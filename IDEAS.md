@@ -14,6 +14,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Airships and the rival** (Nov 17). The Airship and its Mooring Masts are player-only for now: no rival builds Masts
+  or Airships, though its Flak Guns (and armoured trains' flak) shoot yours down, and it builds Flak once you have any
+  aircraft. Open: should a rival (an Architect, say) link a far foothold home by Airship line, and should rivals then
+  learn to cut a line (Flak under its path, a raid on a Mast)? Also open from the build: lines of more than two Masts
+  (a route of stops), an Airship you can fly by hand (a one-off drop of riders, like a Ferry's beach landing), vehicles
+  aboard (a truck in the pod?), and whether Crude should fly (Fuel does now, for a far side's chargers, as a Cargo
+  Plane's does).
+
 - **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
   host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
   Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'

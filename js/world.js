@@ -2427,7 +2427,7 @@ function hollowOn() { return !!(S && S.hollow); }
 function worldBan(type) {
   if (!hollowOn()) return '';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
-  if (BDEFS[type] && BDEFS[type].airfield) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
+  if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
   return '';
 }

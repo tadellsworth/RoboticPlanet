@@ -422,6 +422,47 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
   The AI never flies Cargo Planes.
+- **Airships and Mooring Masts** (every map but the Hollow; `BOTS.airship`, `BDEFS.mast`, `AIRSHIP`). A **Mooring Mast**
+  (6 Cement, 3 Alloy; Build → Move, key T) is a one-tile store. Two make a **line**: the `mastLine` order
+  (`setMastLine`, `mastLineWhy`: both built, at least `AIRSHIP.minDist` (8) tiles apart, a Mast on one line at most;
+  `b.line` on both ends, `mastPartner`) from a Mast's panel, **Link to another Mast** (key L, then a tap on the other:
+  the `mastlink` mode) or **Unlink**; the line is drawn dashed between the mooring cups while either Mast or one of its
+  Airships is selected (`drawMastLine`). An **Airship** (9 rounds of Alloy and Chips, built in an Airfield's hangar: no
+  hangar spot, `airfieldRoom`) serves the line its home Mast (`u.home`) is on: with exactly one line a new one goes there
+  by itself (`shipFindLine`), otherwise its panel's **Line** buttons (`shipLine` order, `setShipLine`); `AIRSHIP.perLine`
+  (2) to a line. Unarmed, 40 hit points, at half a Cargo Plane's speed, 24 goods and 6 seats.
+  Moored, it is inside its Mast, its nose at the mooring cup and its body back along the line (`shipMooring`,
+  `AIRSHIP.nose`); it swings round when its Mast is linked anew. A crossing (`flyShip`): it rises off over `climb` (5) s,
+  turning about at `turn`, flies straight over anything, slows and settles onto the other Mast over the last `settle` tiles
+  (`u.alt`, so flak and the air layer treat it as any aircraft: `u.flight` is `{ ph: 'air', to, from }`), swings round to
+  lie along the line and moors (`shipArrive`). Its tank drains `burn` (0.9) a second in the air; one Fuel puts back
+  `PLANE_FILL.airship` (20); it fills up at either Mast (`fuelPlane`), and waits for Fuel there (`u.noFuel`, a message)
+  before a crossing it can't make (`shipLegFuel`). Each Mast of a line with an Airship keeps `mastFuel` (8) Fuel
+  (`mastFuelKeep`, in `needsOf` and kept back by `keepSupply`): Tankers bring it, or a pipeline. A Mast is a Fuel user to
+  the pipes (`fuelUser`; a burner in `updatePipes`, not a source in `fuelSources`): **Pipe Fuel to it** runs pipe to the
+  nearest Refinery, Bio Farm, storage or Fuel pipe (`pipeToFuel`); piped Fuel fills it up to what it keeps, it never hands
+  its own out, and Fuel is relayed on through it like any Fuel user's (`fuelPipes`), and Tankers leave it be meanwhile
+  (`fuelByPipe`).
+  **Goods** reuse the rail plan (`railPlan`): a line's two Masts are its stations (`bulkLinked`), the one nearer the
+  Command Base its home (`b.home`, `farStation`), and while an Airship serves the line (`airLines`) the far Mast stocks what
+  the buildings within `STATION_REACH` of it need (`b.auto`; by road, touching it, or off the roads within `FOOT_CARRY` on
+  the same ground, `footNear`; Fuel too, for a far side's chargers), the home Mast keeps that for it, and a far Mast's keep
+  comes by Airship only (Haulers and trucks leave it, `dispatch`; nor do trunk runs truck its spare goods home). A trip's
+  mixed load (`shipLoad`): what the other Mast keeps and is short of, from what this one can spare (all it holds when it
+  is the nearer to the Command Base), and from a far Mast its spare goods for home (`spareForHome`, the backhaul). It
+  sets out once that fills `fill` (half) of the hold, with anything once the other side is down to a third of something
+  it keeps, with `least` (4) after `wait` (75) s, or with riders aboard; otherwise it crosses empty to fetch a load or
+  riders waiting at the other Mast, unless another of the line's Airships is there or on its way. Goods in the air count
+  in the Mast's `inc` (`u.cargo`, `u.cargoTo`) and are lost if it is (`shipLost`). Off the roads, a building's output is
+  carried by hand to a Mast on a line close by (`storeFor`).
+  **Riders**: Workers and Warbots take a line in their routes (`airLink`, `airLines`; `findPath` joins a line's Masts at
+  `routeCost` × the straight distance plus `routeBoard` tiles; `computeZones` joins their areas; `routeOpts.noAir` keeps
+  Haulers and vehicles off), wait at the Mast (`ferryWait` with `air`), board (six seats; it waits `boardWait` s for
+  more) and get off at the other Mast to carry on (`unloadFerry`). Flak shoots it down through `hitAircraft`; its riders
+  go down with it. Drawn by `drawAirship` (from `drawPlane`, from a falling wreck's stand-in too): `AIRSHIP_ART`, 3 tiles
+  across, a touch bigger as it climbs, hanging at the cup moored (`lift`), its fans spinning in code, its shadow
+  (`airship-shadow`) down-sun, a pool of team light under it at night. The rival AI builds no Masts or Airships (its flak
+  shoots at them). The mission **Mooring Lines** (Sea and Sky) and the colony goal *Mooring lines* teach it.
 - **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
   keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
@@ -1766,7 +1807,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`GOAL_TIERS`: Groundwork, Long hauls, Across the planet, Accord scale), each counted from `S` by its own `count(P)`
   (a traffic light or overpass, a pipeline joining two buildings, a Generator, a Depot with supply orders, a Research Lab
   upgrade; 30 tiles of asphalt, a Road Train, a Freight Train, a run on a Trade Terminal's route, a Murmur nest; a Ropeway, a
-  Viaduct, a Port and a Container Ship, a Cargo Plane delivery; three Freight Trains at once, 100 Alloy a minute
+  Viaduct, a Port and a Container Ship, a Cargo Plane delivery, goods flown along an Airship line; three Freight Trains at once, 100 Alloy a minute
   (`goodRates`), 100 robots, every upgrade), with `when` leaving out the ones the planet can't offer (`navalMap`, no
   cliffs, a Cargo Plane in the Hollow, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
   (localStorage, `metaStart`: a new game gets an entry keyed by its seed and the time it started on this device; a

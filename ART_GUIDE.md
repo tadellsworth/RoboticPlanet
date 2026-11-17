@@ -9,7 +9,8 @@ and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-e
 [Batch 12](#batch-12-ropeway-and-road-train). The new defences are in [Batch 14](#batch-14-bunker-disruptor-tower-and-mortar-pit), and
 weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
-and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed).
+and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the Airship and
+the Mooring Mast in [Batch 18](#batch-18-the-airship-and-the-mooring-mast-installed).
 
 This guide has three parts:
 
@@ -1517,6 +1518,25 @@ one burns. Everything else is drawn in code: the violet light on the ground roun
 (the light pool tinted `WILD_COLOR`, as bright as it's charged), lamps and building glow dimming where a Leech drinks, a
 shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
 (`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
+
+### Batch 18: the Airship and the Mooring Mast (installed)
+
+The owner chose direction C from the design sheet (`renderer/preview/airship_sheet.py`): the **armoured blimp** and the
+**armoured pylon**. Rendered with `renderer/b/airship.js` and `renderer/b/mast.js` (`v=c`), both teams, at every time of
+day, by `renderer/tools/render_airship.sh`; `renderer/tools/install_airship.py` writes the WebP files (jobs.txt lists
+each one; RENDERER.md, "The Airship and the Mooring Mast").
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `airship@0`, `airship@1` (+ morning, evening, night in `art/tod/<time>/bots/`) | The armoured blimp: a stubby, flattened envelope in the Cargo Plane's and the Bomber's armour (gunmetal plates, team-colour strips along its creases, an armoured hood with a sensor visor and lit bridge windows), four ducted lift fans on pylons at its corners, a V-tail; its cargo pod is under the belly, out of sight. Straight down, facing right, 512 px, 30 world units across | `drawAirship` (from `drawPlane`, so a falling wreck's stand-in draws too): 3 tiles across × (0.94 + 0.1 × its height), so a touch bigger as it climbs off a Mast and smaller as it comes down; the hull runs about 2⅓ tiles. Turned to its heading. Moored it hangs at the Mast's mooring cup, 0.75 of a tile up the screen (the cup's mark, [0.5, 0.08] of the Mast's art), its nose (the art's `dock` mark, 0.3855 of the frame ahead of its middle) at the cup and its body lying back along the line; as it climbs it eases into drawing over the ground it's above, like a plane |
+| (code) | Its four lift fans turning | The `fan0`–`fan3` marks (fractions of the frame from its middle, `AIRSHIP_ART.fans`): over each, a dark blur over the art's still blades and three blades sweeping round with a fading motion trail, faster in the air, darker at night (`drawAirshipFans`); none when a fan is under 2.5 px |
+| `airship-shadow` | Its silhouette (the day render's alpha), softened, 256 px, black | Down-sun of it like a plane's shadow: 0.8 of a tile down (and 0.7 of that across) moored, 1.05 cruising, at about 0.3 by day and fainter at night |
+| (code) | Its light at night | The light pool, in its team colour, on the ground where its shadow falls (the night render's windows, nav lights and strips are in the art) |
+| `mast@0`, `mast@1` (+ morning, evening, night) | The Mooring Mast: a faceted concrete pylon banded in armour, a fuel line up its side in glowing Fuel-orange collars, an armoured clamp head under the mooring cup; at its foot a bunkered loading bay with a lit blast door, a cargo lift and blast walls | `B3D`: one tile (scale 1.4, anchor [0.5, 0.615]), like the other buildings; its site is the shared `site` art |
+
+The line between a linked pair is drawn in code: dashed, in its owner's colour, from mooring cup to mooring cup, while
+either Mast (or one of its Airships) is selected, its dashes running along it (`drawMastLine`). The Airship's
+load (goods and riders) is shown on its panel, not on the sprite: the pod hides it.
 
 ### Not swappable yet (ask Claude Code if you want these)
 

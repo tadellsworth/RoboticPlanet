@@ -36,7 +36,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
 | Resources (Reedcane and the survey stake installed) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
-| Airship and Mooring Mast (design study, not installed) | airship (`v=a\|b\|c`: three directions, top-down like the Cargo Plane), mast (`v=a\|b\|c`; `dock=1` the moored presentation view). See [The Airship and the Mooring Mast](#the-airship-and-the-mooring-mast). |
+| Airship and Mooring Mast (`v=c` installed) | airship (`v=a\|b\|c`: three directions, top-down like the Cargo Plane; `c`, the armoured blimp, is the game's), mast (`v=a\|b\|c`; `c`, the armoured pylon, is the game's; `dock=1` the moored presentation view). See [The Airship and the Mooring Mast](#the-airship-and-the-mooring-mast). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -480,7 +480,7 @@ says how the game draws each piece.
 ## The Airship and the Mooring Mast
 
 A design sheet for the Airship (a slow freight airship on a line between two Mooring Masts) and its mast, in three
-directions for the owner to choose from; not installed. `v=a` is the rigid freighter (a classic hull, containers in
+directions for the owner to choose from; direction C is installed (see "In the game" below). `v=a` is the rigid freighter (a classic hull, containers in
 pannier racks on its flanks, engine cars on outriggers) with the lattice mast; `v=b` the twin-hull lifter (eight
 containers on a truss deck between two hulls) with the gantry (container crane) mast; `v=c` the armoured blimp (the Cargo
 Plane's armour, four ducted lift fans) with the armoured pylon. Run from this folder:
@@ -504,4 +504,15 @@ python3 preview/airship_sheet.py out/set out/airmock <sheet folder>
   image's top like the Ropeway's bull wheel. A moored ship is drawn with its `dock` mark on the mast's `head`.
 - `dock=1` renders the mast and its airship together on open ground at the buildings' angle (1600 x 1000), to show what
   can't be seen from above; it is not a game sprite.
+
+**In the game** (approved: direction C; ART_GUIDE.md, Batch 18). `tools/render_airship.sh` renders `airship@T` and
+`mast@T` (`v=c`) for both teams at every time of day into `out/airship/<time>/` and composes them (the airship with
+`compose_any.py --b1 5 --b2 15`, as the Cargo Plane; the mast with `compose.py`); then
+
+```
+python3 tools/install_airship.py [<game>/art]   # the sprites, their morning, evening and night sets, and airship-shadow
+```
+
+The airship scene also marks its four fans' hubs and rims (`fan0..3`, `fanrim0..3` in its geom.json), which the game's
+spinning-blade overlay is drawn on (`AIRSHIP_ART` in `js/render.js`).
 

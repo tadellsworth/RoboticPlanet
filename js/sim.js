@@ -130,13 +130,14 @@ function tankRoom(b) {
 /**
  * Where should a unit of good g go? Storage set to "fill first" wins, then the nearest storage
  * that takes the good. `except` is skipped (used when emptying a store out); with `from` set, only
- * storage linked to that building by road counts.
+ * storage linked to that building by road counts (or, out past the roads, a Mooring Mast on an Airship line close
+ * enough for Workers to carry it over by hand: footNear).
  */
 function storeFor(owner, g, x, y, except, from) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== owner || b === except || !storeTakes(b, g)) continue;
-    if (from && !roadLinked(b, from)) continue;
+    if (from && !roadLinked(b, from) && !(BDEFS[b.type].mast && airLines().has(b.id) && footNear(from, b))) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, x, y) - (b.smode === 'fill' ? 1e6 : 0);
     if (d < bd) { bd = d; best = b; }
   }
@@ -658,7 +659,7 @@ function railPlan(p) {
       for (const c of mine) if (c.built && BDEFS[c.type].out) for (const g in BDEFS[c.type].out) made.add(g);
       for (const c of mine) {
         for (const [g, n] of needsOf(c)) {
-          if (isLiquid(g) || made.has(g)) continue;
+          if ((isLiquid(g) && !(BDEFS[s.type].mast && g === 'fuel')) || made.has(g)) continue; // (an Airship carries Fuel, as a Cargo Plane does; no train does)
           // A working building: twice what it holds when full. A site: what it still lacks.
           const full = Math.max(0, n) + (c.built ? (c.stock[g] || 0) + (c.inc[g] || 0) : 0);
           want[g] = (want[g] || 0) + (c.built ? 2 * full : Math.max(0, siteCost(c)[g] - (c.stock[g] || 0)));
@@ -682,7 +683,7 @@ function railPlan(p) {
     for (const f of sts) {
       if (f === s || f.home !== s.id) continue;
       const k = keepOf(f);
-      if (k) for (const g in k) if (!isLiquid(g)) want[g] = (want[g] || 0) + k[g];
+      if (k) for (const g in k) if (!isLiquid(g) || (BDEFS[s.type].mast && g === 'fuel')) want[g] = (want[g] || 0) + k[g];
     }
     for (const g in want) want[g] = Math.min(RAIL_AUTO_MAX, want[g]);
     s.auto = Object.keys(want).length ? want : null;
@@ -11534,12 +11535,12 @@ function updateYard(b, def, dt) {
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
   if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
-  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch a ${name}: no open water at its docks` : `Can't build a ${name}: lay track beside the station`; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
   const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0);
-  if (free('alloy') < 1 || free('chip') < 1) { b.yardStatus = `Building a ${name} (part ${have + 1} of ${need}): waiting for ${free('alloy') < 1 ? (free('chip') < 1 ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
+  if (free('alloy') < 1 || free('chip') < 1) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${free('alloy') < 1 ? (free('chip') < 1 ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
   b.yardT = (b.yardT || 0) + dt;
-  b.yardStatus = `Building a ${name}: part ${have + 1} of ${need}`;
+  b.yardStatus = `Building ${aOrAn(name)}: part ${have + 1} of ${need}`;
   b.yardFrac = (have + Math.min(1, b.yardT / YARD.work)) / need;
   if (b.yardT < YARD.work) return;
   b.yardT = 0;
@@ -14055,11 +14056,11 @@ function setShipLine(owner, u, b) {
 function shipLoad(u, A, B) {
   const cap = BOTS[u.type].carry, goods = {}, L = getE(S.players[u.owner].lander);
   const dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0), lend = dh(A) < dh(B);
-  const has = (g) => Math.floor(lend ? supplyOf(A, g) : keepSupply(A, g)) - (goods[g] || 0);
+  const has = (g) => Math.floor(lend && g !== 'fuel' ? supplyOf(A, g) : keepSupply(A, g)) - (goods[g] || 0); // (never the Fuel A keeps for its own Airships)
   const k = keepOf(B) || {};
   let total = 0, low = false;
   for (const [g, n, keep] of needsOf(B)) {
-    if (!keep || isLiquid(g) || n < 1 || goods[g] || total >= cap) continue;
+    if (!keep || g === 'crude' || n < 1 || goods[g] || total >= cap) continue; // (Fuel flies, as a Cargo Plane's does; Crude doesn't)
     const m = Math.min(Math.floor(n), has(g), cap - total);
     if (m < 1) continue;
     goods[g] = m; total += m;
@@ -14111,7 +14112,7 @@ function updateAirship(u, dt) {
 /** Airship u casts off and sets out for Mast (or Airfield) `to`, from Mast `from` (or wherever it is). */
 function shipDepart(u, to, from) {
   exitBuilding(u); // (its riders stay "inside" the Mast they boarded at, out of sight, as a Ferry's)
-  u.flight = { to: to.id, from: from ? from.id : 0 };
+  u.flight = { ph: 'air', to: to.id, from: from ? from.id : 0 }; // (ph: as a plane's in the air, for its engine sound)
   u.vel = 0; u.alt = u.alt || 0; u.boardT = 0; u.noFuel = 0;
 }
 
@@ -14167,8 +14168,8 @@ function shipArrive(u, m) {
   if (u.cargo) {
     const c = getE(u.cargoTo);
     for (const g in u.cargo) { if (c && !c.dead) bump(c.inc, g, -u.cargo[g]); bump(m.stock, g, u.cargo[g]); }
+    if (BDEFS[m.type].mast) m.shipGot = (m.shipGot || 0) + sumValues(u.cargo); // (goods an Airship landed here, in all: Mooring Lines counts them)
     u.cargo = null; u.cargoTo = 0;
-    m.airIn = S.time;
   }
   if (u.aboard && u.aboard.length) unloadFerry(u, m);
 }
