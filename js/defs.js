@@ -234,6 +234,7 @@ const BLAST = {
   tanker: { r0: 0.7, r1: 0.6, bot: 4.5, bld: 3 },
   torch: { r0: 0.55, r1: 0.55, bot: 4, bld: 2 }, // a Torch going up with fuel aboard
   refinery: { r0: 1.5, r1: 0.9, bot: 6, bld: 5 },
+  fueltank: { r0: 1, r1: 2.8, bot: 8, bld: 7 }, // a Fuel Tank: far bigger, full (empty, little more than its shell)
   chain: [0.25, 0.7],
 };
 /*
@@ -243,7 +244,7 @@ const BLAST = {
  * neighbours (side by side before corners). A Refinery also passes Crude on from its intake (to an Asphalt
  * Plant beside it, say). Storage never takes part: a link moves goods between factories, it makes none.
  */
-const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2;
+const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2, FEED_MAX_TANK = 4; // (a Fuel Tank, an oil bloc's hub, feeds up to four)
 const FEED_NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const TRUCK_MIN_DIST = 12;
 const HAUL_FAR = 12, HAUL_NEAR = 6; // a short Hauler run waits for a Hauler finishing within HAUL_NEAR of the pickup rather than send one from over HAUL_FAR away
@@ -325,6 +326,7 @@ const PIPE_CROSS_WEIGHT = 4;
 /** What a tile of pipe on tile t costs. */
 function pipeCost(t) { return S.terrain[t] === T_GROUND || S.road[t] || (S.rail && S.rail[t]) ? PIPE_COST : PIPE_CROSS_COST; }
 const PIPE_RATE = 4;
+const PIPE_RATE_TANK = 8; // a pipeline with a Fuel Tank on it moves twice as much (its pumping station)
 const PIPE_DRY = 20; // something on a Fuel line that has sat empty this long gets Fuel by Tanker again
 const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;
@@ -932,6 +934,10 @@ const BDEFS = {
     cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 1 }, out: { fuel: 8 }, explodes: true,
     work: 6, armor: 10, buildTime: 12, limit: 30,
   },
+  fueltank: {
+    name: 'Fuel Tank', desc: 'Big storage for Crude and Fuel only: up to 120 of them together. The hub of an oil bloc: your Oil Pumps\' Pipe it in buttons send their Crude here (or to the nearest Refinery, if closer), a pipeline with a Fuel Tank on it moves twice as much, and it feeds the Refineries, Asphalt Plants and Fuel users right beside it by conveyor and takes in the Fuel a Refinery beside it makes. Tankers fill up here. Keep it well away from harm: destroyed, it goes up in a huge blast, the fuller the bigger, setting off Refineries, Fuel Tanks and loaded Tankers nearby.',
+    cost: { cement: 5, alloy: 2 }, store: true, tank: 120, explodes: true, armor: 12, buildTime: 12,
+  },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff. A worker builds it from whichever side is the shorter trip, so a Ramp down off high ground is built from the top: nobody drives all the way round.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
@@ -998,11 +1004,11 @@ const BDEFS = {
 };
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
   'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
-  { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
+  { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
@@ -1420,6 +1426,7 @@ const FLAVOR = {
   farm: 'A VIRIDIAN design. Fuel crops now; orchards were phase two.',
   pump: 'The older drilling kit. It predates the Accord and expects to outlast it.',
   refinery: 'Refines enough Fuel for a colony fleet. The fleet is robots.',
+  fueltank: 'Three tanks to the Accord storage code, and a sign that says NO SMOKING. Nobody here smokes.',
   ramp: 'Gradient: Accord passenger standard, one in twelve.',
   repair: 'Fitted out as a clinic. The beds were taken out to make room.',
   wall: 'Rated against dust storms. Tested against neighbours.',

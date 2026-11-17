@@ -104,23 +104,18 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     `fx.js`), a big project, with the 2D renderer kept as the fallback for phones that can't run it. WebGPU, newer
     still, isn't needed.
 
-- **A Tank Farm: big storage for Crude and Fuel (the owner's idea).** Put up beside a cluster of Oil Pumps (five, say),
-  it holds a lot of Crude or Fuel, like a small Depot for liquids only. Today each Pump holds just 6 Crude and a
-  Refinery 8 Fuel, so Tankers make many small runs. With a Tank Farm the pumps nearby fill it (by pipe or feed link),
-  Tankers and pipelines draw full loads from one place, and a stock of Fuel builds up for trucks, ships and aircraft.
-  It is the most dangerous thing in a colony: destroyed (not dismantled), it goes up in a huge fuel blast that grows
-  with how full it is, setting off loaded Tankers and Refineries nearby in a chain. That makes it a prize target for
-  bombers, missiles and raids, so it needs guarding and room around it. To settle: how much it holds and costs,
-  whether it holds one liquid or both, if Fuel Stations and the Airfield draw from it, how big the blast is next to
-  the existing ones (Tanker, Refinery), and how the rival builds, guards and hunts it.
-  **Oil blocs** (the owner, too): the Tank Farm is the hub of an oil district: the Oil Pumps, the Tank Farm, the
-  Refineries and an Asphalt Plant built together as one block. **Oil Pumps pipe into the Tank Farm**: the pipelines
-  we have (Paths → Pipes) join it like storage, so a pump's **Pipe it to the Refinery** and the banner's **Pipe
-  every Oil Pump** would send Crude to the nearest Tank Farm when there is one; from there it goes on by pipe to the
-  Refineries and the Asphalt Plant, and their Fuel comes back into it (feed links where they touch). One choice to
-  weigh: packing a bloc tight saves pipe and Tanker runs, but one blast can then take out the whole block.
-  To be built here after the work in hand (trade routes, the Murmur), not handed to the other chat: it runs through
-  the pipelines, fuel blasts, storage and the rival's oil play.
+- **Built: the Fuel Tank and oil blocs (the owner's idea; first called the Tank Farm).** Gather tab (T), 5 Cement and
+  2 Alloy: storage for Crude and Fuel only, up to 120 together. An Oil Pump's **Pipe it in** (renamed from Pipe it to
+  the Refinery) and **Pipe every Oil Pump** run to the nearest Refinery or Fuel Tank; a pipeline with a Fuel Tank on it
+  moves 8 a second instead of 4, filling the Fuel Tank before other storage. By feed link it gives Crude (and Fuel) to
+  up to 4 neighbours and takes in the Crude a pump beside it pumps and the Fuel a Refinery beside it makes, so pumps,
+  a Fuel Tank, Refineries and an Asphalt Plant make one oil bloc. Tankers and trucks fill up there like
+  at any storage (ships and planes still fill up at their Port and Airfield). Destroyed full, it goes up in the biggest fuel blast in the game (1 tile empty, up to 3.8 full; 8
+  damage to robots, 7 to buildings; a Refinery's is 2.4, 6 and 5), setting off Refineries, Fuel Tanks and loaded
+  Tankers in it; its panel shows how full it is and how big the blast would be now. The rival builds one by its pumps
+  once it has 3 working Oil Pumps and a Foundry, and its bombers rate one highly. Taught in Pipe Dreams (its last goal:
+  store Fuel in a Fuel Tank touching the Refinery). **For the owner to check:** the cap (120), the cost, the blast
+  size, the 4 feed links and the doubled pipeline rate are first guesses.
 
 ## Suggestions from the November review (not decided)
 

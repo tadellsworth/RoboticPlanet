@@ -1627,7 +1627,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
  * Defend tab's Walls card is X, as in Paths. On the All tab each card shows its tab's number and letter.
  */
 const BUILD_KEYS = {
-  gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p' },
+  gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', port: 'p', airfield: 'i', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
@@ -5028,7 +5028,7 @@ function pipeDrag(i, j, first) {
   showRoadBanner(UI.pipeWhy || cross, !UI.pipeWhy);
 }
 
-/** Every Oil Pump of yours that isn't piped to a Refinery yet gets a pipe to the nearest one, in the plan. */
+/** Every Oil Pump of yours that isn't piped to a Refinery or Fuel Tank yet gets a pipe to the nearest one, in the plan. */
 function pipeAllPumps() {
   if (!UI.draft) draftReset();
   const stroke = [];
@@ -5706,8 +5706,8 @@ function openBuildingSheet(b) {
         <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
         <p class="hint" id="sh-smode-hint"></p>
         <div class="section-label">Goods kept here <span class="label-note">tap to switch off</span></div>
-        <div class="goodlist" id="sh-accept">${GOODS.filter((g) => nukeOn() || !NUKE_GOODS.includes(g)).map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
-      if (b.type !== 'lander') {
+        <div class="goodlist" id="sh-accept">${(def.tank ? ['crude', 'fuel'] : GOODS.filter((g) => nukeOn() || !NUKE_GOODS.includes(g))).map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
+      if (b.type !== 'lander' && !def.tank) {
         // The goods a front line runs on, plus any already ordered; the rest behind "More goods".
         const main = ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(warOn() ? ['ammo'] : []);
         const goods = main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
@@ -5769,8 +5769,8 @@ function openBuildingSheet(b) {
     }
     if (def.pump && b.built && b.owner === ME) {
       const pr = pipeToRefinery(ME, b);
-      if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it to the Refinery: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
-        <p class="hint">A pipeline sends its Crude straight to the Refinery, every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
+      if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it in: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
+        <p class="hint">A pipeline to the nearest Refinery or Fuel Tank sends its Crude there every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
     }
     if (fuelUser(def) && b.built && b.owner === ME) {
       const pr = pipeToFuel(ME, b);
@@ -6126,7 +6126,7 @@ function refreshBuildingSheet(b) {
       const linkText = (l, b2) => `${BDEFS[b2.type].name} (${l.goods.map((g) => GOOD[g].name).join(', ')})`;
       const feeds = feedTargets(b), by = feedersOf(b);
       if (feeds.length) parts.push(`<div class="kv"><span>Feeds by conveyor</span><span>${feeds.map((l) => linkText(l, l.c)).join('; ')}</span></div>`);
-      if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}, a tenth faster while fed</span></div>`); // (always said, so the line doesn't wrap and unwrap: the status says when it's fed)
+      if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}${def.tank ? '' : ', a tenth faster while fed'}</span></div>`); // (always said, so the line doesn't wrap and unwrap: the status says when it's fed)
       const sb = !def.store && stationBeside(b);
       if (sb && stationLinks(sb).some((l) => l.c === b)) parts.push(`<div class="kv"><span>Rail Station</span><span>joined by conveyor: it hands this its goods${def.out ? ' and takes its output' : ''}</span></div>`);
       else if (b.railBy) {
@@ -6135,7 +6135,14 @@ function refreshBuildingSheet(b) {
         else parts.push(`<div class="kv"><span>Supplied by rail</span><span>from the Rail Station ${dirText(b, sv || b)}</span></div>`);
       }
     }
-    if (def.store && mine && !def.terminal) {
+    if (def.tank) {
+      // A Fuel Tank: how full it is, and what that would mean if it went up now (see fuelBlast).
+      const held = liquidIn(b), full = Math.min(1, held / def.tank), B = BLAST.fueltank, r = B.r0 + B.r1 * full;
+      parts.push(`<div class="kv"><span>Crude and Fuel</span><span>${held} / ${def.tank} (${b.stock.crude || 0} Crude, ${b.stock.fuel || 0} Fuel)</span></div>`);
+      parts.push(`<div class="bar"><div style="width:${Math.round(full * 100)}%;background:#ff9a3c"></div></div>`);
+      if (mine) parts.push(`<div class="kv"><span>If it's destroyed now</span><span${full > 0.5 ? ' class="err"' : ''}>a blast ${Math.round(r * 10) / 10} tiles round, setting off Refineries, Fuel Tanks and loaded Tankers in it</span></div>`);
+    }
+    if (def.store && mine && !def.terminal && !def.tank) {
       let idle = 0;
       for (const u of S.bots) if (!u.dead && u.inside === b.id && u.type === 'worker') idle++;
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);

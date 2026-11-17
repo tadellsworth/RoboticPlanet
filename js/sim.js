@@ -99,7 +99,7 @@ function growStalks(dt) {
 
 /* ------------------------------------------------------------------ queries */
 
-function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store && !BDEFS[b.type].terminal; } // a Trade Terminal holds only its trades
+function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store && !BDEFS[b.type].terminal && !BDEFS[b.type].tank; } // a Trade Terminal holds only its trades, a Fuel Tank only Crude and Fuel (storeTakes)
 
 function nearestStoreTo(owner, x, y, except) {
   let best = null, bd = Infinity;
@@ -116,7 +116,14 @@ function prioRank(b) { return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1; 
 
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
+  if (BDEFS[b.type].tank) return b.built && !b.dead && isLiquid(g) && b.smode !== 'empty' && !(b.reject && b.reject[g]) && tankRoom(b) >= 1;
   return storeAccepts(b) && b.smode !== 'empty' && !(b.reject && b.reject[g]);
+}
+
+/** Room left in Fuel Tank b for Crude and Fuel (its `tank` cap, less what it holds and has on the way); Infinity for other buildings. */
+function tankRoom(b) {
+  const cap = BDEFS[b.type].tank;
+  return cap ? cap - liquidIn(b) - ((b.inc && ((b.inc.crude || 0) + (b.inc.fuel || 0))) || 0) : Infinity;
 }
 
 /**
@@ -288,28 +295,33 @@ function usesGood(b, g) {
 /** What building b can pass to a neighbour by feed link: what it makes (and a Refinery's Crude). */
 function feedGoods(b) {
   const def = BDEFS[b.type];
-  if (!b || b.dead || !b.built || def.store || !def.out) return [];
+  if (!b || b.dead || !b.built) return [];
+  if (def.tank) return ['crude', 'fuel']; // a Fuel Tank: the hub of an oil bloc
+  if (def.store || !def.out) return [];
   const gs = Object.keys(def.out).filter((g) => !NUKE_GOODS.includes(g) || nukeOn());
   if (def.explodes && def.inp && def.inp.crude) gs.push('crude'); // a Refinery passes Crude on from its intake
   return gs;
 }
 /** How much of g building b can feed on right now (a Refinery keeps one Crude for itself). */
-function feedSupply(b, g) { return BDEFS[b.type].out[g] ? supplyOf(b, g) : Math.max(0, (b.stock[g] || 0) - 1); }
+function feedSupply(b, g) { const d = BDEFS[b.type]; return d.tank || d.out[g] ? supplyOf(b, g) : Math.max(0, (b.stock[g] || 0) - 1); }
 
 /** The neighbours building b feeds (at most FEED_MAX, sides before corners): [{c, goods}]. */
 function feedTargets(b) {
   const gs = feedGoods(b);
   if (!gs.length) return [];
-  const out = [];
+  const out = [], tank = !!BDEFS[b.type].tank, max = tank ? FEED_MAX_TANK : FEED_MAX;
   for (const [di, dj] of FEED_NB) {
     const i = b.x + di, j = b.y + dj;
     if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
     const c = getE(S.bAt[tIdx(i, j)]);
-    if (!c || c === b || c.dead || !c.built || c.owner !== b.owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
-    const goods = gs.filter((g) => usesGood(c, g));
+    if (!c || c === b || c.dead || !c.built || c.owner !== b.owner || BDEFS[c.type].barrier) continue;
+    // Into a Fuel Tank: the Crude a pump beside it pumps, the Fuel a Refinery beside it makes (only what it makes: a
+    // Refinery's own Crude stays). Otherwise storage takes no part.
+    const goods = BDEFS[c.type].tank ? (tank ? [] : gs.filter((g) => isLiquid(g) && BDEFS[b.type].out && BDEFS[b.type].out[g]))
+      : BDEFS[c.type].store ? [] : gs.filter((g) => usesGood(c, g));
     if (!goods.length) continue;
     out.push({ c, goods });
-    if (out.length >= FEED_MAX) break;
+    if (out.length >= max) break;
   }
   return out;
 }
@@ -320,7 +332,7 @@ function feedStep(b, dt) {
   if (b.feedT > 0) return;
   b.feedT = FEED_TIME;
   for (const { c, goods } of feedTargets(b)) {
-    const need = needsOf(c);
+    const need = BDEFS[c.type].tank ? goods.map((g) => [g, tankRoom(c)]) : needsOf(c);
     for (const g of goods) {
       const n = need.find((x) => x[0] === g);
       if (!n || n[1] < 1 || feedSupply(b, g) < 1) continue;
@@ -391,16 +403,21 @@ function feedPreview(owner, type, x, y) {
     if (def.station && !def.terminal && (c.type === 'lander' || c.type === 'depot' || convFor(cd))) out.push({ a: [x, y], b: [i, j], goods: [] });
     else if (cd.station && !cd.terminal && convFor(def)) out.push({ a: [i, j], b: [x, y], goods: [] });
   }
-  if (def.store || def.barrier) return out;
-  const makes = def.out ? Object.keys(def.out).concat(def.explodes && def.inp && def.inp.crude ? ['crude'] : []) : [];
+  if ((def.store && !def.tank) || def.barrier) return out;
+  // (Storage takes no part, but a Fuel Tank does: it feeds Crude and Fuel to what uses them, and takes in the liquids
+  // a neighbour makes; see feedTargets.)
+  const madeLiquids = (d, gs) => gs.filter((g) => isLiquid(g) && d.out && d.out[g]);
+  const makes = def.tank ? ['crude', 'fuel'] : def.out ? Object.keys(def.out).concat(def.explodes && def.inp && def.inp.crude ? ['crude'] : []) : [];
   for (const [di, dj] of FEED_NB) {
     const i = x + di, j = y + dj;
     if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
     const c = getE(S.bAt[tIdx(i, j)]);
-    if (!c || c.dead || c.owner !== owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
-    const toC = makes.filter((g) => typeUses(BDEFS[c.type], g));
+    if (!c || c.dead || c.owner !== owner) continue;
+    const cd = BDEFS[c.type];
+    if (cd.barrier || (cd.store && !cd.tank) || (cd.tank && def.tank)) continue;
+    const toC = cd.tank ? madeLiquids(def, makes) : makes.filter((g) => typeUses(cd, g));
     if (toC.length) out.push({ a: [x, y], b: [i, j], goods: toC });
-    const fromC = feedGoods(c).filter((g) => typeUses(def, g));
+    const fromC = def.tank ? madeLiquids(cd, feedGoods(c)) : feedGoods(c).filter((g) => typeUses(def, g));
     if (fromC.length) out.push({ a: [i, j], b: [x, y], goods: fromC });
   }
   return out;
@@ -3431,7 +3448,7 @@ function updateBuilding(b, dt) {
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
   }
-  if (def.out && !def.store) feedStep(b, dt * S.players[b.owner].mult);
+  if ((def.out && !def.store) || def.tank) feedStep(b, dt * S.players[b.owner].mult);
   if (def.station && !def.terminal) stationStep(b, dt * S.players[b.owner].mult);
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots` + (b.hold ? ', holding inside' : '');
   else if (def.store) b.status = def.station && !def.terminal && !railPlatforms(b.x, b.y).length ? 'No track beside it yet: drag rail out to it in Paths (Rail), to another station' : 'Storing goods';
@@ -4866,7 +4883,7 @@ function liquidIn(b) { return (b.stock && ((b.stock.crude || 0) + (b.stock.fuel 
  */
 function burnLiquids(b) {
   if (b.boomFull !== undefined) return b.boomFull;
-  const def = BDEFS[b.type], cap = INPUT_CAP + ((def.out && def.out.fuel) || 0) + ((def.out && def.out.crude) || 0);
+  const def = BDEFS[b.type], cap = def.tank || INPUT_CAP + ((def.out && def.out.fuel) || 0) + ((def.out && def.out.crude) || 0);
   b.boomFull = Math.min(1, liquidIn(b) / Math.max(1, cap));
   delete b.stock.crude; delete b.stock.fuel;
   return b.boomFull;
@@ -10301,14 +10318,18 @@ function updatePipes() {
       if (fuelUser(def)) N.burners.push(b);
     }
   }
+  // (A Fuel Tank on a line: it moves PIPE_RATE_TANK a second, and the Fuel Tank fills before other storage, up to its cap.)
+  const tankOn = (N) => N.stores.some((s) => BDEFS[s.type].tank);
+  const tanksFirst = (a, b) => (BDEFS[b.type].tank ? 1 : 0) - (BDEFS[a.type].tank ? 1 : 0);
+  const roomIn = (s) => (BDEFS[s.type].tank ? Math.floor(tankRoom(s)) : Infinity);
   for (const [c, N] of nets) {
-    let left = PIPE_RATE, moved = 0;
+    let left = tankOn(N) ? PIPE_RATE_TANK : PIPE_RATE, moved = 0;
     const give = (from, to, n) => { bump(from.stock, 'crude', -n); bump(to.stock, 'crude', n); left -= n; moved += n; };
-    const stores = N.stores.filter((s) => storeTakes(s, 'crude'));
+    const stores = N.stores.filter((s) => storeTakes(s, 'crude')).sort(tanksFirst);
     for (const p of N.pumps) {
       if (N.users.length || stores.length) p.piped = true; // its Crude goes by pipe: no Tanker needed
       for (const u of N.users) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(p, u, n); }
-      for (const s of stores) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), left); if (n > 0) give(p, s, n); }
+      for (const s of stores) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), left, roomIn(s)); if (n > 0) give(p, s, n); }
     }
     for (const u of N.users) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(s, u, n); }
     if (moved) net.flow[c] = S.time; // (drawn: Crude pulsing along the pipe)
@@ -10332,17 +10353,17 @@ function updatePipes() {
   for (const [, N] of lines) {
     // From where it's made to what burns it, then into storage; and from storage to what burns it.
     if (!N.burners.length && !N.makers.length) continue;
-    let fleft = PIPE_RATE, fmoved = 0;
+    let fleft = tankOn(N) ? PIPE_RATE_TANK : PIPE_RATE, fmoved = 0;
     const room = new Map(N.burners.map((u) => [u, Math.floor(pipeRoom(u, 'fuel'))]));
     const fgive = (from, to, n) => { bump(from.stock, 'fuel', -n); bump(to.stock, 'fuel', n); fleft -= n; fmoved += n; if (room.has(to)) room.set(to, room.get(to) - n); };
-    const fstores = N.stores.filter((s) => storeTakes(s, 'fuel'));
+    const fstores = N.stores.filter((s) => storeTakes(s, 'fuel')).sort(tanksFirst);
     // (A Trade Terminal gives what its Fuel contract paid: terminalSpare, as its goods are never anyone's supply.)
     const msup = (m) => Math.floor(BDEFS[m.type].terminal ? terminalSpare(m, 'fuel') : supplyOf(m, 'fuel'));
     for (const m of N.makers) {
       if (fstores.length) m.pipedFuel = true; // its Fuel goes by pipe: no Tanker needed
       else if (N.burners.some((u) => u !== m)) m.fuelLine = true; // (what burns it on the line comes first: a Tanker takes only the surplus)
       for (const u of N.burners) { if (u === m) continue; const n = Math.min(msup(m), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
-      for (const s of fstores) { const n = Math.min(msup(m), fleft); if (n > 0) fgive(m, s, n); }
+      for (const s of fstores) { const n = Math.min(msup(m), fleft, roomIn(s)); if (n > 0) fgive(m, s, n); }
     }
     for (const u of N.burners) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'fuel')), room.get(u), fleft); if (n > 0) fgive(s, u, n); }
     // What burns Fuel on a line with somewhere it's made, or storage with some, gets it by pipe: no Tanker brings
@@ -10446,8 +10467,8 @@ function refineryPipes(owner) {
  */
 function pipeToRefinery(owner, b) {
   const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
-  if (!refs.length) return { why: 'Build a Refinery first: the pipe runs from the pump to it.' };
-  return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery.', 'No way to run pipe from here to a Refinery (water, rock or a rival\'s land in the way?).');
+  if (!refs.length) return { why: 'Build a Refinery or a Fuel Tank first: the pipe runs from the pump to it.' };
+  return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery or Fuel Tank.', 'No way to run pipe from here to a Refinery or Fuel Tank (water, rock or a rival\'s land in the way?).');
 }
 
 /** Where `owner` has Fuel to give by pipe: Refineries, Bio Farms and storage (not a Trade Terminal or a Crawler, which moves). */

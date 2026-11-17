@@ -147,6 +147,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (no stock limit unless you set one) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit); explodes when destroyed |
+| Fuel Tank | Gather tab (T), 5 Cement + 2 Alloy: storage for **Crude and Fuel only**, up to 120 together (`tank`); the hub of an oil bloc: feeds up to 4 neighbours, a pipeline with one on it moves twice as much; a far bigger blast when destroyed full |
 | Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
@@ -785,7 +786,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and bored through rock at `PIPE_CROSS_COST` (1.2 Cement) a tile, weighed by price so it goes round only when that's
   cheaper, with few bends); tap a
   pump to pipe it to the nearest Refinery, or **Pipe every Oil Pump** in the banner; an Oil Pump's panel has a one-tap
-  **Pipe it to the Refinery** too. Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
+  **Pipe it in** too (to the nearest Refinery or Fuel Tank). Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
   the Cement comes in). A pipe joins every building it runs under or beside; each second each line moves up to 4 Crude
   (`updatePipes`) from its pumps to its Refineries (which keep up to 6) and Asphalt Plants, then into storage on it, and
   from storage on it to its Refineries. A piped pump never waits for a Tanker. **Fuel** moves the same way, up to 4 a
@@ -798,6 +799,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Pipe Fuel to it** on its panel, to pipe it to the nearest storage, Refinery or Bio Farm (`pipeToFuel`); the rival
   pipes its own Fuel Stations and Generators that are within 10 tiles. Raiders cut pipe (it counts like a road
   for them), missiles and fuel blasts break it; broken pipe is planned again at once and relaid when it's paid for.
+  **Fuel Tank** (`fueltank`: `tank: 120`, `store`, `explodes`; Gather tab, T; 5 Cement, 2 Alloy): the hub of an **oil
+  bloc**. Storage for Crude and Fuel only (`storeTakes`: liquids, never past its cap, counting what's on the way:
+  `tankRoom`; `storeAccepts` leaves it out, so no other good is ever sent there, and it takes no supply orders). A pump's
+  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank (both `explodes`). A line with a Fuel Tank
+  on it moves `PIPE_RATE_TANK` (8) Crude and 8 Fuel a second instead of 4, and fills its Fuel Tanks before other storage
+  (`updatePipes`). It takes part in feed links (below): it feeds Crude, and Fuel, to up to `FEED_MAX_TANK` (4) neighbours
+  that use them, and takes in by conveyor only what a neighbour makes (an Oil Pump's Crude, a Refinery's Fuel; a
+  Refinery's own Crude stays). Tankers and trucks fill up there like at any storage. Destroyed with Crude and Fuel in it,
+  it goes up in `BLAST.fueltank` (1 tile, up to 3.8 when full; 8 damage to robots, 7 to buildings), setting off
+  Refineries, other Fuel Tanks and loaded Tankers in it; its panel shows how full it is and how big the blast would be
+  now. The rival puts one up by its pumps once it has `AI_FUEL_TANK_PUMPS` (3) Oil Pumps at work and a Foundry
+  (`aiSearchSpot` places it like a Refinery), and its bombers rate it highly (`AI_BOMB_VALUE`).
   **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
   nearest storage or Fuel Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
@@ -808,7 +821,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Feed links** (`FEED_TIME`, `FEED_MAX`, `FEED_BOOST`; `feedTargets`, `feedStep`): a production building passes
   what it makes straight to a neighbour (any of the 8 tiles round it) that uses it, one good every 2 s a link, by a
   short raised conveyor (a pipe for Crude and Fuel), with no Hauler, and a building being fed works a tenth faster.
-  Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part, and a
+  Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part (but a
+  Fuel Tank does: see Fuel, Tankers and pipelines), and a
   Refinery also passes Crude on from its intake. So Mine → Smelter → Chip Fab → Foundry, Quarry → Cement Works,
   Smelter + Cement Works → Ammo Plant, Refinery → Asphalt Plant → Roadworks, Missile Factory → Silo work as blocks.
   Haulers leave a fed factory's input to the conveyor: they bring only its next round's worth of that good

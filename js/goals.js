@@ -126,7 +126,7 @@ const COLONY_GOALS = [
     hint: 'Paths → Junctions, then tap a crossing where three or four roads meet.', paths: 'lights',
     count: () => (Object.values(S.lights || {}).some((l) => l.owner === ME) || Object.values(S.over || {}).some((o) => o.owner === ME) ? 1 : 0) },
   { id: 'pipe', tier: 0, name: 'Line pressure', text: 'Pipe Crude or Fuel between two buildings.', n: 1,
-    hint: 'Tap an Oil Pump → Pipe it to the Refinery, or a Generator → Pipe Fuel to it. Or Paths → Pipes.', at: ['pump', 'generator', 'charger'], paths: 'pipe',
+    hint: 'Tap an Oil Pump → Pipe it in, or a Generator → Pipe Fuel to it. Or Paths → Pipes.', at: ['pump', 'generator', 'charger'], paths: 'pipe',
     count: () => {
       const net = pipeNet(), on = new Map();
       for (const b of S.buildings) {
