@@ -1901,8 +1901,8 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   the aircraft (fliers seen from above with their shadows, and the glows). Colours follow the light (`faunaCol`, from
   `TOD.state`), night animals lifted a little so they still read. Sounds go through `AUDIO.natureBus`, under the
   ambience.
-- **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.35× on High and 1.7× on Ultra
-  (`FAUNA_STEP`).
+- **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
+  (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
 
 ## Project layout
 

@@ -29,7 +29,7 @@ const FAUNA_CELL = 8;     // tiles along each side of a cell
 const FAUNA_QUIET = 40;   // game seconds without shots or blasts nearby before the animals come back
 const FAUNA_DREAD = 75;   // seconds before a Murmur night that the animals sense them coming
 const FAUNA_CAP = 150;    // animals at once at Auto
-const FAUNA_STEP = { saver: 0, auto: 1, high: 1.35, ultra: 1.7 }; // how many next to Auto, by the Graphics step
+const FAUNA_STEP = { saver: 0, auto: 1, high: 1.25, ultra: 1.5 }; // how many next to Auto, by the Graphics step
 /** The biomes whose birdsong falls silent before a Murmur night and comes back as a dawn chorus (faunaHush, faunaChorus). */
 const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
 
@@ -40,22 +40,22 @@ const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
  * shy: how far (tiles) gunfire puts it up; bold: it doesn't flee the fighting (the scavengers).
  */
 const FAUNA_KINDS = {
-  songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 13, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
-  snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', min: 1, p: 0.55, n: [6, 10], z: 13, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
-  deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 10, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
+  songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
+  snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', min: 1, p: 0.55, n: [6, 10], z: 22, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
+  deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 12, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
   herd: { mode: 'herd', draw: 'antelope', act: 'day', hab: 'open', min: 26, p: 0.5, n: [5, 10], z: 9, size: 0.46, speed: 0.26, run: 2.9, col: ['#4c4038', '#8c7c6a', '#1c1814'], spread: 1.6 },
-  fox: { mode: 'herd', draw: 'fox', act: 'day', hab: 'open', min: 10, p: 0.45, n: [1, 1], z: 11, size: 0.38, speed: 0.6, run: 2.5, col: ['#c0602c', '#f2e6d6', '#2a1a10'], roam: true },
-  hare: { mode: 'herd', draw: 'hare', act: 'day', hab: 'open', min: 12, p: 0.55, n: [1, 3], z: 12, size: 0.28, speed: 0.45, run: 3.2, col: ['#f4eee2', '#ffffff', '#3a3632'], hop: true, spread: 2.4, roam: true },
-  arcticfox: { mode: 'herd', draw: 'fox', act: 'night', hab: 'open', min: 16, p: 0.4, n: [1, 1], z: 11, size: 0.36, speed: 0.75, run: 2.5, col: ['#e2e2de', '#ffffff', '#6c6c74'], roam: true, tracks: true, lift: 0.3 },
-  heron: { mode: 'wade', draw: 'heron', act: 'day', hab: 'shallow', min: 2, p: 0.65, n: [1, 1], z: 10, size: 0.52, col: ['#8e98a2', '#e4e8ec', '#2c3036'] },
-  geese: { mode: 'swim', draw: 'goose', act: 'day', hab: 'shallow', min: 5, p: 0.4, n: [3, 6], z: 10, size: 0.38, col: ['#8a7e6e', '#ece4d4', '#1e1c1a'] },
+  fox: { mode: 'herd', draw: 'fox', act: 'day', hab: 'open', min: 10, p: 0.45, n: [1, 1], z: 14, size: 0.38, speed: 0.6, run: 2.5, col: ['#c0602c', '#f2e6d6', '#2a1a10'], roam: true },
+  hare: { mode: 'herd', draw: 'hare', act: 'day', hab: 'open', min: 12, p: 0.55, n: [1, 3], z: 16, size: 0.28, speed: 0.45, run: 3.2, col: ['#f4eee2', '#ffffff', '#3a3632'], hop: true, spread: 2.4, roam: true },
+  arcticfox: { mode: 'herd', draw: 'fox', act: 'night', hab: 'open', min: 16, p: 0.4, n: [1, 1], z: 14, size: 0.36, speed: 0.75, run: 2.5, col: ['#e2e2de', '#ffffff', '#6c6c74'], roam: true, tracks: true, lift: 0.3 },
+  heron: { mode: 'wade', draw: 'heron', act: 'day', hab: 'shallow', min: 2, p: 0.65, n: [1, 1], z: 12, size: 0.52, col: ['#8e98a2', '#e4e8ec', '#2c3036'] },
+  geese: { mode: 'swim', draw: 'goose', act: 'day', hab: 'shallow', min: 5, p: 0.4, n: [3, 6], z: 12, size: 0.38, col: ['#8a7e6e', '#ece4d4', '#1e1c1a'] },
   frog: { mode: 'small', draw: 'frog', act: 'all', hab: 'shore', min: 2, p: 0.6, n: [2, 4], z: 24, size: 0.09, col: ['#5f7c36', '#a8c65c', '#222e18'], hop: true },
   lizard: { mode: 'small', draw: 'lizard', act: 'day', hab: 'rock', min: 2, p: 0.7, n: [1, 3], z: 20, size: 0.24, col: ['#d6ae7a', '#f2dcae', '#6a4424'], dart: true },
   beetle: { mode: 'small', draw: 'beetle', act: 'day', hab: 'open', min: 10, p: 0.6, n: [2, 5], z: 22, size: 0.16, col: ['#221c1a', '#f08a3a', '#000000'] },
   crawler: { mode: 'small', draw: 'crawler', act: 'all', hab: 'open', min: 8, p: 0.6, n: [1, 3], z: 16, size: 0.24, col: ['#c4bcc8', '#ece6f0', '#6a6070'], lift: 0.45 },
-  owl: { mode: 'perch', draw: 'owl', act: 'night', hab: 'tree', min: 6, p: 0.4, n: [1, 1], z: 11, size: 0.24, col: ['#7c644a', '#ccb48e', '#2a2018'], eyes: '#ffc860', lift: 0.45 },
-  snowyowl: { mode: 'perch', draw: 'owl', act: 'night', hab: 'perch', min: 1, p: 0.35, n: [1, 1], z: 11, size: 0.25, col: ['#f2f2ee', '#ffffff', '#5c5c64'], eyes: '#ffe060', lift: 0.5 },
-  crow1: { mode: 'perch', draw: 'crow', act: 'day', hab: 'dead', min: 1, p: 0.35, n: [1, 1], z: 11, size: 0.22, col: ['#222026', '#56525e', '#0c0c0e'], bold: true },
+  owl: { mode: 'perch', draw: 'owl', act: 'night', hab: 'tree', min: 6, p: 0.4, n: [1, 1], z: 14, size: 0.24, col: ['#7c644a', '#ccb48e', '#2a2018'], eyes: '#ffc860', lift: 0.45 },
+  snowyowl: { mode: 'perch', draw: 'owl', act: 'night', hab: 'perch', min: 1, p: 0.35, n: [1, 1], z: 14, size: 0.25, col: ['#f2f2ee', '#ffffff', '#5c5c64'], eyes: '#ffe060', lift: 0.5 },
+  crow1: { mode: 'perch', draw: 'crow', act: 'day', hab: 'dead', min: 1, p: 0.35, n: [1, 1], z: 14, size: 0.22, col: ['#222026', '#56525e', '#0c0c0e'], bold: true },
   bat: { mode: 'flit', draw: 'bat', act: 'night', hab: 'tree', min: 4, p: 0.5, n: [2, 4], z: 11, size: 0.26, col: ['#625458', '#9a8a90', '#3a3034'], lift: 0.55 },
   duskbat: { mode: 'flit', draw: 'bat', act: 'dusk', hab: 'rock', min: 2, p: 0.5, n: [2, 4], z: 11, size: 0.26, col: ['#4a3a34', '#8a7068', '#2e221c'], lift: 0.3 },
   embermoth: { mode: 'flit', draw: 'moth', act: 'night', hab: 'open', min: 8, p: 0.55, n: [3, 6], z: 11, size: 0.07, col: ['#5a2a14', '#ffb060', '#1a0c06'], glow: '#ff8a30', slow: true },
@@ -389,7 +389,8 @@ function faunaFrame(z, v0, v1) {
 /** Bring roster entry e of cell c out, if its kind is about now and there's room. */
 function faunaTrySpawn(c, e) {
   const F = FAUNA, K = e.K, M = F.mur;
-  if (F.z < K.z || e.back > S.time || !faunaActive(e) || e.rank > Math.min(1, 0.8 * F.k) || F.n >= FAUNA_CAP * F.k) return;
+  if (e.back - S.time > 60) e.back = 0; // (the clock went back: a save loaded in its place)
+  if (F.z < K.z || e.back > S.time || !faunaActive(e) || e.rank > Math.min(1, 0.8 * F.k) || F.n >= faunaCap()) return;
   if (!faunaQuiet(c)) return;
   if ((K.mode === 'soar' || K.mode === 'flit' || K.mode === 'vee') && F.storm > 0.35) return;
   const cx = c.x0 + FAUNA_CELL / 2, cy = c.y0 + FAUNA_CELL / 2;
@@ -405,6 +406,9 @@ function faunaTrySpawn(c, e) {
   F.list.push(a);
   F.n += a.m.length;
 }
+
+/** How many animals at most, now: FAUNA_CAP at Auto (FAUNA_STEP), fewer zoomed right out, where they're specks. */
+function faunaCap() { return FAUNA_CAP * FAUNA.k * clamp(FAUNA.z / 36, 0.55, 1); }
 
 /** Fear, the Murmur and the light: whether animal a stays, beds down, or runs. */
 function faunaReact(a) {
@@ -1319,8 +1323,9 @@ function faunaWings(ctx, x, y, s, f, flap, cols, part, o) {
   }
   const hb = P(o && o.neck ? s * 0.34 : s * 0.2, 0);
   faunaEll(ctx, x, y, s * 0.22, s * 0.07, f);
+  if (s < 10) faunaEll(ctx, hb[0], hb[1], s * 0.06, s * 0.05, f); // (small: all in one shape)
   ctx.fill();
-  if (shadow) return;
+  if (shadow || s < 10) return;
   // (the head: a goose's black neck stretched out ahead)
   ctx.fillStyle = faunaCol(o && o.neck ? cols[2] : cols[0], o && o.lift);
   ctx.beginPath();
@@ -1382,7 +1387,7 @@ const FAUNA_DRAW = {
     }
     ctx.stroke();
     // Tail behind (a fox's long brush).
-    if (fox) {
+    if (fox && s > 8) {
       const wag = Math.sin(m.ph * 0.5) * 0.08;
       ctx.fillStyle = faunaCol(col[0], lift); ctx.beginPath(); faunaEll(ctx, -s * 0.38, by + s * 0.03, s * 0.17, s * 0.055, 0.22 + wag); ctx.fill();
       ctx.fillStyle = faunaCol(col[1], lift); ctx.beginPath(); faunaEll(ctx, -s * 0.53, by + s * 0.07, s * 0.05, s * 0.04, 0.3); ctx.fill();
@@ -1397,7 +1402,7 @@ const FAUNA_DRAW = {
     else faunaEll(ctx, hx + Math.cos(ha) * s * 0.07, hy + Math.sin(ha) * s * 0.07, s * 0.04, s * 0.03, ha);
     ctx.fill();
     // Belly and rump (a deer's white flag), an antelope's dark flank stripe, a fox's white chest.
-    if (s > 7) {
+    if (s > 11) {
       ctx.fillStyle = faunaCol(col[1], lift);
       ctx.beginPath(); faunaEll(ctx, s * 0.0, by + bw * 0.72, s * 0.13, bw * 0.26, 0);
       if (kind === 'deer') faunaEll(ctx, -s * 0.255, by - bw * 0.2, s * 0.035, bw * 0.55, 0);
@@ -1408,12 +1413,13 @@ const FAUNA_DRAW = {
       ctx.beginPath(); if (kind === 'antelope') faunaEll(ctx, s * 0.14, by - bw * 0.35, s * 0.12, bw * 0.55, -0.35); else if (!fox) faunaEll(ctx, -s * 0.02, by - bw * 0.62, s * 0.22, bw * 0.3, 0); ctx.fill();
     }
     // Ears, and an antelope's horns.
+    if (s < 9) { ctx.restore(); return; }
     ctx.fillStyle = faunaCol(fox ? col[0] : col[2], lift);
     ctx.beginPath();
     if (fox) { for (const e of [0, 1]) { const ex = hx - s * (0.02 + e * 0.04); ctx.moveTo(ex - s * 0.025, hy - s * 0.03); ctx.lineTo(ex, hy - s * 0.11); ctx.lineTo(ex + s * 0.025, hy - s * 0.03); ctx.closePath(); } }
     else faunaEll(ctx, hx - s * 0.05, hy - s * 0.045, s * 0.045, s * 0.017, up ? -0.7 : 0.4);
     ctx.fill();
-    if (kind === 'antelope' && s > 6) {
+    if (kind === 'antelope') {
       ctx.strokeStyle = faunaCol('#2a221a', lift); ctx.lineWidth = Math.max(0.8, s * 0.022);
       ctx.beginPath(); ctx.moveTo(hx - s * 0.03, hy - s * 0.03); ctx.quadraticCurveTo(hx - s * 0.1, hy - s * 0.05, hx - s * 0.06, hy - s * 0.12); ctx.stroke();
     }
