@@ -5741,11 +5741,12 @@ function flagPile(u, r) {
 /**
  * Warbot u holding flag r, with nothing to fight: crates lying near the flag (a nest's hoard, a wreck's goods) and no
  * enemy robot (the Murmur too) or gun as near, it carries them home a crate at a time, then comes back to the flag
- * (u.resume). Up to half the squad goes; the rest stand guard. True if it set off. (The owner's call, Nov 2026:
+ * (u.resume). Up to half the squad goes; the rest stand guard. A player's warbots only: the rival's flags are left as they
+ * were (one more of 18 rival-vs-rival games ran to the cap with them in). True if it set off. (The owner's call, Nov 2026:
  * warbots on a flag used to stand beside crates and leave them to rot.)
  */
 function flagLoot(u, r) {
-  if (u.noLoot > S.time || u.loot || foesNear(u.owner, r.x, r.y, FLAG_LOOT)) return false;
+  if (S.players[u.owner].ai || u.noLoot > S.time || u.loot || foesNear(u.owner, r.x, r.y, FLAG_LOOT)) return false; // (a player's flags: the rival's marches and raids loot as they always have)
   const l = flagPile(u, r);
   if (!l) return false;
   let out = 0;

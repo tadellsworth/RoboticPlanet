@@ -1147,7 +1147,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no
   Haulers) collect piles and take them to storage (`dispatch` step 4d, `doCrate`) while no enemy robot or gun is
   within `CRATE_SAFE` tiles (`foesNear`). Idle or victorious warbots nearby carry one crate each to their side's
-  nearest garrison and go back for more (`doLoot`). Warbots holding a flag carry home piles within `FLAG_LOOT` (8)
+  nearest garrison and go back for more (`doLoot`). A player's warbots holding a flag (not the rival's) carry home piles within `FLAG_LOOT` (8)
   tiles of it once no enemy robot (the Murmur too) or gun is as near, up to half the squad at a time, and go back to the
   flag after (`flagLoot`, `flagPile`, `u.resume`); they used to stand beside a nest's hoard and leave it to rot. Crates
   left at an Outpost (`b.loot`) are hauled on to storage, and its panel lists them as Salvage (with a warning if no road
