@@ -1256,11 +1256,21 @@ function drawShapeThumb(cv, P) {
   }
   if (P.ring) { blob(0.5, 0.5, 0.3, 0.2, THUMB.rock, THUMB.rockHi); blob(0.47, 0.47, 0.14, 0.08, THUMB.rockHi); crags = 0; }
   if (P.cross) {
-    const lw = Math.max(2, U * 0.08);
-    line([[0.1, 0.5], [0.9, 0.5]], THUMB.rock, lw); line([[0.5, 0.1], [0.5, 0.9]], THUMB.rock, lw);
-    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.13, 0, 7); ctx.fillStyle = THUMB.hi; ctx.fill();
-    for (let k = 0; k < 4; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; ctx.beginPath(); ctx.arc(X(0.5) + Math.cos(k * 1.6) * U * 0.06, Y(0.5) + Math.sin(k * 1.6) * U * 0.06, Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
-    crags = 0;
+    // A mesa in each corner (its inner corner rounded), the lowland between them a cross of arms meeting at the plaza in
+    // the middle, and three slopes off each mesa: one down each inner face and one off the corner, toward the plaza.
+    ctx.fillStyle = THUMB.lo; ctx.fillRect(x0, y0, mw, mh);
+    const m = 0.38, R = U * 0.12, rs = U * 0.055, ramp = (x, y) => { ctx.fillStyle = THUMB.ramp; ctx.fillRect(x - rs / 2, y - rs / 2, rs, rs); };
+    for (const [sx, sy] of [[0, 1], [0, 0], [1, 0], [1, 1]]) {
+      const fx = X(sx ? 1 - m : m), fy = Y(sy ? 1 - m : m), ox = sx ? X(1) + R : X(0) - R, oy = sy ? Y(1) + R : Y(0) - R;
+      const rx = Math.min(fx, ox), ry = Math.min(fy, oy), rw = Math.abs(fx - ox), rh = Math.abs(fy - oy);
+      ctx.save(); ctx.translate(U * 0.02, U * 0.03); ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, rx, ry, rw, rh, R); ctx.fill(); ctx.restore();
+      ctx.fillStyle = THUMB.hi; roundRect(ctx, rx, ry, rw, rh, R); ctx.fill(); ctx.strokeStyle = THUMB.rockHi; ctx.lineWidth = Math.max(1, U * 0.015); ctx.stroke();
+      const dx = sx ? 1 : -1, dy = sy ? 1 : -1;
+      ramp(fx, (fy + (sy ? Y(1) : Y(0))) / 2); ramp((fx + (sx ? X(1) : X(0))) / 2, fy); ramp(fx + dx * 0.29 * R, fy + dy * 0.29 * R);
+    }
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.1, 0, 7); ctx.fillStyle = THUMB.ground; ctx.fill();
+    for (let k = 0; k < 4; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; ctx.beginPath(); ctx.arc(X(0.5) + Math.cos(k * 1.6 + 0.8) * U * 0.06, Y(0.5) + Math.sin(k * 1.6 + 0.8) * U * 0.06, Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    marks = [[0.19, 0.81], [0.19, 0.19], [0.81, 0.19], [0.81, 0.81]]; crags = 0;
   }
   if (P.volcano) {
     for (const [r, c] of [[0.3, '#3a2620'], [0.22, '#5a3a2c'], [0.13, '#7a4a34']]) { ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * r, 0, 7); ctx.fillStyle = c; ctx.fill(); }
