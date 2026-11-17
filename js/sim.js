@@ -4814,7 +4814,7 @@ function damageBot(u, dmg, sx, sy, nat) {
 }
 
 function hitBuilding(b, dmg, by) {
-  if (calmB(b)) return; // nothing shoots on a Trade Post's ground
+  if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   dmg = keepShield(b, dmg);
   b.armor -= dmg;
   b.lastHit = S.time;
@@ -6188,8 +6188,9 @@ function overGap(a, b) {
   return gap;
 }
 
-/** Walk up to an enemy building and hit it. Returns null if it can't be reached. */
+/** Walk up to an enemy building and hit it. Returns null if it can't be reached (or can't be hurt: on a Trade Post's ground). */
 function strikeBuilding(u, b, dt, power) {
+  if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
   const bt = BOTS[u.type], reach = bt.shield ? 1.7 : bt.flame ? 2.05 : WARBOT_HIT.reach; // (a Bulwark goes in closest, in front of its group)
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
@@ -6841,9 +6842,9 @@ function holdRally(u, t, r, dt, power) {
       // (A flag planted for an Attack goes for that building first; the rival AI's marches for the gun that covers
       // the flag, r.first, then on as usual: warbots only shoot back at robots, so the gun has to be their target.)
       const own = r.target ? getE(r.target) : r.first ? getE(r.first) : null;
-      if (own && !own.dead && foes(own.owner, u.owner)) tgt = own;
+      if (own && !own.dead && foes(own.owner, u.owner) && !calmShield(own)) tgt = own;
       else for (const e of S.buildings) {
-        if (e.dead || !foes(e.owner, u.owner)) continue;
+        if (e.dead || !foes(e.owner, u.owner) || calmShield(e)) continue; // (not a finished Trade Terminal on a Trade Post's ground: nothing is hurt there)
         const d = dist2(e.x + 0.5, e.y + 0.5, r.x, r.y);
         if (d < bd) { bd = d; tgt = e; }
       }
@@ -7218,7 +7219,7 @@ function orderRepair(owner, ids, b) {
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
 function orderAttack(owner, ids, target) {
-  if (!target || target.dead || !foes(target.owner, owner) || calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
+  if (!target || target.dead || !foes(target.owner, owner) || calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
@@ -7850,7 +7851,7 @@ function attackAvailable(owner, target, all) {
  */
 function sendAttack(owner, target, count, all, hurry, lead) {
   let sent = 0;
-  if (calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
+  if (calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
   const squad = [];
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of attackSources(owner, target, posted, all)) {
@@ -10909,6 +10910,12 @@ function calmAt(x, y) {
 }
 /** Is building b on a Trade Post's ground? */
 function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
+/**
+ * Is building b out of the robots' reach, a finished one on a Trade Post's ground? A Trade Terminal's construction site
+ * there is not: enemy robots can wreck it like any site, as they could a site anywhere else (the owner's call, Nov 2026:
+ * warbots used to fire at one for ever). Bombs, shells and Missiles still spare everything there.
+ */
+function calmShield(b) { return b.built && calmB(b); }
 
 /* ------------------------------------------------------------------ crawlers */
 
