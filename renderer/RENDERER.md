@@ -35,6 +35,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | The Hollow (proposed, not shipped) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
+| Resources (proposed, not shipped) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -418,3 +419,19 @@ python3 preview/hollow_sheet.py <sheet folder>   # the design sheet (one HTML pa
   code rather than from tiles); `tunnels/run.js` renders it in headless Chrome for the mock-ups.
 - `preview/hollow_specs.json` gives the proposed keys, sizes and anchors. Level 4 of the Burrow leaves levels 1-3 exactly as
   they were (checked pixel for pixel).
+## Fiber and Oil directions
+
+Proposed new looks for the Stalk grove and the Oil seep (IDEAS.md), for the owner to choose from; not installed. Run
+from this folder:
+
+```
+for v in 1 2 3; do node run.js out/res "resources:::fiber-$v:c=fiber&v=$v" "resources:::fiber-$v-g0.25:c=fiber&v=$v&g=0.25" \
+  "resources:::fiber-$v-g0.5:c=fiber&v=$v&g=0.5" "resources:::fiber-$v-g0.75:c=fiber&v=$v&g=0.75" "resources:::vent-$v:c=vent&v=$v"; done
+python3 post/resource_post.py out/res fiber-1 fiber-1-g0.25 ... --day 0.12 --glowk 0.5   # every fiber render
+python3 post/resource_post.py out/res vent-1 vent-2 vent-3
+python3 terrain/oil_seeps.py                    # the seep textures and their night sheen
+python3 preview/resource_mock.py out/preview/res  # patches on five regions, day and night, enlarged, line-ups
+python3 preview/resource_sheet.py <sheet folder>  # the design sheet and the renders beside it
+```
+
+Resources are graded for the time of day in code, so each is one day render; its glow pass becomes a night glow image.
