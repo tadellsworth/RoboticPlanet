@@ -475,6 +475,13 @@ These wait for a later expansion:
   `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
+  Its music is ready (Nov 17): **The Long Silence**, the campaign theme (`MOODS.campaign` in js/audio.js; see the README's
+  Sound), which tells the story's arc from a level the campaign sets with `musicStory(level)`: at `(mission - 1) / 14`
+  missions 1 and 2 are Landfall, 3 and 4 the colony at work, 5 and 6 the first murmur, 7 to 10 Contingency, 11 to 14
+  the Murmur rising (the climax) and 15 the Silence. Until then the Lore guide plays it. Open: whether a mission should
+  play it all through in place of the build themes (as wired now: the war, the Murmur and a nuke still take over), or
+  only in its briefing and quiet stretches, taking turns with the build themes; and whether the Now playing card should
+  show over the Lore guide, which it doesn't (a full screen covers it).
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
   transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
   that matches no robot protocol), so players piece together Earth's fate without ever being told.
