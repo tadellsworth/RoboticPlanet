@@ -3,16 +3,19 @@
  * Terrafall — Send feedback: the short form behind Feedback on the main menu and Send feedback in the pause menu
  * (#screen-feedback in index.html). It posts what the player writes to the relay's /feedback (relay/src/feedback.js,
  * which files it as an issue for the game's maker), with a few facts about this copy of the game, the device and the
- * game being played (feedbackMeta) and, only if the player ticks Attach my current game, that game's save file
- * (saveFileText, as Download save file writes it).
+ * game being played (feedbackMeta, with the build it is: feedbackBuild) and, only if the player ticks them, that game's
+ * save file (Attach my current game: saveFileText, as Download save file writes it) and a picture of the map as it is on
+ * screen (Attach a picture of the map: feedbackShot).
  *
  * It is only interface: it sends no game order and leaves the game as it was (paused under the pause menu, or running
  * on under the multiplayer menu), so it can't touch a multiplayer game. What the player wrote stays in the form until
  * it has been sent: an error, closing the form or a reply that comes back after it was closed never loses it.
  */
 
-/** The relay's limits (relay/src/feedback.js): characters of text, contact, meta (as JSON) and save. */
-const FB_MIN_TEXT = 3, FB_MAX_TEXT = 5000, FB_MAX_CONTACT = 200, FB_MAX_META = 4000, FB_MAX_SAVE = 8 << 20;
+/** The relay's limits (relay/src/feedback.js): characters of text, contact, meta (as JSON), save and picture. */
+const FB_MIN_TEXT = 3, FB_MAX_TEXT = 5000, FB_MAX_CONTACT = 200, FB_MAX_META = 4000, FB_MAX_SAVE = 8 << 20, FB_MAX_SHOT = 1 << 20;
+/** The picture of the map: at most this many pixels on its long side (a JPEG of a few hundred KB). */
+const FB_SHOT_PX = 1600;
 const FB_TYPES = ['bug', 'idea', 'balance', 'other'];
 /** The text box's prompt for each kind of report. */
 const FB_PROMPT = {
@@ -25,11 +28,20 @@ const FB_PROMPT = {
 const FB_LOG = 5;
 
 /**
- * The form's state. type: the kind picked; busy: a report on its way; saveSet: the player has ticked or unticked
- * Attach my current game themselves (until then it follows the type: on for a Bug); sent: the thanks to show (a report
- * filed: { n, note }), until the form is next closed.
+ * The form's state. type: the kind picked; busy: a report on its way; saveSet, shotSet: the player has ticked or
+ * unticked Attach my current game, or Attach a picture of the map, themselves (until then each follows the type: on for
+ * a Bug); sent: the thanks to show (a report filed: { n, note }), until the form is next closed.
  */
-const FB = { type: 'bug', busy: false, saveSet: false, sent: null };
+const FB = { type: 'bug', busy: false, saveSet: false, shotSet: false, sent: null };
+
+/**
+ * Which build of the game this is: index.html's terrafall-build tag, which the publishing workflow
+ * (.github/workflows/pages.yml) stamps with the commit's short hash and the date ("1902487 2026-11-17"), and
+ * tools/build-single.js the same with "one-file"; "dev" for a copy run straight from the repository.
+ */
+function feedbackBuild() {
+  try { const el = document.querySelector('meta[name="terrafall-build"]'); return (el && el.content.trim().slice(0, 60)) || 'dev'; } catch (e) { return 'dev'; }
+}
 
 /** The relay's feedback address: its wss:// (ws://) address as https:// (http://), with /feedback; '' if there's none. */
 function feedbackUrl() {
@@ -45,7 +57,7 @@ function feedbackGame() { return !!(UI.inGame && S && S.players); }
  * only while its JSON is at most FB_MAX_META characters, and shows each value cut to 300).
  */
 function feedbackMeta() {
-  const m = {};
+  const m = { build: feedbackBuild() };
   try { m.version = gameVersion(); } catch (e) { m.version = 'unknown'; }
   if (window.TOD_BUNDLE) m.version += ' (one-file build)';
   m.device = String(navigator.userAgent || 'unknown').slice(0, 280);
@@ -91,6 +103,7 @@ function initFeedback() {
   });
   $('fb-text').addEventListener('input', fbCount);
   $('fb-save').onchange = () => { FB.saveSet = true; };
+  $('fb-shot').onchange = () => { FB.shotSet = true; };
   $('fb-form').addEventListener('submit', (e) => { e.preventDefault(); sendFeedback(); });
   // Every key pressed in the form is the form's: none reaches the game's own keys (a letter typed is not a hotkey,
   // Space does not resume the game behind it). Esc closes it; Ctrl+Enter (⌘Enter) sends.
@@ -112,7 +125,9 @@ function openFeedback() {
   if (!scr.hidden) return;
   const game = feedbackGame();
   $('fb-save-row').hidden = !game;
+  $('fb-shot-row').hidden = !game;
   if (!FB.saveSet) $('fb-save').checked = game && FB.type === 'bug';
+  if (!FB.shotSet) $('fb-shot').checked = game && FB.type === 'bug';
   if (!FB.busy && !/\bbad\b/.test($('fb-msg').className)) fbSay(''); // (why the last try failed stays said, beside the text it kept)
   fbSync();
   scr.hidden = false;
@@ -138,6 +153,7 @@ function fbSetType(t) {
   if (!FB_TYPES.includes(t)) return;
   FB.type = t;
   if (!FB.saveSet) $('fb-save').checked = feedbackGame() && t === 'bug';
+  if (!FB.shotSet) $('fb-shot').checked = feedbackGame() && t === 'bug';
   fbSync();
 }
 
@@ -151,7 +167,7 @@ function fbSync() {
   }
   $('fb-text').placeholder = FB_PROMPT[FB.type];
   $('fb-what').textContent = feedbackGame()
-    ? 'Sent with it: your message, your email or name if you give one, the game\'s version, your device and screen size, and this game\'s map, seed, time and last few messages (and the game itself, only if ticked). Nothing else.'
+    ? 'Sent with it: your message, your email or name if you give one, the game\'s version, your device and screen size, and this game\'s map, seed, time and last few messages (and the game itself and the picture, only if ticked). Nothing else.'
     : 'Sent with it: your message, your email or name if you give one, the game\'s version, and your device and screen size. Nothing else.';
   fbCount();
   $('fb-form').hidden = !!FB.sent;
@@ -180,11 +196,33 @@ function fbBusy(on) {
   $('fb-text').readOnly = on;
   $('fb-contact').readOnly = on;
   $('fb-save').disabled = on;
+  $('fb-shot').disabled = on;
   for (const b of $('fb-type').children) b.disabled = on;
   $('fb-form').setAttribute('aria-busy', on ? 'true' : 'false');
 }
 
 /* ------------------------------------------------------------------ sending */
+
+/**
+ * A picture of the map as it is on screen: the map's own canvas (R.canvas; the panels and menus are page elements, so
+ * they aren't in it), at most FB_SHOT_PX on its long side, as a JPEG data URL under FB_MAX_SHOT characters (a lower
+ * quality if need be). '' if this browser can't make one.
+ */
+function feedbackShot() {
+  const cv = typeof R !== 'undefined' && R.canvas;
+  if (!cv || !cv.width || !cv.height) return '';
+  let c = null;
+  try {
+    const k = Math.min(1, FB_SHOT_PX / Math.max(cv.width, cv.height));
+    c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(cv.width * k)); c.height = Math.max(1, Math.round(cv.height * k));
+    const x = c.getContext('2d');
+    x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height); // (a JPEG has nothing see-through)
+    x.drawImage(cv, 0, 0, c.width, c.height);
+    for (const q of [0.82, 0.65, 0.5]) { const url = c.toDataURL('image/jpeg', q); if (/^data:image\/jpeg;base64,/.test(url) && url.length <= FB_MAX_SHOT) return url; }
+    return '';
+  } catch (e) { return ''; } finally { if (c) c.width = c.height = 0; }
+}
 
 /**
  * Send the report: { type, text, contact?, meta, save?, website } as JSON to feedbackUrl(). The text box is emptied
@@ -200,18 +238,22 @@ async function sendFeedback() {
   const contact = $('fb-contact').value.trim().slice(0, FB_MAX_CONTACT);
   if (contact) body.contact = contact;
   let note = '';
+  if (feedbackGame() && $('fb-shot').checked) {
+    const shot = feedbackShot();
+    if (shot) body.shot = shot; else note = 'The picture of the map couldn\'t be made here, so it went without it.';
+  }
   if (feedbackGame() && $('fb-save').checked) {
     let save = '';
     try { save = saveFileText(); } catch (e) { note = 'Your game couldn\'t be attached, so it went without it.'; }
-    if (save.length > FB_MAX_SAVE) note = 'Your game was too big to attach (over 8 MB), so it went without it.';
+    if (save.length > FB_MAX_SAVE) note = (note ? note + ' ' : '') + 'Your game was too big to attach (over 8 MB), so it went without it.';
     else if (save) body.save = save;
   }
   let json = JSON.stringify(body);
   // (The relay turns away anything much bigger than the biggest save it takes: a save that only just fits goes too.)
-  if (body.save && new Blob([json]).size > FB_MAX_SAVE + 60 * 1024) {
+  if (body.save && new Blob([json]).size > FB_MAX_SAVE + FB_MAX_SHOT + 60 * 1024) {
     delete body.save;
     json = JSON.stringify(body);
-    note = 'Your game was too big to attach (over 8 MB), so it went without it.';
+    note = (note ? note + ' ' : '') + 'Your game was too big to attach (over 8 MB), so it went without it.';
   }
   fbBusy(true);
   fbSay('');
@@ -229,7 +271,7 @@ async function sendFeedback() {
   if (!res) fbSay((navigator.onLine === false ? 'You\'re offline: connect to the internet and try again.' : 'Couldn\'t reach the feedback server: check your connection and try again.') + kept, 'bad');
   else if (res.status === 503 && out.why === 'off') fbSay('Feedback isn\'t switched on yet: the game\'s maker is still setting it up. Please try again in a few days.' + kept, 'bad');
   else if (res.status === 429) fbSay('That\'s a lot of reports from here in a short time: please try again in an hour or so.' + kept, 'bad');
-  else if (res.status === 413) fbSay('That was too big to send: untick Attach my current game and try again.' + kept, 'bad');
+  else if (res.status === 413) fbSay('That was too big to send: untick Attach my current game (and the picture) and try again.' + kept, 'bad');
   else if (res.status === 400 && out.why === 'short') fbSay(`Write a few words first (at least ${FB_MIN_TEXT} characters).`, 'warn');
   else fbSay(`Something went wrong sending it (error ${res.status}). Please try again later.` + kept, 'bad');
 }
@@ -237,7 +279,7 @@ async function sendFeedback() {
 /** The relay filed report #n: thanks, and a fresh form next time (the email or name stays: the same person). */
 function fbFiled(n, note) {
   $('fb-text').value = '';
-  FB.saveSet = false;
+  FB.saveSet = false; FB.shotSet = false;
   FB.sent = { n, note };
   fbSay('');
   if ($('screen-feedback').hidden) {

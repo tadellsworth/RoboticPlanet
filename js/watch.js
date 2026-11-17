@@ -213,44 +213,77 @@ function watchBand(r) {
   return { x: x / band.length, y: y / band.length, n: band.length };
 }
 
-/** What colony P is doing, as the report says it: { s (how much it matters), t (the line), x, y (where) }. */
-function watchDoing(P, army) {
-  const p = P.id, The = watchThe(p, true), Thes = watchThes(p, true);
+/**
+ * Everything colony P is up to, the most important first, read from the computer's own plans (P.stormOn, P.march and
+ * P.siegeAt, P.homeCall, its Missiles and bombers, P.raid, P.pushOn, P.massFor: see js/ai.js) and what it has (`army`:
+ * its warbots). Shared by the report here (watchDoing: the first) and the scouts of your own games (js/scout.js), which
+ * each put it in their own words. Each is { kind, s (how much it matters), x, y (where its band is, when one is out) }
+ * and, by kind:
+ *   storm   storming foe's Command Base (flag id): n warbots in the band, go once it goes in (else it's forming up)
+ *   march   n warbots on the march (flag id), against building b (when it has picked one)
+ *   home    under attack at home: its warbots kept back to hold its base
+ *   fire    Missiles in the air (shots) or bombers out (bombs), the last at colony foe's land
+ *   raid    a band of n out to raid the road at (tx, ty) (flag id), foe's (or -1); forming: still slipping out to it
+ *   push    a Warden's big push (till `until`): every warbot it can spare
+ *   mass    massing for a push, on building b when it has one: army of the need it waits for
+ *   opening its first minutes; build: building up (built buildings, workers); only when it's up to nothing else
+ */
+function rivalPlans(P, army) {
+  const p = P.id, out = [];
   const target = (at) => { const b = at && inMap(at.x, at.y) ? getE(S.bAt[tIdx(at.x, at.y)]) : null; return b && !b.dead && b.owner >= 0 && b.owner !== p ? b : null; };
   if (P.stormOn) {
     const r = rallyById(P.stormOn.id), at = r ? watchBand(r) : null;
-    return { s: 100, t: P.stormOn.go ? `${The} is storming ${watchThes(P.stormOn.foe)} Command Base!` : `${The} is forming up to storm ${watchThes(P.stormOn.foe)} Command Base.`, x: at && at.x, y: at && at.y };
+    out.push({ kind: 'storm', s: 100, id: P.stormOn.id, foe: P.stormOn.foe, go: !!P.stormOn.go, n: at ? at.n : 0, x: at && at.x, y: at && at.y });
   }
   const march = P.march && rallyById(P.march);
-  if (march) {
-    const at = watchBand(march), b = target(P.siegeAt);
-    return { s: 80, t: `${The} has ${at.n || 'its'} warbots on the march` + (b ? ` against ${watchThes(b.owner)} ${BDEFS[b.type].name}.` : '.'), x: at.x, y: at.y };
+  if (march && !(P.stormOn && P.stormOn.id === P.march)) {
+    const at = watchBand(march);
+    out.push({ kind: 'march', s: 80, id: P.march, n: at.n, b: target(P.siegeAt), x: at.x, y: at.y });
   }
-  if (P.homeCall > S.time) return { s: 72, t: `${The} is under attack at home, and keeps its warbots back to hold its base.` };
+  if (P.homeCall > S.time) out.push({ kind: 'home', s: 72 });
   let shots = 0, bombs = 0, foe = -1;
   for (const m of S.missiles) {
     if (m.owner !== p || m.nuke || m.shell || m.rocket) continue;
     if (m.bomb) bombs++; else shots++;
     foe = watchOwner(m.x1, m.y1);
   }
-  if (shots || bombs) return { s: 66, t: `${The} ${shots ? 'is firing Missiles' : 'has bombers out'}${foe >= 0 && foe !== p ? ` at ${watchThe(foe)}` : ''}.` };
+  if (shots || bombs) out.push({ kind: 'fire', s: 66, shots, bombs, foe });
   const raid = P.raid && rallyById(P.raid.id);
   if (raid) {
     const forming = P.raid.to !== undefined, tx = forming ? (P.raid.to % S.W) + 0.5 : raid.x, ty = forming ? ((P.raid.to / S.W) | 0) + 0.5 : raid.y;
-    const f = watchOwner(tx, ty), at = watchBand(raid), d = f >= 0 && f !== p ? watchDir(f, tx, ty) : '';
-    const road = f >= 0 && f !== p ? `${watchThes(f)} ${d ? d + ' road' : 'roads by its base'}` : 'the roads';
-    return { s: 60, t: forming ? `${Thes} band is slipping out to raid ${road}.` : `${Thes} band is raiding ${road}.`, x: at.x, y: at.y };
+    const f = watchOwner(tx, ty), at = watchBand(raid);
+    out.push({ kind: 'raid', s: 60, id: P.raid.id, forming, foe: f >= 0 && f !== p ? f : -1, tx, ty, n: at.n, x: at.x, y: at.y });
   }
-  if (P.pushOn > S.time) return { s: 56, t: `${The} is on its big push: every warbot it can spare will go.` };
-  if (P.massFor && S.time <= P.massFor.until) {
-    const b = target(P.siegeAt);
-    return { s: 50, t: `${The} is massing for a push${b ? ` on ${watchThes(b.owner)} ${BDEFS[b.type].name}` : ''} (${Math.min(army, P.massFor.need)} of ${P.massFor.need} warbots).` };
-  }
-  if (S.time < 150) return { s: 10, t: `${The} ${WATCH_OPENING[P.style] || WATCH_OPENING.balanced}.` };
+  if (P.pushOn > S.time) out.push({ kind: 'push', s: 56, until: P.pushOn });
+  if (P.massFor && S.time <= P.massFor.until) out.push({ kind: 'mass', s: 50, b: target(P.siegeAt), army: Math.min(army, P.massFor.need), need: P.massFor.need });
+  if (out.length) return out;
+  if (S.time < 150) return [{ kind: 'opening', s: 10 }];
   let built = 0, workers = 0;
   for (const b of S.buildings) if (!b.dead && b.owner === p && b.built) built++;
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') workers++;
-  return { s: 10, t: `${The} is building up: ${built} buildings and ${workers} workers.` };
+  return [{ kind: 'build', s: 10, built, workers }];
+}
+
+/** What colony P is doing, as the report says it: { s (how much it matters), t (the line), x, y (where) }. */
+function watchDoing(P, army) {
+  const p = P.id, The = watchThe(p, true), Thes = watchThes(p, true), d = rivalPlans(P, army)[0];
+  const t = (() => {
+    switch (d.kind) {
+      case 'storm': return d.go ? `${The} is storming ${watchThes(d.foe)} Command Base!` : `${The} is forming up to storm ${watchThes(d.foe)} Command Base.`;
+      case 'march': return `${The} has ${d.n || 'its'} warbots on the march` + (d.b ? ` against ${watchThes(d.b.owner)} ${BDEFS[d.b.type].name}.` : '.');
+      case 'home': return `${The} is under attack at home, and keeps its warbots back to hold its base.`;
+      case 'fire': return `${The} ${d.shots ? 'is firing Missiles' : 'has bombers out'}${d.foe >= 0 && d.foe !== p ? ` at ${watchThe(d.foe)}` : ''}.`;
+      case 'raid': {
+        const dir = d.foe >= 0 ? watchDir(d.foe, d.tx, d.ty) : '', road = d.foe >= 0 ? `${watchThes(d.foe)} ${dir ? dir + ' road' : 'roads by its base'}` : 'the roads';
+        return d.forming ? `${Thes} band is slipping out to raid ${road}.` : `${Thes} band is raiding ${road}.`;
+      }
+      case 'push': return `${The} is on its big push: every warbot it can spare will go.`;
+      case 'mass': return `${The} is massing for a push${d.b ? ` on ${watchThes(d.b.owner)} ${BDEFS[d.b.type].name}` : ''} (${d.army} of ${d.need} warbots).`;
+      case 'opening': return `${The} ${WATCH_OPENING[P.style] || WATCH_OPENING.balanced}.`;
+      default: return `${The} is building up: ${d.built} buildings and ${d.workers} workers.`;
+    }
+  })();
+  return { s: d.s, t, x: d.x, y: d.y };
 }
 
 /** Something that has just happened (a Command Base taken, a nuclear launch): first in the report for a while. */

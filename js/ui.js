@@ -136,6 +136,10 @@ function initUI() {
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
+  const syncScouts = () => { $('p-scouts').textContent = `Scout reports: ${SCOUT.on ? 'On' : 'Off'}`; };
+  syncScouts();
+  $('p-scouts').onclick = () => { setScoutsOn(!SCOUT.on); syncScouts(); sfx('click'); };
   // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
   const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
   const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
@@ -1749,6 +1753,8 @@ function initKeyboard() {
         return;
       }
     }
+    // Placing a blueprint: R turns it.
+    if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
@@ -2004,6 +2010,70 @@ function undoLastSite() {
   return true;
 }
 
+/* ------------------------------------------------------------------ now playing */
+
+/*
+ * Now playing (#now-playing), on a computer only: a ♪ in the bottom left corner, level with the tools. When the music
+ * turns to a new theme it opens into a card with the theme's title (MUSIC_TITLES in audio.js) for NP_SHOW ms; hovering
+ * over the ♪, or a click, opens it too. A title shown in the last NP_AGAIN ms isn't shown again (the war theme comes and
+ * goes with the fighting). Nothing shows with the Music off, in photo mode or under a full screen (the main menu is
+ * fine: it has music too). Nor where it would run into the tools (they move left for a panel on a smaller screen) or
+ * the main menu's card (Custom Game fills the screen): a new theme's card waits until it can be seen. Display only: it
+ * reads MUSIC and changes nothing in the game.
+ */
+const NP_SHOW = 6000, NP_AGAIN = 60000;
+const NP = { mood: '', due: false, until: 0, hover: false, shown: {}, mq: null, covers: null, wired: false };
+
+/** A computer: a mouse, not a finger, and the wide layout (the tools along the bottom, not down the side). */
+function nowPlayingDesk() {
+  if (typeof matchMedia !== 'function') return false;
+  NP.mq = NP.mq || matchMedia('(pointer: fine) and (min-width: 1000px) and (min-height: 520px)');
+  return NP.mq.matches && !onTouch();
+}
+
+/** A full screen or dialog over the game (not the main menu itself). */
+function nowPlayingCovered() {
+  NP.covers = NP.covers || [...document.querySelectorAll('.screen:not(#screen-menu), #briefing, #m-picker')];
+  return NP.covers.some((el) => !el.hidden);
+}
+
+function nowPlayingTick() {
+  const el = $('now-playing');
+  if (!el) return;
+  if (!NP.wired) {
+    NP.wired = true;
+    const note = $('np-note');
+    note.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') NP.hover = true; });
+    note.addEventListener('pointerleave', () => { NP.hover = false; });
+    note.addEventListener('click', () => { NP.until = performance.now() + NP_SHOW; note.blur(); });
+  }
+  const title = MUSIC_TITLES[MUSIC.mood] || '';
+  if (MUSIC.mood !== NP.mood) { NP.mood = MUSIC.mood; NP.due = !!title; }
+  const ac = AUDIO.ctx;
+  let on = !!title && AUDIO.on && AUDIO.music > 0 && !!ac && ac.state === 'running' && !UI.photo && nowPlayingDesk() && !nowPlayingCovered();
+  let room = false;
+  if (on) {
+    // Clear of the tools (in a game) and the menu's card (on the menu): the ♪ needs its corner, the card the title too.
+    const H = innerHeight, obs = [$('bottombar').getBoundingClientRect(), $('menu-card').getBoundingClientRect()];
+    const clear = (w) => obs.every((r) => !r.width || r.left >= 24 + w || r.bottom <= H - 64);
+    on = clear(42);
+    room = clear(56 + el.lastElementChild.scrollWidth);
+  }
+  const shown = !el.hidden;
+  if (el.hidden !== !on) el.hidden = !on;
+  if (!on) { NP.hover = false; el.classList.remove('open'); return; }
+  if ($('np-title').textContent !== title) { $('np-title').textContent = title; $('np-note').setAttribute('aria-label', 'Now playing: ' + title); }
+  const tip = room ? '' : 'Now playing: ' + title; // (no room for the card: a hover shows the browser's tip instead)
+  if ($('np-note').title !== tip) $('np-note').title = tip;
+  const now = performance.now();
+  if (NP.due && room && shown) {
+    NP.due = false;
+    if (now - (NP.shown[title] ?? -Infinity) >= NP_AGAIN) { NP.shown[title] = now; NP.until = now + NP_SHOW; }
+  }
+  // (opened a frame after it appears, so the card fades in)
+  el.classList.toggle('open', room && shown && (NP.hover || now < NP.until));
+}
+
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
 function nextGroupNo() {
   const G = S && S.groups ? S.groups : {};
@@ -2049,6 +2119,7 @@ function refreshSelection() {
  * changes nothing (it was most likely meant to move the map).
  */
 function onSelectBox(box, add, armed) {
+  if (R.mode === 'bppick') { bpPickBox(box); return; } // (picking buildings for a blueprint: js/blueprint.js)
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
@@ -2063,6 +2134,8 @@ function onSelectBox(box, add, armed) {
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(...b.garrison.slice(1));
   }
   INPUT.boxArmed = false; // (Box on the selection bar is for one drag)
+  // No warbots, but buildings of yours: the chip at the foot of the map offers to keep them as a blueprint.
+  if (!ids.length && (armed || !onTouch()) && bpBoxOffer(box)) { if (!add) selectBots([], false); return; }
   if (!ids.length && !armed && onTouch()) { refreshSelection(); return; }
   selectBots(ids, add);
   if (ids.length) sfx('click'); else if (onTouch()) toast('No warbots of yours in that box.', 'info');
@@ -3263,6 +3336,9 @@ function setMode(mode, keepPlan) {
   if (UI.pick) { UI.pick = 0; UI.pickDeck = null; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
   UI.placeType = null;
   UI.moveFrom = 0;
+  if (mode !== 'bppick') UI.bpPick = null; // (blueprints: picking buildings, placing one: js/blueprint.js)
+  if (mode !== 'bpplace') UI.bpPlace = null;
+  if (UI.bpOffer && mode !== 'normal') { UI.bpOffer = null; bpOfferShow(); }
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
   if (mode === 'normal') { $('banner').hidden = true; return; }
@@ -3896,6 +3972,8 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'bppick') { if (UI.bpPick && UI.bpPick.size) bpSave([...UI.bpPick]); return; }
+  if (R.mode === 'bpplace') { bpPlaceNow(); return; }
   if (R.mode === 'strike' && UI.strikeKind === 'napalm' && R.napalmAt) { sendNapalm(R.napalmAt.i, R.napalmAt.j); return; }
   if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick), UI.pickDeck); return; }
   if (R.mode === 'scorch' && R.scorchAt) { sendScorch(R.scorchAt.i, R.scorchAt.j); return; }
@@ -4019,6 +4097,9 @@ function onMapTap(i, j, wx, wy) {
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'scorch') { scorchTap(i, j); return; }
+  if (R.mode === 'bppick') { bpPickTap(i, j, wx, wy); return; } // (blueprints: js/blueprint.js)
+  if (R.mode === 'bpplace') { bpPlaceTap(i, j); return; }
+  if (UI.bpOffer) { UI.bpOffer = null; bpOfferShow(); }
   if (R.mode === 'strike') {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
@@ -4314,6 +4395,7 @@ function onMapTap(i, j, wx, wy) {
 function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
+  if (R.mode === 'bpplace') { bpHover(i, j); return; }
   if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
@@ -5290,7 +5372,8 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
@@ -5299,12 +5382,13 @@ function openBuildMenu() {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
   $('build-roads').onclick = () => openRoadDraw();
+  $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
   const show = (g) => {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next';
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
     // On All, a card's key reads "2 K": its tab's number, then its letter.
     for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
   };
@@ -6179,6 +6263,7 @@ function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
+  if (recyclingNow(u)) return `Being taken apart at the Bot Foundry (${Math.max(1, Math.ceil(recycleTime(u.type) - t.t))} s)`;
   if (t && t.type === 'recycle') return u.packing ? 'Going to be recycled: packing up first' : 'Going to be recycled at the Bot Foundry';
   if (u.recycleTo) return 'Going to be recycled: taking cover from enemy warbots first, then on to the Bot Foundry';
   if (BOTS[u.type].siege) {
@@ -6299,8 +6384,8 @@ function refreshRecycle(u) {
   const btn = $('sh-recycle'), hint = $('sh-recycle-hint'), got = recycleText(u.type);
   const on = recycling(u), why = on ? '' : recycleWhy(u);
   const label = on ? 'Keep this unit' : 'Recycle this unit';
-  const text = on ? `On its way to the Bot Foundry, to be taken apart for ${got}. Keep this unit calls it off (so does any other order).`
-    : why || `It goes to the nearest Bot Foundry and is taken apart there: ${got} (half of what it took to make) goes into the Foundry's stock, and its place under the robot limit (${S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS}) is free again.`;
+  const text = on ? `${recyclingNow(u) ? 'Being taken apart at the Bot Foundry' : 'On its way to the Bot Foundry, to be taken apart'} for ${got}. Keep this unit calls it off (so does any other order).`
+    : why || `It goes to the nearest Bot Foundry and is taken apart there (${recycleTime(u.type)} s): ${got} (half of what it took to make) goes into the Foundry's stock, and its place under the robot limit (${S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS}) is free again.`;
   if (btn.textContent !== label) btn.textContent = label;
   btn.disabled = !!why;
   btn.classList.toggle('danger', !on);
@@ -7452,8 +7537,10 @@ function uiTick(dt) {
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)
+  nowPlayingTick(); // (desktop only: the music's title, in the menu and in a game)
   if (!UI.inGame || !S) return;
   if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
+  else scoutTick(); // (scout reports on the rivals, js/scout.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

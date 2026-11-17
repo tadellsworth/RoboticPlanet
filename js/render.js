@@ -4849,9 +4849,13 @@ function render(dtReal) {
       if (pose) { jx += pose.dx; jy += pose.dy; drawWorkUnder(ctx, e, pose, ox, oy, z); }
       const face = e.face;
       e.face = pose && pose.face !== undefined ? pose.face : e.rface; // draw with the smoothed heading
+      // Being taken apart at a Bot Foundry: it fades as the parts come off.
+      const ga = ctx.globalAlpha, apart = recyclingNow(e) ? clamp(e.task.t / recycleTime(e.type), 0, 1) : 0;
+      if (apart) ctx.globalAlpha = ga * (1 - 0.8 * apart);
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
       if (BOTS[e.type].truck) vehicleSmoke(e, e.x + jx, e.y + jy, e.face || 0);
       if (e.loot) drawCrate(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - z * 0.22, z * 0.2, e.loot);
+      ctx.globalAlpha = ga;
       e.face = face;
       if (pose) drawWorkOver(ctx, e, pose, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
     }
@@ -4896,6 +4900,7 @@ function render(dtReal) {
     ctx.lineWidth = 2.5;
     ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
   }
+  if (typeof drawBlueprint === 'function') drawBlueprint(ctx, ox, oy, z); // (blueprints being picked or placed: js/blueprint.js)
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].keep) drawKeepAura(ctx, sel.x, sel.y, sel.owner, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].keep && inMap(R.ghost.x, R.ghost.y)) drawKeepAura(ctx, R.ghost.x, R.ghost.y, 0, ox, oy, z);
