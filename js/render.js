@@ -4119,8 +4119,8 @@ function drawNest(ctx, cx, cy, s, b) {
  * out where it is still digging. The earth is the ground's own colour heaved up (the colour the minimap takes from the
  * texture): lit on the side toward the light, shaded on the far side, clods along both flanks and a crack down the
  * crest where the veins break through. Subtle by day; at night the veins glow and pulses of light run along them back
- * to the nest. Baked into two layers of their own, TUN_PX a tile (ridges, drawn with the ground and graded with it;
- * veins, added on in light). When the network changes (S.mur.ver) only the blocks of the map round the tiles that
+ * to the nest. Zoomed in, drawn live at the screen's resolution (tunnelsLive); zoomed out and for the minimap, from
+ * two baked layers, TUN_PX a tile (ridges, drawn with the ground and graded with it; veins, added on in light). When the network changes (S.mur.ver) only the blocks of the map round the tiles that
  * changed are drawn again (TUN_BLOCK tiles a side).
  */
 const TUN_PX = 24, TUN_BLOCK = 8;
