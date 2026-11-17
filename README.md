@@ -634,6 +634,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     joined up). Nest sites keep 9 tiles from the masses: guards there would keep the gatherers off the Crystal for
     good. The rival lives with the Murmur here as anywhere (`aiMurmur`: exits collapsed, nests struck between surges),
     and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore.
+    **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
+    Refinery, the Refinery comes first after the opening and is started as soon as the Cement is there, its Alloy
+    delivered first (as a turret's is: `oilFirst` in `aiThink`). Its Oil Pumps go to the seeps nearest home: a tile
+    further off costs a spot `AI_HOLLOW_PUMP_FAR` (0.8) of its score (0.3 elsewhere).
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
