@@ -14,6 +14,10 @@
  *   falls.
  * - Achievements (ACHIEVEMENTS, ACHIEVE_KEY): earned from a game's result and stats (metaGameOver) or from what you do
  *   during one (metaDeeds); a few open a page of the Lore guide from the Records screen.
+ * - Challenge modifiers (MODS): a game with some on still counts, and a record or achievement it sets notes them
+ *   (`mods`; achievements in ACHIEVE_KEY's `_mods`). A win with one on earns its badge (R0.mods: how many wins, the
+ *   hardest rival), shown on the Records screen and on the new-game screen's planet card. A modifier that changes the
+ *   pace (MODS[k].pace) keeps the win out of the fastest wins.
  */
 
 const META_GAMES_KEY = 'terrafall.games';
@@ -44,11 +48,17 @@ function metaGames() {
 function metaRecords() {
   if (!META.rec) {
     const r = metaRead(RECORDS_KEY, {});
-    META.rec = { fast: {}, beaten: {}, shapes: {}, ...r };
+    META.rec = { fast: {}, beaten: {}, shapes: {}, mods: {}, ...r };
   }
   return META.rec;
 }
 function metaAchieved() { if (!META.ach) META.ach = metaRead(ACHIEVE_KEY, {}); return META.ach; }
+/** This game's challenge modifiers, for a record or an achievement: a list of MODS keys, or undefined with none. */
+function metaMods() { const l = S ? gameMods() : []; return l.length ? l : undefined; }
+/** The challenge badges won on this device: MODS key → { n: wins with it on, at, best: the hardest rival beaten }. */
+function metaModBadges() { const B = metaRecords().mods; return B && typeof B === 'object' ? B : {}; }
+/** Modifier keys as names: "Half Fuel, Scarce Crystal". */
+function metaModNames(l) { const n = modList(l).map((k) => MODS[k].name); return n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0] || ''; }
 
 /** Write what has changed: now (`force`), or at most every META_FLUSH seconds for the things that only creep up. */
 function metaFlush(force) {
@@ -346,7 +356,7 @@ function refreshGoalsSheet() {
 function metaRecord(kind, val, extra) {
   const R0 = metaRecords(), old = R0[kind];
   if (old && old.v >= val) return;
-  R0[kind] = { v: val, at: Date.now(), k: META.game.k, mode: S.mode, shape: metaShape(), ...(extra || {}) };
+  R0[kind] = { v: val, at: Date.now(), k: META.game.k, mode: S.mode, shape: metaShape(), mods: metaMods(), ...(extra || {}) };
   META.recDirty = true;
   if (old && old.k !== META.game.k) { (META.game.f.fell = META.game.f.fell || {})[kind] = old.v; META.gamesDirty = true; }
 }
@@ -399,6 +409,9 @@ function metaEarn(id) {
   const A = metaAchieved(), a = ACHIEVEMENTS.find((x) => x.id === id);
   if (!a || A[id]) return false;
   A[id] = Date.now();
+  // (earned in a game with challenge modifiers on: which, for the Records screen)
+  const mods = UI.inGame && META.for === S ? metaMods() : undefined;
+  if (mods) (A._mods = A._mods && typeof A._mods === 'object' ? A._mods : {})[id] = mods;
   metaWrite(ACHIEVE_KEY, A);
   if (META.game && META.for === S) { (META.game.f.ach = META.game.f.ach || []).push(id); META.gamesDirty = true; }
   if (UI.inGame && S && S.winner < 0 && $('screen-over').hidden) { toast(`Achievement: ${a.name}. ${a.text}`, 'good'); sfx('complete'); }
@@ -494,11 +507,24 @@ function metaGameOver() {
       metaRecordsTick();
       const R0 = metaRecords();
       if (won) {
-        const shape = metaShape(), diff = S.difficulty, t = Math.floor(S.time);
+        const shape = metaShape(), diff = S.difficulty, t = Math.floor(S.time), mods = metaMods();
         const row = R0.fast[shape] = R0.fast[shape] || {}, old = row[diff];
-        if (!old || t < old.t) {
-          row[diff] = { t, at: Date.now(), k: g.k };
-          g.f.fast = { shape, diff, t, was: old ? old.t : null };
+        // (a modifier that changes the pace, Fragile robots, keeps it out of the fastest wins)
+        const pace = (mods || []).filter((k) => MODS[k].pace);
+        if (pace.length) g.f.pace = pace;
+        else if (!old || t < old.t) {
+          row[diff] = { t, at: Date.now(), k: g.k, mods };
+          g.f.fast = { shape, diff, t, was: old ? old.t : null, mods };
+        }
+        // A challenge badge for each modifier on: how many wins with it, and the hardest rival beaten with it on.
+        if (mods) {
+          const B = R0.mods = metaModBadges(), lv = Object.keys(DIFFICULTY), fresh = [];
+          for (const k of mods) {
+            const b0 = B[k];
+            if (!b0) fresh.push(k);
+            B[k] = { n: ((b0 && b0.n) || 0) + 1, at: Date.now(), best: b0 && lv.indexOf(b0.best) > lv.indexOf(diff) ? b0.best : diff };
+          }
+          g.f.won = { mods, fresh };
         }
         R0.shapes[shape] = 1;
         R0.wins = (R0.wins || 0) + 1;
@@ -518,7 +544,14 @@ function metaGameOver() {
     metaFlush(true);
     // What fell in this game: the fastest win, and the other records this game holds that beat an earlier one.
     const R0 = metaRecords(), f = g.f;
-    if (f.fast) lines.push(['rec', `New record: fastest win on ${f.fast.shape}, ${DIFFICULTY[f.fast.diff].label}: ${fmtTime(f.fast.t)}` + (f.fast.was != null ? ` (was ${fmtTime(f.fast.was)}).` : '.')]);
+    if (f.fast) lines.push(['rec', `New record: fastest win on ${f.fast.shape}, ${DIFFICULTY[f.fast.diff].label}: ${fmtTime(f.fast.t)}` + (f.fast.was != null ? ` (was ${fmtTime(f.fast.was)})` : '') + (f.fast.mods ? `, with ${metaModNames(f.fast.mods)}.` : '.')]);
+    if (f.won) {
+      const nw = f.won.fresh || [];
+      const all = nw.length === f.won.mods.length;
+      lines.push(['badge', `Won with ${metaModNames(f.won.mods)}` + (!nw.length ? '.' : all ? `: ${nw.length > 1 ? 'a new challenge badge for each' : 'a new challenge badge'} (Records).`
+        : `: new challenge badge${nw.length > 1 ? 's' : ''} for ${metaModNames(nw)} (Records).`)]);
+    }
+    if (f.pace) lines.push(['badge', `${metaModNames(f.pace)} changes the pace of a game, so this win isn't counted among the fastest wins.`]);
     const fell = RECORD_KINDS.filter(([kind]) => f.fell && f.fell[kind] !== undefined && R0[kind] && R0[kind].k === g.k);
     if (fell.length) lines.push(['rec', (f.fast ? 'And ' : 'New ') + (fell.length > 1 ? 'records: ' : 'record: ') + fell.map(([kind, , said, fmt]) => `${said} ${fmt(R0[kind].v)}`).join(', ') + '.']);
     for (const id of f.ach || []) { const a = ACHIEVEMENTS.find((x) => x.id === id); if (a) lines.push(['ach', `Achievement: ${a.name}. ${a.text}`]); }
@@ -554,31 +587,43 @@ function renderRecords() {
   const tiles = RECORD_KINDS.map(([kind, label, , fmt]) => {
     const r = R0[kind];
     const sub = r ? [r.mode === 'colony' ? 'Colony' : 'Versus', r.shape].filter(Boolean).join(' · ') : 'None yet';
-    return `<div class="rc-tile"><span>${label}</span><b>${r ? fmt(r.v) : '–'}</b><small>${esc(sub)}</small>${r ? `<small>${metaDate(r.at)}</small>` : ''}</div>`;
+    return `<div class="rc-tile"><span>${label}</span><b>${r ? fmt(r.v) : '–'}</b><small>${esc(sub)}</small>${r ? `<small>${metaDate(r.at)}</small>` : ''}` +
+      (r && modList(r.mods).length ? `<small class="rc-mods" title="${esc('With ' + metaModNames(r.mods))}"><i class="rc-modmark" aria-hidden="true">◆</i> ${esc(metaModNames(r.mods))}</small>` : '') + '</div>';
   }).join('');
   const shapes = SHAPE_PRESETS.filter((s) => R0.fast[s.name]);
   const diffs = Object.keys(DIFFICULTY);
   const fast = shapes.length
     ? `<table class="rc-fast"><thead><tr><th>Map type</th>${diffs.map((d) => `<th>${DIFFICULTY[d].label}</th>`).join('')}</tr></thead><tbody>` +
-      shapes.map((s) => `<tr><th>${esc(s.name)}</th>${diffs.map((d) => { const r = R0.fast[s.name][d]; return `<td>${r ? fmtTime(r.t) : '–'}</td>`; }).join('')}</tr>`).join('') + '</tbody></table>'
+      shapes.map((s) => `<tr><th>${esc(s.name)}</th>${diffs.map((d) => { const r = R0.fast[s.name][d], m = r && modList(r.mods).length ? metaModNames(r.mods) : ''; return `<td>${r ? fmtTime(r.t) : '–'}${m ? `<i class="rc-modmark" title="${esc('With ' + m)}" aria-label="${esc('with ' + m)}">◆</i>` : ''}</td>`; }).join('')}</tr>`).join('') + '</tbody></table>'
     : '<p class="hint">No wins yet. Win a Versus game against the computer and its time goes here, by map type and rival level.</p>';
+  // Challenge badges: one for each modifier won with (Custom Game's Challenge section).
+  const B = metaModBadges(), nb = MOD_ORDER.filter((k) => B[k]).length;
+  const badges = MOD_ORDER.map((k) => {
+    const b = B[k], on = !!(b && b.n);
+    return `<div class="rc-badge${on ? ' on' : ''}" title="${esc(MODS[k].desc)}"><i aria-hidden="true">${on ? '◆' : '◇'}</i><div><b>${esc(MODS[k].name)}</b>` +
+      `<small>${on ? `${b.n} win${b.n > 1 ? 's' : ''}${DIFFICULTY[b.best] ? ` · best: ${DIFFICULTY[b.best].label}` : ''}` : 'Not yet'}</small></div></div>`;
+  }).join('');
+  const AM = A._mods && typeof A._mods === 'object' ? A._mods : {};
   const got = ACHIEVEMENTS.filter((a) => A[a.id]).length;
   const achs = ACHIEVEMENTS.map((a) => {
     const on = !!A[a.id], prog = !on && a.of ? ` <span class="rc-of">${a.have(R0)}/${a.of()}</span>` : '';
     return `<div class="rc-ach${on ? ' on' : ''}"><i aria-hidden="true">${on ? '◆' : '◇'}</i><div><b>${esc(a.name)}</b>${prog}<p>${esc(a.text)}</p>` +
-      `<small>${on ? 'Earned ' + metaDate(A[a.id]) : 'Not yet'}</small>` +
+      `<small>${on ? 'Earned ' + metaDate(A[a.id]) + (modList(AM[a.id]).length ? ` · with ${esc(metaModNames(AM[a.id]))}` : '') : 'Not yet'}</small>` +
       (a.lore && on ? `<button type="button" class="btn small ghost rc-lore" data-lore-at="${a.lore}">Lore ›</button>` : '') + '</div></div>';
   }).join('');
-  $('rc-body').innerHTML = `<p class="mode-desc">Kept on this device. Records and wins count single-player Versus and Colony games (not missions or multiplayer) played without Boosts, rival bans or Unlimited resources.</p>
+  $('rc-body').innerHTML = `<p class="mode-desc">Kept on this device. Records and wins count single-player Versus and Colony games (not missions or multiplayer) played without Boosts, rival bans or Unlimited resources. Challenge modifiers count, and are noted (<i class="rc-modmark">◆</i>); a win with Fragile robots isn't a fastest win.</p>
     <div class="rc-tiles">${tiles}</div>
     <h3>Fastest wins</h3>${fast}
+    <h3>Challenge badges <span class="rc-count">${nb} of ${MOD_ORDER.length}</span></h3>
+    <p class="hint">Win a Versus game against the computer with a challenge modifier on (Custom Game, Challenge) and it earns that one's badge.</p>
+    <div class="rc-badges">${badges}</div>
     <h3>Achievements <span class="rc-count">${got} of ${ACHIEVEMENTS.length}</span></h3><div class="rc-achs">${achs}</div>
     <div class="rc-foot"><button type="button" class="btn small ghost" id="rc-forget">Forget records and achievements</button></div>`;
   for (const b of $('rc-body').querySelectorAll('[data-lore-at]')) b.onclick = () => { sfx('click'); openLore(b.dataset.loreAt); };
   $('rc-forget').onclick = () => {
     const b = $('rc-forget');
     if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'Tap again to forget them all on this device'; return; }
-    META.rec = { fast: {}, beaten: {}, shapes: {} }; META.ach = {};
+    META.rec = { fast: {}, beaten: {}, shapes: {}, mods: {} }; META.ach = {};
     try { localStorage.removeItem(RECORDS_KEY); localStorage.removeItem(ACHIEVE_KEY); } catch (e) { /* storage blocked */ }
     sfx('click');
     renderRecords();

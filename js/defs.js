@@ -1205,6 +1205,7 @@ const EVENTS = {
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
 const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
+const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a challenge modifier, MODS.dust): never
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
 /**
  * The trader brings the raw goods dug from deposits that run out (TRADE_GET: the one a colony has
@@ -1303,6 +1304,43 @@ const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'na
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
+
+/*
+ * Challenge modifiers (Custom Game, the Challenge section; multiplayer too): switches mixed freely, kept in the
+ * game's settings (S.settings.mods, a list of keys) so every device plays them alike, and remembered on the device
+ * with the other new-game choices. modsSetup (js/sim.js) applies the ones that change the landing; the rest are
+ * looked up as the game runs (modOn). `versus`: only with a rival (left out of a Colony game). `pace`: it changes how
+ * fast a game goes rather than only making it harder, so a win with it isn't a fastest win (js/goals.js). `desc` for
+ * the new-game screen, `brief` for the briefing.
+ *   fuel      Refineries refine and energy crops ripen at `rate` speed.
+ *   dust      A dust storm (EVENTS.dust) blows in `at` seconds in and never blows over.
+ *   head      Each computer colony lands with `stock` more times START_STOCK and the robots in `bots`.
+ *   crystal   Crystal clusters hold `keep` as much, and every colony lands with `keep` of its Crystal.
+ *   fragile   Robots and vehicles take `takes` times the damage.
+ *   noturret  People can't build the `types` (the computer can).
+ */
+const MODS = {
+  fuel: { name: 'Half Fuel', rate: 0.5, brief: 'Refineries and energy crops make Fuel at half speed',
+    desc: 'Half Fuel: Refineries refine and energy crops ripen at half speed, for every colony. Fuel Stations, trucks and Generators run short.' },
+  dust: { name: 'Endless dust storm', at: 300, brief: 'from 5 minutes in, for good: bots slowed, Missiles grounded',
+    desc: 'Endless dust storm: 5 minutes in, a dust storm blows in for good: bots at two-thirds speed, Missiles grounded, no other planetary event.' },
+  head: { name: 'Rival head start', versus: true, stock: 1, bots: { worker: 4, hauler: 2, warbot: 2 }, brief: 'the computer landed with twice the goods and 8 more robots',
+    desc: 'Rival head start: every computer colony lands with twice the goods, 4 more Workers, 2 more Haulers and 2 more warbots.' },
+  crystal: { name: 'Scarce Crystal', keep: 0.5, brief: 'half as much in every cluster and at every Command Base',
+    desc: 'Scarce Crystal: Crystal clusters hold half as much, and every colony lands with half its Crystal. Chips and turret ammo come dear.' },
+  fragile: { name: 'Fragile robots', takes: 1.5, pace: true, brief: 'every robot takes half again the damage',
+    desc: 'Fragile robots: every robot and vehicle takes half again as much damage. Fights end sooner, so a win with it is not a fastest win.' },
+  noturret: { name: 'No turrets', types: ['turret', 'minigun', 'mortar', 'disruptor'], brief: 'no Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers for you',
+    desc: 'No turrets: you can\'t build Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers; the computer still can.' },
+};
+const MOD_ORDER = ['fuel', 'dust', 'head', 'crystal', 'fragile', 'noturret'];
+/** A list of modifier keys made safe: known ones, once each, in MOD_ORDER; in a Colony game none that need a rival. */
+function modList(l, mode) { return Array.isArray(l) ? MOD_ORDER.filter((k) => l.includes(k) && !(mode === 'colony' && MODS[k].versus)) : []; }
+/** The challenge modifiers on in this game (a save's unknown ones left out). */
+function gameMods() { return S && S.settings ? modList(S.settings.mods) : []; }
+/** Is challenge modifier k on in this game? */
+function modOn(k) { const m = S && S.settings && S.settings.mods; return Array.isArray(m) && m.includes(k); }
+
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
 /*
  * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
