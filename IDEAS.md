@@ -125,8 +125,6 @@ or drop.
   already come from a seed plus settings; a saved edit layer on top).
 - **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
   "text size" question); captions for alert sounds.
-- **Low-end phone setting:** a "battery saver" switch that lowers resolution, drops night lights and caps the frame
-  rate, for older phones and long sessions.
 - **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
   fights), on the lockstep that's there.
 
