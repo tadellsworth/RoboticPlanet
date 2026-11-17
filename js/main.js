@@ -43,6 +43,10 @@ function demoCamera(dt) {
 function frame(now) {
   // The next frame is booked first: a bug in one frame (drawing, say) can never stop the game.
   requestAnimationFrame(frame);
+  // Graphics set to Saver (gfx().fps): no more than 30 frames a second, every other one on most screens; the frames
+  // between do nothing at all. (4 ms to spare: a frame that comes a little early still counts.)
+  const cap = gfx().fps;
+  if (cap && now - _lastFrame < 1000 / cap - 4) return;
   try { step(now); } catch (e) { frameError(e); }
 }
 

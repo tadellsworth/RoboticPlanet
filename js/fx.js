@@ -6,6 +6,9 @@
  * drawEffects (render.js) hands each effect here; nothing in this file touches the game state or its RNG.
  */
 
+/** How many of n sparks, embers or puffs to draw at the Graphics step now (n at Auto, half on Saver, more on High and Ultra). */
+function fxCount(n) { return Math.max(1, Math.round(n * gfx().fx)); }
+
 /** How dark it is, 0 (day) to 1 (night): how much effects light up the ground. */
 function fxNight() { return typeof TOD !== 'undefined' && TOD.active ? clamp(TOD.state.pools / 0.8, 0, 1) : 0; }
 
@@ -168,7 +171,7 @@ function drawBoomFx(ctx, f, x, y, z, k) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
-  const ns = f.small ? 8 : 14;
+  const ns = fxCount(f.small ? 8 : 14);
   for (let i = 0; i < ns; i++) {
     const ang = hash2(sd, i, 7) * Math.PI * 2, sp = r * (1.2 + 1.6 * hash2(sd, i, 8)), up = r * (0.6 + 1.4 * hash2(sd, i, 9));
     const t1 = Math.min(1, k * 1.25), t0 = Math.max(0, t1 - 0.08);
@@ -191,8 +194,9 @@ function drawFireFx(ctx, f, x, y, z, k) {
   const life = clamp(k < 0.08 ? k / 0.08 : (1 - k) / 0.35, 0, 1), flick = 0.82 + 0.18 * Math.sin(t * 17 + sd) * Math.sin(t * 7.3 + sd * 2);
   fxGround(ctx, x, y, r * 4.2, '#ff8a2a', 0.9 * life * flick);
   // smoke pouring up and drifting off
-  for (let i = 0; i < 6; i++) {
-    const ph = (t * 0.32 + i / 6 + sd * 0.01) % 1, s = r * (1.1 + 2.6 * ph);
+  const np = fxCount(6), ne = fxCount(8);
+  for (let i = 0; i < np; i++) {
+    const ph = (t * 0.32 + i / np + sd * 0.01) % 1, s = r * (1.1 + 2.6 * ph);
     ctx.globalAlpha = 0.5 * life * Math.sin(ph * Math.PI);
     ctx.drawImage(fxPuff(true), x + ph * r * 1.6 + Math.sin(ph * 5 + i) * r * 0.3 - s / 2, y - r * 0.6 - ph * r * 6 - s / 2, s, s);
   }
@@ -211,8 +215,8 @@ function drawFireFx(ctx, f, x, y, z, k) {
     ctx.quadraticCurveTo(bx + w * 0.9, by - hgt * 0.55, bx + w, by); ctx.closePath(); ctx.fill();
   }
   // embers rising
-  for (let i = 0; i < 8; i++) {
-    const ph = (t * 0.55 + i / 8 + hash2(sd, i, 6)) % 1;
+  for (let i = 0; i < ne; i++) {
+    const ph = (t * 0.55 + i / ne + hash2(sd, i, 6)) % 1;
     const ex = x + (hash2(sd, i, 5) - 0.5) * r * 1.6 + Math.sin(ph * 6 + i) * r * 0.4, ey = y - ph * r * 4.5;
     ctx.fillStyle = `rgba(255,${180 + (i % 3) * 25},90,${(1 - ph) * life})`;
     const s = Math.max(1.2, z * 0.03);
@@ -260,7 +264,7 @@ function drawNukeGlowFx(ctx, f, x, y, z, k) {
   // motes of green light rising off the ground
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0, n = fxCount(26); i < n; i++) {
     const ph = (S.time * 0.12 + hash2(sd, i, 6)) % 1, ang = hash2(sd, i, 7) * Math.PI * 2, d = r * Math.sqrt(hash2(sd, i, 8)) * 0.95;
     const mx = x + Math.cos(ang) * d + Math.sin(ph * 6 + i) * z * 0.15, my = y + Math.sin(ang) * d * 0.62 - ph * z * 1.6;
     ctx.fillStyle = `rgba(170,255,140,${0.8 * fade * Math.sin(ph * Math.PI)})`;
@@ -347,7 +351,7 @@ function drawTrails(ctx, ox, oy, z) {
 function drawTrail(ctx, m, k, late, ox, oy, z) {
   const T = FX_TRAIL[fxKind(m)];
   if (!T || !T.life) return;
-  const len = Math.hypot(m.x1 - m.x0, m.y1 - m.y0) + (m.nuke ? 10 : 3), dq = clamp(T.step / len, 0.004, 0.05);
+  const len = Math.hypot(m.x1 - m.x0, m.y1 - m.y0) + (m.nuke ? 10 : 3), dq = clamp(T.step / len, 0.004, 0.05) / gfx().fx; // (puffs closer together on High and Ultra)
   const puff = fxPuff(false);
   for (let q = Math.floor(k / dq) * dq; q >= 0; q -= dq) {
     const age = (k - q) * m.dur + late;
@@ -606,7 +610,7 @@ function drawFlameFx(ctx, f, x, y, z, k) {
     ctx.closePath(); ctx.fill();
   }
   // sparks and burning droplets flung on past the tip
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0, n = fxCount(7); i < n; i++) {
     const q = (k * 1.4 + hash2(sd, i, 7)) % 1, d = L * (0.35 + q * 0.95), lat = (hash2(sd, i, 8) - 0.5) * d * cone * 1.3;
     const ex = x + ca * d - sa * lat, ey = y + sa * d + ca * lat - q * q * z * 0.15, s = Math.max(1.2, z * 0.028);
     ctx.globalAlpha = (1 - q) * fade;
@@ -732,7 +736,7 @@ function drawShieldHitFx(ctx, f, x, y, z, k, cx, cy) {
   ctx.beginPath(); ctx.ellipse(px, py, z * (0.05 + k * 0.32) * big, z * (0.03 + k * 0.12) * big, ha + Math.PI / 2, 0, Math.PI * 2); ctx.stroke();
   // sparks glancing off, back the way the shot came
   const go = 1 - Math.pow(1 - k, 2.2);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0, n = fxCount(9); i < n; i++) {
     const aa = ha + (hash2(sd, i, 1) - 0.5) * 2.4, d = z * (0.12 + 0.55 * hash2(sd, i, 2)) * big * go;
     const ex = px + Math.cos(aa) * d, ey = py + Math.sin(aa) * d, bx = px + Math.cos(aa) * d * 0.6, by = py + Math.sin(aa) * d * 0.6;
     ctx.strokeStyle = i % 3 ? `rgba(200,160,255,${fade})` : `rgba(255,250,255,${fade})`; ctx.lineWidth = Math.max(1, z * 0.018);

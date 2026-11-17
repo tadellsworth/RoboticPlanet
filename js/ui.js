@@ -109,7 +109,7 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
+  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
   $('clock').addEventListener('click', () => {
@@ -129,6 +129,9 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
+  // Graphics (render.js setGfxStep): Saver, Auto, High or Ultra, at once.
+  for (const btn of $('p-gfx').children) btn.onclick = () => { setGfxStep(btn.dataset.v); syncGfx(); sfx('click'); };
+  syncGfx();
   const syncTod = () => { $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`; };
   syncTod();
   // Cycle → Always day → Always night → Cycle.
@@ -285,7 +288,22 @@ const DIFF_INFO = {
   normal: 'Normal: a fair fight. The rival expands, raids your roads and attacks in force.',
   hard: 'Hard: a fast rival that lands with extra goods and attacks early and often.',
 };
+/** What each Graphics step does (the line under it in the pause menu, and the new-game Rules line). */
+const GFX_INFO = {
+  saver: 'Saver: for older phones and long sessions. Drawn at 1×, 30 frames a second, with fewer effects and plainer night lights (kept on this device).',
+  auto: 'Auto: as sharp as the screen allows up to 2× (4K’s worth of pixels), less while frames come slowly (kept on this device).',
+  high: 'High: for a strong computer. A big screen at its full 2×, sharper ground up close, more smoke and sparks (kept on this device).',
+  ultra: 'Ultra: the most there is. The screen’s full sharpness, the densest effects and weather, the richest night light (kept on this device).',
+};
 const TOD_INFO = { cycle: 'Time of day: morning to night, 12 minutes round (looks only; kept on this device).', day: 'Time of day: always day (looks only; kept on this device).', night: 'Time of day: always night, every colony lit up (looks only; kept on this device).' };
+
+/** The Graphics choice as it is now, in the pause menu and the new-game Rules (and the pause menu's lines: how sharp the map is drawn now, and what the step does). */
+function syncGfx() {
+  const v = gfxStep();
+  for (const id of ['p-gfx', 'm-gfx']) for (const b of $(id).children) { b.classList.toggle('on', b.dataset.v === v); b.setAttribute('aria-checked', b.dataset.v === v ? 'true' : 'false'); }
+  $('p-gfx-v').textContent = `drawn at ${+R.dpr.toFixed(2)}×`;
+  $('p-gfx-note').textContent = GFX_INFO[v];
+}
 
 /** Keep remembered settings inside what the data offers now (a map type or biome may have gone). */
 function checkMenuSettings() {
@@ -511,6 +529,7 @@ function initMenu() {
   }
   for (const btn of $('m-daynight').children) { btn.dataset.info = TOD_INFO[btn.dataset.v]; btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
+  for (const btn of $('m-gfx').children) { btn.dataset.info = GFX_INFO[btn.dataset.v]; btn.onclick = () => { setGfxStep(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
   $('m-saveplanet').onclick = () => {
     savePlanet(menuPlanet()); sfx('place'); toast(`Saved Planet #${UI.menu.seed}: pick it from Saved planets any time.`, 'good'); syncMenu();
@@ -706,6 +725,7 @@ function syncMenu() {
     $(id + '-row').classList.toggle('on', !!on);
   }
   for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
+  syncGfx();
   syncPickRows();
   // Random can't be saved as a planet: pick a map type and biome first.
   const rnd = !!(m.shapeRnd || m.biomeRnd);
@@ -2015,16 +2035,16 @@ function undoLastSite() {
 /* ------------------------------------------------------------------ now playing */
 
 /*
- * Now playing (#now-playing), on a computer only: a ♪ in the bottom left corner, level with the tools. When the music
- * turns to a new theme it opens into a card with the theme's title (MUSIC_TITLES in audio.js) for NP_SHOW ms; hovering
- * over the ♪, or a click, opens it too. A title shown in the last NP_AGAIN ms isn't shown again (the war theme comes and
+ * Now playing (#now-playing), on a computer only: when the music turns to a new theme a card in the bottom left corner,
+ * level with the tools, shows its title (MUSIC_TITLES in audio.js) for NP_SHOW ms, then fades away; nothing stays there
+ * between themes (the owner's choice). A title shown in the last NP_AGAIN ms isn't shown again (the war theme comes and
  * goes with the fighting). Nothing shows with the Music off, in photo mode or under a full screen (the main menu is
  * fine: it has music too). Nor where it would run into the tools (they move left for a panel on a smaller screen) or
  * the main menu's card (Custom Game fills the screen): a new theme's card waits until it can be seen. Display only: it
  * reads MUSIC and changes nothing in the game.
  */
 const NP_SHOW = 6000, NP_AGAIN = 60000;
-const NP = { mood: '', due: false, until: 0, hover: false, shown: {}, mq: null, covers: null, wired: false };
+const NP = { mood: '', due: false, until: 0, shown: {}, mq: null, covers: null };
 
 /** A computer: a mouse, not a finger, and the wide layout (the tools along the bottom, not down the side). */
 function nowPlayingDesk() {
@@ -2042,38 +2062,27 @@ function nowPlayingCovered() {
 function nowPlayingTick() {
   const el = $('now-playing');
   if (!el) return;
-  if (!NP.wired) {
-    NP.wired = true;
-    const note = $('np-note');
-    note.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') NP.hover = true; });
-    note.addEventListener('pointerleave', () => { NP.hover = false; });
-    note.addEventListener('click', () => { NP.until = performance.now() + NP_SHOW; note.blur(); });
-  }
   const title = MUSIC_TITLES[MUSIC.mood] || '';
   if (MUSIC.mood !== NP.mood) { NP.mood = MUSIC.mood; NP.due = !!title; }
   const ac = AUDIO.ctx;
   let on = !!title && AUDIO.on && AUDIO.music > 0 && !!ac && ac.state === 'running' && !UI.photo && nowPlayingDesk() && !nowPlayingCovered();
   let room = false;
   if (on) {
-    // Clear of the tools (in a game) and the menu's card (on the menu): the ♪ needs its corner, the card the title too.
+    // Clear of the tools (in a game) and the menu's card (on the menu): the card needs room for its title.
     const H = innerHeight, obs = [$('bottombar').getBoundingClientRect(), $('menu-card').getBoundingClientRect()];
-    const clear = (w) => obs.every((r) => !r.width || r.left >= 24 + w || r.bottom <= H - 64);
-    on = clear(42);
-    room = clear(56 + el.lastElementChild.scrollWidth);
+    room = obs.every((r) => !r.width || r.left >= 24 + 56 + el.lastElementChild.scrollWidth || r.bottom <= H - 64);
   }
   const shown = !el.hidden;
   if (el.hidden !== !on) el.hidden = !on;
-  if (!on) { NP.hover = false; el.classList.remove('open'); return; }
-  if ($('np-title').textContent !== title) { $('np-title').textContent = title; $('np-note').setAttribute('aria-label', 'Now playing: ' + title); }
-  const tip = room ? '' : 'Now playing: ' + title; // (no room for the card: a hover shows the browser's tip instead)
-  if ($('np-note').title !== tip) $('np-note').title = tip;
+  if (!on) { el.classList.remove('open'); return; }
+  if ($('np-title').textContent !== title) $('np-title').textContent = title;
   const now = performance.now();
   if (NP.due && room && shown) {
     NP.due = false;
     if (now - (NP.shown[title] ?? -Infinity) >= NP_AGAIN) { NP.shown[title] = now; NP.until = now + NP_SHOW; }
   }
-  // (opened a frame after it appears, so the card fades in)
-  el.classList.toggle('open', room && shown && (NP.hover || now < NP.until));
+  // (opened a frame after it appears, so the card fades in; it's invisible the rest of the time)
+  el.classList.toggle('open', room && shown && now < NP.until);
 }
 
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */

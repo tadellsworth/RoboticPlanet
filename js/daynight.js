@@ -434,12 +434,14 @@ function glowDisc(color) {
 
 /**
  * At dusk and night, a city glows: a wide, faint haze in its owner's colour round every finished building,
- * so where buildings crowd together the haze builds up into a glow over the whole town.
+ * so where buildings crowd together the haze builds up into a glow over the whole town. Graphics: none on Saver (the
+ * pools under the buildings still show where the towns are), and made at twice the size on Ultra, smoother on a big screen.
  */
 function drawCityGlow(ctx, ox, oy, z, items) {
-  if (!TOD.active || !(TOD.state.pools > 0.01)) return;
-  // The haze is soft, so it's built at an eighth of the screen's size and laid over it in one draw (cheap).
-  const k = 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
+  const night = gfx().night;
+  if (!TOD.active || !(TOD.state.pools > 0.01) || !night) return;
+  // The haze is soft, so it's built at an eighth of the screen's size (a quarter on Ultra) and laid over it in one draw (cheap).
+  const k = night > 1 ? 1 / 4 : 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
   let buf = TOD.cityBuf;
   if (!buf) buf = TOD.cityBuf = document.createElement('canvas');
   if (buf.width !== w || buf.height !== h) { buf.width = w; buf.height = h; }
@@ -466,7 +468,8 @@ function drawCityGlow(ctx, ox, oy, z, items) {
 
 /**
  * At dusk and night, roads light up: a thin glowing line in the owner's colour along each road's edges
- * (brighter on asphalt), so a colony's road network shows as lit lines across the dark.
+ * (brighter on asphalt), so a colony's road network shows as lit lines across the dark. (Graphics on Saver: the lines
+ * without the wider glow round them.)
  */
 function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
   if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
@@ -493,10 +496,26 @@ function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
   for (const key in paths) {
     const o = key.slice(0, -1), col = o === 'n' ? '#ffd9a0' : PLAYER_COLORS[+o] || '#ffd9a0', asph = key.endsWith('a');
     ctx.strokeStyle = col;
-    ctx.globalAlpha = on * (asph ? 0.2 : 0.13); ctx.lineWidth = Math.max(2, z * 0.11); ctx.stroke(paths[key]); // the glow
+    if (gfx().night) { ctx.globalAlpha = on * (asph ? 0.2 : 0.13); ctx.lineWidth = Math.max(2, z * 0.11); ctx.stroke(paths[key]); } // the glow
     ctx.globalAlpha = on * (asph ? 0.85 : 0.6); ctx.lineWidth = Math.max(1, z * 0.028); ctx.stroke(paths[key]); // the strip
   }
   ctx.restore();
+}
+
+/**
+ * Graphics set to Ultra (gfx().night 2): at dusk and night every robot and vehicle on the ground carries a small light in
+ * its colony's colour, so an army on the move shows as moving lights. Drawn among the buildings' pools (ctx is already
+ * adding light, at the pools' strength).
+ */
+function drawUnitLights(ctx, ox, oy, z, items) {
+  const ga = ctx.globalAlpha, s = z * 1.15;
+  ctx.globalAlpha = ga * 0.6;
+  for (const e of items) {
+    if (e.ent !== 'u' || BOTS[e.type].air) continue;
+    const img = PLAYER_COLORS[e.owner] && lightPool(PLAYER_COLORS[e.owner]);
+    if (img) ctx.drawImage(img, ox + e.x * z - s / 2, oy + e.y * z - s / 2, s, s);
+  }
+  ctx.globalAlpha = ga;
 }
 
 /** A bot's drop shadow now: offset (as a fraction of the shadow's length), opacity and spread. */

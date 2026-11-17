@@ -518,14 +518,49 @@ function initRender(canvas) {
 // raises it again when there's room).
 const RENDER_BUDGET = 8.3e6;
 
+/*
+ * Graphics (a device setting, in the pause menu and Custom Game's Rules; kept in localStorage, never in the game): how
+ * much drawing the device is asked for. Auto is the game as it always was. For each step: dpr, the most device pixels
+ * drawn to a CSS pixel; budget, the most pixels a frame (and how high watchFrameRate steps back up); fps, a cap on frames
+ * a second (0: as many as the screen shows; see frame in main.js); fx and wx, how many sparks, embers, smoke puffs and
+ * weather specks next to Auto's (js/fx.js, js/weather.js); hd, the device pixels a tile beyond which the ground is drawn
+ * from the 64 and from the 128 px-a-tile chunks (hdLevel); hdMem, the chunk memory kept, next to Auto's; night, 0 the
+ * simpler night lights, 1 as ever, 2 the richest (js/daynight.js); quick, watchFrameRate steps down sooner, and further
+ * when frames are very slow.
+ */
+const GFX_STEPS = ['saver', 'auto', 'high', 'ultra'];
+const GFX_LEVELS = {
+  saver: { dpr: 1, budget: RENDER_BUDGET, fps: 30, fx: 0.5, wx: 0.5, hd: [TP * 1.2, 64 * 1.25], hdMem: 1, night: 0, quick: false },
+  auto: { dpr: 2, budget: RENDER_BUDGET, fps: 0, fx: 1, wx: 1, hd: [TP * 1.2, 64 * 1.25], hdMem: 1, night: 1, quick: false },
+  high: { dpr: 2, budget: 21e6, fps: 0, fx: 1.5, wx: 1, hd: [TP, 64], hdMem: 2, night: 1, quick: true }, // (a 6K screen at 2×)
+  ultra: { dpr: Infinity, budget: 36e6, fps: 0, fx: 2, wx: 2, hd: [TP, 64], hdMem: 2, night: 2, quick: true }, // (the screen's own: up to 8K at 2×)
+};
+const GFX_KEY = 'terrafall.graphics';
+R.gfx = 'auto';
+try { const v = localStorage.getItem(GFX_KEY); if (GFX_STEPS.includes(v)) R.gfx = v; } catch (e) { /* storage unavailable */ }
+/** The Graphics step now ('saver', 'auto', 'high' or 'ultra'), and its settings. */
+function gfxStep() { return R.gfx; }
+function gfx() { return GFX_LEVELS[R.gfx] || GFX_LEVELS.auto; }
+/** Change the Graphics step, at once: the resolution starts again from the step's own, and the sharp ground is made again. */
+function setGfxStep(v) {
+  R.gfx = GFX_STEPS.includes(v) ? v : 'auto';
+  try { localStorage.setItem(GFX_KEY, R.gfx); } catch (e) { /* storage unavailable */ }
+  R.budget = 0; R.fw = null;
+  const most = Math.round(SMOKE_MAX * gfx().fx);
+  if (SMOKE.puffs.length > most) SMOKE.puffs.splice(0, SMOKE.puffs.length - most);
+  hdReset();
+  if (R.canvas) resizeRender();
+  R.dirty = true;
+}
+
 function resizeRender() {
   // Installed web apps on iPhone sometimes report a viewport shorter than the screen; take the
   // largest of the measurements so the map always reaches the bottom edge.
-  const vv = window.visualViewport;
+  const vv = window.visualViewport, q = gfx();
   R.w = Math.max(window.innerWidth, document.documentElement.clientWidth);
   R.h = Math.max(window.innerHeight, document.documentElement.clientHeight, vv ? Math.round(vv.height) : 0);
-  const fit = Math.sqrt((R.budget || RENDER_BUDGET) / Math.max(1, R.w * R.h));
-  R.dpr = Math.min(2, window.devicePixelRatio || 1, Math.max(1, fit));
+  const fit = Math.sqrt((R.budget || q.budget) / Math.max(1, R.w * R.h));
+  R.dpr = Math.min(q.dpr, window.devicePixelRatio || 1, Math.max(1, fit));
   R.canvas.width = Math.round(R.w * R.dpr);
   R.canvas.height = Math.round(R.h * R.dpr);
   R.canvas.style.width = R.w + 'px';
@@ -545,23 +580,30 @@ function resizeRender() {
  * being held there by the screen or a power-saving mode (an iPhone in Low Power Mode draws 30 a second), and
  * a game at 3× speed is slow in its simulation: a smaller picture helps neither, so those are left alone.
  * A step back up that has to be undone straight away waits twice as long before it's tried again.
+ * High and Ultra (gfx().quick) start higher, so they come down sooner and from further: once most frames of a second
+ * and a half have been slow (not one long one) rather than after 120 frames, two steps at once when frames come under
+ * 25 a second, and frames of up to a second count (a picture too big to draw four times a second is the very thing to
+ * fix: past 250 ms Auto takes a frame for a hitch and starts counting again).
  */
 function watchFrameRate(ms) {
-  const fw = R.fw || (R.fw = { n: 0, sum: 0, sq: 0, draw: 0, other: 0, t0: 0, good: 0, wait: 5, upAt: -9 });
-  if (ms > 250 || document.hidden) { fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.t0 = 0; return; }
+  const fw = R.fw || (R.fw = { n: 0, sum: 0, sq: 0, draw: 0, other: 0, t0: 0, good: 0, wait: 5, upAt: -9, late: 0 });
+  const q = gfx();
+  if (ms > (q.quick ? 1000 : 250) || document.hidden) { fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.t0 = fw.late = 0; return; }
   fw.t0 = performance.now();
   fw.n++; fw.sum += ms; fw.sq += ms * ms;
-  if (fw.n < 120) return;
+  if (ms > 22) fw.late++;
+  const most = !q.quick || fw.late > fw.n / 2, slow = q.quick && most && fw.sum > 1500;
+  if (fw.n < 120 && !slow) return;
   const avg = fw.sum / fw.n, dev = Math.sqrt(Math.max(0, fw.sq / fw.n - avg * avg)), draw = fw.draw / fw.n, other = fw.other / fw.n;
-  fw.n = fw.sum = fw.sq = fw.draw = fw.other = 0;
+  fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.late = 0;
   fw.win = (fw.win || 0) + 1;
   const held = dev < 1.5 && draw + other < avg * 0.5; // a steady beat the game isn't filling
   const simBound = other > avg * 0.5 && draw < avg * 0.25;
-  if (avg > 22 && !held && !simBound) {
+  if (avg > 22 && most && !held && !simBound) {
     fw.good = 0;
     if (R.dpr > 1.05) {
       if (fw.win - fw.upAt <= 3) fw.wait = Math.min(80, fw.wait * 2); // (the last step up was too much)
-      R.budget = Math.max(R.w * R.h, R.w * R.h * R.dpr * R.dpr * 0.6);
+      R.budget = Math.max(R.w * R.h, R.w * R.h * R.dpr * R.dpr * (q.quick && avg > 40 ? 0.36 : 0.6));
       resizeRender();
     }
   } else if (R.budget && (avg < 19 || held) && draw * 1.7 < 11) {
@@ -569,7 +611,7 @@ function watchFrameRate(ms) {
     if (++fw.good < fw.wait) return;
     fw.good = 0; fw.upAt = fw.win;
     R.budget = R.budget / 0.6;
-    if (R.budget >= RENDER_BUDGET || Math.sqrt(R.budget / Math.max(1, R.w * R.h)) >= Math.min(2, window.devicePixelRatio || 1)) R.budget = 0;
+    if (R.budget >= q.budget || Math.sqrt(R.budget / Math.max(1, R.w * R.h)) >= Math.min(q.dpr, window.devicePixelRatio || 1)) R.budget = 0;
     resizeRender();
   } else fw.good = 0;
 }
@@ -751,10 +793,14 @@ function hdReset() {
   R.hd = { chunks: new Map(), px: 0, frame: 0 };
 }
 
-/** Pixels a tile for the sharp map at this zoom (0: the whole-map bake is sharp enough). */
+/**
+ * Pixels a tile for the sharp map at this zoom (0: the whole-map bake is sharp enough). Auto (and Saver) stretch each a
+ * little before the next takes over; High and Ultra take the sharper one as soon as the last would be stretched at all
+ * (gfx().hd). (128 is the ground art's own: one 512 px texture spans 4 tiles.)
+ */
 function hdLevel(z) {
-  const px = z * R.dpr;
-  return px <= TP * 1.2 ? 0 : px <= 64 * 1.25 ? 64 : 128;
+  const px = z * R.dpr, hd = gfx().hd;
+  return px <= hd[0] ? 0 : px <= hd[1] ? 64 : 128;
 }
 
 function hdBake(level, cx, cy) {
@@ -848,10 +894,11 @@ function drawMapLayer(ctx, ox, oy, z) {
     hd.px += size;
     draw(ch);
   }
-  // How much may be kept off screen: HD_SPARE, four screens' worth, or what's left under HD_TOTAL, whichever is least.
+  // How much may be kept off screen: HD_SPARE, four screens' worth, or what's left under HD_TOTAL, whichever is least (each times the
+  // Graphics step's hdMem).
   let on = 0, spare = 0;
   for (const ch of hd.chunks.values()) { if (ch.used === hd.frame) on += ch.c.width * ch.c.height; else spare += ch.c.width * ch.c.height; }
-  const allow = Math.max(0, Math.min(HD_SPARE, 4 * R.canvas.width * R.canvas.height, HD_TOTAL - on));
+  const mem = gfx().hdMem, allow = Math.max(0, Math.min(HD_SPARE * mem, 4 * R.canvas.width * R.canvas.height, HD_TOTAL * mem - on));
   // Spare time: get the chunks just off screen ready for panning.
   for (const [cx, cy] of ring) {
     if (performance.now() - t0 > HD_BAKE_MS || spare + size > allow) break;
@@ -4291,6 +4338,7 @@ const SMOKE_SHEET = { smoke: 'smoke-exhaust', black: 'smoke-exhaust-heavy', stea
 function smokeReady(key, every) {
   if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.next.clear(); }
   const now = S.time, n = SMOKE.next.get(key);
+  every /= gfx().fx; // (Graphics: half as often on Saver, more often on High and Ultra)
   if (n !== undefined && now < n && n - now <= every * 2) return false;
   SMOKE.next.set(key, now + every * (0.85 + Math.random() * 0.3));
   return true;
@@ -4299,7 +4347,8 @@ function smokeReady(key, every) {
 function addPuff(x, y, sheet, size, life, rise, steam) {
   if (!ART[sheet]) return;
   SMOKE.puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
-  if (SMOKE.puffs.length > SMOKE_MAX) SMOKE.puffs.splice(0, SMOKE.puffs.length - SMOKE_MAX);
+  const most = Math.round(SMOKE_MAX * gfx().fx);
+  if (SMOKE.puffs.length > most) SMOKE.puffs.splice(0, SMOKE.puffs.length - most);
 }
 
 /** Exhaust from a truck drawn at (x, y) tiles facing `face`. */
@@ -4792,6 +4841,7 @@ function render(dtReal) {
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
+    if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
     for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
