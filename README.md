@@ -192,7 +192,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of the
+  marks buildings with no road (the Goal card's red line counts only those with no road planned to them either:
+  `cutOffUnplanned`, `roadOnItsWay` in `js/ui.js`): tap one and press **Lay road** to plan the shortest route (shown dashed; of the
   routes as short, the one with fewest bends: `roadSearch` pays `ROAD_TURN` 0.05 a turn, as the rival's roads do), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up; a

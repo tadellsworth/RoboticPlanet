@@ -7498,8 +7498,24 @@ function nextBuilds() {
   return o && o.build ? o.build.filter((t) => !hasAny(t)) : [];
 }
 
+/**
+ * Is a road already planned all the way from building b (cut off from storage) to the road network, waiting for Workers
+ * to pave it? Then the Goal card's no-road warning leaves b out: it's on its way. (roadRouteTo is a search, so each
+ * building's answer is kept for a second: ROAD_WAY.)
+ */
+const ROAD_WAY = new WeakMap();
+function roadOnItsWay(b) {
+  const now = performance.now(), c = ROAD_WAY.get(b);
+  if (c && now - c.t < 1000) return c.v;
+  const r = roadRouteTo(b.owner, b), v = !!(r && !r.length && r.pending);
+  ROAD_WAY.set(b, { t: now, v });
+  return v;
+}
+/** Your buildings and sites cut off from storage with no road planned to them yet (the Goal card's warning). */
+function cutOffUnplanned() { return S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked && !roadOnItsWay(b)); }
+
 function objectiveText() {
-  const cut = S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked);
+  const cut = cutOffUnplanned();
   const warn = cut.length && !(cut.length === 1 && cut[0].type === 'harvester' && !hasBuilt('harvester'))
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
@@ -7553,10 +7569,11 @@ function updateHUD() {
   goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
-  // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road.
+  // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road (and
+  // none planned).
   const step = objectiveStep(), stepKey = step ? OBJECTIVES.indexOf(step) : -1;
   if (UI.objStep !== stepKey) { if (UI.objStep !== undefined && UI.objAuto && !UI.objManual) { UI.objCollapsed = false; UI.objAuto = false; } UI.objStep = stepKey; }
-  const cut = UI.objCollapsed && !S.mission ? S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked).length : 0;
+  const cut = UI.objCollapsed && !S.mission ? cutOffUnplanned().length : 0; // (not those with a road planned to them)
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' + (UI.winMini || '') + (cut ? ` <span class="err">${cut} with no road</span>` : '') : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   // (The messages button sits beside the folded card on a small screen: the open card needs the whole width.)
