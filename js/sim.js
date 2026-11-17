@@ -1714,7 +1714,8 @@ function moveDirect(u, x, y, dt, cap) {
 function dispatch(p) {
   railPlan(p);
   const blds = [];
-  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && !shunned(b)) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about
+  const press = convoysPress(p);
+  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && (!shunned(b) || (press && BDEFS[b.type].terminal))) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about (but a Terminal whose convoys press on)
   blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
@@ -2045,7 +2046,8 @@ function dispatch(p) {
       // below): picked as the nearest with any at all, a Harvester's few Fiber or a Depot's last Stone, no train was
       // ever sent and the run waited for good while the Command Base had plenty.
       const termMin = BDEFS[r.b.type].terminal && r.b.built ? r.n : 0;
-      for (const s of blds) {
+      // (Convoys that press on take the run from storage enemy warbots are at too: a Command Base under siege.)
+      for (const s of termMin && press ? S.buildings.filter((b) => b.owner === p && !b.dead && !evacuated(b)) : blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         if (termMin && (sup(s, r.g) < termMin || !truckLinked(s, r.b))) continue;
         // (Not from a neighbour that feeds it this good by conveyor: that hands it over itself.)
@@ -5193,8 +5195,11 @@ function gunOver(p, x, y) {
   return best;
 }
 
-/** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? */
-function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)); }
+/**
+ * Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? Not a trade
+ * convoy with its escort, nor a Road Train of a rival whose convoys press on (convoysPress).
+ */
+function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)) && !(bt.train && convoysPress(u.owner)); }
 /** Has trade convoy u its escort with it (within 6 tiles)? Then it doesn't give way to enemy warbots: it holds while they fight (convoyHolds). */
 function escorted(u) {
   for (const v of S.bots) if (!v.dead && v.owner === u.owner && v.task && v.task.type === 'escort' && v.task.bot === u.id && dist2(v.x, v.y, u.x, u.y) < 36) return true;
@@ -10768,6 +10773,15 @@ function updateTerminal(b, def, dt) {
 function fmtSecs(s) { s = Math.max(0, Math.ceil(s)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
 /* ------------------------------------------------------------------ trade convoys */
+
+/**
+ * Do player p's trade convoys press on whatever comes? Only in a mission that says so (`pressOn`: Convoy), and only a
+ * rival's (player 0 is the person): its Road Trains set out on schedule from a Command Base under siege, take the run
+ * from storage enemy warbots are at, and never turn back from warbots in their way (gunShy), so a raid on the road can
+ * always catch one. (Unescorted, a convoy turns back from a band on its lane, and a besieged base sends none out: the
+ * mission's "Wreck a rival trade convoy" could be left with nothing to wreck.)
+ */
+function convoysPress(p) { return p > 0 && !!(S.mission && S.mission.pressOn); }
 
 /** The Terminal convoy u is running for (a Road Train, Freight Train or Tanker to or from one), or null. */
 function convoyOf(u) { const b = u.trade ? getE(u.trade) : null; return b && !b.dead && BDEFS[b.type].terminal ? b : null; }
