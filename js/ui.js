@@ -2011,8 +2011,9 @@ function undoLastSite() {
  * turns to a new theme it opens into a card with the theme's title (MUSIC_TITLES in audio.js) for NP_SHOW ms; hovering
  * over the ♪, or a click, opens it too. A title shown in the last NP_AGAIN ms isn't shown again (the war theme comes and
  * goes with the fighting). Nothing shows with the Music off, in photo mode or under a full screen (the main menu is
- * fine: it has music too); the card also waits while the tools are in its way (they move left for a panel on a smaller
- * screen). A new theme's card shows once it can be seen. Display only: it reads MUSIC and changes nothing in the game.
+ * fine: it has music too). Nor where it would run into the tools (they move left for a panel on a smaller screen) or
+ * the main menu's card (Custom Game fills the screen): a new theme's card waits until it can be seen. Display only: it
+ * reads MUSIC and changes nothing in the game.
  */
 const NP_SHOW = 6000, NP_AGAIN = 60000;
 const NP = { mood: '', due: false, until: 0, hover: false, shown: {}, mq: null, covers: null, wired: false };
@@ -2046,15 +2047,18 @@ function nowPlayingTick() {
   let on = !!title && AUDIO.on && AUDIO.music > 0 && !!ac && ac.state === 'running' && !UI.photo && nowPlayingDesk() && !nowPlayingCovered();
   let room = false;
   if (on) {
-    // The room left of the tools: the ♪ needs its own width, the card the title's too.
-    const dock = $('bottombar').getBoundingClientRect(), free = dock.width ? dock.left - 24 : Infinity;
-    on = free >= 42;
-    room = free >= 56 + el.lastElementChild.scrollWidth;
+    // Clear of the tools (in a game) and the menu's card (on the menu): the ♪ needs its corner, the card the title too.
+    const H = innerHeight, obs = [$('bottombar').getBoundingClientRect(), $('menu-card').getBoundingClientRect()];
+    const clear = (w) => obs.every((r) => !r.width || r.left >= 24 + w || r.bottom <= H - 64);
+    on = clear(42);
+    room = clear(56 + el.lastElementChild.scrollWidth);
   }
   const shown = !el.hidden;
   if (el.hidden !== !on) el.hidden = !on;
   if (!on) { NP.hover = false; el.classList.remove('open'); return; }
   if ($('np-title').textContent !== title) { $('np-title').textContent = title; $('np-note').setAttribute('aria-label', 'Now playing: ' + title); }
+  const tip = room ? '' : 'Now playing: ' + title; // (no room for the card: a hover shows the browser's tip instead)
+  if ($('np-note').title !== tip) $('np-note').title = tip;
   const now = performance.now();
   if (NP.due && room && shown) {
     NP.due = false;
