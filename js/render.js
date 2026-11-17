@@ -5545,6 +5545,7 @@ function refreshOverlay(type) {
 function render(dtReal) {
   R.time += dtReal;
   R.dt = dtReal;
+  if (typeof cursorTick === 'function') cursorTick(R.canvas); // (the mouse cursor follows what's under it: js/cursor.js)
   const ctx = R.ctx, z = R.cam.z, began = performance.now(), fw = R.fw && R.fw.t0 ? R.fw : null;
   if (fw) { fw.other += began - fw.t0; fw.t0 = 0; } // (what the frame did before drawing, and below how long drawing took: see watchFrameRate)
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
