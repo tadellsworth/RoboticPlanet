@@ -1473,13 +1473,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   device (`botfall.haptics`), on by default.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
-  building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
+  building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
+  in your land or within `MUSIC_MURMUR_NEAR` (9) tiles of your buildings, lingering 35 s; enemy robots in your land too
+  still bring the war music: 70 bpm Phrygian, a whispering choir of filtered noise pitched on the chord (`mWhisper`), a
+  slow heartbeat, a bass creeping a semitone, far-off crystal glints), and an alarm while a nuke flies; the building music takes turns between
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **Now playing** (`nowPlayingTick` in js/ui.js,
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
-  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the nuke alarm Zero Hour, `end`
+  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the Murmur's Night Murmurs, the nuke alarm Zero Hour, `end`
   none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
