@@ -376,39 +376,61 @@
   </div>
 </div>
 
+<!-- The pause menu: two views in one card (pauseView in js/ui.js), and it opens on the main one each time. Main: Resume, a
+     grid of the rest, the three saves and Feedback with Save & quit. Settings (its button; Back or Esc returns): the volumes,
+     Graphics, the on/off settings and Time of day, only those that apply on this device and in this game. -->
 <div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-labelledby="p-title" tabindex="-1" hidden>
-  <div class="card">
-    <h2 id="p-title">Paused</h2>
-    <p class="p-mods" id="p-mods" hidden></p>
-    <button id="p-resume" class="btn primary big">Resume</button>
-    <button id="p-mppause" class="btn big" hidden>Pause the game for everyone</button>
-    <div class="sound-sliders">
-      <label class="slider-row" for="p-music"><span>Music</span><output id="p-music-v"></output>
-        <input type="range" id="p-music" min="0" max="100" step="5"></label>
-      <label class="slider-row" for="p-fx"><span>Effects</span><output id="p-fx-v"></output>
-        <input type="range" id="p-fx" min="0" max="100" step="5"></label>
-      <label class="slider-row" for="p-amb" title="The land's own sounds: each biome's wind, birds and insects, water and the sea"><span>Ambience</span><output id="p-amb-v"></output>
-        <input type="range" id="p-amb" min="0" max="100" step="5"></label>
-      <!-- Graphics: how much drawing this device is asked for (setGfxStep in js/render.js; kept on this device). -->
-      <div class="gfx-row"><span id="p-l-gfx">Graphics</span><output id="p-gfx-v"></output>
-        <div class="seg gfx-seg" id="p-gfx" role="radiogroup" aria-labelledby="p-l-gfx"><button type="button" role="radio" data-v="saver">Saver</button><button type="button" role="radio" data-v="auto">Auto</button><button type="button" role="radio" data-v="high">High</button><button type="button" role="radio" data-v="ultra">Ultra</button></div>
-        <small class="gfx-note" id="p-gfx-note" aria-live="polite"></small></div>
+  <div class="card p-card">
+    <div class="p-view" id="p-main">
+      <div class="p-head"><h2 id="p-title">Paused</h2>
+        <p class="p-mods" id="p-mods" hidden></p></div>
+      <div class="p-top">
+        <button id="p-resume" class="btn primary big">Resume</button>
+        <button id="p-mppause" class="btn big" hidden>Pause the game for everyone</button>
+      </div>
+      <div class="p-grid">
+        <button id="p-settings" class="btn" title="Music, effects and ambience volume, graphics, full screen, weather, scout reports, vibration and time of day">Settings</button>
+        <button id="p-stats" class="btn">Statistics</button>
+        <button id="p-photo" class="btn" title="Hide the interface and frame a picture of your colony to save (Shift+P)">Photo mode</button>
+        <button id="p-help" class="btn">How to play</button>
+      </div>
+      <div class="p-save" role="group" aria-labelledby="p-l-save"><span class="p-label" id="p-l-save">Save</span>
+        <div class="p-row">
+          <button id="p-saveplanet" class="btn" aria-label="Save this planet" title="Save this planet: keep it (its seed and map settings) to play again from the new-game menu">This planet</button>
+          <button id="p-export" class="btn" aria-label="Download save file" title="Download save file: this game in a file you can load on any device (main menu, Load a save file)">File</button>
+          <button id="p-cloud" class="btn" aria-label="Save to the cloud" title="Save to the cloud: keep this game for 30 days, with a code, a link and a QR code that open it on another device (main menu, Load from a code)">Cloud</button>
+        </div></div>
+      <p class="hint" id="p-saved"></p>
+      <div class="p-row p-foot">
+        <button id="p-feedback" class="btn" aria-label="Send feedback" title="Send feedback: report a bug, suggest an idea or say what you think of the balance (the game stays as it is)">Feedback</button>
+        <button id="p-quit" class="btn ghost">Save &amp; quit</button>
+      </div>
     </div>
-    <button id="p-full" class="btn big" hidden>Full screen: Off</button>
-    <button id="p-weather" class="btn big" title="Sandstorms on the red desert, rainstorms with fog in the forest, blizzards on the poles: now and then, for looks only">Weather: On</button>
-    <button id="p-scouts" class="btn big" title="Now and then a message on what a computer rival is up to: a march, a raid, a storm, an army massing">Scout reports: On</button>
-    <button id="p-haptics" class="btn big" hidden title="A short buzz when an order is given, a building placed or a road built, and for a warning (on a phone that can vibrate)">Vibration: On</button>
-    <button id="p-daynight" class="btn big" title="Cycle (morning to night, 12 minutes round), always day or always night (a display setting)">Time of day: Cycle</button>
-    <p class="hint p-tod-note" id="p-daynight-note" hidden></p>
-    <button id="p-stats" class="btn big">Statistics</button>
-    <button id="p-photo" class="btn big" title="Hide the interface and frame a picture of your colony to save (Shift+P)">Photo mode</button>
-    <button id="p-saveplanet" class="btn big" title="Keep this planet (its seed and map settings) to play again from the new-game menu">Save this planet</button>
-    <button id="p-export" class="btn big" title="Save this game to a file you can load on any device (main menu, Load a save file)">Download save file</button>
-    <button id="p-cloud" class="btn big" title="Keep this game in the cloud for 30 days, with a code, a link and a QR code that open it on another device (main menu, Load from a code)">Save to the cloud</button>
-    <button id="p-help" class="btn big">How to play</button>
-    <button id="p-feedback" class="btn big" title="Report a bug, suggest an idea or say what you think of the balance (the game stays as it is)">Send feedback</button>
-    <button id="p-quit" class="btn big ghost">Save &amp; quit to menu</button>
-    <p class="hint" id="p-saved"></p>
+    <div class="p-view" id="p-setview" role="group" aria-labelledby="p-set-title" hidden>
+      <div class="stats-head p-set-head"><h2 id="p-set-title">Settings</h2><button id="p-back" class="btn small">Back</button></div>
+      <div class="p-box sound-sliders">
+        <label class="slider-row" for="p-music"><span>Music</span>
+          <input type="range" id="p-music" min="0" max="100" step="5"><output id="p-music-v"></output></label>
+        <label class="slider-row" for="p-fx"><span>Effects</span>
+          <input type="range" id="p-fx" min="0" max="100" step="5"><output id="p-fx-v"></output></label>
+        <label class="slider-row" for="p-amb" title="The land's own sounds: each biome's wind, birds and insects, water and the sea"><span>Ambience</span>
+          <input type="range" id="p-amb" min="0" max="100" step="5"><output id="p-amb-v"></output></label>
+        <!-- Graphics: how much drawing this device is asked for (setGfxStep in js/render.js; kept on this device). -->
+        <div class="gfx-row"><span class="p-set-l"><span id="p-l-gfx">Graphics</span><output id="p-gfx-v"></output></span>
+          <div class="seg gfx-seg" id="p-gfx" role="radiogroup" aria-labelledby="p-l-gfx"><button type="button" role="radio" data-v="saver">Saver</button><button type="button" role="radio" data-v="auto">Auto</button><button type="button" role="radio" data-v="high">High</button><button type="button" role="radio" data-v="ultra">Ultra</button></div>
+          <small class="gfx-note" id="p-gfx-note" aria-live="polite"></small></div>
+      </div>
+      <!-- On/off settings: a switch each (pauseSwitch), the whole row to tap. -->
+      <div class="p-box">
+        <button type="button" id="p-full" class="p-sw-row" role="switch" aria-checked="false" hidden title="The game fills the whole screen (Alt+Enter)"><span>Full screen</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">Off</span><i></i></span></button>
+        <button type="button" id="p-weather" class="p-sw-row" role="switch" aria-checked="true" title="Sandstorms on the red desert, rainstorms with fog in the forest, blizzards on the poles: now and then, for looks only"><span>Weather</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
+        <button type="button" id="p-scouts" class="p-sw-row" role="switch" aria-checked="true" title="Now and then a message on what a computer rival is up to: a march, a raid, a storm, an army massing"><span>Scout reports</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
+        <button type="button" id="p-haptics" class="p-sw-row" role="switch" aria-checked="true" hidden title="A short buzz when an order is given, a building placed or a road built, and for a warning (on a phone that can vibrate)"><span>Vibration</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
+        <div class="p-tod"><div class="p-sw-row p-tod-row" title="Cycle (morning to night, 12 minutes round), always day or always night (a display setting)"><span id="p-l-tod">Time of day</span>
+          <div class="seg p-tod-seg" id="p-daynight" role="radiogroup" aria-labelledby="p-l-tod"><button type="button" role="radio" data-v="cycle">Cycle</button><button type="button" role="radio" data-v="day">Day</button><button type="button" role="radio" data-v="night">Night</button></div></div>
+          <p class="hint p-tod-note" id="p-daynight-note" hidden></p></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1094,7 +1116,7 @@
           <li>Below that, the <b>report</b>: the moments that mattered (your first robot, the first attacks each way, buildings lost, when Fiber, Alloy, Crystal or another good ran out and for how long, the deciding battle or capture), where your goods were lost (buildings destroyed, robots destroyed with their loads, crates left lying), and one <b>Next time, try</b> tip drawn from what happened.</li>
         </ul>
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
-        <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music, Effects and Ambience volume, Graphics, Full screen, Weather, Scout reports (see Rivals, teams and victory), Time of day, Statistics, Photo mode, Save this planet, Download save file, Save to the cloud, How to play, Send feedback, and Save &amp; quit to menu, with when the game last saved.</p>
+        <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): <b>Resume</b>, then <b>Settings</b>, <b>Statistics</b>, <b>Photo mode</b> and <b>How to play</b>; under <b>Save</b>, <b>This planet</b> (Save this planet), <b>File</b> (Download save file) and <b>Cloud</b> (Save to the cloud), with when the game last saved; then <b>Feedback</b> (Send feedback) and <b>Save &amp; quit</b>. <b>Settings</b> has the Music, Effects and Ambience volume, Graphics, Full screen, Weather, Scout reports (see Rivals, teams and victory), Vibration and Time of day (<b>Cycle</b>, <b>Day</b> or <b>Night</b>); <b>Back</b> or <kbd>Esc</kbd> returns. The menu always opens on its first page.</p>
         <p><b>Photo mode.</b> For a picture of your colony: <b>Photo mode</b> in the pause menu (or <kbd>Shift</kbd>+<kbd>P</kbd>). The game stands still (in multiplayer it runs on) and the whole interface goes, so you can frame the shot: drag and pinch, or scroll, the arrow keys and <kbd>+</kbd>/<kbd>−</kbd>. The bar at the bottom fades when you leave it alone (tap the map or move the mouse to bring it back). Slide <b>Time of day</b> for morning, evening or night light (in the picture only: the game's clock doesn't change), switch on <b>Borders</b> (the colonies' land) or the <b>Minimap</b>, and <b>Save picture</b> downloads a PNG at your screen's full sharpness with a small Terrafall mark in the corner. <b>Exit</b>, <kbd>Esc</kbd> or <b>Back</b> returns you to where you were.</p>
         <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across (a file that is damaged, or from a version this one can't read, is turned away and your own save stays as it was). Multiplayer games aren't saved for Continue.</p>
         <p><b>Cloud saves.</b> No file to move? <b>Save to the cloud</b> in the pause menu puts the game in the cloud and shows a <b>code</b> (like K7PQ4-XMR2B), a <b>link</b> and a <b>QR code</b> of the link, with <b>Copy link</b> (and <b>Share</b> where the device can). On the other device scan the QR code with its camera, open the link, or tap <b>Load from a code</b> on the main menu and type the code (capitals or not, the dash or not). It loads as a save file does, and the save that was on that device is kept as a backup. Saving the same game to the cloud again updates its code, so one code follows your game; <b>New code</b> gives it another and the old one stops working. A code lasts 30 days after the last save to it, and it's the only key: anyone with it can load the game, nothing else is sent, and there's no account. Multiplayer games and Observer mode aren't saved to the cloud. On an iPhone or iPad, a game added to the Home Screen keeps its own saves apart from Safari: open it there and use Load from a code.</p>
