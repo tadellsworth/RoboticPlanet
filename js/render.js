@@ -4119,8 +4119,8 @@ function drawNest(ctx, cx, cy, s, b) {
  * out where it is still digging. The earth is the ground's own colour heaved up (the colour the minimap takes from the
  * texture): lit on the side toward the light, shaded on the far side, clods along both flanks and a crack down the
  * crest where the veins break through. Subtle by day; at night the veins glow and pulses of light run along them back
- * to the nest. Baked into two layers of their own, TUN_PX a tile (ridges, drawn with the ground and graded with it;
- * veins, added on in light). When the network changes (S.mur.ver) only the blocks of the map round the tiles that
+ * to the nest. Zoomed in, drawn live at the screen's resolution (tunnelsLive); zoomed out and for the minimap, from
+ * two baked layers, TUN_PX a tile (ridges, drawn with the ground and graded with it; veins, added on in light). When the network changes (S.mur.ver) only the blocks of the map round the tiles that
  * changed are drawn again (TUN_BLOCK tiles a side).
  */
 const TUN_PX = 24, TUN_BLOCK = 8;
@@ -4141,7 +4141,7 @@ function tunnelLayers() {
 /** A tunnel tile's point on its ridge (in tiles): its middle, nudged by its own amount so the curve wanders. */
 function tunnelPoint(t) {
   const i = t % S.W, j = (t / S.W) | 0;
-  return [i + 0.5 + (hash2(i, j, 4111) - 0.5) * 0.38, j + 0.5 + (hash2(j, i, 4127) - 0.5) * 0.38];
+  return [i + 0.5 + (hash2(i, j, 4111) - 0.5) * 0.26, j + 0.5 + (hash2(j, i, 4127) - 0.5) * 0.26];
 }
 
 /**
@@ -4185,9 +4185,15 @@ function tunnelRuns() {
   return runs;
 }
 
-/** A run's curve: Catmull-Rom through its tiles' points, eight samples a tile, with the length along it. */
+/**
+ * A run's curve: Catmull-Rom through its tiles' points, eight samples a tile, with the length along it. The points are
+ * smoothed first (each pulled toward its neighbours, twice; the ends stay put so runs still meet at their forks): a
+ * run of tiles goes in steps along the grid, and a ridge should sweep across them, not zig-zag.
+ */
 function tunnelRun(tiles, tail0, tail1) {
-  const P = tiles.map(tunnelPoint), pts = [];
+  let P = tiles.map(tunnelPoint);
+  for (let pass = 0; pass < 2 && P.length > 2; pass++) P = P.map((q, k) => (k === 0 || k === P.length - 1 ? q : [(P[k - 1][0] + 2 * q[0] + P[k + 1][0]) / 4, (P[k - 1][1] + 2 * q[1] + P[k + 1][1]) / 4]));
+  const pts = [];
   if (P.length === 1) pts.push([P[0][0] - 0.2, P[0][1] + 0.05], [P[0][0] + 0.2, P[0][1] - 0.05]);
   for (let k = 0; k < P.length - 1; k++) {
     const p0 = P[Math.max(0, k - 1)], p1 = P[k], p2 = P[k + 1], p3 = P[Math.min(P.length - 1, k + 2)];
@@ -4237,6 +4243,7 @@ function bakeTunnels(T) {
   for (let t = 0; t < N; t++) T.was[t] = S.tun[t] ? 1 : 0;
   if (!dirty.some((d) => d)) return;
   const runs = tunnelRuns(), look = tunnelLook(G);
+  T.runs = runs; T.look = look; // (kept for drawing them live, zoomed in: tunnelsLive)
   for (let b = 0; b < BH; b++) for (let a = 0; a < BW; a++) {
     if (!dirty[b * BW + a]) continue;
     const i0 = a * TUN_BLOCK, j0 = b * TUN_BLOCK, i1 = Math.min(W, i0 + TUN_BLOCK), j1 = Math.min(H, j0 + TUN_BLOCK);
@@ -4269,73 +4276,143 @@ function ridgeWidth(r, s) {
   return w;
 }
 
-/** Stroke a run's curve, offset by (dx, dy) tiles, `wk` times its width, in pieces so the width can taper. */
-function strokeRun(g, r, p, wk, dx, dy) {
-  const P = r.pts, step = 3;
-  for (let k = 0; k < P.length - 1; k += step) {
-    const e = Math.min(P.length - 1, k + step), w = ridgeWidth(r, (P[k].s + P[e].s) / 2) * wk;
-    if (w < 0.01) continue;
-    g.lineWidth = w * p;
-    g.beginPath(); g.moveTo((P[k][0] + dx) * p, (P[k][1] + dy) * p);
-    for (let n = k + 1; n <= e; n++) g.lineTo((P[n][0] + dx) * p, (P[n][1] + dy) * p);
-    g.stroke();
+/**
+ * Where a run shows: the stretches of its curve (sample indices [k0, k1]) over open ground, broken where a road, track,
+ * a cliff or rock, or one of the Hollow's pillars lies over it (the tunnel runs out of sight under those).
+ */
+function runPieces(r) {
+  const P = r.pts, out = [];
+  let k0 = -1;
+  const shows = (q) => {
+    const i = Math.floor(q[0]), j = Math.floor(q[1]);
+    if (i < 0 || j < 0 || i >= S.W || j >= S.H) return false;
+    const t = j * S.W + i;
+    return !(S.road[t] || (S.rail && S.rail[t]) || S.terrain[t] !== T_GROUND || pillarAt(t));
+  };
+  for (let k = 0; k < P.length; k++) {
+    if (shows(P[k])) { if (k0 < 0) k0 = k; }
+    else if (k0 >= 0) { if (k - 1 > k0) out.push([k0, k - 1]); k0 = -1; }
+  }
+  if (k0 >= 0 && P.length - 1 > k0) out.push([k0, P.length - 1]);
+  return out;
+}
+
+/** The unit normal to a run's curve at sample k. */
+function runNormal(P, k) {
+  const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+  return [-dy / l, dx / l];
+}
+
+/**
+ * Add to the current path the outline of a stretch of run r (samples k0..k1): `wk` times its width, offset by
+ * (dx, dy) tiles, `off(s)` across it (tiles; the crest's wander), round at an end that is a fork or a break (a dead
+ * end tapers to nothing). Filled, the outlines of many runs make one shape: no beads where pieces overlap.
+ */
+function addRunOutline(g, r, p, wk, dx, dy, k0, k1, wfn, off) {
+  const P = r.pts, L = [], Rt = [];
+  for (let k = k0; k <= k1; k++) {
+    const [nx, ny] = runNormal(P, k), w = (wfn ? wfn(r, P[k].s) : ridgeWidth(r, P[k].s)) * wk * 0.5, o = off ? off(r, P[k].s) : 0;
+    const cx = P[k][0] + dx + nx * o, cy = P[k][1] + dy + ny * o;
+    L.push([(cx + nx * w) * p, (cy + ny * w) * p]); Rt.push([(cx - nx * w) * p, (cy - ny * w) * p]);
+  }
+  if (L.length < 2) return;
+  g.moveTo(L[0][0], L[0][1]);
+  for (let k = 1; k < L.length; k++) g.lineTo(L[k][0], L[k][1]);
+  for (let k = Rt.length - 1; k >= 0; k--) g.lineTo(Rt[k][0], Rt[k][1]);
+  g.closePath();
+  // Round ends where the width hasn't tapered away (forks, and where a road cuts across).
+  for (const k of [k0, k1]) {
+    const w = (wfn ? wfn(r, P[k].s) : ridgeWidth(r, P[k].s)) * wk * 0.5;
+    if (w * p < 0.4) continue;
+    const [nx, ny] = runNormal(P, k), o = off ? off(r, P[k].s) : 0, x = (P[k][0] + dx + nx * o) * p, y = (P[k][1] + dy + ny * o) * p;
+    g.moveTo(x + w * p, y); g.arc(x, y, w * p, 0, Math.PI * 2);
   }
 }
 
-/** The crest line of a run (the crack the veins break through), wandering a little across the ridge. */
+/** Fill one layer: every stretch of every run's outline as one shape. */
+function fillRuns(g, runs, p, wk, dx, dy, style, wfn, off) {
+  g.fillStyle = style;
+  g.beginPath();
+  for (const r of runs) for (const [k0, k1] of r.pieces || runPieces(r)) addRunOutline(g, r, p, wk, dx, dy, k0, k1, wfn, off);
+  g.fill('nonzero');
+}
+
+/** The crest's wander across the ridge (tiles): slow, so it reads as a crack along the top, not a scribble. */
+function crestOff(r, s) { return 0.022 * Math.sin(s * 3.1 + r.h * 7) + 0.008 * Math.sin(s * 7.3 + r.h * 3); }
+
+/** The crest line of a run between lengths s0 and s1 (the crack the veins break through). */
 function crestPath(g, r, p, s0, s1) {
   const P = r.pts;
   g.beginPath();
   let on = false;
   for (let k = 0; k < P.length; k++) {
-    if (P[k].s < s0 || P[k].s > s1) continue;
-    const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
-    const o = 0.025 * Math.sin(P[k].s * 13 + r.h * 7) + 0.012 * Math.sin(P[k].s * 31);
-    const x = (P[k][0] - (dy / l) * o) * p, y = (P[k][1] + (dx / l) * o) * p;
+    if (P[k].s < s0 || P[k].s > s1) { on = false; continue; }
+    const [nx, ny] = runNormal(P, k), o = crestOff(r, P[k].s), x = (P[k][0] + nx * o) * p, y = (P[k][1] + ny * o) * p;
     if (on) g.lineTo(x, y); else { g.moveTo(x, y); on = true; }
   }
+}
+
+/** Whether length s along run r is in one of its showing stretches. */
+function runShowsAt(r, s) {
+  for (const [k0, k1] of r.pieces || runPieces(r)) if (s >= r.pts[k0].s && s <= r.pts[k1].s) return true;
+  return false;
 }
 
 /** The ridges: the soft shadow they cast, the heaved earth (its shaded and lit sides), clods, the crack, the dark veins. */
 function paintRidges(g, runs, p, L) {
   g.lineCap = 'round'; g.lineJoin = 'round';
-  g.strokeStyle = L.shadow;
-  for (const r of runs) { strokeRun(g, r, p, 1.25, 0.05, 0.06); strokeRun(g, r, p, 1.0, 0.04, 0.05); }
-  g.strokeStyle = L.flank;
-  for (const r of runs) strokeRun(g, r, p, 0.95, 0.012, 0.015);
-  g.strokeStyle = L.soil;
-  for (const r of runs) strokeRun(g, r, p, 0.8, -0.012, -0.014);
-  g.strokeStyle = L.lit;
-  for (const r of runs) strokeRun(g, r, p, 0.42, -0.04, -0.045);
+  for (const r of runs) r.pieces = runPieces(r);
+  fillRuns(g, runs, p, 1.3, 0.05, 0.065, L.shadow);
+  fillRuns(g, runs, p, 1.02, 0.03, 0.04, L.shadow);
+  fillRuns(g, runs, p, 0.95, 0.012, 0.015, L.flank);
+  fillRuns(g, runs, p, 0.8, -0.01, -0.012, L.soil);
+  fillRuns(g, runs, p, 0.42, -0.04, -0.045, L.lit);
   // clods of the broken crust along both flanks
   for (const r of runs) {
     const P = r.pts;
-    for (let k = 0; k < P.length; k++) {
+    for (let k = 0; k < P.length; k += 2) {
       const w = ridgeWidth(r, P[k].s);
-      if (w < 0.05) continue;
-      const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      if (w < 0.05 || !runShowsAt(r, P[k].s)) continue;
+      const [nx, ny] = runNormal(P, k);
       for (const sd of [-1, 1]) {
         const h = hash2(r.tiles[0] + k * 7, sd + 2, 4151);
-        if (h < 0.55) continue;
-        const off = sd * w * (0.5 + 0.35 * h), x = (P[k][0] - (dy / l) * off) * p, y = (P[k][1] + (dx / l) * off) * p, rr = Math.max(0.6, (0.016 + 0.024 * h) * p);
+        if (h < 0.6) continue;
+        const off = sd * w * (0.48 + 0.3 * h), x = (P[k][0] + nx * off) * p, y = (P[k][1] + ny * off) * p, rr = Math.max(0.6, (0.014 + 0.02 * h) * p);
         g.fillStyle = L.clod; g.beginPath(); g.ellipse(x + rr * 0.35, y + rr * 0.4, rr, rr * 0.8, h * 3, 0, Math.PI * 2); g.fill();
         g.fillStyle = L.clodLit; g.beginPath(); g.ellipse(x, y, rr * 0.85, rr * 0.7, h * 3, 0, Math.PI * 2); g.fill();
       }
     }
   }
-  g.strokeStyle = L.crack; g.lineWidth = Math.max(0.7, p * 0.026);
-  for (const r of runs) { crestPath(g, r, p, 0.05, r.L - 0.25); g.stroke(); }
-  g.strokeStyle = 'rgba(96,52,130,0.75)'; g.lineWidth = Math.max(0.7, p * 0.022);
-  for (const r of runs) for (let s = 0.1 + r.h * 0.3; s < r.L - 0.3; s += 0.45 + 0.4 * hash2(r.tiles[0], Math.round(s * 10), 4157)) { crestPath(g, r, p, s, s + 0.2 + 0.5 * hash2(Math.round(s * 10), r.tiles[0], 4159)); g.stroke(); }
+  // The crack down the crest, and the dark root-veins showing in it here and there.
+  g.strokeStyle = L.crack; g.lineWidth = Math.max(0.7, p * 0.024);
+  for (const r of runs) for (const [k0, k1] of r.pieces) { crestPath(g, r, p, Math.max(r.pts[k0].s, 0.05), Math.min(r.pts[k1].s, r.L - 0.25)); g.stroke(); }
+  g.strokeStyle = 'rgba(96,52,130,0.75)'; g.lineWidth = Math.max(0.7, p * 0.02);
+  for (const r of runs) for (let s = 0.1 + r.h * 0.3; s < r.L - 0.3; s += 0.45 + 0.4 * hash2(r.tiles[0], Math.round(s * 10), 4157)) {
+    if (!runShowsAt(r, s)) continue;
+    crestPath(g, r, p, s, s + 0.2 + 0.5 * hash2(Math.round(s * 10), r.tiles[0], 4159)); g.stroke();
+  }
 }
 
-/** The veins' own light along each crest (soft, then a bright thread): added faintly by day and glowing at night. */
+/** A vein's width (tiles) along a run: `w`, narrowing with the ridge where it tapers out. */
+const veinW = (w) => (r, s) => w * Math.min(1, ridgeWidth(r, s) / 0.26);
+
+/** The veins' own light along each crest (a soft haze, a glow, a bright thread): added faintly by day and glowing at night. */
 function paintRidgeVeins(g, runs, p) {
-  g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const [w, c] of [[0.16, 'rgba(150,70,255,0.14)'], [0.09, 'rgba(160,80,255,0.3)'], [0.03, 'rgba(190,130,255,0.95)']]) {
-    g.strokeStyle = c; g.lineWidth = Math.max(1, p * w);
-    for (const r of runs) { crestPath(g, r, p, 0.05, r.L - 0.25); g.stroke(); }
-  }
+  for (const r of runs) if (!r.pieces) r.pieces = runPieces(r);
+  fillRuns(g, runs, p, 1, 0, 0, 'rgba(140,60,255,0.10)', veinW(0.3), crestOff);
+  fillRuns(g, runs, p, 1, 0, 0, 'rgba(150,70,255,0.16)', veinW(0.17), crestOff);
+  fillRuns(g, runs, p, 1, 0, 0, 'rgba(165,90,255,0.32)', veinW(0.085), crestOff);
+  fillRuns(g, runs, p, 1, 0, 0, 'rgba(205,160,255,0.9)', veinW(0.028), crestOff);
+}
+
+/**
+ * The runs in view, when the ridges are drawn live (zoomed in past what the baked layers hold sharply, TUN_PX a tile:
+ * drawn as curves at the screen's own resolution), else null (zoomed out: the baked layers, scaled down, are sharp).
+ */
+function tunnelsLive(T, ox, oy, z) {
+  if (!T.runs || z * (R.dpr || 1) < TUN_PX * 1.25) return null;
+  const x0 = -ox / z - 1, x1 = (R.w - ox) / z + 1, y0 = -oy / z - 1, y1 = (R.h - oy) / z + 1;
+  return T.runs.filter((r) => r.x1 > x0 && r.x0 < x1 && r.y1 > y0 && r.y0 < y1);
 }
 
 /** The tunnels' ridges (with the ground: graded with it at dusk and night), and the faint veins by day; collapsed exits' scars. */
@@ -4343,10 +4420,18 @@ function drawTunnels(ctx, ox, oy, z) {
   const T = tunnelLayers();
   if (!T || !T.n) return;
   ctx.save();
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(T.c, ox, oy, S.W * z, S.H * z);
-  ctx.globalAlpha = 0.15; // (by day the veins only show through the earth)
-  ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
+  const near = tunnelsLive(T, ox, oy, z);
+  if (near) {
+    ctx.translate(ox, oy);
+    paintRidges(ctx, near, z, T.look);
+    ctx.globalAlpha = 0.15; // (by day the veins only show through the earth)
+    paintRidgeVeins(ctx, near, z);
+  } else {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(T.c, ox, oy, S.W * z, S.H * z);
+    ctx.globalAlpha = 0.15;
+    ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
+  }
   ctx.restore();
   for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
   // Their dead (Active), where they fell, until one of them drags it off or it sinks into the ground.
@@ -4386,6 +4471,30 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.imageSmoothingEnabled = true;
   ctx.globalAlpha = n * (0.6 + 0.15 * Math.sin(R.time * 1.3));
+  const near = tunnelsLive(T, ox, oy, z);
+  if (near) {
+    // Zoomed in: the veins drawn live, and the pulses flowing smoothly along each curve (its length counted from the
+    // nest end, between how far along the network its two ends are).
+    ctx.translate(ox, oy);
+    paintRidgeVeins(ctx, near, z);
+    ctx.globalAlpha = 1;
+    let drawn = 0;
+    for (const r of near) {
+      const t0 = r.tiles[0], t1 = r.tiles[r.tiles.length - 1], d0 = T.dist[t0], d1 = T.dist[t1];
+      if (d0 === 65535 || d1 === 65535) continue;
+      for (let k = 0; k < r.pts.length && drawn < 900; k += 2) {
+        const q = r.pts[k];
+        if (!runShowsAt(r, q.s)) continue;
+        const d = d0 + (d1 - d0) * (r.L > 0 ? q.s / r.L : 0), ph = (((d * 0.5 + R.time * 1.4) % 4) + 4) % 4, k2 = ph < 1 ? 1 - ph : 0;
+        if (k2 <= 0.05) continue;
+        drawn++;
+        const [nx, ny] = runNormal(r.pts, k), o = crestOff(r, q.s);
+        fxGlow(ctx, (q[0] + nx * o) * z, (q[1] + ny * o) * z, z * 0.3 * Math.min(1, ridgeWidth(r, q.s) / 0.26 + 0.2), '#c08cff', n * k2 * 0.5);
+      }
+    }
+    ctx.restore();
+    return;
+  }
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
   let drawn = z < 8 ? 300 : 0; // (zoomed right out, the glowing veins alone: the pulses would be specks)

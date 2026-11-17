@@ -1477,8 +1477,10 @@ The night glow map also carries a faint light along a black lake's shore, a chas
 **The Murmur's tunnels, on every map.** The ridges are drawn in code as smooth curves (`tunnelRuns`, `paintRidges`,
 `paintRidgeVeins` in `js/render.js`; `renderer/tunnels/ridges.js` is the reference): each run of a network between forks
 and ends is one curve through its tiles, each tile's point nudged off its middle, the earth in the ground's own colour,
-tapering where it's still digging, the veins glowing at night with pulses running back to the nest. Only the blocks
-round the tiles that changed are drawn again. Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
+tapering where it's still digging, the veins glowing at night with pulses running back to the nest. The curves are
+smoothed so they sweep across the tile grid, and zoomed in they're drawn live at the screen's own resolution (filled
+outlines, layer by layer), so they stay crisp at any zoom; zoomed out they come from a baked layer, of which only the
+blocks round the tiles that changed are drawn again. Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
 morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the ground while it stays shut).
 
 **Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
