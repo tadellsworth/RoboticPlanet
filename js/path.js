@@ -56,6 +56,8 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
   const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
   const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
+  const airOk = who !== undefined && !(opts && opts.noAir) && airLines().size > 0; // (Workers and Warbots ride Airship lines)
+  const lineTile = (t) => (ferryOk && ferryLink(t) >= 0) || (airOk && airLink(t) >= 0); // a Port or Mast where a ride starts
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;
   const cover = opts && opts.coverMap ? opts.coverMap : opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
   const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
@@ -86,7 +88,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       const nb = bj * W + bi;
       if (!walkable(nb) || !canStep(b, nb)) return;
       let w = 0;
-      if (S.bAt[nb] && nb !== goal && !passTile(nb, who) && !(ferryOk && ferryLink(nb) >= 0 && getE(S.bAt[nb]).owner === who)) {
+      if (S.bAt[nb] && nb !== goal && !passTile(nb, who) && !(lineTile(nb) && getE(S.bAt[nb]).owner === who)) {
         if (!breach || !breachable(nb, who)) return;
         w = BREACH_COST + Math.max(0, getE(S.bAt[nb]).armor) * BREACH_PER_ARMOR;
       }
@@ -123,7 +125,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (closed[nt] === gen) continue;
       if (!walkable(nt)) continue; // open ground, bridges and tunnels
       let wall = 0;
-      if (S.bAt[nt] && nt !== goal && !passTile(nt, who) && !(ferryOk && ferryLink(nt) >= 0 && getE(S.bAt[nt]).owner === who)) {
+      if (S.bAt[nt] && nt !== goal && !passTile(nt, who) && !(lineTile(nt) && getE(S.bAt[nt]).owner === who)) {
         if (!breach || dir[2] > 1 || !breachable(nt, who)) continue;
         wall = BREACH_COST + Math.max(0, getE(S.bAt[nt]).armor) * BREACH_PER_ARMOR;
       }
@@ -167,6 +169,18 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * FERRY_COST + FERRY_BOARD) * minStep;
+        if (stamp[nt] !== gen || ng < g[nt]) {
+          stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+          heap.push(nt, ng + h(ni, nj));
+        }
+      }
+    }
+    // A Mooring Mast on an Airship line: fly to the far Mast (its owner's Workers and Warbots).
+    if (S.bAt[cur] && airOk) {
+      const nt = airLink(cur);
+      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who) {
+        const ni = nt % W, nj = (nt / W) | 0;
+        const ng = g[cur] + (Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * AIRSHIP.routeCost + AIRSHIP.routeBoard) * minStep;
         if (stamp[nt] !== gen || ng < g[nt]) {
           stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
           heap.push(nt, ng + h(ni, nj));

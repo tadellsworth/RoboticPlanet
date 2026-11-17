@@ -54,6 +54,8 @@ const ORDERS = {
   pack(p, id) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mobile) return 0; const u = packCrawler(b); return u ? u.id : 0; },
   gate(p, id) { const b = ownB(p, id); return b ? wallToGate(p, b) : 'That Wall is gone.'; },
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
+  /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
+  mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
   airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
   pipeToRefinery(p, id) {
     const b = ownB(p, id); if (!b || !BDEFS[b.type].pump) return { why: 'That Oil Pump is gone.' };
@@ -354,6 +356,8 @@ const ORDERS = {
   /* ---------------------------------------------------------------- Vulcan Bombers */
   /** Call off bomber `uid`'s strike while it's still on the ground (waiting for Ammo or Fuel, say). '' or why not. */
   strikeCancel(p, uid) { const u = ownU(p, uid, 'bomber'); return u ? cancelStrike(p, u) : 'That bomber is gone.'; },
+  /** Put Airship `uid` on the line Mooring Mast `mid` is on (mid 0: on no line). '' or why not. */
+  shipLine(p, uid, mid) { const u = ownU(p, uid, 'airship'); if (!u) return 'That Airship is gone.'; const b = mid ? ownB(p, mid) : null; if (mid && !b) return 'That Mooring Mast is gone.'; return setShipLine(p, u, b); },
 };
 
 /** Run order `name` for player p (args: a list). What it gives back, or undefined if there's no such order. */

@@ -2236,3 +2236,23 @@ art/tod/evening/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@
 art/tod/evening/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1:tod=evening	compose.py
 art/tod/night/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@0:tod=night	compose.py
 art/tod/night/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1:tod=night	compose.py
+
+## The Airship (b/airship.js v=c, the armoured blimp) and the Mooring Mast (b/mast.js v=c, the armoured pylon); tools/render_airship.sh renders them all,
+## tools/install_airship.py writes the WebP files (and bots/airship-shadow, from the day airship's alpha)
+art/bots/airship@0.png	main	airship::#38d4ff:airship@0:v=c	compose_any.py --b1 5 --b2 15
+art/bots/airship@1.png	main	airship::#ff5a6e:airship@1:v=c	compose_any.py --b1 5 --b2 15
+art/buildings/mast@0.png	main	mast::#38d4ff:mast@0:v=c	compose.py
+art/buildings/mast@1.png	main	mast::#ff5a6e:mast@1:v=c	compose.py
+art/tod/morning/bots/airship@0.png	main	airship::#38d4ff:airship@0:v=c&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/airship@1.png	main	airship::#ff5a6e:airship@1:v=c&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/buildings/mast@0.png	main	mast::#38d4ff:mast@0:v=c&tod=morning	compose.py
+art/tod/morning/buildings/mast@1.png	main	mast::#ff5a6e:mast@1:v=c&tod=morning	compose.py
+art/tod/evening/bots/airship@0.png	main	airship::#38d4ff:airship@0:v=c&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/airship@1.png	main	airship::#ff5a6e:airship@1:v=c&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/buildings/mast@0.png	main	mast::#38d4ff:mast@0:v=c&tod=evening	compose.py
+art/tod/evening/buildings/mast@1.png	main	mast::#ff5a6e:mast@1:v=c&tod=evening	compose.py
+art/tod/night/bots/airship@0.png	main	airship::#38d4ff:airship@0:v=c&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/airship@1.png	main	airship::#ff5a6e:airship@1:v=c&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/buildings/mast@0.png	main	mast::#38d4ff:mast@0:v=c&tod=night	compose.py
+art/tod/night/buildings/mast@1.png	main	mast::#ff5a6e:mast@1:v=c&tod=night	compose.py
+art/bots/airship-shadow.png	main	airship::#38d4ff:airship@0:v=c	none | tools/install_airship.py {art}

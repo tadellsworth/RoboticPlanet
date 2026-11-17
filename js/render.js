@@ -6130,7 +6130,7 @@ function render(dtReal) {
     if (b.dead || !BDEFS[b.type].airfield || !b.built || !inView(b.x, b.y, 3)) continue;
     let lead = null, n = 0;
     for (const pl of S.bots) {
-      if (pl.dead || pl.inside !== b.id || !BOTS[pl.type].air) continue;
+      if (pl.dead || pl.inside !== b.id || !BOTS[pl.type].air || BOTS[pl.type].airship) continue; // (an Airship waiting for a line is in no hangar spot)
       n++;
       if (!lead || pl.id < lead.id) lead = pl;
     }
@@ -8443,6 +8443,7 @@ function planeOutline(ctx, L) {
  * bigger and its shadow falls further off down the sun. Engine trails stream behind it in the air.
  */
 function drawPlane(ctx, u, sx, sy, s, alt) {
+  if (BOTS[u.type].airship) { drawAirship(ctx, u, sx, sy, s, alt); return; } // (from {type, owner, face, rface, hp, maxHp, parked} alone, too: a falling wreck)
   const bomber = !!BOTS[u.type].bomber;
   const f = u.rface ?? u.face ?? 0, L = s * (1.6 + 0.85 * alt) * (bomber ? 0.72 : 1), off = s * (0.07 + 1.1 * alt);
   ctx.save();
@@ -8489,6 +8490,116 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, bh + 2);
     ctx.fillStyle = f < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(sx - w / 2, y, w * f, bh);
   }
+}
+
+/*
+ * The Airship (art: airship@T, renderer/b/airship.js v=c, the armoured blimp; straight down, facing right, 30 world
+ * units across: AIRSHIP_ART.frame tiles). Drawn frame × (0.94 + 0.1 alt) tiles across, so it grows a touch as it climbs
+ * off a Mast and shrinks as it comes down (like the Cargo Plane at takeoff). Moored (alt 0) it hangs at the Mast's
+ * mooring cup (the sim puts it there: AIRSHIP.lift, shipMooring), its shadow close below; as it climbs its shadow
+ * falls further down-sun. Its
+ * four lift fans (the marks fan0-3, as fractions of the frame from its middle, `fanR` their blades) spin in code over
+ * the art, and at night a soft pool of team light lies on the ground under it.
+ */
+const AIRSHIP_ART = { frame: 3, fans: [[0.1722, -0.24], [0.1722, 0.24], [-0.1811, -0.24], [-0.1811, 0.24]], fanR: 0.05 };
+
+/** Airship u at (sx, sy) on screen (the ground under it), tile size s, height alt (0 moored at a Mast, 1 cruising). */
+function drawAirship(ctx, u, sx, sy, s, alt) {
+  const f = u.rface ?? u.face ?? 0, F = s * AIRSHIP_ART.frame * (0.94 + 0.1 * alt), x = sx, y = sy;
+  const ext = F * (0.39 * Math.abs(Math.sin(f)) + 0.3 * Math.abs(Math.cos(f))); // (how far its hull and fans reach up and down the screen)
+  const off = s * (0.8 + 0.25 * alt), shx = x + off * 0.7, shy = y + off; // its shadow, down-sun (as a plane's)
+  if (TOD.active && TOD.state.pools > 0.05 && typeof drawLightPool === 'function' && !u.parked) drawLightPool(ctx, shx, shy, s * 1.35, PLAYER_COLORS[u.owner] || '#ffffff');
+  const sh = ART['airship-shadow'];
+  ctx.save();
+  ctx.globalAlpha *= (0.34 - 0.06 * alt) * (TOD.active ? 1 - 0.45 * (TOD.state.pools || 0) : 1); // (as a plane's: 0.3 by day, fainter at night)
+  if (sh) drawArtRaw(ctx, sh, shx, shy, F, f);
+  else { ctx.fillStyle = 'rgba(4,10,16,0.3)'; ctx.translate(shx, shy); ctx.rotate(f); ctx.beginPath(); ctx.ellipse(0, 0, F * 0.38, F * 0.17, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  const art = artFor('airship', u.owner);
+  if (art) drawArt(ctx, art, x, y, F, f);
+  else {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(f);
+    ctx.fillStyle = '#4f565e'; ctx.beginPath(); ctx.ellipse(0, 0, F * 0.37, F * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = PLAYER_COLORS[u.owner] || '#ffffff'; ctx.lineWidth = Math.max(1, F * 0.012); ctx.stroke();
+    ctx.fillStyle = '#3a4046';
+    for (const [fx, fy] of AIRSHIP_ART.fans) { ctx.beginPath(); ctx.arc(fx * F, fy * F, F * 0.062, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  drawAirshipFans(ctx, u, x, y, F, f, alt);
+  const bh = Math.max(2, s * 0.05);
+  if (u.hp < u.maxHp && !u.parked && R.clean < 2) {
+    const w = s * 0.9;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - ext - bh - 2, w, bh);
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - ext - bh - 2, (w * Math.max(0, u.hp)) / u.maxHp, bh);
+  }
+  // Its fuel gauge (yours only), below it, as a plane's.
+  if (u.owner === ME && !R.clean && u.bat !== undefined && !u.parked) {
+    const w = s * 0.9, gy = y + ext + 2, k = clamp(u.bat, 0, 100) / 100;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2 - 1, gy - 1, w + 2, bh + 2);
+    ctx.fillStyle = k < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(x - w / 2, gy, w * k, bh);
+  }
+}
+
+/** The Airship's four lift fans turning: a dark blur over each fan's still blades in the art, and blades sweeping round. */
+function drawAirshipFans(ctx, u, x, y, F, f, alt) {
+  const r = F * AIRSHIP_ART.fanR;
+  if (r < 2.5) return; // (too small to see turn)
+  const spin = (R.time || 0) * (9 + 7 * alt) + (u.id || 0) * 0.7, dark = TOD.active ? 1 - 0.65 * (TOD.state.pools || 0) : 1;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(f);
+  AIRSHIP_ART.fans.forEach(([fx, fy], k) => {
+    const a = (k % 2 ? -1 : 1) * spin + k * 1.3;
+    ctx.save();
+    ctx.translate(fx * F, fy * F);
+    ctx.fillStyle = 'rgba(16,19,22,0.62)';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.97, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(a);
+    for (let b = 0; b < 3; b++) {
+      ctx.rotate((Math.PI * 2) / 3);
+      // the blade's motion blur, a fading sweep behind it, then the blade itself
+      const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 0.95);
+      g.addColorStop(0, `rgba(150,160,170,${0.05 * dark})`); g.addColorStop(1, `rgba(150,160,170,${0.32 * dark})`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r * 0.95, -0.9, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(${Math.round(120 * dark)},${Math.round(130 * dark)},${Math.round(140 * dark)},0.85)`;
+      ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.05); ctx.lineTo(r * 0.92, -r * 0.12); ctx.lineTo(r * 0.92, r * 0.05); ctx.lineTo(r * 0.2, r * 0.07); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#2b3136';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+/** A Mooring Mast selected: its Airship line, dashed in its owner's colour to the other Mast; linking: to the pointer. */
+function drawMastLine(ctx, b, ox, oy, z) {
+  const o = mastPartner(b), col = PLAYER_COLORS[b.owner] || '#ffffff', head = AIRSHIP.lift;
+  const line = (x0, y0, x1, y1, ok) => {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(8,12,18,0.55)'; ctx.lineWidth = Math.max(4, z * 0.12); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = ok ? col : '#ff6b6b'; ctx.lineWidth = Math.max(2, z * 0.06); ctx.setLineDash([z * 0.35, z * 0.22]);
+    ctx.lineDashOffset = -((R.time || 0) * z * 0.8) % (z * 0.57);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.restore();
+  };
+  const cup = (m) => [ox + (m.x + 0.5) * z, oy + (m.y + 0.5 - head) * z];
+  if (R.mode === 'mastlink' && typeof UI !== 'undefined' && UI.linkMast === b.id) {
+    // every Mast it could link to ringed, and a line to the one under the pointer
+    for (const m of S.buildings) {
+      if (m === b || m.dead || m.owner !== b.owner || !BDEFS[m.type].mast) continue;
+      const ok = !mastLineWhy(b.owner, b, m), [cx, cy] = cup(m);
+      ctx.strokeStyle = ok ? col : 'rgba(255,107,107,0.7)'; ctx.lineWidth = Math.max(2, z * 0.05);
+      ctx.beginPath(); ctx.arc(cx, cy + head * z, z * 0.62, 0, Math.PI * 2); ctx.stroke();
+    }
+    const h = R.aimHover;
+    if (h) { const m = S.bAt[tIdx(h.i, h.j)] ? getE(S.bAt[tIdx(h.i, h.j)]) : null, [x0, y0] = cup(b); const ok = !!m && BDEFS[m.type].mast && !mastLineWhy(b.owner, b, m); const [x1, y1] = ok ? cup(m) : [ox + (h.i + 0.5) * z, oy + (h.j + 0.5) * z]; line(x0, y0, x1, y1, ok); }
+    return;
+  }
+  if (!o) return;
+  const [x0, y0] = cup(b), [x1, y1] = cup(o);
+  line(x0, y0, x1, y1, true);
 }
 
 /** A parachute canopy at (x, y) (its bottom edge), size s, with its lines down to (x, ly). */
@@ -8684,8 +8795,15 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
     }
   }
   drawFlakSearchlights(ctx, ox, oy, z, inView, 'beams'); // at night: the flak guns' searchlights sweeping the sky
+  // A Mooring Mast selected (or being linked), or an Airship: its line, from mooring cup to mooring cup.
+  {
+    const ui = typeof UI !== 'undefined' ? UI : {}, sb = getE(R.mode === 'mastlink' ? ui.linkMast : R.selected), su = ui.selBot ? getE(ui.selBot) : null;
+    const m = sb && !sb.dead && BDEFS[sb.type] && BDEFS[sb.type].mast ? sb : su && !su.dead && BOTS[su.type] && BOTS[su.type].airship && shipLine(su) ? shipLine(su)[0] : null;
+    if (m) drawMastLine(ctx, m, ox, oy, z);
+  }
   for (const u of S.bots) {
-    if (u.dead || !BOTS[u.type].air || !u.flight || !inView(u.x, u.y, 4)) continue;
+    // (in flight, or an Airship moored at its Mooring Mast, nose at the cup: it hangs over the buildings round it)
+    if (u.dead || !BOTS[u.type].air || !(u.flight || (BOTS[u.type].airship && u.inside && BDEFS[(getE(u.inside) || {}).type || 'depot'].mast)) || !inView(u.x, u.y, 4)) continue;
     const want = u.face || 0, turn = 3 * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
