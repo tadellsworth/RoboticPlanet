@@ -4839,7 +4839,7 @@ function render(dtReal) {
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
       if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
-      pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#a46cff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
     if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();

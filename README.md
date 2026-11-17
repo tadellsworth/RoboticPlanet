@@ -1275,8 +1275,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
   `renderer/post/lore_planet.py`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
-  `art/lore/murmur-<class>.webp` (the direction-B mole renders at night, `renderer/b/murmur_moles.js` with `hero=1`: to
-  be replaced when the Murmur are reworked to LORE.md's art brief), and the game's own Command Base, Trade Post, Uplink
+  `art/lore/murmur-<class>.webp` (night renders of the Murmur built to LORE.md's art brief, `renderer/b/murmur_moles.js`
+  with `hero=1`, cropped by `renderer/post/murmur_lore.py`), and the game's own Command Base, Trade Post, Uplink
   and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
   Brute are met in the game so far, so the Leech, Spitter and Delver are on file as "sighted".
 - **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
