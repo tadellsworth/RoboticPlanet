@@ -3,16 +3,16 @@
 // Crystal grit that glints violet, huge spade hands with five long fingers turned outward, no eyes, a star of tendrils in
 // place of a nose (gathered while they walk, flared open and pulsing when they find power), and eaten Crystal split out
 // through the shoulders and spine like broken geodes: pale lilac, glowing violet when they are full, dull when hungry.
-//   ?c=swarmer | drainer | brute | spitter | delver | spit-glob | burrow
+//   ?c=swarmer | drainer | brute | spitter | sapper | spit-glob | burrow
 //       swarmer is the game's Scuttler (the brief's Runners), brute its Brute (the Breakers), drainer the Leech
-//   ?v=base | rust | white | bloom      regional variants (Scuttler, Spitter, Delver): Rust armoured in ironstone plates,
+//   ?v=base | rust | white | bloom      regional variants (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates,
 //                                       White pale, shaggy and slow, Bloom veined and glowing violet
 //   ?f=0..3                             walking frame: diagonal pairs (left fore with right hind); only the limbs move
 //   ?charge=0..1                        how full of charge (default 0.75): the crystal glows when full, dims when hungry
 //   ?pose=sense                         any class standing still, its star flared open and pulsing: it has found power
 //   ?pose=feed  (or ?feed=1)            Leech feeding: star pressed to the power and lit, hands planted, threads of charge
 //   ?pose=spit                          Spitter spitting: jaws wide under the star, a clot of charged grit leaving the mouth
-//   ?pose=surface                       Delver breaking the surface: head, hands and a ring of thrown-up soil
+//   ?pose=surface                       Sapper breaking the surface: head, hands and a ring of thrown-up soil
 //   c=spit-glob                         the Spitter's clot on its own (a projectile the game can draw), flying +x
 //   c=burrow&s=1|2|3                    the Burrow (the nest) at its three growth levels (the game's nest-1..3)
 //   ?hero=1                             a 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets
@@ -31,7 +31,7 @@ import { molekit } from './murmur_moleskit.js';
 const P = new URLSearchParams(location.search);
 const C = P.get('c') || 'swarmer', HI = +(P.get('hi') || 0), HERO = !!+(P.get('hero') || 0);
 export const config = C === 'burrow' ? { pad: false } : { pad: false, size: [512, 1024, 2048][HI] };
-export const SPRITE_W = { swarmer: 5.8, drainer: 7.6, brute: 11.4, spitter: 6.8, delver: 8.4, 'spit-glob': 2.6 };
+export const SPRITE_W = { swarmer: 5.8, drainer: 7.6, brute: 11.4, spitter: 6.8, sapper: 8.4, 'spit-glob': 2.6 };
 // every model is built at one world scale, then grown by this much (so the game's 0.078 per unit gives these sizes)
 const GROW = 1.2;
 
@@ -39,7 +39,7 @@ export default function (L) {
   const K = molekit(L);
   const f = +(P.get('f') || 0), V = P.get('v') || 'base';
   const POSE = P.get('pose') || (+(P.get('feed') || 0) ? 'feed' : '');
-  L.seed({ swarmer: 8100, drainer: 8200, brute: 8300, burrow: 8400, spitter: 8500, delver: 8600, 'spit-glob': 8700 }[C] + (V === 'base' ? 0 : V.length));
+  L.seed({ swarmer: 8100, drainer: 8200, brute: 8300, burrow: 8400, spitter: 8500, sapper: 8600, 'spit-glob': 8700 }[C] + (V === 'base' ? 0 : V.length));
   if (C === 'burrow') return burrow(L, K, Math.max(1, Math.min(3, +(P.get('s') || 3))));
   const W = SPRITE_W[C];
   const heroCams = {
@@ -47,7 +47,7 @@ export default function (L) {
     drainer: { pos: [8.6, 5.0, 9.6], at: [0.35, 0.7, 0.1], fov: 31 },
     brute: { pos: [14.6, 6.8, 12.2], at: [0.6, 1.25, 0.3], fov: 37 },
     spitter: { pos: [7.4, 4.3, 8.2], at: [0.25, 0.6, 0.1], fov: 31 },
-    delver: { pos: [9.2, 4.6, 9.6], at: [0.3, 0.5, 0.1], fov: 32 },
+    sapper: { pos: [9.2, 4.6, 9.6], at: [0.3, 0.5, 0.1], fov: 32 },
     'spit-glob': { pos: [2.6, 1.6, 2.9], at: [0, 0.4, 0], fov: 30 },
   };
   K.camera(W, HERO && heroCams[C]);
@@ -61,7 +61,7 @@ export default function (L) {
   else if (C === 'drainer') body = leech(L, K, G, GL, f, POSE);
   else if (C === 'brute') body = brute(L, K, G, GL, f, POSE);
   else if (C === 'spitter') body = spitter(L, K, G, GL, f, V, POSE);
-  else if (C === 'delver') body = delver(L, K, G, GL, f, V, POSE);
+  else if (C === 'sapper') body = sapper(L, K, G, GL, f, V, POSE);
   else { spitGlob(L, K, G, V); return; }
   if (body) centreOn(K, G, [body.mesh]);
 }
@@ -332,7 +332,7 @@ function brute(L, K, G, GL, f, pose) {
 }
 
 // ===============================================================================================================
-// The two later roles: the SPITTER (counters defence lines) and the DELVER (counters walls and turtling). Same kit, same
+// The two later roles: the SPITTER (counters defence lines) and the SAPPER (counters walls and turtling). Same kit, same
 // palette logic, same regional variants as the Scuttler.
 
 // the grit the Spitter grinds from eaten crystal and carries in its cheek pouches: pale lilac, glowing violet. The White
@@ -492,14 +492,14 @@ function spitGlob(L, K, G, v) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// DELVER: counters walls and turtling: it tunnels under them and comes up behind. The true digger, long for a Murmur but
+// SAPPER: counters walls and turtling: it tunnels under them and comes up behind. The true digger, long for a Murmur but
 // still barrel-chested: its huge spade hands set right beside the head and turned out sideways like oars, the fingers
 // long and caked with soil. Crystal has grown hard over its brow into a wedge of stone (geode rind, banded where it
 // wore), and while it digs it keeps its star shut into a point in front of it. Its geodes lie flat along its flanks,
 // split lengthwise and swept back, so they never snag in the tunnel. ?pose=surface: only the head, the hands and a ring
 // of thrown-up soil show above the ground, and the star opens.
 const PAL_DELV = { ...PAL.base, hide: '#1a181c', sheen: '#7a7488', brow: '#5e585c' };
-function delver(L, K, G, GL, f, v, pose) {
+function sapper(L, K, G, GL, f, v, pose) {
   const { THREE } = K, surface = pose === 'surface', still = pose === 'sense';
   const pal = v === 'base' ? PAL_DELV : { ...PAL_DELV, ...PAL[v], brow: v === 'rust' ? '#7a4630' : v === 'white' ? '#cfccc8' : '#5a4a68' };
   const fat = v === 'white' ? 1.12 : v === 'rust' ? 1.05 : 1, legK = v === 'white' ? 0.8 : 1;

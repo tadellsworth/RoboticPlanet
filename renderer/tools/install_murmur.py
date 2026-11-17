@@ -19,7 +19,7 @@ for t in ['', 'tod/morning/', 'tod/evening/', 'tod/night/']:
     for c in ('scuttler', 'brute'):
         for f in range(4): pairs.append((f'{t}units/{c}-f{f}.png', f'{t}bots/{c}-f{f}.webp', 256))
     for s in (1, 2, 3): pairs.append((f'{t}buildings/nest-{s}.png', f'{t}buildings/nest-{s}.webp', 512))
-for c in ('scuttler', 'brute', 'leech', 'spitter', 'delver'): pairs.append((f'lore/murmur-{c}.webp', f'lore/murmur-{c}.webp', None))
+for c in ('scuttler', 'brute', 'leech', 'spitter', 'sapper'): pairs.append((f'lore/murmur-{c}.webp', f'lore/murmur-{c}.webp', None))
 
 before = after = 0
 for s, d, size in pairs:

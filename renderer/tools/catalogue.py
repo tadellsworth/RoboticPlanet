@@ -162,7 +162,7 @@ for tod in ALL:
             add(path(tod, 'units', f'{cr}-f{f}.png'), 'main', job('murmur_moles', '', '', f'{cr}-f{f}', at(f'c={cc}&f={f}', tod)), ROB)
 
 section("The Lore guide's Murmur pictures (art/lore, 480 x 360 WebP): night hero renders, cropped round the animal")
-for cr, q in (('scuttler', 'c=swarmer'), ('brute', 'c=brute'), ('leech', 'c=drainer&pose=feed'), ('spitter', 'c=spitter'), ('delver', 'c=delver')):
+for cr, q in (('scuttler', 'c=swarmer'), ('brute', 'c=brute'), ('leech', 'c=drainer&pose=feed'), ('spitter', 'c=spitter'), ('sapper', 'c=sapper')):
     add(f'art/lore/murmur-{cr}.webp', 'main', job('murmur_moles', '', '', f'murmur-{cr}-hero', f'{q}&hero=1&hi=2&tod=night'),
         f'compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {{raw}}/murmur-{cr}-hero.png {{fin}}/murmur-{cr}.webp --class {cr}')
 

@@ -352,7 +352,7 @@ These wait for a later expansion:
 Scuttler (small, fast, packs), Brute (armoured, breaks Walls), and new ones to design in the chosen style: the
 Leech (named by the owner; latches onto vehicles, trains and buildings and drains their charge, shutting them down while it feeds),
 a Spitter (spits conductive crystal slurry that shorts robots and turrets for a moment: counters defence lines) and a
-Delver (tunnels under Walls and surfaces behind them: counters turtling). Mechanics from the lore:
+Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechanics from the lore:
 
 - A game setting (Off / Quiet / Active, like Planetary events), in Versus as well as Colony; none on the Lunar biome
   (Argos, the moon, is the only silent ground).

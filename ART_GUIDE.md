@@ -801,7 +801,7 @@ Each class:
 Sprites follow the robots: seen from straight above, facing right, centred on the body, with no ground or shadow (the
 game draws the shadow). Only the limbs move across the four frames, in diagonal pairs. The nests use the buildings'
 camera, with no pad. Every one has morning, evening and night versions in `art/tod/<time>/` (the crystal lights up after
-dark). The same scene also makes the Leech, Spitter and Delver, the regional variants (`v=rust|white|bloom`) and the hero
+dark). The same scene also makes the Leech, Spitter and Sapper, the regional variants (`v=rust|white|bloom`) and the hero
 shots: see `renderer/RENDERER.md` for all its options.
 
 To re-render them and install them (from `renderer/`):
@@ -1440,7 +1440,7 @@ same size, or point the tag at a new one. Keep them small (WebP; the whole set i
 |---|---|---|
 | `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
 | `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
-| `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Delver at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
+| `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Sapper at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
 
 The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
 *Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.
