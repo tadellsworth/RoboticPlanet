@@ -467,7 +467,7 @@ function docShortHTML(k) {
 function canHover() { return !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches); }
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
 /** Can the menu's biome have the Murmur? Not Lunar (Random might still pick it: then there are none). */
-function menuMurmur() { return UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0]); }
+function menuMurmur() { return (UI.menu.shapeRnd || murmurShape(UI.menu.shape || 0)) && (UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0])); } // (nor a map type without room for nests: murmurShape)
 /** The Murmur as the menu has them: 'off', 'quiet' or 'active' (off on Argos, whatever the setting, which is kept for the next biome). */
 function menuMurmurLevel() { return menuMurmur() && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off'; }
 /** What each Murmur setting does (the Rules line). */
@@ -838,7 +838,8 @@ function syncMenu() {
   // owner's call: see IDEAS.md.)
   const lair = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow;
   const info = (v) => (lair && v === 'off' ? 'The Murmur: off. The Hollow is the Murmur\'s lair, and it plays best with them: with them off its nests stand empty and no surges come.' : MURMUR_INFO[v]);
-  $('m-murmur-row').dataset.info = silent ? 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).' : info(mur);
+  const noRoom = !m.shapeRnd && !murmurShape(m.shape || 0);
+  $('m-murmur-row').dataset.info = silent ? (noRoom ? `The Murmur: none on ${SHAPE_PRESETS[m.shape || 0].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : info(mur);
   for (const btn of $('m-murmur').children) { mark(btn, btn.dataset.v === mur); btn.dataset.info = silent ? $('m-murmur-row').dataset.info : info(btn.dataset.v); }
   for (const [id, on] of [['m-nuke', m.nuke], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
@@ -2780,6 +2781,7 @@ function startNewGame() {
       ? `The Murmur live here (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. By day they keep to their nests; ${every} their tunnels spread toward your power and packs come up through the exits. Pulse Turrets (with Crystal) and warbots keep them off; collapse an exit with warbots; clear a nest to win the goods it hoards.`
       : `The Murmur (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. They are nobody's side: ${every} their tunnels spread toward the colonies' power, and packs come up through the exits to raid all of you. Collapse an exit with warbots; wreck a nest by day and its tunnels die back.`, near ? near.x : 0, near ? near.y : 0, 'warn');
   } else if (UI.menu.murmur !== 'off' && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
+  else if (UI.menu.murmur !== 'off' && !S.mission && !murmurShape(S.settings.shape)) postMsg(ME, `No Murmur on ${SHAPE_PRESETS[S.settings.shape].name}: its land has no room for their nests.`, 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;

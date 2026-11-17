@@ -2356,7 +2356,7 @@ function newGame(opts) {
   // the sites its map laid out: placeHollowNests).
   const hand = !!(opts.layout || opts.setup || opts.mission);
   let murmur = murmurLevelOk(opts.murmur) ? opts.murmur : opts.wildlife && mode === 'colony' && !hand ? 'active' : !hand && murmurLevelOk(SHAPE_PRESETS[settings.shape].murmur) ? SHAPE_PRESETS[settings.shape].murmur : 'off';
-  if (!murmurGround(settings.biome)) murmur = 'off';
+  if (!murmurGround(settings.biome) || !murmurShape(settings.shape)) murmur = 'off'; // (nor on a map type without room for nests)
   // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
   // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
   // opts.style names one for them all. 'random' deals one at random, picked from the planet's seed, that no other
