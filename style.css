@@ -1073,6 +1073,7 @@ canvas.chart.small { height: 110px; }
 .m-rules-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .m-rules-row .tchips { padding: 0; }
 /* Challenge: the modifiers' switches, in the colour of a challenge. */
+@media (pointer: coarse) { .tchip { min-height: 44px; } } /* (a full finger's press: the Rules and Challenge switches) */
 .m-challenge .tchip.on { border-color: rgba(255, 107, 74, 0.6); background: rgba(255, 107, 74, 0.12); }
 .m-challenge .tchip input:checked { background: #ff6b4a; border-color: #ff6b4a; }
 .m-tod { display: flex; align-items: center; gap: 10px; min-height: 38px; }
@@ -1120,6 +1121,12 @@ canvas.chart.small { height: 110px; }
   .m-planet { grid-template-columns: 1fr; gap: 8px; position: sticky; top: 0; align-self: start; }
   .pv { height: 112px; }
   .planets { max-height: 64px; }
+  /* (the challenge modifiers in a slim column that can't scroll: a line of their names, not a stack of pills) */
+  .pv-mods { display: block; font-size: 12px; line-height: 1.35; color: #ffd2b8; }
+  .pvm-title { font-size: 12px; margin-right: 5px; }
+  .pvm { display: inline; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 600; }
+  .pvm + .pvm::before { content: ' · '; color: var(--muted); }
+  .m-planet:has(.pv-mods:not([hidden])) .pv { height: 84px; } /* (and a smaller preview, so they fit) */
 }
 @media (max-width: 420px) {
   .m-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }

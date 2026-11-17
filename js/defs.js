@@ -1315,15 +1315,15 @@ const MODS = {
   fuel: { name: 'Half Fuel', rate: 0.5, brief: 'Refineries and energy crops make Fuel at half speed',
     desc: 'Half Fuel: Refineries refine and energy crops ripen at half speed, for every colony. Fuel Stations, trucks and Generators run short.' },
   dust: { name: 'Endless dust storm', at: 300, brief: 'from 5 minutes in, for good: bots slowed, Missiles grounded',
-    desc: 'Endless dust storm: 5 minutes in a dust storm blows in, and it never blows over. Bots move at two-thirds speed and Missiles stay grounded; no other planetary event comes.' },
+    desc: 'Endless dust storm: 5 minutes in, a dust storm blows in for good: bots at two-thirds speed, Missiles grounded, no other planetary event.' },
   head: { name: 'Rival head start', versus: true, stock: 1, bots: { worker: 4, hauler: 2, warbot: 2 }, brief: 'the computer landed with twice the goods and 8 more robots',
     desc: 'Rival head start: every computer colony lands with twice the goods, 4 more Workers, 2 more Haulers and 2 more warbots.' },
   crystal: { name: 'Scarce Crystal', keep: 0.5, brief: 'half as much in every cluster and at every Command Base',
     desc: 'Scarce Crystal: Crystal clusters hold half as much, and every colony lands with half its Crystal. Chips and turret ammo come dear.' },
   fragile: { name: 'Fragile robots', takes: 1.5, pace: true, brief: 'every robot takes half again the damage',
-    desc: 'Fragile robots: every robot and vehicle takes half again as much damage, so fights are over sooner (a win with it is not a fastest win).' },
+    desc: 'Fragile robots: every robot and vehicle takes half again as much damage. Fights end sooner, so a win with it is not a fastest win.' },
   noturret: { name: 'No turrets', types: ['turret', 'minigun', 'mortar', 'disruptor'], brief: 'no Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers for you',
-    desc: 'No turrets: you can\'t build Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers (the computer still can). Warbots, Bunkers, Keeps, Walls and Flak Guns defend you.' },
+    desc: 'No turrets: you can\'t build Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers; the computer still can.' },
 };
 const MOD_ORDER = ['fuel', 'dust', 'head', 'crystal', 'fragile', 'noturret'];
 /** A list of modifier keys made safe: known ones, once each, in MOD_ORDER; in a Colony game none that need a rival. */
