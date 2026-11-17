@@ -915,7 +915,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bots' tasks every second (`updateLoot`), so a run called off never leaves a pile looking taken.
 - **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
   armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
-  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
+  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). A Worker builds a Wall
+  from beside it on the home side (`wallStands`: the free neighbour nearest the Command Base by walking, or a Wall
+  site there, the inner row of a double wall, which then waits for the outer row), so nobody is left on top of it,
+  walled out; a site with neither is built from its own tile. Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot

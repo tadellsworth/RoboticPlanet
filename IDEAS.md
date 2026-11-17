@@ -167,11 +167,6 @@ built and played through headless:
   missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
   `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver
   shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
-- **Walled-in workers.** A Worker who builds a Wall in a narrow channel can end up standing on it, walled in for good
-  (Hold the Line). Builders and pavers now skip a worker whose last route failed, so the rest of the work goes on, but
-  the worker stays stuck, and planning both rows of a double wall at once can shut the outer row off from every
-  builder. Ideas: step the builder off to the home side when a Wall or Gate is finished; build a Wall from its
-  home-side neighbour, outer row before inner; or let our own bots pass our own unbuilt Wall sites. A design decision.
 - **Salvage that doesn't reach its site.** The Command Base's Fiber/Stone salvage (`landerSalvage`, "so it can always
   rebuild") can go to a running factory that burns the same good before the gatherer site it was meant for (Border
   Dispute on Hard stalled on Fiber until the hook set the Harvester site to High priority). A fix in dispatch: while a

@@ -1864,13 +1864,15 @@ function dispatch(p) {
   if (!idle.length) return;
 
   // 1) A builder for every construction site that has materials waiting to be built with (not from far off
-  //    while a worker close by will soon be free: see nearSoon).
+  //    while a worker close by will soon be free: see nearSoon). A Wall from beside it, the outer row first (wallStands).
+  let stands = null;
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+      if (b.type === 'wall' && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
-      assignBuild(u, b);
+      assignBuild(u, b, stands);
     }
   }
   // 1b) A worker for every building you've paid to repair.
@@ -2628,13 +2630,49 @@ function nearSoon(u, b) {
   return false;
 }
 
-function assignBuild(u, site) {
+function assignBuild(u, site, stands) {
   if (!u) return;
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampStand(u, site) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].ramp ? rampStand(u, site) : stands && stands.at.has(site.id) ? stands.at.get(site.id) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
+}
+
+/**
+ * A Wall is built from beside it, on the home side, so its builder is never left standing on it (in a narrow channel,
+ * walled out for good). For player p, from the ground its bots can walk to from its Command Bases (its Walls in the
+ * way): `at`, each unbuilt Wall site's tile to build it from (the free neighbour nearest home, or the Wall site next to
+ * it on the home side: the inner row of a double wall); and `wait`, the sites another is built from (the inner row
+ * goes up after the outer, which it would otherwise shut off from every builder). A site with neither is built from
+ * its own tile. { at: Map(site id → tile), wait: Set(site id) }
+ */
+function wallStands(p) {
+  const W = S.W, N = W * S.H, d = new Int32Array(N).fill(-1), q = [];
+  const site = (t) => { const b = S.bAt[t] && getE(S.bAt[t]); return !!b && b.owner === p && b.type === 'wall' && !b.built; };
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'lander') { const t = tIdx(b.x, b.y); d[t] = 0; q.push(t); }
+  // Walking from home (through its own Gates and Outposts), and one step onto a Wall site: no further.
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    if (site(a)) continue;
+    for (const c of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (c < 0 || c >= N || d[c] >= 0 || !walkable(c) || !canStep(a, c) || (S.bAt[c] && !site(c) && !passTile(c, p))) continue;
+      d[c] = d[a] + 1; q.push(c);
+    }
+  }
+  const at = new Map(), wait = new Set();
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b.type !== 'wall' || b.built) continue;
+    const t = tIdx(b.x, b.y), i = b.x;
+    let best = -1;
+    for (const c of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (c >= 0 && c < N && d[c] >= 0 && (!S.bAt[c] || site(c)) && canStep(t, c) && (best < 0 || d[c] < d[best])) best = c;
+    }
+    if (best < 0) continue;
+    at.set(b.id, best);
+    if (S.bAt[best]) wait.add(S.bAt[best]);
+  }
+  return { at, wait };
 }
 
 /**

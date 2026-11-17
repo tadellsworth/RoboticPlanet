@@ -1049,7 +1049,7 @@ const MISSIONS = [
       // (A Gate counts: it's what a wall line gets where it crosses a road.)
       { kind: 'walls', n: [4, 6, 8], text: 'Build {n} Walls',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && (b.type === 'wall' || b.type === 'gate')).length,
-        hint: '<b>Walls</b> (<kbd>X</kbd>): drag a line across each channel, then <b>Build</b>. Once it\'s up, add a second row behind it.',
+        hint: '<b>Walls</b> (<kbd>X</kbd>): drag a line across each channel and a second row behind it, then <b>Build</b>. The outer row goes up first.',
         ui: "#btn-road, #banner-seg [data-v='wall'], #build-walls, #banner-ok" },
       { kind: 'mannedBunker', n: 1, text: 'Man a Bunker with 2 warbots', at: 'bunker',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'bunker' && b.garrison.length >= 2).length,
