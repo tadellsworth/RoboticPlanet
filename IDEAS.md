@@ -169,8 +169,6 @@ built and played through headless:
   shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
 - **A rail-only line.** A far Rail Station needs a road to be built at all (its builders and materials come by road),
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
-- **Trade Winds waits for its second event.** Events come 300-480 s apart (`EVENT_GAP`), so a quick player can wait a
-  few minutes after the trades. A shorter gap in missions would fix it.
 - **Coach rings.** The tutorial's ring can only mark buildings: not a Trade Post (it isn't in `S.buildings`), and not
   the Crawler once it rolls out of the Foundry (the hint says to tap it). For a Container Ship order the ring is on the
   home Port while the supply orders that matter are on the new one.

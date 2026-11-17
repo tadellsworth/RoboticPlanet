@@ -1232,7 +1232,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
 - **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option; in missions only with
   `events: true`, as in Trade Winds, whose setup brings the first one forward with `S.nextEvent`): the
-  first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
+  first after 8 minutes, then one every 5–8 minutes (2–3 in a mission, `MISSION_EVENT_GAP`), never one of the last two
+  again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Ringfall** (a meteor
   shower, pieces of the planet's Ring; type `'meteor'`):
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each

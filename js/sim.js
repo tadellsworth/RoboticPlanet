@@ -8573,8 +8573,8 @@ function startEvent(E) {
 function endEvent(E) {
   S.recentEvents = (S.recentEvents || []).concat(E.type).slice(-2);
   S.event = null;
-  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0);
-  S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
+  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0), gap = S.mission ? MISSION_EVENT_GAP : EVENT_GAP;
+  S.nextEvent = S.time + gap[0] + rng() * (gap[1] - gap[0]);
   if (E.type === 'dust') postMsg(ME, 'The dust storm has blown over.', undefined, undefined, 'info');
   else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
   else if (E.type === 'trader') postMsg(ME, 'The Wren has left orbit, on schedule.', undefined, undefined, 'info');
