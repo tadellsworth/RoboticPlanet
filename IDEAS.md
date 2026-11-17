@@ -130,7 +130,7 @@ or drop.
 - **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
   fights), on the lockstep that's there.
 
-## Trade routes and the finished-goods market (planned, after the current list)
+## Trade routes and the finished-goods market (decided, being built)
 
 The owner wants trade to be a steady supply line all game, not a deal or two, so trade convoys become a constant
 target and the computer rivals build and guard their own. Plan so far (Nov 2026):
@@ -149,9 +149,12 @@ target and the computer rivals build and guard their own. Plan so far (Nov 2026)
   destroyed convoy's cargo spilling as loot crates the raiders can carry home; an Escort option at the Terminal.
 - **The rivals:** they build a Terminal earlier, run their own route, escort it with 2-3 warbots and an Outpost on the
   way; the Salvager makes enemy convoys its favourite target (outside the guns' reach).
-- **Open: raw materials.** Can they be traded without being exploited (Stone never runs out)? Options to test:
-  raw goods sell only at a low rate and buy at a markup; no raw-for-raw swaps; a good's price falls faster the more
-  of it you sell; Stone sells only as Cement; a cap per window. Decide with balance runs.
+- **Raw materials (decided, Nov 17):** raw goods (Stone, Ore, Crystal, Fiber, Crude) sell at about 35% of their value
+  and buy at about 75%; made goods (Cement, Alloy, Chips, Ammo, Fuel) trade at about 55-60%; no raw-for-raw routes.
+- **Also decided (Nov 17):** about 15 goods a convoy, every 2 minutes; one standing route per Terminal (a second route
+  needs a second Terminal at another Trade Post); an Escort switch at the Terminal sends two warbots from the nearest
+  garrison along with each convoy. The three contracts at the Terminal give way to the route and the market board;
+  the steep Fuel contract becomes Fuel on the board at a markup.
 - The *Wren* keeps its occasional big deals as the one-off event.
 
 ## Missions: follow-ups from the tutorial campaign
