@@ -1320,24 +1320,26 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,
     so every device agrees; on a map type with `alwaysNight`, the Hollow, the same windows are **surges**, with a silent
-    lull, `murmurLull`, `SURGE_LULL` (60 s) before each). `murmurTick`, once a second: `MURMUR.warn` (40 s) before nightfall
-    the dusk warning ("The Murmur are stirring", or "The ground has gone silent"); at nightfall (`murmurNightfall`, night `n`)
-    each live nest's network sets out along `branches` branches (`murmurGoals`: power within `MURMUR.reach` first, by
-    `chargeWorth`: Generators, Fuel Stations and chargers, Refineries 3, storage holding 10 Crystal and Fuel 2, any
-    other colony building 1), digging `tiles` that night (up to `cap` in all) over its first two minutes (`murmurGrow`,
-    `murmurDig`: a tile at a time toward the goal, wandering a little, under any ground, roads, buildings and Walls, not
-    water, chasms, rock, lava or the tide); `exits` new exits open along it (`murmurOpenExit`: on open ground over a
-    tunnel, not a road, building, resource, ramp or a Trade Post's ground, on level open ground all round (`exitRoom`: never
-    in a pass it would plug) that a colony's robots can walk to (`murmurReach`), 4 tiles from another exit, clear of
-    collapsed ones still shut, at least `exitFromBase` (12) from a Command Base and `exitFromBld` (5) from any colony
-    building, about six from the nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later):
-    one through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
-    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night raiders (`task.night`) move on
-    to the next thing near them when there's nothing left where they went (`murmurOnward`). At dawn (`murmurDawn`) they
-    go back down: into the nearest exit of their nest within `MURMUR.retreat` (16) tiles (task `down`), or dig down where
-    they stand (task `dig`). Each [base, per night after the first, most] (`murmurBy`), Quiet then Active: tiles [14, 4,
-    28] / [28, 8, 56], branches [1, 0.34, 2] / [2, 0.5, 4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] /
-    [2, 0, 2] (at most 2 / 3 a nest), packs [2, 0.25, 3] / [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
+    lull, `murmurLull`, `SURGE_LULL` (60 s) before each). `murmurTick`, once a second: `MURMUR.warn` (40 s) before
+    nightfall the dusk warning ("The Murmur are stirring", or "The ground has gone silent"); at nightfall
+    (`murmurNightfall`, night `n`) each live nest's network sets out along `branches` branches (`murmurGoals`: power
+    within `MURMUR.reach` first, by `chargeWorth`: Generators, Fuel Stations and chargers, Refineries 3, storage holding
+    10 Crystal and Fuel 2, any other colony building 1), digging `tiles` that night (up to `cap` in all) over its first
+    two minutes (`murmurGrow`, `murmurDig`: a tile at a time toward the goal, wandering a little, stopping 6 tiles short
+    of it, under any ground, roads, buildings and Walls, not water, chasms, rock, lava or the tide); `exits` new exits
+    open along it (`murmurOpenExit`: on open ground over a tunnel, not a road, building, resource, ramp or a Trade
+    Post's ground, on level open ground all round (`exitRoom`: never in a pass it would plug) that a colony's robots can
+    walk to (`murmurReach`), 4 tiles from another exit, clear of collapsed ones still shut, off the nest's own mound, at
+    least `exitFromBase` (12) from a Command Base and `exitFromBld` (4) from any colony building, about six from the
+    nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later): one
+    through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
+    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night
+    raiders (`task.night`) move on to the next thing near them when there's nothing left where they went
+    (`murmurOnward`). At dawn (`murmurDawn`) they go back down: into the nearest exit of their nest within
+    `MURMUR.retreat` (16) tiles (task `down`), or dig down where they stand (task `dig`). Each [base, per night after
+    the first, most] (`murmurBy`), Quiet then Active: tiles [14, 4, 28] / [28, 8, 56], branches [1, 0.34, 2] / [2, 0.5,
+    4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] / [2, 0, 2] (at most 2 / 3 a nest), packs [2, 0.25, 3] /
+    [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
   - **Tunnels** (`S.tun`, a tile layer: a nest's slot in `S.mur.nests` + 1; saved, `TYPED_FIELDS`, and in `hashState`
     with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins
     (`paintTunnelTile`, `paintTunnelVeins`, baked at `TUN_PX` a tile when `S.mur.ver` changes: `tunnelLayers`), faint by day

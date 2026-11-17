@@ -1330,7 +1330,7 @@ const MURMUR = {
     orbits: 2, perTiles: 1100, tiles: [28, 8, 56], branches: [2, 0.5, 4], cap: [60, 36, 260],
     exits: [2, 0, 2], maxExits: 3, pack: [2, 0.5, 5], brutes: 2, waves: 2, raidGap: 1, raidLess: 0,
   },
-  shut: 900, warn: 40, exitArmor: 30, minBase: 18, offRoute: 6, exitFromBase: 12, exitFromBld: 5, reach: 44, retreat: 16, room: [12, 6], prey: 26,
+  shut: 900, warn: 40, exitArmor: 30, minBase: 18, offRoute: 6, exitFromBase: 12, exitFromBld: 4, reach: 44, retreat: 16, room: [12, 6], prey: 26,
 };
 
 /*

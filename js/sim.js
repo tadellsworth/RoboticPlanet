@@ -9781,11 +9781,11 @@ function murmurGrow(b) {
   }
 }
 
-/** Branch r of network k digs one tile on toward its goal, wandering a little; false once it's done (there, spent, or stuck). */
+/** Branch r of network k digs one tile on toward its goal, wandering a little; false once it's done (6 tiles short of it, spent, or stuck). */
 function murmurDig(r, k, b) {
   if (r.k <= 0 || r.h < 0) return false;
   const W = S.W, hx = r.h % W, hy = (r.h / W) | 0, gx = r.g % W, gy = (r.g / W) | 0;
-  if (dist2(hx, hy, gx, gy) <= 4) return false;
+  if (dist2(hx, hy, gx, gy) <= 36) return false; // (it stops short of what it's after, where an exit can open: MURMUR.exitFromBld)
   let best = -1, bs = Infinity;
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     const i = hx + di, j = hy + dj;
@@ -9823,7 +9823,7 @@ function murmurOpenExit(b) {
     if (S.tun[t] !== k) continue;
     const i = t % W, j = (t / W) | 0;
     if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t)) continue;
-    if (dist2(i, j, b.x, b.y) < 16 || calmAt(i + 0.5, j + 0.5)) continue;
+    if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound)
     if (exits.some((e) => dist2(e.x, e.y, i, j) < 16) || shut.some((s) => dist2(s.x, s.y, i, j) < 9)) continue;
     let near = Infinity, base = Infinity;
     for (const e of blds) {
