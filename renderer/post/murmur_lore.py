@@ -1,4 +1,4 @@
-# usage: python3 post/murmur_lore.py <composite.png> <out.webp> --class scuttler|brute|leech|spitter|delver [--q 80]
+# usage: python3 post/murmur_lore.py <composite.png> <out.webp> --class scuttler|brute|leech|spitter|sapper [--q 80]
 # The Lore guide's Murmur pictures (art/lore/murmur-<class>.webp, 480 x 360): a 3/4 hero render of murmur_moles.js
 # (hero=1&hi=2&tod=night, the Leech pose=feed), bloomed with compose_any.py, cropped 4:3 round the animal and shrunk.
 # BOX is where each animal sits in its hero frame (0-1 image coordinates), measured from the same camera with the
@@ -11,7 +11,7 @@ BOX = {
     'brute': (0.213, 0.277, 0.873, 0.656),
     'leech': (0.152, 0.24, 0.984, 0.795),       # with the power line it drinks from
     'spitter': (0.209, 0.33, 0.842, 0.637),
-    'delver': (0.16, 0.375, 0.881, 0.654),
+    'sapper': (0.16, 0.375, 0.881, 0.654),
 }
 
 

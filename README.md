@@ -1287,7 +1287,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `art/lore/murmur-<class>.webp` (night renders of the Murmur built to LORE.md's art brief, `renderer/b/murmur_moles.js`
   with `hero=1`, cropped by `renderer/post/murmur_lore.py`), and the game's own Command Base, Trade Post, Uplink
   and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
-  Brute are met in the game so far, so the Leech, Spitter and Delver are on file as "sighted".
+  Brute are met in the game so far, so the Leech, Spitter and Sapper are on file as "sighted".
 - **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
   new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as The Murmur (id `bughunt`)
   does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, `newGame`

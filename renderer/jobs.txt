@@ -1376,7 +1376,7 @@ art/lore/murmur-scuttler.webp	main	murmur_moles:::murmur-scuttler-hero:c=swarmer
 art/lore/murmur-brute.webp	main	murmur_moles:::murmur-brute-hero:c=brute&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-brute-hero.png {fin}/murmur-brute.webp --class brute
 art/lore/murmur-leech.webp	main	murmur_moles:::murmur-leech-hero:c=drainer&pose=feed&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-leech-hero.png {fin}/murmur-leech.webp --class leech
 art/lore/murmur-spitter.webp	main	murmur_moles:::murmur-spitter-hero:c=spitter&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-spitter-hero.png {fin}/murmur-spitter.webp --class spitter
-art/lore/murmur-delver.webp	main	murmur_moles:::murmur-delver-hero:c=delver&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-delver-hero.png {fin}/murmur-delver.webp --class delver
+art/lore/murmur-sapper.webp	main	murmur_moles:::murmur-sapper-hero:c=sapper&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-sapper-hero.png {fin}/murmur-sapper.webp --class sapper
 ## Vehicle light overlays (day only: light, drawn over the sprite at every time of day)
 art/units/truck-brake.png	main	truck::#38d4ff:truck-brake:part=brake	compose_any.py --b1 5 --b2 15 | post/truck_overlays.py {raw} {fin}
 art/units/truck-boost.png	main	truck::#38d4ff:truck-boost:part=boost	compose_any.py --b1 5 --b2 15 | post/truck_overlays.py {raw} {fin}
