@@ -123,12 +123,14 @@ From a full review of the game after the audit work was merged. None is planned 
 or drop.
 
 ### Rough edges in what's there
-- **Island maps stall.** The leading rival lands six warbots at a time (one Ferry load) and can't break a healthy
-  base. Options: back-to-back landings that wait on the beach for the next load, or a staging island it takes first.
+- **Island maps still stall now and then.** With a decisive lead (or a landing held back by guns) the rival now gathers
+  a band on a beach out of the guns, with a second Ferry, and goes in when it's strong enough (`aiBeach`); in 12
+  Islands test games 4 still ran to 50 minutes (6 before). Left: a rival dug in behind several Mortar Pits, turrets and
+  a Keep, where the leader's bands keep taking Outposts that are lost again (seeds 2, 5, 17); a colony whose home
+  island has no Ore left makes no Alloy, so no army and no Ferry, and nobody lands at all (seed 21); and a staging
+  island it takes first, which isn't tried.
 - **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
-- **Long Haul starts slowly:** both rivals sit at 10 workers until minute 12-15 (a Foundry site waits behind a long
-  Outpost road being paved).
 - **Doctrine balance and text.** The Herald wins 10 of 12 against the Steward. The Architect's text promises a nuke it
   never builds (no Reactor in 10 Nuclear-race games); the Warden's says it "covers its land with turrets" but it
   builds about 2, all within 5 tiles of its base.
@@ -268,8 +270,8 @@ its buildings called for, and some 25 warbots, Alloy piling up for want of room,
 `AI_ARMY_ROOM` kept room only from new Workers, it never thinned the ones it had. Crossroads seeds 1 and 14 ran past
 90 minutes that way. Now it recycles its spare Workers and Haulers at its Foundry (`AI_SCRAP`) and fills the room with
 warbots: those games end at 44 and 37 minutes, won by the same side. The other long ones, seeds 8, 11 and 13 at an hour or more, are close wars, not full
-colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
-four to six at a time (most sit in far garrisons) and hadn't taken a beaten rival with one warbot after an hour.
+colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands a well dug-in rival can
+still hold out to the clock against a leader landing band after band (see Island maps, above).
 
 ## Balance decisions
 
