@@ -2426,8 +2426,10 @@ function landerSalvage(p, dt) {
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
     // (While it salvages a good for a Quarry or Harvester site, only sites get it: a running factory that burns it, a
-    // Smelter say, took every one before the site did. See dispatch.)
-    if (!working && amount < SALVAGE_BELOW && S.buildings.some((b) => !b.dead && b.owner === p && b.type === type && !b.built)) (P.salvaging = P.salvaging || {})[g] = true;
+    // Smelter say, took every one before the site did. See dispatch. A person's colony only, and only for a site a road
+    // joins to storage: a rival keeps its own Fiber rules (P.fiberWait), and its Smelters went without for good behind a
+    // Harvester site that never got built, its army stuck at a handful for 45 minutes.)
+    if (!working && amount < SALVAGE_BELOW && !P.ai && S.buildings.some((b) => !b.dead && b.owner === p && b.type === type && !b.built && !b.unlinked)) (P.salvaging = P.salvaging || {})[g] = true;
     else if (P.salvaging) delete P.salvaging[g];
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
