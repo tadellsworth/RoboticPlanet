@@ -157,9 +157,15 @@ for tod in ALL:
         add(path(tod, 'units', f'gondola{t}.png'), 'main', job('gondola', '', c, f'gondola{t}', at('', tod)), VEH)
     add(path(tod, 'units', 'crawler-dish.png'), 'main', job('crawler', '', P0, 'crawler-dish', at('part=dish', tod)), CRAWL)
     add(path(tod, 'units', 'trader-ship.png'), 'main', job('trader', '', '', 'trader-ship', at('', tod)), VEH)
-    for cr, cc in (('scuttler', 'swarmer'), ('brute', 'brute')):      # the Murmur (murmur_moles.js calls the Scuttler 'swarmer')
-        for f in range(4):
-            add(path(tod, 'units', f'{cr}-f{f}.png'), 'main', job('murmur_moles', '', '', f'{cr}-f{f}', at(f'c={cc}&f={f}', tod)), ROB)
+    # the Murmur (murmur_moles.js calls the Scuttler 'swarmer', the Leech 'drainer' and the Sapper's heave 'heave'), all
+    # rendered hungry (charge=0.3: the game adds their light, js/render.js murmurGlow); the glow images and the volley's
+    # are made by tools/install_murmur_forms.py from the night renders' glow passes
+    for cr, cc, pose, n in (('scuttler', 'swarmer', '', 4), ('brute', 'brute', '', 4), ('leech', 'drainer', '', 4), ('leech', 'drainer', 'feed', 4),
+                            ('spitter', 'spitter', '', 4), ('spitter', 'spitter', 'spit', 4), ('sapper', 'sapper', '', 4), ('sapper', 'sapper', 'dig', 4),
+                            ('sapper', 'sapper', 'under', 4), ('sapper', 'sapper', 'up', 5)):
+        for f in range(n):
+            k, q = f"{cr}-{pose + '-' if pose else ''}f{f}", f"c={cc}{'&pose=' + ('heave' if pose == 'under' else pose) if pose else ''}&f={f}&charge=0.3"
+            add(path(tod, 'units', f'{k}.png'), 'main', job('murmur_moles', '', '', k, at(q, tod)), ROB)
 
 section("The Lore guide's Murmur pictures (art/lore, 480 x 360 WebP): night hero renders, cropped round the animal")
 for cr, q in (('scuttler', 'c=swarmer'), ('brute', 'c=brute'), ('leech', 'c=drainer&pose=feed'), ('spitter', 'c=spitter'), ('sapper', 'c=sapper')):

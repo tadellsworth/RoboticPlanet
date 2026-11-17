@@ -19,6 +19,14 @@
 //   c=sapper&pose=dig | heave           the Sapper digging in (its front half under the ground, soil thrown back) or
 //                                       under it (only the heaving ground shows: the tell at the head of its ridge)
 //   c=drainer&pose=feed&charge=0..1     the Leech feeding, as full as `charge` (without it, full): it brightens as it drinks
+//   The game's action loops (each ?f= a frame; js/render.js drawCritter plays them):
+//   c=drainer&pose=feed&f=0..3          feeding: the star pulsing open and lit, the sac swelling with each draw
+//   c=spitter&pose=spit&f=0..3          wind-up (head back, pouches swollen and burning), the spit (the volley leaving),
+//                                       recoil (head thrust on, pouches emptied), recovering
+//   c=sapper&pose=dig&f=0..3            digging in: the spade hands throwing soil back in turn, clods in the air
+//   c=sapper&pose=heave&f=0..3          under the ground: the heave rising and splitting as it goes
+//   c=sapper&pose=up&f=0..4             coming up: the ground bursting, hands and star breaking through, head and
+//                                       shoulders out, climbing out of its hole
 //   c=burrow&s=1|2|3                    the Burrow (the nest) at its three growth levels (the game's nest-1..3)
 //   c=burrow&s=4                        the Deep's mound, the Hollow's heart (LORE.md): bigger than any nest, nine spires
 //                                       and an outer ring, eight tunnels, satellite molehills, and the Deep's tendril star
@@ -201,6 +209,8 @@ function leech(L, K, G, GL, f, pose) {
   const furM = coat(L, K, 'base'), skinM = K.flesh(pal.skin), nailM = K.keratin(pal.nail);
   // feeding: it fills, everything that carries charge burns (?charge=: how far it has filled, hungry 0 to full 1)
   const given = P.has('charge'), CH = feed ? (given ? K.CHARGE : 1) : K.CHARGE, FK = feed ? (given ? 1 + 1.2 * CH : 2.2) : 1;
+  // the feeding loop (?f=): each draw the star flares wider and brighter and the sac swells a little
+  const pulse = feed && P.has('f') ? [0.15, 0.65, 1, 0.45][f % 4] : feed ? 1 : 0, swell = 1 + 0.04 * pulse;
   const body = K.loft(G, plan({ x0: -2.2, x1: 1.62, w: 0.98, h: 0.86, b: 0.5, cy: 0.76, hip: 0.9, rise: 0.84, head: 0.44, drop: 0.12 }), furM, { lump: 0.03, seed: 7, uv: 1.3, p: 2.3 });
   shells(K, body, furM, 'base', { base: { len: 0.055, density: 0.95, comb: 0.8 } });
 
@@ -222,7 +232,7 @@ function leech(L, K, G, GL, f, pose) {
   const sacM = new THREE.MeshPhysicalMaterial({ color: '#3a3040', roughness: 0.55, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.4, vertexColors: true, map: K.hideMap,
     sheen: 0.35, sheenColor: new THREE.Color('#a890b8'), emissive: new THREE.Color(X.core).multiplyScalar(chF * FK * (K.GLOW * K.GLOW * 0.5 + (K.NIGHTISH ? 0.15 : 0.12)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.45 });
   sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 3) * Math.min(2.2, FK) * chF);
-  const sx = -1.02, sy = 1.06, rx = 1.12, ry = 0.76, rz = 0.84;
+  const sx = -1.02, sy = 1.06, rx = 1.12 * swell, ry = 0.76 * swell, rz = 0.84 * swell;
   {
     const g = new THREE.SphereGeometry(1, 96, 48), p = g.attributes.position, col = new Float32Array(p.count * 3), v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
@@ -243,7 +253,7 @@ function leech(L, K, G, GL, f, pose) {
 
   // ---- the face: the star raised and facing forward; feeding, flared and pressed to the power
   const tip = feed ? [1.82, 0.58, 0] : [1.78, 0.66, 0];
-  const D = face(L, K, G, { base: [1.36, 0.66, 0], tip, r: 0.15, r0: 0.1, len: 0.3, tilt: feed ? 0.15 : 0.45, pose, pal, seed: 3 });
+  const D = face(L, K, G, { base: [1.36, 0.66, 0], tip, r: 0.15, r0: 0.1, len: 0.3, tilt: feed ? 0.15 : 0.45, pose, pal, seed: 3, star: feed ? { open: 0.74 + 0.26 * pulse, glow: 0.45 + 0.55 * pulse } : undefined });
   K.tail(G, { base: [-2.1, 0.76, 0], tip: [-2.4, 0.68, -0.03], r: 0.09, mat: furM });
 
   // ---- limbs: big spade hands (planted wide and dug in while feeding), small hind feet
@@ -261,7 +271,8 @@ function leech(L, K, G, GL, f, pose) {
   if (feed) {
     G.updateMatrixWorld(true);
     const c = G.worldToLocal(D.localToWorld(new THREE.Vector3(0.02, 0, 0))), T0 = c.x + (HERO ? 0.2 : 0.42);
-    const arcM = K.glowMat('#e8d8ff', 1.6, K.dimGlow(X.glow, 2.4));
+    for (let i = 0; i < f * 9; i++) L.rnd();                        // (a fresh crackle each frame)
+    const arcM = K.glowMat('#e8d8ff', 1.6 * (0.6 + 0.5 * pulse), K.dimGlow(X.glow, 2.4 * (0.6 + 0.5 * pulse)));
     for (const s of [-1, -0.35, 0.35, 1]) {
       const pts = [[T0, c.y - 0.05 + s * 0.04, s * 0.22]];
       for (let k = 1; k <= 6; k++) { const t = k / 6; pts.push([T0 + (c.x - T0) * t + (L.rnd() - 0.5) * 0.06, c.y - 0.05 + 0.05 * t + (L.rnd() - 0.5) * 0.06, s * 0.22 * (1 - t) + (L.rnd() - 0.5) * 0.08]); }
@@ -351,7 +362,7 @@ function brute(L, K, G, GL, f, pose) {
 
 // the grit the Spitter grinds from eaten crystal and carries in its cheek pouches: pale lilac, glowing violet. Hoarfell
 // ones' frosted and dim, the Bloom ones' deep violet.
-const GRIT = { skin: '#7a6c86', core: '#c4a6ff', glow: '#9a5cff', chip: '#d8caf4', k: 1 };
+const GRIT = { skin: '#9a8cae', core: '#d2b8ff', glow: '#a466ff', chip: '#e0d4f8', k: 1.7 };   // (pale and bright, so a Spitter reads apart from a Scuttler)
 const GRIT_WHITE = { skin: '#b4b2bc', core: '#e0dcf2', glow: '#bdb4e6', chip: '#eef0f6', k: 0.55 };
 const GRIT_BLOOM = { skin: '#6a4c8e', core: '#cf8cff', glow: '#b048ff', chip: '#b48af0', k: 1.2 };
 
@@ -364,9 +375,9 @@ function pouchMat(L, K, GR, FK) {
     L.blotches(g, n, 50, 26, 90, 0.3, '255,255,255');
     for (let i = 0; i < 2600; i++) { const s = 1 + L.rnd() * 3.5, x = L.rnd() * n, y = L.rnd() * n; g.fillStyle = `rgba(255,255,255,${0.3 + 0.7 * L.rnd()})`; g.save(); g.translate(x, y); g.rotate(L.rnd() * 3); g.fillRect(-s / 2, -s / 3, s, s * 0.66); g.restore(); }
   });
-  const k = (GR.k ?? 1) * K.chargeK(K.CHARGE);
+  const k = (GR.k ?? 1) * Math.max(0.4, K.chargeK(K.CHARGE));     // (the grit always shows a little: the Spitter's mark)
   const m = new THREE.MeshPhysicalMaterial({ color: GR.skin, roughness: 0.62, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.5, vertexColors: true, map: K.hideMap,
-    sheen: 0.45, sheenColor: new THREE.Color('#d0c4e0'), emissiveMap: tex, emissiveIntensity: 0.4,
+    sheen: 0.55, sheenColor: new THREE.Color('#e4daf2'), emissiveMap: tex, emissiveIntensity: 0.4,
     emissive: new THREE.Color(GR.core).multiplyScalar(k * FK * (K.GLOW * K.GLOW * 0.5 + (K.NIGHTISH ? 0.15 : 0.2)) / 0.4) });
   m.envMapIntensity = 0.3; m.userData.glow = K.dimGlow(GR.glow, (K.GLOW > 1 || FK > 1 ? 0.8 : 3) * Math.min(2.2, FK) * k);
   return m;
@@ -439,19 +450,22 @@ function spitter(L, K, G, GL, f, v, pose) {
   const furM = coat(L, K, v), skinM = K.flesh(pal.skin), lipM = K.flesh(lip, { rough: 0.5 }), mouthM = K.flesh(mouth, { rough: 0.4, cc: 0.3 });
   const nailM = K.keratin(pal.nail), toothM = K.keratin(pal.tooth, 0.35), X = xtal(K, v);
   const GR = v === 'white' ? GRIT_WHITE : v === 'bloom' ? GRIT_BLOOM : GRIT;
-  const FK = spit ? 2.2 : 1;
+  // the spit loop (?f=0..3; without f, the spit itself): wind-up, spit, recoil, recovering
+  const SPF = [{ up: -0.06, dn: 0.05, sq: 1.12, FK: 2.0, hx: -0.12, star: 0.55 }, { up: 0.75, dn: -0.45, sq: 0.86, FK: 2.2, hx: 0, star: 0.85, shot: 1 },
+    { up: 0.42, dn: -0.26, sq: 0.8, FK: 0.85, hx: 0.08, star: 0.7, grit: 1 }, { up: 0.12, dn: -0.06, sq: 0.94, FK: 1.3, hx: 0.03, star: 0.6 }][spit && P.has('f') ? f % 4 : 1];
+  const FK = spit ? SPF.FK : 1;
   // ---- the body: barrel-chested, a broad short neck into a broad flat skull (the pouches and jaws make the head)
   const body = K.loft(G, plan({ x0: -1.62, x1: 1.46, w: 0.7, h: 0.6, b: 0.37, cy: 0.66, hip: 0.64, rise: 0.74, head: 0.7, drop: 0.02, fat }), furM, { lump: 0.035, seed: 5, uv: 1.4, p: 2.35 });
   shells(K, body, furM, v, { base: { len: 0.05, comb: 0.85 } });
 
   // ---- the jaws: a broad blunt muzzle hinged at the cheeks, the star on the upper one. Walking, closed (grit beading at
   // the corners); spitting, the upper jaw thrown up and the lower dropped, the mouth's floor and the clot showing
-  const hinge = [1.16, 0.6, 0], up = spit ? 0.75 : -0.03, dn = spit ? -0.45 : 0.03;
+  const hinge = [1.16 + (spit ? SPF.hx : 0), 0.6, 0], up = spit ? SPF.up : -0.03, dn = spit ? SPF.dn : 0.03;
   const J1 = L.group(hinge[0], hinge[1] + 0.02, 0, 0, G); J1.rotation.z = up;
   const J2 = L.group(hinge[0], hinge[1] - 0.06, 0, 0, G); J2.rotation.z = dn;
   K.seg(J1, [0.08, 0.08, 0], 0.36, 0.22, 0.5 * fat, furM, { lump: 0.04, flat: 0.6 });                  // furred top of the head
   K.seg(J1, [0.34, 0.03, 0], 0.27, 0.15, 0.44 * fat, K.hide(pal.muzzle, { ns: 0.8 }), { lump: 0.03, flat: 0.7 });   // the naked upper lip
-  face(L, K, G, { parent: J1, base: [0.38, 0.08, 0], tip: [0.56, 0.08, 0], r: 0.12, r0: 0.085, len: 0.22, tilt: 0.25, pose, pal, seed: 7 });
+  face(L, K, G, { parent: J1, base: [0.38, 0.08, 0], tip: [0.56, 0.08, 0], r: 0.12, r0: 0.085, len: 0.22, tilt: 0.25, pose, pal, seed: 7, star: spit ? { open: SPF.star } : undefined });
   K.seg(J2, [0.3, -0.03, 0], 0.32, 0.12, 0.44 * fat, lipM, { lump: 0.03, flat: 0.2 });                // lower jaw, a heavy chin
   K.seg(J2, [0.3, 0.05, 0], 0.28, 0.035, 0.34 * fat, mouthM, { lump: 0.02 });                         // the mouth's floor, a fat tongue
   for (const s of [-1, 1]) {                                                                           // teeth along both rims
@@ -464,7 +478,7 @@ function spitter(L, K, G, GL, f, v, pose) {
   // ---- the cheek pouches: two great bags of grit swelling the head out behind the jaw like a hamster's full cheeks and
   // tapering forward to the corners of the mouth; their rear sinks under the shoulder fur, so they read as part of the
   // head. Squeezed flatter when it spits.
-  const gM = pouchMat(L, K, GR, FK), sq = spit ? 0.86 : 1;
+  const gM = pouchMat(L, K, GR, FK), sq = spit ? SPF.sq : 1;
   for (const s of [-1, 1]) {
     sac(L, K, G, [0.72, 0.64, s * 0.56 * fat], [0.6 * sq, 0.34 * sq, 0.4 * sq * fat], gM, s);
     sac(L, K, G, [1.1, 0.6, s * 0.48 * fat], [0.3 * sq, 0.25 * sq, 0.27 * sq * fat], gM, s + 3);
@@ -493,7 +507,12 @@ function spitter(L, K, G, GL, f, v, pose) {
   }
 
   // ---- spitting: the clot just leaving the mouth, a stream of grit still joining them
-  if (spit && P.get('shot') === 'shards') {
+  if (spit && SPF.grit) {                            // (recoil: the last of the grit still leaving the mouth)
+    const mid = (up + dn) / 2, d = [Math.cos(mid), Math.sin(mid), 0], XG = { ...X, k: 1.6 };
+    for (let i = 0; i < 9; i++) { const t = 0.45 + i * 0.09; K.shard(G, [hinge[0] + d[0] * t + (L.rnd() - 0.5) * 0.08, hinge[1] + d[1] * t + (L.rnd() - 0.5) * 0.08, (L.rnd() - 0.5) * 0.18], [L.rnd() - 0.5, L.rnd() - 0.5, L.rnd() - 0.5], 0.06, 0.02, XG, { collar: false }); }
+  } else if (spit && !SPF.shot) {
+    // (winding up or recovering: nothing leaving the mouth)
+  } else if (spit && (P.get('shot') === 'shards' || P.has('f'))) {
     const mid = (up + dn) / 2, d = [Math.cos(mid), Math.sin(mid), 0];
     shardVolley(L, K, G, [hinge[0] + d[0] * 0.95, hinge[1] + d[1] * 0.95, 0], d, v, [hinge[0] + d[0] * 0.42, hinge[1] + d[1] * 0.42 - 0.02, 0]);
   } else if (spit) {
@@ -550,8 +569,9 @@ function spitGlob(L, K, G, v) {
 // of thrown-up soil show above the ground, and the star opens.
 const PAL_DELV = { ...PAL.base, hide: '#1a181c', sheen: '#7a7488', brow: '#5e585c' };
 function sapper(L, K, G, GL, f, v, pose) {
-  const { THREE } = K, surface = pose === 'surface', still = pose === 'sense', dig = pose === 'dig';
-  if (pose === 'heave') return heave(L, K, G, xtal(K, v));
+  const { THREE } = K, surface = pose === 'surface', still = pose === 'sense', dig = pose === 'dig', up = pose === 'up';
+  if (pose === 'heave') return heave(L, K, G, xtal(K, v), P.has('f') ? f % 4 : 0);
+  if (up && f === 0) return heave(L, K, G, xtal(K, v), 0, true);          // (coming up, first the ground bursts)
   const pal = v === 'base' ? PAL_DELV : { ...PAL_DELV, ...PAL[v], brow: v === 'rust' ? '#7a4630' : v === 'white' ? '#cfccc8' : '#5a4a68' };
   const fat = v === 'white' ? 1.12 : v === 'rust' ? 1.05 : 1, legK = v === 'white' ? 0.8 : 1;
   const furM = coat(L, K, v, { sheen: 1, rough: 0.8, sheenColor: pal.sheen }), skinM = K.flesh(pal.skin), nailM = K.keratin(pal.nail, 0.45), X = xtal(K, v);
@@ -560,8 +580,11 @@ function sapper(L, K, G, GL, f, v, pose) {
   const S = (x, w, h, b, cy) => [x, w * fat, h * fat, b * fat, cy];
   // the whole animal is built in B (body space: +x forward). Walking, B is G; surfacing, B is the front half, pitched up
   // out of a hole at the origin.
-  const B = surface ? L.group(-0.3, -0.95, 0, 0, G) : dig ? L.group(0, -0.42, 0, 0, G) : G;
+  // coming up (pose=up, f=1..4): the star and fingers breaking through, head and hands out, shoulders, climbing out
+  const UP = up ? [null, [-0.78, -1.32, 0.8], [-0.3, -0.95, 0.55], [0.12, -0.6, 0.38], [0.6, -0.28, 0.2]][Math.min(4, f)] : null;
+  const B = surface ? L.group(-0.3, -0.95, 0, 0, G) : dig ? L.group(0, -0.42, 0, 0, G) : up ? L.group(UP[0], UP[1], 0, 0, G) : G;
   if (surface) B.rotation.z = 0.55;
+  if (up) B.rotation.z = UP[2];
   if (dig) B.rotation.z = -0.36;   // (digging: nose down into its hole, the rump still up behind)
   const st = plan({ x0: -2.75, x1: 2.14, w: 0.7, h: 0.54, b: 0.33, cy: 0.52, hip: 0.68, rise: 0.76, head: 0.54, drop: 0.06, fat });
   // soil dust on the lower flanks and the rump
@@ -578,8 +601,8 @@ function sapper(L, K, G, GL, f, v, pose) {
       const ring = 0.84 + 0.16 * Math.sin(x * 30 + 2 * K.nz(a * 2, x, 1)), root = K.sstep(1.1, 1.6, x), k = (0.55 + 0.45 * root) * ring;
       return [browC.r * k, browC.g * k, browC.b * k];
     } });
-  const sp = surface ? { open: 0.95, glow: 0.6 } : still ? { open: 1, glow: 0.75 } : { open: 0, glow: 0 };
-  face(L, K, G, { parent: B, base: [1.98, 0.47, 0], tip: [2.26, 0.45, 0], r: 0.13, r0: 0.085, len: 0.28, tilt: surface ? 0.2 : 0.05, pose, pal, star: sp, seed: 9 });
+  const sp = surface || up ? { open: 0.95, glow: 0.6 } : still ? { open: 1, glow: 0.75 } : { open: 0, glow: 0 };
+  face(L, K, G, { parent: B, base: [1.98, 0.47, 0], tip: [2.26, 0.45, 0], r: 0.13, r0: 0.085, len: 0.28, tilt: surface || up ? 0.2 : 0.05, pose, pal, star: sp, seed: 9 });
   const browTop = shield.top(1.62, 0);
   K.geode(B, browTop, [0.25, 1, 0], 0.1, X, { sx: 1.8, open: 0.7, sink: 0.04 });
 
@@ -600,17 +623,31 @@ function sapper(L, K, G, GL, f, v, pose) {
     return r;
   };
   if (dig) return digIn(L, K, G, B, body, { hand, skinM, furM, nailM, fat, legK, clodGeo, f });
-  if (!surface) for (const s of [-1, 1]) {
+  if (!surface && !up) for (const s of [-1, 1]) {
     hand(s, { parent: GL, plant: still, shoulder: [1.18, 0.42, s * 0.4 * fat], wrist: [1.36, 0.3, s * 0.64 * fat], splay: 1.08, swing: 0.22, tilt: 0.8, droop: 0.08, armR: 0.23 * fat });
     K.hindlimb(GL, { side: s, f, plant: still, hip: [-2.2, 0.42, s * 0.28 * fat], foot: [-2.48, 0.08, s * (0.5 + 0.06 * legK) * fat], len: 0.4, r: 0.14 * fat,
       stride: 0.16 * legK, lift: 0.1, skin: skinM, leg: furM, clawMat: nailM, out: 0.8 });
   }
-  if (!surface) return body;
+  if (!surface && !up) return body;
 
   // ---- surfacing: the hands planted on the rim of the hole, fingers dug into the soil
-  for (const s of [-1, 1]) hand(s, { parent: G, plant: true, shoulder: [0.25, 0.05, s * 0.34], wrist: [0.55, 0.62, s * 0.84], splay: 0.8, tilt: 0.5, droop: 0.28 });
+  if (surface) for (const s of [-1, 1]) hand(s, { parent: G, plant: true, shoulder: [0.25, 0.05, s * 0.34], wrist: [0.55, 0.62, s * 0.84], splay: 0.8, tilt: 0.5, droop: 0.28 });
+  // coming up: the hands from the shoulders, reaching out of the hole onto the ground (where they reach, in G)
+  if (up) {
+    G.updateMatrixWorld(true);
+    const W = [null, [0.42, 0.3, 0.62], [0.55, 0.62, 0.84], [1.35, 0.1, 0.82], [2.1, 0.08, 0.72]][Math.min(4, f)];
+    for (const s of [-1, 1]) {
+      const w = B.worldToLocal(G.localToWorld(new THREE.Vector3(W[0], W[1], s * W[2])));
+      hand(s, { parent: B, plant: true, shoulder: [1.18, 0.42, s * 0.4 * fat], wrist: [w.x, w.y, w.z], splay: f >= 3 ? 1.0 : 0.8, tilt: f >= 3 ? 0.75 : 0.5, droop: f >= 3 ? 0.1 : 0.28 });
+    }
+    // the unseen floor beyond the hole hides the rest of it (the hole's own bowl hides what is in it); its material
+    // is locked, so the glow pass leaves it unseen too
+    const flM = new THREE.MeshBasicMaterial({ colorWrite: false }), fl = new THREE.Mesh(new THREE.RingGeometry(1.7, 40, 64).rotateX(-Math.PI / 2), flM);
+    Object.defineProperty(fl, 'material', { get: () => flM, set: () => {} });
+    fl.renderOrder = -10; L.getRoot().add(fl);
+  }
   // the first geodes of the shoulders, just breaking out of the hole behind the head
-  for (const s of [-1, 1]) K.geode(G, [-0.12, 0.02, s * 0.36], [-0.5, 1, s * 0.4], 0.13 * n, X, { spires: 1, open: 0.75 });
+  if (surface) for (const s of [-1, 1]) K.geode(G, [-0.12, 0.02, s * 0.36], [-0.5, 1, s * 0.4], 0.13 * n, X, { spires: 1, open: 0.75 });
   // ---- the ring of thrown-up soil: a crumbly ring heaped round a dark hole, lumps of it fallen on the head and hands
   const RI = 0.8, RP = 1.1, RO = 1.85;
   const prof = (r) => r < RI ? -0.6 + 0.6 * K.sstep(0.15, RI, r) : r < RP ? 0.5 * K.sstep(RI - 0.08, RP, r) : 0.5 * (1 - K.sstep(RP, RO, r));
@@ -639,6 +676,11 @@ function sapper(L, K, G, GL, f, v, pose) {
   }
   for (let i = 0; i < 7; i++) { const p = [1.0 + L.rnd() * 0.6, 0, (L.rnd() - 0.5) * 0.4]; const s = 0.035 + 0.035 * L.rnd(); const w = B.localToWorld(new THREE.Vector3(p[0], body.top(p[0], p[2]) + s * 0.4, p[2])); G.worldToLocal(w); L.mesh(clodGeo(s, i + 40), ringM[i % 3], w.x, w.y, w.z, { parent: G, dirt: 0 }); }
   for (let i = 0; i < 6; i++) { const a = L.rnd() * Math.PI * 2, r = RP + L.rnd() * 0.5; K.shard(G, [Math.cos(a) * r, prof(r) - 0.02, Math.sin(a) * r], [L.rnd() - 0.5, 0.5, L.rnd() - 0.5], 0.14 + L.rnd() * 0.1, 0.04, X, { collar: false }); }
+  // bursting out (f=1, 2): clods thrown up into the air all round
+  if (up && f <= 2) for (let i = 0; i < (f === 1 ? 60 : 30); i++) {
+    const a = L.rnd() * Math.PI * 2, r = 0.4 + L.rnd() * (f === 1 ? 1.4 : 2.0), s = 0.03 + Math.pow(L.rnd(), 2) * 0.1;
+    L.mesh(clodGeo(s, i + 90), ringM[i % 3], Math.cos(a) * r, 0.3 + L.rnd() * (f === 1 ? 1.2 : 0.7), Math.sin(a) * r, { parent: G, dirt: 0, ry: L.rnd() * 6.28 });
+  }
   return null;                                       // the hole sits in the middle of the frame
 }
 
@@ -650,10 +692,16 @@ function digIn(L, K, G, B, body, o) {
   const { THREE } = K, toG = (p) => G.worldToLocal(B.localToWorld(new THREE.Vector3(...p)));
   G.updateMatrixWorld(true);
   const soil = [K.crust('#5a4636', { rough: 0.97 }), K.crust('#4a3a2e', { rough: 0.97 }), K.crust('#6e5844', { rough: 0.97 })];
-  // the hands: s = -1 flung up and back, a load of soil in it; s = +1 down in the hole
-  const up = o.hand(-1, { parent: B, plant: true, shoulder: [1.18, 0.42, -0.42 * o.fat], wrist: [0.55, 1.35, -1.05 * o.fat], splay: 2.2, tilt: 1.7, droop: -0.35, curl: 0.4 });
-  o.hand(1, { parent: B, plant: true, shoulder: [1.18, 0.42, 0.42 * o.fat], wrist: [1.9, -0.25, 0.7 * o.fat], splay: 0.9, tilt: 0.5, droop: 0.4 });
-  for (let i = 0; i < 16; i++) L.mesh(o.clodGeo(0.04 + 0.06 * L.rnd(), i + 500), soil[i % 3], 0.3 + 0.5 * L.rnd(), 0.1 + 0.1 * L.rnd(), (L.rnd() - 0.5) * 0.4, { parent: up.hand, dirt: 0 });
+  // the hands dig in turn (f = 0..3): one flung up and back with a load of soil while the other is down in the hole
+  // (what moves frame to frame draws on its own random numbers, so the crater stays the same in every frame)
+  let sd = 9001 + o.f * 7919; const rf = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  const raise = { '-1': [1, 0.55, 0, 0.4][o.f % 4], '1': [0, 0.4, 1, 0.55][o.f % 4] }, mix = (a, b, t) => a + (b - a) * t;
+  for (const s of [-1, 1]) {
+    const r = raise[s];
+    const h = o.hand(s, { parent: B, plant: true, shoulder: [1.18, 0.42, s * 0.42 * o.fat], wrist: [mix(1.9, 0.55, r), mix(-0.25, 1.35, r), s * mix(0.7, 1.05, r) * o.fat],
+      splay: mix(0.9, 2.2, r), tilt: mix(0.5, 1.7, r), droop: mix(0.4, -0.35, r), curl: mix(0.24, 0.4, r) });
+    if (r > 0.3) for (let i = 0; i < Math.round(16 * r); i++) L.mesh(o.clodGeo(0.04 + 0.06 * rf(), i + 500), soil[i % 3], 0.3 + 0.5 * rf(), 0.1 + 0.1 * rf(), (rf() - 0.5) * 0.4, { parent: h.hand, dirt: 0 });
+  }
   // the hind feet, braced out wide behind (on G: on the ground, whatever the tilt of the body)
   for (const s of [-1, 1]) {
     const h = toG([-2.2, 0.42, s * 0.28 * o.fat]);
@@ -688,11 +736,17 @@ function digIn(L, K, G, B, body, o) {
     const a = L.rnd() * Math.PI * 2, r = RI + 0.04 + Math.pow(L.rnd(), 1.2) * (outer(a) * 0.98 - RI), s = 0.025 + Math.pow(L.rnd(), 2.2) * 0.12, x = Math.cos(a) * r, z = Math.sin(a) * r;
     L.mesh(o.clodGeo(s, i), soil[i % 3], cx + x, Math.max(0, heapH(x, z)) + s * 0.1, z, { parent: G, dirt: 0.1, dirtH: s, ry: L.rnd() * 6 });
   }
-  // clods in the air: thrown from the raised hand back over the body, and off to the side
-  const hp = G.worldToLocal(up.hand.localToWorld(new THREE.Vector3(0.4, 0.2, 0)));
-  for (let i = 0; i < 46; i++) {
-    const t = Math.pow(L.rnd(), 0.8), s = 0.03 + Math.pow(L.rnd(), 2) * 0.08, sp = (L.rnd() - 0.5) * 1.4 * t;
-    L.mesh(o.clodGeo(s, i + 300), soil[i % 3], hp.x - t * 2.6, hp.y + 0.6 * Math.sin(Math.PI * t * 0.8) - t * 0.6, hp.z - t * 1.0 + sp, { parent: G, dirt: 0, ry: L.rnd() * 6 });
+  // clods in the air: thrown from each hand at the top of its stroke back over the body and off to the side, each
+  // clod a little further along its arc each frame (so they fly), new ones leaving the hand that is up
+  for (const s of [-1, 1]) {
+    const top = toG([0.55, 1.35, s * 1.05 * o.fat]), hp = new THREE.Vector3(top.x + 0.25, top.y + 0.2, top.z);
+    let sd2 = s > 0 ? 77 : 33; const rs = () => ((sd2 = (sd2 * 16807) % 2147483647) / 2147483647);
+    const ph = ((o.f % 4) - (s > 0 ? 2 : 0) + 4) % 4 / 4;           // (each hand's throw half a cycle after the other's)
+    for (let i = 0; i < 30; i++) {
+      const t0 = rs(), t = (t0 + ph) % 1, sz = 0.03 + Math.pow(rs(), 2) * 0.08, sp = (rs() - 0.5) * 1.4 * t, ry = rs() * 6;
+      if (t > 0.97) continue;
+      L.mesh(o.clodGeo(sz, i + 300 + (s > 0 ? 50 : 0)), soil[i % 3], hp.x - t * 2.6, hp.y + 0.6 * Math.sin(Math.PI * t * 0.8) - t * 0.9, hp.z + s * t * 1.0 + sp, { parent: G, dirt: 0, ry: ry + t * 3 });
+    }
   }
   return body;
 }
@@ -701,17 +755,21 @@ function digIn(L, K, G, B, body, o) {
 // splitting at the head of its fresh ridge, the ridge itself running away behind (-x), clods tumbling off, and chips
 // of crystal turned up in the cracks (they catch its charge: faint at night). The tell a player sees before it comes
 // up inside the walls.
-function heave(L, K, G, X) {
+//   f=0..3: the loop as it goes, the dome rising and settling, its cracks opening and shifting, clods rolling off.
+//   burst: the first frame of coming up (pose=up&f=0): a rounder dome split wide open, clods jumping off it.
+function heave(L, K, G, X, f = 0, burst = false) {
   const { THREE } = K, soil = [K.crust('#5a4636', { rough: 0.97 }), K.crust('#4a3a2e', { rough: 0.97 }), K.crust('#6e5844', { rough: 0.97 })];
-  const RX = 2.0, RZ = 1.3;   // (about the Sapper's own size: it is right under it)
+  const RX = burst ? 1.5 : 2.0 * (1 + 0.05 * [0, 1, 1.4, 0.6][f]), RZ = burst ? 1.4 : 1.3;   // (about the Sapper's own size: it is right under it)
+  const lift = burst ? 0.95 : [0.62, 0.7, 0.76, 0.68][f], open = burst ? 0.3 : [0.12, 0.14, 0.17, 0.15][f], turn = burst ? 0 : f * 0.13;
   const crack = (x, z) => {
-    const r = Math.hypot(x / RX, z / RZ), a = Math.atan2(z / RZ, x / RX), w = a * 3 + 0.9 + 0.5 * K.nz(r * 2.5, 1.3, a);
-    return Math.pow(Math.abs(Math.cos(w)), 40) * K.sstep(0.08, 0.3, r) * (1 - K.sstep(0.75, 1.0, r)) + Math.pow(Math.abs(Math.cos(r * 9 + K.nz(x * 2, 3, z * 2))), 60) * K.sstep(0.3, 0.45, r) * (1 - K.sstep(0.6, 0.75, r)) * 0.6;
+    const r = Math.hypot(x / RX, z / RZ), a = Math.atan2(z / RZ, x / RX), w = a * 3 + 0.9 + turn + 0.5 * K.nz(r * 2.5, 1.3, a);
+    return Math.pow(Math.abs(Math.cos(w)), burst ? 14 : 40) * K.sstep(0.08, 0.3, r) * (1 - K.sstep(0.75, 1.0, r)) + Math.pow(Math.abs(Math.cos(r * 9 + turn * 2 + K.nz(x * 2, 3, z * 2))), 60) * K.sstep(0.3, 0.45, r) * (1 - K.sstep(0.6, 0.75, r)) * 0.6
+      + (burst ? K.sstep(0.32, 0.12, r) * 1.2 : 0);                // (bursting: the middle broken open, dark)
   };
   const hgt = (x, z) => {
-    const r = Math.hypot(x / RX, z / RZ), dome = 0.7 * Math.pow(Math.max(0, 1 - r * r), 0.7);
-    const t = Math.max(0, -x - 0.8) / 2.4, ridge = x < -0.8 ? 0.3 * (1 - t) * Math.exp(-((z / (0.6 * (1 - 0.3 * t))) ** 2)) * (t < 1 ? 1 : 0) : 0;
-    return Math.max(dome, ridge) * (1 + 0.12 * K.nz(x * 3, 1, z * 3)) + (dome > 0.02 ? 0.03 * K.nz(x * 11, 6, z * 11) : 0) - 0.13 * crack(x, z);
+    const r = Math.hypot(x / RX, z / RZ), dome = lift * Math.pow(Math.max(0, 1 - r * r), 0.7);
+    const t = Math.max(0, -x - 0.8) / 2.4, ridge = !burst && x < -0.8 ? 0.3 * (1 - t) * Math.exp(-((z / (0.6 * (1 - 0.3 * t))) ** 2)) * (t < 1 ? 1 : 0) : 0;
+    return Math.max(dome, ridge) * (1 + 0.12 * K.nz(x * 3, 1, z * 3)) + (dome > 0.02 ? 0.03 * K.nz(x * 11, 6, z * 11) : 0) - open * crack(x, z) * (burst ? 2.2 : 1);
   };
   const g = new THREE.PlaneGeometry(7.2, 3.4, 260, 124).rotateX(-Math.PI / 2); g.translate(-0.5, 0, 0);
   const p = g.attributes.position, col = new Float32Array(p.count * 3), H = new Float32Array(p.count);
@@ -726,8 +784,10 @@ function heave(L, K, G, X) {
   L.mesh(g, K.crust('#ffffff', { rough: 0.95, ns: 0.9 }), 0, 0, 0, { parent: G });
   const clod = (s, k) => { const q = new THREE.DodecahedronGeometry(1, 1), pp = q.attributes.position; for (let i = 0; i < pp.count; i++) { const w = 1 + 0.3 * K.nz(pp.getX(i) * 2 + k, pp.getY(i) * 2, pp.getZ(i) * 2); pp.setXYZ(i, pp.getX(i) * w, pp.getY(i) * w, pp.getZ(i) * w); } q.scale(s, s * 0.7, s); q.computeVertexNormals(); return q; };
   for (let i = 0; i < 150; i++) {
-    const a = L.rnd() * Math.PI * 2, r = Math.pow(L.rnd(), 0.6) * 1.15, x = Math.cos(a) * r * RX, z = Math.sin(a) * r * RZ, s = 0.03 + Math.pow(L.rnd(), 2.2) * 0.1;
-    L.mesh(clod(s, i), soil[i % 3], x, Math.max(0, hgt(x, z)) + s * 0.2, z, { parent: G, dirt: 0.1, dirtH: s, ry: L.rnd() * 6 });
+    let a = L.rnd() * Math.PI * 2, r = Math.pow(L.rnd(), 0.6) * 1.15; const s = 0.03 + Math.pow(L.rnd(), 2.2) * 0.1, ry = L.rnd() * 6;
+    if (i % 2) { a += f * 0.22; r = Math.min(1.25, r + 0.06 * f); }                // (half of them rolling off as it goes)
+    const x = Math.cos(a) * r * RX, z = Math.sin(a) * r * RZ, jump = burst && i % 3 === 0 ? 0.3 + 0.8 * L.rnd() : 0;
+    L.mesh(clod(s, i), soil[i % 3], x, Math.max(0, hgt(x, z)) + s * 0.2 + jump, z, { parent: G, dirt: 0.1, dirtH: s, ry: ry + f });
   }
   // chips of crystal turned up in the cracks
   for (const [x, z, l] of [[0.5, -0.15, 0.36], [-0.4, 0.42, 0.28], [0.2, 0.62, 0.22], [-0.2, -0.6, 0.26], [1.1, 0.3, 0.2]]) K.cluster(G, [x, Math.max(0, hgt(x, z)) - 0.05, z], [x * 0.8, 1, z * 0.8], 3, l, l * 0.26, X, 0.6, { collar: false });

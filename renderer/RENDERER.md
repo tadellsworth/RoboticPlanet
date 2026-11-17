@@ -455,6 +455,20 @@ python3 preview/forms_mock.py out/forms out/fx out/preview/forms   # line-ups, a
 python3 preview/forms_sheet.py out/forms out/preview/forms out/fx <sheet folder>
 ```
 
+**In the game** (approved, installed: ART_GUIDE.md, Batch 17). Every Murmur frame the game draws is in jobs.txt
+(`art/units/<key>.png` and its morning, evening and night versions: walking `f0..3` for all five, `leech-feed`,
+`spitter-spit`, `sapper-dig`, `sapper-under` (the scene's `pose=heave`) and `sapper-up`), all rendered hungry
+(`charge=0.3`): the game adds their light with glow images, as bright as each is charged. Name the renders `<key>`,
+`<key>--morning`, `<key>--evening` and `<key>--night`, add `fx-spit` (`c=spit-shards`, by day and `--night`), compose
+them all with `compose_any.py --b1 3.5 --b2 10 --glow 1.4`, then
+
+```
+python3 fx/spit_impact.py out/fx
+python3 tools/install_murmur_forms.py out/murmur out/fx <game>/art   # sprites, their glow images, the volley and its hit
+```
+
+The Lore guide's Spitter (brighter pouches) is the catalogue's `murmur-spitter-hero` through `post/murmur_lore.py`.
+
 ## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake
 
 `tools/render_install.sh` renders everything the game uses from the two sets above (one job at a time), and
