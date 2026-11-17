@@ -24,6 +24,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
   from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
   (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
+- **A new look for the oil seeps** (owner's to-do, Nov 17: "I don't like the current one"). The owner's two reference
+  pictures show a puddle of crude: glossy, jet black, with a soft, wavy, irregular outline (lobes and pinched waists,
+  no straight edges), a few separate small round droplets and smaller puddles scattered beside it, faint dark-grey
+  sheen patches inside, and thin bright white highlights along the lower (front) rims, as if lit from above and
+  behind. Today's seep is a texture drawn across all its tiles as one shape (`drawSeep` in `js/render.js`, the
+  `oil-seep` art) with its night glow in `resourceGlow`; the Hollow's seeps use the same art. A redo would make the
+  puddle (and its droplets) the art, keep it reading as one shape across a seep's tiles, darken as it is pumped dry,
+  and keep a faint gleam at night. Render a sample sheet for the owner to pick from first.
 - **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
   doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
   and text" in the November review below.
@@ -452,10 +460,35 @@ These wait for a later expansion:
   symmetry, one a colony in each set (Active two sets on a Medium map for two, Quiet one), off the ways between the
   colonies; exits open no nearer than 12 tiles to a Command Base or 4 to a building; a collapsed exit stays shut 15
   minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.
+  **Their craft (the owner's decision, Nov 17; built, Active only, Quiet keeps the plain packs):** at dusk a watcher
+  stands at the edge of each colony's land facing it (the strike falls there); the packs gather out of the guns' reach
+  and off the colony's land, out of sight of its roads, and come in together; a few go first for the Fuel Stations,
+  Generators or streetlamps near the target (dark and dead till dawn: the lights go out one by one); targets and routes
+  keep out of gun cover; Brutes lead, Scuttlers spread round the target and scatter from warbots; half lost, the rest
+  go back down and come again; their dead are dragged off (no blast or fire, nothing left by morning); they remember
+  where they were killed (exits and strikes keep away) and where they fed (strikes come back), fading each night; from
+  night 3, with warbots about, a feint on the far side first. The rival builds a Pulse Turret where its power was cut.
+  To keep it fair the packs are smaller (Active [2, 0.34, 4], was [2, 0.5, 5]), only the exits with something near
+  them send a pack (as before), and a plan draws the packs of its three exits nearest the rally point.
+  Measured (35-minute computer-run Colony games, Active, seeds 7 and 8, before → after): robots lost to the Murmur,
+  Standard Small 28, 32 → 5, 15; Standard Huge 11, 9 → 10, 8; the Hollow Small 1, 5 → 15, 13; the Hollow Huge 8, 8 →
+  8, 10; buildings at 15 minutes, all eight, 221 → 231, at 30 minutes 260 → 287 (construction sites wrecked 3 → 10).
+  Versus, nine computer-only games: seven on Standard, shape 2 and shape 4 end in 13.9 to 40.5 minutes (mean 23.9, was
+  22.1), the first seat winning 5 to 2 (was 3 to 4), about 3 robots a colony lost to the Murmur (was 3.5); on the
+  Hollow, Medium seed 11 ends at 34.8 (before: still going at 75) and Small seed 21 at 17.7 (was 29.4).
+  The Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a dozen or so in
+  35 minutes; its size is the same). The owner (Nov 17): keep it hard there, it's their lair.
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
   `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
+  Its music is ready (Nov 17): **The Long Silence**, the campaign theme (`MOODS.campaign` in js/audio.js; see the README's
+  Sound), which tells the story's arc from a level the campaign sets with `musicStory(level)`: at `(mission - 1) / 14`
+  missions 1 and 2 are Landfall, 3 and 4 the colony at work, 5 and 6 the first murmur, 7 to 10 Contingency, 11 to 14
+  the Murmur rising (the climax) and 15 the Silence. Until then the Lore guide plays it. Open: whether a mission should
+  play it all through in place of the build themes (as wired now: the war, the Murmur and a nuke still take over), or
+  only in its briefing and quiet stretches, taking turns with the build themes; and whether the Now playing card should
+  show over the Lore guide, which it doesn't (a full screen covers it).
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
   transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
   that matches no robot protocol), so players piece together Earth's fate without ever being told.
@@ -478,3 +511,8 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
   them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.
+- **The new forms' art is in** (Nov 2026, ART_GUIDE Batch 17): drawn true size with their action loops, glow and light
+  pools; the behaviour is the sim's. Open, for whoever builds it: a Sapper under the ground shows only within
+  `SIGHT_R` (6) tiles of the colony on this device (`colonySees` in js/render.js), so the tap and hover there (js/ui.js)
+  should skip one the player can't see; the regional variants (`v=rust|white|bloom` in murmur_moles.js) aren't rendered
+  for the game yet; and whether the Murmur's light should show on the minimap at night.

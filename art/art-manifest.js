@@ -293,8 +293,20 @@ const ART_MANIFEST = {
   ...frames('crawler', 8),
   ...(() => { const o = {}; for (const t of [0, 1]) { for (let d = 0; d < 10; d++) o[`crawler-deploy@${t}-d${d}`] = `bots/crawler-deploy@${t}-d${d}.webp`; o[`crawlerbase@${t}`] = `bots/crawlerbase@${t}.webp`; } return o; })(),
   'crawler-dish': 'bots/crawler-dish.webp', 'crawler-lights': 'bots/crawler-lights.webp', 'crawler-dust': 'bots/crawler-dust.webp',
-  // Creatures: four walking frames each (one version: wildlife has no team).
-  ...(() => { const o = {}; for (const c of ['scuttler', 'brute']) for (let f = 0; f < 4; f++) o[`${c}-f${f}`] = `bots/${c}-f${f}.webp`; return o; })(),
+  // The Murmur (renderer/b/murmur_moles.js; one version: wildlife has no team). Loaded only in a game with them, from
+  // their own bundle in a single-file copy (ensureMurmurArt in js/render.js). Each: four walking frames, and its action
+  // loops (MURMUR_POSES in js/render.js): the Leech feeding, the Spitter spitting, the Sapper digging in, under the
+  // ground (the heave) and coming up. Every frame has a glow image (<key>-glow: its crystal's light alone, added over it
+  // as bright as it's charged). 256x256, straight down, facing right; re-lit sets in tod/<time>/bots (MURMUR_TOD_KEYS).
+  ...(() => {
+    const o = {}, F = { scuttler: { '': 4 }, brute: { '': 4 }, leech: { '': 4, feed: 4 }, spitter: { '': 4, spit: 4 }, sapper: { '': 4, dig: 4, under: 4, up: 5 } };
+    for (const c in F) for (const p in F[c]) for (let f = 0; f < F[c][p]; f++) { const k = `${c}-${p ? p + '-' : ''}f${f}`; o[k] = `bots/${k}.webp`; o[k + '-glow'] = `bots/${k}-glow.webp`; }
+    return o;
+  })(),
+  // The Spitter's volley in flight (pointing right, drawn 0.6 of a tile across; its glow added at night) and its hit
+  // (8 frames of 128x128 in a row: the shards came from the left).
+  'fx-spit': 'effects/fx-spit.webp', 'fx-spit-glow': 'effects/fx-spit-glow.webp',
+  'fx-spit-hit': { src: 'effects/fx-spit-hit.webp', frames: 8, cols: 8 },
   // Tiles (128x128, straight down): railway track pieces, the bridge kit (water, sky, rail; piers and
   // towers 128x256, the suspension cable 512x128) and the Sky islands canyon set.
   ...files('rail', ['rail-straight', 'rail-curve', 'rail-tee', 'rail-cross', 'rail-end', 'rail-level-crossing', 'rail-barrier-up', 'rail-barrier-down', 'rail-lights-on']),

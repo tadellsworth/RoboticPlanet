@@ -112,8 +112,22 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); syncGfx(); sfx('click'); };
+  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
+  // Settings: the pause menu's second view (Back, or Esc, returns to the first).
+  $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
+  $('p-back').onclick = () => { sfx('click'); pauseView('main', true); };
+  // Its choices (Graphics, Time of day) are radio groups: ← → (↑ ↓) pick the next one, as anywhere else.
+  for (const id of ['p-gfx', 'p-daynight']) {
+    $(id).addEventListener('keydown', (e) => {
+      const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      const opts = [...$(id).children].filter((b) => b.getAttribute('aria-disabled') !== 'true');
+      const b = opts[(opts.findIndex((o) => o.classList.contains('on')) + d + opts.length) % opts.length];
+      if (b) { b.click(); b.focus(); }
+    });
+  }
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
   $('clock').addEventListener('click', () => {
     const now = performance.now();
@@ -122,9 +136,9 @@ function initUI() {
     if (UI.clockTaps.length >= 3) { UI.clockTaps = []; openBoost(); }
   });
   $('bo-close').onclick = () => closeBoost();
-  // Music and Effects volume (remembered on this device).
+  // Music, Effects and Ambience volume (remembered on this device).
   const syncVol = () => {
-    for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx']]) {
+    for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx'], ['p-amb', 'amb']]) {
       $(id).value = Math.round(AUDIO[k] * 100);
       $(id + '-v').textContent = AUDIO[k] > 0 ? Math.round(AUDIO[k] * 100) + '%' : 'Off';
     }
@@ -132,41 +146,60 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
+  $('p-amb').oninput = () => { setVolume('amb', $('p-amb').value / 100); syncVol(); };
   // Graphics (render.js setGfxStep): Saver, Auto, High or Ultra, at once.
   for (const btn of $('p-gfx').children) btn.onclick = () => { setGfxStep(btn.dataset.v); syncGfx(); sfx('click'); };
   syncGfx();
-  // Time of day (a display setting): Cycle → Always day → Always night → Cycle. In a game with the Murmur, Always day
-  // is skipped (they live by the night: see todForced), and on an always-night map (the Hollow) it stays night; the
-  // line under the button says why.
+  // Time of day (a display setting): Cycle, Day (always day) or Night (always night). In a game with the Murmur, Day
+  // can't be picked (they live by the night: see todForced), and on an always-night map (the Hollow) it stays night;
+  // the line under the choices says why.
+  const todLocked = (v, f) => (f === 'night' ? v !== 'night' : f === 'murmur' && v === 'day');
   UI.syncTod = () => {
-    const f = UI.inGame ? todForced() : '';
-    $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`;
+    const f = UI.inGame ? todForced() : '', now = todMode();
+    for (const b of $('p-daynight').children) {
+      const v = b.dataset.v, locked = todLocked(v, f);
+      b.classList.toggle('on', v === now);
+      b.setAttribute('aria-checked', v === now ? 'true' : 'false');
+      b.classList.toggle('na', locked);
+      b.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      b.title = locked ? (f === 'night' ? 'Always night here: this map lies underground.' : 'No Always day in this game: the Murmur live by the night.') : TOD_INFO[v];
+    }
     $('p-daynight-note').hidden = !f;
     $('p-daynight-note').textContent = f === 'night' ? 'Always night here: this map lies underground.' : f === 'murmur' ? 'No Always day in this game: the Murmur live by the night. Always night only changes the look: they still come out at the game clock\'s nightfall, after the dusk warning.' : '';
   };
   UI.syncTod();
-  $('p-daynight').onclick = () => {
-    const f = UI.inGame ? todForced() : '';
-    if (f === 'night') { sfx('error'); UI.syncTod(); return; }
-    const modes = f === 'murmur' ? ['cycle', 'night'] : TOD_MODES;
-    setTodMode(modes[(modes.indexOf(todMode()) + 1) % modes.length]); UI.syncTod(); sfx('click');
-  };
+  for (const b of $('p-daynight').children) {
+    b.onclick = () => {
+      const f = UI.inGame ? todForced() : '';
+      if (todLocked(b.dataset.v, f)) { sfx('error'); UI.syncTod(); return; }
+      if (b.dataset.v === todMode() && f) return; // (already so, and the game holds it there: nothing to change)
+      setTodMode(b.dataset.v); UI.syncTod(); sfx('click');
+    };
+  }
   // What the game overrules (read by daynight.js's todForced): the Murmur keep the cycle on. (An always-night map, the
   // Hollow, is night whatever happens: todForced sees to that itself.)
   TOD.force = () => (UI.inGame && S && S.wildlife ? 'murmur' : '');
-  const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
+  const syncWx = () => pauseSwitch('p-weather', weatherOn());
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
   // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
-  const syncScouts = () => { $('p-scouts').textContent = `Scout reports: ${SCOUT.on ? 'On' : 'Off'}`; };
+  const syncScouts = () => pauseSwitch('p-scouts', SCOUT.on);
   syncScouts();
   $('p-scouts').onclick = () => { setScoutsOn(!SCOUT.on); syncScouts(); sfx('click'); };
   // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
-  const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
+  const syncHaptics = () => pauseSwitch('p-haptics', HAPTIC.on);
   const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   $('p-haptics').hidden = !hapticsSupported() || !touchScreen;
   syncHaptics();
   $('p-haptics').onclick = () => { setHaptics(!HAPTIC.on); syncHaptics(); sfx('click'); if (HAPTIC.on) try { navigator.vibrate(HAPTIC_PATTERNS.order); } catch (e) { /* not allowed here */ } };
+  // The custom mouse cursor (js/cursor.js): with a mouse only.
+  initCursor();
+  const syncCursor = () => pauseSwitch('p-cursor', CURSOR.on);
+  $('p-cursor').hidden = !CURSOR.ok;
+  syncCursor();
+  $('p-cursor').onclick = () => { setCursorOn(!CURSOR.on); syncCursor(); sfx('click'); };
+  // (Weather can be switched in Custom Game's Rules too: the switches are read again as Settings opens.)
+  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); syncCursor(); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -322,6 +355,29 @@ function syncGfx() {
   for (const id of ['p-gfx', 'm-gfx']) for (const b of $(id).children) { b.classList.toggle('on', b.dataset.v === v); b.setAttribute('aria-checked', b.dataset.v === v ? 'true' : 'false'); }
   $('p-gfx-v').textContent = `drawn at ${+R.dpr.toFixed(2)}×`;
   $('p-gfx-note').textContent = GFX_INFO[v];
+}
+
+/**
+ * The pause menu's view: 'main' (Resume, Statistics, the saves...) or 'settings' (the volumes, Graphics, the switches,
+ * Time of day). It opens on the main view each time (btn-pause). With `focus` (Settings or Back pressed, or Esc), the
+ * keyboard's focus goes with it: into Settings (its Back), or back to the Settings button.
+ */
+function pauseView(v, focus) {
+  const set = v === 'settings';
+  UI.pauseView = set ? 'settings' : 'main';
+  $('p-main').hidden = set;
+  $('p-setview').hidden = !set;
+  $('screen-pause').querySelector('.card').classList.toggle('p-set', set);
+  $('screen-pause').scrollTop = 0;
+  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); }
+  if (focus) $(set ? 'p-back' : 'p-settings').focus({ preventScroll: true });
+}
+
+/** One of the pause menu's on/off settings (Full screen, Weather, Scout reports, Custom cursor, Vibration): its switch, On or Off. */
+function pauseSwitch(id, on) {
+  const b = $(id);
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
+  b.querySelector('.p-sw-v').textContent = on ? 'On' : 'Off';
 }
 
 /** Keep remembered settings inside what the data offers now (a map type or biome may have gone). */
@@ -1637,7 +1693,7 @@ function initFullscreen() {
     $('btn-full').innerHTML = on ? FS_ICON.off : FS_ICON.on;
     $('btn-full').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
     $('btn-full').title = (on ? 'Leave full screen' : 'Full screen') + ' (Alt+Enter)';
-    $('p-full').textContent = `Full screen: ${on ? 'On' : 'Off'}`;
+    pauseSwitch('p-full', on);
   };
   sync();
   $('btn-full').onclick = () => { toggleFullscreen(); sfx('click'); };
@@ -2521,7 +2577,7 @@ function escapeKey() {
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
   if (!$('screen-boost').hidden) { closeBoost(); return; }
-  if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
+  if (!$('screen-pause').hidden) { if (UI.pauseView === 'settings') pauseView('main', true); else $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
   if (UI.toolPick && !$('banner').hidden) { toolPicker(false); return; } // (the Paths tools picker of an upright phone)
@@ -2976,6 +3032,7 @@ function helpPage(id) { pagerShow(HELP_PAGER, id); }
  * The Lore guide (#screen-lore): the colony's archive of the story (LORE.md), a page at a time like the How to play.
  * Its pictures are fetched the first time it opens (data-src), all at once, so the service worker keeps them for
  * offline play from then on. A phone's Back button closes it: opening adds an entry to the history, closing takes it back.
+ * While it's open the music is the campaign theme, The Long Silence (musicLore in audio.js).
  */
 function openLore(at) {
   const scr = $('screen-lore');
@@ -2989,12 +3046,14 @@ function openLore(at) {
   } else show();
   scr.hidden = false;
   pagerShow(LORE_PAGER, at && $(at) ? at : pagerSections(LORE_PAGER)[0].id); // (`at`: a page to open on, from the Records screen)
+  musicLore(true); // (the campaign theme while it's open: musicLore in audio.js)
   try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
 }
 
 function closeLore(fromBack) {
   if ($('screen-lore').hidden) return;
   $('screen-lore').hidden = true;
+  musicLore(false);
   if (!fromBack) try { if (history.state && history.state.lore) history.back(); } catch (e) { /* as above */ }
 }
 
@@ -3264,7 +3323,9 @@ function coachScroll(sel) {
 }
 
 /** Where a goal's `ui` selector looks for the button that opens it (when the button itself isn't on screen). */
-const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack'], [/#pop-/, '#pop']];
+const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack'], [/#pop-/, '#pop'],
+  // (A pause-menu button: the pause button while the menu is shut; in it, Settings or Back, whichever view has it.)
+  [/#p-/, () => ($('screen-pause').hidden ? '#btn-pause' : UI.pauseView === 'settings' ? '#p-back' : '#p-settings')]];
 
 /**
  * What to light up for goal g: its `ui` buttons if any is on screen; else the buttons that open the way to them (Build
@@ -3324,7 +3385,7 @@ function coachTargetAll(g, sel) {
   const open = [];
   let panel = false;
   for (const part of sel.split(',')) {
-    for (const [re, opener] of COACH_OPENERS) if (re.test(part) && !open.includes(opener)) open.push(opener);
+    for (const [re, to] of COACH_OPENERS) { const opener = typeof to === 'function' ? to() : to; if (re.test(part) && !open.includes(opener)) open.push(opener); }
     // (A card on another tab of the open build menu: that tab.)
     const card = part.match(/\.bcard\[data-t=['"]?(\w+)/), grp = card && BUILD_GROUPS.find((gr) => gr.types.includes(card[1]));
     if (grp && !open.includes(`#build-tabs [data-g="${grp.key}"]`)) open.push(`#build-tabs [data-g="${grp.key}"]`);
@@ -7497,8 +7558,24 @@ function nextBuilds() {
   return o && o.build ? o.build.filter((t) => !hasAny(t)) : [];
 }
 
+/**
+ * Is a road already planned all the way from building b (cut off from storage) to the road network, waiting for Workers
+ * to pave it? Then the Goal card's no-road warning leaves b out: it's on its way. (roadRouteTo is a search, so each
+ * building's answer is kept for a second: ROAD_WAY.)
+ */
+const ROAD_WAY = new WeakMap();
+function roadOnItsWay(b) {
+  const now = performance.now(), c = ROAD_WAY.get(b);
+  if (c && now - c.t < 1000) return c.v;
+  const r = roadRouteTo(b.owner, b), v = !!(r && !r.length && r.pending);
+  ROAD_WAY.set(b, { t: now, v });
+  return v;
+}
+/** Your buildings and sites cut off from storage with no road planned to them yet (the Goal card's warning). */
+function cutOffUnplanned() { return S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked && !roadOnItsWay(b)); }
+
 function objectiveText() {
-  const cut = S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked);
+  const cut = cutOffUnplanned();
   const warn = cut.length && !(cut.length === 1 && cut[0].type === 'harvester' && !hasBuilt('harvester'))
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
@@ -7552,10 +7629,11 @@ function updateHUD() {
   goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
-  // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road.
+  // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road (and
+  // none planned).
   const step = objectiveStep(), stepKey = step ? OBJECTIVES.indexOf(step) : -1;
   if (UI.objStep !== stepKey) { if (UI.objStep !== undefined && UI.objAuto && !UI.objManual) { UI.objCollapsed = false; UI.objAuto = false; } UI.objStep = stepKey; }
-  const cut = UI.objCollapsed && !S.mission ? S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked).length : 0;
+  const cut = UI.objCollapsed && !S.mission ? cutOffUnplanned().length : 0; // (not those with a road planned to them)
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' + (UI.winMini || '') + (cut ? ` <span class="err">${cut} with no road</span>` : '') : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   // (The messages button sits beside the folded card on a small screen: the open card needs the whole width.)

@@ -126,7 +126,7 @@ function todSrc(name, key) {
 }
 
 function todKeySet() {
-  if (!TOD.keys) TOD.keys = new Set(typeof TOD_KEYS !== 'undefined' ? TOD_KEYS : []);
+  if (!TOD.keys) TOD.keys = new Set([...(typeof TOD_KEYS !== 'undefined' ? TOD_KEYS : []), ...(typeof MURMUR_TOD_KEYS !== 'undefined' ? MURMUR_TOD_KEYS : [])]);
   return TOD.keys;
 }
 
@@ -137,15 +137,9 @@ function todKeySet() {
 function todLoadSet(name) {
   if (TOD.sets[name]) return;
   const set = TOD.sets[name] = { imgs: {}, n: 0 };
-  const add = (key, src) => loadImg(src, (img) => {
-    if (TOD.sets[name] !== set) return;
-    set.imgs[key] = img; set.n++;
-    // (the graded copy that stood in for it while it loaded has done its job)
-    const a = ART[key];
-    if (a && a.graded && a.graded[name]) { todFree(a.graded[name]); delete a.graded[name]; }
-  });
+  todMurmurAdd(name, set); // (the Murmur's, in a game with them: from their own bundle)
   if (typeof window !== 'undefined' && window.TOD_BUNDLE) {
-    const go = () => { const d = window.TOD_DATA && window.TOD_DATA[name]; if (d) for (const key in d) add(key, d[key]); };
+    const go = () => { const d = window.TOD_DATA && window.TOD_DATA[name]; if (d) for (const key in d) todAdd(name, set, key, d[key]); };
     if (window.TOD_DATA && window.TOD_DATA[name]) { go(); return; }
     const s = document.createElement('script');
     s.src = `tod-${name}.js`;
@@ -154,8 +148,32 @@ function todLoadSet(name) {
     document.head.appendChild(s);
     return;
   }
-  for (const key of todKeySet()) { const src = todSrc(name, key); if (src) add(key, src); }
+  for (const key of typeof TOD_KEYS !== 'undefined' ? TOD_KEYS : []) { const src = todSrc(name, key); if (src) todAdd(name, set, key, src); }
 }
+
+/** One sprite's re-lit version for set `name` (src: a file or data URI), into the set once it has loaded. */
+function todAdd(name, set, key, src) {
+  loadImg(src, (img) => {
+    if (TOD.sets[name] !== set) return;
+    set.imgs[key] = img; set.n++;
+    // (the graded copy that stood in for it while it loaded has done its job)
+    const a = ART[key];
+    if (a && a.graded && a.graded[name]) { todFree(a.graded[name]); delete a.graded[name]; }
+  });
+}
+
+/**
+ * The Murmur's re-lit sprites (MURMUR_TOD_KEYS) join a set only once their art is wanted (ensureMurmurArt): from the
+ * Murmur's bundle in a single-file copy, else from their files.
+ */
+function todMurmurAdd(name, set) {
+  if (typeof _murmurArt === 'undefined' || _murmurArt.state !== 'in' || set.murmur || typeof MURMUR_TOD_KEYS === 'undefined') return;
+  set.murmur = true;
+  const d = typeof window !== 'undefined' && window.MURMUR_BUNDLE ? window.MURMUR_DATA && window.MURMUR_DATA[name] : null;
+  for (const key of MURMUR_TOD_KEYS) { const src = d ? d[key] : todSrc(name, key); if (src) todAdd(name, set, key, src); }
+}
+/** The Murmur's art has come in: the sets already loaded take their re-lit sprites too. */
+function todMurmurIn() { for (const name in TOD.sets) todMurmurAdd(name, TOD.sets[name]); }
 
 /**
  * Let a set go once it's no longer in use: every sprite's re-lit and graded copies for that time go with it,
@@ -373,7 +391,7 @@ function drawStreetLamp(ctx, e, ox, oy, z) {
   if (!post) return;
   const x = ox + e.x * z, y = oy + e.y * z;
   drawArt(ctx, post, x, y, z);
-  const on = TOD.active ? TOD.state.lights : 0, lit = artFor('streetlamp-' + e.kind + '-lit', e.owner);
+  const on = (TOD.active && !murmurDarkAt(e.i, e.j) ? TOD.state.lights : 0) * drunkLight(e.i + 0.5, e.j + 0.5), lit = artFor('streetlamp-' + e.kind + '-lit', e.owner); // (out where the Murmur cut the lights; dimmed where a Leech drinks)
   if (on > 0.01 && lit) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * on; drawArtRaw(ctx, lit, x, y, z); ctx.globalAlpha = ga; }
 }
 
@@ -383,9 +401,10 @@ function drawStreetLights(ctx, ox, oy, z, v0, v1) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const e of streetLamps(v0, v1)) {
+    if (murmurDarkAt(e.i, e.j)) continue; // (the Murmur cut the lights here)
     const L = STREETLIGHT[e.kind], w = z * L.r * 2, pool = ART['streetlamp-' + e.kind + '-pool'];
-    const x = ox + (e.i + 0.5) * z, y = oy + (e.j + 0.5) * z;
-    ctx.globalAlpha = on * L.a;
+    const x = ox + (e.i + 0.5) * z, y = oy + (e.j + 0.5) * z, dim = drunkLight(e.i + 0.5, e.j + 0.5);
+    ctx.globalAlpha = on * L.a * dim;
     if (pool) ctx.drawImage(pool.img, x - w / 2, y - w * 0.4, w, w * 0.8);
     else ctx.drawImage(streetGlow(e.kind), x - w / 2, y - w * 0.4, w, w * 0.8); // seen at an angle: a little squashed
     if (artFor('streetlamp-' + e.kind, e.owner)) continue; // the post's own lit head shows the lamp
@@ -461,7 +480,7 @@ function drawCityGlow(ctx, ox, oy, z, items) {
   c.globalAlpha = 0.085 * TOD.state.pools;
   let any = false;
   for (const e of items) {
-    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct) continue;
+    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue;
     const col = PLAYER_COLORS[e.owner];
     if (!col) continue;
     const r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
@@ -490,7 +509,7 @@ function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
   const paths = {};
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
     const t = j * W + i;
-    if (!S.road[t] || S.bAt[t]) continue;
+    if (!S.road[t] || S.bAt[t] || murmurDarkAt(i, j)) continue; // (where the Murmur put the lights out: dark)
     const o = wayOwner(t), key = (o >= 0 ? o : 'n') + (S.pave[t] === 2 ? 'a' : 'r');
     const P = paths[key] || (paths[key] = new Path2D());
     const x0 = ox + (i + inset) * z, x1 = ox + (i + 1 - inset) * z, y0 = oy + (j + inset) * z, y1 = oy + (j + 1 - inset) * z;
@@ -521,11 +540,44 @@ function drawUnitLights(ctx, ox, oy, z, items) {
   const ga = ctx.globalAlpha, s = z * 1.15;
   ctx.globalAlpha = ga * 0.6;
   for (const e of items) {
-    if (e.ent !== 'u' || BOTS[e.type].air) continue;
+    if (e.ent !== 'u' || BOTS[e.type].air || BOTS[e.type].wild) continue; // (the Murmur light the ground their own way: drawMurmurLights)
     const img = PLAYER_COLORS[e.owner] && lightPool(PLAYER_COLORS[e.owner]);
     if (img) ctx.drawImage(img, ox + e.x * z - s / 2, oy + e.y * z - s / 2, s, s);
   }
   ctx.globalAlpha = ga;
+}
+
+/**
+ * At dusk and night, the Murmur's crystal throws violet light on the ground round each of them, as bright as they're
+ * charged, breathing slowly (a Leech drinking, quickly); faint round a Sapper's heave, where the colony can see it.
+ * Drawn among the buildings' pools (ctx is already adding light, at the pools' strength).
+ */
+function drawMurmurLights(ctx, ox, oy, z, items) {
+  const img = lightPool(WILD_COLOR);
+  if (!img) return;
+  const ga = ctx.globalAlpha;
+  for (const e of items) {
+    if (e.ent !== 'u' || !BOTS[e.type] || !BOTS[e.type].wild) continue;
+    if (e.pose === 'under' && !murmurInSight(e)) continue;
+    const L = MURMUR_LOOK[e.type] || MURMUR_LOOK.scuttler, id = e.id || 0;
+    const pulse = e.pose === 'feed' ? 0.9 + 0.3 * Math.max(0, Math.sin(R.time * 8 + id)) : 0.85 + 0.15 * Math.sin(R.time * 2.4 + id * 1.7);
+    const k = (0.15 + 0.85 * murmurCharge(e)) * pulse * (e.pose === 'under' ? 0.45 : 1), sz = z * L.size * 2.4;
+    ctx.globalAlpha = ga * Math.min(1, 0.8 * k);
+    ctx.drawImage(img, ox + e.x * z - sz / 2, oy + e.y * z - sz / 2, sz, sz);
+  }
+  ctx.globalAlpha = ga;
+}
+
+/**
+ * How much of a light is left (0..1) at (x, y) while a Leech drinks beside it (u.pose 'feed'): the lamps and the glow
+ * round a building it has its star pressed to go dim as it drinks (the lore: "the lights dim as they drink").
+ */
+function drunkLight(x, y) {
+  if (!S || !S.wildlife) return 1;
+  if (R.feedersAt !== R.time) { R.feedersAt = R.time; R.feeders = S.bots.filter((u) => !u.dead && u.pose === 'feed'); }
+  let k = 1;
+  for (const u of R.feeders) { const d = Math.hypot(u.x - x, u.y - y); if (d < 1.4) k = Math.min(k, 0.15 + 0.85 * Math.max(0, (d - 0.5) / 0.9)); }
+  return k;
 }
 
 /** A bot's drop shadow now: offset (as a fraction of the shadow's length), opacity and spread. */

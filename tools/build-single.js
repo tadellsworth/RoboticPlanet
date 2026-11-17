@@ -19,14 +19,17 @@ const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
 // biome is wanted: see ensureBiomeArt), so the page stays small; its manifest entries stay, without the data.
 const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow']; // (as js/render.js: every biome but the Desert)
 const lazyBiomeOf = (key) => LAZY_BIOMES.find((b) => key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) || null;
-const inlined = {}, biomeData = {};
+// The Murmur's art goes in a bundle of its own too (dist/murmur.js: the day art and each time of day's re-lit set,
+// loaded in a game with the Murmur: see ensureMurmurArt), its manifest entries likewise left without the data.
+const murmurArtKey = (key) => /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/.test(key); // (as js/render.js: MURMUR_ART)
+const inlined = {}, biomeData = {}, murmurData = { day: {}, morning: {}, evening: {}, night: {} };
 for (const key of Object.keys(manifest)) {
   const entry = typeof manifest[key] === 'string' ? { src: manifest[key] } : { ...manifest[key] };
   const file = path.join(root, 'art', entry.src);
   if (!fs.existsSync(file)) { console.warn('missing art file, skipped:', entry.src); continue; }
   const data = `data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${fs.readFileSync(file).toString('base64')}`;
   const lb = lazyBiomeOf(key);
-  if (lb) { (biomeData[lb] = biomeData[lb] || {})[key] = data; entry.src = ''; } else entry.src = data;
+  if (lb) { (biomeData[lb] = biomeData[lb] || {})[key] = data; entry.src = ''; } else if (murmurArtKey(key)) { murmurData.day[key] = data; entry.src = ''; } else entry.src = data;
   inlined[key] = entry;
 }
 let biomeBytes = 0;
@@ -44,7 +47,7 @@ const code = scripts.map((src) => (src === 'art/art-manifest.js'
 
 // Day and night: each time's re-lit sprites go in a bundle beside the page (dist/tod-<time>.js, loaded
 // when that time comes round); the headlights and light pool are small enough to go inline.
-const todKeys = (() => { const sb = {}; vm.runInNewContext(read('art/tod/tod-keys.js').replace('const TOD_KEYS', 'this.TOD_KEYS'), sb); return sb.TOD_KEYS || []; })();
+const [todKeys, murmurTodKeys] = (() => { const sb = {}; vm.runInNewContext(read('art/tod/tod-keys.js').replace('const TOD_KEYS', 'this.TOD_KEYS').replace('const MURMUR_TOD_KEYS', 'this.MURMUR_TOD_KEYS'), sb); return [sb.TOD_KEYS || [], sb.MURMUR_TOD_KEYS || []]; })();
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 let todBytes = 0;
 for (const t of ['morning', 'evening', 'night']) {
@@ -57,7 +60,14 @@ for (const t of ['morning', 'evening', 'night']) {
   const js = `window.TOD_DATA = window.TOD_DATA || {};\nwindow.TOD_DATA[${JSON.stringify(t)}] = ${JSON.stringify(data)};\n`;
   fs.writeFileSync(path.join(root, 'dist', `tod-${t}.js`), js);
   todBytes += js.length;
+  for (const key of murmurTodKeys) {
+    const e = manifest[key], src = e && (typeof e === 'string' ? e : e.src);
+    const file = src && path.join(root, 'art/tod', t, src.replace(/\.(png|webp)$/, '.webp'));
+    if (file && fs.existsSync(file)) murmurData[t][key] = `data:image/webp;base64,${fs.readFileSync(file).toString('base64')}`;
+  }
 }
+const murmurJs = `window.MURMUR_DATA = ${JSON.stringify(murmurData)};\n`;
+fs.writeFileSync(path.join(root, 'dist', 'murmur.js'), murmurJs);
 const todShared = {};
 for (const f of fs.readdirSync(path.join(root, 'art/tod/shared'))) {
   if (f.endsWith('.webp')) todShared[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/tod/shared', f)).toString('base64')}`;
@@ -89,9 +99,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.MURMUR_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB)`);

@@ -161,6 +161,7 @@ const MM_DESERT = {};
 function applyBiome() {
   const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (a biome without art of its own wears another's: BIOME_ART)
   ensureBiomeArt(b); // (the map is baked again as it arrives)
+  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt(); // (a game with the Murmur: their art, now)
   const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   Object.assign(THEME, THEME_DESERT, look.theme);
@@ -286,12 +287,40 @@ function ensureBiomeArt(b) {
   for (const k of keys) loadArtKey(k, entryOf(k));
 }
 
+/*
+ * The Murmur's art (every creature's frames and their glow, and the Spitter's volley and its hit) loads only in a game
+ * with the Murmur (ensureMurmurArt, from applyBiome), and their re-lit sets for the time of day with it (MURMUR_TOD_KEYS:
+ * see todMurmurIn). In a single-file copy it's a bundle beside the page (murmur.js: the day art and each time's set).
+ */
+const MURMUR_ART = /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/;
+const _murmurArt = { state: '' };
+function murmurArtKey(key) { return MURMUR_ART.test(key); }
+function ensureMurmurArt() {
+  if (_murmurArt.state || typeof ART_MANIFEST !== 'object') return;
+  _murmurArt.state = 'loading';
+  const keys = Object.keys(ART_MANIFEST).filter(murmurArtKey);
+  const entryOf = (k) => (typeof ART_MANIFEST[k] === 'string' ? { src: ART_MANIFEST[k] } : ART_MANIFEST[k]);
+  const done = () => { _murmurArt.state = 'in'; if (typeof todMurmurIn === 'function') todMurmurIn(); };
+  if (typeof window !== 'undefined' && window.MURMUR_BUNDLE) {
+    const go = () => { const d = window.MURMUR_DATA && window.MURMUR_DATA.day; if (d) for (const k of keys) if (d[k]) loadArtKey(k, { ...entryOf(k), src: d[k] }); done(); };
+    if (window.MURMUR_DATA) { go(); return; }
+    const sc = document.createElement('script');
+    sc.src = 'murmur.js';
+    sc.onload = go;
+    sc.onerror = () => { _murmurArt.state = 'failed'; }; // no bundle: the creatures are drawn in code
+    document.head.appendChild(sc);
+    return;
+  }
+  for (const k of keys) loadArtKey(k, entryOf(k));
+  done();
+}
+
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
   R.artChange = onChange;
   // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
   for (const key of Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a))) {
-    if (lazyBiomeOf(key)) continue; // (see ensureBiomeArt)
+    if (lazyBiomeOf(key) || murmurArtKey(key)) continue; // (see ensureBiomeArt and ensureMurmurArt)
     loadArtKey(key, typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   }
 }
@@ -2765,20 +2794,20 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     // The new defences' art: the Mortar Pit's tube turns like a turret head (mortar-head-0…7, or 0…15),
     // and optional overlays light up as they fire: bunker-fire (muzzle flashes at the slit) and
     // disruptor-pulse (the coils and orb glowing), faded out over a moment.
     if (type === 'mortar') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     // The Keep: its roof cannon turns like a turret head (keep-head-0…15), and now and then an arc crackles
     // along the razor wire round its walls (keep-spark-0…5: a 0.4 s burst every 2 to 5 seconds).
     if (type === 'keep') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'keep');
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
       if (b && b.built) {
         const period = 2 + 3 * hash2(b.x, b.y, 91), ph = (R.time + period * hash2(b.y, b.x, 37)) % period;
         const sp = ph < 0.4 && ART['keep-spark-' + Math.floor(ph / 0.4 * 6)];
@@ -2789,7 +2818,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // rotary gun follows what it's hosing (minigun-head-0…15).
     if (type === 'flak' || type === 'minigun') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, type);
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     const fx = type === 'bunker' ? ['bunker-fire', 0.1] : type === 'disruptor' ? ['disruptor-pulse', 0.4] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
     if (fx && b && b.flash && S.time - b.flash < fx[1]) {
@@ -2799,6 +2828,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       if (over) { ctx.globalAlpha = Math.max(0, a); drawArt(ctx, over, cx, cy, s); ctx.globalAlpha = 1; }
     }
     if (type === 'silo' && b && b.stock) drawSiloStatus(ctx, b, cx, cy, s, color);
+    if (shorted(b)) drawShortArcs(ctx, b, cx, cy, s); // (the Spitter's shards: the charge crawling over it)
     return;
   }
   const u = s / 32;
@@ -4319,6 +4349,30 @@ function drawTunnels(ctx, ox, oy, z) {
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   ctx.restore();
   for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
+  // Their dead (Active), where they fell, until one of them drags it off or it sinks into the ground.
+  for (const d of S.mur.dead || []) {
+    const age = S.time - d.t, a = clamp((MURMUR.craft.bodyLast - age) / 3, 0, 1);
+    if (a > 0) drawMurmurBody(ctx, ox + d.x * z, oy + d.y * z, z, d.type, a, hash2(d.id, 3, 7) * Math.PI * 2);
+  }
+}
+
+/** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
+function drawMurmurBody(ctx, x, y, s, type, a, rot) {
+  const k = type === 'brute' ? 1.7 : 1;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(10,4,12,0.35)';
+  ctx.beginPath(); ctx.ellipse(s * 0.02, s * 0.05, s * 0.17 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = type === 'brute' ? '#2a1a12' : '#1e0f22'; ctx.lineWidth = Math.max(1, s * 0.025 * k); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const sy of [-1, 1]) { ctx.moveTo(-s * 0.04 * k, sy * s * 0.05 * k); ctx.lineTo(-s * 0.1 * k, sy * s * 0.1 * k); ctx.moveTo(s * 0.05 * k, sy * s * 0.05 * k); ctx.lineTo(s * 0.02 * k, sy * s * 0.11 * k); }
+  ctx.stroke();
+  ctx.fillStyle = type === 'brute' ? '#3a2519' : '#2b1631';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.13 * k, s * 0.075 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(140,100,190,0.55)'; // (dull crystal along its back)
+  for (let n = 0; n < 3; n++) { ctx.beginPath(); ctx.arc((n - 1) * s * 0.045 * k, -s * 0.02 * k, s * 0.012 * k, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
 }
 
 /**
@@ -4473,45 +4527,275 @@ function minimapTunnels() {
 }
 
 /** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
-function drawCritter(ctx, u, x, y, s) {
-  const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
-  const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+/*
+ * The Murmur (renderer/b/murmur_moles.js; art in the Murmur's own bundle, see ensureMurmurArt). Each is drawn true to the
+ * others' size but the Brute, shrunk to fit the map: the frame's width in tiles. Its shadow: half-length and half-width
+ * (tiles, turned with it). walk: walking frames a second.
+ */
+const MURMUR_LOOK = {
+  scuttler: { size: 0.62, sh: [0.17, 0.1], walk: 10 },
+  spitter: { size: 0.73, sh: [0.2, 0.13], walk: 9 },
+  leech: { size: 0.81, sh: [0.24, 0.16], walk: 6 },
+  sapper: { size: 0.9, sh: [0.3, 0.12], walk: 7 },
+  brute: { size: 0.82, sh: [0.29, 0.17], walk: 6 },
+};
+/**
+ * Their actions (u.pose, timed by u.poseT): art <type>-<key>-f<n>, n frames, each dt seconds (or each its own: times),
+ * looping (or once: held on the last). Feeding: the star pulsing, the sac swelling with each draw. Spitting: wind-up,
+ * the spit, recoil, recovering. Digging in: soil flying from each hand in turn. Under: the heave rising and splitting
+ * as it goes. Up: the ground bursting, hands and star through, head and shoulders, climbing out.
+ */
+const MURMUR_POSES = {
+  feed: { key: 'feed', n: 4, dt: 0.18 },
+  spit: { key: 'spit', n: 4, times: [0.42, 0.14, 0.2, 0.24] },
+  dig: { key: 'dig', n: 4, dt: 0.13 },
+  under: { key: 'under', n: 4, dt: 0.22 },
+  up: { key: 'up', n: 5, dt: 0.17, once: true },
+};
+
+/** Which of its frames a creature shows now: { key, k (the frame), pose (its MURMUR_POSES entry, if acting) }. */
+function murmurFrame(u) {
+  const P = u.pose && MURMUR_POSES[u.pose];
+  if (P) {
+    const t = typeof u.poseT === 'number' ? u.poseT : R.time + (u.id || 0) * 0.37;
+    let k = 0;
+    if (P.times) {
+      let r = t % P.times.reduce((a, b) => a + b, 0);
+      while (k < P.n - 1 && r >= P.times[k]) r -= P.times[k++];
+    } else k = P.once ? Math.min(P.n - 1, Math.floor(t / P.dt)) : Math.floor(t / P.dt) % P.n;
+    const key = `${u.type}-${P.key}-f${k}`;
+    if (ART[key]) return { key, k, pose: P };
+  }
+  const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, moving = (u.moved || u.fought) && !P;
+  const k = moving ? Math.floor(R.time * L.walk + (u.id || 0)) % 4 : 0;
+  return { key: `${u.type}-f${k}`, k, pose: null };
+}
+
+/** How full of charge it is (0..1: what its crystal's glow follows); a creature from before charge was kept: well fed. */
+function murmurCharge(u) { return typeof u.charge === 'number' && u.charge === u.charge ? clamp(u.charge, 0, 1) : 0.75; }
+
+/**
+ * The light of its crystal (and the Leech's sac), over the sprite: its glow image added, as bright as it is charged,
+ * stronger as the light goes, pulsing slowly as it breathes (faster while a Leech drinks; the Spitter's pouches flaring
+ * as it winds up and dimming as they empty; the heave's chips of crystal glinting).
+ */
+function murmurGlow(ctx, u, fr, x, y, w, face) {
+  const g = ART[fr.key + '-glow'];
+  if (!g) return;
+  const id = u.id || 0, ch = murmurCharge(u);
+  let pulse = 0.8 + 0.2 * Math.sin(R.time * 2.4 + id * 1.7);
+  if (u.pose === 'feed') pulse = 0.85 + 0.3 * Math.max(0, Math.sin(R.time * 8 + id));
+  else if (u.pose === 'spit' && fr.pose) pulse = [1.25, 1.35, 0.55, 0.8][fr.k] || 1;
+  else if (u.pose === 'under') pulse = 0.45 + 0.75 * Math.pow(Math.max(0, Math.sin(R.time * 2.7 + id * 2.3)), 8) + 0.2 * Math.max(0, Math.sin(R.time * 4.1 + id));
+  const a = (0.22 + 0.78 * fxNight()) * (0.12 + 0.88 * Math.pow(ch, 0.9)) * pulse;
+  if (a < 0.02) return;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = 'rgba(20,8,20,0.3)';
-  ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.08, s * 0.17 * k, s * 0.1 * k, 0, 0, Math.PI * 2); ctx.fill();
-  // The art: four walking frames, stepping while it moves or fights.
-  const walk = ART[u.type + '-f0'] ? ART[u.type + '-f' + (u.moved || u.fought ? Math.floor(R.time * (brute ? 6 : 10) + u.id) % 4 : 0)] : null;
-  if (walk) {
-    ctx.restore();
-    drawArt(ctx, walk, x, y, s * (brute ? 0.82 : 0.62), face);
-  } else {
-  ctx.rotate(face);
-  ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
-  ctx.beginPath();
-  for (let n = 0; n < 3; n++) {
-    const lx = (n - 1) * s * 0.07 * k, sw = (n % 2 ? step : -step) * s * 0.035 * k;
-    ctx.moveTo(lx, 0); ctx.lineTo(lx + sw, -s * 0.14 * k);
-    ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
-  }
-  ctx.stroke();
-  ctx.fillStyle = brute ? '#6b4430' : '#55306a';
-  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
-  ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
-  if (brute) {
-    ctx.fillStyle = '#c9b18f';
-    for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
-  }
-  ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
-  ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha *= Math.min(1, a);
+  drawArtRaw(ctx, g, x, y, w, face);
   ctx.restore();
+}
+
+/**
+ * Can the colony on this device see a Sapper under the ground here? Within SIGHT_R tiles of any of its buildings, its
+ * bots or its streetlamps (its allies' too). Watching a game with no colony of your own, everything shows. Kept a
+ * moment per creature.
+ */
+const SIGHT_R = 6;
+function colonySees(x, y) {
+  if (!(ME >= 0) || !S.players[ME]) return true;
+  const r2 = SIGHT_R * SIGHT_R, ours = (o) => o >= 0 && (o === ME || !foes(ME, o)) && !isWild(o);
+  for (const b of S.buildings) if (!b.dead && ours(b.owner) && (b.x + 0.5 - x) ** 2 + (b.y + 0.5 - y) ** 2 < r2) return true;
+  for (const b of S.bots) if (!b.dead && ours(b.owner) && (b.x - x) ** 2 + (b.y - y) ** 2 < r2) return true;
+  if (S.road) {
+    const i0 = Math.max(0, Math.floor(x - SIGHT_R)), i1 = Math.min(S.W - 1, Math.ceil(x + SIGHT_R)), j0 = Math.max(0, Math.floor(y - SIGHT_R)), j1 = Math.min(S.H - 1, Math.ceil(y + SIGHT_R));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const t = j * S.W + i; // (a lamp: every third tile of road on open ground, as streetLamps has them)
+      if ((i + 2 * j) % 3 || !S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t] || (i + 0.5 - x) ** 2 + (j + 0.5 - y) ** 2 >= r2) continue;
+      if (ours(wayOwner(t))) return true;
+    }
+  }
+  return false;
+}
+function murmurInSight(u) {
+  const c = R.sight || (R.sight = new Map()), e = c.get(u.id);
+  if (e && e.of === S && R.time - e.t < 0.5 && Math.abs(e.x - u.x) < 0.3 && Math.abs(e.y - u.y) < 0.3) return e.v;
+  if (c.size > 300) c.clear();
+  const v = colonySees(u.x, u.y);
+  c.set(u.id, { of: S, t: R.time, x: u.x, y: u.y, v });
+  return v;
+}
+
+/** Where a creature faces: as it goes, or while it spits, at what it's spitting at (u.fx: { x, y } or [x, y]). */
+function murmurFace(u) {
+  const t = u.pose === 'spit' && u.fx, tx = t && (Array.isArray(t) ? t[0] : t.x), ty = t && (Array.isArray(t) ? t[1] : t.y);
+  return t && tx === +tx && ty === +ty && (tx !== u.x || ty !== u.y) ? Math.atan2(ty - u.y, tx - u.x) : u.face || 0;
+}
+
+function drawCritter(ctx, u, x, y, s) {
+  const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, face = murmurFace(u), under = u.pose === 'under';
+  if (under && !murmurInSight(u)) return; // (a Sapper under the ground shows only where the colony can see)
+  const fr = murmurFrame(u), art = ART[fr.key], w = s * L.size;
+  // Dragging one of its dead (Active): the body behind it, and a scuff in the dirt where it's been dragged.
+  if (u.drag && BOTS[u.drag]) {
+    const k = L.sh[0] / 0.17, bx = x - Math.cos(face) * s * 0.3 * k, by = y - Math.sin(face) * s * 0.3 * k;
+    ctx.save(); ctx.strokeStyle = 'rgba(30,18,24,0.35)'; ctx.lineWidth = Math.max(1, s * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - Math.cos(face) * s * 0.35, by - Math.sin(face) * s * 0.35); ctx.stroke(); ctx.restore();
+    drawMurmurBody(ctx, bx, by, s, u.drag, 1, face + (u.moved ? Math.sin(R.time * 9 + u.id) * 0.15 : 0));
+  }
+  if (!under && !(u.pose === 'up' && fr.pose)) { // (its shadow; nothing of it stands on the ground while it's under or coming up)
+    ctx.save();
+    ctx.translate(x + s * 0.03, y + s * 0.08); ctx.rotate(face);
+    ctx.fillStyle = 'rgba(20,8,20,0.3)';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * L.sh[0], s * L.sh[1], 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (art) {
+    drawArt(ctx, art, x, y, w, face);
+    murmurGlow(ctx, u, fr, x, y, w, face);
+  } else if (under) {
+    // (no art yet: a mound of heaved earth)
+    ctx.save(); ctx.translate(x, y); ctx.rotate(face);
+    ctx.fillStyle = todColor('#6a5240'); ctx.beginPath(); ctx.ellipse(0, 0, s * 0.22, s * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = todColor('#2e2218'); ctx.lineWidth = Math.max(1, s * 0.02);
+    ctx.beginPath(); ctx.moveTo(-s * 0.12, -s * 0.05); ctx.lineTo(s * 0.02, s * 0.02); ctx.lineTo(s * 0.12, -s * 0.06); ctx.stroke();
+    ctx.restore();
+  } else {
+    // (no art: drawn in code, a body with legs stepping, the Brute bigger)
+    const brute = u.type === 'brute', k = L.sh[0] / 0.17;
+    const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(face);
+    ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let n = 0; n < 3; n++) {
+      const lx = (n - 1) * s * 0.07 * k, sw = (n % 2 ? step : -step) * s * 0.035 * k;
+      ctx.moveTo(lx, 0); ctx.lineTo(lx + sw, -s * 0.14 * k);
+      ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
+    }
+    ctx.stroke();
+    ctx.fillStyle = brute ? '#6b4430' : '#55306a';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
+    ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
+    if (brute) {
+      ctx.fillStyle = '#c9b18f';
+      for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
+    }
+    ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
+    ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
   if (u.hp < u.maxHp && R.clean < 2) {
-    const w = s * 0.34 * k;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, w, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+    const bw = s * 0.34 * L.sh[0] / 0.17, top = y - s * Math.max(0.24, L.sh[0] * 1.3);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2, top, bw, Math.max(2, s * 0.05));
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - bw / 2, top, (bw * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
   }
+}
+
+/** The fresh ridge each Sapper under the ground leaves behind it (its last few tiles, kept here as it goes: once it's through, the game's tunnels take over). */
+function sapperTrails() {
+  const T = R.sapTrails || (R.sapTrails = new Map()), live = new Set();
+  for (const u of S.bots) {
+    if (u.dead || u.pose !== 'under') continue;
+    live.add(u.id);
+    let tr = T.get(u.id);
+    if (!tr || tr.of !== S) T.set(u.id, (tr = { of: S, pts: [[u.x, u.y]] }));
+    const last = tr.pts[tr.pts.length - 1];
+    if (Math.hypot(u.x - last[0], u.y - last[1]) > 0.12) { tr.pts.push([u.x, u.y]); if (tr.pts.length > 90) tr.pts.shift(); }
+  }
+  for (const id of [...T.keys()]) if (!live.has(id)) T.delete(id);
+  return T;
+}
+
+/**
+ * Those ridges, where the colony can see them: the heaved earth (with the ground, before it's graded), or at night
+ * (glow) the veins' light along them. The head of each, where it's still digging, tapers under the heave.
+ */
+function drawFreshRidges(ctx, ox, oy, z, glow) {
+  const T = glow ? R.sapTrails : S.bots && sapperTrails(), n = glow ? fxNight() : 1;
+  if (!T || !T.size || n < 0.02) return;
+  const look = glow ? null : tunnelLook(MM_COLORS.ground || [140, 100, 70]);
+  ctx.save();
+  ctx.translate(ox, oy);
+  if (glow) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = n * 0.85; }
+  for (const [id, tr] of T) {
+    const u = getE(id);
+    if (!u || u.dead || tr.pts.length < 3 || !murmurInSight(u)) continue;
+    const pts = tr.pts.map((q) => [q[0], q[1]]);
+    let len = 0;
+    pts[0].s = 0;
+    for (let k = 1; k < pts.length; k++) { len += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); pts[k].s = len; }
+    const run = { tiles: [id], pts, L: len, tail0: true, tail1: true, h: hash2(id, 3, 4133) };
+    if (glow) paintRidgeVeins(ctx, [run], z); else paintRidges(ctx, [run], z, look);
+  }
+  ctx.restore();
+}
+
+/** The Spitter's volley in flight (addFx 'spit', from x, y to tx, ty over its life): its shards, and their light at dusk and night. */
+function drawSpitFx(ctx, f, ox, oy, z, k) {
+  const tx = f.tx !== undefined ? f.tx : f.x + 1, ty = f.ty !== undefined ? f.ty : f.y, a = Math.atan2(ty - f.y, tx - f.x);
+  const q = Math.min(1, k * 1.05), x = ox + (f.x + (tx - f.x) * q) * z, y = oy + (f.y + (ty - f.y) * q) * z;
+  const art = ART['fx-spit'], w = z * 0.6;
+  if (art) drawArtRaw(ctx, art, x, y, w, a);
+  else { ctx.fillStyle = '#d8c4ff'; for (let n = 0; n < 4; n++) { ctx.beginPath(); ctx.arc(x - Math.cos(a) * n * z * 0.05, y - Math.sin(a) * n * z * 0.05, z * (0.04 - n * 0.008), 0, Math.PI * 2); ctx.fill(); } }
+  const night = fxNight(), g = ART['fx-spit-glow'];
+  if (g && night > 0.02) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = night * (0.8 + 0.2 * Math.sin(R.time * 40)); drawArtRaw(ctx, g, x, y, w, a); ctx.restore(); }
+  if (TOD.active && typeof drawLightPool === 'function') { ctx.globalAlpha = 0.55; drawLightPool(ctx, x, y, z * 0.7, WILD_COLOR); ctx.globalAlpha = 1; }
+}
+
+/** Where the volley strikes (addFx 'spitHit'): the flash, splinters flying back, charge crawling over the struck face, grit embers dying. */
+function drawSpitHitFx(ctx, f, ox, oy, z, k) {
+  const x = ox + f.x * z, y = oy + f.y * z, art = ART['fx-spit-hit'];
+  // (the art's shards came from the left: turned to come the way the volley did, found once among the volleys in flight)
+  const dirs = R.spitDirs || (R.spitDirs = new WeakMap());
+  let a = dirs.get(f);
+  if (a === undefined) {
+    a = 0;
+    let best = 1;
+    for (const v of S.fx) if (v.type === 'spit' && v.tx !== undefined) { const d = Math.hypot(v.tx - f.x, v.ty - f.y); if (d < best) { best = d; a = Math.atan2(v.ty - v.y, v.tx - v.x); } }
+    dirs.set(f, a);
+  }
+  if (art && art.frames) drawSheetFrame(ctx, art, Math.floor(k * art.frames), x, y, z * 1.0, 0, a);
+  else { fxGlow(ctx, x, y, z * 0.5, '#c8a8ff', 1 - k); }
+  if (TOD.active && typeof drawLightPool === 'function' && k < 0.5) { ctx.globalAlpha = 1 - k / 0.5; drawLightPool(ctx, x, y, z * 1.1, WILD_COLOR); ctx.globalAlpha = 1; }
+}
+
+/**
+ * A building the Spitter's shards have shorted (b.shortT, until then): its gun dark, and the charge crawling over it in
+ * short violet-white arcs that jump about.
+ */
+function shorted(b) { return !!(b && b.shortT > S.time); }
+function drawShortArcs(ctx, b, cx, cy, s) {
+  const left = b.shortT - S.time, k = Math.min(1, left / 0.4), seed = Math.floor(R.time * 14) + (b.id || 0) * 13;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let n = 0; n < 4; n++) {
+    const h1 = hash2(seed, n, 5101), h2 = hash2(n, seed, 5113), h3 = hash2(seed + n, 7, 5119);
+    const a1 = h1 * Math.PI * 2, a2 = a1 + (0.8 + h2 * 1.6) * (h3 < 0.5 ? 1 : -1), r1 = s * (0.18 + 0.2 * h2), r2 = s * (0.12 + 0.24 * h3), up = s * 0.28;
+    const x1 = cx + Math.cos(a1) * r1, y1 = cy - up + Math.sin(a1) * r1 * 0.7, x2 = cx + Math.cos(a2) * r2, y2 = cy - up + Math.sin(a2) * r2 * 0.7;
+    for (const [lw, col] of [[s * 0.06, 'rgba(150,90,255,0.3)'], [s * 0.022, 'rgba(240,228,255,0.95)']]) {
+      ctx.strokeStyle = col; ctx.globalAlpha = k; ctx.lineWidth = Math.max(1, lw);
+      ctx.beginPath(); boltPath(ctx, x1, y1, x2, y2, s * 0.06, seed + n, 6); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  fxGlow(ctx, cx, cy - s * 0.28, s * 0.5, '#b48cff', 0.35 * k * (0.7 + 0.3 * hash2(seed, 1, 5123)));
+}
+/** A gun's head drawn dark while it's shorted (its image's shape filled near-black over it). */
+function drawHeadDark(ctx, head, cx, cy, s) {
+  if (!head || !head.img) return;
+  let m = head.dark;
+  if (!m) {
+    const img = head.img, c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgba(8,6,14,0.62)'; x.fillRect(0, 0, c.width, c.height);
+    m = head.dark = { img: c, scale: head.scale, anchor: head.anchor, key: head.key + '-dark' };
+  }
+  drawArtRaw(ctx, m, cx, cy, s);
 }
 
 /**
@@ -4579,7 +4863,7 @@ function drawBot(ctx, u, sx, sy, s) {
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
   const art = own || (!isArmy(u) && !truck ? artFor('worker', u.owner) : null);
-  const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && S.road[u.task.node]));
+  const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && (S.road[u.task.node] || harvestKind(u))));
   const bob = u.busy && !acting ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (truck) {
     if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
@@ -4706,7 +4990,9 @@ function drawBotShadow(ctx, u, x, y, along, across) {
  */
 function workPose(u) {
   const t = u.task;
-  if (!t || !u.busy) return null;
+  if (!t) { HARV_SPOTS.delete(u.id); return null; }
+  if (t.type === 'staff') { const h = harvestPose(u, t); if (h) return h; } // (gathering: see harvestPose)
+  if (!u.busy) return null;
   if (t.type === 'build' && t.phase === 'work') {
     const a = R.time * 0.7 + u.id * 1.7, r = 0.33;
     return { kind: 'weld', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8, face: a + Math.PI };
@@ -4727,6 +5013,7 @@ function workPose(u) {
 
 /** The road surface spreading across the tile being paved, from the side the bot came in. */
 function drawWorkUnder(ctx, u, pose, ox, oy, z) {
+  if (pose.kind === 'harvest') { drawHarvestUnder(ctx, u, pose, ox, oy, z); return; }
   if (pose.tile === undefined) return;
   const i = pose.tile % S.W, j = (pose.tile / S.W) | 0, x = ox + i * z, y = oy + j * z;
   const horiz = Math.abs(Math.cos(u.face)) >= Math.abs(Math.sin(u.face));
@@ -4752,6 +5039,8 @@ function drawWorkUnder(ctx, u, pose, ox, oy, z) {
 
 /** Sparks off a weld, dust off fresh concrete, steam off hot asphalt. */
 function drawWorkOver(ctx, u, pose, sx, sy, z) {
+  if (pose.kind === 'walk') return;
+  if (pose.kind === 'harvest') { drawHarvest(ctx, u, pose, sx, sy, z); return; }
   const T = R.time, seed = u.id * 7.31;
   if (pose.kind === 'weld') {
     // The arc: a hot white-blue point in front of the bot, flickering, and sparks spraying from it.
@@ -4785,6 +5074,433 @@ function drawWorkOver(ctx, u, pose, sx, sy, z) {
       ctx.beginPath(); ctx.arc(sx + (hash2(k, u.id, 2) - 0.5) * z * 0.5, sy + z * 0.15 - ph * z * 0.3, z * (0.05 + ph * 0.08), 0, Math.PI * 2); ctx.fill();
     }
   }
+}
+
+/*
+ * Gathering. A robot working a resource stops at its near edge, facing it, and works it with its arm the way that
+ * resource needs: it scythes Reedcane in sweeps (Bloom veins too, which shed glowing motes as they're cut), drills
+ * Ore a few holes at a time (Uranium's cuttings glow green), breaks boulders and rock faces with a hammer, and
+ * scores Crystal with a cutting beam; an Agribot picks ripe crops one plant at a time, or plants a row of
+ * seedlings. All of it is drawn only, from R.time and the task's own timer: none of it is in S.
+ */
+const HARV_STAND = 0.36;      // how far short of a resource's middle a gatherer stands (tiles)
+const HARV_SPOTS = new Map(); // (drawing only) bot id → { node, ax, ay: the way it faces; cx, cy: the node's middle; sx, sy: where it stands }
+
+/** What a robot at its node is doing there, or null: 'cut', 'vein', 'drill', 'drillU', 'break', 'face', 'laser', 'pick', 'plant' or 'sow'. */
+function harvestKind(u) {
+  const t = u.task;
+  if (!t || t.type !== 'staff' || t.phase !== 'work' || u.inside || !(t.node >= 0) || S.road[t.node]) return null;
+  const b = getE(t.bld);
+  if (!b) return null;
+  const def = BDEFS[b.type];
+  if (t.face) return 'face';
+  if (def.farm) return t.act === 'harvest' ? 'pick' : 'plant';
+  if (def.plant) return 'sow';
+  if (!def.gather) return null;
+  const r = S.res[t.node];
+  return r === R_STALK ? 'cut' : r === R_VEIN ? 'vein' : r === R_ORE ? 'drill' : r === R_URANIUM ? 'drillU' : r === R_CRYSTAL ? 'laser' : r === R_BOULDER ? 'break' : null;
+}
+
+/** How long that job takes, as js/sim.js times it (the staff task going from 'toNode' to 'work'). */
+function harvestTime(b, t) {
+  const def = BDEFS[b.type];
+  return t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : 3;
+}
+
+/** Which way the cliff is from a Quarry's rock-face spot, as a step [di, dj], or null. */
+function harvestFaceDir(node) {
+  const i = node % S.W, j = (node / S.W) | 0;
+  let best = null, bs = 0;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const n = tIdx(i + di, j + dj), wall = S.terrain[n] === T_GROUND && S.elev[n] !== S.elev[node] && !canStep(node, n);
+    const sc = S.terrain[n] === T_ROCK ? 3 : wall && S.elev[n] > S.elev[node] ? 2 : wall ? 1 : 0;
+    if (sc > bs) { bs = sc; best = [di, dj]; }
+  }
+  return best;
+}
+
+/**
+ * A gatherer's pose: walking up, it's drawn stopping at the near edge (the sim walks it on to the middle); at work,
+ * it stands there facing in and moves as its job needs; walking off, it's drawn easing back onto its path.
+ */
+function harvestPose(u, t) {
+  const rec = HARV_SPOTS.get(u.id);
+  if (t.phase === 'toNode' && t.node >= 0 && !S.road[t.node] && !t.face) {
+    const cx = (t.node % S.W) + 0.5, cy = ((t.node / S.W) | 0) + 0.5, dx = cx - u.x, dy = cy - u.y, d = Math.hypot(dx, dy);
+    let r = rec;
+    if (!r || r.node !== t.node) { r = { node: t.node, ax: Math.cos(u.face || 0), ay: Math.sin(u.face || 0), cx, cy }; HARV_SPOTS.set(u.id, r); }
+    if (d > 0.12) { r.ax = dx / d; r.ay = dy / d; }
+    if (d >= HARV_STAND) return d >= HARV_STAND + 0.5 ? null : { kind: 'walk', dx: 0, dy: 0, jit: (d - HARV_STAND) / 0.5 };
+    return { kind: 'walk', dx: -r.ax * (HARV_STAND - d), dy: -r.ay * (HARV_STAND - d), jit: 0 };
+  }
+  const hk = t.phase === 'work' ? harvestKind(u) : null;
+  if (hk) {
+    const b = getE(t.bld), T = harvestTime(b, t), prog = clamp(1 - t.timer / T, 0, 1);
+    const cx = (t.node % S.W) + 0.5, cy = ((t.node / S.W) | 0) + 0.5;
+    let r = rec && rec.node === t.node ? rec : null;
+    if (!r) { r = { node: t.node, ax: Math.cos(u.face || 0), ay: Math.sin(u.face || 0) }; HARV_SPOTS.set(u.id, r); }
+    r.cx = cx; r.cy = cy;
+    if (hk === 'face') {
+      // A rock face: it creeps on up to the cliff at the edge of its tile.
+      const fd = harvestFaceDir(t.node);
+      if (fd) { r.ax = fd[0]; r.ay = fd[1]; }
+      const e = smoothstep01(clamp((T - t.timer) / 0.5, 0, 1)) * 0.14;
+      r.sx = cx + r.ax * e; r.sy = cy + r.ay * e;
+    } else { r.sx = cx - r.ax * HARV_STAND; r.sy = cy - r.ay * HARV_STAND; }
+    const a = harvestAnim(hk, u, prog, T), px = -r.ay, py = r.ax;
+    return {
+      kind: 'harvest', hk, prog, T, a, ax: r.ax, ay: r.ay, stx: r.sx, sty: r.sy, jit: 0,
+      face: Math.atan2(r.ay, r.ax) + a.yaw,
+      dx: r.sx - u.x + r.ax * a.lunge + px * a.shake, dy: r.sy - u.y + r.ay * a.lunge + py * a.shake,
+    };
+  }
+  if (t.phase === 'back' && rec && rec.sx !== undefined) {
+    const k = clamp(Math.hypot(u.x - rec.cx, u.y - rec.cy) / 0.6, 0, 1);
+    if (k >= 1) { HARV_SPOTS.delete(u.id); return null; }
+    return { kind: 'walk', dx: (rec.sx - u.x) * (1 - k), dy: (rec.sy - u.y) * (1 - k), jit: k };
+  }
+  if (t.phase !== 'toNode' && t.phase !== 'work') HARV_SPOTS.delete(u.id);
+  return null;
+}
+
+/**
+ * The moves of each job, from the clock: lunge (forward, tiles), yaw (turn, radians) and shake (sideways, tiles)
+ * for the body; fwd and lat (tiles from where it stands, along and across its facing) for the tool's head.
+ */
+function harvestAnim(hk, u, prog, T) {
+  const tm = R.time, TAU = Math.PI * 2, off = hash2(u.id, 7, 3);
+  const a = { lunge: 0, yaw: 0, shake: 0, fwd: 0.3, lat: 0, off };
+  if (hk === 'cut' || hk === 'vein') {
+    // Scything: the arm swings its blade in an arc across the stand, and the body turns with it.
+    a.w = TAU * (hk === 'vein' ? 0.9 : 1.25);
+    a.ang = a.w * tm + off * TAU;
+    const th = 0.6 * Math.sin(a.ang + 0.5);
+    a.fwd = 0.08 + 0.3 * Math.cos(th); a.lat = 0.3 * Math.sin(th);
+    a.yaw = (hk === 'vein' ? 0.14 : 0.18) * Math.sin(a.ang);
+    a.lunge = 0.03;
+  } else if (hk === 'drill' || hk === 'drillU') {
+    // Drilling: the arm reaches out, the bit bores in (the robot shaking with it), pulls out, and moves along.
+    a.P = 2.4;
+    const q = tm / a.P + off * 7, c = Math.floor(q), f = q - c;
+    const spot = (n) => (hash2(n, u.id, 11) - 0.5) * 0.26;
+    const reach = f < 0.12 ? smoothstep01(f / 0.12) : f > 0.88 ? smoothstep01((1 - f) / 0.12) : 1;
+    a.on = f > 0.14 && f < 0.86;
+    a.lat = lerp(spot(c - 1), spot(c), smoothstep01(clamp(f / 0.15, 0, 1)));
+    a.fwd = 0.2 + 0.18 * reach;
+    a.yaw = a.lat * 0.8;
+    a.lunge = 0.02 + (a.on ? 0.012 : 0);
+    a.shake = a.on ? Math.sin(tm * 95) * 0.006 + Math.sin(tm * 61) * 0.004 : 0;
+  } else if (hk === 'break' || hk === 'face') {
+    // Breaking: it rears back, swings the hammer in, and the blow throws chips and dust; then the next spot.
+    a.P = hk === 'face' ? 1.0 : 0.85;
+    const S0 = 0.62, q = tm / a.P + off * 7, f = q - Math.floor(q);
+    const spot = (n) => (hash2(n, u.id, 13) - 0.5) * 0.22;
+    const since = (f - S0 + 1) % 1, last = Math.floor(q - S0);
+    a.lunge = f < 0.55 ? -0.05 * smoothstep01(f / 0.55) : f < S0 ? -0.05 + 0.11 * (f - 0.55) / (S0 - 0.55) : 0.06 * (1 - smoothstep01((f - S0) / (1 - S0)));
+    a.lat = lerp(spot(last), spot(last + 1), smoothstep01(clamp((since - 0.05) / 0.5, 0, 1)));
+    a.hitLat = spot(last); a.age = since * a.P; a.blow = last;
+    a.reachHit = 0.3 + 0.06 * 1.5;
+    a.fwd = 0.3 + a.lunge * 1.5;
+    a.yaw = a.lat * 0.7;
+    a.shake = a.age < 0.12 ? Math.sin(a.age * 130) * 0.012 * (1 - a.age / 0.12) : 0;
+  } else if (hk === 'laser') {
+    // Scoring Crystal: the beam traces slowly across the cluster, and stops a moment as each piece comes away.
+    a.lat = 0.17 * Math.sin(TAU * 0.42 * tm + off * TAU);
+    a.fwd = 0.38;
+    a.yaw = Math.atan2(a.lat, 0.38) * 0.5;
+    a.lunge = 0.01;
+    const q = tm / 1.75 + off * 5;
+    a.f = q - Math.floor(q); a.cyc = Math.floor(q); a.on = a.f < 0.9;
+  } else if (hk === 'pick') {
+    // Picking: it turns to a plant, reaches in, snips, and lifts the pod back to its hopper; then the next one.
+    a.P = 0.9;
+    const q = tm / a.P + off * 7, c = Math.floor(q), f = q - c;
+    const side = (n) => (n % 2 ? 1 : -1) * (0.1 + 0.08 * hash2(n, u.id, 17));
+    const reach = f < 0.35 ? smoothstep01(f / 0.35) : f < 0.5 ? 1 : 1 - smoothstep01((f - 0.5) / 0.5);
+    a.f = f; a.cyc = c; a.reach = reach; a.snip = f >= 0.35 && f < 0.5;
+    a.side = side(c); a.sidePrev = side(c - 1);
+    a.lat = a.side * reach;
+    a.fwd = 0.16 + 0.2 * reach;
+    a.yaw = lerp(a.sidePrev, a.side, smoothstep01(clamp(f / 0.3, 0, 1))) * 1.1;
+    a.lunge = 0.035 * reach;
+  } else {
+    // Planting ('plant' crops, 'sow' Reedcane): three seedlings in a row, one poke each.
+    const k = Math.min(2, Math.floor(prog * 3)), q = prog * 3 - k, spot = (n) => (n - 1) * 0.15;
+    const reach = q < 0.35 ? smoothstep01(q / 0.35) : q < 0.6 ? 1 : 1 - smoothstep01((q - 0.6) / 0.4);
+    a.k = k; a.q = q; a.reach = reach;
+    a.lat = spot(k) * (0.3 + 0.7 * reach);
+    a.fwd = 0.16 + 0.2 * reach;
+    a.yaw = lerp(k ? spot(k - 1) : 0, spot(k), smoothstep01(clamp(q / 0.3, 0, 1))) * 0.9;
+    a.lunge = q > 0.38 && q < 0.6 ? 0.03 * Math.sin((Math.PI * (q - 0.38)) / 0.22) : 0;
+    a.puff = q >= 0.45 ? ((q - 0.45) * T) / 3 : -1; // seconds since this seed went in
+  }
+  return a;
+}
+
+/** A soft glow (added light), radius r, colour c [r, g, b], strength al. */
+function harvGlow(ctx, x, y, r, c, al) {
+  if (!(al > 0.01) || !(r > 0.5)) return;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${Math.min(1, al)})`);
+  g.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
+  const op = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = op;
+}
+
+/** A soft puff of dust or smoke (rgb a string 'r,g,b'), thickest in the middle. */
+function harvPuff(ctx, x, y, r, rgb, al) {
+  if (!(al > 0.01) || !(r > 0.5)) return;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb},${al})`); g.addColorStop(0.55, `rgba(${rgb},${al * 0.55})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+/** A four-pointed glint, radius r. */
+function harvStar(ctx, x, y, r, al) {
+  if (r < 0.6 || al <= 0.02) return;
+  ctx.fillStyle = `rgba(235,252,255,${Math.min(1, al)})`;
+  ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.18, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.18, y); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x, y + r * 0.18); ctx.lineTo(x + r, y); ctx.lineTo(x, y - r * 0.18); ctx.closePath(); ctx.fill();
+}
+
+/** A stream of n bits, `rate` a second each: fn(k, ph, born) with ph going 0 → 1 over a bit's life (born numbers it). */
+function harvBits(n, rate, id, salt, fn) {
+  for (let k = 0; k < n; k++) {
+    const x = R.time * rate + k / n + hash2(k, id, salt), born = Math.floor(x);
+    fn(k, x - born, born);
+  }
+}
+
+/** The arm from the robot (x0, y0) out to its tool (x1, y1), bent at the elbow (screen pixels). */
+function drawToolArm(ctx, x0, y0, x1, y1, z, bend) {
+  const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+  const mx = (x0 + x1) / 2 - (dy / len) * len * 0.22 * bend, my = (y0 + y1) / 2 + (dx / len) * len * 0.22 * bend;
+  const path = (o) => { ctx.beginPath(); ctx.moveTo(x0 + o, y0 + o * 1.3); ctx.lineTo(mx + o, my + o * 1.3); ctx.lineTo(x1 + o, y1 + o * 1.3); ctx.stroke(); };
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(10,8,5,0.28)'; ctx.lineWidth = Math.max(2, z * 0.045); path(z * 0.03); // (its shadow)
+  ctx.strokeStyle = '#262a30'; ctx.lineWidth = Math.max(1.6, z * 0.04); path(0);
+  ctx.strokeStyle = '#a9b2bc'; ctx.lineWidth = Math.max(0.7, z * 0.013); path(0);
+  ctx.fillStyle = '#d9a72c';
+  ctx.beginPath(); ctx.arc(mx, my, Math.max(1, z * 0.022), 0, Math.PI * 2); ctx.fill();
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+}
+
+const REED_BITS = ['200,184,106', '143,174,74', '226,212,154'];
+const ORE_BITS = ['160,82,45', '96,74,58', '201,162,122'];
+const STONE_BITS = ['141,138,132', '110,107,102', '179,174,165'];
+const LEAF_BITS = ['111,174,60', '155,207,90', '86,140,48'];
+
+/** The seedlings a planting robot has put in so far (and the soil it turned), under the robot. */
+function drawHarvestUnder(ctx, u, pose, ox, oy, z) {
+  if (pose.hk !== 'plant' && pose.hk !== 'sow') return;
+  const a = pose.a, ax = pose.ax, ay = pose.ay, px = -ay, py = ax;
+  for (let n = 0; n <= a.k; n++) {
+    const grow = n < a.k ? 1 : clamp((a.q - 0.5) / 0.25, 0, 1);
+    if (n === a.k && a.q < 0.45) continue;
+    const x = ox + (pose.stx + ax * 0.36 + px * (n - 1) * 0.15) * z, y = oy + (pose.sty + ay * 0.36 + py * (n - 1) * 0.15) * z;
+    ctx.fillStyle = 'rgba(70,46,28,0.55)';
+    ctx.beginPath(); ctx.ellipse(x, y + z * 0.01, z * 0.045, z * 0.03, 0, 0, Math.PI * 2); ctx.fill();
+    if (grow <= 0) continue;
+    const h = z * 0.06 * grow;
+    ctx.strokeStyle = '#6fbf3e'; ctx.lineWidth = Math.max(1, z * 0.014); ctx.lineCap = 'round';
+    if (pose.hk === 'sow') {
+      // Reedcane: a tuft of thin blades, arching out from one root, paler at the tips.
+      ctx.fillStyle = '#4f8f34';
+      ctx.beginPath(); ctx.ellipse(x, y, h * 0.22, h * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      for (const [ang, len] of [[-0.62, 0.85], [-0.22, 1.2], [0.15, 1.05], [0.55, 0.9]]) {
+        const tx = x + Math.sin(ang) * h * len, ty = y - Math.cos(ang) * h * len;
+        ctx.strokeStyle = '#6fbf3e';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + Math.sin(ang) * h * 0.2, y - h * len * 0.7, tx, ty); ctx.stroke();
+        ctx.fillStyle = '#b7e07a'; ctx.fillRect(tx - 0.6, ty - 0.6, 1.2, 1.2);
+      }
+    } else {
+      // An energy crop: a stem and two leaves.
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h * 0.7); ctx.stroke();
+      ctx.fillStyle = '#7ccf48';
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + s * h * 0.38, y - h * 0.75, h * 0.38, h * 0.18, s * -0.5, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.lineCap = 'butt';
+  }
+}
+
+/** The tool, its arm and what flies off the work, over the robot (sx, sy: the robot as drawn, screen pixels). */
+function drawHarvest(ctx, u, pose, sx, sy, z) {
+  const a = pose.a, hk = pose.hk, ax = pose.ax, ay = pose.ay, px = -ay, py = ax, tm = R.time, TAU = Math.PI * 2;
+  const glow = 0.75 + 0.5 * (todNow().lights || 0), fine = z >= 14;
+  // Where it stands (without the lunge and shake) and a point on the work from there.
+  const bx = sx - (ax * a.lunge + px * a.shake) * z, by = sy - (ay * a.lunge + py * a.shake) * z;
+  const at = (fwd, lat) => [bx + (ax * fwd + px * lat) * z, by + (ay * fwd + py * lat) * z];
+  const [hx, hy] = at(a.fwd, a.lat);
+  const shx = sx + Math.cos(pose.face) * z * 0.1, shy = sy + Math.sin(pose.face) * z * 0.1;
+  const back = Math.atan2(-ay, -ax);
+  ctx.save();
+  if (hk === 'cut' || hk === 'vein') {
+    const vein = hk === 'vein', headAt = (ang) => { const th = 0.6 * Math.sin(ang + 0.5); return at(0.08 + 0.3 * Math.cos(th), 0.3 * Math.sin(th)); };
+    if (vein) harvGlow(ctx, hx, hy, z * 0.2, [190, 130, 255], 0.35 * glow * (0.75 + 0.25 * Math.sin(tm * 7)));
+    if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, 0.6);
+    // The blade's sweep: a fading trail along the arc it just cut.
+    ctx.lineCap = 'round';
+    for (let k = 1; k <= 6; k++) {
+      const p0 = headAt(a.ang - a.w * 0.025 * (k - 1)), p1 = headAt(a.ang - a.w * 0.025 * k);
+      ctx.strokeStyle = vein ? `rgba(205,150,255,${0.55 * (1 - k / 7) * glow})` : `rgba(255,255,255,${0.42 * (1 - k / 7)})`;
+      ctx.lineWidth = Math.max(1, z * 0.03 * (1 - k / 8));
+      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+    }
+    const dir = Math.atan2(hy - shy, hx - shx);
+    ctx.strokeStyle = vein ? '#f0dcff' : '#eef3f6'; ctx.lineWidth = Math.max(1, z * 0.018);
+    ctx.beginPath(); ctx.arc(hx, hy, z * 0.05, dir - 1.2, dir + 1.2); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // What it cuts: flecks of cane thrown off the way the blade was going, or the vein's glowing motes rising.
+    harvBits(vein ? 8 : 7, vein ? 0.9 : 1.6, u.id, vein ? 23 : 21, (k, ph, born) => {
+      const angB = a.ang - (a.w * ph) / (vein ? 0.9 : 1.6), [x0, y0] = headAt(angB), h1 = hash2(k, born, u.id), h2 = hash2(born, k, 5);
+      if (vein) {
+        const x = x0 + Math.sin(ph * 5 + k) * z * 0.06 + (h1 - 0.5) * z * 0.2 * ph, y = y0 - ph * z * 0.45;
+        harvGlow(ctx, x, y, z * (0.1 - 0.05 * ph), k % 2 ? [110, 240, 225] : [200, 140, 255], 0.85 * (1 - ph) * glow);
+        ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - ph)})`;
+        ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+        return;
+      }
+      const side = Math.cos(angB + 0.5) >= 0 ? 1 : -1, sp = 0.22 + 0.3 * h1;
+      const x = x0 + (px * side * sp - ax * 0.15 * h2) * ph * z, y = y0 + (py * side * sp - ay * 0.15 * h2) * ph * z - Math.sin(Math.PI * ph) * z * 0.06;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ph * 6 * side + born);
+      ctx.fillStyle = `rgba(${REED_BITS[(k + born) % 3]},${1 - ph * ph})`;
+      ctx.fillRect(-z * 0.035, -z * 0.008, z * 0.07, Math.max(1, z * 0.016));
+      ctx.restore();
+    });
+  } else if (hk === 'drill' || hk === 'drillU') {
+    const U = hk === 'drillU';
+    if (a.on) {
+      if (U) harvGlow(ctx, hx, hy, z * 0.22, [110, 255, 90], 0.4 * glow * (0.8 + 0.2 * Math.sin(tm * 9)));
+      else harvPuff(ctx, hx, hy, z * (0.16 + 0.02 * Math.sin(tm * 5)), '140,108,84', 0.32);
+    }
+    if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, -0.5);
+    // The bit, turning while it bores.
+    const br = Math.max(1.5, z * 0.045);
+    ctx.fillStyle = '#41464e'; ctx.beginPath(); ctx.arc(hx, hy, br, 0, TAU); ctx.fill();
+    ctx.strokeStyle = U ? '#b9ffb0' : '#cfd4dc'; ctx.lineWidth = Math.max(0.8, z * 0.012);
+    const spin = a.on ? tm * 40 : 0;
+    for (let k = 0; k < 3; k++) { const s = spin + (k * TAU) / 3; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(s) * br, hy + Math.sin(s) * br); ctx.stroke(); }
+    // Cuttings sprayed out of the hole (glowing green ones from Uranium), and sparks off the bit.
+    harvBits(9, 2.4, u.id, 31, (k, ph, born) => {
+      const qb = (tm - ph / 2.4) / a.P + a.off * 7, fb = qb - Math.floor(qb);
+      if (!(fb > 0.16 && fb < 0.84)) return;
+      const [x0, y0] = at(0.38, (hash2(Math.floor(qb), u.id, 11) - 0.5) * 0.26);
+      const ang = hash2(k, born, u.id) * TAU, d = (0.12 + 0.2 * hash2(born, k, u.id)) * ph;
+      const x = x0 + Math.cos(ang) * d * z, y = y0 + Math.sin(ang) * d * z + ph * ph * z * 0.1, sz = Math.max(1.2, z * 0.028 * (1 - ph * 0.4));
+      if (U) { harvGlow(ctx, x, y, z * 0.06, [120, 255, 100], 0.9 * (1 - ph) * glow); ctx.fillStyle = `rgba(200,255,180,${1 - ph})`; }
+      else ctx.fillStyle = `rgba(${ORE_BITS[(k + born) % 3]},${1 - ph * ph})`;
+      ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+    });
+    if (a.on) harvBits(4, 4, u.id, 37, (k, ph, born) => {
+      if (hash2(born, k, 9) > 0.5) return;
+      const ang = hash2(k, born, 3) * TAU, d = ph * z * 0.22;
+      ctx.strokeStyle = `rgba(255,${190 + Math.round(60 * (1 - ph))},110,${1 - ph})`; ctx.lineWidth = Math.max(1, z * 0.014);
+      ctx.beginPath(); ctx.moveTo(hx + Math.cos(ang) * d, hy + Math.sin(ang) * d); ctx.lineTo(hx + Math.cos(ang) * (d + z * 0.04), hy + Math.sin(ang) * (d + z * 0.04)); ctx.stroke();
+    });
+  } else if (hk === 'break' || hk === 'face') {
+    const F = hk === 'face', [ix, iy] = at(a.reachHit + 0.03, a.hitLat), age = a.age;
+    // The dust of the last blow, billowing out and settling.
+    for (let k = 0; k < 3; k++) {
+      const r = z * (0.08 + age * (F ? 0.24 : 0.2) + k * 0.02), al = (F ? 0.55 : 0.5) * (1 - age / a.P);
+      harvPuff(ctx, ix + (k - 1) * px * z * 0.08 - ax * age * z * 0.12, iy + (k - 1) * py * z * 0.08 - ay * age * z * 0.12 - age * z * 0.06, r, F ? '205,192,172' : '210,201,186', al);
+    }
+    if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, 0.45);
+    // The hammer's head, square to the arm, its striking face bright.
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(hy - shy, hx - shx));
+    ctx.fillStyle = '#31353b'; ctx.fillRect(-z * 0.035, -z * 0.048, z * 0.075, z * 0.096);
+    ctx.fillStyle = '#9aa2ab'; ctx.fillRect(z * 0.03, -z * 0.048, Math.max(1, z * 0.014), z * 0.096);
+    ctx.restore();
+    // The blow: a flash, and chips of stone flung back off the rock, hopping and tumbling.
+    if (age < 0.09) {
+      harvGlow(ctx, ix, iy, z * 0.2 * (1 - age / 0.09), [255, 240, 205], 0.9);
+      harvStar(ctx, ix, iy, z * 0.13 * (1 - age / 0.09), 0.9);
+    }
+    if (age < 0.7) for (let k = 0; k < (F ? 7 : 6); k++) {
+      const h1 = hash2(k, a.blow, u.id), h2 = hash2(a.blow, k, u.id + 3), ph = age / 0.7;
+      const ang = back + (h1 - 0.5) * 3.4, d = (0.12 + 0.3 * h2) * (1 - (1 - ph) * (1 - ph));
+      const x = ix + Math.cos(ang) * d * z, y = iy + Math.sin(ang) * d * z - Math.sin(Math.PI * ph) * z * (0.05 + 0.08 * h1);
+      const sz = z * (0.025 + 0.03 * h2);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ph * 8 * (h1 - 0.5) + k);
+      ctx.fillStyle = `rgba(${STONE_BITS[(k + a.blow) % 3]},${ph < 0.7 ? 1 : (1 - ph) / 0.3})`;
+      ctx.fillRect(-sz / 2, -sz / 2, sz, sz * 0.8);
+      ctx.restore();
+    }
+  } else if (hk === 'laser') {
+    const [qx, qy] = [hx, hy], ex = sx + Math.cos(pose.face) * z * 0.18, ey = sy + Math.sin(pose.face) * z * 0.18;
+    // The score it has cut across the cluster so far, brighter as it goes deeper.
+    const [l0x, l0y] = at(a.fwd, -0.17), [l1x, l1y] = at(a.fwd, 0.17);
+    ctx.strokeStyle = `rgba(170,245,255,${0.15 + 0.35 * pose.prog})`; ctx.lineWidth = Math.max(1, z * 0.012);
+    ctx.beginPath(); ctx.moveTo(l0x, l0y); ctx.lineTo(l1x, l1y); ctx.stroke();
+    if (a.on) {
+      const fl = 0.85 + 0.15 * Math.sin(tm * 53), op = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (const [w, c, al] of [[0.07, '60,200,255', 0.22 * glow], [0.03, '140,235,255', 0.6], [0.01, '255,255,255', 0.95]]) {
+        ctx.strokeStyle = `rgba(${c},${al * fl})`; ctx.lineWidth = Math.max(w === 0.01 ? 1 : 1.5, z * w);
+        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(qx, qy); ctx.stroke();
+      }
+      ctx.globalCompositeOperation = op; ctx.lineCap = 'butt';
+      harvGlow(ctx, qx, qy, z * 0.15, [160, 240, 255], 0.85 * fl * glow);
+      harvGlow(ctx, ex, ey, z * 0.08, [120, 220, 255], 0.6 * glow);
+    }
+    ctx.fillStyle = '#2a2f36'; ctx.beginPath(); ctx.arc(ex, ey, Math.max(1.2, z * 0.03), 0, TAU); ctx.fill();
+    ctx.fillStyle = a.on ? '#bff6ff' : '#4f8fa0'; ctx.beginPath(); ctx.arc(ex, ey, Math.max(0.8, z * 0.014), 0, TAU); ctx.fill();
+    // Glints twinkling over the cluster; a piece coming away as each pass ends; slivers off the beam's spot.
+    harvBits(4, 0.7, u.id, 41, (k, ph, born) => {
+      const [x, y] = at(0.38 + (hash2(k, born, u.id) - 0.5) * 0.36, (hash2(born, k, u.id) - 0.5) * 0.46);
+      harvStar(ctx, x, y, z * 0.075 * Math.sin(Math.PI * ph), 0.85);
+    });
+    if (!a.on) harvStar(ctx, qx, qy, z * 0.16 * Math.sin((Math.PI * (a.f - 0.9)) / 0.1), 1);
+    if (a.on) harvBits(5, 1.8, u.id, 43, (k, ph, born) => {
+      const tb = tm - ph / 1.8, [x0, y0] = at(0.38, 0.17 * Math.sin(TAU * 0.42 * tb + a.off * TAU));
+      const ang = back + (hash2(k, born, u.id) - 0.5) * 3.6, d = 0.22 * ph;
+      const x = x0 + Math.cos(ang) * d * z, y = y0 + Math.sin(ang) * d * z - Math.sin(Math.PI * ph) * z * 0.05, r = Math.max(1, z * 0.022);
+      ctx.fillStyle = `rgba(200,250,255,${1 - ph})`;
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.7, y + r * 0.6); ctx.lineTo(x - r * 0.7, y + r * 0.6); ctx.closePath(); ctx.fill();
+    });
+  } else {
+    // Agribots: an arm with a two-fingered gripper, open as it reaches and closing on the stem (or the seed).
+    const pick = hk === 'pick';
+    if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, 0.5);
+    const dirA = Math.atan2(hy - shy, hx - shx), open = pick ? (a.snip || a.f >= 0.5 ? 0.12 : 0.5) : a.q < 0.5 ? 0.14 : 0.45;
+    ctx.strokeStyle = '#d7dce1'; ctx.lineWidth = Math.max(1, z * 0.016); ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(dirA + s * open) * z * 0.06, hy + Math.sin(dirA + s * open) * z * 0.06); ctx.stroke(); }
+    ctx.lineCap = 'butt';
+    if (pick) {
+      // The pod it snipped, carried back along the arm to the hopper.
+      if (a.f >= 0.5 && a.f < 0.85) {
+        const [x0, y0] = at(0.36, a.side), k = smoothstep01((a.f - 0.5) / 0.35), x = lerp(x0, sx, k), y = lerp(y0, sy, k);
+        ctx.fillStyle = '#ee5a86'; ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, z * 0.035), 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(255,225,235,0.85)'; ctx.beginPath(); ctx.arc(x - z * 0.01, y - z * 0.01, Math.max(0.6, z * 0.012), 0, TAU); ctx.fill();
+      }
+      // Leaves fluttering down from the last two plants picked.
+      for (const [n, side, age] of [[a.cyc, a.side, (a.f - 0.35) * a.P], [a.cyc - 1, a.sidePrev, (a.f + 0.65) * a.P]]) {
+        if (age < 0 || age > 1.1) continue;
+        const [x0, y0] = at(0.36, side), ph = age / 1.1;
+        for (let k = 0; k < 3; k++) {
+          const h1 = hash2(k, n, u.id), ang = back + (h1 - 0.5) * 4, d = (0.08 + 0.12 * hash2(n, k, u.id)) * (1 - (1 - ph) * (1 - ph));
+          const x = x0 + Math.cos(ang) * d * z + Math.sin(ph * 9 + k) * z * 0.025, y = y0 + Math.sin(ang) * d * z - Math.sin(Math.PI * ph) * z * 0.07 + ph * z * 0.04;
+          ctx.fillStyle = `rgba(${LEAF_BITS[(k + n) % 3]},${1 - ph * ph})`;
+          ctx.beginPath(); ctx.ellipse(x, y, Math.max(1, z * 0.03), Math.max(0.6, z * 0.014), Math.sin(ph * 7 + k) * 1.2 + h1 * 3, 0, TAU); ctx.fill();
+        }
+      }
+    } else if (a.puff >= 0 && a.puff < 0.6) {
+      // The soil turned up where the seed went in.
+      const [x0, y0] = at(0.36, (a.k - 1) * 0.15), ph = a.puff / 0.6;
+      harvPuff(ctx, x0, y0 - ph * z * 0.03, z * (0.05 + ph * 0.1), '128,98,66', 0.45 * (1 - ph));
+      for (let k = 0; k < 5; k++) {
+        const h1 = hash2(k, a.k, u.id + 11), ang = h1 * TAU, d = 0.09 * (1 - (1 - ph) * (1 - ph));
+        const x = x0 + Math.cos(ang) * d * z, y = y0 + Math.sin(ang) * d * z - Math.sin(Math.PI * ph) * z * 0.05, sz = Math.max(1, z * 0.022);
+        ctx.fillStyle = `rgba(${k % 2 ? '107,74,47' : '138,100,64'},${1 - ph})`;
+        ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+      }
+    }
+  }
+  ctx.restore();
 }
 
 /** A Freight Truck seen from above: a team-coloured cab and a flatbed with its load of crates (over its art, if any). */
@@ -5120,6 +5836,7 @@ function refreshOverlay(type) {
 function render(dtReal) {
   R.time += dtReal;
   R.dt = dtReal;
+  if (typeof cursorTick === 'function') cursorTick(R.canvas); // (the mouse cursor follows what's under it: js/cursor.js)
   const ctx = R.ctx, z = R.cam.z, began = performance.now(), fw = R.fw && R.fw.t0 ? R.fw : null;
   if (fw) { fw.other += began - fw.t0; fw.t0 = 0; } // (what the frame did before drawing, and below how long drawing took: see watchFrameRate)
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
@@ -5146,11 +5863,13 @@ function render(dtReal) {
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
+  if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, false); // (and a Sapper's fresh ridge, where the colony can see it)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawBiomeGlow(ctx, ox, oy, z);
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
+  if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -5249,6 +5968,7 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
+  if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
   if (typeof faunaGround === 'function') faunaGround(ctx, ox, oy, z, v0, v1); // the wildlife on the ground and in the trees (looks only: js/wildlife.js)
   drawPlans(ctx, ox, oy, z, inView);
@@ -5349,13 +6069,17 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power)
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
+      const dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1; // (a Leech drinking from it: its lights dim)
+      if (dim < 1) ctx.globalAlpha *= dim;
       pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#a46cff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      if (dim < 1) ctx.globalAlpha /= dim;
     }
+    drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
     if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
-    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused && !shorted(e)) drawSearchlight(ctx, e, ox, oy, z);
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
@@ -5400,6 +6124,13 @@ function render(dtReal) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
+      // Working bots act out their job (building, paving, gathering): a pose, plus effects under and over them.
+      const pose = workPose(e);
+      if (pose) {
+        if (pose.jit !== undefined) { jx *= pose.jit; jy *= pose.jit; } // (a gatherer stands just where it works)
+        jx += pose.dx; jy += pose.dy;
+        drawWorkUnder(ctx, e, pose, ox, oy, z);
+      }
       if (e.owner === ME && !R.clean && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
       // Your Howitzers, zoomed out: a marker over each, so they don't get lost among the trucks.
       if (e.owner === ME && !R.clean && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[ME]);
@@ -5409,9 +6140,6 @@ function render(dtReal) {
         ctx.lineWidth = Math.max(1.5, z * 0.045);
         ctx.beginPath(); ctx.ellipse(ox + (e.x + jx) * z, oy + (e.y + jy) * z + z * 0.06, z * 0.3, z * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
       }
-      // Working bots act out their job (building, paving): a pose, plus effects under and over them.
-      const pose = workPose(e);
-      if (pose) { jx += pose.dx; jy += pose.dy; drawWorkUnder(ctx, e, pose, ox, oy, z); }
       const face = e.face;
       e.face = pose && pose.face !== undefined ? pose.face : e.rface; // draw with the smoothed heading
       // Being taken apart at a Bot Foundry: it fades as the parts come off.
@@ -5431,6 +6159,7 @@ function render(dtReal) {
   drawSmoke(ctx, ox, oy, z, inView);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawAirLayer(ctx, ox, oy, z, inView);
+  if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
@@ -7109,6 +7838,8 @@ function drawEffects(ctx, ox, oy, z) {
       if (TOD.active && typeof drawLightPool === 'function' && k < 0.6) { ctx.globalAlpha = 1 - k / 0.6; drawLightPool(ctx, x, y, w * 0.6, '#ff8a2a'); ctx.globalAlpha = 1; }
       continue;
     }
+    if (f.type === 'spit') { drawSpitFx(ctx, f, ox, oy, z, k); continue; } // the Spitter's volley
+    if (f.type === 'spitHit') { drawSpitHitFx(ctx, f, ox, oy, z, k); continue; }
     // Effect art, if a sprite sheet for this effect is installed.
     const sheet = FX_ART[f.type] && ART[FX_ART[f.type]];
     // Pulse-laser glows and coloured sparks (scuffles, creatures) stay drawn in code, in their own colour.

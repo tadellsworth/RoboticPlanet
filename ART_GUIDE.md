@@ -1490,10 +1490,41 @@ old survey stake on each tile (`oil`, the pump spot, its lamp's light in `oil-gl
 stain shows. No stakes in the Hollow (the Pathfinder never mapped it: LORE.md): its seeps are the soaked ground alone. All 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they
 have no time-of-day versions; their light is in the night glow map (`resourceGlow`).
 
+### Batch 17: the Leech, the Spitter and the Sapper, and the Murmur's light (installed)
+
+Rendered with `renderer/b/murmur_moles.js` (the owner approved the forms sheet, `renderer/preview/forms_sheet.py`), then
+`renderer/tools/install_murmur_forms.py` writes the WebP files (RENDERER.md, "The Leech, the Spitter and the Sapper").
+Every Murmur key (the Scuttler's and the Brute's too, re-rendered with the rest) loads only in a game with the Murmur:
+`ensureMurmurArt` in `js/render.js`, and in the single file the bundle `dist/murmur.js` beside the page, with their
+morning, evening and night sets (`MURMUR_TOD_KEYS` in `art/tod/tod-keys.js`).
+
+| Keys | What | How it's drawn |
+|---|---|---|
+| `scuttler-f0…3`, `brute-f0…3`, `leech-f0…3`, `spitter-f0…3`, `sapper-f0…3` | Walking frames, 256×256, straight down, facing right, no ground or shadow | The frame `MURMUR_LOOK.size` tiles across: Scuttler 0.62, Spitter 0.73, Leech 0.81, Brute 0.82, Sapper 0.9 (true to one another but the Brute, shrunk to fit the map), turned to face, a shadow under it |
+| `leech-feed-f0…3` | Feeding: the star pressed to the power, pulsing open and lit, the sac swelling with each draw | Looped while `u.pose` is `feed` (0.18 s a frame) |
+| `spitter-spit-f0…3` | Wind-up (head back, pouches swollen and burning), the spit (jaws wide, the volley leaving), recoil (head thrust on, pouches emptied, the last grit leaving), recovering | `spit`: 0.42, 0.14, 0.2 and 0.24 s |
+| `sapper-dig-f0…3` | Digging in, nose first: each spade hand in turn thrown up and back with a load of soil, clods in the air over its back, a crater of fresh soil round the hole | `dig`, 0.13 s a frame |
+| `sapper-under-f0…3` | Under the ground: only a dome of soil heaving and splitting, a short ridge behind it, crystal chips turned up in the cracks | `under`, 0.22 s a frame, only within sight of the colony (6 tiles of its buildings, bots or lamps); its fresh ridge is drawn behind it in code, like the tunnels |
+| `sapper-up-f0…4` | Coming up: the ground bursting, star and fingers breaking through, head and hands out, shoulders, climbing out | `up`, 0.17 s a frame, once, held on the last |
+| `<every key above>-glow` | The crystal's light alone (and the Leech's sac, the Spitter's pouches): the night render's glow pass, bloomed, one gain per creature | Added over the sprite (`murmurGlow`) as bright as it's charged (`u.charge`), weak by day and full at night, breathing |
+| `fx-spit` (+ `fx-spit-glow`) | The Spitter's volley in flight: five knots of crystal shards trailing grit, pointing right | 0.6 of a tile across, from the Spitter to its target over the effect's life, its light added at night |
+| `fx-spit-hit` | The volley striking: 8 frames of 128 in a row (a violet-white flash, splinters flying back, charge crawling over the struck face, embers), from `renderer/fx/spit_impact.py` | One tile across, turned the way the volley came |
+
+The sprites are rendered hungry (`charge=0.3`): their light is added by the game, so a hungry one is dull and a full
+one burns. Everything else is drawn in code: the violet light on the ground round every Murmur at dusk and night
+(the light pool tinted `WILD_COLOR`, as bright as it's charged), lamps and building glow dimming where a Leech drinks, a
+shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
+(`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
 - Laser beams, the white blast flash and the Pulse Turret's glow (the other effects are in Batch 15)
+- The work animations: a builder's weld, paving, and the gathering moves (scything Reedcane and Bloom veins, drilling
+  Ore and Uranium, hammering boulders and rock faces, the Crystal cutting beam, an Agribot picking and planting) are
+  drawn in code, with the tool on a drawn arm (`drawToolArm`, `drawHarvest` in `js/render.js`). Small tool sprites
+  (a blade, a drill bit, a hammer head, a gripper; seen from straight above, about 0.1 tile) could replace the drawn
+  heads later; the chips, dust, motes and glints would stay code-drawn
 - App icon: its source is `icons/icon.svg` (the planet, ring and T in flat colours). To change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
   `apple-touch-icon.png` at 180×180 and `favicon-32.png`), all square and opaque
 - 3D buildings: the set from Claude Design is installed (harvester, quarry, mine, tap, smelter, fab, foundry, depot,
