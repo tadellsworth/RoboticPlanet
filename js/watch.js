@@ -214,57 +214,59 @@ function watchBand(r) {
 }
 
 /**
- * What colony P is up to, read from the computer's own plans (P.stormOn, P.march and P.siegeAt, P.homeCall, its
- * Missiles and bombers, P.raid, P.pushOn, P.massFor: see js/ai.js) and what it has (`army`: its warbots). Shared by
- * the report here (watchDoing) and the scouts of your own games (js/scout.js), which each put it in their own words.
- * { kind, s (how much it matters), x, y (where its band is, when one is out) } and, by kind:
- *   storm   storming foe's Command Base: n warbots in the band, go once it goes in (else it's forming up)
- *   march   n warbots on the march, against building b (when it has picked one)
+ * Everything colony P is up to, the most important first, read from the computer's own plans (P.stormOn, P.march and
+ * P.siegeAt, P.homeCall, its Missiles and bombers, P.raid, P.pushOn, P.massFor: see js/ai.js) and what it has (`army`:
+ * its warbots). Shared by the report here (watchDoing: the first) and the scouts of your own games (js/scout.js), which
+ * each put it in their own words. Each is { kind, s (how much it matters), x, y (where its band is, when one is out) }
+ * and, by kind:
+ *   storm   storming foe's Command Base (flag id): n warbots in the band, go once it goes in (else it's forming up)
+ *   march   n warbots on the march (flag id), against building b (when it has picked one)
  *   home    under attack at home: its warbots kept back to hold its base
  *   fire    Missiles in the air (shots) or bombers out (bombs), the last at colony foe's land
- *   raid    a band of n out to raid the road at (tx, ty), foe's (or -1); forming: still slipping out to it
- *   push    a Warden's big push: every warbot it can spare
+ *   raid    a band of n out to raid the road at (tx, ty) (flag id), foe's (or -1); forming: still slipping out to it
+ *   push    a Warden's big push (till `until`): every warbot it can spare
  *   mass    massing for a push, on building b when it has one: army of the need it waits for
- *   opening its first minutes; build: building up (built buildings, workers)
+ *   opening its first minutes; build: building up (built buildings, workers); only when it's up to nothing else
  */
-function rivalPlan(P, army) {
-  const p = P.id;
+function rivalPlans(P, army) {
+  const p = P.id, out = [];
   const target = (at) => { const b = at && inMap(at.x, at.y) ? getE(S.bAt[tIdx(at.x, at.y)]) : null; return b && !b.dead && b.owner >= 0 && b.owner !== p ? b : null; };
   if (P.stormOn) {
     const r = rallyById(P.stormOn.id), at = r ? watchBand(r) : null;
-    return { kind: 'storm', s: 100, foe: P.stormOn.foe, go: !!P.stormOn.go, n: at ? at.n : 0, x: at && at.x, y: at && at.y };
+    out.push({ kind: 'storm', s: 100, id: P.stormOn.id, foe: P.stormOn.foe, go: !!P.stormOn.go, n: at ? at.n : 0, x: at && at.x, y: at && at.y });
   }
   const march = P.march && rallyById(P.march);
-  if (march) {
+  if (march && !(P.stormOn && P.stormOn.id === P.march)) {
     const at = watchBand(march);
-    return { kind: 'march', s: 80, n: at.n, b: target(P.siegeAt), x: at.x, y: at.y };
+    out.push({ kind: 'march', s: 80, id: P.march, n: at.n, b: target(P.siegeAt), x: at.x, y: at.y });
   }
-  if (P.homeCall > S.time) return { kind: 'home', s: 72 };
+  if (P.homeCall > S.time) out.push({ kind: 'home', s: 72 });
   let shots = 0, bombs = 0, foe = -1;
   for (const m of S.missiles) {
     if (m.owner !== p || m.nuke || m.shell || m.rocket) continue;
     if (m.bomb) bombs++; else shots++;
     foe = watchOwner(m.x1, m.y1);
   }
-  if (shots || bombs) return { kind: 'fire', s: 66, shots, bombs, foe };
+  if (shots || bombs) out.push({ kind: 'fire', s: 66, shots, bombs, foe });
   const raid = P.raid && rallyById(P.raid.id);
   if (raid) {
     const forming = P.raid.to !== undefined, tx = forming ? (P.raid.to % S.W) + 0.5 : raid.x, ty = forming ? ((P.raid.to / S.W) | 0) + 0.5 : raid.y;
     const f = watchOwner(tx, ty), at = watchBand(raid);
-    return { kind: 'raid', s: 60, forming, foe: f >= 0 && f !== p ? f : -1, tx, ty, n: at.n, x: at.x, y: at.y };
+    out.push({ kind: 'raid', s: 60, id: P.raid.id, forming, foe: f >= 0 && f !== p ? f : -1, tx, ty, n: at.n, x: at.x, y: at.y });
   }
-  if (P.pushOn > S.time) return { kind: 'push', s: 56 };
-  if (P.massFor && S.time <= P.massFor.until) return { kind: 'mass', s: 50, b: target(P.siegeAt), army: Math.min(army, P.massFor.need), need: P.massFor.need };
-  if (S.time < 150) return { kind: 'opening', s: 10 };
+  if (P.pushOn > S.time) out.push({ kind: 'push', s: 56, until: P.pushOn });
+  if (P.massFor && S.time <= P.massFor.until) out.push({ kind: 'mass', s: 50, b: target(P.siegeAt), army: Math.min(army, P.massFor.need), need: P.massFor.need });
+  if (out.length) return out;
+  if (S.time < 150) return [{ kind: 'opening', s: 10 }];
   let built = 0, workers = 0;
   for (const b of S.buildings) if (!b.dead && b.owner === p && b.built) built++;
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') workers++;
-  return { kind: 'build', s: 10, built, workers };
+  return [{ kind: 'build', s: 10, built, workers }];
 }
 
 /** What colony P is doing, as the report says it: { s (how much it matters), t (the line), x, y (where) }. */
 function watchDoing(P, army) {
-  const p = P.id, The = watchThe(p, true), Thes = watchThes(p, true), d = rivalPlan(P, army);
+  const p = P.id, The = watchThe(p, true), Thes = watchThes(p, true), d = rivalPlans(P, army)[0];
   const t = (() => {
     switch (d.kind) {
       case 'storm': return d.go ? `${The} is storming ${watchThes(d.foe)} Command Base!` : `${The} is forming up to storm ${watchThes(d.foe)} Command Base.`;

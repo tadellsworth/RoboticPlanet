@@ -136,6 +136,10 @@ function initUI() {
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
+  const syncScouts = () => { $('p-scouts').textContent = `Scout reports: ${SCOUT.on ? 'On' : 'Off'}`; };
+  syncScouts();
+  $('p-scouts').onclick = () => { setScoutsOn(!SCOUT.on); syncScouts(); sfx('click'); };
   // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
   const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
   const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
@@ -7452,6 +7456,7 @@ function uiTick(dt) {
   siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
   if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
+  else scoutTick(); // (scout reports on the rivals, js/scout.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

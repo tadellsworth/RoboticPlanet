@@ -1655,7 +1655,7 @@ body.photo #minimap .mm-hide { display: none; }
    the selection go (nobody here plays a colony), and the Scout report card sits under the top bar, clear of the
    minimap. The setup screen (main menu, Watch a game) is a card like Missions'. */
 body.watching #goods, body.watching #pop, body.watching .objrow, body.watching #bottombar, body.watching #selbar, body.watching #groupbar,
-body.watching #nuke-card, body.watching #win-card, body.watching #event-card, body.watching #p-export { display: none !important; }
+body.watching #nuke-card, body.watching #win-card, body.watching #event-card, body.watching #p-export, body.watching #p-scouts { display: none !important; }
 body.watching .toprow { justify-content: flex-end; }
 /* (Statistics: the totals and "how busy your buildings were" are one colony's; the graphs, every colony's, stay.) */
 body.watching #st-body .stat-tiles, body.watching #st-body .chart-block:has(#st-bars) { display: none; }
