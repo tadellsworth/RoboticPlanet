@@ -342,8 +342,17 @@ These wait for a later expansion:
   drops; Uplinks stand under them), **Bloom veins for Fiber** (no light for Stalks or crops; harvesting veins draws
   the Murmur), **floating Crystal** (the richest Crystal on masses hanging over the chasms, reached by Ropeway or
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
-  Airfields). No solar flares. **The Murmur in Versus become a setting** (Off / Quiet / Active), Active by default in
-  the Hollow and usable on other maps too; the rival AI learns to live with them.
+  Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
+  same 12-minute clock, and the hum goes silent just before each one.
+- **The Murmur in regular games (decided by the owner, Nov 17; being built).** A Custom Game setting for every map,
+  **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
+  Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
+  new exits open along it, and more of them **pop out of the exits** to harass the colonies as they fight each other,
+  so the longer a game goes the bigger the networks and the raids. **At dawn the ones that came up go back down**; the
+  nests stay on the map and can be attacked by day (days to strike the nests, nights to hold the line). **Counterplay:**
+  warbots collapse a tunnel exit (it stays shut a while), and wrecking a nest makes its whole network die back.
+  Tunnels pass under roads, buildings and Walls. Quiet: fewer, slower tunnels and smaller packs. The rival AI learns to
+  live with them.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
