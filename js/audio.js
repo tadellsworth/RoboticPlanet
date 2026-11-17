@@ -18,8 +18,10 @@
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
  * groove while you build (three of them, taking turns every ten minutes of play: the original,
- * Night Drive and Horizon), a driving track when you're under attack or at war, and an alarm while a
- * nuclear missile is in the air. It's written a bar at a time from chord progressions, arpeggios,
+ * Night Drive and Horizon), a driving track when you're under attack or at war (two of them, a new
+ * fight taking the other: Overdrive and Redline), and an alarm while a nuclear missile is in the air.
+ * The campaign theme, The Long Silence, tells the story's arc from a level the game sets (musicStory):
+ * the Lore guide plays it while it's open. It's written a bar at a time from chord progressions, arpeggios,
  * bass lines, drum patterns and short melodies, arranged in 8-bar sections that bring parts in and
  * out, so it never loops exactly. On a computer a small card names each theme as it starts (MUSIC_TITLES).
  *
@@ -107,9 +109,11 @@ function buildAudioGraph(ac) {
   const feOut = ac.createGain(); feOut.gain.value = 0.55;
   A.fxEchoIn.connect(fe).connect(feLP).connect(feFb).connect(fe);
   feLP.connect(feOut).connect(A.fxBus);
-  // A soft clipper the blasts are driven into: grit and weight (and harmonics a phone speaker can play).
+  // A soft clipper the blasts are driven into: grit and weight (and harmonics a phone speaker can play). A gentler
+  // one gives Redline's bass its bite (mGrowl).
   A.boomCurve = new Float32Array(2048);
-  for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; A.boomCurve[i] = Math.tanh(x * 2.8) / Math.tanh(2.8); }
+  A.driveCurve = new Float32Array(2048);
+  for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; A.boomCurve[i] = Math.tanh(x * 2.8) / Math.tanh(2.8); A.driveCurve[i] = Math.tanh(x * 1.8) / Math.tanh(1.8); }
 
   A.musicBus = ac.createGain();
   A.musicBus.gain.value = musicLevel();
@@ -1427,10 +1431,10 @@ function jungleCall(g, dark) {
 
 /** Which mood the music should be in right now. */
 function musicMood() {
-  if (typeof UI === 'undefined' || !UI.inGame || !S) return 'menu';
+  if (typeof UI === 'undefined' || !UI.inGame || !S) return MUSIC.lore ? 'campaign' : 'menu';
   if (S.winner >= 0) return 'end';
   if (S.missiles.some((m) => m.nuke)) return 'nuke';
-  if (MUSIC.of !== S) { MUSIC.of = S; MUSIC.warUntil = 0; MUSIC.murmurUntil = 0; }
+  if (MUSIC.of !== S) { MUSIC.of = S; MUSIC.warUntil = 0; MUSIC.murmurUntil = 0; MUSIC.wars = 0; MUSIC.warAt = -Infinity; }
   // Under attack, raiders in your land, or your warbots in a fight: war, for at least 40 s after. The Murmur close to
   // your colony (MUSIC_MURMUR of them, in your land or near your buildings) bring in Night Murmurs instead, for at least
   // 35 s after: the war music comes in for them only when enemy robots are in your land too.
@@ -1451,7 +1455,19 @@ function musicMood() {
   const murmur = wild >= MUSIC_MURMUR;
   if (murmur) MUSIC.murmurUntil = S.time + 35;
   if (threat >= 3 && (robots > 0 || !murmur)) MUSIC.warUntil = S.time + 40;
-  return S.time < MUSIC.warUntil ? 'war' : S.time < (MUSIC.murmurUntil || 0) ? 'murmur' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
+  if (S.time < MUSIC.warUntil) return warTheme();
+  // (in the campaign, once it sets the story's level, its theme plays in place of the build themes)
+  return S.time < (MUSIC.murmurUntil || 0) ? 'murmur' : MUSIC.story != null ? 'campaign' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
+}
+
+/**
+ * The war theme for this fight. The two take turns: a new fight (war music again after WAR_GAP s of game time without
+ * it) takes the other one, and a game's first is Overdrive. Within a fight, it stays the same theme.
+ */
+function warTheme() {
+  if (S.time - MUSIC.warAt > WAR_GAP) MUSIC.wars++;
+  MUSIC.warAt = S.time;
+  return WAR_THEMES[(Math.max(1, MUSIC.wars) - 1) % WAR_THEMES.length];
 }
 
 /** Night Murmurs comes in with this many of the Murmur in your land or within MUSIC_MURMUR_NEAR tiles of your buildings. */
@@ -1459,11 +1475,50 @@ const MUSIC_MURMUR = 2, MUSIC_MURMUR_NEAR = 9;
 
 /** The build music's themes, taking turns every MUSIC_ROTATE seconds of play (a game starts on the first). */
 const BUILD_THEMES = ['build', 'build2', 'build3'], MUSIC_ROTATE = 600;
+/** The war music's themes, a new fight taking the next (warTheme): Overdrive, then Redline. */
+const WAR_THEMES = ['war', 'war2'], WAR_GAP = 30;
 /** Each theme's title, for the Now playing card (nowPlayingTick in ui.js); the menu plays a slow take on the main theme. */
-const MUSIC_TITLES = { menu: 'Lost in a Dream', build: 'Lost in a Dream', build2: 'Night Drive', build3: 'Horizon', war: 'Overdrive', nuke: 'Zero Hour', murmur: 'Night Murmurs' };
+const MUSIC_TITLES = { menu: 'Lost in a Dream', build: 'Lost in a Dream', build2: 'Night Drive', build3: 'Horizon', war: 'Overdrive', war2: 'Redline', nuke: 'Zero Hour', murmur: 'Night Murmurs', campaign: 'The Long Silence' };
+
+/**
+ * The campaign theme (The Long Silence) and how far into the story it is: `level` 0 (the landing) to 1 (the Silence)
+ * picks its stage (`stages` in MOODS.campaign) and how much of the Murmur is in the mix. The campaign (planned:
+ * CAMPAIGN.md) sets it chapter by chapter, (mission - 1) / 14 for its fifteen; set, the theme plays in a game in place
+ * of the build themes (the war, the Murmur and a nuke still take over), and null ends it. Display only, like all the
+ * music: nothing in the game depends on it.
+ */
+function musicStory(level) { MUSIC.story = level == null ? null : clampV(level); }
+/** The Lore guide is open (openLore/closeLore in ui.js): the campaign theme plays at LORE_STORY while it is. */
+function musicLore(open) {
+  MUSIC.lore = !!open;
+  if (AUDIO.ctx) MUSIC.want = musicMood();
+}
+/** The story's level the Lore guide plays the campaign theme at: the first murmur, quiet enough to read by. */
+const LORE_STORY = 0.33;
+/** The level the campaign theme plays at now. */
+function storyLevel() { return MUSIC.lore && !(typeof UI !== 'undefined' && UI.inGame) ? LORE_STORY : MUSIC.story == null ? 0 : MUSIC.story; }
 
 const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10], DORIAN = [0, 2, 3, 5, 7, 9, 10];
-const CHORD = { m: [0, 3, 7], M: [0, 4, 7], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], dim: [0, 3, 6] };
+const LYDIAN = [0, 2, 4, 6, 7, 9, 11], MIXOLYDIAN = [0, 2, 4, 5, 7, 9, 10], HARMONIC = [0, 2, 3, 5, 7, 8, 11];
+const CHORD = { m: [0, 3, 7], M: [0, 4, 7], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], dim: [0, 3, 6], sus2: [0, 2, 7], sus4: [0, 5, 7] };
+
+/**
+ * The campaign theme's tune, four bars in scale degrees (0: the key's root, an octave up), each note [step, degree,
+ * length in steps]. It's the same tune in every stage, so it darkens as the stages walk the modes from the brightest to
+ * the darkest: D A E D | C♯ A B | D A E F♯ E | D in Lydian, D A E♭ D | C A B♭ | D A E♭ F E♭ | D in Phrygian.
+ */
+const STORY_THEME = [
+  [[0, 0, 6], [6, 4, 2], [8, 8, 6], [14, 7, 2]],
+  [[0, 6, 4], [4, 4, 4], [8, 5, 8]],
+  [[0, 0, 6], [6, 4, 2], [8, 8, 4], [12, 9, 2], [14, 8, 2]],
+  [[0, 7, 12], [12, 4, 4]],
+];
+/** Redline's bass riff, two bars (a chord's), as semitones over the chord's root (null: a rest): a gallop, an octave leap, a half-step neighbour. */
+const RIFF = [[0, null, 0, 0, 0, null, 0, 0, 0, null, 0, 0, 12, null, 1, 0], [0, null, 0, 0, 7, null, 0, 0, 0, null, 12, 0, 10, null, 1, 0]];
+/** The campaign's road lights (its 'lights' arpeggio, eight to a bar), in the order they go dark as the story goes on. */
+const LIGHTS_OUT = [7, 3, 5, 1, 6, 2, 4, 0];
+/** The Uplink's call in the campaign theme ('signal'), the steps of its bar; the ground answers in the same rhythm. */
+const SIGNAL = [0, 3, 6, 8, 12];
 
 /** Each mood: tempo, keys (MIDI note of the root, octave 3), scale, chord progressions, and its arrangements. */
 const MOODS = {
@@ -1511,14 +1566,33 @@ const MOODS = {
       ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'lead'],
     ],
   },
+  // Overdrive: the first war theme.
   war: {
-    bpm: 112, keys: [52, 53, 55], scale: PHRYGIAN, chordBars: 1,
+    bpm: 112, keys: [52, 53, 55], scale: PHRYGIAN, chordBars: 1, crash: true,
     progs: [[[0, 'm'], [1, 'M'], [0, 'm'], [10, 'M']], [[0, 'm'], [8, 'M'], [5, 'm'], [7, 'M']], [[0, 'm'], [0, 'm'], [8, 'M'], [10, 'M']]],
     arrange: [
       ['pad', 'bass16', 'kick4', 'hat16', 'snare'],
       ['pad', 'bass16', 'kick4', 'hat16', 'snare', 'stab'],
       ['pad', 'bass16', 'kick4', 'hat16', 'snare', 'lead', 'arp'],
       ['bass16', 'kick4', 'tom', 'hat16', 'stab'],
+    ],
+  },
+  // Redline: the second war theme, taking turns with Overdrive (warTheme). Built on the buzzy bass pushed harder
+  // (mGrowl): a galloping riff on the chord's root (RIFF) whose filter opens over every two bars and snaps back on the
+  // chord change, and in the breakdown opens slowly over a whole section ('growlOpen'). Quicker than Overdrive, in
+  // harmonic minor with a chord every two bars; hard drums (a driven kick in a broken beat, four to the bar at the
+  // peak, a gated snare, open hats), a gliding saw lead with a late vibrato (mSaw), and a noise riser into each section.
+  war2: {
+    bpm: 124, keys: [50, 48, 51], scale: HARMONIC, chordBars: 2, lead: 'saw', crash: true, gain: 0.95,
+    rhythms: [[0, 6, 8, 14], [0, 3, 8, 11, 14], [0, 8, 12], [0, 2, 8, 10, 12], [0, 6, 10]],
+    progs: [[[0, 'm'], [8, 'M'], [1, 'M'], [7, 'M']], [[0, 'm'], [0, 'm'], [8, 'M'], [7, 'M']], [[0, 'm'], [5, 'm'], [1, 'M'], [7, 'M']]],
+    arrange: [
+      ['pad', 'growl', 'kickW', 'gate', 'hat8w'],
+      ['pad', 'growl', 'kickW', 'gate', 'hat8w', 'riser'],
+      ['growl', 'kickW', 'gate', 'hat8w', 'lead', 'riser'],
+      ['pad', 'growl', 'kickW', 'gate', 'hat16', 'lead', 'tom'],
+      ['pad', 'growlOpen', 'hat8w', 'riser'],
+      ['growl', 'kick4h', 'gate', 'hat16', 'lead', 'tom', 'riser'],
     ],
   },
   // Night Murmurs: the Murmur close by. Slow and low (Phrygian, a chord every two bars): a choir of whispers pitched on
@@ -1536,15 +1610,66 @@ const MOODS = {
       ['pad', 'whisper', 'heart', 'creep', 'tick3'],
     ],
   },
+  // The Long Silence: the campaign theme, the whole story in one piece. The story's level (storyLevel: 0, the landing,
+  // to 1, the Silence; set by musicStory, or the Lore guide's LORE_STORY) picks the stage, the last whose `at` it has
+  // reached, at each new section; the stage's settings stand over the theme's own (moodDef). One key, D, all through:
+  // the stages walk the modes from the brightest to the darkest, and the same tune (STORY_THEME) darkens with them. The
+  // level also sets, bar by bar, how much of the Murmur is heard: the whispering choir ('choir') grows from a breath to
+  // a wall, crystal glints ('glints') come oftener, the heartbeat ('pulse') beats harder, the Uplink's call ('signal') is
+  // answered by the ground more often, and the colony's road lights (the 'lights' arpeggio) go dark one by one.
+  // (Its soundtrack export plays the whole arc in fifteen sections, five minutes: the level rising from 0 to 1 over the
+  // first thirteen, then two more at 1 for the Silence.)
+  campaign: {
+    bpm: 96, keys: [50], scale: MINOR, chordBars: 2, theme: STORY_THEME,
+    stages: [
+      // Landfall (0, the first missions): hopeful and wide. D Lydian: a halo of high chords spread across the stereo,
+      // the shimmer (the Ring in the sky), the arpeggio in threes, the soft buzzy bass and the bell playing the tune.
+      { at: 0, scale: LYDIAN, gain: 1.15,
+        progs: [[[0, 'M7'], [2, 'M'], [9, 'm'], [7, 'M']], [[0, 'M'], [2, 'M'], [4, 'm'], [2, 'M']], [[9, 'm'], [7, 'M'], [0, 'M7'], [2, 'M']]],
+        arrange: [['pad', 'halo', 'shimmer'], ['pad', 'halo', 'arp3', 'bassW', 'lead'], ['pad', 'arp3', 'bassW', 'shimmer', 'lead']] },
+      // The colony at work (0.1): D Mixolydian, half-time drums, the bass, the road lights all lit, the tune; now and then
+      // a crystal glint far off.
+      { at: 0.1, scale: MIXOLYDIAN, gain: 1,
+        progs: [[[0, 'M'], [10, 'M'], [5, 'M'], [0, 'M']], [[0, 'M'], [7, 'm'], [10, 'M'], [5, 'M']], [[5, 'M'], [10, 'M'], [0, 'M'], [0, 'M']]],
+        arrange: [['pad', 'lights', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'glints'], ['pad', 'lights', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'glints'],
+          ['pad', 'halo', 'lights', 'bassHalf', 'kickHalf', 'hat', 'lead', 'glints']] },
+      // The first murmur (0.25; the Lore guide plays this one): D Dorian. The drums fall away and the sound in the ground
+      // comes in: the choir, faint, a slow heartbeat, the Uplink's call (sometimes answered), the first lights out, the
+      // tune breaking off after two bars.
+      { at: 0.25, scale: DORIAN, gain: 1.05, themeBars: [0, 1, null, null],
+        progs: [[[0, 'm7'], [5, 'M'], [0, 'm7'], [5, 'M']], [[0, 'm'], [10, 'M'], [5, 'M'], [0, 'm']], [[3, 'M'], [5, 'M'], [0, 'm'], [0, 'm7']]],
+        arrange: [['pad', 'choir', 'lights', 'pulse', 'glints', 'signal'], ['pad', 'choir', 'lights', 'bassW', 'glints', 'lead'],
+          ['pad', 'choir', 'lights', 'pulse', 'bassW', 'glints', 'signal', 'shimmer']] },
+      // Contingency (0.4): D minor, a chord a bar. The war turns serious: the drums come back, the main theme's own chords,
+      // the bass creeping a half step, the tune whole again but dark, the choir louder, more lights out.
+      { at: 0.4, scale: MINOR, chordBars: 1, gain: 0.88,
+        progs: [[[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M']], [[0, 'm'], [10, 'M'], [8, 'M'], [7, 'm']], [[0, 'm7'], [5, 'm'], [8, 'M7'], [10, 'M']]],
+        arrange: [['pad', 'choir', 'creep', 'kick', 'snare', 'hat', 'lights', 'glints'], ['pad', 'choir', 'bass', 'kick', 'snare', 'hat', 'lead', 'glints', 'signal'],
+          ['pad', 'choir', 'creep', 'kick', 'snare', 'hat8', 'lights', 'lead', 'glints']] },
+      // The Murmur rise (0.68): D Phrygian, the climax. The choir is a wall, the lights are gone, glints swarm; Redline's
+      // hard drums and growling bass (eighths on a root that creeps by half steps), a drone, and the tune on the saw.
+      { at: 0.68, scale: PHRYGIAN, chordBars: 1, lead: 'saw', gain: 0.73,
+        progs: [[[0, 'm'], [1, 'M'], [0, 'm'], [1, 'M']], [[0, 'm'], [1, 'M'], [10, 'm'], [0, 'm']], [[0, 'm'], [8, 'M'], [1, 'M'], [0, 'm']]],
+        arrange: [['choir', 'drone', 'growl8', 'kickW', 'gate', 'hat8w', 'glints', 'riser'], ['choir', 'pad', 'growl8', 'kick4h', 'gate', 'hat16', 'lead', 'glints', 'tom', 'riser'],
+          ['choir', 'drone', 'growl8', 'kickW', 'gate', 'hat16', 'lead', 'glints', 'tom', 'riser']] },
+      // The Silence (0.96, the last mission): it all stops. Suspended chords, neither major nor minor, and every
+      // progression ends away from home; the halo and the shimmer again, the Uplink calling, two lights left, the tune's
+      // first bar alone; then the choir again, fainter and further off.
+      { at: 0.96, scale: DORIAN, gain: 1.25, silence: true, themeBars: [null, null, 0, null],
+        progs: [[[0, 'sus2'], [8, 'M7'], [3, 'M7'], [10, 'sus2']], [[8, 'M7'], [10, 'sus2'], [0, 'sus2'], [5, 'sus4']], [[0, 'sus2'], [5, 'sus4'], [8, 'M7'], [10, 'sus2']]],
+        arrange: [['pad', 'halo', 'shimmer', 'signal', 'lead'], ['pad', 'choir', 'lights', 'pulse', 'signal', 'bassW'], ['pad', 'halo', 'choir', 'lights', 'shimmer', 'signal', 'lead']] },
+    ],
+  },
   nuke: {
-    bpm: 120, keys: [53], scale: PHRYGIAN, chordBars: 2,
+    bpm: 120, keys: [53], scale: PHRYGIAN, chordBars: 2, crash: true,
     progs: [[[0, 'm'], [1, 'M']]],
     arrange: [['drone', 'alarm', 'heart', 'hat16']],
   },
   end: { bpm: 90, keys: [57], scale: MINOR, chordBars: 1, progs: [[[0, 'm']]], arrange: [[]] },
 };
 
-const MUSIC = { timer: 0, next: 0, step: 0, bar: 0, mood: '', want: 'menu', def: null, layers: new Set(), stepDur: 0.15, key: 57, prog: null, sect: 0, arr: 0, of: null, warUntil: 0, motif: null, arpMode: 0, color: false, lastDeg: 7 };
+const MUSIC = { timer: 0, next: 0, step: 0, bar: 0, mood: '', want: 'menu', def: null, layers: new Set(), stepDur: 0.15, key: 57, prog: null, sect: 0, arr: 0, of: null, warUntil: 0, motif: null, arpMode: 0, color: false, lastDeg: 7,
+  wars: 0, warAt: -Infinity, story: null, lore: false, lv: 0, stage: 0, rose: false, sawHz: 0 };
 
 function musicStart() {
   if (MUSIC.timer || !AUDIO.ctx) return;
@@ -1569,9 +1694,23 @@ function musicSchedule(until) {
 
 const rnd = (n) => Math.floor(Math.random() * n);
 
+/**
+ * A mood's settings. A theme told in stages (the campaign's) takes the stage for the story's level now, the last whose
+ * `at` it has reached (MUSIC.stage), its settings standing over the theme's own.
+ */
+function moodDef(m) {
+  const d = MOODS[m];
+  if (!d.stages) return d;
+  const lv = storyLevel();
+  let k = 0;
+  while (k + 1 < d.stages.length && lv >= d.stages[k + 1].at) k++;
+  MUSIC.stage = k;
+  return Object.assign({}, d, d.stages[k]);
+}
+
 /** Switch to a new mood: its tempo, a key, a progression, and the first arrangement. */
 function musicSetMood(m, t) {
-  const d = MOODS[m];
+  const d = moodDef(m);
   MUSIC.mood = m; MUSIC.def = d;
   if (AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel(), t, 0.4); // (each theme at its own trim)
   MUSIC.stepDur = 60 / d.bpm / 4;
@@ -1581,21 +1720,33 @@ function musicSetMood(m, t) {
   MUSIC.layers = new Set(d.arrange[0]);
   MUSIC.arpMode = rnd(3);
   MUSIC.motif = makeMotif();
+  MUSIC.rose = false; MUSIC.sawHz = 0;
   if (AUDIO.mEcho) AUDIO.mEcho.delayTime.setValueAtTime(MUSIC.stepDur * 3, t); // a dotted-eighth echo
-  if (m === 'war' || m === 'nuke') mCrash(t);
+  if (d.crash) mCrash(t);
 }
 
-/** A new 8-bar section: bring parts in and out, and now and then a new progression. */
-function musicSection() {
-  const d = MUSIC.def;
+/**
+ * A new 8-bar section: bring parts in and out, and now and then a new progression. In a theme told in stages, a new
+ * stage of the story brings its own first arrangement, a progression of its own and its trim.
+ */
+function musicSection(t) {
+  let d = MUSIC.def;
   MUSIC.sect++;
-  if (d.arrange.length > 1) {
-    let a;
-    do a = 1 + rnd(d.arrange.length - 1); while (a === MUSIC.arr && d.arrange.length > 2);
-    MUSIC.arr = a;
+  const was = MUSIC.stage;
+  if (d.stages) MUSIC.def = d = moodDef(MUSIC.mood);
+  if (d.stages && MUSIC.stage !== was) {
+    MUSIC.arr = 0;
+    MUSIC.prog = d.progs[rnd(d.progs.length)];
+    if (AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel(), t, 0.6);
+  } else {
+    if (d.arrange.length > 1) {
+      let a;
+      do a = 1 + rnd(d.arrange.length - 1); while (a === MUSIC.arr && d.arrange.length > 2);
+      MUSIC.arr = a;
+    }
+    if (MUSIC.sect % 2 === 0) MUSIC.prog = d.progs[rnd(d.progs.length)];
   }
   MUSIC.layers = new Set(d.arrange[MUSIC.arr]);
-  if (MUSIC.sect % 2 === 0) MUSIC.prog = d.progs[rnd(d.progs.length)];
   MUSIC.arpMode = rnd(3);
   MUSIC.color = Math.random() < 0.5;
   MUSIC.motif = makeMotif();
@@ -1625,12 +1776,34 @@ function musicStep(t) {
   if (L.has('hat') && s % 4 === 2) mHat(t, s === 14 ? 0.12 : 0.04, 1);
   if (L.has('hat16')) mHat(t, 0.03, s % 2 ? 0.55 : 1);
   if (L.has('tom') && fill && s >= 8 && s % 2 === 0) mTom(t, 140 - (s - 8) * 9);
+  // Redline's hard drums: the driven kick in a broken beat (or four to the bar), the gated snare, open hats between.
+  if (L.has('kickW') && (s === 0 || s === 8 || s === 10 || (MUSIC.bar % 2 === 1 && (s === 3 || s === 13)) || (fill && s === 14))) mKickHard(t, s === 0 || s === 8 ? 1 : 0.8);
+  if (L.has('kick4h') && s % 4 === 0) mKickHard(t, 1);
+  if (L.has('gate') && (s === 4 || s === 12)) mGate(t, 1);
+  if (L.has('gate') && fill && s >= 13) mGate(t, 0.45 + (s - 13) * 0.2);
+  if (L.has('hat8w') && s % 2 === 0) mHat(t, s % 4 === 2 ? 0.13 : 0.03, s % 4 === 2 ? 1.1 : 0.7);
+  // A riser into the next section, and a crash on its downbeat.
+  if (s === 0 && MUSIC.rose && MUSIC.bar % 8 === 0) { MUSIC.rose = false; mCrash(t); }
+  if (L.has('riser') && fill && s === 0) { mRiser(t, sd * 16); MUSIC.rose = true; }
   // Bass
   if (L.has('bass') && s % 2 === 0) mBass(t, root - 12 + (s % 8 === 6 ? 12 : 0), sd * 1.6);
   if (L.has('bassW') && s === 0) mBass(t, root - 12, sd * 15, true);
   if (L.has('bass16')) mBass(t, root - 12 + (s % 8 === 7 ? 12 : 0), sd * 0.8);
   if (L.has('bassOct') && s % 2 === 0) mBass(t, root - 12 + (s % 4 === 2 ? 12 : 0), sd * 1.5); // root and octave, eighth notes
   if (L.has('bassHalf') && (s === 0 || s === 6 || s === 10)) mBass(t, root - 12 + (s === 6 ? 7 : 0), sd * (s === 0 ? 5 : 3), true);
+  // Redline's growl: the riff, its filter opening over the chord's two bars (over the whole section in the breakdown,
+  // 'growlOpen'); accents on the beats. 'growl8': eighths on the root and an octave pickup (the campaign's climax).
+  if (L.has('growl') || L.has('growlOpen')) {
+    const riff = RIFF[MUSIC.bar % 2], r = riff[s];
+    if (r !== null) {
+      const ph = L.has('growlOpen') ? ((MUSIC.bar % 8) * 16 + s) / 127 : ((MUSIC.bar % 2) * 16 + s) / 31, beat = s % 4 === 0;
+      mGrowl(t, bassNote(root) + r, sd * (riff[(s + 1) % 16] === null ? 1.8 : 0.85), Math.min(1, ph * ph + (beat ? 0.1 : 0)), beat ? 1 : 0.78);
+    }
+  }
+  if (L.has('growl8') && (s % 2 === 0 || s === 15)) {
+    const ph = ((MUSIC.bar % 2) * 16 + s) / 31;
+    mGrowl(t, bassNote(root) + (s === 15 ? 12 : 0), sd * (s === 15 ? 0.85 : 1.7), Math.min(1, ph * ph + (s % 4 === 0 ? 0.1 : 0)), s % 4 === 0 ? 1 : 0.8);
+  }
   // Arpeggio: chord tones across two octaves.
   if (L.has('arp') || (L.has('arp8') && s % 2 === 0)) {
     const notes = [...chord.map((n) => n + 12), ...chord.map((n) => n + 24)];
@@ -1651,12 +1824,34 @@ function musicStep(t) {
   if (L.has('creep') && (s === 0 || s === 8)) mBass(t, root - 12 + (s === 8 && MUSIC.bar % 2 === 1 ? 1 : 0), sd * 7, true);
   if (L.has('tick3') && s % 3 === 0) mHat(t, 0.018, s === 0 ? 0.5 : 0.3);
   if (L.has('glint') && (s === 6 || s === 13) && Math.random() < 0.45) mLead(t, MUSIC.key + 36 + chord[rnd(chord.length)], sd * 4, 0.3);
+  // The campaign theme's Murmur, as much of it as the story's level (MUSIC.lv) says: glints oftener (a swarm at the
+  // climax), the road lights going dark one by one (LIGHTS_OUT; two are left in the Silence), the heartbeat, and the
+  // Uplink's call (SIGNAL), which the ground sometimes answers in the same rhythm the bar after.
+  const lv = MUSIC.lv;
+  if (L.has('glints') && (s === 6 || s === 13 || (lv >= 0.68 && !d.silence && (s === 2 || s === 10))) && Math.random() < (d.silence ? 0.25 : 0.12 + 0.6 * lv)) mLead(t, MUSIC.key + 36 + chord[rnd(chord.length)], sd * 4, 0.3 + 0.3 * lv);
+  if (L.has('lights') && s % 2 === 0) {
+    const k = s / 2, dark = d.silence ? 6 : Math.max(0, Math.min(8, Math.floor(((lv - 0.22) / 0.5) * 8)));
+    if (LIGHTS_OUT.indexOf(k) >= dark) {
+      const notes = [...chord.map((n) => n + 12), ...chord.map((n) => n + 24)];
+      mArp(t, MUSIC.key + notes[MUSIC.arpMode === 1 ? pingPong(k, notes.length) : k % notes.length], s);
+    }
+  }
+  if (L.has('pulse') && (s === 0 || s === 3)) mKick(t, (s ? 0.45 : 0.65) * (d.silence ? 0.6 : 0.55 + 0.5 * lv));
+  if (L.has('signal') && SIGNAL.includes(s)) {
+    const b = MUSIC.bar % 4;
+    if (b === 0 && s === 0) MUSIC.answer = Math.random() < (d.silence ? 0.5 : Math.max(0, Math.min(0.8, (lv - 0.15) * 1.6)));
+    if (b === 0) mBeacon(t, MUSIC.key + (s === 12 ? 31 : 36));
+    else if (b === 1 && MUSIC.answer) mThud(t, s === 0 ? 1 : 0.75);
+  }
   // Melody
   if (L.has('lead') && MUSIC.melody) {
     const n = MUSIC.melody[s];
-    if (n) (d.lead === 'pluck' ? mPluck : mLead)(t, n[0], n[1] * sd);
+    if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
   }
 }
+
+/** A bass note for the chord's root, in the octave from C2 to B2 (Redline's riff, the campaign's climax). */
+function bassNote(root) { return 36 + ((((root - 36) % 12) + 12) % 12); }
 
 function pingPong(k, n) { const p = 2 * n - 2; const m = k % p; return m < n ? m : p - m; }
 
@@ -1667,9 +1862,10 @@ function musicBar(t) {
   if (MUSIC.want !== MUSIC.mood && !turn) musicSetMood(MUSIC.want, t);
   else {
     MUSIC.bar++;
-    if (MUSIC.bar % 8 === 0) musicSection();
+    if (MUSIC.bar % 8 === 0) musicSection(t);
   }
   const d = MUSIC.def, prog = MUSIC.prog;
+  MUSIC.lv = d.stages ? storyLevel() : 0;
   const c = prog[Math.floor(MUSIC.bar / d.chordBars) % prog.length];
   let q = c[1];
   if (MUSIC.color && q === 'm') q = 'm7'; else if (MUSIC.color && q === 'M') q = 'M7';
@@ -1681,12 +1877,29 @@ function musicBar(t) {
   if (L.has('pad') && MUSIC.bar % d.chordBars === 0) mPad(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
   if (L.has('drone')) mDrone(t, MUSIC.key - 12 + c[0], barDur, MUSIC.bar);
   if (L.has('whisper') && MUSIC.bar % d.chordBars === 0) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
-  MUSIC.melody = L.has('lead') ? realizeMotif(MUSIC.motif, MUSIC.chord) : null;
+  // The campaign theme: the halo, and the choir as loud as the story's level says (far off and faint in the Silence).
+  if (L.has('halo') && MUSIC.bar % d.chordBars === 0) mHalo(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
+  // (15 dB louder from the first murmur, 0.25, to the climax, 0.75: from a breath under the pads to a wall over them,
+  // and from 0.6 an octave higher too)
+  if (L.has('choir') && MUSIC.bar % d.chordBars === 0) {
+    const lv = Math.max(0.25, Math.min(0.75, MUSIC.lv)), v = d.silence ? 2.6 : 1.8 * Math.pow(10, ((lv - 0.25) / 0.5) * 0.75);
+    mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars, v, d.silence ? 1 : 0, !d.silence && MUSIC.lv >= 0.6);
+  }
+  MUSIC.melody = !L.has('lead') ? null : d.theme ? realizeTheme(d) : realizeMotif(MUSIC.motif, MUSIC.chord);
+}
+
+/** The bar's notes of the campaign theme's tune (STORY_THEME) in the stage's scale; null in a bar the stage leaves out. */
+function realizeTheme(d) {
+  const bars = d.themeBars || [0, 1, 2, 3], k = bars[MUSIC.bar % bars.length];
+  if (k == null) return null;
+  const out = new Array(16).fill(null);
+  for (const [s, deg, len] of d.theme[k]) out[s] = [MUSIC.key + 12 + Math.floor(deg / 7) * 12 + d.scale[deg % 7], len * 0.9];
+  return out;
 }
 
 /** A short rhythmic idea (onsets and moves through the scale) that the lead repeats over the section's chords. */
 function makeMotif() {
-  const rhythms = [[0, 3, 6, 10, 12], [0, 4, 8, 12], [0, 2, 4, 8, 11, 14], [0, 6, 8, 14], [0, 3, 8, 10, 12, 14], [0, 8, 10]];
+  const rhythms = (MUSIC.def && MUSIC.def.rhythms) || [[0, 3, 6, 10, 12], [0, 4, 8, 12], [0, 2, 4, 8, 11, 14], [0, 6, 8, 14], [0, 3, 8, 10, 12, 14], [0, 8, 10]];
   const r = rhythms[rnd(rhythms.length)];
   return { r, moves: r.map(() => [-2, -1, -1, 1, 1, 2, 0][rnd(7)]) };
 }
@@ -1867,20 +2080,156 @@ function mDrone(t, n, dur, bar) {
 /**
  * Night Murmurs' choir: noise through a narrow band-pass on each chord note (an octave down and as written), swelling
  * in and out over the chord like many low voices under the ground, the filters wandering a little sharp and flat.
+ * `vol` scales it (the campaign theme's choir grows with the story); `far` (0..1) moves it off into the reverb and echo;
+ * `high` adds the voices an octave up.
  */
-function mWhisper(t, notes, dur) {
+function mWhisper(t, notes, dur, vol = 1, far = 0, high = false) {
   const ac = AUDIO.ctx, g = ac.createGain();
   env(g, t, dur * 0.45, 1, dur * 0.55, dur * 0.5);
-  for (const n of notes) for (const oct of [-12, 0]) {
+  for (const n of notes) for (const oct of high ? [-12, 0, 12] : [-12, 0]) {
     const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), vg = ac.createGain(), f = midiHz(n + oct);
     src.buffer = AUDIO.noise; src.loop = true;
     bp.type = 'bandpass'; bp.Q.value = 28;
     bp.frequency.setValueAtTime(f * 0.985, t); bp.frequency.linearRampToValueAtTime(f * 1.015, t + dur * 0.5); bp.frequency.linearRampToValueAtTime(f, t + dur);
-    vg.gain.value = oct ? 0.55 : 0.32;
+    vg.gain.value = oct < 0 ? 0.55 : oct ? 0.22 : 0.32;
     src.connect(bp).connect(vg).connect(g);
     src.start(t, Math.random() * 1.5); src.stop(t + dur * 1.6);
   }
-  sends(g, 0.9, 0.8, 0.15);
+  sends(g, 0.9 * vol * (1 - 0.75 * far), 0.8 * vol * (1 + 0.4 * far), 0.15 * vol * (1 + 2 * far));
+}
+
+/**
+ * Redline's bass: the buzzy bass (mBass) pushed harder. Two saws, the second a little sharp, through a more resonant
+ * low-pass that snaps down within a quarter second, then into a soft clipper for bite; under them the sine an octave
+ * down, clean. Played dry. `open` (0..1) moves the filter, the snap and where it settles: at 0 it's mBass's, about
+ * 400 Hz down to 220 Hz; at 1, from 2.4 kHz down to 880 Hz, the bass wide open and snarling.
+ */
+function mGrowl(t, n, dur, open, v) {
+  const ac = AUDIO.ctx, f = midiHz(n), lp = ac.createBiquadFilter(), pre = ac.createGain(), ws = ac.createWaveShaper(), g = ac.createGain(), sg = ac.createGain();
+  const a = mOsc('sawtooth', f, t), b = mOsc('sawtooth', f, t), sub = mOsc('sine', f / 2, t);
+  b.detune.value = 11;
+  lp.type = 'lowpass'; lp.Q.value = 6;
+  lp.frequency.setValueAtTime(400 + 2000 * open, t); lp.frequency.exponentialRampToValueAtTime(220 * (1 + 3 * open), t + Math.min(dur, 0.25));
+  pre.gain.value = 0.75;
+  ws.curve = AUDIO.driveCurve; ws.oversample = '2x';
+  a.connect(pre); b.connect(pre); pre.connect(lp).connect(ws).connect(g);
+  sg.gain.value = 0.85; sub.connect(sg).connect(g);
+  env(g, t, 0.004, 0.135 * v, dur * 0.65, dur * 0.35 + 0.04);
+  sends(g, 1, 0, 0);
+  for (const o of [a, b, sub]) { o.start(t); o.stop(t + dur + 0.1); }
+}
+
+/** Redline's kick: a higher, quicker pitch drop than mKick's, driven into the soft clipper, with the beater's click. It pumps the pads too. */
+function mKickHard(t, v) {
+  const ac = AUDIO.ctx, o = mOsc('sine', 210, t), g = ac.createGain(), ws = ac.createWaveShaper(), out = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(105, t + 0.03); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+  env(g, t, 0.002, 1.2 * v, 0.04, 0.24);
+  ws.curve = AUDIO.boomCurve; out.gain.value = 0.22;
+  o.connect(g).connect(ws).connect(out); sends(out, 1, 0, 0);
+  o.start(t); o.stop(t + 0.36);
+  const src = ac.createBufferSource(), hp = ac.createBiquadFilter(), cg = ac.createGain();
+  src.buffer = AUDIO.noise; hp.type = 'highpass'; hp.frequency.value = 3000;
+  env(cg, t, 0.001, 0.07 * v, 0.003, 0.02);
+  src.connect(hp).connect(cg); sends(cg, 1, 0, 0);
+  src.start(t, Math.random()); src.stop(t + 0.05);
+  const pg = AUDIO.mPad.gain;
+  pg.cancelScheduledValues(t); pg.setValueAtTime(0.4, t); pg.linearRampToValueAtTime(1, t + MUSIC.stepDur * 3);
+}
+
+/** Redline's snare, an 80s gated one: a burst of noise held open a moment and then shut hard, over a short tone. */
+function mGate(t, v) {
+  const ac = AUDIO.ctx, src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 0.55;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22 * v, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.09 * v, t + 0.04); g.gain.linearRampToValueAtTime(0.075 * v, t + 0.13);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  src.connect(bp).connect(g); sends(g, 1, 0.18, 0);
+  src.start(t, Math.random()); src.stop(t + 0.2);
+  const o = mOsc('triangle', 210, t), og = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(150, t + 0.07);
+  env(og, t, 0.002, 0.11 * v, 0.02, 0.09);
+  o.connect(og); sends(og, 1, 0.1, 0);
+  o.start(t); o.stop(t + 0.16);
+}
+
+/**
+ * Redline's lead, menacing: two detuned saws and a square an octave down through a low-pass that bites open and
+ * settles, gliding up or down from the last note, a slow vibrato coming in late.
+ */
+function mSaw(t, n, dur, vol) {
+  const ac = AUDIO.ctx, f = midiHz(n), lp = ac.createBiquadFilter(), g = ac.createGain(), lfo = mOsc('sine', 5.2, t), lg = ac.createGain();
+  const from = MUSIC.sawHz || f, len = Math.max(0.2, dur);
+  MUSIC.sawHz = f;
+  lp.type = 'lowpass'; lp.Q.value = 2.5;
+  lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(2800, t + 0.06); lp.frequency.exponentialRampToValueAtTime(1300, t + 0.45);
+  env(g, t, 0.01, 0.034 * (vol || 1), len * 0.8, 0.28);
+  lg.gain.setValueAtTime(0, t); lg.gain.setValueAtTime(0, t + Math.min(0.18, len * 0.5)); lg.gain.linearRampToValueAtTime(16, t + Math.min(0.6, len)); // (cents)
+  lfo.connect(lg);
+  for (const [type, mul, det, lvl] of [['sawtooth', 1, -8, 1], ['sawtooth', 1, 8, 1], ['square', 0.5, 0, 0.45]]) {
+    const o = mOsc(type, from * mul, t), og = ac.createGain();
+    o.frequency.exponentialRampToValueAtTime(f * mul, t + 0.07);
+    o.detune.value = det; lg.connect(o.detune);
+    og.gain.value = lvl; o.connect(og).connect(lp);
+    o.start(t); o.stop(t + len + 0.35);
+  }
+  lfo.start(t); lfo.stop(t + len + 0.35);
+  lp.connect(g); sends(g, 1, 0.35, 0.3);
+}
+
+/** A noise riser over the bar before a new section: band-passed noise sweeping up and swelling, cut on the downbeat. */
+function mRiser(t, dur) {
+  const ac = AUDIO.ctx, src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = AUDIO.noise; src.loop = true;
+  bp.type = 'bandpass'; bp.Q.value = 2.5;
+  bp.frequency.setValueAtTime(350, t); bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.055, t + dur * 0.97); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  src.connect(bp).connect(g); sends(g, 1, 0.45, 0.2);
+  src.start(t, Math.random()); src.stop(t + dur + 0.05);
+}
+
+/**
+ * The campaign theme's halo: the chord an octave and two up in soft triangles spread across the stereo field, swelling
+ * in slowly and left in the reverb (the Ring in the sky).
+ */
+function mHalo(t, notes, dur) {
+  const ac = AUDIO.ctx, g = ac.createGain(), lp = ac.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 3200;
+  env(g, t, dur * 0.4, 1, dur * 0.7, dur * 0.6);
+  notes.forEach((n, i) => {
+    for (const oct of [12, 24]) {
+      const o = mOsc('triangle', midiHz(n + oct), t), og = ac.createGain();
+      o.detune.value = i % 2 ? 5 : -5;
+      og.gain.value = oct === 12 ? 0.018 : 0.011;
+      o.connect(og);
+      if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = ((i + (oct === 24 ? 0.5 : 0)) / notes.length) * 1.6 - 0.8; og.connect(p).connect(lp); } else og.connect(lp);
+      o.start(t); o.stop(t + dur * 1.3 + 0.1);
+    }
+  });
+  lp.connect(g); sends(g, 0.6, 0.9, 0.25);
+}
+
+/** The Uplink's call in the campaign theme: a high, clean blip, out into the echo. Transmitting. */
+function mBeacon(t, n) {
+  const ac = AUDIO.ctx, f = midiHz(n), g = ac.createGain(), o = mOsc('sine', f, t), o2 = mOsc('square', f, t), g2 = ac.createGain(), lp = ac.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 3000; g2.gain.value = 0.15;
+  env(g, t, 0.003, 0.03, 0.05, 0.09);
+  o.connect(g); o2.connect(g2).connect(lp).connect(g);
+  sends(g, 0.8, 0.4, 0.6);
+  for (const x of [o, o2]) { x.start(t); x.stop(t + 0.2); }
+}
+
+/** The ground answering the Uplink in its own rhythm (LORE.md: the Murmur answer): a low knock and a breath of noise from under the ground. */
+function mThud(t, v) {
+  const ac = AUDIO.ctx, o = mOsc('sine', 88, t), g = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(44, t + 0.14);
+  env(g, t, 0.006, 0.2 * v, 0.02, 0.28);
+  o.connect(g); sends(g, 1, 0.35, 0);
+  o.start(t); o.stop(t + 0.4);
+  const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
+  src.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 220; bp.Q.value = 3;
+  env(ng, t, 0.01, 0.09 * v, 0.03, 0.22);
+  src.connect(bp).connect(ng); sends(ng, 1, 0.5, 0.2);
+  src.start(t, Math.random()); src.stop(t + 0.35);
 }
 
 function mAlarm(t, n) {

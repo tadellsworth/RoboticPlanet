@@ -1439,7 +1439,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
   lists the rest; a picker stays on top, Previous / Next end each page, ← → turn them; Esc, Back or a phone's Back
-  closes it (opening adds a history entry; closing takes it back). Its pictures are `data-src` until it first opens,
+  closes it (opening adds a history entry; closing takes it back). While it's open the music is the campaign theme, The
+  Long Silence (`musicLore`; see Sound). Its pictures are `data-src` until it first opens,
   then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
@@ -1699,9 +1700,36 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
-  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **Now playing** (`nowPlayingTick` in js/ui.js,
+  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **The war music** takes turns between two
+  themes, `WAR_THEMES` (`warTheme`): a game's first fight gets Overdrive (112 bpm Phrygian, sixteenth-note bass,
+  four-on-the-floor kick, stabs, the bell lead) and each new fight (war music again after `WAR_GAP` (30) s of game time
+  without it) the other one; within a fight it stays the same. **Redline** (`war2`), the second, is built on the buzzy
+  bass pushed harder (`mGrowl`: two saws, one a little sharp, through a resonant low-pass that snaps down within a
+  quarter second, into a soft clipper, `driveCurve`, over a clean sine an octave down; played dry): a galloping riff on
+  the chord's root with an octave leap and a half-step neighbour (`RIFF`), its filter opening over each chord's two bars
+  and snapping back on the change (over a whole section in the breakdown, `growlOpen`); 124 bpm harmonic minor, a
+  driven kick in a broken beat (`mKickHard`; four to the bar at the peak), an 80s gated snare (`mGate`), open hats, a
+  gliding saw lead with a late vibrato (`mSaw`) and a noise riser (`mRiser`) into a crash on each new section.
+  **The campaign theme**, **The Long Silence** (`campaign`), tells the story's arc from a level (`storyLevel`, 0 to 1)
+  instead of the game: `musicStory(level)` sets it (the campaign, planned in CAMPAIGN.md, would raise it chapter by
+  chapter, `(mission - 1) / 14`; while set, the theme plays in a game in place of the build themes; `null` ends it), and
+  until the campaign exists the **Lore guide** plays it while it's open (`musicLore` from `openLore`/`closeLore`, at
+  `LORE_STORY` (0.33), the first murmur, quiet enough to read by). At each 8-bar section the level picks a stage (its
+  `stages`, each standing over the theme's own settings: `moodDef`); one key, D, all through, the stages walking the
+  modes from the brightest to the darkest, and the same four-bar tune (`STORY_THEME`, played in each stage's scale, so it
+  darkens with them): Landfall (0; Lydian, hopeful and wide: a halo of high chords spread across the stereo, `mHalo`, the
+  shimmer, the arpeggio in threes, the bell), the colony at work (0.1; Mixolydian, half-time drums), the first murmur
+  (0.25; Dorian: the drums fall away, the choir comes in, a heartbeat, the Uplink's call, `mBeacon`, which the ground
+  sometimes answers in its rhythm, `mThud`), Contingency (0.4; minor, the main theme's chords, drums back, the bass
+  creeping a half step), the Murmur rising (0.68; Phrygian, the climax: Redline's drums and growl, a drone, the tune on
+  the saw) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
+  left, the tune's first bar alone, the choir again, fainter and far off). Bar by bar the level also sets how much of
+  the Murmur is heard: the choir grows 15 dB from 0.25 to 0.75 (an octave higher too from 0.6), glints come oftener,
+  the heartbeat beats harder, the ground answers oftener, and the road lights (the `lights` arpeggio, eight a bar) go dark
+  one by one (`LIGHTS_OUT`). **Now playing** (`nowPlayingTick` in js/ui.js,
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
-  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the Murmur's Night Murmurs, the nuke alarm Zero Hour, `end`
+  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war themes Overdrive and Redline, the Murmur's Night
+  Murmurs, the nuke alarm Zero Hour, the campaign theme The Long Silence (not shown over the Lore guide, a full screen), `end`
   none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a

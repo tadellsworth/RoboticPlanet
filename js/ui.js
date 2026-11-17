@@ -2976,6 +2976,7 @@ function helpPage(id) { pagerShow(HELP_PAGER, id); }
  * The Lore guide (#screen-lore): the colony's archive of the story (LORE.md), a page at a time like the How to play.
  * Its pictures are fetched the first time it opens (data-src), all at once, so the service worker keeps them for
  * offline play from then on. A phone's Back button closes it: opening adds an entry to the history, closing takes it back.
+ * While it's open the music is the campaign theme, The Long Silence (musicLore in audio.js).
  */
 function openLore(at) {
   const scr = $('screen-lore');
@@ -2989,12 +2990,14 @@ function openLore(at) {
   } else show();
   scr.hidden = false;
   pagerShow(LORE_PAGER, at && $(at) ? at : pagerSections(LORE_PAGER)[0].id); // (`at`: a page to open on, from the Records screen)
+  musicLore(true); // (the campaign theme while it's open: musicLore in audio.js)
   try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
 }
 
 function closeLore(fromBack) {
   if ($('screen-lore').hidden) return;
   $('screen-lore').hidden = true;
+  musicLore(false);
   if (!fromBack) try { if (history.state && history.state.lore) history.back(); } catch (e) { /* as above */ }
 }
 
