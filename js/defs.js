@@ -1501,6 +1501,7 @@ const FLAVOR = {
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
   nest: 'Logged as an acoustic anomaly. The log was never closed.',
+  mound: 'Unsurveyed. Every robot sent to map it is still listed as mapping.',
   depot: 'Shelf labels from the colony manifest: seed stock, school desks, blankets. Mostly Cement.',
   // Robots
   worker: 'Accord-standard construction unit. Tireless, literal, never asks why.',
