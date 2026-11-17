@@ -978,8 +978,8 @@ const BDEFS = {
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
   terminal: {
-    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. One contract always brings Fuel, at a steep price (30 Stone or Fiber for about 6): a Tanker takes it home, or a pipeline to storage. It docks at a neutral Trade Post (gold on the minimap), within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
-    cost: { cement: 12, alloy: 5 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
+    name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
+    cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
   },
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',
@@ -1219,41 +1219,49 @@ const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, ce
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10, ammo: 10, chip: 4 };
 const TRADE_BONUS = 1.3;
 /**
- * The Trade Terminal (BDEFS.terminal). Each colony gets `offers` contracts at a time, new ones every `every`
- * seconds (one you've picked stays while it has lots left). A contract swaps a lot of `lot` of one good
- * (TERMINAL_GIVE) for another (TERMINAL_GET), each `lots` times at most, at `rate` of the goods' worth
- * (TRADE_VALUE): below what making them yourself is worth. A Terminal more than `minDist` tiles from the
- * Command Base pays `perTile` more for every tile further, up to `maxBonus`. Every lot sold of a good knocks
- * `sat` off what that good fetches, down to `satMin`; it recovers `recover` a minute. Only Road Trains and
- * Freight Trains serve a Terminal (and only in loads of `minLoad` or more, or what's left of the lot).
- * A lot is `lotWorth` worth of the good given (60 Cement, 30 Stone or Fiber, 25 Ore, 20 Crystal: see tradeLot).
- * Alloy, Chips and Ammo are only ever bought, never given (Ammo only when war is on). A contract never trades a
- * good down for a much cheaper one (what you give worth over `downMax` times what you get: no Crystal for
- * Stone), never a made good for one it's made from (TRADE_MADE_FROM: no Cement for Stone), Cement only for
- * made goods (Alloy, Chips, Ammo), and never pays back under `minPay`. 30 Stone buys about 9 Alloy (11 at a
- * Terminal far out); 60 Cement about 16 Ammo (20).
- * On top of the `offers`, one contract always brings Fuel (o.steep), for a lot of whichever of `fuelGive` the colony
- * has most to spare, at the steep `fuelRate` (about half the usual): 30 Stone or Fiber for 6 Fuel (8 far out). It's
- * the way to Fuel for a colony with no oil and poor soil. Fuel is a liquid: what it pays waits at the Terminal for a
- * Tanker (or flows home by pipeline to storage on the line), never a train.
+ * The Trade Terminal (BDEFS.terminal) runs one standing trade route, "send this good, bring back that one", set on its
+ * panel and kept until it's changed. The Trade Post's ledger takes one delivery from each Terminal every `every`
+ * seconds (its window). A convoy (a Road Train, or a Freight Train where track runs beside the Terminal) brings a run
+ * of `lot` of the good sent (fewer of a rich good, so what comes back stays within `carryBack`), waits at the dock if
+ * it's early, and takes home what the run bought (a liquid bought, Fuel or Crude, goes by Tanker or by pipeline). The
+ * Terminal asks for its run a trip ahead of the window: `lead` seconds at first, then the last trip's time and a bit.
+ * The market board: each good sells for its worth (TRADE_VALUE) times `sell` and costs its worth times `buy`, raw goods
+ * (TRADE_RAW) at one rate and made goods at another, Fuel `fuelMarkup` dearer still. So raw goods sell low and buy at
+ * three-quarters of their worth, and made goods for made goods go at a little over half. No route sends a raw good for
+ * another raw good, a made good for one of its own ingredients (TRADE_MADE_FROM: no Cement for Stone), or Cement for
+ * anything but a made good (TRADE_MADE); Crude and Fuel are only ever bought (no convoy carries a liquid). A Terminal
+ * more than `minDist` tiles from the Command Base pays `perTile` more for every tile further, up to `maxBonus`.
+ * Every run sold of a good knocks `sat` off what that good fetches (down to `satMin`), and each second it gets back
+ * `recover` of the way to full (about half in four minutes): one route on a good settles a little under full price,
+ * two drive it down to the floor. With Escort on, `escort` warbots from the nearest garrison within `escortReach`
+ * tiles ride along with each convoy and go back once it's home. Warbots holding a rally flag go after an enemy trade
+ * convoy that passes within `hunt` tiles of the flag. 15 Stone buys about 2.4 Alloy a run, 15 Alloy about
+ * 16 Crystal, 15 Cement about 2 Alloy (more from a Terminal far out).
  */
-const TERMINAL = { minDist: 16, lot: 30, lotWorth: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 4,
-  fuelRate: 0.3, fuelGive: ['stone', 'fiber'] };
-/** What each made good is made from: a contract never sells one for its own ingredients. */
+const TERMINAL = { lot: 15, every: 120, lead: 60, carryBack: 30, minDist: 16, perTile: 0.015, maxBonus: 0.25,
+  sell: { raw: 0.35, made: 0.575 }, buy: { raw: 0.75, made: 1 }, fuelMarkup: 1.5, sat: 0.1, satMin: 0.5, recover: 0.003,
+  escort: 2, escortReach: 24, hunt: 6 };
+/** Raw goods (dug, cut, tapped or pumped) on the market board; the rest of TRADE_BOARD is made in factories. */
+const TRADE_RAW = ['stone', 'fiber', 'ore', 'crystal', 'crude'];
+/** The market board, in the order it's shown: every good a route can send or bring back. */
+const TRADE_BOARD = ['stone', 'fiber', 'ore', 'crystal', 'crude', 'cement', 'alloy', 'chip', 'ammo', 'fuel'];
+/** What each made good is made from: a route never sells one for its own ingredients. */
 const TRADE_MADE_FROM = { cement: ['stone'], alloy: ['ore', 'fiber'], chip: ['crystal', 'alloy'], ammo: ['alloy', 'cement'], fuel: ['crude'] };
-/** Goods only bought, made in factories: what Cement can buy. */
-const TRADE_MADE = ['alloy', 'chip', 'ammo'];
+/** The made goods Cement can buy. */
+const TRADE_MADE = ['alloy', 'chip', 'ammo', 'fuel'];
 /*
  * Neutral Trade Posts (S.posts): off-world exchanges standing on no-one's ground from the start, placed
  * fairly between the colonies (one more than there are colonies; `colony` of them in Colony mode, about
  * `colonyDist` tiles out), at least `minFromBase` tiles from every Command Base and `apart` from each other,
  * and never more than `fair` tiles nearer one colony than another (the nearest two, after the first).
  * A colony trades by docking its Trade Terminal within `dock` tiles of one (one Terminal per post): no
- * Terminal anywhere else, never on a rival's ground, and a rival's land round a post keeps you out.
+ * Terminal anywhere else, never on a rival's ground, and a rival's land round a post keeps you out. The post's
+ * ground, `calm` tiles round its pad, is a no-fire zone: nothing shoots at anything on it, nor from it (see calmAt),
+ * so the fights over trade happen out on the routes, never at the dock.
  */
-const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3 };
-const TERMINAL_GIVE = ['fiber', 'cement', 'stone', 'ore', 'crystal'];
-const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
+const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3, calm: 3 };
+/** The goods tradeShortest weighs for the rival AI (what its land runs out of, and what it's made into). */
+const TRADE_SHORT = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
 
 /*
  * The Murmur (players see them as that; the code calls them wildlife, and their nests type 'nest'): a Colony

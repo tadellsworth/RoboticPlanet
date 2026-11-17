@@ -4016,8 +4016,8 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].sea) { drawShip(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].air) { drawPlane(ctx, u, sx, sy, s, 0); return; }
-  if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); return; }
-  if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
   const color = PLAYER_COLORS[u.owner];
   // A Rocket Truck with its rack raised (deploying or firing) shows its launcher up and legs out.
@@ -4030,6 +4030,7 @@ function drawBot(ctx, u, sx, sy, s) {
   if (truck) {
     if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
     else drawTruck(ctx, u, sx, sy, s, color, own);
+    if (u.trade) drawTradeFlag(ctx, u, sx, sy, s);
   } else if (art) {
     const size = s * (u.type === 'bulwark' ? 0.68 : isArmy(u) ? 0.6 : BOTS[u.type].siege ? 0.72 : 0.5);
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
@@ -4689,6 +4690,7 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
+  drawCalmGround(ctx, ox, oy, z, inView);
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
     const selB = getE(R.selected);
@@ -5590,6 +5592,47 @@ function drawTradePost(ctx, cx, cy, z, post) {
     ctx.fillStyle = on ? '#ffd27a' : '#8a6a30'; ctx.beginPath(); ctx.arc(bx, by, Math.max(1.5, z * 0.045), 0, Math.PI * 2); ctx.fill();
   }
   tradePostLabel(ctx, cx, cy, z, r);
+  ctx.restore();
+}
+
+/**
+ * A Trade Post's ground (TRADE_POST.calm tiles round its pad), where nothing shoots: a faint gold dashed border, its
+ * corners marked, so it's clear where the fighting over trade stops.
+ */
+function drawCalmGround(ctx, ox, oy, z, inView) {
+  if (!S.posts || !S.posts.length) return;
+  const R0 = TRADE_POST.calm;
+  ctx.save();
+  for (const p of S.posts) {
+    if (!inView(p.x, p.y, R0 + 1)) continue;
+    const x0 = ox + (p.x - R0) * z, y0 = oy + (p.y - R0) * z, w = (2 * R0 + 1) * z;
+    ctx.fillStyle = 'rgba(255,207,74,0.05)';
+    ctx.fillRect(x0, y0, w, w);
+    ctx.strokeStyle = 'rgba(255,207,74,0.45)'; ctx.lineWidth = Math.max(1, z * 0.04);
+    ctx.setLineDash([z * 0.22, z * 0.16]);
+    ctx.strokeRect(x0 + 1, y0 + 1, w - 2, w - 2);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,207,74,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.07);
+    const c = z * 0.5;
+    for (const [x, y, dx, dy] of [[x0, y0, 1, 1], [x0 + w, y0, -1, 1], [x0, y0 + w, 1, -1], [x0 + w, y0 + w, -1, -1]]) {
+      ctx.beginPath(); ctx.moveTo(x + dx * c, y + dy * 2); ctx.lineTo(x + dx * 2, y + dy * 2); ctx.lineTo(x + dx * 2, y + dy * c); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/** A trade convoy's pennant (see convoyOf): a small gold flag on a mast above vehicle (sx, sy), flying back from its heading. */
+function drawTradeFlag(ctx, u, sx, sy, s) {
+  const h = s * 0.62, f = u.face || 0, wave = Math.sin(R.time * 6 + u.id) * s * 0.025;
+  const bx = sx - Math.cos(f) * s * 0.18, by = sy - Math.sin(f) * s * 0.18;
+  ctx.save();
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = Math.max(1, s * 0.03);
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by - h); ctx.stroke();
+  const back = Math.cos(f) > 0 ? -1 : 1; // (it streams away from the way it's going)
+  ctx.fillStyle = '#ffcf4a'; ctx.strokeStyle = '#3a2a10'; ctx.lineWidth = Math.max(0.8, s * 0.015);
+  ctx.beginPath(); ctx.moveTo(bx, by - h); ctx.lineTo(bx + back * s * 0.3, by - h + s * 0.08 + wave); ctx.lineTo(bx, by - h + s * 0.17); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = PLAYER_COLORS[u.owner] || '#ffffff';
+  ctx.beginPath(); ctx.arc(bx + back * s * 0.1, by - h + s * 0.085, Math.max(1, s * 0.03), 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
@@ -6670,6 +6713,23 @@ function renderMinimap() {
     ctx.fillStyle = b.built ? PLAYER_COLORS[b.owner] : 'rgba(255,255,255,0.7)';
     ctx.fillRect(x, y, w, h);
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
+  }
+  // Trade routes: each Terminal's lane (the way its convoys drive), dashed in its owner's colour (a rival's fainter:
+  // a raider's map), and the convoys on them, gold dots (flashing red when one was hit just now).
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].terminal || !b.route || !b.lane || b.lane.length < 2) continue;
+    const mine = b.owner === ME;
+    ctx.strokeStyle = PLAYER_COLORS[b.owner] || '#ffffff'; ctx.globalAlpha = mine ? 0.9 : 0.55; ctx.lineWidth = mine ? 1.6 : 1.1;
+    ctx.setLineDash([3, 2.5]);
+    ctx.beginPath();
+    b.lane.forEach((t, k) => { const x = ((t % S.W) + 0.5) * sx, y = (((t / S.W) | 0) + 0.5) * sy; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !u.trade) continue;
+    const b = getE(u.trade), hit = b && b.convoyHit !== undefined && S.time - b.convoyHit < 6 && (R.time * 4) % 2 < 1;
+    ctx.fillStyle = hit ? '#ff5a6e' : '#ffcf4a'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(u.x * sx, u.y * sy, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
   // Trade Posts: gold diamonds.
   if (S.posts) for (const p of S.posts) {

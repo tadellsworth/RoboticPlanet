@@ -1589,6 +1589,8 @@ const SHEET_KEYS = {
   // The Army panel (Q): its orders, the group size, and its Air tab.
   'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
+  // A Trade Terminal's route: Start (or Change) it, Stop it, Escort on or off.
+  'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -5397,42 +5399,87 @@ function openBuildMenu() {
 }
 
 /**
- * The Trade Terminal's contracts: each one's lot and what it pays today, with Take (or Stop) on it, and the
- * lot's progress. Rebuilt only when something shown changes, so its buttons stay pressable.
+ * The Trade Terminal's route and the market board. The route: what it sends and what it brings back (a row of goods
+ * each: tap one of each, then Start route), what a run fetches today, when the next one goes, Stop, and the Escort
+ * switch. The board: what each good sells for and costs on the Trade Post's ledger, eased where you've sold a lot
+ * lately. Rebuilt only when something shown changes, so its buttons stay pressable.
  */
 function renderTrade(b) {
   const el = $('sh-trade');
   if (!el) return;
-  const T = tradeState(ME), have = spendable(ME);
-  const sig = JSON.stringify([T.round, T.pick, T.offers.map((o) => [o.left, tradePay(ME, o, b)]), Object.keys(T.sat).map((g) => Math.round(T.sat[g] * 20))]);
-  $('sh-trade-next').textContent = T.next > S.time ? `new ones in ${fmtTime(T.next - S.time)}` : '';
+  const T = tradeState(ME), r = b.route;
+  if (!UI.tradePick || UI.tradePick.id !== b.id) UI.tradePick = { id: b.id, give: r ? r.give : null, get: r ? r.get : null };
+  const pk = UI.tradePick, why = pk.give && pk.get ? tradePairWhy(pk.give, pk.get) : '';
+  const run = pk.give && pk.get && !why ? tradeRun(ME, pk, b) : null, cur = r ? tradeRun(ME, r, b) : null;
+  const wait = r ? terminalWindow(b) - S.time : 0;
+  $('sh-trade-next').textContent = r ? (wait > 0 ? `next run in ${fmtClock(wait)}` : 'run due') : '';
   const trainNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].train && botLinked(u, b));
   const railNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === ME && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
   const bonus = Math.round((terminalBonus(b) - 1) * 100);
-  // Fuel a contract paid (a liquid) goes home by Tanker, or by a pipeline to storage: say so when none can take it.
-  const fuelHere = Math.floor(terminalSpare(b, 'fuel')), fuelPick = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].steep;
-  const tankerNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].tanker && botLinked(u, b));
+  const liq = r && isLiquid(r.get), tankerNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].tanker && botLinked(u, b));
+  const hit = b.convoyHit !== undefined && S.time - b.convoyHit < 30;
   $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
-    ((fuelHere >= 1 || fuelPick) && !tankerNear && !b.pipedFuel ? '<span class="err">No Tanker can reach it to take its Fuel home: order one at the Bot Foundry (or pipe the Terminal to storage).</span> ' : '') +
-    (fuelHere >= 1 ? `${fuelHere} Fuel waits here for ${b.pipedFuel ? 'the pipeline' : 'a Tanker'}. ` : '') +
-    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot and take what it pays home (Fuel goes by Tanker, or by pipeline to storage). Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
-    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each contract runs up to ' + TERMINAL.lots + ' times, and each lot of a good you sell pays a little less for a while. ' +
-    `The last contract always brings Fuel, at a steep ${Math.round(TERMINAL.fuelRate * 100)}%: for a colony with no oil and poor soil.`;
+    (liq && !tankerNear && !b.pipedFuel ? `<span class="err">No Tanker can reach it to take the ${GOOD[r.get].name} home: order one at the Bot Foundry${r.get === 'fuel' ? ' (or pipe the Terminal to storage)' : ''}.</span> ` : '') +
+    `The Trade Post's ledger takes one run from each Terminal every ${Math.round(TERMINAL.every / 60)} minutes: a convoy (a Road Train, or a Freight Train on track beside it) takes ${TERMINAL.lot} of the good out and brings what they bought home${liq ? ` (${GOOD[r.get].name} goes by Tanker${r.get === 'fuel' ? ', or by pipeline to storage' : ''})` : ''}. ` +
+    `Raw goods sell for about a third of their worth and cost three-quarters of it; made goods sell for a little over half and cost their worth; Fuel costs half as much again. No raw good for another raw good.` +
+    (bonus ? ` This Terminal pays +${bonus}% for standing this far out.` : ` One further than ${TERMINAL.minDist} tiles from your Command Base pays more.`) +
+    ' Nothing shoots on the Post\'s ground: convoys are hit out on the road.';
+  const goods = (side) => (side === 'give' ? tradeSends() : tradeGets());
+  const fmt = (x) => (x >= 10 ? String(Math.round(x)) : (Math.round(x * 10) / 10).toString());
+  renderBoard();
+  const sig = JSON.stringify([r, b.escort, pk, Math.round((cur ? cur.pay : 0) * 10), Math.round((run ? run.pay : 0) * 10), b.runs || 0, hit, warOn()]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
-  if (!T.offers.length) { el.innerHTML = '<p class="hint">Contracts arrive in a moment.</p>'; return; }
-  el.innerHTML = T.offers.map((o, k) => {
-    const on = T.pick === k, pay = tradePay(ME, o, b), sat = T.sat[o.give] ?? 1;
-    // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
-    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${goodN(o.give, o.lot)} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${goodN(o.get, pay)}` +
-      `<small> ${o.steep ? 'Always on offer, at a steep price (half the usual rate); a Tanker takes the Fuel home · ' : ''}${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
-      `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${o.left > 0 ? (on ? 'Stop' : 'Take') : 'Filled'}</button></div>`;
+  const row = (side) => goods(side).map((g) => {
+    const on = pk[side] === g, bad = side === 'get' && pk.give && tradePairWhy(pk.give, g);
+    return `<button class="gtag toggle tpick${on ? ' on' : ''}" data-side="${side}" data-g="${g}"${bad ? ` title="${bad}"` : ''}${bad && !on ? ' disabled' : ''}><i class="gi ${g}"></i><span>${goodN(g, 2)}</span></button>`;
   }).join('');
-  for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
-    const k = +btn.dataset.k;
-    act('contract', [T.pick === k ? -1 : k], () => { renderTrade(b); refreshSheet(); });
+  const last = b.last ? ` · last run: ${b.last.n} ${goodN(b.last.give, b.last.n)} for ${b.last.pay} ${goodN(b.last.get, b.last.pay)}` : '';
+  const same = r && pk.give === r.give && pk.get === r.get;
+  el.innerHTML = `<div class="trade-cur${r ? ' on' : ''}"><span>${r ? `Send <b>${cur.lot}</b> <i class="gi ${r.give}"></i>${goodN(r.give, cur.lot)} → bring back about <b>${fmt(cur.pay)}</b> <i class="gi ${r.get}"></i>${goodN(r.get, 2)}` +
+      `<small>A run every ${Math.round(TERMINAL.every / 60)} minutes${b.runs ? ` · ${b.runs} run${b.runs > 1 ? 's' : ''} so far` : ''}${last}</small>` : 'No route yet<small>Pick a good to send and one to bring back, then Start route.</small>'}` +
+      `${hit ? '<small class="err">A convoy was hit on the road just now.</small>' : ''}</span></div>` +
+    `<div class="trade-side">Send</div><div class="goodlist" id="sh-tgive">${row('give')}</div>` +
+    `<div class="trade-side">Bring back</div><div class="goodlist" id="sh-tget">${row('get')}</div>` +
+    `<p class="hint" id="sh-tpreview">${!pk.give || !pk.get ? 'Tap a good in each row.' : why ? `<span class="err">${why}</span>` : `${run.lot} ${goodN(pk.give, run.lot)} → about ${fmt(run.pay)} ${goodN(pk.get, 2)} a run, at today's prices.`}</p>` +
+    `<div class="actions"><button class="btn primary" id="sh-tgo" ${run && !same ? '' : 'disabled'}>${r ? 'Change route' : 'Start route'}</button>` +
+    `<button class="btn" id="sh-tstop" ${r ? '' : 'disabled'}>Stop route</button>` +
+    `<button class="btn${b.escort ? ' primary' : ''}" id="sh-escort" aria-pressed="${b.escort ? 'true' : 'false'}">Escort: ${b.escort ? 'on' : 'off'}</button></div>` +
+    `<p class="hint">Escort: ${TERMINAL.escort} warbots from the nearest garrison ride along with each convoy and walk back once it's home.</p>`;
+  for (const btn of el.querySelectorAll('button.tpick')) btn.onclick = () => {
+    const side = btn.dataset.side, g = btn.dataset.g;
+    pk[side] = pk[side] === g ? null : g;
+    if (side === 'give' && pk.get && tradePairWhy(pk.give, pk.get)) pk.get = null; // (what it brought back can't be had for the new good)
     sfx('click');
+    renderTrade(b);
   };
+  $('sh-tgo').onclick = () => {
+    const give = pk.give, get = pk.get;
+    act('tradeRoute', [b.id, give, get], (w) => {
+      if (w) { sfx('error'); toast(w, 'warn'); }
+      else { sfx('place'); haptic('order'); toast(`Trade route set: ${GOOD[give].name} out, ${GOOD[get].name} back.`, 'info'); }
+      renderTrade(b); refreshSheet();
+    });
+  };
+  $('sh-tstop').onclick = () => { act('tradeRoute', [b.id, null, null], () => { UI.tradePick = null; renderTrade(b); refreshSheet(); }); sfx('click'); };
+  $('sh-escort').onclick = () => { act('tradeEscort', [b.id, !b.escort], () => { renderTrade(b); refreshSheet(); }); sfx('click'); };
+  markSheetKeys();
+}
+
+/** The market board: each good's price selling and buying on the Trade Post's ledger (TRADE_VALUE × 20, in whole marks of the ledger), eased ones marked. */
+function renderBoard() {
+  const el = $('sh-board');
+  if (!el) return;
+  const T = tradeState(ME), sends = tradeSends(), gets = tradeGets();
+  const sig = JSON.stringify([gets, TRADE_BOARD.map((g) => Math.round((T.sat[g] ?? 1) * 100))]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  const n = (x) => Math.max(1, Math.round(x * 20));
+  el.innerHTML = '<div class="board-row board-head"><span>Good</span><span>Sells for</span><span>Costs</span></div>' + TRADE_BOARD.filter((g) => gets.includes(g)).map((g) => {
+    const sat = T.sat[g] ?? 1, eased = sat < 0.99;
+    return `<div class="board-row${tradeRaw(g) ? ' raw' : ''}"><span><i class="gi ${g}"></i>${goodN(g, 2)}<small>${tradeRaw(g) ? 'raw' : 'made'}</small></span>` +
+      `<span${eased ? ' class="eased" title="You sold a lot of it lately: it fetches less for a while"' : ''}>${sends.includes(g) ? n(sellPrice(ME, g)) + (eased ? ` ↓${Math.round((1 - sat) * 100)}%` : '') : '—'}</span><span>${n(buyPrice(g))}</span></div>`;
+  }).join('');
 }
 
 /** A Port's shipyard or a Rail Station's rail yard: each kind it builds, how many are ordered, +1, +5 and Clear. */
@@ -5538,7 +5585,8 @@ function openBuildingSheet(b) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
-    if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
+    if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
+      '<div class="section-label">Market board <span class="label-note">the Post\'s ledger: what each good sells for and costs</span></div><div class="board" id="sh-board"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
     if (def.station && !def.terminal && b.built && mine) {
       html += `<div class="section-label">Railway</div><div class="status" id="sh-rail-status"></div>
@@ -6293,6 +6341,7 @@ function botActivity(u) {
       if (t.type === 'topup') return 'Topping up its battery';
       if (t.type === 'refill') return `Tank empty: going to refill it with Fuel at the ${nm(t.bld)}` + (u.resume ? ', then back to it' : '');
       if (t.type === 'loot') return t.phase === 'home' ? 'Carrying a crate of loot home' : 'Going to pick up loot';
+      if (t.type === 'escort') { const c = getE(t.bot); return c && !c.dead && c.inside ? 'Escorting a trade convoy: waiting with it at the Trade Post' : c && !c.dead && dist2(c.x, c.y, u.x, u.y) <= 2.6 ? 'Escorting a trade convoy: riding along' : 'Escorting a trade convoy: catching up with it'; }
       return 'On patrol';
     })();
     return what + where;
@@ -6311,6 +6360,8 @@ function botActivity(u) {
   if (t && t.type === 'staff' && (t.phase === 'toCharge' || t.phase === 'charging')) return t.phase === 'charging' ? 'Recharging its battery' : 'Going to recharge its battery';
   if (!t) return u.carry ? `Looking for somewhere to store ${GOOD[u.carry].name}` : u.inside ? 'Resting in storage' : 'Waiting for a job';
   if (t.type === 'home') return 'Heading back to storage';
+  if (t.type === 'dock') return 'Trade convoy: waiting at the Trade Post for the ledger to take its run';
+  if (t.type === 'haul' && u.trade) return t.dst === u.trade ? (t.phase === 'toSrc' ? `Trade convoy: loading ${GOOD[t.good].name} at the ${nm(t.src)}` : `Trade convoy: taking ${GOOD[t.good].name} out to the Trade Terminal`) : t.phase === 'toSrc' ? `Trade convoy: going to the Trade Post for its ${GOOD[t.good].name}` : `Trade convoy: bringing ${GOOD[t.good].name} home from the Trade Post`;
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
   if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : `Constructing ${a}`; }
   if (t.type === 'staff') {
@@ -6583,7 +6634,7 @@ function openPostSheet(post) {
   const t = tIdx(post.x, post.y);
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Trade Post</h3><div class="sub">Neutral: nobody owns it</div></div></div>
-    <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. Only Road Trains and Freight Trains serve it. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more.</p>
+    <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. A small neutral AI keeps the Accord's ledger here: your Terminal runs one standing trade route, a Road Train or Freight Train convoy every 2 minutes. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more. <b>Nothing shoots on its ground</b> (the gold dashed square): convoys are hit out on the road.</p>
     <div id="sh-dyn"></div>
     <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>${flavorLine('post')}`;
   openSheet('post', t, html);
@@ -7029,7 +7080,7 @@ function refreshPopSheet() {
 }
 
 const WARBOT_PLACES = [['base', 'At the Command Base'], ['posted', 'In Outposts and Bunkers'], ['home', 'Heading back to a garrison'], ['attack', 'Attacking'],
-  ['hold', 'Holding a rally flag'], ['defend', 'Out guarding a garrison'], ['fix', 'Being repaired or recharging'], ['loot', 'Carrying loot home'],
+  ['hold', 'Holding a rally flag'], ['defend', 'Out guarding a garrison'], ['escort', 'Escorting trade convoys'], ['fix', 'Being repaired or recharging'], ['loot', 'Carrying loot home'],
   ['idle', 'Standing in the field (no garrison with room)']];
 
 /** Your warbots sorted by where they are and what they're doing (WARBOT_PLACES). */
@@ -7045,6 +7096,7 @@ function warbotGroups() {
     else if (tt === 'attack') g.attack.push(u);
     else if (tt === 'hold') g.hold.push(u);
     else if (tt === 'defend') g.defend.push(u);
+    else if (tt === 'escort') g.escort.push(u);
     else if (tt === 'repair' || tt === 'topup') g.fix.push(u);
     else if (tt === 'loot') g.loot.push(u);
     else if (tt === 'garrison') g.home.push(u);
