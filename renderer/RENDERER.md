@@ -13,7 +13,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | `b/*.js` | One scene per sprite (list below). `worklib.js`, `milkit.js`, `robkit.js`, `missile.js` and `nuke.js` are shared helpers the scenes import. |
 | `compose.py`, `compose_any.py`, `compose2.py` | Add bloom from the glow pass and downsample 2×. |
 | `walls/` | The wall and gate renderer: `run.js`, `index.html`, `wlib.js`, `b/wall.js`, `b/gate.js`, `compose_walls.py`, and `layout.py` (test layouts). |
-| `post/` | Python that finishes renders: light overlays, the Pulse Cannon effects, working-loop embers, lamp heads, time-of-day extras, headlights and emitter points. |
+| `post/` | Python that finishes renders: light overlays, the Pulse Cannon effects, working-loop embers, lamp heads, time-of-day extras, headlights, emitter points, and the Lore guide's pictures (`lore_planet.py`, `murmur_lore.py`). |
 | `fx/` | The 2D effect library (`fxlib.py`) and the sheets made with it: explosion, fuel blast, smoke, steam, flare and exhaust. |
 | `terrain/` | The pure-Python terrain renderer: ground, water, rock, cliffs, plants and canyon tiles. `tex.py` is also used by `fx/fxlib.py`. |
 | `preview/` | The review videos and mock-ups. These don't ship. |
@@ -33,7 +33,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Ropeway | ropeway (the station), gondola |
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
-| Wildlife | creature (scuttler, brute), nest |
+| The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -126,8 +126,13 @@ Parameters the scenes read:
 | `rot=k&n=N` | pulseturret, mortar heads | Head direction k of N. 0 is right (east), then clockwise on screen. |
 | `empty=1` | silo, nsilo | The silo with its missile gone. |
 | `d=k` | crawler | Deploy frame 1–9. Frame 9 is the deployed base. |
-| `c=scuttler\|brute` | creature | Which creature. |
-| `s=1..3` | nest | Nest size. |
+| `c=scuttler\|brute` | creature (old, unshipped) | Which creature. |
+| `s=1..3` | nest (old, unshipped), murmur_moles (`c=burrow`) | Nest level. |
+| `c=` | murmur_moles | Which Murmur: `swarmer` (the game's Scuttler), `brute`, `drainer` (the Leech), `spitter`, `delver`, `spit-glob` (the Spitter's clot alone, flying right) or `burrow` (the nest, with `s=`). |
+| `v=base\|rust\|white\|bloom` | murmur_moles | The regional variant (Scuttler, Spitter, Delver): Rust armoured in ironstone plates, White pale, shaggy and slow, Bloom with the Bloom's glowing violet veins. |
+| `pose=feed\|sense\|spit\|surface` | murmur_moles | `feed` the Leech latched on (star flared, pressed to the power, threads of charge; `feed=1` works too); `sense` any class standing still with its star flared and lit; `spit` the Spitter spitting; `surface` the Delver breaking the surface. |
+| `charge=0..1` | murmur_moles | How full of charge (default 0.75, a well-fed raider): the crystal glows with it and goes dull and lightless when hungry. |
+| `hero=1`, `hi=1\|2`, `ground=0` | murmur_moles | A 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets its power line), rendered 2× or 4× bigger with `hi`; `ground=0` leaves the ground out (to measure where the animal sits). |
 | `piece=` | rail, bridge, pipe | The tile piece (pipe: straight, corner, tee, cross, end, raised). Rail also has `lights-on`; bridges also have `lamp`, and `abut-w/e/n/s` (a Viaduct's abutment tile; `abut-e`: its span leaves eastward). |
 | `style=water\|sky\|rail` | bridge | The bridge type. |
 | `kind=road\|asphalt`, `lit=1` | streetlamp | Which lamp, and whether to render only the lit head. |
@@ -162,7 +167,8 @@ node walls/run.js out/w 'wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod
 | Walls and gates | 512 | The same 57° view, orthographic, no pad |
 | Streetlamps | 256 | Orthographic 57°. The foot is at (128, 234). |
 | Freight Truck and Tanker | 384 | Straight down, facing right, 10 world units across |
-| Robots, Road Train, train cars, gondola, creatures, trader | 256 | Straight down, 10 units across |
+| Robots, Road Train, train cars, gondola, trader | 256 | Straight down, 10 units across |
+| The Murmur (murmur_moles) | 256 (rendered at 512; hero shots 512–2048) | Straight down, facing right, centred on the body, `SPRITE_W` units across: Scuttler 5.8, Spitter 6.8, Leech 7.6, Delver 8.4, Brute 11.4 (designed for `tile × 0.078 × SPRITE_W`; the game draws the Scuttler frame 0.62 of a tile wide and the Brute 0.82, `drawCritter` in `js/render.js`). The Burrow uses the buildings' 57° view on 512, no pad. |
 | Crawler | 512 | Straight down, 20 units across |
 | Rail tiles | 256 | Straight down |
 | Pipe tiles | 256 | Straight down |

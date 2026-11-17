@@ -77,9 +77,9 @@ art/buildings/ropeway@1.png	main	ropeway::#ff5a6e:ropeway@1	compose.py
 art/buildings/bunker@1.png	main	bunker::#ff5a6e:bunker@1	compose.py
 art/buildings/mortar@1.png	main	mortar::#ff5a6e:mortar@1:part=base	compose.py
 art/buildings/disruptor@1.png	main	disruptor::#ff5a6e:disruptor@1	compose.py --glow 0.4
-art/buildings/nest-1.png	main	nest:::nest-1:s=1	compose.py
-art/buildings/nest-2.png	main	nest:::nest-2:s=2	compose.py
-art/buildings/nest-3.png	main	nest:::nest-3:s=3	compose.py
+art/buildings/nest-1.png	main	murmur_moles:::nest-1:c=burrow&s=1	compose.py
+art/buildings/nest-2.png	main	murmur_moles:::nest-2:c=burrow&s=2	compose.py
+art/buildings/nest-3.png	main	murmur_moles:::nest-3:c=burrow&s=3	compose.py
 
 ## Gun heads (day): K turns clockwise on screen from right
 art/buildings/turret-head-0@0.png	main	pulseturret::#38d4ff:turret16-0@0:part=head&rot=0&n=16	compose.py
@@ -212,9 +212,9 @@ art/tod/morning/buildings/ropeway@1.png	main	ropeway::#ff5a6e:ropeway@1:tod=morn
 art/tod/morning/buildings/bunker@1.png	main	bunker::#ff5a6e:bunker@1:tod=morning	compose.py
 art/tod/morning/buildings/mortar@1.png	main	mortar::#ff5a6e:mortar@1:part=base&tod=morning	compose.py
 art/tod/morning/buildings/disruptor@1.png	main	disruptor::#ff5a6e:disruptor@1:tod=morning	compose.py --glow 0.4
-art/tod/morning/buildings/nest-1.png	main	nest:::nest-1:s=1&tod=morning	compose.py
-art/tod/morning/buildings/nest-2.png	main	nest:::nest-2:s=2&tod=morning	compose.py
-art/tod/morning/buildings/nest-3.png	main	nest:::nest-3:s=3&tod=morning	compose.py
+art/tod/morning/buildings/nest-1.png	main	murmur_moles:::nest-1:c=burrow&s=1&tod=morning	compose.py
+art/tod/morning/buildings/nest-2.png	main	murmur_moles:::nest-2:c=burrow&s=2&tod=morning	compose.py
+art/tod/morning/buildings/nest-3.png	main	murmur_moles:::nest-3:c=burrow&s=3&tod=morning	compose.py
 
 ## Gun heads (morning): K turns clockwise on screen from right
 art/tod/morning/buildings/turret-16dir/turret-head-0@0.png	main	pulseturret::#38d4ff:turret16-0@0:part=head&rot=0&n=16&tod=morning	compose.py
@@ -363,9 +363,9 @@ art/tod/evening/buildings/ropeway@1.png	main	ropeway::#ff5a6e:ropeway@1:tod=even
 art/tod/evening/buildings/bunker@1.png	main	bunker::#ff5a6e:bunker@1:tod=evening	compose.py
 art/tod/evening/buildings/mortar@1.png	main	mortar::#ff5a6e:mortar@1:part=base&tod=evening	compose.py
 art/tod/evening/buildings/disruptor@1.png	main	disruptor::#ff5a6e:disruptor@1:tod=evening	compose.py --glow 0.4
-art/tod/evening/buildings/nest-1.png	main	nest:::nest-1:s=1&tod=evening	compose.py
-art/tod/evening/buildings/nest-2.png	main	nest:::nest-2:s=2&tod=evening	compose.py
-art/tod/evening/buildings/nest-3.png	main	nest:::nest-3:s=3&tod=evening	compose.py
+art/tod/evening/buildings/nest-1.png	main	murmur_moles:::nest-1:c=burrow&s=1&tod=evening	compose.py
+art/tod/evening/buildings/nest-2.png	main	murmur_moles:::nest-2:c=burrow&s=2&tod=evening	compose.py
+art/tod/evening/buildings/nest-3.png	main	murmur_moles:::nest-3:c=burrow&s=3&tod=evening	compose.py
 
 ## Gun heads (evening): K turns clockwise on screen from right
 art/tod/evening/buildings/turret-16dir/turret-head-0@0.png	main	pulseturret::#38d4ff:turret16-0@0:part=head&rot=0&n=16&tod=evening	compose.py
@@ -514,9 +514,9 @@ art/tod/night/buildings/ropeway@1.png	main	ropeway::#ff5a6e:ropeway@1:tod=night	
 art/tod/night/buildings/bunker@1.png	main	bunker::#ff5a6e:bunker@1:tod=night	compose.py
 art/tod/night/buildings/mortar@1.png	main	mortar::#ff5a6e:mortar@1:part=base&tod=night	compose.py
 art/tod/night/buildings/disruptor@1.png	main	disruptor::#ff5a6e:disruptor@1:tod=night	compose.py --glow 0.4
-art/tod/night/buildings/nest-1.png	main	nest:::nest-1:s=1&tod=night	compose.py
-art/tod/night/buildings/nest-2.png	main	nest:::nest-2:s=2&tod=night	compose.py
-art/tod/night/buildings/nest-3.png	main	nest:::nest-3:s=3&tod=night	compose.py
+art/tod/night/buildings/nest-1.png	main	murmur_moles:::nest-1:c=burrow&s=1&tod=night	compose.py
+art/tod/night/buildings/nest-2.png	main	murmur_moles:::nest-2:c=burrow&s=2&tod=night	compose.py
+art/tod/night/buildings/nest-3.png	main	murmur_moles:::nest-3:c=burrow&s=3&tod=night	compose.py
 
 ## Gun heads (night): K turns clockwise on screen from right
 art/tod/night/buildings/turret-16dir/turret-head-0@0.png	main	pulseturret::#38d4ff:turret16-0@0:part=head&rot=0&n=16&tod=night	compose.py
@@ -971,14 +971,14 @@ art/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d9:d=9	compos
 art/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1	compose_any.py --b1 3.5 --b2 10
 art/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish	compose_any.py --b1 6 --b2 16
 art/units/trader-ship.png	main	trader:::trader-ship	compose_any.py --b1 3.5 --b2 10
-art/units/scuttler-f0.png	main	creature:::scuttler-f0:c=scuttler&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f1.png	main	creature:::scuttler-f1:c=scuttler&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f2.png	main	creature:::scuttler-f2:c=scuttler&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f3.png	main	creature:::scuttler-f3:c=scuttler&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f0.png	main	creature:::brute-f0:c=brute&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f1.png	main	creature:::brute-f1:c=brute&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f2.png	main	creature:::brute-f2:c=brute&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f3.png	main	creature:::brute-f3:c=brute&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (morning): top-down, facing right
 art/tod/morning/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=morning	compose_any.py --b1 5 --b2 15
@@ -1101,14 +1101,14 @@ art/tod/morning/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d
 art/tod/morning/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/trader-ship.png	main	trader:::trader-ship:tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/scuttler-f0.png	main	creature:::scuttler-f0:c=scuttler&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f1.png	main	creature:::scuttler-f1:c=scuttler&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f2.png	main	creature:::scuttler-f2:c=scuttler&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f3.png	main	creature:::scuttler-f3:c=scuttler&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f0.png	main	creature:::brute-f0:c=brute&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f1.png	main	creature:::brute-f1:c=brute&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f2.png	main	creature:::brute-f2:c=brute&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f3.png	main	creature:::brute-f3:c=brute&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (evening): top-down, facing right
 art/tod/evening/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=evening	compose_any.py --b1 5 --b2 15
@@ -1231,14 +1231,14 @@ art/tod/evening/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d
 art/tod/evening/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/trader-ship.png	main	trader:::trader-ship:tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/scuttler-f0.png	main	creature:::scuttler-f0:c=scuttler&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f1.png	main	creature:::scuttler-f1:c=scuttler&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f2.png	main	creature:::scuttler-f2:c=scuttler&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f3.png	main	creature:::scuttler-f3:c=scuttler&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f0.png	main	creature:::brute-f0:c=brute&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f1.png	main	creature:::brute-f1:c=brute&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f2.png	main	creature:::brute-f2:c=brute&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f3.png	main	creature:::brute-f3:c=brute&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (night): top-down, facing right
 art/tod/night/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=night	compose_any.py --b1 5 --b2 15
@@ -1361,15 +1361,22 @@ art/tod/night/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d9:
 art/tod/night/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/trader-ship.png	main	trader:::trader-ship:tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/scuttler-f0.png	main	creature:::scuttler-f0:c=scuttler&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f1.png	main	creature:::scuttler-f1:c=scuttler&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f2.png	main	creature:::scuttler-f2:c=scuttler&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f3.png	main	creature:::scuttler-f3:c=scuttler&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f0.png	main	creature:::brute-f0:c=brute&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f1.png	main	creature:::brute-f1:c=brute&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f2.png	main	creature:::brute-f2:c=brute&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f3.png	main	creature:::brute-f3:c=brute&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
+
+## The Lore guide's Murmur pictures (art/lore, 480 x 360 WebP): night hero renders, cropped round the animal
+art/lore/murmur-scuttler.webp	main	murmur_moles:::murmur-scuttler-hero:c=swarmer&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-scuttler-hero.png {fin}/murmur-scuttler.webp --class scuttler
+art/lore/murmur-brute.webp	main	murmur_moles:::murmur-brute-hero:c=brute&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-brute-hero.png {fin}/murmur-brute.webp --class brute
+art/lore/murmur-leech.webp	main	murmur_moles:::murmur-leech-hero:c=drainer&pose=feed&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-leech-hero.png {fin}/murmur-leech.webp --class leech
+art/lore/murmur-spitter.webp	main	murmur_moles:::murmur-spitter-hero:c=spitter&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-spitter-hero.png {fin}/murmur-spitter.webp --class spitter
+art/lore/murmur-delver.webp	main	murmur_moles:::murmur-delver-hero:c=delver&hero=1&hi=2&tod=night	compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {raw}/murmur-delver-hero.png {fin}/murmur-delver.webp --class delver
 ## Vehicle light overlays (day only: light, drawn over the sprite at every time of day)
 art/units/truck-brake.png	main	truck::#38d4ff:truck-brake:part=brake	compose_any.py --b1 5 --b2 15 | post/truck_overlays.py {raw} {fin}
 art/units/truck-boost.png	main	truck::#38d4ff:truck-boost:part=boost	compose_any.py --b1 5 --b2 15 | post/truck_overlays.py {raw} {fin}

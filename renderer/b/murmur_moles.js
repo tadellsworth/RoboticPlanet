@@ -17,12 +17,14 @@
 //   c=burrow&s=1|2|3                    the Burrow (the nest) at its three growth levels (the game's nest-1..3)
 //   ?hero=1                             a 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets
 //                                       the power line it is drinking from)
+//   ?ground=0                           a hero shot without its patch of ground (to measure where the animal sits)
 //   ?hi=1|2                             render 2x / 4x bigger (presentation)
 //   ?tod=night|evening|morning          time of day (lib.js); at night only the creatures' own light shows
 // Sprites follow the robots: orthographic straight down, facing +x, centred on the body, no ground and no shadow (the
 // game draws those), sun from the top-left, toned like robkit.js. The models share one world scale (a Brute is twice a
-// Scuttler); SPRITE_W is the frame width in world units, so in the game draw a sprite at tile * 0.078 * W (the robots'
-// 0.06 per unit, times 1.3 so the smallest still reads). The Burrow uses the building camera (like nest.js) on the 512
+// Scuttler); SPRITE_W is the frame width in world units, designed to be drawn at tile * 0.078 * W (the robots' 0.06
+// per unit, times 1.3 so the smallest still reads); the game draws the Scuttler frame 0.62 of a tile wide and the Brute
+// 0.82 (drawCritter in js/render.js). The Burrow uses the building camera (like nest.js) on the 512
 // canvas. Rules from the brief: fur, skin, soil and stone only; no shells, mandibles, extra legs, wings or slime.
 import { molekit } from './murmur_moleskit.js';
 
@@ -49,7 +51,7 @@ export default function (L) {
     'spit-glob': { pos: [2.6, 1.6, 2.9], at: [0, 0.4, 0], fov: 30 },
   };
   K.camera(W, HERO && heroCams[C]);
-  if (HERO) K.heroGround(W);
+  if (HERO && P.get('ground') !== '0') K.heroGround(W);
   const G = L.group(0, 0, 0), GL = L.group(0, 0, 0, 0, G);       // GL holds the moving limbs
   G.scale.setScalar(GROW);
   // every class centres itself on its body alone (centreOn), so the walk never jitters and a special pose stays
