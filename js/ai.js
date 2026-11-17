@@ -51,7 +51,7 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
  *   what it lacks (only vehicles give Chips back; vehicles and crews idle `crisisIdle` seconds);
  * - when it makes economic sense (not Easy): its Bot Foundry waits for parts that a vehicle, crew or Hauler idle for
  *   `eco` seconds gives back, one at a time, at most one every `ecoGap` seconds.
- * A kind scrapped isn't ordered again for `hold` seconds (P.scrapT).
+ * A kind scrapped isn't ordered again for `hold` seconds (P.scrapT), nor Haulers in place of scrapped Freight Trucks.
  */
 const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, far: 3, batch: 4, idle: 120, crisis: 90, crisisIdle: 60, eco: 300, ecoGap: 60, hold: 300 };
 /** The robots it may scrap, vehicles first (they give Chips back too); never the army, planes, ships, trains or Crawlers. */
@@ -901,8 +901,10 @@ function aiThink(p) {
     if ((tradeFirst || me.some((t) => BDEFS[t.type].terminal)) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
     if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
-    // A kind it scrapped lately isn't ordered again (but a Tanker when it has none: see aiScrap).
-    for (const k in b.orders) if (aiScrapHeld(P, k) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
+    // A kind it scrapped lately isn't ordered again (but a Tanker when it has none: see aiScrap), nor are Haulers in place
+    // of the Freight Trucks it scrapped (they count towards its Haulers), past AI_SCRAP.minHaulers.
+    for (const k in b.orders) if ((aiScrapHeld(P, k) && !(k === 'tanker' && !(kinds.tanker > 0))) ||
+      (k === 'hauler' && aiScrapHeld(P, 'truck') && (kinds.hauler || 0) >= AI_SCRAP.minHaulers)) delete b.orders[k];
     break;
   }
   // Scrap the extras: robots it has more of than it uses go to its Foundry to be recycled, a few at a time, when it has
