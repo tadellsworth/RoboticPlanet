@@ -5025,8 +5025,15 @@ function drawHarvestUnder(ctx, u, pose, ox, oy, z) {
     const h = z * 0.06 * grow;
     ctx.strokeStyle = '#6fbf3e'; ctx.lineWidth = Math.max(1, z * 0.014); ctx.lineCap = 'round';
     if (pose.hk === 'sow') {
-      // Reedcane: three thin shoots fanning up.
-      for (const s of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(x + s * h * 0.12, y); ctx.quadraticCurveTo(x + s * h * 0.15, y - h * 0.6, x + s * h * 0.5, y - h * (s ? 0.95 : 1.25)); ctx.stroke(); }
+      // Reedcane: a tuft of thin blades, arching out from one root, paler at the tips.
+      ctx.fillStyle = '#4f8f34';
+      ctx.beginPath(); ctx.ellipse(x, y, h * 0.22, h * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      for (const [ang, len] of [[-0.62, 0.85], [-0.22, 1.2], [0.15, 1.05], [0.55, 0.9]]) {
+        const tx = x + Math.sin(ang) * h * len, ty = y - Math.cos(ang) * h * len;
+        ctx.strokeStyle = '#6fbf3e';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + Math.sin(ang) * h * 0.2, y - h * len * 0.7, tx, ty); ctx.stroke();
+        ctx.fillStyle = '#b7e07a'; ctx.fillRect(tx - 0.6, ty - 0.6, 1.2, 1.2);
+      }
     } else {
       // An energy crop: a stem and two leaves.
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h * 0.7); ctx.stroke();
