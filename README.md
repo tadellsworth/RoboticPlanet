@@ -474,7 +474,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
   beside whichever enemy building it can reach that's least guarded (`aiNaval`). Against a rival across the water
-  (Medium and up, not in missions), once it has a decisive lead (half as many warbots again and four more) or a landing
+  (Medium and up, in missions too), once it has a decisive lead (half as many warbots again and four more) or a landing
   is held back by the guns over the beach, it lands a band instead (`aiBeach`, `P.beach`, `AI_BEACH`): it picks the
   rival's Command Base if it has the warbots to take it, or else the fort it takes fewest to take, and a beach out of
   the guns' reach near it (off the rival's land where it can be: warbots standing about there run their batteries
@@ -1286,7 +1286,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
   tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to.
-- **The rival's opening** (Medium, Normal and Hard, not a mission's rival: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`):
+- **The rival's opening** (Medium, Normal and Hard, a mission's rival too: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`):
   its Bot Foundry goes up straight after its first Fuel Station (it lands with what the Foundry costs), and the rest of
   the plan's opening (two Harvesters, a Quarry, a Cement Works, a Mine, a Crystal Tap, a Smelter, a Chip Fab) comes
   before every other ask until each of them has stood once (what it can't place yet, a Mine with no Ore on its land, is
@@ -1294,7 +1294,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Workers for them, not warbots, and doesn't rest for the Ammo Plant. Tenth in the plan, the Foundry used to wait
   behind Outposts toward what was short and their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a
   Worker of its own once the buildings before it had taken every one: on Long haul both rivals sat at their ten landing
-  Workers until minute 10 to 15. Now the first robot comes about half a minute in.
+  Workers until minute 10 to 15. Now the first robot comes about half a minute in. In missions it reaches every rival
+  of Medium and up (a mission's `rival` level for the difficulty): Hold the Line's on every level; Supply Lines',
+  Convoy's, Siege Breakers', Final Descent's and King of the Hill's on Normal and Hard; Live Fire's, Border Dispute's
+  and Chain Reaction's on Hard. Played headless before and after (the AI on your side plus the hints' steps, three
+  times or more for each mission and level it reaches), each is still won: a passive rival is weaker early, since its
+  Foundry makes Workers first (Live Fire on Hard went from one win in three to three); Siege Breakers on Hard takes
+  about 30 minutes instead of 22 (its 45-minute clock stands); Final Descent on Normal and Hard is a real war now,
+  where the old rival's army was gone by minute 10 (six wins in seven on each: one lost on Hard, one still open at 41
+  minutes on Normal); Hold the Line's Herald hits a colony that only follows the hints a minute or two sooner on Easy
+  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, left to the trade work, was played
+  only by the AI (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
+  Harbour's briefing tells of them.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
