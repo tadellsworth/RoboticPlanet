@@ -283,11 +283,13 @@ function aiScrap(p, c) {
   };
   // Crisis: no Alloy or no Chips for a while (P.dry: none on hand while the Foundry or a site waits for it), with next to
   // none being made: the robots that give back what it lacks (only vehicles give Chips back).
-  const goods = playerGoods(p), rates = goodRates(p);
   const dryFor = (g) => { const r = P.dry && P.dry[g]; return r && S.time - r[1] <= 4 ? S.time - r[0] : 0; };
-  const lacks = (g) => dryFor(g) >= AI_SCRAP.crisis && rates[g].made < 1 && (goods[g] || 0) < 1;
-  const lackChip = lacks('chip');
-  if (lackChip || lacks('alloy')) send(AI_SCRAP.batch - away, AI_SCRAP.crisisIdle, true, lackChip ? 'chip' : null, c.few ? AI_SCRAP_KINDS.filter((k) => k !== 'worker') : null);
+  let lackChip = dryFor('chip') >= AI_SCRAP.crisis, lackAlloy = dryFor('alloy') >= AI_SCRAP.crisis;
+  if (lackChip || lackAlloy) {
+    const goods = playerGoods(p), rates = goodRates(p), lacks = (g) => rates[g].made < 1 && (goods[g] || 0) < 1;
+    lackChip = lackChip && lacks('chip'); lackAlloy = lackAlloy && lacks('alloy');
+  }
+  if (lackChip || lackAlloy) send(AI_SCRAP.batch - away, AI_SCRAP.crisisIdle, true, lackChip ? 'chip' : null, c.few ? AI_SCRAP_KINDS.filter((k) => k !== 'worker') : null);
   // Too many: no room under the bot limit for the army it wants.
   if (!c.few && c.room > 0) send(Math.min(AI_SCRAP.batch - away, c.room - away) - sent, AI_SCRAP.idle, true, null, null);
   // Economic sense (not Easy): the Foundry waits for parts that a robot idle for minutes would give back. One at a time.
