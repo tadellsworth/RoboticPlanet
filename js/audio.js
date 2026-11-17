@@ -93,6 +93,11 @@ function buildAudioGraph(ac) {
   A.fxBus = ac.createGain();
   A.fxBus.gain.value = A.fx;
   A.fxBus.connect(A.master);
+  // The land's own sounds (each biome's wind, bed and calls, water, crickets, the sea) go through a bus of their own
+  // under the effects (NATURE_LEVEL), so they sit below the colony and the fighting.
+  A.natureBus = ac.createGain();
+  A.natureBus.gain.value = NATURE_LEVEL;
+  A.natureBus.connect(A.fxBus);
   // The effects' own space, for explosions: a dark outdoor reverb (the blast rolling round the hills) and a
   // slapback echo off a far ridge. Explosions send to both (more of it the further off they are).
   A.fxVerbIn = ac.createGain();
@@ -1047,7 +1052,7 @@ function updateBeds(live, dt) {
     const wind = ac.createBufferSource(); wind.buffer = A.noise; wind.loop = true;
     const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 0.7;
     const wg = ac.createGain(); wg.gain.value = 0;
-    wind.connect(bp).connect(wg).connect(A.fxBus);
+    wind.connect(bp).connect(wg).connect(A.natureBus);
     wind.start();
     WORLD.bed = { hum, g3, lp, bp, wg, o1, o2, gust: 0, chirp: 3 };
   }
@@ -1138,7 +1143,7 @@ function ambienceBeds(live, dt, zl) {
     ab.connect(abg); ab.start();
     if (airPan) { air.g.connect(airPan); abg.connect(airPan); airPan.connect(A.fxBus); } else { air.g.connect(A.fxBus); abg.connect(A.fxBus); }
     // The sea: low, rumbling wash.
-    const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.fxBus);
+    const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.natureBus);
     WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
   }
   const M = WORLD.amb, on = live && AUDIO.fx > 0;
@@ -1184,7 +1189,7 @@ function ambienceBeds(live, dt, zl) {
       M.cricket = (0.6 + Math.random() * 2.2) / Math.max(0.3, W);
       const g = ac.createGain(), pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
       g.gain.value = 0.5 * night * (0.3 + 0.7 * W);
-      if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(A.fxBus); } else g.connect(A.fxBus);
+      if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(A.natureBus); } else g.connect(A.natureBus);
       sfx('cricket', g);
       setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 2000);
     }
@@ -1233,11 +1238,14 @@ function weatherSound() {
   return weatherAt(S.time);
 }
 
-/** A gain for a sound from somewhere round about (panned at random within ±spread), that lets go of itself after a while. */
-function aroundVoice(spread, vol) {
-  const ac = AUDIO.ctx, g = ac.createGain();
+/**
+ * A gain for a sound from somewhere round about (panned at random within ±spread), that lets go of itself after a while.
+ * `bus`: where it goes (the effects unless given: the land's own sounds pass AUDIO.natureBus).
+ */
+function aroundVoice(spread, vol, bus) {
+  const ac = AUDIO.ctx, g = ac.createGain(), out = bus || AUDIO.fxBus;
   g.gain.value = vol === undefined ? 1 : vol;
-  if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = (Math.random() * 2 - 1) * spread; g.connect(p).connect(AUDIO.fxBus); } else g.connect(AUDIO.fxBus);
+  if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = (Math.random() * 2 - 1) * spread; g.connect(p).connect(out); } else g.connect(out);
   setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 8000);
   return g;
 }
@@ -1249,7 +1257,7 @@ function natureBeds(live, dt, zl, b, sway, wx) {
       const src = ac.createBufferSource(); src.buffer = A.noise; src.loop = true;
       const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
       const g = ac.createGain(); g.gain.value = 0;
-      src.connect(f).connect(g).connect(A.fxBus); src.start(0, Math.random() * 1.5);
+      src.connect(f).connect(g).connect(A.natureBus); src.start(0, Math.random() * 1.5);
       return { f, g };
     };
     // (a voice that pulses: insects, frogs, lapping water; its noise through a gain an oscillator swings)
@@ -1259,7 +1267,7 @@ function natureBeds(live, dt, zl, b, sway, wx) {
       const am = ac.createGain(); am.gain.value = 1 - depth;
       const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = rate; lg.gain.value = depth; lfo.connect(lg).connect(am.gain); lfo.start();
       const g = ac.createGain(); g.gain.value = 0;
-      src.connect(f).connect(am).connect(g).connect(A.fxBus); src.start(0, Math.random() * 1.5);
+      src.connect(f).connect(am).connect(g).connect(A.natureBus); src.start(0, Math.random() * 1.5);
       return { f, g, lfo };
     };
     const leaves = voice('bandpass', 3000, 0.6), hiss = voice('highpass', 5000), rain = voice('bandpass', 2200, 0.35), rumble = voice('lowpass', 70, 0.7);
@@ -1271,7 +1279,7 @@ function natureBeds(live, dt, zl, b, sway, wx) {
     const gl = ac.createOscillator(), gLg = ac.createGain(); gl.frequency.value = 0.06; gLg.gain.value = 0.3; gl.connect(gLg).connect(gAm.gain); gl.start();
     const glowOsc = [];
     for (const [f, k] of [[412, 0.5], [415.5, 0.4], [618.7, 0.25]]) { const o = ac.createOscillator(), og = ac.createGain(); o.type = 'sine'; o.frequency.value = f; og.gain.value = k; o.connect(og).connect(glp); o.start(); glowOsc.push({ o, f }); }
-    glp.connect(gAm).connect(glow.g).connect(A.fxBus);
+    glp.connect(gAm).connect(glow.g).connect(A.natureBus);
     WORLD.nat = { leaves, hiss, rain, rumble, drone, lap, glow, glowOsc, surf: 4, lapping: 1, ember: 1, bolt: -1, thunderAt: 0, murmur: 20 };
   }
   const M = WORLD.nat, on = live && AUDIO.fx > 0 && !!S, N = NATURE[b] || {};
@@ -1309,14 +1317,14 @@ function natureBeds(live, dt, zl, b, sway, wx) {
   // Surf breaking on the shore of a sea map; little waves lapping at a lake's or a river's banks.
   if (shoreF > 0.05) {
     M.surf -= dt;
-    if (ocean && M.surf <= 0) { M.surf = 2.5 + Math.random() * 4; _noise(2.4, 0.13 * shoreF * zq, { type: 'bandpass', freq: 1100, to: 350, q: 0.6, attack: 0.7, dest: aroundVoice(0.5) }); }
+    if (ocean && M.surf <= 0) { M.surf = 2.5 + Math.random() * 4; _noise(2.4, 0.13 * shoreF * zq, { type: 'bandpass', freq: 1100, to: 350, q: 0.6, attack: 0.7, dest: aroundVoice(0.5, 1, AUDIO.natureBus) }); }
     M.lapping -= dt;
-    if (!ocean && M.lapping <= 0) { M.lapping = 0.5 + Math.random() * 1.4; _noise(0.22, 0.018 * shoreF * zq, { type: 'bandpass', freq: 1200 + Math.random() * 900, q: 2.5, attack: 0.03, dest: aroundVoice(0.6) }); }
+    if (!ocean && M.lapping <= 0) { M.lapping = 0.5 + Math.random() * 1.4; _noise(0.22, 0.018 * shoreF * zq, { type: 'bandpass', freq: 1200 + Math.random() * 900, q: 2.5, attack: 0.03, dest: aroundVoice(0.6, 1, AUDIO.natureBus) }); }
   }
   // Embers ticking as they fall.
   if (kind === 'ash' && wk > 0.1) {
     M.ember -= dt;
-    if (M.ember <= 0) { M.ember = 0.15 + (Math.random() * 0.8) / wk; _noise(0.03, 0.012 * wk * zq, { type: 'highpass', freq: 3000 + Math.random() * 2000, dest: aroundVoice(0.8) }); }
+    if (M.ember <= 0) { M.ember = 0.15 + (Math.random() * 0.8) / wk; _noise(0.03, 0.012 * wk * zq, { type: 'highpass', freq: 3000 + Math.random() * 2000, dest: aroundVoice(0.8, 1, AUDIO.natureBus) }); }
   }
   // Thunder after the lightning: the same flashes the rainstorm shows (drawWeather), heard a moment later from off a way.
   if (kind === 'rain' && wk > 0.2) {
@@ -1363,6 +1371,8 @@ function groundMurmur(v) {
 }
 
 // The life (and the land) heard now and then out in each biome: see biomeCall. (None on Argos: it's silent.)
+/** How loud the land's own sounds are under the effects (AUDIO.natureBus): turned down by about 5 dB on the owner's word, Nov 2026. */
+const NATURE_LEVEL = 0.55;
 const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
 
 /**
@@ -1375,7 +1385,7 @@ const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volc
 function biomeCall(b, w, night) {
   if (!sfxReady()) return;
   w = w === undefined ? 1 : w;
-  const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w)), r = Math.random(), dark = Math.random() < (night || 0);
+  const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w), AUDIO.natureBus), r = Math.random(), dark = Math.random() < (night || 0);
   if (b === 'jungle' || b === 'autumn') {
     if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird
     else jungleCall(g, dark);
