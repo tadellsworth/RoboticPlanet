@@ -13,7 +13,8 @@
  * overhead, whine in on the approach and screech down on the runway; ships hoot leaving port; the
  * sea washes the shore, lava bubbles, and crickets sing on warm nights. Away from the streets the land itself is
  * heard (see natureBeds and biomeCall): each biome's rustle, hiss, drone or shimmer and its calls, surf and lapping
- * water, a volcano's rumble, the weather (rain and thunder, storms, embers), and near a nest, the Murmur in the ground.
+ * water, a volcano's rumble, the weather (rain and thunder, storms, embers), and near a nest or a tunnel exit (and at
+ * night over their tunnels), the Murmur in the ground.
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
  * groove while you build (three of them, taking turns every ten minutes of play: the original,
@@ -960,8 +961,12 @@ function audioTick(dt) {
   // How near a Murmur nest the view is (none live on Argos), and the volcano (see natureBeds).
   const cx = (v0.x + v1.x) / 2, cy = (v0.y + v1.y) / 2, span = Math.max(8, Math.abs(v1.x - v0.x) / 2);
   let nest = 0;
-  if (typeof murmurGround !== 'function' || murmurGround(biome())) for (const b of S.buildings) if (!b.dead && b.type === 'nest') nest = Math.max(nest, 1 - Math.hypot(b.x - cx, b.y - cy) / (span + 18));
+  if (typeof murmurGround !== 'function' || murmurGround(biome())) for (const b of S.buildings) if (!b.dead && (b.type === 'nest' || b.type === 'burrow')) nest = Math.max(nest, (b.type === 'nest' ? 1 : 0.7) * (1 - Math.hypot(b.x - cx, b.y - cy) / (span + 18)));
   WORLD.nest = nest;
+  // ...and how much of the Murmur's tunnel network is on screen (every other tile counted): heard at night (natureBeds).
+  let tun = 0;
+  if (S.tun) for (let j = j0; j <= j1; j += 2) for (let i = i0; i <= i1; i += 2) if (S.tun[j * S.W + i]) tun++;
+  WORLD.tun = Math.min(1, tun / 12);
   const V = S.volcano;
   WORLD.volc = V ? Math.max(0, Math.min(1, 1 - (Math.hypot(V.x - cx, V.y - cy) - (V.r || 0)) / (span + 20))) : 0;
   for (const u of S.bots) {
@@ -1315,10 +1320,14 @@ function natureBeds(live, dt, zl, b, sway, wx) {
     if (bolt !== M.bolt && S.time < at) { M.bolt = bolt; if (hash2(bolt, 3, 83) < 0.4) M.thunderAt = at + 0.5 + Math.random() * 2.5; }
   }
   if (M.thunderAt && S.time >= M.thunderAt) { M.thunderAt = 0; if (kind === 'rain') thunder(Math.max(0.4, wk) * zq); }
-  // The Murmur: near a nest, now and then (more often at night), a low sound in the ground.
-  if (WORLD.nest > 0) {
+  // The Murmur: near a nest or an exit, now and then (more often at night), a low sound in the ground; at night (from
+  // the game's clock: when they're up) over their tunnels too, more often the more of them there are. On an
+  // always-night map it goes dead silent in the lull before a surge.
+  const up = on && typeof murmurNight === 'function' && S.wildlife && murmurNight(S.time), lull = on && typeof murmurLull === 'function' && murmurLull(S.time);
+  const near = Math.max(WORLD.nest || 0, up ? 0.8 * (WORLD.tun || 0) : 0);
+  if (near > 0 && !lull) {
     M.murmur -= dt;
-    if (M.murmur <= 0) { M.murmur = ((25 + Math.random() * 40) / (0.3 + WORLD.nest)) * (night > 0.5 ? 0.6 : 1); groundMurmur(WORLD.nest * zq); }
+    if (M.murmur <= 0) { M.murmur = ((25 + Math.random() * 40) / (0.3 + near)) * (up ? 0.35 : night > 0.5 ? 0.6 : 1); groundMurmur(near * zq); }
   }
 }
 

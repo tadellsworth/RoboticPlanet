@@ -120,6 +120,7 @@ function watchStart(setup) {
   newGame({
     seed: randomSeed(), difficulty: 'normal', mode: 'versus', size: DEFAULT_SIZE.versus, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH,
     shape: setup.shape, players: n, humans: [], styles: docs, style: 'balanced', nuke: true, events: false, victory: 'capture',
+    murmur: typeof UI !== 'undefined' && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off', // (the Murmur as the new-game screen has them)
     biome: BIOME_ORDER[Math.floor(Math.random() * BIOME_ORDER.length)],
   });
   // (newGame gives the first colony the plain Steward when nobody plays it: it gets its doctrine here, before the

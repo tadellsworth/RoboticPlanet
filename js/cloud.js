@@ -73,7 +73,7 @@ function cloudKeep(o) {
 /** Which game this is, to tell whether a saved code is this game's (its planet, mode and players). */
 function cloudGameId() {
   const st = S.settings || {};
-  return [S.seed, S.mission ? 'mission ' + S.mission.id : S.mode, st.shape, st.biome, S.W + 'x' + S.H, S.players.length].join('|');
+  return [S.seed, S.mission ? 'mission ' + S.mission.id : S.mode, st.shape, st.biome, S.W + 'x' + S.H, nColonies()].join('|');
 }
 
 /** Can this game go to the cloud? (A game of one's own: not multiplayer, not Observer mode; and a relay to send it to.) */

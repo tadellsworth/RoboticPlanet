@@ -73,7 +73,7 @@ function feedbackMeta() {
     m.biome = st.biome || 'desert';
     m.size = (SIZE_PRESETS[st.size] || {}).name || String(st.size);
     m.seed = S.seed;
-    m.players = S.players.length;
+    m.players = nColonies();
     if (S.mode === 'versus' && !M) m.difficulty = S.difficulty;
     m.time = fmtTime(S.time);
     const log = (UI.msgLog || []).slice(-FB_LOG);

@@ -18,7 +18,7 @@ function simStep(dt) {
   if (S.tick % 10 === 3) foeSweep();
   if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
-  for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
+  for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !isWild(p)) dispatch(p);
   for (let k = 0; k < S.buildings.length; k++) {
     const b = S.buildings[k];
     if (!b.dead) updateBuilding(b, dt);
@@ -46,13 +46,14 @@ function simStep(dt) {
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
+  if (S.wildlife && S.tick % 30 === 17) murmurTick();
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step (its search for building spots is the dearest thing in one): another that's due
   // the same step waits a few steps, which also pulls apart timers that start (or an older save has) in step.
   let thought = false;
   for (const P of S.players) {
-    if (!P.ai || P.out) continue;
+    if (!P.ai || P.out || P.absent) continue;
     P.aiT -= dt;
     if (P.aiT > 0) continue;
     if (thought) { P.aiT = 5 * dt; continue; }
@@ -3228,7 +3229,7 @@ function doStaff(u, t, dt) {
         t.wait = 3;
       }
       if (!def.gather && !def.plant && !def.farm && !def.roadworks) return; // production happens in updateBuilding
-      if (foesAt(b)) { b.status = `${S.wildlife ? 'The Murmur are' : 'Enemy warbots'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
+      if (foesAt(b)) { b.status = `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : 'Enemies are'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
       let node;
       if (def.gather) {
         // Ore Mines dig any uranium in reach first in a Nuclear race.
@@ -3414,6 +3415,7 @@ function updateBuilding(b, dt) {
     if (b.working) { b.useI = (b.useI || 0) + dt; b.useT = (b.useT || 0) + dt; }
   }
   b.working = false;
+  if (def.burrow) return; // (a Murmur tunnel exit: see murmurTick)
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
@@ -4760,6 +4762,7 @@ function hitBuilding(b, dmg, by) {
 
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
+  if (def.burrow) { collapseExit(b, by); return; }
   if (def.wild) { clearNest(b, by); return; }
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
@@ -4996,7 +4999,7 @@ function updateDanger() {
     if (!r) continue;
     const R = r + DANGER_PAD, R2 = R * R, cx = b.x + 0.5, cy = b.y + 0.5;
     for (let p = 0; p < n; p++) {
-      if (!foes(p, b.owner) || (S.wildlife && p === WILD_OWNER)) continue;
+      if (!foes(p, b.owner) || isWild(p)) continue;
       DANGER.guns[p].push({ b, r: R });
       const m = DANGER.maps[p];
       for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
@@ -5019,7 +5022,7 @@ function updateDanger() {
     const spots = dist2(lx, ly, v.x, v.y) > 0.25 ? [[v.x, v.y], [lx, ly]] : [[v.x, v.y]];
     const R2 = R * R;
     for (let p = 0; p < n; p++) {
-      if (!foes(p, v.owner) || (S.wildlife && p === WILD_OWNER)) continue;
+      if (!foes(p, v.owner) || isWild(p)) continue;
       const m = DANGER.maps[p];
       for (const [cx, cy] of spots)
         for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
@@ -5115,7 +5118,7 @@ function escorted(u) {
 function dangerSweep() {
   updateDanger();
   for (const b of S.buildings) {
-    if (b.dead || b.owner < 0 || (S.wildlife && b.owner === WILD_OWNER)) continue;
+    if (b.dead || b.owner < 0 || isWild(b.owner)) continue;
     const hot = underGuns(b);
     if (hot && !b.underFire) {
       b.underFire = S.time;
@@ -5154,7 +5157,7 @@ function foeSweep() {
   for (const u of S.bots) {
     if (budget <= 0) break;
     if (u.dead || u.inside || u.dropping || u.ferryWait || u.ride >= 0 || !gunShy(u) || BOTS[u.type].crawler) continue;
-    if (u.owner < 0 || (S.wildlife && u.owner === WILD_OWNER)) continue;
+    if (u.owner < 0 || isWild(u.owner)) continue;
     const t = u.task;
     if (t && t.type === 'flee') continue; // (running from a blast: nothing else matters)
     const m = dangerMap(u.owner), here = tIdx(Math.floor(u.x), Math.floor(u.y)), caught = (m[here] & 2) !== 0;
@@ -5554,12 +5557,13 @@ function eliminate(old, by, how) {
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
   // Played on past a victory (S.endless): no one wins again, but losing your own colony still ends it.
   if (S.endless) { if (!left.some((Q) => !Q.ai)) { S.winner = by; S.endHow = how || 'capture'; } return; }
+  // (the Murmur's slot, absent, is nobody's colony: it neither wins nor counts as one people play)
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
   if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
   // colony in it, the menu's backdrop, ends when the first colony falls; one being watched, S.watch, plays on to the
   // last colony standing: see js/watch.js.)
-  else if (S.players.some((Q) => !Q.ai) ? !left.some((Q) => !Q.ai) : old === 0 && !S.watch) { S.winner = by; S.endHow = how || 'capture'; }
+  else if (S.players.some((Q) => !Q.ai && !Q.absent) ? !left.some((Q) => !Q.ai) : old === 0 && !S.watch) { S.winner = by; S.endHow = how || 'capture'; }
 }
 
 /* ------------------------------------------------------------------ surrender and Domination */
@@ -5660,8 +5664,8 @@ function updateDomination() {
  * nobody can count on the other two fighting.
  */
 function rivalOf(p) {
-  if (S.players.length === 2) return 1 - p;
-  const enemy = (q) => foes(q, p);
+  if (nColonies() === 2) return 1 - p; // (the Murmur's own slot, after the colonies, is nobody's rival)
+  const enemy = (q) => foes(q, p) && !isWild(q);
   // Domination: a colony about to win on land is everyone's rival (Uplinks: one whose clock is running).
   if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
   if (S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p && !S.players[S.upLead].out) return S.upLead;
@@ -8370,7 +8374,7 @@ function logFirst(k, p, e) { if (!(S.log && S.log.some((x) => x.k === k && x.p =
 function logTick() {
   if (!S.log) { S.log = []; S.logFrom = S.time > 30 ? Math.round(S.time) : 0; }
   for (const P of S.players) {
-    if (P.absent || P.out || (S.wildlife && P.id === WILD_OWNER)) continue;
+    if (P.absent || P.out || isWild(P.id)) continue;
     const have = {}, want = {};
     for (const b of S.buildings) {
       if (b.dead || b.owner !== P.id) continue;
@@ -8915,10 +8919,153 @@ function naniteRepair() {
   }
 }
 
-/* ------------------------------------------------------------------ wildlife (Colony) */
+/* ------------------------------------------------------------------ the Murmur (wildlife) */
 
 function wildOn() { return !!(S && S.wildlife); }
 function isWildBot(u) { return !!BOTS[u.type].wild; }
+
+/** The Murmur setting of this game (see MURMUR): 'off', 'quiet' or 'active' (an older save with them: Active). */
+function murmurLevel() { return S && S.wildlife ? (S.settings && (S.settings.murmur === 'quiet' || S.settings.murmur === 'active') ? S.settings.murmur : 'active') : 'off'; }
+/** This game's MURMUR numbers (null without the Murmur). */
+function murmurCfg() { const k = murmurLevel(); return k === 'off' ? null : MURMUR[k]; }
+/** Is this map always night (a map type with alwaysNight: the Hollow)? Its nights are surges instead (murmurNight). */
+function alwaysNightMap() { const sh = S && S.settings && SHAPE_PRESETS[S.settings.shape || 0]; return !!(sh && sh.alwaysNight); }
+/** Seconds into the day at game time t (0 at dawn). */
+function dayClock(t) { return ((t % TOD_LEN) + TOD_LEN) % TOD_LEN; }
+/**
+ * Is it night for the Murmur at game time t? From the game's own clock (todPhase: the same on every device in a
+ * multiplayer game), never the display setting. On an always-night map, the surges: the same 12-minute rhythm.
+ */
+function murmurNight(t) {
+  if (alwaysNightMap()) { const x = dayClock(t); return x >= NIGHT_FROM && x < NIGHT_TO; }
+  return todNameAt(t) === 'night';
+}
+/** The lull before a surge (an always-night map): the ground goes dead silent. */
+function murmurLull(t) { if (!alwaysNightMap()) return false; const x = dayClock(t); return x >= NIGHT_FROM - SURGE_LULL && x < NIGHT_FROM; }
+/** How many nights (or surges) have begun by game time t (the first is 1; none yet, 0). */
+function murmurNights(t) { return t < NIGHT_FROM ? 0 : Math.floor((t - NIGHT_FROM) / TOD_LEN) + 1; }
+/** A MURMUR [base, per night after the first, most] on night n (whole numbers). */
+function murmurBy(v, n) { return Math.min(v[2], Math.floor(v[0] + v[1] * Math.max(0, n - 1) + 1e-9)); }
+
+/**
+ * The Murmur come into a game at `level` (see MURMUR): their slot (Colony: the empty second one; Versus: one of
+ * their own after the colonies), the tunnel layer, and the nests (placeNests in Colony, placeNestsVersus otherwise).
+ * Nothing on a silent biome. Once the landing sites are in: from newGame, or a mission's setup.
+ */
+function murmurStart(level) {
+  if (level !== 'quiet' && level !== 'active') return;
+  if (!murmurGround(S.settings && S.settings.biome)) return; // (no Murmur on the moon)
+  S.wildlife = true;
+  S.settings.murmur = level;
+  if (S.mode !== 'colony') {
+    if (!S.wildSlot) {
+      const id = S.players.length;
+      S.players.push({
+        id, absent: true, wild: true, ai: false, mult: 1, lander: 0,
+        stats: { built: 0, bots: 0, captured: 0, lost: 0, outposts: 0, startBots: 0, ramps: 0, moved: 0, dismantled: 0, nukes: 0 },
+        made: {}, madeBots: {}, aiT: 0, nextAttack: 0,
+      });
+      S.wildSlot = true; S.wildOwner = id;
+    }
+  } else S.wildOwner = WILD_OWNER;
+  murmurLayer();
+  if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
+  for (const b of S.buildings) if (!b.dead && b.type === 'nest') murmurAdopt(b);
+}
+
+/** The tunnel layer and the Murmur's state (S.tun, S.mur), made if missing (a save from before them). */
+function murmurLayer() {
+  if (!S.tun || S.tun.length !== S.W * S.H) S.tun = new Uint8Array(S.W * S.H);
+  if (!S.mur || typeof S.mur !== 'object') S.mur = {};
+  const M = S.mur;
+  M.nests = M.nests || []; M.shut = M.shut || []; M.ver = M.ver || 0;
+  if (M.night === undefined) { M.night = murmurNight(S.time) ? 1 : 0; M.warned = murmurNights(S.time) + (M.night ? 0 : 0); }
+  for (const b of S.buildings) if (!b.dead && b.type === 'nest' && !M.nests.includes(b.id)) murmurAdopt(b);
+}
+
+/** Nest b's place in the tunnel layer (its slot + 1 marks its tiles), taken now if it has none; its own tile is the root. */
+function murmurAdopt(b) {
+  const M = S.mur;
+  let k = M.nests.indexOf(b.id);
+  if (k < 0) { if (M.nests.length >= 254) return 0; k = M.nests.length; M.nests.push(b.id); }
+  const t = tIdx(b.x, b.y);
+  if (!S.tun[t]) { S.tun[t] = k + 1; M.ver++; }
+  return k + 1;
+}
+
+/** The nest whose tunnel tile t is (null: no tunnel there, or its nest is gone). */
+function tunnelNest(t) { const v = S.tun ? S.tun[t] : 0; if (!v) return null; const b = getE(S.mur.nests[v - 1]); return b && !b.dead ? b : null; }
+
+/**
+ * The Murmur's nests in a Versus game: fair for every colony (each set of them follows the map's own symmetry, as the
+ * Uplinks do: uplinkOrbit), out in the wilds away from the bases (MURMUR.minBase, or a fifth of the map across), by
+ * Crystal seams and strike sites (rich deposits), on open ground a colony can walk to. Quiet has fewer (MURMUR orbits).
+ */
+function placeNestsVersus(seed) {
+  const C = murmurCfg();
+  const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
+  if (!C || !Ls.length) return;
+  const W = S.W, H = S.H, N = W * H, span = dhypot(W, H);
+  const zones = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
+  const free = (t) => S.terrain[t] === T_GROUND && !S.res[t] && !S.fert[t] && !S.ramp[t] && !S.road[t] && !S.bAt[t] && S.owner[t] < 0 &&
+    !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) && !(S.fault && S.fault[t]) && !(S.rail && S.rail[t]);
+  const want = clamp(Math.round(N / (C.perTiles * Math.max(1, Ls.length / 2))), 1, C.orbits);
+  // Crystal and rich deposits near each spot (a box count, 6 tiles round): what the nests are drawn to.
+  const lure = (i, j) => {
+    let c = 0, r = 0;
+    for (let y = Math.max(0, j - 6); y <= Math.min(H - 1, j + 6); y++) for (let x = Math.max(0, i - 6); x <= Math.min(W - 1, i + 6); x++) {
+      const u = y * W + x;
+      if (S.res[u] === R_CRYSTAL) c++;
+      if (S.res[u] && richRes(u)) r++;
+    }
+    return Math.min(c, 14) * 0.5 + Math.min(r, 10) * 0.35;
+  };
+  const nests = [];
+  // (Crowded out, a little closer in and closer together, but only to have one set at all.)
+  for (let pass = 0; pass < 3 && !nests.length; pass++) {
+    const minBase = Math.max(MURMUR.minBase, span * 0.2) * [1, 0.85, 0.7][pass], apart = [12, 10, 8][pass];
+    const ok = new Uint8Array(N), score = new Float32Array(N);
+    for (let j = 2; j < H - 2; j++) for (let i = 2; i < W - 2; i++) {
+      const t = j * W + i;
+      if (!free(t) || !zones.has(S.zone[t])) continue;
+      let open = 0;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const u = tIdx(i + di, j + dj); if (walkable(u) && !S.bAt[u] && !S.ramp[u]) open++; }
+      if (open < 3) continue;
+      const d = Ls.map((L) => dist(i, j, L.x, L.y)).sort((a, b) => a - b);
+      if (d[0] < minBase) continue;
+      if ((S.posts || []).some((p) => dist2(p.x, p.y, i, j) < 64)) continue;
+      ok[t] = 1;
+      // By the riches, not far out past the frontier (a little beyond the minimum), a little of the seed's whim.
+      score[t] = lure(i, j) - Math.abs(d[0] - minBase - 6) * 0.12 + hash2(i, j, (seed ^ 0x51ab) >>> 0) * 0.6;
+    }
+    while (nests.length < want * Ls.length) {
+      let best = null, bs = -Infinity;
+      for (let t = 0; t < N; t++) {
+        if (!ok[t] || score[t] <= bs) continue;
+        const o = uplinkOrbit(t);
+        if (!o || !o.every((u) => ok[u])) continue;
+        const xs = o.map((u) => [u % W, (u / W) | 0]);
+        let fine = true;
+        for (let a = 0; a < xs.length && fine; a++) {
+          for (let c = a + 1; c < xs.length && fine; c++) if (dist(xs[a][0], xs[a][1], xs[c][0], xs[c][1]) < apart) fine = false;
+          for (const n of nests) if (dist(xs[a][0], xs[a][1], n.x, n.y) < apart) fine = false;
+        }
+        if (!fine) continue;
+        bs = score[t]; best = o;
+      }
+      if (!best) break;
+      const raidAt = WILD.first + hash2(best[0], nests.length, seed) * 120; // (the same for every nest of a set: fair)
+      for (const u of best) {
+        const b = addBuilding(wildOwner(), 'nest', u % W, (u / W) | 0, true);
+        b.level = 1;
+        b.raidAt = raidAt;
+        for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
+        nests.push(b);
+        for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+      }
+    }
+  }
+}
 
 /**
  * Scatter the Murmur's nests (type 'nest') over the wilds at the start of a Colony game: one for every WILD.perTiles
@@ -8937,7 +9084,7 @@ function placeNests(seed) {
     let open = 0;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (walkable(tIdx(i + di, j + dj)) && !S.bAt[tIdx(i + di, j + dj)]) open++;
     if (open < 3) continue;
-    const b = addBuilding(WILD_OWNER, 'nest', i, j, true);
+    const b = addBuilding(wildOwner(), 'nest', i, j, true);
     b.level = 1;
     b.raidAt = WILD.first + rng() * 120;
     for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
@@ -8955,7 +9102,7 @@ function placeNests(seed) {
  */
 function placePosts(seed) {
   S.posts = [];
-  const Ls = S.players.filter((P) => !P.absent && !(S.wildlife && P.id === WILD_OWNER)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
+  const Ls = S.players.filter((P) => !P.absent && !isWild(P.id)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
   if (!Ls.length) return;
   const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
   const homes = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
@@ -9043,7 +9190,7 @@ function travelCost(from) {
 
 /** The map's own symmetry: tile t and its twins (the same spot on every other side), or null off the map. */
 function uplinkOrbit(t) {
-  const W = S.W, H = S.H, N = W * H, np = S.players.length, SH = SHAPE_PRESETS[S.settings.shape || 0];
+  const W = S.W, H = S.H, N = W * H, np = nColonies(), SH = SHAPE_PRESETS[S.settings.shape || 0];
   if (haul4Map(S.settings)) { const i = t % W, j = (t / W) | 0; return [t, j * W + (W - 1 - i), N - 1 - t, (H - 1 - j) * W + i]; } // (Long Haul 2v2: mirrored both ways)
   if (np === 2 || SH.twin) return [t, N - 1 - t]; // (Twin Valleys: only the half turn)
   if (SH.cross || SH.quad4) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
@@ -9067,7 +9214,7 @@ function uplinkOrbit(t) {
 function placeUplinks(seed) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
-  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && S.players.length >= 3) || haul4Map(S.settings);
+  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && nColonies() >= 3) || haul4Map(S.settings);
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
@@ -9167,7 +9314,7 @@ function uplinksNeeded() { return Math.ceil((S.uplinks || []).length / 2); }
 /** The goal in words: "2 of 3", or with an even number "2 of 4, more than anyone else" (2 each is a tie). */
 function uplinkGoal() {
   const n = (S.uplinks || []).length;
-  return `${uplinksNeeded()} of ${n}` + (n % 2 ? '' : `, more than ${S.players.length > 2 ? 'anyone else' : 'the rival'}`);
+  return `${uplinksNeeded()} of ${n}` + (n % 2 ? '' : `, more than ${nColonies() > 2 ? 'anyone else' : 'the rival'}`);
 }
 
 /**
@@ -9238,7 +9385,7 @@ function spawnCritter(b, type, task) {
     const i = b.x + di, j = b.y + dj;
     if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)]) { x = i; y = j; break; }
   }
-  const u = addBot(WILD_OWNER, type, x, y);
+  const u = addBot(wildOwner(), type, x, y);
   u.x += (hash2(u.id, 3, 5) - 0.5) * 0.5; u.y += (hash2(u.id, 4, 5) - 0.5) * 0.5;
   u.nest = b.id;
   u.task = task || { type: 'guard' };
@@ -9251,21 +9398,21 @@ function despawnCritter(u) {
   S.byId.delete(u.id);
 }
 
-/** What a nest's next pack goes for: the nearest building, road or bot the colony has within reach. */
+/** What a nest's next pack goes for: the nearest building or road a colony (any colony) has within reach, and whose. */
 function wildTarget(b) {
   let best = null, bd = WILD.reach * WILD.reach;
   for (const e of S.buildings) {
-    if (e.dead || e.owner === WILD_OWNER) continue;
+    if (e.dead || e.owner === wildOwner() || e.owner < 0) continue;
     const d = dist2(e.x, e.y, b.x, b.y);
-    if (d < bd) { bd = d; best = { x: e.x, y: e.y }; }
+    if (d < bd) { bd = d; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   const R0 = WILD.reach;
   for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {
     for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
       const t = j * S.W + i;
-      if (!S.road[t] || wayOwner(t) < 0 || wayOwner(t) === WILD_OWNER || crossTile(t)) continue;
+      if (!S.road[t] || wayOwner(t) < 0 || wayOwner(t) === wildOwner() || crossTile(t)) continue;
       const d = dist2(i, j, b.x, b.y);
-      if (d < bd) { bd = d; best = { x: i, y: j }; }
+      if (d < bd) { bd = d; best = { x: i, y: j, owner: wayOwner(t) }; }
     }
   }
   return best;
@@ -9284,28 +9431,33 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  b.status = `Level ${b.level} nest · ${guards} on guard` + (b.raidAt > S.time ? '' : ' · ready to raid');
-  if (S.time < b.raidAt) return;
+  // (Versus: a nest sends no packs of its own by day; its Murmur come up through the tunnels at night, see murmurTick.
+  // Days are for striking the nests, nights for holding the line. Colony keeps its raids by day as well.)
+  b.status = `Level ${b.level} nest · ${guards} on guard` + (S.mode !== 'colony' ? '' : b.raidAt > S.time ? '' : ' · ready to raid');
+  if (S.time < b.raidAt || S.mode !== 'colony') return;
   b.raidAt = S.time + 30; // nothing in reach: look again soon
   const tgt = wildTarget(b);
   if (!tgt) return;
+  // (The pack grows with the colony it goes for: one more for every WILD.perBuildings of its buildings. Quiet: a
+  // creature fewer, and further apart: MURMUR raidLess and raidGap.)
+  const C = murmurCfg() || MURMUR.active;
   let built = 0;
-  for (const e of S.buildings) if (!e.dead && e.owner === 0 && e.built) built++;
-  const size = Math.min(WILD.maxPack, 1 + b.level + Math.floor(built / WILD.perBuildings) + Math.floor(S.time / 1200));
+  for (const e of S.buildings) if (!e.dead && e.owner === tgt.owner && e.built) built++;
+  const size = Math.max(1, Math.min(WILD.maxPack, 1 + b.level + Math.floor(built / WILD.perBuildings) + Math.floor(S.time / 1200)) - C.raidLess);
   const brutes = b.level >= 2 ? Math.max(1, Math.floor(size / 4)) : 0;
   const until = S.time + dist(b.x, b.y, tgt.x, tgt.y) / 1.1 + WILD.raidTime;
   for (let k = 0; k < size; k++) spawnCritter(b, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: tgt.x, y: tgt.y, until });
-  const gap = WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0]);
+  const gap = (WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0])) * C.raidGap;
   b.raidAt = S.time + gap;
-  postMsg(ME, `A pack of ${size} Murmur${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
-  if (!S.wildWarned) { S.wildWarned = true; sfx('alert'); }
+  postMsg(tgt.owner, `A pack of ${size} Murmur${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
+  if (!S.wildWarned && isMe(tgt.owner)) { S.wildWarned = true; sfx('alert'); }
 }
 
 /** The nearest colony bot out in the open within r tiles of (x, y) (with `zone`: only one standing in that walkable area). */
 function wildPrey(x, y, r, zone) {
   let best = null, bd = r * r;
   for (const v of S.bots) {
-    if (v.dead || v.inside || v.owner === WILD_OWNER) continue;
+    if (v.dead || v.inside || v.owner === wildOwner()) continue;
     const d = dist2(v.x, v.y, x, y);
     if (d >= bd || (zone !== undefined && S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== zone)) continue;
     bd = d; best = v;
@@ -9322,7 +9474,9 @@ function critterBite(u, foe) {
   u.fought = 1;
   addFx('spark', (u.x + foe.x + (foe.ent === 'b' ? 0.5 : 0)) / 2, (u.y + foe.y + (foe.ent === 'b' ? 0.5 : 0)) / 2, { color: '#c77dff' });
   if (foe.ent === 'b') {
-    foe.lastHit = S.time;
+    foe.lastHit = S.time; foe.wildHit = S.time; // (wildHit: the Murmur's, which never call a rival's army home: see aiMurmur)
+    // Forts near by answer, as they do enemy warbots shooting at it (garrisonDefense): every colony's, by day or night.
+    if (foe.owner >= 0 && S.players[foe.owner]) { const R = S.players[foe.owner].raided || (S.players[foe.owner].raided = {}); R.x = foe.x + 0.5; R.y = foe.y + 0.5; R.t = S.time; }
     if (!foe.built) {
       foe.armor -= bt.bite;
       if (foe.armor <= 0) { postMsg(foe.owner, `The Murmur wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); }
@@ -9353,12 +9507,12 @@ function bruteTarget(u, r) {
   for (let j = cj - R0; j <= cj + R0; j++) for (let i = ci - R0; i <= ci + R0; i++) {
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
-    if (!S.road[t] || S.bAt[t] || crossTile(t) || wayOwner(t) < 0 || wayOwner(t) === WILD_OWNER) continue;
+    if (!S.road[t] || S.bAt[t] || crossTile(t) || wayOwner(t) < 0 || wayOwner(t) === wildOwner()) continue;
     const d = dist2(i + 0.5, j + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = { road: t, x: i, y: j }; }
   }
   for (const e of S.buildings) {
-    if (e.dead || e.owner === WILD_OWNER) continue;
+    if (e.dead || e.owner === wildOwner()) continue;
     // (a Wall or Gate when it's what's nearest: in the way of a walled-in colony)
     const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y), w = BDEFS[e.type].barrier ? 1 : 0.6;
     if (d < bd * w) { bd = d / w; best = { bld: e.id, x: e.x, y: e.y }; } // (by its id: a save keeps no building inside a task)
@@ -9379,7 +9533,7 @@ function updateCritter(u, dt) {
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
-    if (u.scanT <= 0 && t.type !== 'home') {
+    if (u.scanT <= 0 && t.type !== 'home' && t.type !== 'down' && t.type !== 'dig') {
       u.scanT = 0.4;
       foe = wildPrey(u.x, u.y, t.type === 'guard' ? 4 : 4.5);
       if (foe && t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > 49) foe = null;
@@ -9408,7 +9562,7 @@ function updateCritter(u, dt) {
       let g = t.smash, gb = g && g.bld ? getE(g.bld) : null;
       if (g && (g.bld ? !gb || gb.dead : !S.road[g.road])) g = null;
       if (!g) { g = bruteTarget(u, 6); t.smash = g; t.work = 0; gb = g && g.bld ? getE(g.bld) : null; }
-      if (!g) { t.until = Math.min(t.until, S.time + 8); return; }
+      if (!g) { if (t.night) murmurOnward(u, t); else t.until = Math.min(t.until, S.time + 8); return; }
       const gx = g.x + 0.5, gy = g.y + 0.5;
       if (dist2(u.x, u.y, gx, gy) > (g.bld ? 1.7 : 1.1)) {
         if (!moveDirect(u, gx, gy, dt) && travel(u, g.x, g.y, dt) === null) t.smash = null;
@@ -9426,7 +9580,19 @@ function updateCritter(u, dt) {
     // to 12 tiles off and then drop it at once for being over 6 away, so it stood still for the whole raid.)
     const prey = wildPrey(u.x, u.y, WILD.hunt, S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]);
     if (prey && travel(u, Math.floor(prey.x), Math.floor(prey.y), dt) !== null) return;
-    t.until = Math.min(t.until, S.time + 10);
+    if (t.night) murmurOnward(u, t); else t.until = Math.min(t.until, S.time + 10);
+    return;
+  }
+  // Dawn (see murmurDawn): down the nearest exit of its nest, or dig down where it stands.
+  if (t.type === 'down') {
+    const ex = getE(t.exit);
+    if (!ex || ex.dead || S.time > t.until) { u.task = { type: 'dig', at: S.time + 1 }; u.path = null; return; }
+    const r = travel(u, ex.x, ex.y, dt);
+    if (r || r === null || dist2(u.x, u.y, ex.x + 0.5, ex.y + 0.5) < 2.2) despawnCritter(u);
+    return;
+  }
+  if (t.type === 'dig') {
+    if (S.time >= t.at) { addFx('dust', u.x, u.y, { r: 0.45 }); despawnCritter(u); }
     return;
   }
   if (t.type === 'home') {
@@ -9446,15 +9612,392 @@ function updateCritter(u, dt) {
   if (u.wx !== undefined && dist2(u.x, u.y, u.wx, u.wy) > 0.04) { if (!moveDirect(u, u.wx, u.wy, dt * 0.5)) u.wx = undefined; }
 }
 
-/** A nest cleared by `by`'s warbots: its goods spill out and its creatures scatter. */
+/** A night raider with nothing left where it went: on to the next thing of a colony's near it (every 8 s at most), else it lingers. */
+function murmurOnward(u, t) {
+  if (S.time < (t.re || 0)) return;
+  t.re = S.time + 8;
+  const g = murmurPrey(u.x, u.y, 16);
+  if (g && dist2(g.x + 0.5, g.y + 0.5, u.x, u.y) > 4) { t.x = g.x; t.y = g.y; t.arrived = false; t.smash = null; u.path = null; }
+}
+
+/**
+ * A nest cleared by `by`'s warbots: its goods spill out and its creatures scatter; its tunnel network dies back
+ * (murmurDieback) and its exits close.
+ */
 function clearNest(b, by) {
   const n = dropLoot(b);
-  postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.`, b.x, b.y, 'good');
+  const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id);
+  postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.` +
+    (exits.length ? ` Its tunnels die back and its ${exits.length} exit${exits.length > 1 ? 's close' : ' closes'}.` : ''), b.x, b.y, 'good');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#c77dff', r: 2.4 });
   if (isMe(by)) sfx('capture');
-  S.players[by].stats.captured++;
+  if (S.players[by]) S.players[by].stats.captured++;
+  if (S.mur && S.tun) {
+    const k = S.mur.nests.indexOf(b.id) + 1;
+    if (k) (S.mur.dying = S.mur.dying || []).push({ k, t: S.time, left: 1 });
+    for (const e of exits) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.9 }); destroyBuilding(e, false); }
+  }
   destroyBuilding(b, true);
 }
+
+/*
+ * The Murmur's nights (see MURMUR), once a second: the dusk warning, nightfall (each nest's tunnels set out toward
+ * power, exits open along them, packs come up through them), the night's digging and raids, and dawn (the ones that
+ * came up go back down). A wrecked nest's network dies back at any hour. All from the game's clock: every device
+ * in a multiplayer game runs the same nights.
+ */
+function murmurTick() {
+  const C = murmurCfg();
+  if (!C) return;
+  murmurLayer();
+  const M = S.mur, night = murmurNight(S.time), n = murmurNights(S.time), x = dayClock(S.time), surge = alwaysNightMap();
+  // The dusk warning (on an always-night map, the lull: the ground goes dead silent before a surge).
+  if (!night && x >= NIGHT_FROM - MURMUR.warn && x < NIGHT_FROM && M.warned !== n + 1) {
+    M.warned = n + 1;
+    for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, surge ? 'The ground has gone silent. A surge is coming: the Murmur will be up through their tunnels in a minute.'
+      : 'The Murmur are stirring: night falls soon, and they come up through their tunnels. Bring your bots in close and man the guns.', undefined, undefined, 'warn');
+    if (!S.players[ME] || !S.players[ME].absent) sfx('alert');
+  }
+  if (night && !M.night) murmurNightfall(n);
+  else if (!night && M.night) murmurDawn();
+  M.night = night ? 1 : 0;
+  murmurDieback();
+  if (!night) return;
+  M.lastNight = n;
+  for (const id of M.nests) {
+    const b = getE(id);
+    if (!b || b.dead) continue;
+    murmurGrow(b, C);
+    // (an exit a while apart, once the night's tunnels are under way; none yet where to: tried again in a while)
+    if (b.exitsDue > 0 && S.time >= (b.exitAt || 0)) { if (murmurOpenExit(b)) { b.exitsDue--; b.exitAt = S.time + 25; } else b.exitAt = S.time + 10; }
+  }
+  // The packs: `waves` a night, the first a minute after nightfall (the night's first exits are open by then), the
+  // second well into the night.
+  const into = x - NIGHT_FROM;
+  while ((M.wave || 0) < C.waves && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; murmurWave(n, C); }
+}
+
+/** Nightfall (night n): each live nest's tunnels set out toward power (murmurGrow), and new exits are due. */
+function murmurNightfall(n) {
+  const C = murmurCfg(), M = S.mur;
+  M.wave = 0; M.at = S.time;
+  for (const id of M.nests) {
+    const b = getE(id);
+    if (!b || b.dead) continue;
+    const k = M.nests.indexOf(id) + 1;
+    let size = 0;
+    for (let t = 0; t < S.tun.length; t++) if (S.tun[t] === k) size++;
+    const cap = murmurBy(C.cap, n), budget = Math.max(0, Math.min(murmurBy(C.tiles, n), cap - size));
+    b.br = [];
+    const goals = murmurGoals(b, murmurBy(C.branches, n));
+    for (let g = 0; g < goals.length; g++) {
+      const share = Math.floor(budget / goals.length) + (g < budget % goals.length ? 1 : 0);
+      if (share > 0) b.br.push({ h: murmurFrom(k, goals[g]), g: goals[g], k: share });
+    }
+    b.tunAcc = 0; b.tunRate = budget / 120; // (dug in the first two minutes of the night)
+    const open = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id).length;
+    b.exitsDue = Math.max(0, Math.min(murmurBy(C.exits, n), C.maxExits - open));
+    b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
+  }
+  if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
+}
+
+/**
+ * Where nest b's branches head tonight (up to `want`, tiles): power within MURMUR.reach of it, colony buildings with charge
+ * first (Generators, Fuel Stations and chargers, storage full of Crystal or Fuel), each a few tiles from the others;
+ * with nothing in reach, the nearest colony building anywhere. Every colony alike.
+ */
+function murmurGoals(b, want) {
+  const list = [];
+  for (const e of S.buildings) {
+    if (e.dead || isWild(e.owner) || e.owner < 0) continue;
+    const d = dist(e.x, e.y, b.x, b.y);
+    const w = chargeWorth(e);
+    list.push({ t: tIdx(e.x, e.y), x: e.x, y: e.y, s: (d <= MURMUR.reach ? 4 : 0) + w * 3 - d * 0.12 + hash2(e.id, b.id, Math.floor(S.time / TOD_LEN)) * 1.5 });
+  }
+  list.sort((a, c) => c.s - a.s || a.t - c.t);
+  const out = [];
+  for (const g of list) {
+    if (out.length >= want) break;
+    if (out.some((t) => dist2(t % S.W, (t / S.W) | 0, g.x, g.y) < 49)) continue;
+    out.push(g.t);
+  }
+  return out;
+}
+
+/** How much charge building e holds for the Murmur (they feed on it): 3 a power plant or charger, 2 storage full of Crystal or Fuel, else 1. */
+function chargeWorth(e) {
+  const def = BDEFS[e.type];
+  if (!e.built) return 0.5;
+  if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery') return 3;
+  if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
+  return def.mil ? 0.7 : 1;
+}
+
+/** The tile of network k nearest goal tile g (where a branch heading for it sets out). */
+function murmurFrom(k, g) {
+  const gx = g % S.W, gy = (g / S.W) | 0;
+  let best = -1, bd = Infinity;
+  for (let t = 0; t < S.tun.length; t++) {
+    if (S.tun[t] !== k) continue;
+    const d = dist2(t % S.W, (t / S.W) | 0, gx, gy);
+    if (d < bd || (d === bd && t < best)) { bd = d; best = t; }
+  }
+  return best;
+}
+
+/** Can a tunnel run under tile t? Under any ground, roads, buildings and Walls; not under water, chasms, rock, lava or the tide. */
+function tunnelable(t) { return S.terrain[t] === T_GROUND && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]); }
+
+/** A night's digging for nest b: its branches, one tile at a time, at the pace that spends the night's tiles by dawn. */
+function murmurGrow(b) {
+  if (!b.br || !b.br.length) return;
+  const k = S.mur.nests.indexOf(b.id) + 1;
+  if (!k) return;
+  b.tunAcc = (b.tunAcc || 0) + (b.tunRate || 0);
+  let guard = 0;
+  while (b.tunAcc >= 1 && b.br.length && guard++ < 16) {
+    b.tunAcc -= 1;
+    b.brI = ((b.brI || 0) + 1) % b.br.length;
+    const r = b.br[b.brI];
+    if (!murmurDig(r, k, b)) b.br.splice(b.br.indexOf(r), 1);
+  }
+}
+
+/** Branch r of network k digs one tile on toward its goal, wandering a little; false once it's done (there, spent, or stuck). */
+function murmurDig(r, k, b) {
+  if (r.k <= 0 || r.h < 0) return false;
+  const W = S.W, hx = r.h % W, hy = (r.h / W) | 0, gx = r.g % W, gy = (r.g / W) | 0;
+  if (dist2(hx, hy, gx, gy) <= 4) return false;
+  let best = -1, bs = Infinity;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const i = hx + di, j = hy + dj;
+    if (!inMap(i, j)) continue;
+    const t = j * W + i;
+    if (!tunnelable(t)) continue;
+    const s = dist(i, j, gx, gy) + hash2(t, b.id, S.mur.lastNight || 0) * 1.3 + (S.tun[t] ? 0.7 : 0);
+    if (s < bs) { bs = s; best = t; }
+  }
+  if (best < 0) return false;
+  r.h = best;
+  if (!S.tun[best]) { S.tun[best] = k; r.k--; S.mur.ver++; }
+  else r.k -= 0.25; // (along a tunnel already there: cheap, but not free, so a branch can't wander for ever)
+  return r.k > 0;
+}
+
+/**
+ * Open one more exit along nest b's network: on open, level ground over a tunnel that a colony's robots can walk to
+ * (murmurReach; exitRoom: never in a pass it would plug), not a road, a building, a resource or a ramp, nor a Trade
+ * Post's ground, clear of the other exits and of collapsed ones still shut, at least MURMUR.exitFromBase
+ * tiles from a Command Base and exitFromBld from any colony building; out toward the colonies (about six tiles from their
+ * nearest building) and away from the nest. Returns it, or null where there's nowhere.
+ */
+function murmurOpenExit(b) {
+  const k = S.mur.nests.indexOf(b.id) + 1;
+  if (!k) return null;
+  const W = S.W, blds = S.buildings.filter((e) => !e.dead && e.owner >= 0 && !isWild(e.owner));
+  const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow');
+  // (only where a colony's robots can walk to: a tunnel runs under a cliff or a building, but an exit up on a ledge, or
+  // shut in behind buildings, would be a pack nobody could meet, and an exit no warbot could collapse: murmurReach)
+  const reach = murmurReach();
+  const shut = S.mur.shut.filter((s) => s.until > S.time);
+  let best = null, bs = -Infinity;
+  for (let t = 0; t < S.tun.length; t++) {
+    if (S.tun[t] !== k) continue;
+    const i = t % W, j = (t / W) | 0;
+    if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t)) continue;
+    if (dist2(i, j, b.x, b.y) < 16 || calmAt(i + 0.5, j + 0.5)) continue;
+    if (exits.some((e) => dist2(e.x, e.y, i, j) < 16) || shut.some((s) => dist2(s.x, s.y, i, j) < 9)) continue;
+    let near = Infinity, base = Infinity;
+    for (const e of blds) {
+      const d = dist(e.x, e.y, i, j);
+      if (d < near) near = d;
+      if (e.type === 'lander' && d < base) base = d;
+    }
+    if (near < MURMUR.exitFromBld || base < MURMUR.exitFromBase) continue;
+    const s = -Math.abs(Math.min(near, 30) - 6) + Math.min(dist(i, j, b.x, b.y), 20) * 0.1 + hash2(t, b.id, S.mur.lastNight || 0) * 2;
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (best === null) return null;
+  const e = addBuilding(wildOwner(), 'burrow', best % W, (best / W) | 0, true);
+  e.nest = b.id;
+  e.armor = MURMUR.exitArmor;
+  addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.7 });
+  // Colonies near it hear it open (the nearest building of each within 20 tiles).
+  for (const P of S.players) {
+    if (P.absent || P.out) continue;
+    let near = null, bd = 400;
+    for (const o of blds) if (o.owner === P.id) { const d = dist2(o.x, o.y, e.x, e.y); if (d < bd) { bd = d; near = o; } }
+    if (near) postMsg(P.id, `A Murmur tunnel exit opened near your ${BDEFS[near.type].name}. Send warbots to collapse it.`, e.x, e.y, 'warn');
+  }
+  return e;
+}
+
+/** Room for an exit at tile t: level open ground all round it, no building beside it (so it never plugs a pass). */
+function exitRoom(t) {
+  const W = S.W, i = t % W, j = (t / W) | 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!di && !dj) continue;
+    if (!inMap(i + di, j + dj)) return false;
+    const u = t + dj * W + di;
+    if (S.terrain[u] !== T_GROUND || S.bAt[u] || S.elev[u] !== S.elev[t] || S.ramp[u]) return false;
+  }
+  return true;
+}
+
+/**
+ * The ground a colony's robots can walk to from their Command Bases, as a route goes (murmurOpenExit): over open ground,
+ * roads, fords and Ramps (canStep), not through buildings (but those a road runs through: passTile). 1 where they can.
+ */
+function murmurReach() {
+  const W = S.W, N = W * S.H, seen = new Uint8Array(N), q = [];
+  for (const P of S.players) {
+    const L = !P.absent && !P.out ? getE(P.lander) : null;
+    if (!L) continue;
+    const t = tIdx(L.x, L.y);
+    if (!seen[t]) { seen[t] = 1; q.push(t); }
+  }
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (b < 0 || b >= N || seen[b] || !walkable(b) || !canStep(a, b)) continue;
+      if (S.bAt[b] && !passTile(b)) { seen[b] = 2; continue; } // (a building: reached, but nothing goes on through it)
+      seen[b] = 1; q.push(b);
+    }
+  }
+  for (let t = 0; t < N; t++) if (seen[t] === 2) seen[t] = 0;
+  return seen;
+}
+
+/** A night's wave: a pack comes up through every open exit with something of a colony's within reach of it (murmurPrey). */
+function murmurWave(n, C) {
+  const up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length, room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  const size = murmurBy(C.pack, n), brutes = n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0, until = S.time + 600;
+  const told = {};
+  let made = 0;
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow') continue;
+    const nest = getE(e.nest);
+    if (!nest || nest.dead) continue;
+    const g = murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
+    if (!g || up + made + size > room) continue;
+    for (let k = 0; k < size; k++) {
+      const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: g.x, y: g.y, until, night: 1 });
+      u.nest = nest.id; u.exit = e.id;
+      made++;
+    }
+    addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
+    if (g.owner >= 0) { const T = told[g.owner] || (told[g.owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
+  }
+  for (const p in told) {
+    const T = told[p];
+    postMsg(+p, `The Murmur are up: ${T.n} of them came out of their tunnels near you${brutes ? ', Brutes among them' : ''}!`, T.x, T.y, 'bad');
+    if (isMe(+p)) sfx('alert');
+  }
+}
+
+/** Seconds until the next night (or surge) begins: 0 while one is on. */
+function murmurNextNight() { if (murmurNight(S.time)) return 0; const x = dayClock(S.time); return x < NIGHT_FROM ? NIGHT_FROM - x : TOD_LEN - x + NIGHT_FROM; }
+
+/** How many colonies are still in the game. */
+function nColoniesIn() { return S.players.filter((P) => !P.absent && !P.out).length; }
+
+/**
+ * What a pack at (x, y) goes for: within r tiles, the colony's bot, building full of charge or road that draws it most
+ * (charge first, then whatever's nearest). { x, y, owner } or null.
+ */
+function murmurPrey(x, y, r) {
+  let best = null, bs = -Infinity;
+  const r2 = r * r, wo = wildOwner();
+  for (const e of S.buildings) {
+    if (e.dead || e.owner < 0 || e.owner === wo || calmB(e)) continue;
+    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y);
+    if (d2 > r2) continue;
+    const s = chargeWorth(e) * 3 - Math.sqrt(d2) * 0.4;
+    if (s > bs) { bs = s; best = { x: e.x, y: e.y, owner: e.owner }; }
+  }
+  for (const v of S.bots) {
+    if (v.dead || v.inside || v.owner < 0 || v.owner === wo || BOTS[v.type].air || BOTS[v.type].sea) continue;
+    const d2 = dist2(v.x, v.y, x, y);
+    if (d2 > r2) continue;
+    const s = 2 - Math.sqrt(d2) * 0.4;
+    if (s > bs) { bs = s; best = { x: Math.floor(v.x), y: Math.floor(v.y), owner: v.owner }; }
+  }
+  if (best) return best;
+  const R0 = Math.ceil(r), ci = Math.floor(x), cj = Math.floor(y);
+  for (let j = Math.max(0, cj - R0); j <= Math.min(S.H - 1, cj + R0); j++) for (let i = Math.max(0, ci - R0); i <= Math.min(S.W - 1, ci + R0); i++) {
+    const t = j * S.W + i;
+    if (!S.road[t] || wayOwner(t) < 0 || wayOwner(t) === wo || crossTile(t)) continue;
+    const s = -dist(i, j, x, y) * 0.4;
+    if (s > bs) { bs = s; best = { x: i, y: j, owner: wayOwner(t) }; }
+  }
+  return best;
+}
+
+/** Dawn: the ones that came up in the night go back down, into the nearest open exit of their nest (MURMUR.retreat tiles), or dig down where they stand. */
+function murmurDawn() {
+  const M = S.mur;
+  M.wave = 0;
+  let n = 0;
+  const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow');
+  for (const u of S.bots) {
+    if (u.dead || !u.task || !u.task.night) continue;
+    let ex = null, bd = MURMUR.retreat * MURMUR.retreat;
+    for (const e of exits) if (e.nest === u.nest) { const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y); if (d < bd) { bd = d; ex = e; } }
+    u.task = ex ? { type: 'down', exit: ex.id, until: S.time + 45 } : { type: 'dig', at: S.time + 1 + hash2(u.id, 9, 31) * 4 };
+    u.path = null; u.fight = 0;
+    n++;
+  }
+  for (const id of M.nests) { const b = getE(id); if (b) { b.br = []; b.exitsDue = 0; } }
+  for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, alwaysNightMap() ? 'The surge ebbs: the Murmur go back down their tunnels.'
+    : `Dawn: the Murmur go back down their tunnels${n ? '' : ' (none came up near anyone)'}. Their nests and exits are still out there: strike them by day.`, undefined, undefined, 'info');
+}
+
+/**
+ * A night's digging done at once (a mission's setup: tunnels already there when it starts): nest b's network digs
+ * `tiles` toward the colony's power (murmurGoals), and with `exit`, an exit opens along it. Returns the exit, if one.
+ */
+function murmurPredig(b, tiles, exit) {
+  if (!b || b.dead || !S.tun) return null;
+  const k = murmurAdopt(b);
+  if (!k) return null;
+  const goals = murmurGoals(b, 1);
+  if (!goals.length) return null;
+  const r = { h: murmurFrom(k, goals[0]), g: goals[0], k: tiles };
+  for (let n = 0; n < tiles * 3 && murmurDig(r, k, b); n++);
+  return exit ? murmurOpenExit(b) : null;
+}
+
+/** A wrecked nest's network dies back from its tips, a few tiles a second, and goes in the end; its exits close at once (see clearNest). */
+function murmurDieback() {
+  const M = S.mur, W = S.W, N = W * S.H;
+  if (!M.dying || !M.dying.length) return;
+  const nb = (t, k) => { const i = t % W; let c = 0; if (i > 0 && S.tun[t - 1] === k) c++; if (i < W - 1 && S.tun[t + 1] === k) c++; if (t >= W && S.tun[t - W] === k) c++; if (t + W < N && S.tun[t + W] === k) c++; return c; };
+  for (const d of M.dying) {
+    const k = d.k, gone = [];
+    let left = 0;
+    for (let t = 0; t < N; t++) if (S.tun[t] === k) { left++; if (nb(t, k) <= 1 || S.time - d.t > 40) gone.push(t); }
+    for (const t of gone.slice(0, 24)) S.tun[t] = 0;
+    if (gone.length) M.ver++;
+    d.left = left - Math.min(gone.length, 24);
+  }
+  M.dying = M.dying.filter((d) => d.left > 0);
+}
+
+/** A Murmur tunnel exit collapsed by `by`'s warbots: it's gone, and nothing opens there for MURMUR.shut seconds. */
+function collapseExit(b, by) {
+  S.mur.shut.push({ x: b.x, y: b.y, until: S.time + MURMUR.shut });
+  S.mur.shut = S.mur.shut.filter((s) => s.until > S.time);
+  addFx('dust', b.x + 0.5, b.y + 0.5, { r: 1 });
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: WILD_COLOR, r: 1.4 });
+  if (by >= 0 && S.players[by]) {
+    S.players[by].stats.collapsed = (S.players[by].stats.collapsed || 0) + 1;
+    postMsg(by, `Tunnel exit collapsed! It stays shut for ${Math.round(MURMUR.shut / 60)} minutes. Wreck its nest and the whole network dies back.`, b.x, b.y, 'good');
+  }
+  if (isMe(by)) sfx('capture');
+  destroyBuilding(b, false);
+}
+
 
 /* ------------------------------------------------------------------ ropeways */
 
@@ -10124,7 +10667,7 @@ function deploySpot(owner, i, j, zone, terr) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || runwayAt(t)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
     if (zone !== undefined && S.zone[t] !== zone) continue;
-    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
+    if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
     if (ringOverRival(owner, x, y, terr || BDEFS.dropost.terr)) continue; // (its ring mustn't cut a rival's buildings off)
     const d = di * di + dj * dj;
     if (d < bd) { bd = d; best = t; }
@@ -10994,7 +11537,7 @@ function foundPortBlocked(owner, f, i, j) {
   if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Pick open, empty ground on the shore (no road, deposit or building).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
   if (ringOverRival(owner, i, j, PORT_FOUND.claim)) return `Too close to a rival's buildings: the Port's land (${PORT_FOUND.claim} tiles round it) would cut them off.`;
-  if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
+  if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
   const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
   if (!docks.length) return 'A Port goes right at the water\'s edge, beside open water wide enough for ships.';
   if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
@@ -11494,7 +12037,7 @@ function airdropBlocked(owner, u, kind, i, j) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
     if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
-    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
+    if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
     if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
   } else {
     const b = S.bAt[t] ? getE(S.bAt[t]) : null;
@@ -12248,5 +12791,9 @@ function hashState() {
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); int(S.fires ? S.fires.length : 0);
+  // The Murmur's tunnels, their nests' branches and the exits shut for now (see murmurTick).
+  if (S.tun) for (let t = 0; t < S.tun.length; t++) if (S.tun[t]) { int(t); int(S.tun[t]); }
+  if (S.mur) { int(S.mur.night || 0); int(S.mur.wave || 0); int(S.mur.warned || 0); for (const e of S.mur.shut || []) { int(e.x); int(e.y); num(e.until); } }
+  for (const b of S.buildings) if (b.br) for (const r of b.br) { int(r.h); int(r.g); num(r.k); }
   return h >>> 0;
 }

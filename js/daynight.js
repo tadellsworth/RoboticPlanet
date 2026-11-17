@@ -14,7 +14,9 @@
  * - Evening and night: headlights on vehicles, a glow (light pool) in team colour under buildings,
  *   and the bots' drop shadows lean and soften with the light.
  *
- * Off (the pause menu's Day and night setting): it's always day, exactly as before.
+ * Off (the pause menu's Day and night setting): it's always day, exactly as before; but not in a game with the Murmur,
+ * who live by the night (todMode shows the cycle there), and an always-night map (the Hollow) is always night. The game's
+ * own logic never reads any of this: the Murmur's nights come from the clock itself (TOD_CYCLE in defs.js, murmurNight).
  */
 const TOD_TIMES = {
   morning: { mul: [1.0, 0.85, 0.79], add: [0.06, 0.05, 0.09], shadow: { dx: -0.16, dy: 0.06, alpha: 0.4, blur: 1.0 }, lights: 0, headlights: 0, pools: 0 },
@@ -23,8 +25,7 @@ const TOD_TIMES = {
   // (night is a little deeper than it was, so the cities' lights stand out: see drawCityGlow and drawRoadGlow)
   night: { mul: [0.16, 0.2, 0.33], add: [0.006, 0.008, 0.022], shadow: { dx: 0.03, dy: 0.05, alpha: 0.25, blur: 1.6 }, lights: 1, headlights: 1, pools: 0.8 },
 };
-/** The cycle, in minutes of game time: [time] holds it, [from, to] crossfades. It starts at dawn. */
-const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day', 'evening', 0.5], ['evening', 1.5], ['evening', 'night', 0.5], ['night', 3], ['night', 'morning', 0.5]];
+/** (The cycle, TOD_CYCLE, is in defs.js: the Murmur's nights are game logic and read it too, through todPhase.) */
 const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: 'Night' };
 /** Sprites that are light (or UI) and are never re-lit or graded. */
 const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-|^(smelter|refinery)-work-|^turret-charge-)/;
@@ -38,14 +39,23 @@ const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: 
  */
 const TOD_MODES = ['cycle', 'day', 'night'];
 const TOD_MODE_NAMES = { cycle: 'Cycle', day: 'Always day', night: 'Always night' };
-function todMode() { return TOD.mode; }
+/**
+ * The setting as it applies now: what this device keeps (TOD.mode), unless the game overrules it (todForced): with
+ * the Murmur in the game it can't be always day (they live by the night: the cycle shows instead), and an
+ * always-night map (the Hollow) is always night. The game's own logic never reads any of this (see murmurNight).
+ */
+function todMode() { const f = todForced(); return f === 'night' ? 'night' : f === 'murmur' && TOD.mode === 'day' ? 'cycle' : TOD.mode; }
+/** The setting as kept on this device, whatever the game overrules. */
+function todStored() { return TOD.mode; }
+/** Does the game overrule the setting: 'murmur' (no always day), 'night' (always night) or '' (TOD.force, set by ui.js)? */
+function todForced() { try { return typeof TOD.force === 'function' ? TOD.force() || '' : ''; } catch (e) { return ''; } }
 function setTodMode(m) {
   TOD.mode = TOD_MODES.includes(m) ? m : 'cycle';
   TOD.on = TOD.mode !== 'day';
   try { localStorage.setItem('botfall.daynight', TOD.mode === 'day' ? '0' : TOD.mode === 'night' ? 'night' : '1'); } catch (e) { /* storage unavailable */ }
 }
 /** Is the light changing at all (the cycle, or always night)? */
-function todEnabled() { return TOD.on; }
+function todEnabled() { return todMode() !== 'day'; }
 function setTodEnabled(on) { setTodMode(on ? 'cycle' : 'day'); }
 TOD.mode = 'cycle';
 try { const v = localStorage.getItem('botfall.daynight'); if (v === '0') { TOD.mode = 'day'; TOD.on = false; } else if (v === 'night') TOD.mode = 'night'; } catch (e) { /* storage unavailable */ }
@@ -53,18 +63,7 @@ try { const v = localStorage.getItem('botfall.daynight'); if (v === '0') { TOD.m
 const todLerp = (a, b, f) => a + (b - a) * f;
 
 /** The light at game time t (seconds): { a, b, f (0..1 from a to b), name, mul, add, shadow, lights, headlights, pools }. */
-function todAt(t) {
-  const total = TOD_CYCLE.reduce((n, p) => n + p[p.length - 1], 0) * 60;
-  let x = ((t % total) + total) % total;
-  for (const p of TOD_CYCLE) {
-    const len = p[p.length - 1] * 60;
-    if (x >= len) { x -= len; continue; }
-    if (p.length === 2) return todMix(p[0], p[0], 0);
-    const f = x / len;
-    return todMix(p[0], p[1], f * f * (3 - 2 * f)); // smoothstep
-  }
-  return todMix('day', 'day', 0);
-}
+function todAt(t) { const p = todPhase(t); return todMix(p.a, p.b, p.f); }
 
 function todMix(a, b, f) {
   const A = TOD_TIMES[a], B = TOD_TIMES[b];
@@ -84,7 +83,8 @@ function todMix(a, b, f) {
  */
 function todNow() {
   if (TOD.over != null) return todAt(TOD.over);
-  return TOD.mode === 'night' ? todMix('night', 'night', 0) : TOD.on && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
+  const m = todMode();
+  return m === 'night' ? todMix('night', 'night', 0) : m !== 'day' && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
 }
 /** Is the menu's demo held at daylight while it fast-forwards (TOD.dayHold, set in main.js; never in a game)? */
 function todHeld() { return !!TOD.dayHold && !(typeof UI !== 'undefined' && UI.inGame); }
@@ -97,10 +97,11 @@ function todFrame() {
   TOD.state = st;
   TOD.active = st.a !== 'day' || st.b !== 'day';
   const over = TOD.over != null; // (photo mode's time of day: its sets load whatever the setting)
-  if (!S || (!over && (!TOD.on || (todHeld() && TOD.mode !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
+  const m = todMode();
+  if (!S || (!over && (m === 'day' || (todHeld() && m !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
   // The sets in use now and the next one coming (looked up a little ahead), and no others.
   const at = over ? TOD.over : S.time;
-  const want = TOD.mode === 'night' && !over ? new Set(['night']) : new Set([st.a, st.b, todAt(at + 45).a, todAt(at + 45).b]);
+  const want = m === 'night' && !over ? new Set(['night']) : new Set([st.a, st.b, todAt(at + 45).a, todAt(at + 45).b]);
   want.delete('day');
   for (const name of want) todLoadSet(name);
   for (const name in TOD.sets) if (!want.has(name)) todDropSet(name);

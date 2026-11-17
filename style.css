@@ -1076,6 +1076,10 @@ canvas.chart.small { height: 110px; }
 .pvm { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.35;
   color: #ffd2b8; background: rgba(255, 107, 74, 0.12); border: 1px solid rgba(255, 107, 74, 0.38); }
 .pvm i, .p-mods i, .rc-modmark { font-style: normal; color: var(--warn); }
+/* (the Murmur setting, a line of its own above the challenge modifiers, in the Murmur's violet) */
+.pvm-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; width: 100%; }
+.pvm.mur { color: #e4d2ff; background: rgba(164, 108, 255, 0.14); border-color: rgba(164, 108, 255, 0.45); }
+.p-tod-note { margin: -4px 0 8px; }
 
 /* Settings: Match, Planet, Rules. A row is a label and its control; the line under them describes. */
 .m-sets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -1117,7 +1121,7 @@ canvas.chart.small { height: 110px; }
 .tchip[hidden] { display: none; }
 .tchip:hover { border-color: rgba(255, 255, 255, 0.25); }
 .tchip.on { color: var(--text); border-color: rgba(56, 212, 255, 0.55); background: rgba(56, 212, 255, 0.1); }
-.tchip.na { opacity: 0.45; cursor: default; } /* (the Murmur on Lunar: none live there) */
+.tchip.na { opacity: 0.45; cursor: default; }
 .tchip .tchip-sub { font-size: 0.85em; font-weight: 500; opacity: 0.75; } /* (what an option's name means, beside it: the Murmur are creatures) */
 .tchip.na input { cursor: default; }
 .tchip input { appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; flex: none; border-radius: 50%; cursor: pointer;
@@ -1136,6 +1140,9 @@ canvas.chart.small { height: 110px; }
 .m-tod .m-rl { white-space: nowrap; }
 .tod-seg { flex: none; padding: 2px; gap: 2px; border-radius: 10px; }
 .tod-seg button { padding: 6px 13px; border-radius: 8px; font-size: 13.5px; }
+/* (a choice not on offer now: the Murmur on Argos, Always day with the Murmur on; a tap says why in the Rules line) */
+.m-tod.na .seg button, .seg button.na { opacity: 0.42; cursor: default; }
+.m-tod.na .seg button.on { opacity: 0.6; }
 
 /* A big screen: the planet on the left, settings on the right; wider still, Match beside Planet. */
 @media (min-width: 900px) and (min-height: 600px) {
@@ -1194,6 +1201,7 @@ canvas.chart.small { height: 110px; }
   .pvm-title { font-size: 12px; margin-right: 5px; }
   .pvm { display: inline; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 600; }
   .pvm + .pvm::before { content: ' · '; color: var(--muted); }
+  .pvm-line { display: block; }
   .m-planet:has(.pv-mods:not([hidden])) .pv { height: 84px; } /* (and a smaller preview, so they fit) */
 }
 @media (max-width: 420px) {

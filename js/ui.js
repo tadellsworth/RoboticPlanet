@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture', mods: [] },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -75,7 +75,9 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
+    if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
   checkMenuSettings();
   initMenu();
@@ -133,10 +135,24 @@ function initUI() {
   // Graphics (render.js setGfxStep): Saver, Auto, High or Ultra, at once.
   for (const btn of $('p-gfx').children) btn.onclick = () => { setGfxStep(btn.dataset.v); syncGfx(); sfx('click'); };
   syncGfx();
-  const syncTod = () => { $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`; };
-  syncTod();
-  // Cycle → Always day → Always night → Cycle.
-  $('p-daynight').onclick = () => { setTodMode(TOD_MODES[(TOD_MODES.indexOf(todMode()) + 1) % TOD_MODES.length]); syncTod(); sfx('click'); };
+  // Time of day (a display setting): Cycle → Always day → Always night → Cycle. In a game with the Murmur, Always day
+  // is skipped (they live by the night: see todForced), and on an always-night map (the Hollow) it stays night; the
+  // line under the button says why.
+  UI.syncTod = () => {
+    const f = UI.inGame ? todForced() : '';
+    $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`;
+    $('p-daynight-note').hidden = !f;
+    $('p-daynight-note').textContent = f === 'night' ? 'Always night here: this map lies underground.' : f === 'murmur' ? 'No always day in this game: the Murmur live by the night, so the cycle stays on (cycle or always night).' : '';
+  };
+  UI.syncTod();
+  $('p-daynight').onclick = () => {
+    const f = UI.inGame ? todForced() : '';
+    if (f === 'night') { sfx('error'); UI.syncTod(); return; }
+    const modes = f === 'murmur' ? ['cycle', 'night'] : TOD_MODES;
+    setTodMode(modes[(modes.indexOf(todMode()) + 1) % modes.length]); UI.syncTod(); sfx('click');
+  };
+  // What the game overrules (read by daynight.js's todMode): the Murmur keep the cycle on; an always-night map stays night.
+  TOD.force = () => (UI.inGame && S ? (alwaysNightMap() ? 'night' : S.wildlife ? 'murmur' : '') : '');
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
@@ -326,7 +342,8 @@ function checkMenuSettings() {
   // is how an earlier build kept them, for players 1 to 3.)
   const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
   m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
-  for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  for (const k of ['nuke', 'events', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  if (!murmurLevelOk(m.murmur)) m.murmur = 'active';
   m.mods = modList(m.mods); // the challenge modifiers picked (MODS), Rival head start kept for Versus in Colony too
   // (Teams isn't remembered: on a map made for 2 vs 2 it starts on.)
   if (m.teams === undefined && !m.shapeRnd && SHAPE_PRESETS[m.shape].teamDefault) m.teams = 1;
@@ -337,7 +354,7 @@ function saveSettings() {
   const m = UI.menu;
   try {
     localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
-      diff: m.diff, style: m.style, styles: m.styles, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
+      diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
 
@@ -394,6 +411,16 @@ function canHover() { return !!(window.matchMedia && matchMedia('(hover: hover) 
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
 /** Can the menu's biome have the Murmur? Not Lunar (Random might still pick it: then there are none). */
 function menuMurmur() { return UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0]); }
+/** The Murmur as the menu has them: 'off', 'quiet' or 'active' (off on Argos, whatever the setting, which is kept for the next biome). */
+function menuMurmurLevel() { return menuMurmur() && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off'; }
+/** What each Murmur setting does (the Rules line). */
+const MURMUR_INFO = {
+  off: 'The Murmur: off. No nests, no tunnels, no raids.',
+  quiet: 'The Murmur: quiet. Fewer nests; by night their tunnels creep toward your power and a few small packs come up through the exits.',
+  active: 'The Murmur: active. Nests out in the wilds; every night their tunnels spread toward power, new exits open and packs come up to raid every colony. The longer the game, the more of them. Keeps the day-and-night cycle on.',
+};
+/** The time of day as the menu shows it: always day isn't on offer with the Murmur in the game (they live by the night). */
+function menuTodMode() { const m = todStored(); return m === 'day' && menuMurmurLevel() !== 'off' ? 'cycle' : m; }
 const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); return G ? G.name : ''; };
 /**
  * How many players the menu is set to (Versus): you and one to three rivals, as many as the map type
@@ -416,7 +443,7 @@ function modeInfo(mode, n, teams) {
   const where = m.shapeRnd ? 'a square planet' : quad ? SH.name : 'a square planet';
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
-    ? (UI.menu.wild && menuMurmur() ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them. Build, research and spread across the planet.'
+    ? (menuMurmurLevel() !== 'off' ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them, and come up through their tunnels by night. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
     : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
       : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
@@ -456,9 +483,9 @@ function menuSummary() {
   if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
   if (!m.nuke) extra.push('no Nuclear race');
-  if (colony && (!m.wild || !menuMurmur())) extra.push('no Murmur');
+  extra.push(menuMurmurLevel() === 'off' ? 'no Murmur' : `Murmur: ${MURMUR_NAMES[menuMurmurLevel()]}`);
   if (m.events) extra.push('Planetary events');
-  if (todMode() !== 'cycle') extra.push(todMode() === 'day' ? 'always day' : 'always night');
+  if (menuTodMode() !== 'cycle') extra.push(menuTodMode() === 'day' ? 'always day' : 'always night');
   if (!weatherOn()) extra.push('no weather');
   if (m.unlimited) extra.push('Unlimited resources');
   const mods = menuMods();
@@ -530,9 +557,12 @@ function initMenu() {
   }
   // The doctrine line's own buttons (a touch screen): How it plays opens the whole of it, Less closes it again.
   $('m-style-note').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-docmore]'); if (b) { UI.docOpen = b.dataset.docmore === '1'; sfx('click'); syncInfo(); } });
-  // The Murmur's switch can't be turned on on Lunar: a tap on it still says why (in the Rules line).
-  $('m-wild-row').addEventListener('click', () => { if ($('m-wild').disabled) { UI.menuHover['m-sec-rules'] = $('m-wild-row'); syncInfo(); } });
-  for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
+  // The Murmur: Off, Quiet or Active (none on Argos: there a tap says why, in the Rules line).
+  for (const btn of $('m-murmur').children) btn.onclick = () => {
+    if (!menuMurmur()) { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
+    UI.menu.murmur = btn.dataset.v; UI.menuHover['m-sec-rules'] = btn; syncMenu(); saveSettings(); sfx('click');
+  };
+  for (const [id, k] of [['m-nuke', 'nuke'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
   // Challenge modifiers (MODS): a switch each, mixed freely.
@@ -540,7 +570,14 @@ function initMenu() {
   for (const k of MOD_ORDER) {
     $('m-mod-' + k).onchange = () => { const l = UI.menu.mods.filter((x) => x !== k); UI.menu.mods = modList($('m-mod-' + k).checked ? l.concat(k) : l); syncMenu(); saveSettings(); sfx('click'); };
   }
-  for (const btn of $('m-daynight').children) { btn.dataset.info = TOD_INFO[btn.dataset.v]; btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); }; }
+  // Time of day (looks only). Always day isn't on offer while the Murmur are on: a tap on it says why.
+  for (const btn of $('m-daynight').children) {
+    btn.dataset.info = TOD_INFO[btn.dataset.v];
+    btn.onclick = () => {
+      if (btn.dataset.v === 'day' && menuMurmurLevel() !== 'off') { UI.menuHover['m-sec-rules'] = btn; syncInfo(); sfx('error'); return; }
+      setTodMode(btn.dataset.v); syncMenu(); sfx('click');
+    };
+  }
   $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
   for (const btn of $('m-gfx').children) { btn.dataset.info = GFX_INFO[btn.dataset.v]; btn.onclick = () => { setGfxStep(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
@@ -599,8 +636,8 @@ function syncInfo() {
   const note = $('m-style-note'), html = doc ? docHTML(doc) : docNoteDefault();
   if (note.innerHTML !== html) note.innerHTML = html;
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
-  // (Colony on Lunar: the Rules line says why the Murmur's switch is off, a touch screen having no hover to ask with)
-  $('m-rules-info').textContent = line('m-sec-rules', m.mode === 'colony' && !menuMurmur() ? $('m-wild-row').dataset.info : TOD_INFO[todMode()]);
+  // (On Lunar the Rules line says why the Murmur are off, a touch screen having no hover to ask with)
+  $('m-rules-info').textContent = line('m-sec-rules', !menuMurmur() ? $('m-murmur-row').dataset.info : MURMUR_INFO[menuMurmurLevel()]);
   const mods = menuMods(), names = mods.map((k) => MODS[k].name);
   $('m-challenge-info').textContent = line('m-sec-challenge', mods.length === 1 ? MODS[mods[0]].desc
     : mods.length ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}. Win a Versus game with them on to earn their badges (Records).`
@@ -729,19 +766,24 @@ function syncMenu() {
     lab.dataset.doc = docKeyOf(v);
     lab.dataset.info = docInfo(docKeyOf(v));
   }
-  $('m-wild-row').hidden = !colony;
-  // The Murmur: none on Lunar (Argos, the moon, is silent ground), so there the switch is off and can't be turned on
-  // (the setting itself is kept for the next biome).
-  const silent = !menuMurmur();
-  $('m-wild').disabled = silent;
-  $('m-wild-row').classList.toggle('na', silent);
-  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Argos, the moon (no nests, no raids).'
-    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their nests. None on Argos, the moon.';
-  for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild && !silent], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
+  // The Murmur: none on Lunar (Argos, the moon, is silent ground), so there it shows Off and can't be changed (the
+  // setting itself is kept for the next biome).
+  const silent = !menuMurmur(), mur = menuMurmurLevel();
+  $('m-murmur-row').classList.toggle('na', silent);
+  $('m-murmur-row').dataset.info = silent ? 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).' : MURMUR_INFO[mur];
+  for (const btn of $('m-murmur').children) { mark(btn, btn.dataset.v === mur); btn.dataset.info = silent ? $('m-murmur-row').dataset.info : MURMUR_INFO[btn.dataset.v]; }
+  for (const [id, on] of [['m-nuke', m.nuke], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
   }
-  for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
+  // Time of day: with the Murmur on, Always day is off (they live by the night), and says so.
+  for (const btn of $('m-daynight').children) {
+    mark(btn, btn.dataset.v === menuTodMode());
+    const locked = btn.dataset.v === 'day' && mur !== 'off';
+    btn.classList.toggle('na', locked);
+    btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    btn.dataset.info = locked ? 'Always day is off while the Murmur are in the game: they live by the night, so the day-and-night cycle stays on. Set The Murmur to Off to have it.' : TOD_INFO[btn.dataset.v];
+  }
   syncGfx();
   for (const k of MOD_ORDER) {
     const on = m.mods.includes(k);
@@ -767,9 +809,11 @@ function syncMenu() {
  * with it (see metaModBadges in js/goals.js).
  */
 function syncPvMods() {
-  const el = $('m-pv-mods'), mods = menuMods(), won = typeof metaModBadges === 'function' ? metaModBadges() : {};
-  const html = mods.length ? '<span class="pvm-title">Challenge</span>' + mods.map((k) => `<span class="pvm${won[k] ? ' won' : ''}" title="${esc(MODS[k].desc + (won[k] ? ' You have won with it: its badge is in Records.' : ''))}">${won[k] ? '<i aria-hidden="true">◆</i>' : ''}${MODS[k].name}</span>`).join('') : '';
-  el.hidden = !mods.length;
+  const el = $('m-pv-mods'), mods = menuMods(), won = typeof metaModBadges === 'function' ? metaModBadges() : {}, mur = menuMurmurLevel();
+  // (the Murmur setting first, on its own line: Off, Quiet or Active)
+  const html = `<span class="pvm-line"><span class="pvm-title">The Murmur</span><span class="pvm mur" title="${esc(MURMUR_INFO[mur])}">${MURMUR_NAMES[mur]}</span></span>` +
+    (mods.length ? '<span class="pvm-line"><span class="pvm-title">Challenge</span>' + mods.map((k) => `<span class="pvm${won[k] ? ' won' : ''}" title="${esc(MODS[k].desc + (won[k] ? ' You have won with it: its badge is in Records.' : ''))}">${won[k] ? '<i aria-hidden="true">◆</i>' : ''}${MODS[k].name}</span>`).join('') + '</span>' : '');
+  el.hidden = false;
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 
@@ -844,6 +888,7 @@ function choosePicked(kind, v) {
   const m = UI.menu, rnd = v === 'rnd';
   if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
   if (kind === 'shape' && !rnd && SHAPE_PRESETS[m.shape].teamDefault) { m.teams = 1; m.players = 4; } // (a map made for 2 vs 2: four players, Teams on, which you can still turn off)
+  if (kind === 'shape' && !rnd && murmurLevelOk(SHAPE_PRESETS[m.shape].murmur)) m.murmur = SHAPE_PRESETS[m.shape].murmur; // (a map type with its own Murmur: the Hollow)
   sfx('click');
   closePicker();
   syncMenu();
@@ -1429,6 +1474,7 @@ function initDialogs() {
 
 function syncSaved() {
   syncPauseMods();
+  if (UI.syncTod) UI.syncTod();
   syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
   const el = $('p-saved');
   if (!el) return;
@@ -1439,12 +1485,15 @@ function syncSaved() {
     : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
-/** The pause menu's line of this game's challenge modifiers (each named in full when pointed at). */
+/** The pause menu's line of this game's challenge modifiers (each named in full when pointed at), and the Murmur setting. */
 function syncPauseMods() {
-  const el = $('p-mods'), mods = S ? gameMods() : [];
+  const el = $('p-mods'), mods = S ? gameMods() : [], mur = S && !S.mission ? murmurLevel() : 'off';
   if (!el) return;
-  el.hidden = !mods.length;
-  el.innerHTML = mods.length ? '<b>Challenge:</b> ' + mods.map((k) => `<span title="${esc(MODS[k].desc)}">${MODS[k].name}</span>`).join(' · ') : '';
+  const parts = [];
+  if (S && !S.mission) parts.push(`<b>The Murmur:</b> <span title="${esc(mur === 'off' ? MURMUR_INFO.off : MURMUR_INFO[mur])}">${MURMUR_NAMES[mur]}</span>`);
+  if (mods.length) parts.push('<b>Challenge:</b> ' + mods.map((k) => `<span title="${esc(MODS[k].desc)}">${MODS[k].name}</span>`).join(' · '));
+  el.hidden = !parts.length;
+  el.innerHTML = parts.join('<br>');
 }
 
 /* ------------------------------------------------------------------ boosts (hidden) */
@@ -2587,7 +2636,7 @@ function doctrineLines() {
   if (S.mode === 'colony') return;
   for (const P of S.players) {
     const st = P.id !== ME && P.ai && !P.absent && !P.out && isDoctrine(P.style) && PERSONALITIES[P.style];
-    const who = allies(P.id, ME) ? `Your ally ${callsign(P.id, true)}` : S.players.length > 2 ? callsign(P.id, true) : `Your rival, ${callsign(P.id, true)},`;
+    const who = allies(P.id, ME) ? `Your ally ${callsign(P.id, true)}` : nColonies() > 2 ? callsign(P.id, true) : `Your rival, ${callsign(P.id, true)},`;
     if (st) postMsg(ME, `${who} is ${st.noun} (${st.plain}): it ${st.desc}.`, 0, 0, 'info');
   }
 }
@@ -2607,7 +2656,7 @@ function startNewGame() {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
-    style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
+    style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(),
   });
   enterGame();
@@ -2616,28 +2665,31 @@ function startNewGame() {
   postMsg(ME, UI.menu.mode === 'colony'
     ? (BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? `Your bots have landed on ${regionName(S.settings.biome)}. Build, expand and make this moon home.`
       : `Your bots have landed in ${regionName(S.settings.biome)}. Build, expand and make this planet home.`)
-    : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
+    : nColonies() > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : `Your bots have landed. A rival colony, ${callsign(1, true)}, landed to the north. Build up fast!`, 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   doctrineLines();
   modsBriefing();
   if (S.wildlife) {
-    // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
-    const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
+    // Pointed at the nest nearest home (J jumps there), the rest are violet on the minimap.
+    const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && b.type === 'nest');
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
-    postMsg(ME, `The Murmur live here: ${nests.length} nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
-  } else if (UI.menu.mode === 'colony' && UI.menu.wild && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
+    const where = `(violet on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''})`;
+    postMsg(ME, S.mode === 'colony'
+      ? `The Murmur live here (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. From about 7 minutes in they raid whatever you build near their nests, and every night their tunnels spread and packs come up through the exits. Pulse Turrets (with Crystal) and warbots keep them off; collapse an exit with warbots; clear a nest to win the goods it hoards.`
+      : `The Murmur (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. They are nobody's side: every night their tunnels spread toward the colonies' power, and packs come up through the exits to raid all of you. Collapse an exit with warbots; wreck a nest by day and its tunnels die back.`, near ? near.x : 0, near ? near.y : 0, 'warn');
+  } else if (UI.menu.murmur !== 'off' && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
-    postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
+    postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${nColonies() > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (S.victory === 'domination') postMsg(ME, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
-  if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
+  if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${nColonies() > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
   $('br-title').textContent = 'Before you start';
   showBriefing(landingLog());
 }
@@ -2950,7 +3002,7 @@ function showGameOver() {
   $('o-log').hidden = true;
   $('o-report').hidden = true;
   if (S.mission) { showMissionOver(); return; }
-  const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
+  const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = nColonies() > 2;
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
   // (lost while the colony stands: on the Uplinks another colony speaks for the planet; else, settlement priority)
@@ -2963,7 +3015,7 @@ function showGameOver() {
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
       : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
-        : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
+        : many ? `${nColonies() > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
@@ -3014,7 +3066,7 @@ function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
-  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const extras = [def.mode === 'colony' && def.war && 'Warbots', (def.murmur || def.wildlife) && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
@@ -3317,7 +3369,7 @@ function renderStats() {
   const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.floor(landShare(ME) * 100) + '%'],
     ['Bots lost', st.lost]];
-  const players = versus ? S.players.map((P) => P.id) : [0];
+  const players = versus ? S.players.filter((P) => !P.absent).map((P) => P.id) : [0]; // (not the Murmur's slot)
   const ser = (fn) => players.map((p) => ({ name: playerName(p), color: CHART.series[p], values: fn(H.p[p] || {}) }));
   const goodsList = GOODS.filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
   if (!goodsList.includes(UI.stats.good)) UI.stats.good = 'alloy';
@@ -5670,18 +5722,23 @@ function openBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === ME;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
-  let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `${playerName(b.owner)}'s fortified headquarters. Capture it and everything ${playerName(b.owner)} built is yours.` : `${playerName(b.owner)}'s fortified headquarters. Capture it to win.`) : def.desc;
+  let desc = !mine && b.type === 'lander' ? (nColonies() > 2 ? `${playerName(b.owner)}'s fortified headquarters. Capture it and everything ${playerName(b.owner)} built is yours.` : `${playerName(b.owner)}'s fortified headquarters. Capture it to win.`) : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && isDoctrine(S.players[b.owner].style) && S.players[b.owner].style;
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${docLabel(style)}:</b> it ${PERSONALITIES[style].desc}.`;
   if (!mine && b.type === 'lander' && S.mission && captureLocked(b, ME)) desc += ' <b>Finish your other goals first:</b> until then it holds at 1 armor.';
-  if (def.wild) {
+  if (def.burrow) {
+    // A tunnel exit: what it is (its description), whose network, and how to deal with it.
+    const nest = getE(b.nest), up = S.bots.filter((u) => !u.dead && u.exit === b.id && u.task && u.task.night).length;
+    desc += ` <b>${murmurNight(S.time) ? (alwaysNightMap() ? 'A surge is on' : 'Night') + `: ${up ? `${up} of the Murmur came up here` : 'the Murmur are up'}.` : `${alwaysNightMap() ? 'Between surges' : 'Day'}: quiet until ${alwaysNightMap() ? 'the next surge' : 'nightfall'} (${fmtClock(murmurNextNight())}).`}</b>` +
+      ` Its nest is ${nest ? dirText(b, nest) + ' of here' : 'gone'}. <b>To deal with it:</b> Army → Attack, then tap it (4 armed warbots are plenty), or send warbots below.`;
+  } else if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
     desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} of the Murmur out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
   }
   // With no road to storage yet, that warning and its Lay road button lead the panel: in view at half height.
   const roadFirst = mine && b.unlinked && needsRoad(b);
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
+    <div class="owner"><span class="dot" style="background:${ownerColor(b.owner)}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
     ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div>${mine && def.inp && !def.pump ? '<div id="sh-why"></div>' : ''}<div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
@@ -6037,7 +6094,7 @@ function refreshBuildingSheet(b) {
   const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(ME, b.x, b.y) : null;
   const foes = mine && !gun && !BDEFS[b.type].war && !(def.staff && b.staff) && foesAt(b); // (a staffed building says so itself)
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
-    : foes ? `${S.wildlife ? 'The Murmur are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
+    : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
   if (!b.built) {
@@ -7372,7 +7429,7 @@ function objectiveText() {
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
       : `<b>${pct}%</b> of the planet colonized. Every milestone reached!`;
   }
-  return S.players.length > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take every rival Command Base to win.'
+  return nColonies() > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take every rival Command Base to win.'
     : 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
 }
 

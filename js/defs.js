@@ -743,13 +743,13 @@ function colonyName(p) {
 
 /**
  * What to call player p: 'You' (whoever plays on this device), a person's name in multiplayer, else its callsign
- * ('VERMILION'; 'VERMILION (ally)' for your ally in a team game). In Colony mode the second slot is the Murmur. In a
+ * ('VERMILION'; 'VERMILION (ally)' for your ally in a team game). The Murmur's slot is the Murmur (Colony: the second). In a
  * sentence (the = true) only 'you' and 'the Murmur' change: a callsign stands without "the".
  */
 function playerName(p, the) {
   const me = typeof ME !== 'undefined' ? ME : 0, G = typeof S !== 'undefined' && S ? S : null;
   if (p === me && !(G && G.watch)) return the ? 'you' : 'You'; // (whoever is playing on this device; nobody, in a game being watched)
-  if (G && G.mode === 'colony' && p === 1) return the ? 'the Murmur' : 'Murmur';
+  if (G && ((G.mode === 'colony' && p === 1) || (G.wildlife && p === (G.wildOwner ?? 1)))) return the ? 'the Murmur' : 'Murmur';
   if (G && G.players && G.players[p] && G.players[p].name) return G.players[p].name; // (a person, in multiplayer)
   const ally = G && G.teams && typeof allies === 'function' && allies(p, me);
   return ally ? `${callsign(p)} (ally)` : callsign(p);
@@ -990,6 +990,11 @@ const BDEFS = {
   nest: {
     name: 'Murmur Nest', desc: 'The Murmur breed down here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
     cost: {}, wild: true, armor: 45, buildTime: 1,
+  },
+  // A Murmur tunnel exit (see MURMUR): opens along a nest's tunnels at night; warbots collapse it.
+  burrow: {
+    name: 'Tunnel Exit', desc: 'A Murmur tunnel exit: heaved earth over a hole into the network the nest has dug. At night packs come up through it to raid every colony near it (bots, buildings full of charge, roads), and at dawn they go back down. Send warbots to collapse it: it stays shut for a while (15 minutes). Wreck the nest it belongs to and its whole network dies back.',
+    cost: {}, wild: true, burrow: true, armor: 30, buildTime: 1,
   },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',
@@ -1266,23 +1271,93 @@ const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock
 const TRADE_SHORT = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
 
 /*
- * The Murmur (players see them as that; the code calls them wildlife, and their nests type 'nest'): a Colony
- * option, on by default; never in missions unless one asks, and never on a silent biome (Lunar: see murmurGround).
- * Creature nests sit out in the wilds,
- * owned by WILD_OWNER (the empty second player slot of a Colony game). Each keeps a few Scuttlers on
- * guard (guards + its level) and, from `first` seconds on, sends a pack every `gap` seconds at the
- * nearest thing the colony has built within `reach` tiles of it. The pack goes for bots in the open;
+ * The Murmur (players see them as that; the code calls them wildlife, their nests type 'nest' and their tunnel exits
+ * type 'burrow'): the setting MURMUR below, in every kind of game; never in missions unless one asks, and never on a
+ * silent biome (Lunar: see murmurGround). Creature nests sit out in the wilds, owned by wildOwner() (in Colony
+ * WILD_OWNER, the empty second player slot; in Versus a slot of their own). Each keeps a few Scuttlers on
+ * guard (guards + its level) and, in Colony, from `first` seconds on, sends a pack every `gap` seconds at the
+ * nearest thing a colony has built within `reach` tiles of it. The pack goes for bots in the open;
  * Brutes (from level 2) tear up roads and batter buildings (never below 1 armor; construction sites
  * are wrecked), and break through Walls and Gates, slowly (`wallBite` of a bite each). After `raidTime` the pack heads home. A nest grows a level every `grow` seconds (up
  * to 3): bigger packs and more hoarded goods. Packs also grow with the colony (one more creature for
  * every `perBuildings` buildings). Nothing can be built within `clear` tiles of a nest.
  */
-const WILD_OWNER = 1;
+const WILD_OWNER = 1; // (a Colony game's: in Versus the Murmur have a slot of their own after the colonies, see wildOwner)
 const WILD = {
   first: 420, gap: [260, 400], reach: 24, raidTime: 70, grow: 600, guards: 2, guardEvery: 45, perTiles: 800,
   perBuildings: 14, maxPack: 9, bite: 1.1, wallBite: 0.35, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
   hunt: 6, // tiles an arrived Scuttler will walk to reach a bot (12 makes raids far deadlier: an AI colony was wiped out by minute 15)
 };
+/** The Murmur's colour where a colour stands for them (the minimap, a panel's owner dot, their tunnels' glow). */
+const WILD_COLOR = '#a46cff';
+
+/*
+ * The Murmur setting (the new-game screen's "The Murmur": Off, Quiet or Active; Active by default): the Murmur in
+ * every kind of game, Versus as well as Colony. Never on a silent biome (Argos: see murmurGround). Missions leave
+ * them out unless one asks (its `murmur`); a map type can bring its own default (SHAPE_PRESETS `murmur`). They live
+ * by the day: the setting keeps the day-and-night cycle on (murmurNight, from the game's own clock).
+ *
+ * - Nests (Versus: placed fairly by the map's symmetry, away from the bases, by Crystal seams and strike sites): up
+ *   to `orbits` sets of them (a nest for each colony in a set), one set for every `perTiles` tiles of map for two
+ *   colonies (Medium, 2240 tiles: two sets on Active, one on Quiet).
+ * - Tunnels (S.tun, a tile layer): each night every nest's network spreads, `tiles` more a night (the base, more each
+ *   night after the first, at most the last), along `branches` branches heading for power (colony buildings, charge
+ *   first), up to `cap` tiles in all (base, per night, most). Tunnels pass under roads, buildings and Walls.
+ * - Exits (type 'burrow'): `exits` more open along each network a night (at most `maxExits` open at once), and at
+ *   night packs come up through them, `pack` strong (base, per night, most; Brutes from night `brutes` on), `waves`
+ *   packs a night from each. They harass every colony alike (bots, buildings full of charge, roads); at dawn the ones
+ *   that came up go back down. Warbots collapse an exit (`exitArmor`): it stays shut `shut` seconds. A wrecked
+ *   nest's network dies back and its exits close.
+ * - At most room[0] + room[1] a colony of the Murmur are up at night at once; a pack comes up only where a colony has
+ *   something within `prey` tiles of the exit.
+ * - Versus: the nests send no packs by day (days are for striking them, nights for holding the line). Colony keeps the
+ *   nests' raids by day too (WILD); Quiet's come further apart (`raidGap` times the usual gap), a creature smaller
+ *   (`raidLess`).
+ * - Quiet: fewer nests, fewer and slower tunnels, fewer exits and smaller packs.
+ * - `warn`: seconds before nightfall the dusk warning comes. Exits open no nearer than `exitFromBase` tiles to a
+ *   Command Base or `exitFromBld` to any colony building; a branch makes for power within `reach` tiles of its nest;
+ *   at dawn a creature within `retreat` tiles of an open exit goes down it (the rest dig down where they stand).
+ */
+const MURMUR_LEVELS = ['off', 'quiet', 'active'];
+const MURMUR_NAMES = { off: 'Off', quiet: 'Quiet', active: 'Active' };
+const MURMUR = {
+  quiet: {
+    orbits: 1, perTiles: 2200, tiles: [14, 4, 28], branches: [1, 0.34, 2], cap: [36, 18, 120],
+    exits: [1, 0.25, 1], maxExits: 2, pack: [2, 0.25, 3], brutes: 4, waves: 1, raidGap: 1.6, raidLess: 1,
+  },
+  active: {
+    orbits: 2, perTiles: 1100, tiles: [28, 8, 56], branches: [2, 0.5, 4], cap: [60, 36, 260],
+    exits: [2, 0.5, 3], maxExits: 4, pack: [3, 0.34, 5], brutes: 2, waves: 2, raidGap: 1, raidLess: 0,
+  },
+  shut: 900, warn: 40, exitArmor: 30, minBase: 18, exitFromBase: 9, exitFromBld: 3, reach: 44, retreat: 16, room: [24, 8], prey: 26,
+};
+
+/*
+ * The day: 12 minutes round, starting at dawn: [time of day, minutes] holds, [from, to, minutes] crossfades. Game
+ * logic (the Murmur's nights: murmurNight) reads it through todPhase from the game's own clock, the same on every
+ * device; how it looks (js/daynight.js) is a display setting kept on each device, which the game never reads.
+ */
+const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day', 'evening', 0.5], ['evening', 1.5], ['evening', 'night', 0.5], ['night', 3], ['night', 'morning', 0.5]];
+const TOD_LEN = TOD_CYCLE.reduce((n, p) => n + p[p.length - 1], 0) * 60;
+/** Where game time t (seconds) falls in the day: { a, b, f } (f, 0 to 1, from a to b, smoothed). */
+function todPhase(t) {
+  let x = ((t % TOD_LEN) + TOD_LEN) % TOD_LEN;
+  for (const p of TOD_CYCLE) {
+    const len = p[p.length - 1] * 60;
+    if (x >= len) { x -= len; continue; }
+    if (p.length === 2) return { a: p[0], b: p[0], f: 0 };
+    const f = x / len;
+    return { a: p[0], b: p[1], f: f * f * (3 - 2 * f) }; // smoothstep
+  }
+  return { a: 'day', b: 'day', f: 0 };
+}
+/** The time of day's name at game time t ('morning', 'day', 'evening' or 'night'). */
+function todNameAt(t) { const p = todPhase(t); return p.f < 0.5 ? p.a : p.b; }
+/** When night begins and ends in each day (seconds into it): halfway through the crossfades either side of it. */
+const NIGHT_FROM = (() => { let s = 0; for (const p of TOD_CYCLE) { if (p.length === 3 && p[1] === 'night') return s + p[2] * 30; s += p[p.length - 1] * 60; } return 0; })();
+const NIGHT_TO = (() => { let s = 0; for (const p of TOD_CYCLE) { if (p.length === 3 && p[0] === 'night') return s + p[2] * 30; s += p[p.length - 1] * 60; } return 0; })();
+/** The lull before a surge on an always-night map (the Hollow): the ground goes dead silent this long before it. */
+const SURGE_LULL = 60;
 
 /*
  * Research (Colony): a Research Lab researches one upgrade at a time for the whole colony. The cost
@@ -1434,6 +1509,7 @@ const FLAVOR = {
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
   nest: 'Logged as an acoustic anomaly. The log was never closed.',
+  burrow: 'Ground survey for this tile: level, compacted, stable. Survey date: yesterday.',
   depot: 'Shelf labels from the colony manifest: seed stock, school desks, blankets. Mostly Cement.',
   // Robots
   worker: 'Accord-standard construction unit. Tireless, literal, never asks why.',
@@ -1501,6 +1577,8 @@ function wardenDay(t) { return String(12054 + Math.floor(Math.max(0, t || 0) / 7
 
 /** Do the Murmur live on this biome? Not on Lunar (Argos, the moon: the only silent ground). */
 function murmurGround(biome) { return !(BIOMES[biome] && BIOMES[biome].silent); }
+/** Is murmur one of the setting's levels ('off', 'quiet', 'active')? */
+function murmurLevelOk(v) { return MURMUR_LEVELS.includes(v); }
 /** The biome's name on Ithaca I ('the Rust'), for flavour; capitalised at the start of a sentence with cap. */
 function regionName(biome, cap) {
   const r = (BIOMES[biome] || BIOMES.desert).region || '';

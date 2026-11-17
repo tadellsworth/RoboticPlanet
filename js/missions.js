@@ -16,9 +16,9 @@
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
  * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
- * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions
- * otherwise leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, creature
- * nests), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
+ * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events (switch on what missions otherwise
+ * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events), murmur ('quiet' or
+ * 'active': the Murmur, with their nests, tunnels and nights; the older wildlife: true is Active), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
  * (1 to 4, met in any order, shown one at a time as the next goal) }.
  * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal: the
  * real button names in <b> and keys in <kbd>), ui (CSS selector of the button(s) to light up meanwhile; when none is
@@ -921,13 +921,14 @@ const MISSIONS = [
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
     brief: 'The Murmur breed in nests under the swamp and raid your colony. Arm up and clear the nests before the packs grow.',
     intro: [
-      'The <b>Murmur</b> live here: their nests send packs at your colony from about 4 minutes in.',
-      '<b>Scuttlers</b> bite robots; <b>Brutes</b> tear up roads and batter buildings. Nests grow over time.',
+      'The <b>Murmur</b> live here: packs from their nests from 4 minutes in. <b>Scuttlers</b> bite, <b>Brutes</b> smash.',
+      'By night they tunnel toward your power and come up through <b>tunnel exits</b>: collapse those with warbots.',
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
       'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert.',
     ],
-    mode: 'colony', seed: 6107, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, wildlife: true, limit: [0, 0, 20],
+    // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them)
+    mode: 'colony', seed: 6107, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 20],
     setup(S) {
       kit(S, KIT7, 4);
       const P = S.players[0], L = getE(P.lander);
@@ -937,6 +938,10 @@ const MISSIONS = [
       L.stock.ammo = 30; L.stock.crystal += 6; L.stock.alloy += 6; L.stock.chip += 4;
       // The first packs come out at 4-5 minutes (free play: 7-9), so the Pulse Turret gets to show what it does.
       for (const b of S.buildings) if (b.type === 'nest') b.raidAt = 240 + (b.raidAt - WILD.first) / 2;
+      // The tunnels dug the night before: the nest nearest the colony has dug toward it, and an exit is open out there
+      // (night falls at 8 minutes: collapse it before then).
+      const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
+      if (near) murmurPredig(near, 22, true);
     },
     goals: [
       { kind: 'built', type: 'turret', n: [1, 1, 2],
@@ -945,8 +950,12 @@ const MISSIONS = [
       { kind: 'bots', type: 'warbot', n: [2, 3, 4], at: 'foundry',
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>. They wait in the Command Base and reload there.',
         ui: "#sh-orders .order-row[data-k='warbot'] [data-d='1']" },
-      { kind: 'nests', n: [1, 2, 2], text: ['Clear a Murmur nest', 'Clear {n} Murmur nests'], count: (P) => P.stats.captured || 0,
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap a nest. Its hoard spills out for your warbots.',
+      // The tunnels of the Murmur: an exit (a violet ring on the minimap) opened along them overnight. Collapsed, it stays shut.
+      { kind: 'exits', n: 1, text: 'Collapse a tunnel exit', count: (P) => P.stats.collapsed || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap the tunnel exit (a violet ring on the minimap).',
+        ui: '#btn-attack, #ar-attack' },
+      { kind: 'nests', n: [1, 1, 2], text: ['Clear a Murmur nest', 'Clear {n} Murmur nests'], count: (P) => P.stats.captured || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b>, then tap a nest: its hoard spills out, and its tunnels die back.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },
@@ -1426,7 +1435,8 @@ function missionOptions(k, diff) {
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
-      if (def.wildlife && S.mode === 'colony' && murmurGround(S.settings.biome)) { S.wildlife = true; placeNests(S.seed); } // (none on the moon)
+      // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
+      if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
       if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);

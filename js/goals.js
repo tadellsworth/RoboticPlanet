@@ -273,7 +273,7 @@ function goalAction(g) {
   if (b) return ['Show', show(b)];
   if (g.nest || g.post) {
     const L = getE(S.players[ME].lander);
-    const pool = g.nest ? S.buildings.filter((e) => !e.dead && BDEFS[e.type].wild) : (S.posts || []);
+    const pool = g.nest ? S.buildings.filter((e) => !e.dead && e.type === 'nest') : (S.posts || []);
     const near = L && pool.length ? pool.reduce((a, e) => (dist2(e.x, e.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? e : a)) : null;
     if (near && g.nest) return ['Show', show(near)];
     if (near) return ['Show', () => { closeSheet(); setMode('normal'); centerOn(near.x + 0.5, near.y + 0.5); openPostSheet(near); }];
@@ -533,7 +533,7 @@ function metaGameOver() {
         metaEarn('win');
         if (diff === 'hard') metaEarn('win-hard');
         if ((diff === 'normal' || diff === 'hard') && !g.f.turret) metaEarn('no-turret');
-        if (S.players.length > 2 && !S.teams) metaEarn('ffa');
+        if (nColonies() > 2 && !S.teams) metaEarn('ffa');
         if (S.endHow === 'domination') metaEarn('domination');
         if (S.endHow === 'uplinks') metaEarn('uplinks');
         if (SHAPE_PRESETS.every((s) => R0.shapes[s.name])) metaEarn('shapes');

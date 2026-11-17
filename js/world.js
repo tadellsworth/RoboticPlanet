@@ -1972,9 +1972,13 @@ function newGame(opts) {
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
-  // The Murmur (wildlife, see WILD): Colony free play only, and never on a silent biome (Lunar: see murmurGround); the
-  // nests go down once the landing site is in.
-  if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup && murmurGround(settings.biome)) S.wildlife = true;
+  // The Murmur (see MURMUR and WILD): opts.murmur ('off', 'quiet' or 'active'); unset, the map type's own (SHAPE_PRESETS
+  // murmur) except on a hand-made map (a mission's: it switches them on in its setup, see missionOptions), else off. An
+  // older Colony game's switch (opts.wildlife) is Active. Never on a silent biome (Argos: see murmurGround). The nests go
+  // down once the landing sites are in (murmurStart).
+  const hand = !!(opts.layout || opts.setup || opts.mission);
+  let murmur = murmurLevelOk(opts.murmur) ? opts.murmur : opts.wildlife && mode === 'colony' && !hand ? 'active' : !hand && murmurLevelOk(SHAPE_PRESETS[settings.shape].murmur) ? SHAPE_PRESETS[settings.shape].murmur : 'off';
+  if (!murmurGround(settings.biome)) murmur = 'off';
   // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
   // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
   // opts.style names one for them all. 'random' deals one at random, picked from the planet's seed, that no other
@@ -2014,7 +2018,7 @@ function newGame(opts) {
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
-  if (S.wildlife) placeNests(seed);
+  if (murmur !== 'off') murmurStart(murmur);
   placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
@@ -2576,7 +2580,7 @@ function computeTerritory() {
   let took = false;
   for (let t = 0; t < N; t++) {
     const o = S.owner[t];
-    if (o < 0 || (S.wildlife && o === WILD_OWNER) || d[o][t] === Infinity) continue;
+    if (o < 0 || isWild(o) || d[o][t] === Infinity) continue;
     if ((S.road[t] || S.rail[t]) && S.wown[t] >= 0 && S.wown[t] !== o) {
       S.wown[t] = o;
       if (S.paveMark) S.paveMark[t] = 0;
@@ -2807,7 +2811,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
   if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
-    if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a Murmur nest: clear it with warbots first.' };
+    if (!e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a Murmur nest: clear it with warbots first.' };
   }
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
   // A Ramp is built from either side of its cliff (see rampStands), so it only needs one side your bots can reach.
@@ -4039,6 +4043,14 @@ function human(p) { const P = S.players[p]; return !!P && !P.ai; }
  * just p !== q); neutral owners (-1) are everyone's. Allies don't shoot, shell, bomb, raid or capture each other.
  */
 function foes(p, q) { return p !== q && !(S && S.teams && p >= 0 && q >= 0 && S.teams[p] !== undefined && S.teams[p] === S.teams[q]); }
+/** The Murmur's player slot (owner of their nests, exits and creatures): Colony's empty second slot, else one after the colonies. */
+function wildOwner() { return S && S.wildOwner !== undefined ? S.wildOwner : WILD_OWNER; }
+/** Is p the Murmur (in a game that has them)? */
+function isWild(p) { return !!(S && S.wildlife && p === wildOwner()); }
+/** Player p's colour where a colour stands for them (the Murmur: their violet). */
+function ownerColor(p) { return isWild(p) || (S && S.mode === 'colony' && p === WILD_OWNER && S.wildlife) ? WILD_COLOR : PLAYER_COLORS[p] || '#9aa2ab'; }
+/** How many colonies the game was set up for (the Murmur's own slot, in a Versus game with them, isn't one). */
+function nColonies() { return S.players.length - (S.wildSlot ? 1 : 0); }
 /** ...on the same team (and not the same player). */
 function allies(p, q) { return p !== q && !foes(p, q); }
 /** Player p's team (without teams: their own number). */
@@ -4185,13 +4197,14 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
-const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault']; // optional per-tile layers some map types have (null otherwise)
+const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
   wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
   heat: Float32Array, // (the traffic map's flow: see HEAT)
+  tun: Uint8Array, // (the Murmur's tunnels: see murmurTick)
 };
 
 function serializeGame() {
@@ -4223,7 +4236,14 @@ function checkSave(o) {
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
-  if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
+  // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
+  if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
+  if (o.wildOwner != null && !(Number.isInteger(o.wildOwner) && o.wildOwner >= 0 && o.wildOwner < o.players.length)) bad();
+  if (o.mur != null) {
+    const M = o.mur;
+    if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
+    if (M.shut != null && !(Array.isArray(M.shut) && M.shut.every((e) => obj(e) && Number.isInteger(e.x) && Number.isInteger(e.y) && Number.isFinite(e.until)))) bad();
+  }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
   const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
@@ -4237,11 +4257,14 @@ function checkSave(o) {
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
+    // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
+    if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry))) bad();
   if (o.settings != null) {
     const st = o.settings;
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
+    if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
   }
   if (o.mission) {
     const M = o.mission;

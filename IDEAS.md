@@ -344,7 +344,7 @@ These wait for a later expansion:
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
   Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
   same 12-minute clock, and the hum goes silent just before each one.
-- **The Murmur in regular games (decided by the owner, Nov 17; being built).** A Custom Game setting for every map,
+- **The Murmur in regular games (decided by the owner, Nov 17; built Nov 17: see README, The Murmur).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
   Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
   new exits open along it, and more of them **pop out of the exits** to harass the colonies as they fight each other,
@@ -353,6 +353,11 @@ These wait for a later expansion:
   warbots collapse a tunnel exit (it stays shut a while), and wrecking a nest makes its whole network die back.
   Tunnels pass under roads, buildings and Walls. Quiet: fewer, slower tunnels and smaller packs. The rival AI learns to
   live with them.
+  As built: Versus nests send nothing by day (only Colony's do); nests are placed by the map's symmetry, one a colony
+  in each set (Active two sets on a Medium map for two, Quiet one); exits open no nearer than 9 tiles to a Command Base;
+  a collapsed exit stays shut 15 minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.
+  Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
+  `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last

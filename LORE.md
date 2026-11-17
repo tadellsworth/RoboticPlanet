@@ -375,3 +375,12 @@ above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 
 setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
 mode built around the Murmur.
+
+The Murmur in every game (the owner's decision, Nov 17 2026; built): a setting for every map, Off, Quiet or Active,
+Active by default, never on Argos. They live by the night, so with them on the day-and-night cycle stays on. By night
+each nest's tunnels spread toward power, new exits open along them and packs come up through the exits to raid every
+colony alike; at dawn the ones that came up go back down. The tunnels are drawn as the art brief has the Bloom: raised
+ridges of heaved earth with violet root-veins, glowing at night with pulses running back to the nest. Warbots collapse
+an exit (it stays shut a while); a wrecked nest's network dies back. They are nobody's side: they never count for
+victory, and the rival colonies live with them too. In the Hollow, where it is always night, the nights are surges,
+and the ground goes dead silent just before each.

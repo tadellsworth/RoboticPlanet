@@ -2820,6 +2820,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'burrow': { drawBurrow(ctx, cx, cy, s, b); break; }
     case 'station': {
       // A platform with a canopy beside the track, crates stacked under it and the team colour on the roof.
       hullBase(ctx, cx, cy, s, color);
@@ -3965,6 +3966,229 @@ function drawNest(ctx, cx, cy, s, b) {
   }
 }
 
+/* ------------------------------------------------------------------ the Murmur's tunnels and exits */
+
+/*
+ * The Murmur's tunnels (S.tun, see murmurTick): raised ridges of heaved earth with violet root-veins breaking through
+ * them, as moles leave (LORE.md's art brief: the Bloom follows the ridges). Subtle by day; at night the veins glow and
+ * pulses of light run along them back to the nest. Baked into two layers of their own, TUN_PX a tile (ridges, drawn with
+ * the ground and graded with it; veins, added on in light), again when the network changes (S.mur.ver). Procedural for
+ * now: paintTunnelTile, paintTunnelVeins, drawBurrow and drawExitScar are each one function, so art can stand in later.
+ */
+const TUN_PX = 16;
+
+/** The baked tunnel layers, made again when the network has changed (at most once a second). */
+function tunnelLayers() {
+  if (!S || !S.tun || !S.mur) return null;
+  let T = R.tunL;
+  if (!T || T.of !== S || T.c.width !== S.W * TUN_PX || T.c.height !== S.H * TUN_PX) {
+    const c = T && T.c || document.createElement('canvas'), g = T && T.g || document.createElement('canvas');
+    c.width = g.width = S.W * TUN_PX; c.height = g.height = S.H * TUN_PX;
+    T = R.tunL = { of: S, c, g, ver: -1, at: -9, dist: null, n: 0 };
+  }
+  if (T.ver !== S.mur.ver && (R.time - T.at > 1 || T.ver < 0)) bakeTunnels(T);
+  return T;
+}
+
+/** Bake the ridges and veins of every tunnel tile, and how far each is from its nest along the network (for the pulses). */
+function bakeTunnels(T) {
+  const W = S.W, H = S.H, N = W * H, p = TUN_PX, cx = T.c.getContext('2d'), gx = T.g.getContext('2d');
+  cx.clearRect(0, 0, T.c.width, T.c.height); gx.clearRect(0, 0, T.g.width, T.g.height);
+  T.ver = S.mur.ver; T.at = R.time; T.n = 0;
+  const dist = T.dist && T.dist.length === N ? T.dist : (T.dist = new Uint16Array(N));
+  dist.fill(65535);
+  // How far along the network each tile is from its nest (a walk out from every nest's tile).
+  const q = [];
+  for (const id of S.mur.nests) { const b = getE(id); if (b && !b.dead) { const t = tIdx(b.x, b.y); if (S.tun[t]) { dist[t] = 0; q.push(t); } } }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && S.tun[u] && dist[u] === 65535) { dist[u] = dist[t] + 1; q.push(u); }
+  }
+  for (let t = 0; t < N; t++) {
+    if (!S.tun[t]) continue;
+    const i = t % W, j = (t / W) | 0;
+    const m = (j > 0 && S.tun[t - W] ? 1 : 0) | (i < W - 1 && S.tun[t + 1] ? 2 : 0) | (j < H - 1 && S.tun[t + W] ? 4 : 0) | (i > 0 && S.tun[t - 1] ? 8 : 0);
+    T.n++;
+    if (S.road[t] || (S.rail && S.rail[t]) || S.terrain[t] !== T_GROUND) continue; // (under a road or track it runs out of sight)
+    paintTunnelTile(cx, i * p, j * p, p, m, hash2(i, j, 4111));
+    paintTunnelVeins(gx, i * p, j * p, p, m, hash2(i, j, 4127));
+  }
+}
+
+/**
+ * One tunnel tile's ridge (top-left corner x, y; p px a tile; m: which neighbours it joins, 1 north, 2 east, 4 south,
+ * 8 west; h 0..1 for its own look): a hump of heaved earth along the tunnel, a shadow on its lower side, a lit crest,
+ * clods turned up beside it.
+ */
+function paintTunnelTile(ctx, x, y, p, m, h) {
+  const c = p / 2, arms = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].filter((a) => m & a[0]);
+  // Points along the ridge: from the middle out along each arm (to the tile's edge, where the next tile's ridge takes
+  // over), a little off the line by the tile's own look, so the hump wanders and its edges come out lumpy.
+  const pts = [[x + c, y + c, 0.26]];
+  if (!arms.length) pts.push([x + c - p * 0.18, y + c + p * 0.04, 0.2], [x + c + p * 0.18, y + c - p * 0.03, 0.2]);
+  for (const [, ax, ay] of arms) for (let k = 1; k <= 3; k++) {
+    const f = k / 3, w = Math.sin((h * 9 + k * 2.3) * 3.1) * p * 0.05;
+    pts.push([x + c + ax * c * f - ay * w, y + c + ay * c * f + ax * w, 0.22 + 0.06 * Math.sin(h * 17 + k * 1.7)]);
+  }
+  ctx.save();
+  // The shadow on its lower side, the heaved earth, then the light on its crest.
+  ctx.fillStyle = 'rgba(16,9,12,0.34)';
+  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px + p * 0.05, py + p * 0.09, r * p * 1.12, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(86,60,46,0.8)';
+  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px, py, r * p, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(138,106,82,0.45)';
+  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px - p * 0.05, py - p * 0.07, r * p * 0.48, 0, Math.PI * 2); ctx.fill(); }
+  // A crack along the crest, where the ground split as it rose.
+  ctx.strokeStyle = 'rgba(30,17,15,0.55)'; ctx.lineWidth = Math.max(0.8, p * 0.045); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const [, ax, ay] of arms) {
+    ctx.moveTo(x + c, y + c);
+    ctx.lineTo(x + c + ax * c * 0.5 + ay * p * 0.04 * (h - 0.5), y + c + ay * c * 0.5 + ax * p * 0.04 * (h - 0.5));
+    ctx.lineTo(x + c + ax * c, y + c + ay * c);
+  }
+  ctx.stroke();
+  // Clods turned up beside it.
+  ctx.fillStyle = 'rgba(58,40,34,0.75)';
+  for (let k = 0; k < 3; k++) {
+    const a = h * 40 + k * 2.1, r = p * (0.34 + 0.1 * ((h * 7 + k) % 1));
+    ctx.beginPath(); ctx.arc(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r, p * (0.04 + 0.03 * ((h * 13 + k) % 1)), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * One tunnel tile's root-veins (same arguments as paintTunnelTile), in light: thin violet veins breaking through the
+ * ridge, with a twig or two off them. Added faintly by day and glowing at night (drawTunnelGlow).
+ */
+function paintTunnelVeins(ctx, x, y, p, m, h) {
+  const c = p / 2, arms = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].filter((a) => m & a[0]);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(190,130,255,0.95)'; ctx.lineWidth = Math.max(1, p * 0.07);
+  const off = (h - 0.5) * p * 0.16;
+  ctx.beginPath();
+  for (const [, ax, ay] of arms) {
+    // (a vein wanders a little off the ridge's line: across it by `off`, back at the tile's edge)
+    ctx.moveTo(x + c + ay * off, y + c + ax * off);
+    ctx.quadraticCurveTo(x + c + ax * c * 0.5 - ay * off, y + c + ay * c * 0.5 - ax * off, x + c + ax * c, y + c + ay * c);
+  }
+  if (!arms.length) { ctx.moveTo(x + c - p * 0.15, y + c); ctx.lineTo(x + c + p * 0.15, y + c); }
+  ctx.stroke();
+  // A twig breaking out of the ridge.
+  ctx.lineWidth = Math.max(0.8, p * 0.04); ctx.strokeStyle = 'rgba(214,170,255,0.8)';
+  const a = h * 6.28, r = p * 0.28;
+  ctx.beginPath(); ctx.moveTo(x + c, y + c); ctx.lineTo(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r); ctx.stroke();
+  ctx.fillStyle = 'rgba(230,200,255,0.9)';
+  ctx.beginPath(); ctx.arc(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r, Math.max(0.8, p * 0.045), 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** The tunnels' ridges (with the ground: graded with it at dusk and night), and the faint veins by day; collapsed exits' scars. */
+function drawTunnels(ctx, ox, oy, z) {
+  const T = tunnelLayers();
+  if (!T || !T.n) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(T.c, ox, oy, S.W * z, S.H * z);
+  ctx.globalAlpha = 0.22; // (by day the veins only show through the earth)
+  ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
+  ctx.restore();
+  for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
+}
+
+/**
+ * At night (after the ground is graded): the veins glow, and pulses of light run along them back to the nest (each
+ * tile in view lit as a band, by how far it is from its nest along the network, moves past it).
+ */
+function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
+  const n = fxNight(), T = n > 0.02 ? tunnelLayers() : null;
+  if (!T || !T.n) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalAlpha = n * (0.55 + 0.15 * Math.sin(R.time * 1.3));
+  ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
+  const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
+  let drawn = 0;
+  for (let j = j0; j <= j1 && drawn < 900; j++) for (let i = i0; i <= i1; i++) {
+    const t = j * S.W + i, d = T.dist[t];
+    if (!S.tun[t] || d === 65535 || S.road[t]) continue;
+    const ph = (((d * 0.5 + R.time * 1.4) % 4) + 4) % 4, k = ph < 1 ? 1 - ph : 0; // (bands every 8 tiles, flowing toward the nest)
+    if (k <= 0.05) continue;
+    drawn++;
+    fxGlow(ctx, ox + (i + 0.5) * z, oy + (j + 0.5) * z, z * 0.45, '#c08cff', n * k * 0.7);
+  }
+  ctx.restore();
+}
+
+/**
+ * A tunnel exit (screen centre cx, cy; s px a tile; b the exit): a mound of churned earth round a dark hole, root-veins
+ * spilling out of it (glowing at night), and while the Murmur are up, a slow violet breath of light from below.
+ */
+function drawBurrow(ctx, cx, cy, s, b) {
+  const t = R.time, n = typeof fxNight === 'function' ? fxNight() : 0, h = b ? hash2(b.id, 3, 7) : 0.5;
+  ctx.save();
+  // The heaved mound, its shadow first.
+  ctx.fillStyle = 'rgba(16,8,14,0.4)';
+  ctx.beginPath(); ctx.ellipse(cx + s * 0.04, cy + s * 0.16, s * 0.48, s * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(cx - s * 0.1, cy - s * 0.12, s * 0.05, cx, cy, s * 0.5);
+  g.addColorStop(0, '#8a6a55'); g.addColorStop(0.6, '#5a3f33'); g.addColorStop(1, '#3a2724');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let k = 0; k <= 18; k++) {
+    const a = (k / 18) * Math.PI * 2, r = s * (0.42 + 0.06 * Math.sin(a * 4 + h * 9));
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.66 + s * 0.03;
+    if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.fill();
+  // Clods on the rim.
+  ctx.fillStyle = '#6b4d3e';
+  for (let k = 0; k < 6; k++) { const a = h * 6 + k * 1.05, r = s * 0.36; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.62, s * 0.05, 0, Math.PI * 2); ctx.fill(); }
+  // The hole.
+  ctx.fillStyle = '#0d060c';
+  ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.2, s * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+  // Root-veins spilling over the rim.
+  ctx.strokeStyle = `rgba(184,130,255,${0.45 + 0.5 * n})`; ctx.lineWidth = Math.max(1, s * 0.035); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let k = 0; k < 4; k++) {
+    const a = h * 5 + k * 1.6, r0 = s * 0.18, r1 = s * (0.44 + 0.08 * Math.sin(k + h));
+    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0 * 0.6);
+    ctx.quadraticCurveTo(cx + Math.cos(a + 0.4) * r1 * 0.7, cy + Math.sin(a + 0.4) * r1 * 0.45, cx + Math.cos(a + 0.2) * r1, cy + Math.sin(a + 0.2) * r1 * 0.62);
+  }
+  ctx.stroke();
+  ctx.restore();
+  // A violet breath from the hole: faint by day, stronger at night, strongest while they're up.
+  const up = S && S.mur && S.mur.night ? 1 : 0, br = 0.5 + 0.5 * Math.sin(t * 1.7 + h * 6);
+  if (typeof fxGlow === 'function') fxGlow(ctx, cx, cy, s * (0.35 + 0.15 * br), '#b07aff', (0.12 + 0.35 * n + 0.25 * up) * (0.6 + 0.4 * br));
+}
+
+/** Where an exit was collapsed (frac: how much of its time shut is left, 1 to 0): a caved-in pit of loose earth, fading as it settles. */
+function drawExitScar(ctx, x, y, s, frac) {
+  ctx.save();
+  ctx.globalAlpha = 0.35 + 0.45 * Math.max(0, Math.min(1, frac));
+  ctx.fillStyle = 'rgba(40,26,22,0.8)';
+  ctx.beginPath(); ctx.ellipse(x, y + s * 0.04, s * 0.34, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,92,72,0.7)'; ctx.lineWidth = Math.max(1, s * 0.04);
+  ctx.beginPath();
+  for (let k = 0; k < 5; k++) { const a = k * 1.25 + 0.3; ctx.moveTo(x + Math.cos(a) * s * 0.08, y + Math.sin(a) * s * 0.05); ctx.lineTo(x + Math.cos(a) * s * 0.3, y + Math.sin(a) * s * 0.18); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The tunnels on the minimap: a layer of their own, a pixel a tile, made again when the network changes. */
+function minimapTunnels() {
+  if (!S || !S.tun || !S.mur) return null;
+  let M = R.tunMM;
+  if (!M || M.of !== S || M.c.width !== S.W || M.c.height !== S.H) { const c = (M && M.c) || document.createElement('canvas'); c.width = S.W; c.height = S.H; M = R.tunMM = { of: S, c, ver: -1 }; }
+  if (M.ver !== S.mur.ver) {
+    M.ver = S.mur.ver;
+    const g = M.c.getContext('2d'), img = g.createImageData(S.W, S.H);
+    for (let t = 0; t < S.tun.length; t++) if (S.tun[t]) { const k = t * 4; img.data[k] = 168; img.data[k + 1] = 112; img.data[k + 2] = 255; img.data[k + 3] = 200; }
+    g.putImageData(img, 0, 0);
+  }
+  return M.c;
+}
+
 /** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
 function drawCritter(ctx, u, x, y, s) {
   const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
@@ -4638,9 +4862,11 @@ function render(dtReal) {
   drawMapLayer(ctx, ox, oy, z);
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
+  if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawLavaGlow(ctx, ox, oy, z);
   drawBiomeGlow(ctx, ox, oy, z);
+  if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -6755,12 +6981,15 @@ function renderMinimap() {
   ctx.setTransform(k, 0, 0, k, 0, 0); // (from the canvas itself, whatever the drawing resolution is now)
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(MM.base, 0, 0, MM.w, MM.h);
+  // The Murmur's tunnels, violet threads (brighter at night).
+  const mmT = S.tun ? minimapTunnels() : null;
+  if (mmT) { ctx.globalAlpha = 0.45 + 0.4 * fxNight(); ctx.drawImage(mmT, 0, 0, MM.w, MM.h); ctx.globalAlpha = 1; }
   for (const b of S.buildings) {
-    if (b.dead) continue;
+    if (b.dead || b.type === 'burrow') continue;
     const big = b.type === 'lander' ? 2.2 : 1.3;
     const w = Math.max(2.5, sx * big), h = Math.max(2.5, sy * big);
     const x = (b.x + 0.5) * sx - w / 2, y = (b.y + 0.5) * sy - h / 2;
-    ctx.fillStyle = b.built ? PLAYER_COLORS[b.owner] : 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = b.built ? (BDEFS[b.type].wild ? WILD_COLOR : PLAYER_COLORS[b.owner]) : 'rgba(255,255,255,0.7)';
     ctx.fillRect(x, y, w, h);
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
   }
@@ -6780,6 +7009,13 @@ function renderMinimap() {
     const b = getE(u.trade), hit = b && b.convoyHit !== undefined && S.time - b.convoyHit < 6 && (R.time * 4) % 2 < 1;
     ctx.fillStyle = hit ? '#ff5a6e' : '#ffcf4a'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(u.x * sx, u.y * sy, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // Murmur tunnel exits: violet rings round a dark hole.
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'burrow') continue;
+    const x = (b.x + 0.5) * sx, y = (b.y + 0.5) * sy, r = Math.max(2.4, sx * 1.1);
+    ctx.fillStyle = '#1a0d1c'; ctx.strokeStyle = WILD_COLOR; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
   // Trade Posts: gold diamonds.
   if (S.posts) for (const p of S.posts) {

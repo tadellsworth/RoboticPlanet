@@ -22,8 +22,10 @@ how goods move.
   against the two northern ones (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones and an optional ladder of
   **Colony goals** (see Colony goals, Records and achievements below). Free play has the full
-  building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
-  **the Murmur** (native creatures whose nests raid you; on by default, never on Lunar).
+  building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab**.
+- **The Murmur** in every game (the setting **The Murmur**: Off, Quiet or Active, Active by default, never on Lunar):
+  native creatures, nobody's side, whose nests sit out in the wilds and whose tunnels spread toward power every night,
+  packs coming up through their exits to raid every colony alike (see The Murmur below).
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
@@ -70,8 +72,9 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
-and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **The Murmur** (Colony; on by default; off and greyed on Lunar),
-**Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
+and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
+**Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
@@ -1248,7 +1251,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
-  'VERMILION (ally)' for a team-mate, 'Murmur' for the Colony wildlife slot), with the colour where it helps find them
+  'VERMILION (ally)' for a team-mate, 'Murmur' for the Murmur's slot), with the colour where it helps find them
   ("VERMILION (red) to the north"); the setup's Each rival dropdowns and the lobby's computer places are named so too.
   **The narrator** (`NARRATOR`, `narrate(p, key, x, y, every)` in `js/world.js`): your Command AI's dry lines, as toasts
   of kind `narr` (italic, a grey edge): the first road (`layRoad`), the first nightfall (`nightfallLine`, UI-side, with
@@ -1288,22 +1291,62 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   with `hero=1`, cropped by `renderer/post/murmur_lore.py`), and the game's own Command Base, Trade Post, Uplink
   and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
   Brute are met in the game so far, so the Leech, Spitter and Sapper are on file as "sighted".
-- **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
-  new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as The Murmur (id `bughunt`)
-  does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, `newGame`
-  never sets `S.wildlife`, a mission's `wildlife` is ignored and `placeNests` places nothing, so there are no nests and
-  no raids in any mode; the setup's switch is off and greyed there (the saved setting is kept for other biomes), and an
-  old Lunar save that has nests keeps them. Internally the creatures are still `wildlife`, the nests type `'nest'`;
-  players see "the Murmur", "Murmur nest", Scuttler and Brute. One nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
-  second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
-  `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
-  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open (once there,
-  any within `WILD.hunt`, 6, tiles they can walk to; with none, they move on); Brutes (24 hp,
-  bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked) and
-  break through Walls and Gates, slowly (`WILD.wallBite`, a third of a bite: about 40 s for one Brute on a Wall). Nests grow a
-  level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
-  creatures as enemies; warbots clear a nest (`clearNest`: its hoard spills as loot, its creatures scatter). Nothing can be
-  built within `WILD.clear` tiles of one.
+- **The Murmur** (players' name for the wildlife; `WILD` and `MURMUR` in `js/defs.js`, the wildlife section of `js/sim.js`).
+  **The setting** (`S.settings.murmur`, `murmurLevel()`: 'off', 'quiet' or 'active'; `opts.murmur` to `newGame`; unset,
+  the map type's own `SHAPE_PRESETS[shape].murmur` outside a hand-made map, else off; an older Colony `opts.wildlife` is
+  Active; the new-game Rules' Off / Quiet / Active, `UI.menu.murmur`, remembered on the device, Active by default, an old
+  saved `wild: 0` reading as Off; sent with the multiplayer settings, `mpGameOpts`; shown on the planet card, the summary,
+  the briefing and the pause menu). In missions only where one asks (`murmur: 'quiet'|'active'`, or the older `wildlife:
+  true` as Active), as The Murmur (id `bughunt`) does. `murmurStart(level)` brings them into a game: `S.wildlife`, their
+  owner slot (`wildOwner()`: Colony's empty second slot, `WILD_OWNER`; in Versus a slot of their own appended after the
+  colonies, `S.wildSlot`, `absent` and `wild`, so `nColonies()` counts colonies without it), the tunnel layer and the
+  nests. **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, there are no nests
+  and no raids in any mode; the setup shows Off, greyed (the saved setting is kept for other biomes), and an old Lunar
+  save that has nests keeps them. Internally the creatures are `wildlife`, the nests type `'nest'`, tunnel exits type
+  `'burrow'`; players see "the Murmur", "Murmur Nest", "Tunnel Exit", Scuttler and Brute. **Nobody's side**: the slot is
+  `absent`, so it never counts for capture, surrender, Domination, the Uplinks or teams (`foes` with every colony; `isWild`).
+  - **Nests.** Colony: one per `WILD.perTiles` tiles (3–8, `placeNests`), at least 16 tiles from the landing site.
+    Versus (`placeNestsVersus`): sets of nests following the map's own symmetry (`uplinkOrbit`, each set one nest a
+    colony), up to `MURMUR[level].orbits` (Active 2, Quiet 1), one set a `perTiles` of map for two colonies; on open ground a
+    colony can walk to, at least `max(MURMUR.minBase, a fifth of the map across)` from every Command Base, 12 tiles apart,
+    by Crystal and rich deposits ("strike sites"); crowded out, a little closer, but only to have one set. Each keeps
+    `guards + level` Scuttlers on guard and grows a level every `WILD.grow` s (to 3). **Colony** nests also raid by day:
+    from `WILD.first` (7 min) a pack every 260–400 s (× `raidGap` on Quiet, a creature smaller) at the nearest building
+    or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
+  - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,
+    so every device agrees; on a map type with `alwaysNight`, the Hollow, the same windows are **surges**, with a silent
+    lull, `murmurLull`, `SURGE_LULL` (60 s) before each). `murmurTick`, once a second: `MURMUR.warn` (40 s) before nightfall
+    the dusk warning ("The Murmur are stirring", or "The ground has gone silent"); at nightfall (`murmurNightfall`, night `n`)
+    each live nest's network sets out along `branches` branches (`murmurGoals`: power within `MURMUR.reach` first, by
+    `chargeWorth`: Generators, Fuel Stations and chargers, Refineries 3, storage holding 10 Crystal and Fuel 2, any
+    other colony building 1), digging `tiles` that night (up to `cap` in all) over its first two minutes (`murmurGrow`,
+    `murmurDig`: a tile at a time toward the goal, wandering a little, under any ground, roads, buildings and Walls, not
+    water, chasms, rock, lava or the tide); `exits` new exits open along it (`murmurOpenExit`: on open ground over a
+    tunnel, not a road, building, resource, ramp or a Trade Post's ground, 4 tiles from another exit, clear of collapsed
+    ones still shut, at least `exitFromBase` (9) from a Command Base and `exitFromBld` (3) from any colony building, about
+    six from the nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later):
+    one through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
+    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once. Night raiders (`task.night`) move on
+    to the next thing near them when there's nothing left where they went (`murmurOnward`). At dawn (`murmurDawn`) they
+    go back down: into the nearest exit of their nest within `MURMUR.retreat` (16) tiles (task `down`), or dig down where
+    they stand (task `dig`). Each [base, per night after the first, most] (`murmurBy`), Quiet then Active: tiles [14, 4,
+    28] / [24, 8, 56], branches [1, 0.34, 2] / [1, 0.5, 4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] /
+    [1, 0.5, 2] (at most 2 / 4 a nest), packs [2, 0.25, 3] / [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
+  - **Tunnels** (`S.tun`, a tile layer: a nest's slot in `S.mur.nests` + 1; saved, `TYPED_FIELDS`, and in `hashState`
+    with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins
+    (`paintTunnelTile`, `paintTunnelVeins`, baked at `TUN_PX` a tile when `S.mur.ver` changes: `tunnelLayers`), faint by day
+    and glowing at night with pulses running back to the nest (`drawTunnelGlow`), violet threads on the minimap
+    (`minimapTunnels`); exits (`drawBurrow`) are violet rings there, collapsed ones a caved-in pit (`drawExitScar`).
+  - **Counterplay.** Turrets, garrisons and warbots treat creatures as enemies; a creature battering a building marks it
+    raided (`P.raided`), so forts round it answer (`garrisonDefense`). Warbots **collapse an exit** (`MURMUR.exitArmor`, 30;
+    `collapseExit`: gone, nothing opens within 3 tiles for `MURMUR.shut`, 15 min, `S.mur.shut`; `stats.collapsed`) and
+    **clear a nest** (`clearNest`: its hoard spills as loot, its creatures scatter, its exits close and its network dies
+    back from the tips, `murmurDieback`). Nothing can be built within `WILD.clear` tiles of a nest. The exit's panel says
+    what it is, whether its Murmur are up, where its nest is and how to deal with it.
+  - **The rival AI** (`aiMurmur`): by night its Command Base keeps two warbots home; it collapses exits within
+    `AI_EXIT_NEAR` (12) tiles of its buildings (3 warbots and more for the creatures round it), and by day, with no night
+    due and its attack threshold and `AI_NEST_SPARE` (4) more warbots, strikes the nearest nest within `AI_NEST_REACH`
+    (26) tiles. The Murmur never call its army home (`wildHit`) or count as an enemy army.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
@@ -1316,8 +1359,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
   cratering roads (re-planned at once if the Cement allows), denting buildings and bots (never below 1 armor) and
   leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race); it ends "Ringfall over. Fresh Ore and
-  Crystal in the strike zones. Listen for the Murmur." (its last words only where the Murmur are in the game: Colony
-  with them on, never on Lunar). **Solar flare**: battery drain ×
+  Crystal in the strike zones. Listen for the Murmur." (its last words only where the Murmur are in the game, never on
+  Lunar). **Solar flare**: battery drain ×
   `FLARE_DRAIN` (2). **The *Wren*** (the trader ship, type `'trader'`; its card shows the name in italics,
   `EVENTS.trader.html`, and one of its 31-year-old cargo lists, `WREN_CARGO` by the event's number): 75 s; offers the raw good that runs out (Ore, Crystal, Stone or Crude: the one
   lowest in stock plus deposits left on your land, `TRADE_GET`/`TRADE_LEFT`) for a good you hold well over
@@ -1509,7 +1552,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   heard too: rain, with thunder a moment after each lightning flash the storm shows (the same flashes: `hash2` of the
   seed and the 5-second stretch), the wind blowing up in a sandstorm, blizzard or gale (`STORM_WIND`; fog stills it),
   sand and snow hissing, leaves in a gale, embers ticking as they fall in an ashfall, an aurora's shimmer. Near a Murmur
-  nest, now and then (more at night), a low sound in the ground (`groundMurmur`). Argos is near-silent: only the
+  nest or tunnel exit, now and then (more at night), a low sound in the ground (`groundMurmur`), and at night (while
+  they're up: `murmurNight`) over their tunnels too, more often the more of them are on screen (`WORLD.tun`); on an
+  always-night map it goes silent in the lull before a surge (`murmurLull`). Argos is near-silent: only the
   faintest rumble for a wind, no calls, and its frozen pools make no water sounds; the Cinderlands' lakes sound like the
   lava they look like. The mix, measured against the build music at the default volumes (a tap on the music bus and one
   on these voices): a calm wild scene sits about 18 to 22 dB under the music, a storm about 11 to 14 dB under, an
@@ -1595,10 +1640,13 @@ Ground marks fade over a minute or so (at most 350 at once). Each effect can be 
 
 ### Day and night
 
-The planet turns: morning, day, evening and night, 12 minutes of game time round (`TOD_CYCLE` in `js/daynight.js`),
-starting at dawn, with half-minute crossfades. It runs on game time, so it pauses with the game and is saved with it;
-the clock in the top bar shows a sun (coloured for dawn, day and dusk) or a moon. Turn it off in the pause menu (Day and
-night; a display setting kept on the device).
+The planet turns: morning, day, evening and night, 12 minutes of game time round (`TOD_CYCLE` in `js/defs.js`, read
+through `todPhase`), starting at dawn, with half-minute crossfades. It runs on game time, so it pauses with the game and
+is saved with it; the clock in the top bar shows a sun (coloured for dawn, day and dusk) or a moon. Turn it off in the
+pause menu (Day and night; a display setting kept on the device, `todStored`), except in a game with the Murmur: they
+live by the night, so `todMode()` shows the cycle for Always day there (`todForced`, `TOD.force` set by `js/ui.js`) and the
+pause menu says why under the button; a map type with `alwaysNight` (the Hollow) is always night. The game's own logic
+never reads the display setting: the Murmur's nights come from the game clock (`murmurNight`).
 
 - **Re-lit art.** Every 3D sprite (buildings, robots and vehicles, track and bridge pieces: the 207 keys in
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at

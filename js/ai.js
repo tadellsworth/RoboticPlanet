@@ -851,7 +851,8 @@ function aiThink(p) {
       if (inMap(zi, zj) && S.zone[tIdx(zi, zj)] === hz) reach++;
       if (!u.inside && dist2(u.x, u.y, lander.x + 0.5, lander.y + 0.5) <= 144) near++;
     }
-    if (smart && (near >= 4 || S.time - (lander.lastHit || -99) < 30)) P.homeCall = S.time + 20;
+    // (The Murmur biting at the base never call the army home: lastHit by them is wildHit too. See aiMurmur.)
+    if (smart && (near >= 4 || (S.time - (lander.lastHit || -99) < 30 && lander.wildHit !== lander.lastHit))) P.homeCall = S.time + 20;
     // Under siege (P.homeCall), each doctrine answers in its own way: a Salvager (raider) raids at once (aiRaid), a
     // Warden (turtle) starts no push (aiPush), an Architect (tycoon) fires its Missiles into the army at its gates (below).
     if (P.homeCall > S.time && st.harass && P.nextRaid > S.time + 15 && !P.raid) P.nextRaid = S.time + 15;
@@ -866,6 +867,9 @@ function aiThink(p) {
       else if (b.keepW !== undefined) delete b.keepW;
     }
   }
+
+  // 3d) The Murmur: exits near its land collapsed, nests struck by day, a guard at home by night (aiMurmur).
+  if (S.wildlife && S.mode !== 'colony') aiMurmur(p, lvl, lander, smart);
 
   // A passive rival (an early mission's, on Easy): it builds, grows and defends, but never strikes first.
   if (P.passive) return;
@@ -1051,6 +1055,57 @@ function aiThink(p) {
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
+}
+
+/**
+ * Living with the Murmur (see MURMUR; Versus with them in the game). The Murmur are nobody's side: they hit every
+ * colony alike, and the rival treats them as the third enemy they are, not as its war.
+ * - By night its garrisons defend: the Command Base keeps two warbots home (Medium and up: P.homeGuard), and every
+ *   fort answers creatures battering the buildings round it (critterBite marks them raided, see garrisonDefense).
+ * - A tunnel exit near its land (within AI_EXIT_NEAR tiles of a building of its own) is collapsed, by day or night: a
+ *   band of warbots, more where creatures stand round it.
+ * - By day, with no night coming soon and an army to spare (its attack threshold and AI_NEST_SPARE more), it strikes
+ *   the nearest nest within AI_NEST_REACH tiles of its buildings: enough for the nest, its guards and its level.
+ * - The Murmur never stall its own attacks: their bites don't call the army home (homeCall: wildHit), and they
+ *   aren't counted as an enemy army anywhere.
+ * One order every AI_MURMUR_EVERY seconds at most.
+ */
+const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY = 8;
+function aiMurmur(p, lvl, lander, smart) {
+  const P = S.players[p];
+  const night = murmurNight(S.time);
+  if (smart && night && (P.homeGuard || 0) < 2) P.homeGuard = 2;
+  if (S.time < (P.murT || 0)) return;
+  P.murT = S.time + AI_MURMUR_EVERY;
+  const mine = S.buildings.filter((b) => !b.dead && b.owner === p);
+  const near = (e, r) => { let bd = r * r + 1; for (const b of mine) { const d = dist2(b.x, b.y, e.x, e.y); if (d < bd) bd = d; } return Math.sqrt(bd); };
+  const going = new Map();
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'attack') going.set(u.task.target, (going.get(u.task.target) || 0) + 1);
+  const around = (e, r) => { let n = 0; for (const u of S.bots) if (!u.dead && !u.inside && isWild(u.owner) && dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) <= r * r) n++; return n; };
+  // 1) Exits near its land, nearest first.
+  let ex = null, ed = Infinity;
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || going.get(e.id)) continue;
+    const d = near(e, AI_EXIT_NEAR);
+    if (d <= AI_EXIT_NEAR && d < ed) { ed = d; ex = e; }
+  }
+  if (ex) {
+    const need = 3 + Math.ceil(around(ex, 6) * 0.7);
+    if (attackAvailable(p, ex) >= need && sendAttack(p, ex, need + 1, false, false, true)) return;
+  }
+  // 2) By day, a nest, with the army to spare.
+  if (night || murmurNight(S.time + 100) || P.passive) return;
+  const army = aiArmyOf(p);
+  if (army < lvl.threshold + AI_NEST_SPARE) return;
+  let nest = null, nd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'nest' || going.get(b.id)) continue;
+    const d = near(b, AI_NEST_REACH);
+    if (d <= AI_NEST_REACH && d < nd) { nd = d; nest = b; }
+  }
+  if (!nest) return;
+  const need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
+  if (attackAvailable(p, nest) >= need + 2) sendAttack(p, nest, need + 2, false, false, true);
 }
 
 /**
@@ -1980,7 +2035,7 @@ function aiGunThreats(p) {
   const out = [];
   for (const g of DANGER.guns[p] || []) {
     const b = g.b;
-    if (b.dead || b.owner < 0 || (S.wildlife && b.owner === WILD_OWNER)) continue;
+    if (b.dead || b.owner < 0 || isWild(b.owner)) continue;
     const r2 = g.r * g.r;
     let score = 0, n = 0;
     for (const e of S.buildings) {
@@ -2634,7 +2689,7 @@ function rivalLandNear(p, i, j, r) {
   for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
     if (!inMap(i + di, j + dj) || di * di + dj * dj > r * r) continue;
     const o = S.owner[tIdx(i + di, j + dj)];
-    if (o >= 0 && o !== p && !(S.wildlife && o === WILD_OWNER)) return true;
+    if (o >= 0 && o !== p && !isWild(o)) return true;
   }
   return false;
 }
