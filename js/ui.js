@@ -3610,6 +3610,32 @@ function sendNapalm(i, j) {
 /** A Vulcan Bomber ready on the ground that can drop napalm on tile (i, j), or null. */
 function readyNapalm(i, j) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && !napalmBlocked(ME, u, i, j)) || null; }
 
+/**
+ * The Air strike section of a fertile soil or crop panel: shown whenever you have a Vulcan Bomber, whoever farms the
+ * soil (on your own farmland the button says so). refreshNapalmSection keeps its button and hint current.
+ */
+function napalmSection(t) {
+  if (!myBombers().length) return '';
+  const own = soilHolder(t) === ME;
+  return `<div class="section-label">Air strike</div><p class="hint" id="sh-nap-hint"></p>` +
+    `<button class="btn big${own ? ' danger' : ''}" id="sh-napalm">${own ? 'Napalm your own farmland' : 'Napalm it'}</button>`;
+}
+
+function refreshNapalmSection(t) {
+  const btn = $('sh-napalm');
+  if (!btn) return;
+  const i = t % S.W, j = (t / S.W) | 0, u = readyNapalm(i, j), n = napalmSoil(i, j), who = soilHolder(t), any = myBombers();
+  btn.disabled = !u;
+  const farm = who === ME ? ' <b>This is your own farmland</b>: what burns, your Bio Farms lose for good.'
+    : who >= 0 ? ` It's ${playerName(who, true)}'s farmland.` : '';
+  const why = u ? '' : !any.length ? 'You have no Vulcan Bombers left.'
+    : any.some((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time)) ? napalmBlocked(ME, any.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time)), i, j)
+      : any.some((v) => v.rearmUntil > S.time && !v.mission && !v.flight) ? `Your bombers are rearming (${Math.ceil(Math.min(...any.filter((v) => v.rearmUntil > S.time).map((v) => v.rearmUntil - S.time)))} s).`
+        : 'Your bombers are out on sorties.';
+  $('sh-nap-hint').innerHTML = `Napalm here: ${BOMBER.fuel + NAPALM.fuel} Fuel at the Airfield and no Ammo. It burns ${n} patch${n === 1 ? '' : 'es'} of fertile soil within ${NAPALM.radius} tiles for good (crops on it too), and whatever stands there for ${NAPALM.burn} seconds.${farm}` +
+    (why ? ` <span class="err">${why}</span>` : '');
+}
+
 /** A panel's Napalm button: the first ready bomber drops napalm on tile (i, j) (`what`: for the toast). */
 function napalmFromPanel(i, j, what) {
   const u = readyNapalm(i, j);
@@ -6651,8 +6677,9 @@ function openResourceSheet(t) {
   const rich = richRes(t) ? '<p class="desc"><b>Rich deposit:</b> it holds far more than the ones near your base. The frontier pays.</p>' : '';
   const html = `<div class="sheet-title"><div><h3>${richRes(t) ? 'Rich ' + info.name.toLowerCase() : info.name}</h3></div></div>
     <p class="desc">${desc}</p>${rich}
-    <div id="sh-dyn"></div>`;
+    <div id="sh-dyn"></div>${type === R_CROP ? napalmSection(t) : ''}`;
   openSheet('res', t, html);
+  if ($('sh-napalm')) $('sh-napalm').onclick = () => napalmFromPanel(t % S.W, (t / S.W) | 0, 'the crops');
   refreshSheet();
 }
 
@@ -6730,13 +6757,12 @@ function openUplinkSheet(u) {
 
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
-  const i = t % S.W, j = (t / S.W) | 0, theirs = soilHolder(t) !== ME, n = napalmSoil(i, j);
-  const air = warOn() && theirs && myBombers().length;
+  const i = t % S.W, j = (t / S.W) | 0;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
     <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Fuel Stations. Paths and buildings on it leave less room to farm. Burned (by napalm, or a Torch's Scorch the earth), it's lost for good.</p>` +
-    (air ? `<div class="section-label">Air strike</div><p class="hint">Napalm here: ${BOMBER.fuel + NAPALM.fuel} Fuel at the Airfield and no Ammo. It burns ${n} patch${n === 1 ? '' : 'es'} of fertile soil within ${NAPALM.radius} tiles for good, and whatever stands there for ${NAPALM.burn} seconds.</p><button class="btn big" id="sh-napalm">Napalm it</button>` : '');
+    napalmSection(t);
   openSheet('soil', t, html);
-  if ($('sh-napalm')) { $('sh-napalm').disabled = !readyNapalm(i, j); $('sh-napalm').onclick = () => napalmFromPanel(i, j, 'the farmland'); }
+  if ($('sh-napalm')) { $('sh-napalm').onclick = () => napalmFromPanel(i, j, 'the farmland'); refreshNapalmSection(t); }
 }
 
 /** Burned soil (burntSoil): what's left of fertile soil after napalm or a Torch. */
@@ -7268,7 +7294,8 @@ function refreshSheet() {
     const grow = (r === R_STALK || r === R_CROP) && S.grow[t] < 1 ? `<div class="kv"><span>${r === R_CROP ? 'Ripening' : 'Growing'}</span><span>${Math.round(S.grow[t] * 100)}%</span></div>` : '';
     $('sh-dyn').innerHTML = r === R_CROP ? (grow || '<div class="kv"><span>Ripe</span><span>Ready to harvest</span></div>')
       : `<div class="kv"><span>${r === R_OIL ? 'Crude left' : 'Harvests left'}</span><span>${S.amt[t]}</span></div>${grow}`;
-  }
+    refreshNapalmSection(t);
+  } else if (UI.sheetKind === 'soil') refreshNapalmSection(UI.sheetFor);
 }
 
 /* ------------------------------------------------------------------ HUD */
