@@ -4325,6 +4325,19 @@ function drawTunnels(ctx, ox, oy, z) {
   }
 }
 
+/** Is creature u within sight of this device's colony (a building of its within 12 tiles)? What's underground shows only then. */
+function critterSeen(u) { for (const b of S.buildings) if (!b.dead && b.owner === ME && dist2(b.x + 0.5, b.y + 0.5, u.x, u.y) < 144) return true; return false; }
+/** The ground heaving over a Sapper underground: a ridge of broken earth pushing up, cracks and grit. */
+function drawHeave(ctx, x, y, s, u) {
+  const p = 0.5 + 0.5 * Math.sin(R.time * 5 + u.id), a = u.face || 0;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = 'rgba(70,48,30,0.55)';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * (0.2 + 0.03 * p), s * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,18,10,0.7)'; ctx.lineWidth = Math.max(1, s * 0.02);
+  ctx.beginPath(); ctx.moveTo(-s * 0.15, 0); ctx.lineTo(-s * 0.03, s * 0.03); ctx.lineTo(s * 0.06, -s * 0.03); ctx.lineTo(s * 0.16, s * 0.01); ctx.stroke();
+  ctx.restore();
+}
+
 /** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
 function drawMurmurBody(ctx, x, y, s, type, a, rot) {
   const k = type === 'brute' ? 1.7 : 1;
@@ -4497,8 +4510,13 @@ function minimapTunnels() {
 
 /** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
 function drawCritter(ctx, u, x, y, s) {
-  const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
+  // A Sapper underground: only the ground heaving over it, and only near your colony (see murmurSapStep).
+  if (u.under) { if (critterSeen(u)) drawHeave(ctx, x, y, s, u); return; }
+  const brute = u.type === 'brute' || u.type === 'sapper', k = { brute: 1.7, sapper: 1.35, spitter: 1.1, leech: 0.85 }[u.type] || 1, face = u.face || 0;
   const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+  // The other forms glow with the charge they carry (u.charge), the Leech brightest as it feeds.
+  if (u.charge > 0.02) { ctx.save(); ctx.globalAlpha *= Math.min(0.7, u.charge * 0.7); ctx.fillStyle = '#b07cff'; ctx.beginPath(); ctx.arc(x, y, s * 0.2 * k, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  if (u.pose === 'feed') { ctx.save(); ctx.strokeStyle = 'rgba(200,140,255,0.8)'; ctx.lineWidth = Math.max(1, s * 0.03); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(face) * s * 0.35, y + Math.sin(face) * s * 0.35); ctx.stroke(); ctx.restore(); }
   // Dragging one of its dead (Active): the body behind it, and a scuff in the dirt where it's been dragged.
   if (u.drag && BOTS[u.drag]) {
     const bx = x - Math.cos(face) * s * 0.3 * k, by = y - Math.sin(face) * s * 0.3 * k;
@@ -4525,11 +4543,12 @@ function drawCritter(ctx, u, x, y, s) {
     ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
   }
   ctx.stroke();
-  ctx.fillStyle = brute ? '#6b4430' : '#55306a';
+  const col = { sapper: ['#4a3424', '#8a6a4a'], spitter: ['#2b2f4a', '#6f7fd8'], leech: ['#40214f', '#9b59d0'] }[u.type];
+  ctx.fillStyle = col ? col[0] : brute ? '#6b4430' : '#55306a';
   ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
+  ctx.fillStyle = col ? col[1] : brute ? '#8d5d41' : '#7a4a92';
   ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
-  if (brute) {
+  if (u.type === 'brute') {
     ctx.fillStyle = '#c9b18f';
     for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
   }

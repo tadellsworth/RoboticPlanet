@@ -30,7 +30,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
   **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -1554,6 +1554,32 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `murmurPrey` steer by both. Messages, in the colony's voice: the watcher, `Power lost at your …`, `Contact
     withdrawing underground…`, `The Murmur are up again…`, `Second contact, far side…`. Dawn clears the plans, the
     dark and the dead.
+  - **Their other forms (Active only).** `leech`, `spitter`, `sapper` in `BOTS` (wild; `drain`, `spit`, `sap`), numbers in
+    `MURMUR.forms`, the section after the craft in `js/sim.js`. From each form's night `from` (a mission can bring them
+    sooner: `S.mur.formsFrom`, and `formsAll` for all three whatever the target), a plan's wave brings at most one of
+    each from the exit nearest its rally point (`murmurFormsFor`: the Leech where there's power to cut, the Spitter and
+    the Sapper where a gun or Wall of the colony stands within 8 tiles of the target, `murmurDefenceNear`), gathering
+    with the pack. At `murmurLaunch`: the Leech takes the cutting (role `cut`): there it feeds (`murmurFeed`, pose
+    `feed`, `u.charge` up by `rate` a second; the building is cut and stays dark while it feeds, a Fuel every
+    `fuelEvery` s and `bat` a second off each bot charging in it), and full (or its building gone) goes home (task
+    `carry`, `murmurCarry`; whatever brings one down, `murmurDeliver`: its nest's `born` moves `grow` × charge s
+    back, so it levels sooner). The Spitter (role `spit`, `murmurSpitStep`) goes in with the Brutes for the nearest gun
+    or Wall within 12 tiles of the target, stops `range` tiles off, and spits every `every` s while its charge holds
+    (`cost`, back at `regen`): pose `spit`, `u.fx`/`u.fy` its target, fx `spit` (`tx`, `ty`) and `spitHit`;
+    `murmurSpitHit` takes `damage` armor (a Wall or Gate twice that, and can go; anything else not below 1), marks the
+    colony raided, and shorts a gun out (`b.shortT`, `short` s: `shorted(b)`; Pulse Turrets, Minigun Nests and Mortar
+    Pits don't fire meanwhile, their panels say so). The Sapper (role `sap`, `murmurSapStep`) digs in where it stands
+    (pose `dig`, `dig` s), goes under (pose `under`, `u.under`: `aloft` counts it out of reach, so `damageBot` does
+    nothing, and `nearestEnemyBot`, `foeReach` and the guns' and warbots' targets leave it out) straight for a tile by
+    the target at `speed`, every tile it passes (that can be tunnelled) becoming its nest's tunnel (`S.tun`, so exits
+    can open there), comes up (`up` s, pose `up`: open to a strike, not striking back) and then fights as a Brute
+    does. Every form keeps `u.pose` ('walk' otherwise), `u.poseT` and `u.charge` (its glow); saved, checked by
+    `checkSave`, in `hashState`. The drawing (`drawCritter`): a glow for the charge, a heave over a Sapper underground
+    within 12 tiles of this device's colony (`critterSeen`, `drawHeave`). Repair brings a cut building's power back
+    (`doFix` at full armor → `murmurPowerBack`; a cut dents it so it can be repaired; `stats.powerBack`). Kills of
+    each kind are counted (`S.mur.slain`). The rival: warbots to a rally flag where an underground Sapper will come up
+    (`aiMurmur`, one at a time, called home after 40 s: `P.sapRally`); a shorted gun counts as a place to cover
+    (`P.murCut` → `aiMurCut`, another Pulse Turret there). Missions: *What Comes Up* (First Contact).
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,

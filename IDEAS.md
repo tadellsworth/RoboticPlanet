@@ -423,6 +423,16 @@ These wait for a later expansion:
   Versus, nine computer-only games: seven on Standard, shape 2 and shape 4 end in 13.9 to 40.5 minutes (mean 23.9, was
   22.1), the first seat winning 5 to 2 (was 3 to 4), about 3 robots a colony lost to the Murmur (was 3.5); on the
   Hollow, Medium seed 11 ends at 34.8 (before: still going at 75) and Small seed 21 at 17.7 (was 29.4).
+  **Their other forms (the owner's decision, Nov 17; built, Active only):** the Leech, the Spitter and the Sapper (BOTS
+  `leech`, `spitter`, `sapper`), at most one of each with a strike from their nights (2, 2, 3), each with its part:
+  the Leech takes the power cut (it feeds, dark and draining, and takes the charge home: its nest grows sooner), the
+  Spitter shorts out the guns and eats at Walls from a few tiles off, the Sapper goes under the Walls and guns (out
+  of reach; its route stays a tunnel) and comes up by the target. Repair brings a cut building's power back. Under
+  ground a Sapper can't be hit at all: the chosen answer is to meet it where it comes up (warbots there; the rival
+  does it too), with a moment as it heaves up when it can't fight back. The art is another helper's (u.pose, u.poseT,
+  u.charge, u.fx/u.fy, b.shortT, fx 'spit' and 'spitHit'); until it lands they're drawn in code. Taught in *What Comes
+  Up* (First Contact), which also teaches the craft: a Fuel Station a Leech drank dry to repair, a Pulse Turret by a
+  Fuel Station, warbots where the watcher stood, and a Leech, a Spitter and a Sapper to kill.
   For the owner: the Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a
   dozen or so in 35 minutes; its size is the same): the lair, or soften it there?
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,

@@ -397,4 +397,8 @@ a colony's land at dusk, facing it, then is gone, and the night's strike falls t
 in together at what no gun covers; the road lights go dark one by one as they cut the power first; a pack that loses
 half its number goes back down and comes again; they take their dead with them; they remember where they were killed
 and where they fed; and later on a small pack draws the warbots off before the main one strikes. The colony only logs
-what it sees ("Contact at the edge of sensor range"). Quiet keeps the plain packs.
+what it sees ("Contact at the edge of sensor range"). Quiet keeps the plain packs. Their other forms come up with
+them on Active too (the owner's decision, Nov 17 2026; built), under the art brief's names: the **Leech** drinks a
+colony's power (Fuel Stations, Generators, streetlamps, the robots charging) and takes it home to its nest; the
+**Spitter** spits conductive slurry that shorts the guns out for a moment; the **Sapper** tunnels under Walls and
+comes up inside, and its tunnel stays. The mission *What Comes Up* meets them.
