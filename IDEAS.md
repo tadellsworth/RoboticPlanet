@@ -70,6 +70,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   multiplayer (goals shared or each player's own) and a scenario picker in the lobby. Comes after the campaign. Related:
   Shared colony co-op (two players, one colony) in the November review list.
 
+- **Crossroads' name** (to decide; the map was reworked on the owner's request, Nov 17). Its ridges are gone: a mesa
+  stands in each corner, three slopes down off each, over an open lowland whose four arms still meet in a cross at the
+  rich plaza. Keep the name, or rename it (Four Mesas, say)? Only the name would change: saves and saved planets keep
+  the map by its place in the list.
+
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields

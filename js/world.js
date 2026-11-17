@@ -230,6 +230,54 @@ function generateMap(seed, W, H, cfg) {
   else if (h4) for (const t of orbit(id(bx, by)).slice(1)) bases.push({ x: t % W, y: (t / W) | 0 });
   else if (quad) for (let k = 1, t = id(bx, by); k < 4; k++) { t = r4(t); bases.push({ x: t % W, y: (t / W) | 0 }); }
   else for (let k = 1; k < 3; k++) { const [x, y] = rot(bx, by, k); bases.push({ x: Math.round(x), y: Math.round(y) }); }
+  // Crossroads: a mesa in each corner of the planet, its top CR_TOP levels above the lowland between them, ringed by a
+  // terrace a level down (about two tiles wide). The lowland between makes a cross, one arm along each middle line from
+  // the edge of the planet to the plaza in the middle. Each mesa has three slopes down, three tiles wide: one off each
+  // face toward the corner across that arm (with four, the slopes either side of an arm meet head on) and one off its
+  // rounded inner corner toward the plaza. Laid out on player 0's part of the map: with three or four, one mesa (the bottom-left quarter, turned onto
+  // the others); with two, the bottom half's two mesas, player 0's on the left and the free one on the right (the
+  // planet is narrower, so the free one is smaller and the arm between them lies right of the middle), turned half
+  // round onto the top half. A mesa: its inner corner (xc, yc), `ex` +1 if it lies west of its face at xc (-1: east);
+  // every mesa here lies south of its face at yc. `rc` rounds the inner corner.
+  let CM = null;
+  if (SH.cross) {
+    const ms = [], cs = seed * 53 + 29;
+    let armX = hw - 0.5, floor; // (the middle of the arm between the bottom two mesas, and how wide its floor is)
+    if (quad) {
+      const R = clamp(Math.round((ccx - bx) * 0.55), 9, 15);
+      ms.push({ xc: bx + R, ex: 1, yc: by - R, rc: Math.round(R * 0.75) });
+      floor = W - 2 * (bx + R + 3);
+    } else {
+      const F = clamp(Math.round(W * 0.17), 6, 12), xE = bx + clamp(Math.round((ccx - bx) * 0.75), 8, 11), xW = xE + 5 + F;
+      const yN = by - clamp(by - Math.ceil((H + F + 6) / 2), 8, 20), rc = Math.round(Math.min(xE - bx, by - yN) * 0.75);
+      ms.push({ xc: xE, ex: 1, yc: yN, rc }, { xc: xW, ex: -1, yc: yN, rc: Math.min(rc, Math.floor((W - 1 - xW) * 0.45)) });
+      armX = xE + 3 + (F - 1) / 2; floor = F;
+    }
+    for (const m of ms) {
+      // The face slopes: across the middle of each face's straight part (the north one with four players turned from
+      // the east one, so the mesa is the same either side of its diagonal), and the corner slope from the middle of the
+      // rounding straight toward the plaza.
+      m.row = Math.round((m.yc + m.rc + H - 1) / 2);
+      m.col = quad ? W - 1 - m.row : m.ex > 0 ? Math.round((m.xc - m.rc) / 2) : clamp(Math.round((m.xc + m.rc + W - 1) / 2), m.xc + m.rc + 1, W - 3);
+      m.ox = m.xc - m.ex * m.rc; m.oy = m.yc + m.rc;
+      const d = dist(m.ox, m.oy, ccx, ccy);
+      m.dx = (ccx - m.ox) / d; m.dy = (ccy - m.oy) / d; m.far = d;
+    }
+    // How far inside a mesa's top tile (i, j) is (negative: out past its edge), its outline wobbling a little.
+    const inside = (m, i, j) => {
+      const u = m.ex * (m.xc - i), v = j - m.yc, rc = m.rc;
+      return u < rc && v < rc ? rc - Math.sqrt(sq(rc - u) + sq(rc - v)) : Math.min(u, v);
+    };
+    // (The outline wobbles less where the arms are narrow, so they stay open.)
+    const amp = clamp((floor - 4) / 6, 0.4, 1);
+    const e = (i, j) => {
+      let b = -Infinity;
+      for (const m of ms) b = Math.max(b, inside(m, i, j));
+      return b + amp * ((fbm(i / 6, j / 6, cs, 2) - 0.5) * 3.4 + (fbm(i / 2.5, j / 2.5, cs + 7, 1) - 0.5) * 1.2);
+    };
+    CM = { ms, e, armX };
+  }
+  const CR_TOP = 2; // (the terrace is a level lower, the lowland two)
   const F_FERTILE = 100;
   const stampDens = clamp(dens, 0.7, 1.15);
   const fields = [];
@@ -281,13 +329,29 @@ function generateMap(seed, W, H, cfg) {
   // (Long Haul 2v2: squeezed into the colony's half of the width, and stretched up the map.)
   const beyond = quad ? (dx, dy) => { const f = clamp((hw - 4) / 31, 0.7, 1), c = Math.SQRT1_2; return [bx + (dx * c - dy * c) * f, by + (dx * c + dy * c) * f]; }
     : h4 ? (dx, dy) => [bx + dx * 0.7, by + dy * 1.25] : (dx, dy) => [bx + dx, by + dy];
-  field(...beyond(8 + jit(), -11 + jit()), 1.6, R_ORE, 0.8 * stampDens, true);
-  field(...beyond(-9 + jit(), -10 + jit()), 1.5, R_CRYSTAL, 0.8 * stampDens, true);
-  field(...beyond(1 + jit(), -13), 1.1, R_OIL, 0.9, true);
+  if (CM) {
+    // Crossroads: down in the lowland in front of the mesa, to draw the colony down off it: Ore out past its east face
+    // and Crystal past its north face (each between that face's slope and the corner one), and Oil beside the foot of
+    // the corner slope.
+    const m = CM.ms[0], ox = m.xc + 5 + jit() * 0.5, oy = Math.round((m.yc + m.rc + m.row) / 2) + jit();
+    field(ox, oy, 1.6, R_ORE, 0.8 * stampDens, true);
+    const [cx, cy] = quad ? [W - 1 - oy, W - 1 - ox] : [Math.round((m.col + m.xc - m.rc) / 2) + jit(), m.yc - 5 + jit() * 0.5];
+    field(cx, cy, 1.5, R_CRYSTAL, 0.8 * stampDens, true);
+    const f = m.rc + 4.5;
+    field(m.ox + m.dx * f - m.dy * 3.2, m.oy + m.dy * f + m.dx * 3.2, 1.1, R_OIL, 0.9, true);
+  } else {
+    field(...beyond(8 + jit(), -11 + jit()), 1.6, R_ORE, 0.8 * stampDens, true);
+    field(...beyond(-9 + jit(), -10 + jit()), 1.5, R_CRYSTAL, 0.8 * stampDens, true);
+    field(...beyond(1 + jit(), -13), 1.1, R_OIL, 0.9, true);
+  }
   // Contested fields near the middle (mirrored, so there is one on each side) and an oil field
   // right in the centre that both sides want.
-  if (quad) {
-    // (By the plaza; Crossroads lays the plaza's own fields over the middle.)
+  if (quad && CM) {
+    // (Crossroads: by the plaza, either side of the way down to it off the mesa's corner.)
+    field(ccx - 8, ccy + 2.5, 1.6, R_ORE, 0.85, true);
+    field(ccx - 2.5, ccy + 8, 1.4, R_CRYSTAL, 0.85, true);
+  } else if (quad) {
+    // (By the plaza; Pinwheel and Four Isles lay their own fields over the middle.)
     field(ccx - 7, ccy + 3.5, 1.6, R_ORE, 0.85, true);
     field(ccx - 3.5, ccy + 7, 1.4, R_CRYSTAL, 0.85, true);
   } else if (h4) {
@@ -617,62 +681,92 @@ function generateMap(seed, W, H, cfg) {
     if (order.length) carve(order[0], centre);
     links = [[ca, half]];
   };
-  // Crossroads: ridges along both middle lines split the planet into four quarters, meeting at an open
-  // plaza in the middle with the richest fields; the bases hold two opposite quarters and the other two
-  // are rich and unclaimed. Gaps near the edges let a quarter reach its neighbours round the flanks.
-  // (Built to grow into four players, one in each quarter.)
-  const crossShape = () => {
-    const cr = makeRng(seed ^ 0x5e6f31), sC = seed * 41 + 3;
-    const wob = (i, j) => (fbm(i / 3, j / 3, sC, 2) > 0.56 ? 1 : 0);
-    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
-      if (nearBase(i, j, 8.5)) continue;
-      if ((i >= ca - 1 - wob(i, j) && i <= cb + 1) || j <= half + 1 + wob(i, j)) put(id(i, j), T_ROCK, undefined, true);
+  // Crossroads (the mesas and the arms between them: see CM): no water anywhere, and no crags on a mesa's cliffs (its
+  // terrace, the foot below it and a rim along the top's edge, so every slope off a mesa is joined to the others along
+  // the rim) or on the ways: each slope and the way on from its foot (straight across the arm, or on to the plaza), and
+  // down the middle of each arm. crLane marks the ways, which no hill is laid on. Each tile with its twins (put's
+  // orbit), on player 0's part of the map.
+  const crLane = new Uint8Array(N);
+  const crossOpen = () => {
+    const clear = (i, j, mark) => {
+      if (i < 0 || j < 0 || i >= W || j >= H || !canon(i, j)) return;
+      for (const u of orbit(id(i, j))) {
+        if (terrain[u] !== T_GROUND) { terrain[u] = T_GROUND; res[u] = R_NONE; fert[u] = 0; }
+        if (mark) crLane[u] = 1;
+      }
+    };
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (!canon(i, j)) continue;
+      const e = CM.e(i, j);
+      if (terrain[id(i, j)] === T_WATER || (e >= -3.5 && e < 3.5)) clear(i, j, false);
     }
-    // The flank gaps (each with its twin).
-    for (let j = H - 10; j <= H - 8; j++) for (let i = ca - 3; i <= cb + 3; i++) put(id(i, j), T_GROUND);
-    for (let j = half; j <= half + 2; j++) for (const i of [2, 3, 4, W - 5, W - 4, W - 3]) put(id(i, j), T_GROUND);
-    // The plaza.
-    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, ccx, ccy) <= 21) put(id(i, j), T_GROUND, baseLevel);
-    stampRes(cr, ccx + 0.5, ccy + 0.5, 1.1, R_OIL, 0.9);
-    stampRes(cr, ccx - 2.6, ccy + 2.2, 1.3, R_ORE, 0.85);
-    stampRes(cr, ccx + 2.6, ccy + 2.0, 1.3, R_CRYSTAL, 0.85);
-    // The unclaimed quarter (bottom right; its twin, top left): rich.
-    const q0 = { x0: cb + 4, x1: W - 3, y0: half + 4, y1: H - 3 };
+    const midX = Math.round(CM.armX), midY = quad ? hw : half; // (the middle of the arm east of the mesa, and the first row of player 0's part)
+    for (const m of CM.ms) {
+      // Off the east (or west) face: from inside the top out across the arm, to its middle (two players: the arm's
+      // far side, where the free mesa's slope comes down to meet it).
+      for (let k = -2; k <= 2; k++) for (let i = m.xc - m.ex * 4; m.ex > 0 ? i <= midX : i >= midX; i += m.ex) clear(i, m.row + k, Math.abs(k) <= 1);
+      // Off the north face, up to the middle line.
+      for (let k = -2; k <= 2; k++) for (let j = m.yc + 4; j >= midY; j--) clear(m.col + k, j, Math.abs(k) <= 1);
+      // Off the corner, on to the plaza.
+      const r0 = m.rc - 4;
+      for (let j = Math.floor(Math.min(m.oy, ccy)) - 3; j <= Math.ceil(Math.max(m.oy, ccy)) + 3; j++) {
+        for (let i = Math.floor(Math.min(m.ox, ccx)) - 3; i <= Math.ceil(Math.max(m.ox, ccx)) + 3; i++) {
+          const s = (i - m.ox) * m.dx + (j - m.oy) * m.dy, p = Math.abs((j - m.oy) * m.dx - (i - m.ox) * m.dy);
+          if (s >= r0 && s <= m.far && p <= 2.2) clear(i, j, p <= 1.5);
+        }
+      }
+    }
+    // Down the middle of each arm: three tiles either side of the middle line (two players: the arm between the
+    // bottom mesas, which lies right of the middle, and the middle row, across the planet).
+    if (quad) {
+      for (let j = hw; j < H; j++) for (let i = hw - 3; i < hw; i++) clear(i, j, true);
+      for (let j = hw; j < hw + 3; j++) for (let i = 0; i < hw; i++) clear(i, j, true);
+    } else {
+      for (let j = half; j < H; j++) for (let i = midX - 2; i <= midX + 2; i++) clear(i, j, true);
+      for (let j = half; j < half + 3; j++) for (let i = 0; i < W; i++) clear(i, j, true);
+    }
+  };
+  // The plaza: open ground in the middle (where a neutral Trade Post lands, as near every colony), with Oil, Ore and
+  // Crystal round its rim (with three or four, at each quarter's corner of it).
+  const crossPlaza = (cr) => {
+    if (quad) {
+      for (let j = hw; j < H; j++) for (let i = 0; i < hw; i++) if (dist2(i, j, ccx, ccy) <= 31) put(id(i, j), T_GROUND);
+      stampRes(cr, ccx - 3.4, ccy + 3.4, 0.95, R_OIL, 0.9);
+      stampRes(cr, ccx - 4.6, ccy + 1.1, 1.05, R_ORE, 0.85);
+      stampRes(cr, ccx - 1.1, ccy + 4.6, 1.05, R_CRYSTAL, 0.85);
+    } else {
+      for (let j = half; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, ccx, ccy) <= 21) put(id(i, j), T_GROUND);
+      stampRes(cr, ccx + 0.5, ccy + 0.5, 1.1, R_OIL, 0.9);
+      stampRes(cr, ccx - 2.6, ccy + 2.2, 1.3, R_ORE, 0.85);
+      stampRes(cr, ccx + 2.6, ccy + 2.0, 1.3, R_CRYSTAL, 0.85);
+    }
+  };
+  // Crossroads for two: the bases on two opposite mesas (bottom left and top right); the other two mesas are free and
+  // rich, so worth a fight. (The same planet as for four, narrower: see CM.)
+  const crossShape = () => {
+    const cr = makeRng(seed ^ 0x5e6f31);
+    crossOpen();
+    crossPlaza(cr);
+    // The free mesa (bottom right; its twin, top left): rich fields on its top.
+    const sp = CM.ms[1];
     const rich = [[R_ORE, 1.8], [R_CRYSTAL, 1.6], [R_OIL, 1.1], [F_FERTILE, 2.2], [R_BOULDER, 1.6], [R_ORE, 1.5]];
     for (const [type, rad] of rich) {
       for (let tries = 0; tries < 60; tries++) {
-        const x = q0.x0 + cr() * (q0.x1 - q0.x0), y = q0.y0 + cr() * (q0.y1 - q0.y0);
-        if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND || nearBase(x, y, 9)) continue;
+        const x = sp.xc + 1 + cr() * (W - 3 - sp.xc), y = sp.yc + 1 + cr() * (H - 3 - sp.yc);
+        if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND || CM.e(x, y) < rad + 0.5) continue;
         stampRes(cr, x, y, rad, type, type === F_FERTILE ? 0.8 : 0.85);
         break;
       }
     }
-    links = [[ca, half], [3, half], [W - 4, half]]; // the plaza, and both flank gaps (the far one through the free quarter)
+    links = [[ca, half], [Math.round(CM.armX), H - 2], [1, half], [W - 2, half]]; // the plaza, and the outer ends of the arms
   };
-  // Crossroads for three or four: the same ridges, plaza and flank gaps, laid on the bottom-left quarter
-  // (its top and right edges) and turned onto the others. Each quarter's flank gaps are as far from its
-  // corner along both ridges, so the gap on one side of a ridge always meets its neighbour's.
-  const fg = quad ? Math.max(4, Math.round(qc * 0.6)) : 0; // a flank gap's distance from the outer edge
+  // Crossroads for three or four: the mesa, the arms either side of it and its quarter of the plaza, laid on the
+  // bottom-left quarter and turned onto the others.
   const crossShape4 = () => {
-    const cr = makeRng(seed ^ 0x5e6f31), sC = seed * 41 + 3;
-    const wob = (i, j) => (fbm(i / 3, j / 3, sC, 2) > 0.56 ? 1 : 0);
-    for (let j = hw; j < H; j++) for (let i = 0; i < hw; i++) {
-      if (nearBase(i, j, 8.5)) continue;
-      if (i >= hw - 2 - wob(i, j) || j <= hw + 1 + wob(i, j)) put(id(i, j), T_ROCK, undefined, true);
-    }
-    // The flank gaps: one through the ridge on the right (to the next quarter round), one through the
-    // ridge above (to the one before), each three tiles wide.
-    for (let d = fg; d <= fg + 2; d++) {
-      for (let i = hw - 5; i < hw; i++) put(id(i, H - 1 - d), T_GROUND);
-      for (let j = hw; j < hw + 5; j++) put(id(d, j), T_GROUND);
-    }
-    // The plaza: open ground in the middle (where a neutral Trade Post lands, as near every colony),
-    // with Oil, Ore and Crystal round its rim at each quarter's corner of it.
-    for (let j = hw; j < H; j++) for (let i = 0; i < hw; i++) if (dist2(i, j, ccx, ccy) <= 31) put(id(i, j), T_GROUND, baseLevel);
-    stampRes(cr, ccx - 3.4, ccy + 3.4, 0.95, R_OIL, 0.9);
-    stampRes(cr, ccx - 4.6, ccy + 1.1, 1.05, R_ORE, 0.85);
-    stampRes(cr, ccx - 1.1, ccy + 4.6, 1.05, R_CRYSTAL, 0.85);
-    links = [[hw - 1, hw], [hw - 1, H - 2 - fg], [fg + 1, hw]]; // the plaza and both flank gaps
+    const cr = makeRng(seed ^ 0x5e6f31);
+    crossOpen();
+    crossPlaza(cr);
+    links = [[hw - 1, hw], [hw - 1, H - 2], [1, hw]]; // the plaza, and the outer ends of the arms either side
   };
   // Pinwheel (three or four): four curved ridges sweep out from a plaza in the middle, one between each pair
   // of neighbouring quarters. Each ends a few tiles short of the edge (the way round to the next colony) and,
@@ -1085,6 +1179,30 @@ function generateMap(seed, W, H, cfg) {
     for (let t = half * W; t < N; t++) if (low[t] >= 0) { minE[t] = low[t]; if (np === 2) minE[mir(t)] = low[t]; }
     symmetrize();
   }
+  // Crossroads: the levels, whatever the Terrain setting (only the hills depend on it). Each mesa's top is CR_TOP, its
+  // terrace a level down and the lowland between at 0, with a few low hills a level up out in the lowland (more on
+  // rougher terrain, none on Flat), kept off the ways (crLane) and well clear of the mesas and the plaza. crBand: 2 on
+  // a mesa's top, 1 on its terrace (the slopes are cut through it in step 6). Player 0's part, each tile with its twins.
+  const crBand = new Uint8Array(N);
+  if (CM) {
+    const thr = [2, 0.7, 0.66, 0.62, 0.6][clamp(cfg.rough ?? DEFAULT_ROUGH, 0, 4)], sHill = seed * 67 + 5;
+    const nearLane = (i, j) => { for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if (x >= 0 && y >= 0 && x < W && y < H && crLane[id(x, y)]) return true; return false; };
+    const lay = (t, lv, band) => { for (const u of orbit(t)) { elev[u] = lv; minE[u] = band ? lv : -1; crBand[u] = band; } };
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (!canon(i, j)) continue;
+      const e = CM.e(i, j), band = e >= 0 ? 2 : e >= -2 ? 1 : 0;
+      const hill = !band && e < -5.5 && dist2(i, j, ccx, ccy) > 81 && !nearLane(i, j) && fbm(i / 4.5, j / 4.5, sHill, 2) > thr;
+      lay(id(i, j), band ? CR_TOP - 2 + band : hill ? 1 : 0, band);
+    }
+    // Every drop off a top is a single level: lowland right beside one (where the outline wobbles in) joins the terrace.
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const t = id(i, j);
+      if (!canon(i, j) || crBand[t]) continue;
+      let top = false;
+      orth(t, (u) => { if (crBand[u] === 2) top = true; });
+      if (top) lay(t, CR_TOP - 1, 1);
+    }
+  }
 
   // Three players, the planet in thirds: how far tile (i, j) of player 0's third is from the nearer of its two
   // sides (the lines at 30° and 150° out from the middle).
@@ -1325,7 +1443,8 @@ function generateMap(seed, W, H, cfg) {
     // Crater and Plateau maps: replace the ramps that happened to land on the crater's or the
     // plateaus' cliffs with set ones: one into the crater on each side (facing each base) and two
     // down off each plateau (one toward the middle, one to the side). Each is two tiles wide.
-    if (SH.crater || SH.plateau || SH.wheel || SH.mesas) {
+    // (The Wheel, Three Mesas and Crossroads lay their own too.)
+    if (SH.crater || SH.plateau || SH.wheel || SH.mesas || SH.cross) {
       const keep = ramp.slice();
       const set = (t) => { ramp[t] = 1; res[t] = R_NONE; if (np === 2) { ramp[mir(t)] = 1; res[mir(t)] = R_NONE; } };
       // The lower tile of a cliff step on ray (x0,y0) → angle a, from `inside` to outside.
@@ -1393,6 +1512,46 @@ function generateMap(seed, W, H, cfg) {
             }
             a = t;
           }
+        }
+      } else if (SH.cross) {
+        // Crossroads: clear every ramp on a mesa's cliffs (on its terrace, or at the terrace's foot), then cut its three
+        // slopes (see CM), each three lanes wide with a ramp at both steps, on player 0's part with their twins.
+        for (let t = 0; t < N; t++) {
+          if (!ramp[t]) continue;
+          let cliff = crBand[t] === 1;
+          if (!crBand[t]) orth(t, (u) => { if (crBand[u] === 1) cliff = true; });
+          if (cliff) ramp[t] = 0;
+        }
+        const setR = (t) => { for (const u of orbit(t)) { ramp[u] = 1; res[u] = R_NONE; } };
+        // A lane straight down off a face, from (i, j) on the top: a ramp at the foot of each step, down to the lowland.
+        const lane = (i, j, di, dj) => {
+          for (let n = 0, a = id(i, j); n < 14; n++) {
+            i += di; j += dj;
+            if (i < 0 || j < 0 || i >= W || j >= H) return;
+            const t = id(i, j);
+            if (!ground(a) || !ground(t) || elev[t] > elev[a]) return;
+            if (elev[t] === elev[a] - 1) setR(t);
+            if (!crBand[t] && elev[t] === 0) return;
+            a = t;
+          }
+        };
+        // Is tile t at the foot of a step up onto a tile at level lv (of the mesa: its top, or its terrace)?
+        const under = (t, lv) => { let up = false; orth(t, (u) => { if (ground(u) && elev[u] === lv && crBand[u]) up = true; }); return up; };
+        for (const m of CM.ms) {
+          for (let k = -1; k <= 1; k++) lane(m.xc - m.ex * 3, m.row + k, m.ex, 0);
+          for (let k = -1; k <= 1; k++) lane(m.col + k, m.yc + 3, 0, -1);
+          // Off the rounded corner, toward the plaza: at each step down the cliff, the tiles at its foot within a
+          // lane-and-a-half of the line from the corner's centre out (the three nearest, where the cliff runs so that
+          // fewer are).
+          const r = m.rc + 6, steps = [[], []];
+          for (let j = Math.floor(m.oy - r); j <= Math.ceil(m.oy + r); j++) for (let i = Math.floor(m.ox - r); i <= Math.ceil(m.ox + r); i++) {
+            if (i < 0 || j < 0 || i >= W || j >= H || !canon(i, j)) continue;
+            const t = id(i, j), s = (i - m.ox) * m.dx + (j - m.oy) * m.dy, p = Math.abs((j - m.oy) * m.dx - (i - m.ox) * m.dy);
+            if (p > 2.6 || s < m.rc - 4 || !ground(t)) continue;
+            if (crBand[t] === 1 && elev[t] === CR_TOP - 1 && under(t, CR_TOP)) steps[0].push({ t, p });
+            else if (!crBand[t] && elev[t] === CR_TOP - 2 && under(t, CR_TOP - 1)) steps[1].push({ t, p });
+          }
+          for (const st of steps) st.sort((a, b) => a.p - b.p || a.t - b.t).forEach((c, k) => { if (c.p <= 1.3 || k < 3) setR(c.t); });
         }
       } else if (SH.crater) {
         // Clear every ramp onto the floor (on the floor, or on the rim right beside it).
@@ -1527,9 +1686,10 @@ function generateMap(seed, W, H, cfg) {
       for (let tries = 0; tries < 60; tries++) {
         const x = x0 + cr() * (x1 - x0), y = y0 + cr() * (y1 - y0);
         if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND || dist2(x, y, spare.x, spare.y) < 9) continue;
+        if (CM && crBand[id(Math.floor(x), Math.floor(y))] !== 2) continue; // (Crossroads: on the free mesa's top)
         for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
           const t = id(i, j);
-          if (quarter(i, j) !== 1 || dist2(i, j, x, y) > rad * rad || terrain[t] !== T_GROUND || ramp[t] || cr() >= (type === F_FERTILE ? 0.8 : 0.85)) continue;
+          if (quarter(i, j) !== 1 || dist2(i, j, x, y) > rad * rad || terrain[t] !== T_GROUND || ramp[t] || (CM && crBand[t] !== 2) || cr() >= (type === F_FERTILE ? 0.8 : 0.85)) continue;
           if (type === F_FERTILE) { fert[t] = 1; res[t] = R_NONE; } else { res[t] = type; fert[t] = 0; }
         }
         break;

@@ -570,6 +570,22 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
+  **Crossroads** (`cross`, `minLevels: 3`; its layout is `CM` in `generateMap`) stands a mesa in each corner of the
+  planet, its top `CR_TOP` (2) levels above the lowland (0) and ringed by a terrace a level down about two tiles wide,
+  its inner corner rounded and its outline wobbling with noise (less where the arms are narrow, so they stay open). The
+  lowland between the mesas is a cross, an arm along each middle line from the edge of the planet to the plaza: open
+  ground, no water anywhere, crags only away from the cliffs and the ways (each slope, the way on from its foot and down
+  the middle of each arm: `crLane`), and on rougher terrain a few low hills a level up (none on Flat), kept off the
+  ways and clear of the mesas and the plaza. The levels are the map's own, whatever the Terrain setting (`crBand`: 2 on
+  a mesa's top, 1 on its terrace). Each mesa has three slopes down, three lanes wide with a ramp at both steps (every
+  other ramp on its cliffs is cleared, as on Plateaus): one off each inner face, across the middle of its straight part,
+  toward the corner across that arm (the two facing slopes meet head on), and one off the rounded corner toward the
+  plaza. A crag-free rim along every mesa's top joins its slopes. With three or four the bottom-left quarter is laid
+  out and turned onto the others, so the free mesa with three is a mesa like the rest; with two (a narrower planet) the
+  bottom half holds the base's mesa and a smaller free one beside it, the arm between them right of the middle, turned
+  half round onto the top. A colony's richer fields lie down in the lowland in front of its slopes (Ore and Crystal
+  past its two faces, Oil by the corner slope's foot), and the free mesas' rich fields on their tops, so expanding
+  means coming down.
   Five more shapes are for two players (laid over the finished terrain by `shapeExtras`, each tile with its twin, from
   the shape's own random numbers so laying one again gives the same map): **Rift** cuts a chasm (`T_CHASM`, 4–8 tiles
   across) along the middle line, crossed only by natural rock arches, a pair with their twins and sometimes one down the
@@ -577,12 +593,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   climb, a valley running round it on each side (a long tunnel is the only shortcut; the massif stops short of each
   landing zone, so the starter fertile field is never buried); **Oases** is a barren,
   crag-strewn waste with nothing worth having outside the home ground and a few rich oases (three a side and one in the
-  middle, fertile with two fields each) joined by narrow, winding passes; **Crossroads** (a wider map) splits the
-  planet into four quarters with ridges along both middle lines, meeting at an open plaza with the richest fields, the
-  bases in two opposite corners and the other two quarters rich and unclaimed, with gaps near the edges for flanking
-  (built so it can grow into four players, one a quarter); **Lakes** scatters many small lakes between the bases (the
+  middle, fertile with two fields each) joined by narrow, winding passes; **Crossroads** (a wider map; its mesas are
+  below) dries the planet out, clears the crags off its mesas' cliffs and its ways and lays an open plaza with the
+  richest fields in the middle, the bases on two opposite corner mesas and the other two mesas rich and unclaimed;
+  **Lakes** scatters many small lakes between the bases (the
   `naval` flag marks it, with Islands, for the ships to come). Each shape lists `links`, the places its base must reach
-  by land (each arch, both valleys, the plaza and both flank gaps), and `linkBase` opens the cheapest way to each one
+  by land (each arch, both valleys, the plaza and the outer ends of Crossroads' arms), and `linkBase` opens the cheapest way to each one
   round the shape's own barrier (`wall`: a ford or a cut through crags, two tiles wide, only where there's no way
   round), so the twin of every link reaches the other base and no river or crag can cut a way across off.
   **Sky islands** (`sky: true`) lays out a home island per side, a small middle one, a chain of stepping-stone
