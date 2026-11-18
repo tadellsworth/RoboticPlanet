@@ -570,7 +570,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   owner's routes (`findPath`, at `FERRY_COST` times the distance plus `FERRY_BOARD`) and joins the zones at its ends. A
   bot whose route crosses waits in the Port (`u.ferryWait`, `ferryPassenger`), boards (six seats, `seatsFor`: a truck
   two, a Road Train three), sails and carries on from the far Port (`updateFerry`, `unloadFerry`); it gives up after
-  `FERRY_GIVEUP` s. **Beach landings** (`orderLanding`, `doLanding`): a Ferry tied up at a Port takes up to six armed
+  `FERRY_GIVEUP` s. One Ferry works a line (`lineFerry`: the oldest free one based at either end); any others based
+  there wait tied up at their Port as spares, for beach landings and founding Ports (the Port panel offers a spare
+  first, `portFerry`), and take the line over if its Ferry is sent off. (Every Ferry based there used to work it, so a
+  second one bought was never free.) **Beach landings** (`orderLanding`, `doLanding`): a Ferry tied up at a Port takes up to six armed
   warbots (free ones first, then stationed ones) and lands them on any shore tile it can reach, where they hold a rally
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).

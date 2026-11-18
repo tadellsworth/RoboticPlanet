@@ -3653,8 +3653,12 @@ function dirText(a, b) {
   return `${d} tile${d === 1 ? '' : 's'} ${ns && ew ? ns + '-' + ew : ns || ew || 'away'}`;
 }
 
-/** A Ferry of yours tied up at Port b, free for a beach landing. */
-function portFerry(b) { return S.bots.find((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry && u.inside === b.id && !u.landing) || null; }
+/** A Ferry of yours tied up at Port b, free for a beach landing: a spare first, before the one working a ferry line (lineFerry). */
+function portFerry(b) {
+  const here = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry && u.inside === b.id && !u.landing);
+  const far = b.ferryTo ? getE(b.ferryTo) : null, onLine = far && !far.dead ? lineFerry(b, far) : null;
+  return here.find((u) => u !== onLine) || here[0] || null;
+}
 
 /** Which ships are tied up at Port b, and who serves its ferry line. */
 function portShipsText(b) {

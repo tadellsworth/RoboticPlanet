@@ -12611,6 +12611,21 @@ function sailTo(u, dest) {
  * other end (once someone is aboard it waits FERRY_WAIT s for more, or sails when full), and sails across
  * empty when bots are waiting at the other end. With no line it stays tied up. (Beach landings: see doLanding.)
  */
+/**
+ * The Ferry that works the ferry line from Port `home` (to its partner `far`): of the owner's Ferries based at either
+ * end and free (not off on a landing or under your orders), the oldest. Any others there wait tied up as spares, for
+ * beach landings and founding Ports (portFerry); if the one on the line is sent off, the next takes it over. (Every
+ * Ferry based at a line's Port used to work it, so a second one bought there was never free.)
+ */
+function lineFerry(home, far) {
+  let best = null;
+  for (const v of S.bots) {
+    if (v.dead || !BOTS[v.type].ferry || v.owner !== home.owner || v.landing || v.manual || (v.home !== home.id && v.home !== far.id)) continue;
+    if (!best || v.id < best.id) best = v;
+  }
+  return best;
+}
+
 function updateFerry(u, dt) {
   if (u.landing) { doLanding(u, dt); return; }
   // Under your orders: it sails where it was told and waits there (see orderSail).
@@ -12625,7 +12640,7 @@ function updateFerry(u, dt) {
   }
   const home = getE(u.home);
   const far = home && !home.dead && home.ferryTo ? getE(home.ferryTo) : null;
-  const line = !!(home && far && !far.dead && far.built && home.built && far.ferryTo === home.id && far.owner === u.owner);
+  const line = !!(home && far && !far.dead && far.built && home.built && far.ferryTo === home.id && far.owner === u.owner) && lineFerry(home, far) === u;
   if (u.path) {
     if (!moveAlong(u, dt)) return;
     const to = getE(u.sailTo);
@@ -12633,7 +12648,7 @@ function updateFerry(u, dt) {
     if (to && !to.dead && to.owner === u.owner && BDEFS[to.type].port) { enterBuilding(u, to); unloadFerry(u, to); }
     return;
   }
-  if (!u.inside) { const dest = line ? home : nearestPort(u); if (dest && S.tick % 15 === u.id % 15) sailTo(u, dest); return; }
+  if (!u.inside) { const dest = line || (home && !home.dead && home.owner === u.owner) ? home : nearestPort(u); if (dest && S.tick % 15 === u.id % 15) sailTo(u, dest); return; } // (a spare goes home to wait)
   if (S.tick % 6 !== u.id % 6) return;
   const here = getE(u.inside);
   if (!here) return;
