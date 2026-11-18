@@ -535,3 +535,26 @@ python3 tools/install_airship.py [<game>/art]   # the sprites, their morning, ev
 The airship scene also marks its four fans' hubs and rims (`fan0..3`, `fanrim0..3` in its geom.json), which the game's
 spinning-blade overlay is drawn on (`AIRSHIP_ART` in `js/render.js`).
 
+
+## The Maglev line
+
+A design sheet for the Maglev line (IDEAS.md, "High-speed transit": an elevated guideway on pylons between two Maglev
+Terminals, pods carrying goods at several times a Freight Train's speed), in three directions for the owner to choose
+from; not installed. `b/maglev.js` takes `v=a|b|c` (A the Accord Phase 2 civic line in pale concrete, B the robots'
+industrial freight line in steel lattice, C a half-height monorail on squat piers) and `c=terminal|pylon|pod|deck|scene`
+(the Terminal on its pad, marks `head`/`dock`; a pylon with no pad, marks `head`/`foot`, `state=cut` for one shot down;
+a pod straight down in a 10-unit frame, `load=0` empty; one tile of guideway straight down, running east; and a wide
+presentation view at the buildings' angle, 1600 x 1000). Run from this folder:
+
+```
+sh tools/render_maglev.sh out/maglev                       # every piece, both teams, day and night, composed
+TERRAFALL_ART=<game>/art python3 preview/maglev_mock.py out/maglev out/preview/maglev   # the game-style pictures
+python3 preview/maglev_sheet.py out/maglev out/preview/maglev <sheet folder>            # the design sheet and its pictures
+```
+
+- Terminals, pylons and the cut pylon compose like buildings (`compose.py`); pods and deck tiles like the train cars
+  (`compose_any.py --b1 3.5 --b2 11`, 512 to 256); the scenes with `compose_any.py` (to 800 x 500).
+- The mock-up draws the guideway the way the sheet proposes the game should: a straight band of the deck tile from one
+  Terminal's `head` to the other's, lifted the pylon's height (its `head` over its `anchor`) up the screen, its shadow
+  down-sun on the ground, a pylon sprite every three tiles with its head on the band (shorter on high ground, as the
+  Viaduct's piers are), and the pods turned to the line; a cut line is two bands with a gap.
