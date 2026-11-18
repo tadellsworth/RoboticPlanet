@@ -63,6 +63,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
   run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
   the dead are drawn too.
+- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18: for later). The Fiber plant on the map is the
+  Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`, ART_GUIDE; the Bloom and the Hollow
+  use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
+  denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
+  on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
+  regrowing (the Grove Planter).
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
   Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
   `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
