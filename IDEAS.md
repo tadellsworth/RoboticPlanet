@@ -40,6 +40,29 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   "the ground under it is hollow". Collapsing the exits, wrecking the nest (its network dies back) or a Seismic Lance (see
   Megastructures) shores it up; the Sapper (the Murmur form that digs) would lead it. It makes ignoring the Murmur
   costly in long games, as the tunnel network keeps spreading under the old battlefields (LORE.md).
+- **Total war scars the land** (the owner, Nov 18 2026: for later; "I really like the concepts of these battles
+  affecting the environment"). The picture: a long war slowly turns a green, forested map into a World War 1
+  battlefield. Animals in a blast's radius die (the fauna is scenery today, js/wildlife.js: they scatter from
+  fighting but nothing kills them); trees and living plants burn and stay burnt (a charred trunk, a blackened stump,
+  never growing back, as Napalm already scorches fertile soil for good: `scorch`, "Napalm and scorched earth" below);
+  grass and living ground burn to bare earth and ash the same way; bomb, shell, Missile and nuclear craters remain
+  (today's craters are decals that fade: `addDecal('scorch')`, DECAL_MAX, `S.decals` filtered by life; they would
+  become lasting ground marks like the aircraft wrecks, `S.wrecks`, with a cap and dropped oldest first, in `S` so saves
+  and every lockstep client agree). Over a protracted war the no-man's-land between two colonies accumulates: craters
+  overlapping, burnt groves, dead ground, the remains and wrecks already there, carrion birds; the green regions
+  (Greenreach, Hoarfell's firs, the Autumn woods, the Bloom) show it most, the Rust and Argos least. Design points to
+  settle with the owner: what heals (nothing? grass in a long time? Bio Farms and the Grove Planter can re-green a
+  patch?), whether burnt ground hurts play (no Bio Farms on it, Harvesters find nothing: yes, that is the point) or is
+  only a look, how craters affect movement (slow? none, like wrecks?), what the biggest weapons do (a nuke leaves a
+  glassed crater field; the Lance of Corvane a trench), and the cost cap so a 60-minute war stays fast. LORE.md's
+  tone fits (the garden the Pathfinder planted, harmed by the war; "the war feeds them": the Murmur get stronger).
+- **Fauna: better looks and movement** (the owner, Nov 18 2026: for later; the fauna models were added by the other chat
+  with basic tools). Review every animal in js/wildlife.js (deer, songbirds, geese, foxes, herds, herons, hares, owls,
+  lizards, hawks, vultures, beetles, ember moths, floaters, blind crawlers, glow-worms, the carrion birds) and rework
+  them with the renderer (Claude Design): more detailed models at the game's sizes, day and night, and better motion
+  (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
+  run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
+  the dead are drawn too.
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
   Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
   `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
