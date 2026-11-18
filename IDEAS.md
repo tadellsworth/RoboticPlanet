@@ -178,14 +178,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
   from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
   (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
-- **A new look for the oil seeps** (owner's to-do, Nov 17: "I don't like the current one"). The owner's two reference
-  pictures show a puddle of crude: glossy, jet black, with a soft, wavy, irregular outline (lobes and pinched waists,
-  no straight edges), a few separate small round droplets and smaller puddles scattered beside it, faint dark-grey
-  sheen patches inside, and thin bright white highlights along the lower (front) rims, as if lit from above and
-  behind. Today's seep is a texture drawn across all its tiles as one shape (`drawSeep` in `js/render.js`, the
-  `oil-seep` art) with its night glow in `resourceGlow`; the Hollow's seeps use the same art. A redo would make the
-  puddle (and its droplets) the art, keep it reading as one shape across a seep's tiles, darken as it is pumped dry,
-  and keep a faint gleam at night. Render a sample sheet for the owner to pick from first.
+- **A new look for the oil seeps (done Nov 18 2026).** The owner's reference pictures showed a puddle of crude: glossy,
+  jet black, a soft wavy outline of lobes and pinched waists, a few droplets beside it, pale sheen patches, a thin white
+  light along the lower rim. From a design sheet of three directions (A fresh spill, B spattered seep, C still pool;
+  `renderer/preview/oil_seep_sheet.py`) the owner chose **B, the Spattered seep**, and decided: a slow shimmer in the
+  sheen for motion (render-only, nothing on Saver); **no survey stakes at all** (the puddle alone marks the oil; the
+  stake art is gone); the Hollow's seeps a touch stronger in rim and sheen with a violet gleam; droplets may lie on the
+  open ground beside the seep; pumping dry recedes from the pump outward (a pump's own tile first); under a road the
+  puddle stops at the kerb and the road keeps its stain; one look on every biome, tuned where black on dark ground needs
+  it. Built in code, not art: `js/seep.js` (ART_GUIDE Batch 20). Open: a bubble that swells and pops now and then was
+  the other motion idea; it can be added later if the shimmer is too quiet.
 - **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
   doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
   and text" in the November review below.
@@ -270,7 +272,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   rainbow sheen). From a design sheet of three directions each, the owner picked **Reedcane** for Fiber (jointed
   sage-teal canes with mint plumes, an image for each growth stage, the plumes glowing at night) and the **Pathfinder
   survey stake** for Oil (the seep drawn as soaked dark ground across all its tiles, an old survey stake on each pump
-  spot, its lamp lit at night). ART_GUIDE Batch 16.
+  spot, its lamp lit at night). ART_GUIDE Batch 16. (Nov 18: the oil look was redone again as a puddle of crude and the
+  survey stakes retired: see "A new look for the oil seeps" above and ART_GUIDE Batch 20.)
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:

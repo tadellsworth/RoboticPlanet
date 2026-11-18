@@ -447,7 +447,9 @@ A design sheet for a new look for the oil seeps (IDEAS.md: "A new look for the o
 picture of a glossy jet-black puddle: three directions, all the same kind of puddle, differing in character (A fresh
 spill, B spattered seep, C still pool). The puddle is built from a seep's tiles the way `drawSeep` builds its shape and
 shaded from the shape itself (rim light where the edge faces the player, sheen patches, a damp stain); pumping erodes
-the wet area inward. Pure Python, no 3D render; not installed. Run from this folder:
+the wet area inward. Pure Python, no 3D render. The owner chose direction B (Nov 18 2026) and it is installed as code,
+not images: `js/seep.js` ports the shape logic to canvas and the game bakes each seep's puddle itself (ART_GUIDE Batch
+20); the survey stakes below are no longer drawn. Run from this folder:
 
 ```
 python3 terrain/oil_puddles.py                        # a quick test: the three puddles at three fills, on plain sand (out/res)
@@ -487,7 +489,7 @@ python3 tools/install_murmur_forms.py out/murmur out/fx <game>/art   # sprites, 
 
 The Lore guide's Spitter (brighter pouches) is the catalogue's `murmur-spitter-hero` through `post/murmur_lore.py`.
 
-## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake
+## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake (the stake since retired: Batch 20)
 
 `tools/render_install.sh` renders everything the game uses from the two sets above (one job at a time), and
 `tools/install_art.py [<game>/art]` writes it into the game's art folder as WebP (the Hollow's pieces drawn with the

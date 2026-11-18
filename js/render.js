@@ -712,6 +712,7 @@ function bakeMap() {
   R.mapCtx = R.map.getContext('2d');
   R.mapCtx.hdScale = 1;
   hdReset();
+  seepIndexBuild(); // (the oil seeps' puddles, drawn with the ground: js/seep.js)
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
@@ -755,6 +756,26 @@ function redrawAround(ctx, i, j) {
   ctx.restore();
 }
 
+/**
+ * Repaint the tiles i0..i1 × j0..j1 (and one round them) in the ground bakes: the whole-map bake, the night glow map
+ * and any sharp chunk they touch, the plants over them drawn again (a seep's puddle made again as it is pumped: seepFrame).
+ */
+function redrawRegion(i0, j0, i1, j1) {
+  if (!R.mapCtx) return;
+  i0 = Math.max(0, i0 - 1); j0 = Math.max(0, j0 - 1); i1 = Math.min(S.W - 1, i1 + 1); j1 = Math.min(S.H - 1, j1 + 1);
+  const ctxs = [R.mapCtx];
+  if (R.hd) for (const ch of R.hd.chunks.values()) if (i1 >= ch.i0 - 1 && i0 <= ch.i0 + HD_CHUNK && j1 >= ch.j0 - 1 && j0 <= ch.j0 + HD_CHUNK) ctxs.push(ch.ctx);
+  for (const ctx of ctxs) {
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) drawTile(i, j, ctx);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+    drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
+    ctx.restore();
+  }
+  if (R.glowMap) glowTiles(i0, j0, i1, j1);
+  MM.dirty = true;
+}
+
 /*
  * Night glow: biomes whose ground, water or plants glow after dark (the alien bloom's veins and plants,
  * the ashlands' embers) have glow art (ground-glow-<b>, water-glow-<b>, plant-<b>-<k>-glow) baked into a
@@ -765,7 +786,7 @@ function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const b = R.biome;
-  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow || ART['stalk-glow'] || ART['oil-glow']); // (the Hollow: its Bloom veins glow; Stalks' plumes and the survey stakes' lamps everywhere)
+  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
@@ -789,7 +810,8 @@ function glowTiles(i0, j0, i1, j1) {
     const t = tIdx(i, j);
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
-    if (S.res[t] && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (Stalks' plumes, survey stakes' lamps, the Bloom's veins)
+    drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
+    if (S.res[t] && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (Stalks' plumes, the Bloom's veins)
     if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
@@ -809,15 +831,14 @@ function glowTiles(i0, j0, i1, j1) {
 
 /**
  * A resource's light in the night glow map, from its art's glow image where it has one (drawn just as drawResource draws
- * the resource): a Stalk's plumes once grown, a survey stake's lamp, a Bloom vein (or, without art, a violet glow).
+ * the resource): a Stalk's plumes once grown, a Bloom vein (or, without art, a violet glow). (An oil seep's gleam is
+ * drawn with its puddle: drawSeepTile.)
  */
 function resourceGlow(ctx, type, amt, grow, i, j) {
   const cx = i * TP + TP / 2, cy = j * TP + TP / 2;
   if (type === R_STALK) {
     const art = ART[stalkKey(grow) + '-glow'];
     if (art) drawArt(ctx, art, cx, cy, TP);
-  } else if (type === R_OIL) {
-    if (ART['oil-glow'] && !S.hollow) drawArt(ctx, ART['oil-glow'], cx, cy, TP * (0.6 + 0.4 * Math.min(1, amt / RES[R_OIL].amount))); // (a stake's lamp: none in the Hollow)
   } else if (type === R_VEIN) {
     if (ART['vein-glow-hollow']) drawArt(ctx, ART['vein-glow-hollow'], cx, cy, TP * (0.5 + 0.5 * grow));
     else veinGlow(ctx, i, j, grow);
@@ -827,45 +848,6 @@ function resourceGlow(ctx, type, amt, grow, i, j) {
 /** Which of a Stalk's images shows it at growth `grow` (0..1): a quarter, half or three-quarters grown, or full. */
 function stalkKey(grow) {
   return grow >= 0.875 || !ART['stalk-1'] ? 'stalk' : grow < 0.375 ? 'stalk-1' : grow < 0.625 ? 'stalk-2' : 'stalk-3';
-}
-
-/**
- * An oil seep's ground on tile (i, j): the seep's texture (oil-seep, one image every 2 × 2 tiles, laid the same way
- * across the map so neighbouring tiles join) over a disc that shrinks as the tile is pumped dry, bridged to every
- * neighbouring oil tile, so a seep reads as one place across all its tiles. A soaked dark edge first. The pump spot (the
- * resource's own art, the survey stake) is drawn on it.
- */
-function drawSeep(ctx, i, j, x, y) {
-  const art = ART['oil-seep'], t = tIdx(i, j);
-  const oil = (a, b) => inMap(a, b) && S.res[tIdx(a, b)] === R_OIL && !S.road[tIdx(a, b)] && !(S.rail && S.rail[tIdx(a, b)]);
-  const f = Math.min(1, S.amt[t] / RES[R_OIL].amount), r = TP * (0.3 + 0.17 * f), cx = x + TP / 2, cy = y + TP / 2;
-  if (!R.seepPat || R.seepPat.img !== art.img) {
-    const pat = ctx.createPattern(art.img, 'repeat');
-    if (!pat) return;
-    pat.setTransform(new DOMMatrix().scale((2 * TP) / art.img.width));
-    R.seepPat = { img: art.img, pat };
-  }
-  const shape = (k) => { // the disc, ragged a little, and a bridge toward each oil neighbour
-    ctx.beginPath();
-    for (let n = 0; n <= 18; n++) {
-      const a = (n / 18) * Math.PI * 2, rr = r * k * (1 + 0.1 * Math.sin(a * 3 + hash2(i, j, 811) * 6) + 0.05 * Math.sin(a * 7 + hash2(j, i, 813) * 6));
-      if (n) ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92); else ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
-    }
-    ctx.fill();
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-      if (!oil(i + di, j + dj)) continue;
-      ctx.lineWidth = r * k * (di && dj ? 1.2 : 1.7);
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + di * TP * 0.5, cy + dj * TP * 0.5); ctx.stroke();
-    }
-  };
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
-  ctx.lineCap = 'round';
-  ctx.fillStyle = ctx.strokeStyle = 'rgba(22,14,8,0.22)';
-  shape(1.22);
-  ctx.fillStyle = ctx.strokeStyle = R.seepPat.pat;
-  shape(1);
-  ctx.restore();
 }
 
 /** A Bloom vein's glow in the night glow map (dimmer while it grows back): violet light along it. */
@@ -1164,18 +1146,21 @@ function paintTile(ctx, i, j) {
     drawRail(ctx, i, j, x, y, t);
     if (!S.road[t] && terr === T_ROCK) drawRailTunnel(ctx, i, j, x, y, t, true);
   }
+  // The oil seeps' puddles (js/seep.js): a seep is one puddle of crude across its tiles, reaching a little onto the open
+  // ground beside them; the puddle is the whole of an oil tile's look (no resource art on it).
+  drawSeepTile(ctx, i, j, x, y, t, false);
   if (S.res[t]) {
     // An oil seep under a road or track stays underground: it shows through faintly, a stain on the surface.
     const under = S.road[t] || (S.rail && S.rail[t]);
-    if (under && S.res[t] === R_OIL && ART.oil) { // (with the art: just the stain; the survey stake was taken up for the road)
-      ctx.fillStyle = 'rgba(20,14,10,0.3)';
-      ctx.beginPath(); ctx.ellipse(x + TP / 2, y + TP / 2, TP * 0.38, TP * 0.3, 0.3, 0, Math.PI * 2); ctx.fill();
-      return;
+    if (S.res[t] === R_OIL) {
+      if (under) {
+        ctx.fillStyle = 'rgba(20,14,10,0.3)';
+        ctx.beginPath(); ctx.ellipse(x + TP / 2, y + TP / 2, TP * 0.38, TP * 0.3, 0.3, 0, Math.PI * 2); ctx.fill();
+      }
+      return; // (no glint on a rich seep: the puddle's sheen is its shine)
     }
     if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
-    else if (S.res[t] === R_OIL && ART['oil-seep']) drawSeep(ctx, i, j, x, y);
-    // (No survey stakes in the Hollow: the Pathfinder never mapped it, LORE.md. Its seeps are the soaked ground alone.)
-    if (!(S.res[t] === R_OIL && S.hollow && ART['oil-seep'] && !under)) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
+    drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (under) ctx.restore();
     else if (richRes(t)) drawGlint(ctx, x, y, i, j);
   }
@@ -5971,6 +5956,7 @@ function render(dtReal) {
   ctx.fillStyle = '#120f14';
   ctx.fillRect(0, 0, R.w, R.h);
   if (!S || !R.map) return;
+  seepFrame(); // (a pumped seep's puddle made again as its amount crosses a step: js/seep.js)
   flushDirtyTiles();
   updateTerritoryLayer();
   todFrame();
@@ -5992,6 +5978,7 @@ function render(dtReal) {
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawBiomeGlow(ctx, ox, oy, z);
+  drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
