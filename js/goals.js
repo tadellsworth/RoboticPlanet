@@ -183,6 +183,9 @@ const COLONY_GOALS = [
     hint: 'Build → Move → Mooring Mast, twice; tap one → Link, then the other; an Airfield\'s Hangar: Airships +1.', at: ['mast'], build: 'mast',
     count: () => (S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'mast' && b.shipGot > 0) ? 1 : 0) },
 
+  { id: 'maglev', tier: 3, name: 'Phase 2', text: 'Move goods by Maglev pod.', n: 1,
+    hint: 'Build → Move → Maglev Terminal; Paths → Maglev: tap it, then the far end; order pods on a Terminal\'s panel; a Generator by each end.', at: ['magterm'], build: 'magterm',
+    count: () => (S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'magterm' && b.magGot > 0) ? 1 : 0) },
   { id: 'trains3', tier: 3, name: 'Rolling stock', text: 'Have 3 Freight Trains running at once.', n: 3,
     hint: 'More stations along your lines; each Rail yard builds Freight Trains (5 rounds of parts each).', at: ['station'], build: 'station',
     count: () => metaBots('freight') },

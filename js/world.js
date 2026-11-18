@@ -3048,7 +3048,7 @@ function civClaims(b) {
   const def = BDEFS[b.type];
   // (Nor a Trade Terminal: docked on a Trade Post's neutral ground, where nothing can be attacked, a ring of its own land
   // would shut everyone else's roads out of there for good. The owner's call, Nov 2026.)
-  return b.built && !def.mil && !def.wild && !def.barrier && !def.gate && !def.ramp && !def.terminal && b.type !== 'wall';
+  return b.built && !def.mil && !def.wild && !def.barrier && !def.gate && !def.ramp && !def.terminal && !def.pylon && b.type !== 'wall'; // (nor a Maglev pylon: a line claims no land)
 }
 
 /**
@@ -4455,6 +4455,12 @@ function cancelTask(bot) {
       if (s && s.builder === bot.id) s.builder = 0;
       break;
     }
+    case 'magfix': { // (a Maglev line's repair: the job is free for another Worker; one out on the line gets off at the Terminal)
+      const b = getE(t.bld);
+      if (b && b.magFix && b.magFix.u === bot.id) { b.magFix.u = 0; b.magFix.since = 0; }
+      if (bot.inside && t.phase === 'ride') { const E = getE(bot.inside); exitBuilding(bot); if (E) { bot.x = E.x + 0.5; bot.y = E.y + 0.5; } }
+      break;
+    }
     case 'staff': {
       const b = getE(t.bld);
       if (b) {
@@ -4636,6 +4642,9 @@ function destroyBuilding(b, burn, quiet) {
     if (o && o.ferryTo === b.id) o.ferryTo = 0;
     if (typeof ferryChanged === 'function') ferryChanged();
   }
+  // A Maglev pylon down cuts its line; a Maglev Terminal takes its line (and the pods in it) with it.
+  if (BDEFS[b.type].pylon && typeof magPylonDown === 'function') { if (b.built) magPylonDown(b); else if (b.magFrom) magLineCancel(b); }
+  if (BDEFS[b.type].magterm && typeof magTermDown === 'function') magTermDown(b);
   // So does a Mooring Mast at one end of an Airship line (its Airships wait at the other Mast for a new one).
   if (BDEFS[b.type].mast && b.line) {
     const o = getE(b.line);

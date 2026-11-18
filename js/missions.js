@@ -798,6 +798,51 @@ const MISSIONS = [
     ],
   },
   {
+    id: 'maglev', name: 'Phase 2', chapter: 'Industry and Trade',
+    brief: 'The Crystal lies far to the north, across the river. Build the Accord\'s Phase 2 transit line at last: a Maglev between two Terminals, powered at both ends.',
+    intro: [
+      'A <b>Maglev Terminal</b> is storage with a dock on its roof. A line runs straight between two, on pylons, over anything.',
+      'Plan it in <b>Paths → Maglev</b>: tap a finished Terminal, then the far end. A Worker builds it out from the near end.',
+      '<b>Maglev Pods</b> (ordered at a Terminal) carry 16 goods a trip at three times a Freight Train\'s speed, both ways.',
+      'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
+      'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
+    ],
+    mode: 'colony', seed: 7302, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
+    layout(m, W) {
+      // (As Iron Road: no Crystal near home; a field of it 22 tiles north, with a river between.)
+      const b = m.bases[0];
+      mapTiles(m, W, b.x, b.y, 23, (t) => { if (m.res[t] === R_CRYSTAL) { m.res[t] = 0; m.amt[t] = 0; } });
+      mapTiles(m, W, b.x, b.y, 40, (t, i, j) => { if (Math.abs(j - (b.y - 12)) <= 1 && Math.abs(i - b.x) <= 14 && m.terrain[t] === T_GROUND && !m.ramp[t]) { m.terrain[t] = T_WATER; m.res[t] = 0; m.amt[t] = 0; m.fert[t] = 0; m.elev[t] = 0; } });
+      placeField(m, W, b.x + 2, b.y - 21, 2.6, R_CRYSTAL, 0.8, 53);
+    },
+    setup(S) {
+      kit(S, KIT8.filter((t) => t !== 'tap'), 4);
+      const L = getE(S.players[0].lander), P = S.players[0];
+      P.stats.startBots = P.stats.bots;
+      // (No Crystal near home, so no Chips of its own until the line runs: enough for the Terminals, the line and its pods.)
+      L.stock.cement += 50; L.stock.alloy += 40; L.stock.chip += 30; L.stock.fuel += 16;
+      for (let k = 0; k < 2; k++) enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel: the far one's comes by pod)
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'magterm', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Maglev Terminal</b> (<kbd>G</kbd>), on the north side of your base, by a road.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='magterm']" },
+      { kind: 'magLine', n: 1, text: 'Run a Maglev line across the river', at: 'magterm',
+        count: () => magLines(0).length,
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>): tap the Terminal, then a clear spot by the Crystal across the river; <b>Build</b>.',
+        ui: "#btn-road, #banner-seg [data-v='maglev'], #banner-ok, #sh-magline" },
+      { kind: 'magRun', n: 1, text: 'A pod on the line, powered both ends', at: 'magterm',
+        count: () => (magLines(0).some(([a, b]) => linePods(a).length > 0 && magPowered(a) && magPowered(b)) ? 1 : 0),
+        hint: 'Tap a <b>Terminal</b> → <b>Pod bay</b>: Maglev Pods <b>+1</b>; a <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end.',
+        ui: "#sh-yard .order-row[data-k='magpod'] [data-d='1'], #btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      { kind: 'magFreight', n: [16, 24, 32], text: 'Move {n} goods by pod', at: 'magterm',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && b.type === 'magterm' ? b.magGot || 0 : 0), 0),
+        hint: 'A <b>Crystal Tap</b> (<kbd>C</kbd>) touching the far Terminal: its site\'s goods go out by pod, its Crystal comes home.',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+    ],
+  },
+  {
     id: 'trade', name: 'Trade Winds', chapter: 'Industry and Trade',
     brief: 'Dock a Trade Terminal at a neutral Trade Post and run a trade route by Road Train, through the planet\'s storms.',
     intro: [

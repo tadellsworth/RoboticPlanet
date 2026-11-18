@@ -176,6 +176,9 @@ const BOTS = {
     desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and 3 Fuel from its Airfield, on top of the Fuel in its tank (it can\'t take off without them), and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
     desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield: a full tank takes 5 Fuel, a long round trip 4 to 6. It flies to the nearest Airfield when the Foundry finishes it.' },
+  // The Maglev pod (see MAGLEV): built at a Maglev Terminal's pod bay, it runs the guideway between the Terminal's line's two ends.
+  magpod: { name: 'Maglev Pod', plural: 'Maglev Pods', speed: WORKER_SPEED * 3.4 * 3, hp: 12, haul: true, magpod: true, mixed: true, carry: 16, parts: 2, round: { alloy: 2, chip: 1 }, accel: 0.85 * 4, brake: 1.6 * 4,
+    desc: 'A sleek freight pod on a Maglev line: 16 goods a trip, several kinds at once, at three times a Freight Train\'s top speed. It runs the line by itself, both ways, loading what the far Terminal needs and bringing its spare goods home, and dwells at each end to load. Goods only: no riders. It needs power: with a Generator within 4 tiles of each Terminal it flies; without (or in a solar flare) it crawls at a Worker\'s pace. Order it at a Maglev Terminal (4 Alloy, 2 Chips; four to a line). A pod on a span whose pylon is shot down is lost with its load.' },
   // The Airship (see AIRSHIP): built in an Airfield's hangar, it lives on a line between two Mooring Masts, not at the Airfield.
   airship: { name: 'Airship', plural: 'Airships', speed: WORKER_SPEED * 1.875, hp: 40, air: true, airship: true, carry: 24, seats: 6, parts: 9, accel: 0.35, brake: 0.45,
     desc: 'An armoured freight airship that shuttles between two Mooring Masts, both ways, over anything (water, cliffs, rock), at half a Cargo Plane\'s speed. It carries up to 24 goods a trip, several kinds at once (each side sends what the buildings round the other side need, and the far side\'s spare goods come home), and six Workers or Warbots who ride it like a ferry. Built in an Airfield\'s hangar, it flies to its line and lives at its Masts. It burns Fuel in the air and fills up at either Mast. Unarmed, and Flak brings it down.' },
@@ -207,7 +210,7 @@ const BOTS = {
   sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
     desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -295,6 +298,27 @@ const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
 const AI_FORTRESS_SPAN_AT = 600; // the rival Viaducts onto an enemy's mesa or plateau from 10 minutes in (see aiFortressSpan)
 const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.5 }, VIA_TIME = 5; // cost a tile spanned (Alloy rounded up)
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
+/**
+ * The Maglev line (BDEFS.magterm, BDEFS.magpylon, BOTS.magpod): an elevated guideway on pylons, straight across
+ * anything, between two Maglev Terminals `min` to `max` tiles apart (b.line on both, as a Mooring Mast's; a Terminal is
+ * on one line at most). Planned in Paths (Maglev) with two taps: a built Terminal of yours (the near end), then the far
+ * end (a clear spot where the far Terminal goes up, a Terminal site, or a built Terminal). A pylon stands every
+ * `spacing` tiles from the near Terminal (magSpots), on open ground, a cliff top or shallow water, never on a building,
+ * a road or track; a spot in a chasm or deep water or rock is left out as long as the pylons either side of it stand,
+ * so a line crosses a gap of up to `gap` tiles (two spans). The line costs `cost` a tile (and the far Terminal its
+ * own cost when it's new), paid from storage as the goods come in like a Viaduct, and a Worker standing at the near
+ * Terminal builds it out, `time` seconds a tile, the pylons going up one by one and the far Terminal last. Pods
+ * (`perLine` to a line, built at either Terminal's pod bay) carry BOTS.magpod.carry goods both ways, planned as a
+ * Freight Train's loads are (railPlan: the far Terminal stocks what the buildings round it need, the home one keeps that
+ * for the line, spare goods come home): a pod sets out once `fill` of its hold is worth it, sooner when the far side
+ * runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a Generator with Fuel in it
+ * within its own radius of each Terminal (magPowered); without one at either end, or in a solar flare, the pods crawl at
+ * WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short and go back, one on the spans that
+ * rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it in `repair` s at `spacing` tiles'
+ * cost. The rival builds none (IDEAS.md).
+ */
+const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
+  deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
@@ -1091,6 +1115,16 @@ const BDEFS = {
     name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (before the track if you like: drag rail from one station to the other and it ends beside each). Once a train runs on it, the far station stocks itself with what the buildings round it need and sends their output home, the station nearest your Command Base keeps the line fed, and trains carry several goods a trip. Buildings, a Command Base or a Depot touching a station are joined to it by conveyor, no Hauler needed: put your far factories round it. Supply orders you set come on top. Its rail yard builds Freight Trains: order them on its panel.',
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
+  magterm: {
+    name: 'Maglev Terminal', short: 'Maglev',
+    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four to a line): they carry 16 goods a trip at three times a Freight Train\'s speed. The two Terminals work like a railway\'s stations (the far one stocks what the buildings round it need and sends their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl.',
+    cost: { cement: 8, alloy: 6, chip: 3 }, store: true, magterm: true, armor: 14, buildTime: 14, yard: ['magpod'],
+  },
+  magpylon: {
+    name: 'Maglev Pylon', short: 'Pylon',
+    desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
+    cost: { cement: 3, alloy: 3, chip: 1 }, pylon: true, armor: 24, buildTime: 20,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1122,12 +1156,12 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'mast', 'terminal'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
@@ -1663,6 +1697,8 @@ const FLAVOR = {
   mast: 'The waiting room at its foot has benches and a departure board. Nobody waits in it.',
   dropost: 'Survey stake, by air.',
   station: 'Platform signs in four languages. Every train is freight.',
+  magterm: 'Phase 2 transit. Platforms to passenger standard. Departures on time; the seats stay folded.',
+  magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
   nest: 'Logged as an acoustic anomaly. The log was never closed.',
@@ -1676,6 +1712,7 @@ const FLAVOR = {
   paver: 'Every road built to passenger standard. No passengers yet.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',
+  magpod: 'Twelve seats, folded. Forty crates.',
   cargoship: 'Loaded to the colony manifest’s tonnage. Most of it is Ore.',
   tankship: 'Spills are to be reported to an office that does not answer.',
   ferry: 'Rated for 200 passengers and their luggage. Carries warbots.',

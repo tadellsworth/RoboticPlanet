@@ -2759,6 +2759,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const t = R.time;
   const working = b && b.working;
   if (b && !b.built) { drawSite(ctx, type, cx, cy, s, owner, b); return; }
+  if (type === 'magpylon' && b && b.id) return; // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
   // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
@@ -5933,6 +5934,12 @@ function refreshOverlay(type) {
     R.overlay = { type, valid, at: R.time };
     return;
   }
+  // The Maglev tool: your finished Terminals on no line (the near end to tap first).
+  if (type === 'maglev') {
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].magterm && b.built && !b.line && !magPending(b) && !b.magFrom) valid[tIdx(b.x, b.y)] = 1;
+    R.overlay = { type, valid, at: R.time };
+    return;
+  }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
     const t = j * S.W + i;
     if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
@@ -6008,6 +6015,7 @@ function render(dtReal) {
   ctx.globalAlpha = 1;
   drawBridgeRigging(ctx, ox, oy, z, inView);
   drawViaducts(ctx, ox, oy, z);
+  drawMaglevShadows(ctx, ox, oy, z); // (the Maglev guideways' shadows, on the ground)
   drawCrossingGates(ctx, ox, oy, z, inView);
   drawPipeRings(ctx, ox, oy, z, inView);
 
@@ -6124,7 +6132,7 @@ function render(dtReal) {
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
-  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && inView(u.x, u.y, 1)) items.push(u);
+  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && !BOTS[u.type].magpod && inView(u.x, u.y, 1)) items.push(u); // (Maglev pods ride their guideway: drawMaglevs)
   // Planes parked at an Airfield: one waits at the head of the runway, lined up to roll; the rest are in the
   // hangar (a tag on the Airfield says how many). Nothing parks off the runway, on ground other things use.
   const hangarTags = [];
@@ -6180,7 +6188,7 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power)
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || BDEFS[e.type].pylon || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power; a Maglev pylon lights the line, not the ground)
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       const dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1; // (a Leech drinking from it: its lights dim)
       if (dim < 1) ctx.globalAlpha *= dim;
@@ -6265,6 +6273,7 @@ function render(dtReal) {
     }
   }
 
+  drawMaglevs(ctx, ox, oy, z, inView); // Maglev lines: pylons, guideways and pods, over the buildings and robots below them
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
@@ -6326,7 +6335,7 @@ function render(dtReal) {
   if (sb && !sb.inside) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(ox + sb.x * z, oy + sb.y * z, z * 0.32, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ox + sb.x * z, oy + (sb.y - (BOTS[sb.type].magpod ? MAGLEV.head : 0)) * z, z * 0.32, 0, Math.PI * 2); ctx.stroke(); // (a Maglev pod rides at deck height)
   }
   // Mouse hover: outline the tile under the pointer while laying roads or placing lights.
   if (R.hover >= 0 && R.mode === 'road') {
@@ -8602,6 +8611,217 @@ function drawMastLine(ctx, b, ox, oy, z) {
   if (!o) return;
   const [x0, y0] = cup(b), [x1, y1] = cup(o);
   line(x0, y0, x1, y1, true);
+}
+
+
+/* ------------------------------------------------------------------ Maglev lines */
+
+/*
+ * A Maglev line is drawn the way the design sheet proposed (renderer/preview/maglev_mock.py): a straight band of the
+ * guideway tile (magdeck@T, one tile running east, repeated) from one Terminal's dock to the other's, MAGLEV.head tiles
+ * up the screen, its shadow on the ground down-sun (MAG_SHADOW of its height), a pylon sprite on every spot with its
+ * head under the band (squashed shorter on ground higher than the line's ends, stretched taller in a dip: MAG_LEVEL a
+ * level, as the Viaduct's piers), the pods turned along the line at deck height with their shadows on the ground, and a
+ * cut line as two bands with a gap and the fallen pylon (magpylon-cut@T) in it. At night the power rails glow in the
+ * team colour, dimmed on a line without power. Shadows go down before the buildings (drawMaglevShadows); pylons, bands
+ * and pods go over them (drawMaglevs), under the air. Nothing of it is baked: lines come and go.
+ */
+const MAG_SHADOW = [0.6, 0.55], MAG_LEVEL = 0.3, MAG_END = 0.44; // (the band ends this far short of a dock: the platform's rim)
+
+/** The dock of Terminal b on screen, [x, y] (its tile centre, MAGLEV.head up). */
+function magDock(b, ox, oy, z) { return [ox + (b.x + 0.5) * z, oy + (b.y + 0.5 - MAGLEV.head) * z]; }
+
+/** The spans of the line A–B (A the near end) in tiles from A: [[d0, d1]], split at every cut. */
+function magSpans(A, B) {
+  const L = dist(A.x, A.y, B.x, B.y), cuts = magCut(A, B).map((c) => c.d).sort((p, q) => p - q), out = [];
+  let d0 = MAG_END;
+  for (const d of cuts) { out.push([d0, d - MAGLEV.spacing * 0.55]); d0 = d + MAGLEV.spacing * 0.55; }
+  out.push([d0, L - MAG_END]);
+  return out.filter(([a, b]) => b - a > 0.2);
+}
+
+/** The guideway tile repeated along a straight band on screen from (x0, y0) to (x1, y1), tile size z, for team `owner` (art, or a plain band). */
+function magBand(ctx, owner, x0, y0, x1, y1, z, shadow) {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.sqrt(dx * dx + dy * dy);
+  if (L < 1) return;
+  const ang = Math.atan2(dy, dx), art = artFor('magdeck', owner);
+  ctx.save();
+  ctx.translate(x0, y0); ctx.rotate(ang);
+  if (shadow || !art) {
+    ctx.fillStyle = shadow ? 'rgba(4,10,16,1)' : '#cbc6bb';
+    ctx.fillRect(0, -z * 0.17, L, z * 0.34);
+    if (!shadow) { ctx.fillStyle = PLAYER_COLORS[owner] || '#fff'; ctx.fillRect(0, -z * 0.17, L, Math.max(1, z * 0.03)); ctx.fillRect(0, z * 0.14, L, Math.max(1, z * 0.03)); }
+    ctx.restore();
+    return;
+  }
+  ctx.beginPath(); ctx.rect(0, -z / 2, L, z); ctx.clip();
+  withTod(ctx, art, (v) => { const img = artMip(v, z * (R.drawScale || 1)); for (let x = 0; x < L; x += z) ctx.drawImage(img, x, -z / 2, z + 0.5, z); });
+  ctx.restore();
+}
+
+/** At night: the power rails' glow along a span, in the team colour (dim on a line without power). */
+function magGlow(ctx, owner, x0, y0, x1, y1, z, k) {
+  if (!TOD.active || TOD.state.lights < 0.01 || k <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = PLAYER_COLORS[owner] || '#ffffff'; ctx.lineCap = 'round';
+  ctx.globalAlpha *= 0.16 * TOD.state.lights * k; ctx.lineWidth = Math.max(2, z * 0.5);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.globalAlpha *= 1.6; ctx.lineWidth = Math.max(1, z * 0.22);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.restore();
+}
+
+/** Every line on the map (built, and going up as far as it's got): { A, B, fx, fy, spans, L, owner, building }. */
+function magLinesToDraw() {
+  const out = [];
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].magterm) continue;
+    const o = magPartner(b);
+    if (o && magNearEnd(b) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
+    const s = magPending(b);
+    if (s) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
+  }
+  return out;
+}
+
+/** The band shadows, on the ground before the buildings go down (the line's height, down-sun). */
+function drawMaglevShadows(ctx, ox, oy, z) {
+  const lines = magLinesToDraw();
+  if (!lines.length && !(typeof UI !== 'undefined' && UI.placeType === 'maglev' && UI.ropeA && R.ropeEnd)) return;
+  const H = MAGLEV.head, sx = MAG_SHADOW[0] * H * z, sy = MAG_SHADOW[1] * H * z;
+  ctx.save();
+  ctx.globalAlpha *= 0.26 * (TOD.active ? 1 - 0.55 * (TOD.state.pools || 0) : 1);
+  for (const ln of lines) {
+    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
+    for (const [d0, d1] of ln.spans) magBand(ctx, ln.owner, ax + ux * d0 * z + sx, ay + uy * d0 * z + sy, ax + ux * d1 * z + sx, ay + uy * d1 * z + sy, z, true);
+  }
+  ctx.restore();
+}
+
+/** Pylon b (a building) at its foot (cx, cy): squashed or stretched so its head sits under the band (MAG_LEVEL a level of ground). */
+function drawMagPylon(ctx, b, cx, cy, z, cut) {
+  const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
+  let hs = 1;
+  if (!cut && b.line) {
+    const A = getE(b.line), B = A ? magPartner(A) : null;
+    if (A && B) {
+      const L = dist(A.x, A.y, B.x, B.y) || 1, f = clamp(((b.k || 1) * MAGLEV.spacing) / L, 0, 1);
+      const ref = S.elev[tIdx(A.x, A.y)] * (1 - f) + S.elev[tIdx(B.x, B.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
+      hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
+    }
+  }
+  if (!art) {
+    ctx.fillStyle = '#cbc6bb'; ctx.fillRect(cx - z * 0.05, cy - MAGLEV.deck * hs * z, z * 0.1, MAGLEV.deck * hs * z);
+    ctx.fillStyle = '#3f4449'; ctx.fillRect(cx - z * 0.2, cy - MAGLEV.deck * hs * z, z * 0.4, z * 0.06);
+    return;
+  }
+  const s = z * (art.scale || 1.4), W = s, Hh = s * hs, an = Array.isArray(art.anchor) ? art.anchor : [0.5, 0.6145];
+  withTod(ctx, art, (v) => ctx.drawImage(artMip(v, s * (R.drawScale || 1)), cx - an[0] * W, cy - an[1] * Hh, W, Hh));
+}
+
+/** A pod at ground point (gx, gy) on screen, drawn at deck height, turned to `ang`; loaded or empty; its shadow down-sun. */
+function drawMagPod(ctx, owner, gx, gy, z, ang, loaded, alpha) {
+  const H = MAGLEV.head, F = z * MAGLEV.podFrame;
+  ctx.save();
+  if (alpha !== undefined) ctx.globalAlpha *= alpha;
+  // the shadow on the ground
+  ctx.save();
+  ctx.globalAlpha *= 0.3 * (TOD.active ? 1 - 0.55 * (TOD.state.pools || 0) : 1);
+  ctx.translate(gx + MAG_SHADOW[0] * H * z, gy + MAG_SHADOW[1] * H * z); ctx.rotate(ang);
+  ctx.fillStyle = 'rgba(4,10,16,1)';
+  ctx.beginPath(); ctx.ellipse(0, 0, F * 0.37, F * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  const art = artFor(loaded ? 'magpod' : 'magpod-empty', owner) || artFor('magpod', owner);
+  if (art) drawArt(ctx, art, gx, gy - H * z, F, ang);
+  else {
+    ctx.translate(gx, gy - H * z); ctx.rotate(ang);
+    ctx.fillStyle = '#d0cbc1'; roundRect(ctx, -F * 0.38, -F * 0.14, F * 0.76, F * 0.28, F * 0.1); ctx.fill();
+    ctx.fillStyle = PLAYER_COLORS[owner] || '#fff'; ctx.fillRect(-F * 0.3, -F * 0.14, F * 0.6, Math.max(1, F * 0.03)); ctx.fillRect(-F * 0.3, F * 0.11, F * 0.6, Math.max(1, F * 0.03));
+    if (loaded) { ctx.fillStyle = '#8a5a2a'; ctx.fillRect(-F * 0.12, -F * 0.07, F * 0.24, F * 0.14); }
+  }
+  ctx.restore();
+}
+
+/**
+ * The lines over the buildings: pylons (and fallen ones), the bands with their night glow, the pods running and
+ * docked, a repair pod on its way out, and the band of a line going up; while a line is being placed, its preview
+ * (the band to the far end picked, every pylon spot ringed, the first bad one red).
+ */
+function drawMaglevs(ctx, ox, oy, z, inView) {
+  const lines = magLinesToDraw();
+  const preview = typeof UI !== 'undefined' && UI.placeType === 'maglev' && UI.ropeA && R.ropeEnd ? R.ropeEnd : null;
+  const anyPylon = S.buildings.some((b) => !b.dead && BDEFS[b.type].pylon);
+  if (!lines.length && !preview && !anyPylon) return;
+  // pylons standing (built), y-sorted so lower ones overlap upper ones
+  const pyl = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].pylon && inView(b.x, b.y, 2)).sort((a, b) => a.y - b.y);
+  for (const b of pyl) drawMagPylon(ctx, b, ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z, false);
+  for (const ln of lines) {
+    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
+    const H = MAGLEV.head * z, ang = Math.atan2(uy, ux);
+    if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
+    // a fallen pylon in every cut
+    if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
+    const powered = ln.B ? magLinePowered(ln.A) : false;
+    for (const [d0, d1] of ln.spans) {
+      const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
+      magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
+      if (ln.B && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
+    }
+    if (ln.building) {
+      // the rest of the line marked out, dashed, to the far end
+      const got = ln.spans.length ? ln.spans[0][1] : MAG_END;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.setLineDash([z * 0.15, z * 0.12]);
+      ctx.beginPath(); ctx.moveTo(ax + ux * got * z, ay + uy * got * z - H); ctx.lineTo(ax + ux * (ln.L - MAG_END) * z, ay + uy * (ln.L - MAG_END) * z - H); ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+    // pods: running (at their place along the line), one docked at each end, the repair pod on its way out
+    for (const u of S.bots) {
+      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !(u.magTo === ln.A.id || u.magTo === ln.B.id)) continue;
+      drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+    }
+    for (const T of [ln.A, ln.B]) {
+      const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
+      if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+    }
+    const F = ln.A.magFix;
+    if (F && F.u && F.since > 0) {
+      const E = magFixEnd(ln.A), f = clamp((S.time - F.since) / (MAGLEV.repair * 0.3), 0, 1), d = F.k * MAGLEV.spacing;
+      const ex = E.x + 0.5, ey = E.y + 0.5, tx = ln.A.x + 0.5 + ux * d, ty = ln.A.y + 0.5 + uy * d;
+      drawMagPod(ctx, ln.owner, ox + (ex + (tx - ex) * f) * z, oy + (ey + (ty - ey) * f) * z, z, ang, false);
+    }
+  }
+  // the preview while a line is placed: from the near Terminal picked to the far end under the pointer or tapped
+  if (preview) {
+    const A = getE(UI.ropeA.id);
+    if (A && !A.dead) {
+      const E = preview, ax = ox + (A.x + 0.5) * z, ay = oy + (A.y + 0.5) * z, fx = E.i + 0.5, fy = E.j + 0.5, L = dist(A.x + 0.5, A.y + 0.5, fx, fy) || 1;
+      const ux = (fx - A.x - 0.5) / L, uy = (fy - A.y - 0.5) / L, H = MAGLEV.head * z;
+      ctx.save();
+      ctx.globalAlpha *= E.ok ? 0.75 : 0.4;
+      magBand(ctx, ME, ax + ux * MAG_END * z, ay + uy * MAG_END * z - H, ax + ux * (L - MAG_END) * z, ay + uy * (L - MAG_END) * z - H, z, false);
+      ctx.restore();
+      if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.8)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); ctx.moveTo(ax, ay - H); ctx.lineTo(ox + fx * z, oy + fy * z - H); ctx.stroke(); ctx.restore(); }
+      ctx.lineWidth = Math.max(1.5, z * 0.06);
+      let badSeen = false;
+      for (const sp of E.spots || []) {
+        const cx = ox + (sp.i + 0.5) * z, cy = oy + (sp.j + 0.5) * z, bad = sp.kind === 'bad' && !badSeen;
+        if (bad) badSeen = true;
+        ctx.save();
+        ctx.strokeStyle = bad ? '#ff6b6b' : sp.kind === 'skip' ? 'rgba(255,255,255,0.55)' : '#9dffb8';
+        if (sp.kind === 'skip') ctx.setLineDash([z * 0.12, z * 0.1]);
+        ctx.beginPath(); ctx.arc(cx, cy, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+        if (sp.kind === 'ok') { ctx.globalAlpha *= 0.55; drawMagPylon(ctx, { owner: ME, x: sp.i, y: sp.j, k: sp.k, line: 0 }, cx, cy, z, false); }
+        ctx.restore();
+      }
+      const t = tIdx(E.i, E.j), far = S.bAt[t] ? getE(S.bAt[t]) : null;
+      if (!far) { ctx.globalAlpha = 0.6; drawBuilding(ctx, 'magterm', ox + fx * z, oy + fy * z, z, ME, { built: true, garrison: [], stock: {} }); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
+      ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
+    }
+  }
 }
 
 /** A parachute canopy at (x, y) (its bottom edge), size s, with its lines down to (x, ly). */

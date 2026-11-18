@@ -10,7 +10,8 @@ and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-e
 weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
 and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the Airship and
-the Mooring Mast in [Batch 18](#batch-18-the-airship-and-the-mooring-mast-installed).
+the Mooring Mast in [Batch 18](#batch-18-the-airship-and-the-mooring-mast-installed); the Maglev line in
+[Batch 21](#batch-21-the-maglev-line-installed).
 
 This guide has three parts:
 
@@ -1608,6 +1609,27 @@ with a touch stronger rim light and sheen and a violet gleam (`SEEP_LOOK.hollow`
 lie only on open ground on the seep's own level (never water, rock, a road or track, a building or another resource);
 under a road or track the puddle stops at the kerb and the road keeps its dark stain. Everything is render state (`SEEP`),
 read from `S` and never written to it; the simulation never reads it.
+
+### Batch 21: the Maglev line (installed)
+
+The owner chose direction **A, Accord Phase 2**, from the design sheet (`renderer/preview/maglev_sheet.py`), with the two
+mixes the sheet suggested: the pylon caps and the Terminal's dock in gunmetal (as drawn) and B's hazard chevrons on A's
+pylon caps. Rendered with `renderer/b/maglev.js` (`v=a`), both teams, at every time of day, by
+`renderer/tools/render_maglev_game.sh`; `renderer/tools/install_maglev.py` writes the WebP files (jobs.txt lists each
+one; RENDERER.md, "The Maglev line").
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `magterm@0`, `magterm@1` (+ morning, evening, night in `art/tod/<time>/buildings/`) | The Maglev Terminal: a round glass-sided transit hall in pale weathered concrete on the usual pad, a lit platform ring and a railing on its roof, lamp masts, a gunmetal dock at deck height in the platform's middle, and at its door a canopy, a shelter with an empty bench and a timetable board glowing blank. 512 px, the buildings' angle | `B3D` at scale 1.6 (as big as the Rail Station; anchor [0.5, 0.615]), like any building; its site is the shared `site` art. The guideway meets it at the art's `head` mark, `MAGLEV.head` (0.464) tiles up the screen from its tile centre |
+| `magpylon@0`, `magpylon@1` (+ morning, evening, night) | A slender tapering concrete pylon on an octagonal footing banded in hazard yellow, a gunmetal hammerhead cap with hazard chevrons on its ends and a team-colour strip up its front, a red aviation light. 512 px, the buildings' angle, no pad | `B3D` (scale 1.4), its foot on the tile centre, drawn by `drawMagPylon` under the band: squashed shorter on ground higher than the line's ends and stretched taller over a dip (`MAG_LEVEL`, 0.3 a level, as the Viaduct's piers); its head is `MAGLEV.deck` (0.343) tiles up |
+| `magpylon-cut@0`, `magpylon-cut@1` (+ times of day) | The pylon shot down: a sheared, charred stump with its rebar out, the column lying beside it with its cap still on, broken deck slabs (one with a live power rail), rubble and scorched ground | In every cut of a line, on the fallen pylon's spot, until the Worker rebuilds it |
+| `magpod@0`, `magpod@1`, `magpod-empty@0`, `magpod-empty@1` (+ times of day) | The pod: a sleek rounded capsule in pale white, a band of lit windows along each flank with the seats folded inside, a team-colour rail along each edge, its roof hatch standing open over the crates when loaded (`magpod`) and shut when empty (`magpod-empty`). Straight down, facing right, 256 px, one tile (10 world units) across | `drawMagPod`: one tile across (`MAGLEV.podFrame`), turned along the line, at deck height (`MAGLEV.head` up the screen from where it is on the ground), a dark ellipse of shadow on the ground `MAG_SHADOW` (0.6 right, 0.55 down) of its height off; loaded art with anything in its hold. One is drawn docked at each Terminal |
+| `magdeck@0`, `magdeck@1` (+ times of day, in `art/tiles/`) | One tile of guideway: a slim pale box girder with a team-colour power rail along each edge, running east. Straight down, 256 px, one tile | `magBand`: repeated along a straight band from the near Terminal's dock to the far one's (turned to the line, clipped to its length, ending `MAG_END` short of each dock), split at a cut, and as far as it's built on a line going up; its shadow is the same band drawn dark on the ground down-sun (`drawMaglevShadows`, before the buildings); at night a soft ribbon of team light along it (`magGlow`), dim on a line without power |
+
+The band, the pylons and the pods go on after the buildings and robots (so what stands under a line is under it) and
+before the air (`drawMaglevs`); nothing of it is baked, because lines come and go. The placement preview is the same
+band at 75% with every pylon spot ringed (green standing, dashed grey spanned, the first bad one red) and a ghost of
+the far Terminal.
 
 ### Not swappable yet (ask Claude Code if you want these)
 
