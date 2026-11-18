@@ -261,7 +261,7 @@ function bakedArt(key) {
  * Every biome's art but the Desert's (ground, water, rock, cliff, plants, glow and canyon art) loads only when it's
  * wanted: that biome is being played, or shown on the new-game screen (ensureBiomeArt). In a single-file
  * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js), which keeps the page under
- * its 16 MB (the Forest's and Hoarfell's joined the newer biomes there, Nov 2026: about 1 MB of the page).
+ * its 16 MB (the Forest's and the Polar Caps' joined the newer biomes there, Nov 2026: about 1 MB of the page).
  */
 const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow'];
 function lazyBiomeOf(key) {

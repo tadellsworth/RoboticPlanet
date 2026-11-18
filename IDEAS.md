@@ -50,7 +50,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   become lasting ground marks like the aircraft wrecks, `S.wrecks`, with a cap and dropped oldest first, in `S` so saves
   and every lockstep client agree). Over a protracted war the no-man's-land between two colonies accumulates: craters
   overlapping, burnt groves, dead ground, the remains and wrecks already there, carrion birds; the green regions
-  (Greenreach, Hoarfell's firs, the Autumn woods, the Bloom) show it most, the Rust and Argos least. Design points to
+  (Greenreach, the Polar Caps' firs, the Autumn woods, the Bloom) show it most, the Rust and Argos least. Design points to
   settle with the owner: what heals (nothing? grass in a long time? Bio Farms and the Grove Planter can re-green a
   patch?), whether burnt ground hurts play (no Bio Farms on it, Harvesters find nothing: yes, that is the point) or is
   only a look, how craters affect movement (slow? none, like wrecks?), what the biggest weapons do (a nuke leaves a
@@ -216,7 +216,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,
   so art can be added freely; kept for the record). `dist/terrafall.html` must stay under 16 MB (its
   host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
-  Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
+  Fiber and Oil art, so the Forest's and the Polar Caps' biome art moved into bundles beside the page like the newer biomes'
   (`LAZY_BIOMES`), freeing about 1 MB (15,409 KB). That buys a few batches of art and code, not the long run. The page
   still carries every other image as text (about 9.7 MB of WebP, a third more once inlined): buildings 5 MB (each in two
   team colours), bots 2 MB, effects 1.2 MB. The lasting fix is to move the rest of the art beside the page too, in a
@@ -802,7 +802,7 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   computer rivals have to handle them too).
 - Glimpsed, not seen: road lights going dark one by one at night as they come; sensor blips before contact.
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
-  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
+  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in the Polar Caps,
   violet-glowing in the Bloom.
 - **The new forms' art is in** (Nov 2026, ART_GUIDE Batch 17): drawn true size with their action loops, glow and light
   pools; the behaviour is the sim's. Open, for whoever builds it: a Sapper under the ground shows only within

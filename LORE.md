@@ -63,7 +63,7 @@ The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds n
 | Emberwood | Autumn forest | The leaves stay red-gold all year. |
 | The Long Grass | Savanna | Easy roads, nowhere to hide. |
 | Blackwater | Swamp | Soft ground that Pavers hate. |
-| Hoarfell | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
+| The Polar Caps | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
 | Cinderlands | Volcanic ash | Crust cracked open by the oldest strikes. |
 | The Bloom | Violet alien growth | Native life feeding on fallen Crystal (see Native life). |
 | The Hollow | Underground caverns | The Murmur's lair beneath the Bloom (see The Hollow). |
@@ -107,7 +107,7 @@ The Pathfinder carried more than relays. Its seed vaults held Earth: grasses, tr
 
 Sixty years on, Earth's animals thrive on a world made ready for people who never came. They are the only colonists that arrived.
 
-- **Where it took.** The green and temperate regions are mostly Earth's now: deer and songbirds in Greenreach, geese and foxes in Emberwood, herds on the Long Grass, herons in Blackwater, hares and owls in Hoarfell. Only the hardiest Earth life holds on in the Rust: lizards, a hawk.
+- **Where it took.** The green and temperate regions are mostly Earth's now: deer and songbirds in Greenreach, geese and foxes in Emberwood, herds on the Long Grass, herons in Blackwater, hares and owls in the Polar Caps. Only the hardiest Earth life holds on in the Rust: lizards, a hawk.
 - **Where it didn't.** The land the ringfall made strange keeps small native creatures of its own: ash beetles and ember moths in the Cinderlands, jellyfish-like floaters over the Bloom, blind crawlers and glow-worms in the Hollow. Argos has nothing.
 - **What the robots make of it.** Their orders file the animals as colony stock, held for the colonists, so no vanguard harms them on purpose. The war harms them anyway. Flocks lift at the first shot and herds scatter from convoys. Carrion birds circle every new wreck.
 - **The animals know first.** Before the Murmur come up, the birds stop singing and the herds move off. A colony that listens learns to read the quiet. At dawn they come back.
@@ -126,7 +126,7 @@ No robot has ever logged one alone. The Murmur is always plural, and it is the t
 - **They nest near Crystal seams and strike sites.** The violet Bloom is their ecosystem above ground. They have never been found on the moon.
 - **They grow the Bloom.** The Bloom is a root network the Murmur cultivate along their tunnels. Its veins carry the charge they drain back down to the nests: their version of roads and power lines. Wherever the Bloom spreads, the tunnels below are spreading too.
 - **No vanguard has orders about them.** The Accord assumed the planet was empty. Torches were first built to burn back the Bloom for farmland.
-- **Regional variants (art suggestion):** armored Rust variants, pale slow ones in Hoarfell, and Bloom variants that glow violet at night.
+- **Regional variants (art suggestion):** armored Rust variants, pale slow ones in the Polar Caps, and Bloom variants that glow violet at night.
 - **A thread for Colony mode:** the tunnels are laid out in patterns the Research Lab can't explain. Are the Murmur only animals? Never answer outright.
 
 ### Art brief: the Murmur
@@ -385,7 +385,7 @@ Decisions the owner made in chat (Nov 2026), kept here with the bible. Adopted n
 meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: the Steward, Turtle: the Warden, Raider:
 the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
 classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Sapper (the Delver until the owner renamed it, Nov 2026); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
-above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The polar region is Hoarfell and the swamp is Blackwater (renamed from the White and the Sump
+above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The polar region is the Polar Caps (the owner's name, Nov 18 2026; it was Hoarfell before, and the White before that) and the swamp is Blackwater (renamed from the White and the Sump
 by the owner, Nov 2026). The biomes take their region names everywhere, the new-game
 setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. The Hollow is in the game as a map
