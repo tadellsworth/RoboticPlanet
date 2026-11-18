@@ -2291,9 +2291,12 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js, biome-<b>.js:
-                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES, and
-                          murmur.js: the Murmur's art, for a game with them)
+tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
+                          about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
+                          (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when
+                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), tod-<time>.js (each time of
+                          day's re-lit set) and lore.js (the Lore guide's pictures). Copied without its folder, the page
+                          still runs, drawn in code.
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 

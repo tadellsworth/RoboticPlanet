@@ -318,11 +318,26 @@ function ensureMurmurArt() {
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
   R.artChange = onChange;
+  const entryOf = (key) => (typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
-  for (const key of Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a))) {
-    if (lazyBiomeOf(key) || murmurArtKey(key)) continue; // (see ensureBiomeArt and ensureMurmurArt)
-    loadArtKey(key, typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
+  const keys = Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a)).filter((key) => !lazyBiomeOf(key) && !murmurArtKey(key)); // (see ensureBiomeArt and ensureMurmurArt)
+  if (typeof window !== 'undefined' && window.ART_BUNDLE) {
+    // The single-file game: the art is in bundles beside the page (art-<group>.js, made by tools/build-single.js), loaded
+    // now; each key loads as its bundle arrives. A bundle that's missing (the page copied without its folder) leaves its
+    // art drawn in code, as a missing file would.
+    const left = new Set(keys);
+    for (const g of window.ART_BUNDLE) {
+      const go = () => { const d = window.ART_DATA && window.ART_DATA[g]; if (!d) return; for (const key of keys) if (left.has(key) && d[key]) { left.delete(key); loadArtKey(key, { ...entryOf(key), src: d[key] }); } delete window.ART_DATA[g]; };
+      if (window.ART_DATA && window.ART_DATA[g]) { go(); continue; }
+      const s = document.createElement('script');
+      s.src = `art-${g}.js`;
+      s.onload = go;
+      s.onerror = () => console.warn('Terrafall: no art bundle', g);
+      document.head.appendChild(s);
+    }
+    return;
   }
+  for (const key of keys) loadArtKey(key, entryOf(key));
 }
 
 /** Load an image, then ok(img). A download that fails is tried once more a moment later; then fail(), if given. */

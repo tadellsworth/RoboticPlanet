@@ -22,17 +22,28 @@ const lazyBiomeOf = (key) => LAZY_BIOMES.find((b) => key.endsWith('-' + b) || ke
 // The Murmur's art goes in a bundle of its own too (dist/murmur.js: the day art and each time of day's re-lit set,
 // loaded in a game with the Murmur: see ensureMurmurArt), its manifest entries likewise left without the data.
 const murmurArtKey = (key) => /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/.test(key); // (as js/render.js: MURMUR_ART)
-const inlined = {}, biomeData = {}, murmurData = { day: {}, morning: {}, evening: {}, night: {} };
+// Every other image goes in one of four bundles beside the page too (dist/art-<group>.js: buildings, bots, effects, and
+// the rest: tiles, resources, roads, rail, bridges, the canyon, pipes, markers and the Desert's biome art), all loaded as
+// the page starts (see loadArt), so the page holds the code alone and can't fill up again as art is added.
+const ART_GROUPS = ['buildings', 'bots', 'effects', 'other'];
+const artGroupOf = (src) => { const d = src.split('/')[0]; return ART_GROUPS.includes(d) ? d : 'other'; };
+const inlined = {}, biomeData = {}, murmurData = { day: {}, morning: {}, evening: {}, night: {} }, artData = {};
 for (const key of Object.keys(manifest)) {
   const entry = typeof manifest[key] === 'string' ? { src: manifest[key] } : { ...manifest[key] };
   const file = path.join(root, 'art', entry.src);
   if (!fs.existsSync(file)) { console.warn('missing art file, skipped:', entry.src); continue; }
   const data = `data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${fs.readFileSync(file).toString('base64')}`;
   const lb = lazyBiomeOf(key);
-  if (lb) { (biomeData[lb] = biomeData[lb] || {})[key] = data; entry.src = ''; } else if (murmurArtKey(key)) { murmurData.day[key] = data; entry.src = ''; } else entry.src = data;
+  if (lb) { (biomeData[lb] = biomeData[lb] || {})[key] = data; entry.src = ''; } else if (murmurArtKey(key)) { murmurData.day[key] = data; entry.src = ''; } else { (artData[artGroupOf(entry.src)] = artData[artGroupOf(entry.src)] || {})[key] = data; entry.src = ''; }
   inlined[key] = entry;
 }
-let biomeBytes = 0;
+let biomeBytes = 0, artBytes = 0;
+fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+for (const g of ART_GROUPS) {
+  const js = `window.ART_DATA = window.ART_DATA || {};\nwindow.ART_DATA[${JSON.stringify(g)}] = ${JSON.stringify(artData[g] || {})};\n`;
+  fs.writeFileSync(path.join(root, 'dist', `art-${g}.js`), js);
+  artBytes += js.length;
+}
 for (const b of LAZY_BIOMES) {
   const js = `window.BIOME_DATA = window.BIOME_DATA || {};\nwindow.BIOME_DATA[${JSON.stringify(b)}] = ${JSON.stringify(biomeData[b] || {})};\n`;
   fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
@@ -99,9 +110,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.MURMUR_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB)`);

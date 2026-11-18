@@ -163,7 +163,9 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   (a route of stops), an Airship you can fly by hand (a one-off drop of riders, like a Ferry's beach landing), vehicles
   aboard (a truck in the pod?). (Fuel and Crude both fly: the owner's call, Nov 17.)
 
-- **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
+- **Room to grow in the single-file game** (owner's to-do, Nov 17; done Nov 18: every picture now lives in a bundle beside the page,
+  `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,
+  so art can be added freely; kept for the record). `dist/terrafall.html` must stay under 16 MB (its
   host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
   Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
   (`LAZY_BIOMES`), freeing about 1 MB (15,409 KB). That buys a few batches of art and code, not the long run. The page
