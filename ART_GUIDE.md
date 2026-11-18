@@ -1486,12 +1486,11 @@ morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the
 
 **Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
 canes with mint plumes. `stalk` is full grown and `stalk-1`, `stalk-2`, `stalk-3` show it a quarter, half and three
-quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glow` are the plumes' light at night. An
-oil seep is now soaked dark ground (`oil-seep`, 256 px, one image every 2 × 2 tiles) drawn across all its tiles as one
-shape (`drawSeep`: a disc on each tile, shrinking as it's pumped, bridged to its oil neighbours), with the Pathfinder's
-old survey stake on each tile (`oil`, the pump spot, its lamp's light in `oil-glow`). Under a road or track only a
-stain shows. No stakes in the Hollow (the Pathfinder never mapped it: LORE.md): its seeps are the soaked ground alone. All 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they
-have no time-of-day versions; their light is in the night glow map (`resourceGlow`).
+quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glow` are the plumes' light at night. All
+192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they have no time-of-day
+versions; their light is in the night glow map (`resourceGlow`). (This batch's Oil look, soaked dark ground with the
+Pathfinder's survey stake on each tile, was replaced in Batch 20 by a puddle of crude made in code; the `oil`, `oil-glow`
+and `oil-seep` images are gone.)
 
 ### Batch 17: the Leech, the Spitter and the Sapper, and the Murmur's light (installed)
 
@@ -1574,6 +1573,41 @@ code: the fall (the aircraft's own sprite drawn by `drawPlane` into a canvas of 
 and pitches, flames licking back off it, pieces breaking away, its shadow and a thick smoke trail), the fireball, fires
 and scorch marks, the burnt ground under the wreck, its smouldering and embers, and what grows over it. An aircraft
 added later with no `wreck-<type>` art of its own is drawn as its outline, broken in two and charred, until it has one.
+
+### Batch 20: oil seeps as puddles of crude (installed; no images)
+
+The oil seeps are now puddles of crude, after the owner's reference picture: glossy, jet black, a soft wavy outline of
+lobes and pinched waists, a few droplets and small puddles beside it, pale sheen spots inside, a thin white light along
+the edges nearest the player. From the design sheet's three directions (`renderer/preview/oil_seep_sheet.py`: A fresh
+spill, B spattered seep, C still pool) the owner chose **B, the Spattered seep**: more lobes, tighter waists, a trail of
+droplets off one side, the sheen in smaller spots, a slightly thinner rim light, and as it is pumped its waists pinch
+off and it breaks into two or three pools. **There is no art for it**: the puddle is made in code from the seep's own
+tiles (`js/seep.js`), so any layout of tiles comes out right, and it is baked with the ground (the whole-map bake, the
+sharp chunks at 64 and 128 px a tile, and the night glow map), so it costs nothing per frame.
+
+How it is made (`seepGeometry`, a port of `renderer/terrain/oil_puddles.py` direction b): a disc on each oil tile (its
+size from how much crude is left, jittered a little), a lobe or two off each, bridges to its oil neighbours, and the
+droplets (placed once, just outside the full shape, most in a trail off one side); the union is softened and its edge
+pushed about by low-frequency noise (a domain warp, more lobes from another noise), and the 0.5 contour of that field
+(marching squares, 16 cells a tile) is the puddle, one `Path2D` in map pixels. It is shaded from its own shape when
+drawn (`drawSeepPuddle`): the shape filled white then filled black shifted up a hair leaves the white rim light along
+every edge that faces the player; the same trick the other way leaves a faint grey line on the edges that face away;
+soft pale spots toward its top are the sheen; a translucent dark fill of the full shape and a soft dark edge are the
+damp stain under and round it. At night the rim and sheen are left in the glow map as a faint cool gleam
+(`drawSeepGlow`), violet in the Hollow. **Motion:** the sheen spots breathe slowly (`drawSeepShimmer`: one 64 px blob
+sprite drawn over each spot with a slow sine, a handful of draws a seep; not on the Saver step, with reduced motion, or
+zoomed out past 18 px a tile). **Pumping:** a pump takes from the fullest tile it reaches, so for the picture the
+crude of the tiles it reaches is pooled and handed back farthest tile first (`seepFills`): the pump's own tile dries
+first, the wet area recedes from the pump and pinches into pools; the puddle is made again only when the seep's amount
+crosses one of ten steps, and only its tiles are repainted (`seepFrame`, `redrawRegion`). A dry seep leaves its stain.
+
+**The survey stakes are gone** (the owner, Nov 18): nothing stands on a seep now, on any map. `oil.webp`, `oil-glow.webp`
+and `oil-seep.webp` were removed from `art/resources/` and the manifest. **The Hollow's seeps** are the same puddle
+with a touch stronger rim light and sheen and a violet gleam (`SEEP_LOOK.hollow`); the Cinderlands' and Blackwater's
+(black on dark ash and mud) get a stronger rim and sheen and a paler stain (`SEEP_LOOK.volcanic`, `.swamp`). Droplets
+lie only on open ground on the seep's own level (never water, rock, a road or track, a building or another resource);
+under a road or track the puddle stops at the kerb and the road keeps its dark stain. Everything is render state (`SEEP`),
+read from `S` and never written to it; the simulation never reads it.
 
 ### Not swappable yet (ask Claude Code if you want these)
 

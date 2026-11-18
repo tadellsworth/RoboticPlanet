@@ -40,6 +40,29 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   "the ground under it is hollow". Collapsing the exits, wrecking the nest (its network dies back) or a Seismic Lance (see
   Megastructures) shores it up; the Sapper (the Murmur form that digs) would lead it. It makes ignoring the Murmur
   costly in long games, as the tunnel network keeps spreading under the old battlefields (LORE.md).
+- **Total war scars the land** (the owner, Nov 18 2026: for later; "I really like the concepts of these battles
+  affecting the environment"). The picture: a long war slowly turns a green, forested map into a World War 1
+  battlefield. Animals in a blast's radius die (the fauna is scenery today, js/wildlife.js: they scatter from
+  fighting but nothing kills them); trees and living plants burn and stay burnt (a charred trunk, a blackened stump,
+  never growing back, as Napalm already scorches fertile soil for good: `scorch`, "Napalm and scorched earth" below);
+  grass and living ground burn to bare earth and ash the same way; bomb, shell, Missile and nuclear craters remain
+  (today's craters are decals that fade: `addDecal('scorch')`, DECAL_MAX, `S.decals` filtered by life; they would
+  become lasting ground marks like the aircraft wrecks, `S.wrecks`, with a cap and dropped oldest first, in `S` so saves
+  and every lockstep client agree). Over a protracted war the no-man's-land between two colonies accumulates: craters
+  overlapping, burnt groves, dead ground, the remains and wrecks already there, carrion birds; the green regions
+  (Greenreach, Hoarfell's firs, the Autumn woods, the Bloom) show it most, the Rust and Argos least. Design points to
+  settle with the owner: what heals (nothing? grass in a long time? Bio Farms and the Grove Planter can re-green a
+  patch?), whether burnt ground hurts play (no Bio Farms on it, Harvesters find nothing: yes, that is the point) or is
+  only a look, how craters affect movement (slow? none, like wrecks?), what the biggest weapons do (a nuke leaves a
+  glassed crater field; the Lance of Corvane a trench), and the cost cap so a 60-minute war stays fast. LORE.md's
+  tone fits (the garden the Pathfinder planted, harmed by the war; "the war feeds them": the Murmur get stronger).
+- **Fauna: better looks and movement** (the owner, Nov 18 2026: for later; the fauna models were added by the other chat
+  with basic tools). Review every animal in js/wildlife.js (deer, songbirds, geese, foxes, herds, herons, hares, owls,
+  lizards, hawks, vultures, beetles, ember moths, floaters, blind crawlers, glow-worms, the carrion birds) and rework
+  them with the renderer (Claude Design): more detailed models at the game's sizes, day and night, and better motion
+  (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
+  run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
+  the dead are drawn too.
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
   Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
   `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
@@ -178,14 +201,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
   from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
   (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
-- **A new look for the oil seeps** (owner's to-do, Nov 17: "I don't like the current one"). The owner's two reference
-  pictures show a puddle of crude: glossy, jet black, with a soft, wavy, irregular outline (lobes and pinched waists,
-  no straight edges), a few separate small round droplets and smaller puddles scattered beside it, faint dark-grey
-  sheen patches inside, and thin bright white highlights along the lower (front) rims, as if lit from above and
-  behind. Today's seep is a texture drawn across all its tiles as one shape (`drawSeep` in `js/render.js`, the
-  `oil-seep` art) with its night glow in `resourceGlow`; the Hollow's seeps use the same art. A redo would make the
-  puddle (and its droplets) the art, keep it reading as one shape across a seep's tiles, darken as it is pumped dry,
-  and keep a faint gleam at night. Render a sample sheet for the owner to pick from first.
+- **A new look for the oil seeps (done Nov 18 2026).** The owner's reference pictures showed a puddle of crude: glossy,
+  jet black, a soft wavy outline of lobes and pinched waists, a few droplets beside it, pale sheen patches, a thin white
+  light along the lower rim. From a design sheet of three directions (A fresh spill, B spattered seep, C still pool;
+  `renderer/preview/oil_seep_sheet.py`) the owner chose **B, the Spattered seep**, and decided: a slow shimmer in the
+  sheen for motion (render-only, nothing on Saver); **no survey stakes at all** (the puddle alone marks the oil; the
+  stake art is gone); the Hollow's seeps a touch stronger in rim and sheen with a violet gleam; droplets may lie on the
+  open ground beside the seep; pumping dry recedes from the pump outward (a pump's own tile first); under a road the
+  puddle stops at the kerb and the road keeps its stain; one look on every biome, tuned where black on dark ground needs
+  it. Built in code, not art: `js/seep.js` (ART_GUIDE Batch 20). Open: a bubble that swells and pops now and then was
+  the other motion idea; it can be added later if the shimmer is too quiet.
 - **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
   doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
   and text" in the November review below.
@@ -270,7 +295,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   rainbow sheen). From a design sheet of three directions each, the owner picked **Reedcane** for Fiber (jointed
   sage-teal canes with mint plumes, an image for each growth stage, the plumes glowing at night) and the **Pathfinder
   survey stake** for Oil (the seep drawn as soaked dark ground across all its tiles, an old survey stake on each pump
-  spot, its lamp lit at night). ART_GUIDE Batch 16.
+  spot, its lamp lit at night). ART_GUIDE Batch 16. (Nov 18: the oil look was redone again as a puddle of crude and the
+  survey stakes retired: see "A new look for the oil seeps" above and ART_GUIDE Batch 20.)
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:

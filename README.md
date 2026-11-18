@@ -2078,9 +2078,10 @@ posts along the top with live arcs crackling over it now and then, and steel bla
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
 Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
-growth stage, `stalkKey`) and the oil seep (its texture drawn across all its tiles as one shape, `drawSeep`, with the
-Pathfinder's survey stake on each, none in the Hollow, which it never mapped; their light at night in the night glow map,
-`resourceGlow`) (ART_GUIDE Batch 16). The crash sites aircraft leave when they're shot down are rendered too: the broken,
+growth stage, `stalkKey`; their light at night in the night glow map, `resourceGlow`) (ART_GUIDE Batch 16). An oil seep
+has no art at all: it is a puddle of crude made in code from its tiles (`js/seep.js`: one glossy black shape across the
+seep with a white rim light, sheen and droplets, baked with the ground and gleaming faintly at night; it recedes from a
+pump as it is pumped and breaks into pools) (ART_GUIDE Batch 20). The crash sites aircraft leave when they're shot down are rendered too: the broken,
 burnt airframes of the Cargo Plane, the Vulcan Bomber and the Airship (`wreck-cargoplane`, `wreck-bomber`,
 `wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 19).
 Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
