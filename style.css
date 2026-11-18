@@ -1949,3 +1949,10 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
   .w-go { padding: 6px 12px; }
   .w-go #w-start { padding: 10px 16px; }
 }
+
+/* Observer setup: on a phone the Challenge section folds away under More options (syncWatchMore). */
+#screen-watch .w-more { display: none; width: 100%; min-height: 44px; }
+@media (max-width: 699px) {
+  #screen-watch .w-more { display: block; }
+  #screen-watch #w-sec-challenge:not(.open) { display: none; }
+}

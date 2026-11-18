@@ -1187,6 +1187,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to the next, as in a game), to look at only: while watching, style.css hides every button, field and switch in a
   panel (`body.watching #sheet-body`), no key presses one (`sheetKeyButton` finds none showing), and the owner line names
   the colony and its doctrine (`ownerLabel`); a tap turns Follow off, so what was tapped stays in view.
+  On a phone (under 700 px wide) the Challenge section folds away under **More options** (`w-more`, `syncWatchMore`: it
+  says how many challenges are on); planetary events default to off there (the owner's call).
 - **Scout reports** (`js/scout.js`): in your own games (not Colony, not Observer), `scoutTick` (from `uiTick`, once a
   second by the clock) reads each enemy computer rival's plans with `rivalPlans` (the Observer's reading, above) and
   `scoutNews` turns them into news, each with a key: a storm of your (or your ally's) Command Base forming up (and

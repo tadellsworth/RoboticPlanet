@@ -39,6 +39,14 @@ const WATCH = { setup: null };
 
 /* ------------------------------------------------------------------ the setup screen */
 
+/** The More options button's words (a phone's fold over the Challenge section): open or shut, and how many are on. */
+function syncWatchMore() {
+  const b = $('w-more'), w = WATCH.setup;
+  if (!b || !w) return;
+  const n = (w.mods || []).length, open = $('w-sec-challenge').classList.contains('open');
+  b.textContent = `${open ? 'Fewer options ▾' : 'More options ▸'}${n ? ` (${n} challenge${n > 1 ? 's' : ''} on)` : ''}`;
+}
+
 /** The challenge modifiers on offer here: not No turrets, which only stops people building them (MODS). */
 const WATCH_MODS = MOD_ORDER.filter((k) => k !== 'noturret');
 /** The computer's level, for every colony (DIFFICULTY; Custom Game's DIFF_INFO speaks of one rival against you). */
@@ -158,6 +166,8 @@ function buildWatch() {
     Object.assign(s, { seed: p.seed, shape: p.shape, size: p.size, rough: p.rough, rich: p.rich, biome: p.biome || 0, n: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
   });
   WATCH.hover = {};
+  // On a phone the Challenge section folds away under More options (it says how many are on).
+  $('w-more').onclick = () => { const s = $('w-sec-challenge'), open = !s.classList.contains('open'); s.classList.toggle('open', open); $('w-more').setAttribute('aria-expanded', open ? 'true' : 'false'); syncWatchMore(); sfx('click'); };
   for (const sec of ['w-sec-match', 'w-sec-planet', 'w-sec-rules', 'w-sec-challenge']) hoverInfo($(sec), (k) => { WATCH.hover[sec] = k; syncWatchInfo(); });
 }
 
@@ -181,6 +191,7 @@ function closeWatch(fromBack) {
 
 /** The setup screen up to date with WATCH.setup. */
 function syncWatch() {
+  syncWatchMore();
   const w = WATCH.setup, n = watchCount(w), teams = watchTeams(w);
   if (typeof ensureBiomeArt === 'function' && !w.biomeRnd) ensureBiomeArt(BIOME_ORDER[w.biome]); // (the chosen biome's swatch)
   const mark = (b, on) => { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); };
