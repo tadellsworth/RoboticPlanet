@@ -611,11 +611,40 @@ These wait for a later expansion:
     20.8, 17.4, 17.1, 21.5; Small 21 to 23, none, 20.1, 18.2 → the same; Large 31 and 32, 46.3, 51.8 → the same; the
     same winners wherever there was one. On 5b04c5e with it, seed 11 ends at 39.5. Standard (map types 0, 2 and 4,
     seeds 21 to 23, seven games): the same, 14.8 to 45.4 minutes, the same winners (one game lost one robot fewer).
-    Still open: Small seed 21 runs to 75 before and after, for another reason: from 19 minutes the second seat has two
-    to three times the first's army but storms its walled base with 12 to 21 of its 35 (the rest kept in its 20 and
-    more forts; taking the base needs 20, later 34) and is beaten every time. And seed 12 showed a colony with no Oil
+    Still open: seed 12 showed a colony with no Oil
     Pump for ten minutes while 111 Crude lay on its own land (its pumps out in the middle wrecked, its sites full: the
     open item above).
+  - **The rival gathers its whole army for a storm (fixed Nov 18).** Small seed 21 (computer only, Normal, the Murmur
+    Active) ran to 75 minutes with no winner before and after the nests fix: from 19 minutes the second seat had two to
+    three times the first's army (35 against 13) but stormed its base with 12 to 14 and marched on its Outposts with
+    18 to 21, beaten every time. It wasn't the forts' home guards (its Outposts kept none, its Keep two, its Bunkers two
+    each): traced, at 19 minutes 8 of its 35 warbots were in a garrison and 26 out, 9 hauling crates; at 25 to 31
+    minutes 13 to 18 of 27 to 29 were hauling, and it could gather 1 or 2 for a base that took 24 to 28. An idle
+    warbot picks up crates within 6 tiles and, once it has carried one home, goes back for more within 50 (`doLoot`);
+    the cleared nests' hoards never rot (`LOOT_KEEP`), and a march counts only garrisoned warbots (`aiSpare`), so the
+    rival "massed" (`P.massFor`) while half its army shuttled crates, and went with what was left. Later (46 minutes)
+    the base took 34 behind turrets and mortar pits, and the storm stopped at 30 whatever the base took (`aiMarch`):
+    it massed for four minutes, gave up, marched on the cheapest Outpost with 18 to 21, lost them, and again. Now a
+    rival with a decisive lead (the storm's: half as many warbots again as the enemy and four more) massing for a march
+    or a storm it has the armed warbots for (`P.massFor` with `lead`), or with a storm under way, has a warbot that
+    brought a crate home stay there instead of going back for more (`lootHeld`), so the march can draw on it; and the
+    storm is as big as the base takes and two more when that is over 30 and it can gather them. Two wider cuts were
+    measured and dropped: holding every crate run of any massing colony (nest strikes too) starved two colonies out of
+    a Standard game, and holding a massing colony with the army but no lead ran three of four Hollow Large games to
+    the cap that had ended (a rival in an even war masses for some Outpost from 11 minutes on, so that hold never
+    lifted, and on the Hollow the nests' hoards are the Alloy it lives on; the cap change alone replayed those games
+    unchanged). Measured (75 minutes at most, the same winner unless said), before → after: the Hollow, Small seeds
+    21 to 25, none, 20.1, 18.2, 55.7, 31.2 → 22.7 (the second seat wins), 17.1, 18.2, 57.6, none; Medium 11 to 16,
+    28.2, 48.6, 20.8, 17.4, 17.1, 21.5 → 27.6, 40.9, 23.5, 18.3, 17.6, 21.5; Large 31 to 34, 46.3, 51.8, 30.5, 26.0
+    → 44.9, 49.9, 33.2, 25.8. Standard (map types 0, 2 and 4, seeds 21 to 25, 13 games): 14.7 to 37 minutes, within
+    a few minutes of before, one winner changed (type 0 seed 21: 45.4, first seat → 37.0, second). Still open: Small
+    seed 25 ran to the cap after (the second seat won at 31.2 before). The games are the same to 20 minutes and part
+    there by chance; then the second seat, with 38 against 8 to 11, storms the base four times under the crushed-rival
+    rule (twice the enemy's army and two more, however the guns count: 24, 20, 17 and 21 warbots) against a base that
+    takes 34, 37 and 41 (two or three turrets, a Keep, a Bunker, three Outposts and seven warbots within 9 tiles),
+    loses all 82, and has no Fuel or Chips left to make more. That rule throws a crushing army at guns that beat it
+    whenever the enemy's army is small and its guns many; a storm beaten there once could wait for what the base takes.
+    Test: `lh/hollow-storm-test.js`.
   - Three or four players: not built (the layout is made for two, turned half round).
   - Decided (owner, Nov 17): Off stays allowed on the Hollow, with the menu's warning.
   - Decided (Nov 17): Colony on the Hollow caps the exits open at once (`murmurExitCap`) at what a Standard Colony map
