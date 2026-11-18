@@ -28,9 +28,9 @@
  *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
- *   Resources: stalk boulder ore crystal crop oil uranium   (crop is drawn smaller while it ripens; stalk has an image
- *              for each growth stage, stalk-1 … stalk-3, and oil a seep texture, oil-seep, drawn across a seep's tiles;
- *              stalk-glow, stalk-3-glow and oil-glow are their light at night)
+ *   Resources: stalk boulder ore crystal crop uranium   (crop is drawn smaller while it ripens; stalk has an image
+ *              for each growth stage, stalk-1 … stalk-3; stalk-glow and stalk-3-glow are its light at night. An oil
+ *              seep has no art: it is a puddle of crude made in code from its tiles, js/seep.js)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles;
  *              512x512 keeps them sharp when zoomed in)
  *   Biomes:    ground-jungle water-jungle rock-jungle cliff-jungle, and the same with -polar
@@ -127,10 +127,10 @@ const ART_MANIFEST = {
   ...driveSet('bulwark'), ...driveSet('torch'),
   ground: 'tiles/ground.webp',
   // Fiber's Stalks (Reedcane, renderer/b/resources.js): full grown, then a quarter, half and three-quarters grown as
-  // it comes back; the plumes' light at night. Oil: the Pathfinder's survey stake on each seep tile, and the seep itself.
+  // it comes back; the plumes' light at night. (Oil has no art: a seep is a puddle of crude made in code from its tiles,
+  // js/seep.js.)
   stalk: 'resources/stalk.webp', 'stalk-1': 'resources/stalk-1.webp', 'stalk-2': 'resources/stalk-2.webp', 'stalk-3': 'resources/stalk-3.webp',
   'stalk-glow': 'resources/stalk-glow.webp', 'stalk-3-glow': 'resources/stalk-3-glow.webp',
-  oil: 'resources/oil.webp', 'oil-glow': 'resources/oil-glow.webp', 'oil-seep': 'resources/oil-seep.webp',
   boulder: 'resources/boulder.webp',
   ore: 'resources/ore.webp',
   crystal: 'resources/crystal.webp',
@@ -357,6 +357,6 @@ const ART_MANIFEST = {
   'wreck-airship': { src: 'bots/wreck-airship.webp', scale: 3.4 },
 
   // Still to make (placeholders are drawn until these exist):
-  //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
+  //   resources: crop, uranium          ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };
