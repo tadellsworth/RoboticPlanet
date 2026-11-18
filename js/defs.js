@@ -1324,7 +1324,7 @@ const EVENTS = {
   dust:   { name: 'Dust storm',    color: '#d9a86a', dur: [60, 90], warn: true,  desc: 'Bots move at two-thirds speed and Missiles are grounded until it blows over.' },
   meteor: { name: 'Ringfall',      color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Pieces of the Ring crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
   flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Fuel Stations fuelled.' },
-  trader: { name: 'The Wren',      html: 'The <i>Wren</i>', color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'The Accord supply ship swaps spare goods for the Ore, Crystal, Stone or Crude your land is running out of.' },
+  trader: { name: 'The Wren',      html: 'The <i>Wren</i>', color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'The Accord supply ship takes spare raw goods (Stone, Fiber, Ore, Crystal or Crude) for the finished goods you\'re shortest of: Cement, Alloy, Chips, Fuel or Ammo.' },
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
@@ -1334,9 +1334,9 @@ const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
 const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a challenge modifier, MODS.dust): never
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
 /**
- * The trader brings the raw goods dug from deposits that run out (TRADE_GET: the one a colony has
- * least of, in stock and left in the ground on its land, against TRADE_LEFT), and takes a good it
- * has well over TRADE_KEEP of (TRADE_GIVE: never Chips, Ammo or Missiles). It pays TRADE_BONUS times
+ * The trader (the Wren) takes raw goods only (WREN_TAKES: the one a colony has well over TRADE_KEEP of) and brings
+ * finished goods only (WREN_BRINGS: the one it has least of against TRADE_KEEP; Ammo only with a war on). (TRADE_GET,
+ * TRADE_LEFT and TRADE_GIVE were its old rule, the other way round, and the rival's trading still reads them.) It pays TRADE_BONUS times
  * the worth (TRADE_VALUE) of what it takes.
  */
 const TRADE_GET = { ore: R_ORE, crystal: R_CRYSTAL, stone: R_BOULDER, crude: R_OIL };
@@ -1345,6 +1345,7 @@ const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal
 const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.5, fuel: 1.5, alloy: 2.2, ammo: 1.2, chip: 4 }; // Alloy = an Ore and a Fiber, Cement = half a Stone, Ammo = a third of an Alloy and a Cement and the work, a Chip = a Crystal and an Alloy
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10, ammo: 10, chip: 4 };
 const TRADE_BONUS = 1.3;
+const WREN_TAKES = ['stone', 'fiber', 'ore', 'crystal', 'crude'], WREN_BRINGS = ['cement', 'alloy', 'chip', 'fuel', 'ammo'];
 /**
  * The Trade Terminal (BDEFS.terminal) runs one standing trade route, "send this good, bring back that one", set on its
  * panel and kept until it's changed. The Trade Post's ledger takes one delivery from each Terminal every `every`

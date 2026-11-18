@@ -9302,34 +9302,27 @@ function meteorImpact(E, h) {
 }
 
 /**
- * The trader's offer to player p (see TRADE_GET): the raw good p is closest to running out of, for
- * some of a good p has plenty of. null if p has nothing much to spare.
+ * The trader's offer to player p: it takes raw goods only (WREN_TAKES: the one p has most over what it likes to keep,
+ * at least half again) and brings finished goods only (WREN_BRINGS: the one p has least of against what it likes to
+ * keep), at TRADE_BONUS times the worth. null if p has no raw good much to spare. (It used to bring the raw good p's
+ * land ran shortest of, for any good; the owner turned it round, Nov 2026.)
  */
 function traderOffer(p) {
   const have = spendable(p);
-  // What's left of each raw good: in stock, and in the ground on p's land.
-  const left = {};
-  for (const g in TRADE_GET) left[g] = have[g] || 0;
-  for (let t = 0; t < S.W * S.H; t++) {
-    if (S.owner[t] !== p || !S.res[t]) continue;
-    for (const g in TRADE_GET) if (S.res[t] === TRADE_GET[g]) left[g] += S.amt[t];
-  }
   let get = null, lv = Infinity;
-  for (const g in TRADE_GET) {
-    if (g === 'crude' && !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'pump')) continue; // no use for it yet
-    const v = left[g] / TRADE_LEFT[g];
+  for (const g of WREN_BRINGS) {
+    if (g === 'ammo' && !warOn()) continue; // (no use for it without a war)
+    const v = (have[g] || 0) / TRADE_KEEP[g];
     if (v < lv) { lv = v; get = g; }
   }
-  // What it asks for: the good furthest over what the colony likes to keep (at least half again).
   let give = null, gv = 1.5;
-  for (const g of TRADE_GIVE) {
-    if (g === get || (TRADE_MADE_FROM[g] || []).includes(get)) continue; // (never a made good for its own ingredients: no Cement for Stone)
+  for (const g of WREN_TAKES) {
     const v = (have[g] || 0) / TRADE_KEEP[g];
     if ((have[g] || 0) >= 8 && v > gv) { gv = v; give = g; }
   }
   if (!give || !get) return null;
   const n = clamp(Math.round((have[give] - TRADE_KEEP[give]) * 0.6), 6, 40);
-  const m = Math.max(3, Math.round((n * TRADE_VALUE[give] * TRADE_BONUS) / TRADE_VALUE[get]));
+  const m = Math.max(2, Math.round((n * TRADE_VALUE[give] * TRADE_BONUS) / TRADE_VALUE[get]));
   return { give, n, get, m, short: lv < 1, done: false };
 }
 
