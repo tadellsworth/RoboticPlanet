@@ -540,7 +540,10 @@ spinning-blade overlay is drawn on (`AIRSHIP_ART` in `js/render.js`).
 
 A design sheet for the Maglev line (IDEAS.md, "High-speed transit": an elevated guideway on pylons between two Maglev
 Terminals, pods carrying goods at several times a Freight Train's speed), in three directions for the owner to choose
-from; not installed. `b/maglev.js` takes `v=a|b|c` (A the Accord Phase 2 civic line in pale concrete, B the robots'
+from. **Direction A is installed** (Nov 2026, with B's hazard chevrons on its pylon caps): `tools/render_maglev_game.sh`
+renders its Terminal, pylon, fallen pylon, pods and guideway tile for both teams at every time of day, and
+`tools/install_maglev.py` writes them into the game's art (ART_GUIDE.md, Batch 21); the game draws the line as the
+mock-up below does (`drawMaglevs` in `js/render.js`). `b/maglev.js` takes `v=a|b|c` (A the Accord Phase 2 civic line in pale concrete, B the robots'
 industrial freight line in steel lattice, C a half-height monorail on squat piers) and `c=terminal|pylon|pod|deck|scene`
 (the Terminal on its pad, marks `head`/`dock`; a pylon with no pad, marks `head`/`foot`, `state=cut` for one shot down;
 a pod straight down in a 10-unit frame, `load=0` empty; one tile of guideway straight down, running east; and a wide

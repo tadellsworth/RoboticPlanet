@@ -217,6 +217,15 @@ const ART_MANIFEST = {
   // Mast (renderer/b/mast.js v=c, the armoured pylon: one tile, its mooring cup at [0.5, 0.08]).
   'airship@0': 'bots/airship@0.webp', 'airship@1': 'bots/airship@1.webp', 'airship-shadow': 'bots/airship-shadow.webp',
   'mast@0': B3D('buildings/mast@0.webp'), 'mast@1': B3D('buildings/mast@1.webp'),
+  // The Maglev line (renderer/b/maglev.js v=a, Accord Phase 2, installed by tools/install_maglev.py): the Terminal (as big
+  // as the Rail Station, its dock MAGLEV.head tiles up the screen), the pylon (no pad, its head MAGLEV.deck tiles up) and
+  // the pylon shot down, the pod loaded and empty (top-down, facing +x, one tile) and one tile of guideway running east,
+  // which drawMaglevs repeats along a line.
+  'magterm@0': B3D('buildings/magterm@0.webp', 1.6), 'magterm@1': B3D('buildings/magterm@1.webp', 1.6),
+  'magpylon@0': B3D('buildings/magpylon@0.webp'), 'magpylon@1': B3D('buildings/magpylon@1.webp'),
+  'magpylon-cut@0': B3D('buildings/magpylon-cut@0.webp'), 'magpylon-cut@1': B3D('buildings/magpylon-cut@1.webp'),
+  'magpod@0': 'bots/magpod@0.webp', 'magpod@1': 'bots/magpod@1.webp', 'magpod-empty@0': 'bots/magpod-empty@0.webp', 'magpod-empty@1': 'bots/magpod-empty@1.webp',
+  'magdeck@0': 'tiles/magdeck@0.webp', 'magdeck@1': 'tiles/magdeck@1.webp',
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

@@ -2268,3 +2268,51 @@ art/tod/night/bots/airship@1.png	main	airship::#ff5a6e:airship@1:v=c&tod=night	c
 art/tod/night/buildings/mast@0.png	main	mast::#38d4ff:mast@0:v=c&tod=night	compose.py
 art/tod/night/buildings/mast@1.png	main	mast::#ff5a6e:mast@1:v=c&tod=night	compose.py
 art/bots/airship-shadow.png	main	airship::#38d4ff:airship@0:v=c	none | tools/install_airship.py {art}
+art/buildings/magterm@0.png	main	maglev::#38d4ff:magterm@0:v=a	compose.py
+art/buildings/magpylon@0.png	main	maglev::#38d4ff:magpylon@0:v=a&c=pylon	compose.py
+art/buildings/magpylon-cut@0.png	main	maglev::#38d4ff:magpylon-cut@0:v=a&c=pylon&state=cut	compose.py
+art/bots/magpod@0.png	main	maglev::#38d4ff:magpod@0:v=a&c=pod	compose_any.py --b1 3.5 --b2 11
+art/bots/magpod-empty@0.png	main	maglev::#38d4ff:magpod-empty@0:v=a&c=pod&load=0	compose_any.py --b1 3.5 --b2 11
+art/tiles/magdeck@0.png	main	maglev::#38d4ff:magdeck@0:v=a&c=deck	compose_any.py --b1 3.5 --b2 11
+art/buildings/magterm@1.png	main	maglev::#ff5a6e:magterm@1:v=a	compose.py
+art/buildings/magpylon@1.png	main	maglev::#ff5a6e:magpylon@1:v=a&c=pylon	compose.py
+art/buildings/magpylon-cut@1.png	main	maglev::#ff5a6e:magpylon-cut@1:v=a&c=pylon&state=cut	compose.py
+art/bots/magpod@1.png	main	maglev::#ff5a6e:magpod@1:v=a&c=pod	compose_any.py --b1 3.5 --b2 11
+art/bots/magpod-empty@1.png	main	maglev::#ff5a6e:magpod-empty@1:v=a&c=pod&load=0	compose_any.py --b1 3.5 --b2 11
+art/tiles/magdeck@1.png	main	maglev::#ff5a6e:magdeck@1:v=a&c=deck	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/buildings/magterm@0.png	main	maglev::#38d4ff:magterm@0:v=a&tod=morning	compose.py
+art/tod/morning/buildings/magpylon@0.png	main	maglev::#38d4ff:magpylon@0:v=a&c=pylon&tod=morning	compose.py
+art/tod/morning/buildings/magpylon-cut@0.png	main	maglev::#38d4ff:magpylon-cut@0:v=a&c=pylon&state=cut&tod=morning	compose.py
+art/tod/morning/bots/magpod@0.png	main	maglev::#38d4ff:magpod@0:v=a&c=pod&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/bots/magpod-empty@0.png	main	maglev::#38d4ff:magpod-empty@0:v=a&c=pod&load=0&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/tiles/magdeck@0.png	main	maglev::#38d4ff:magdeck@0:v=a&c=deck&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/buildings/magterm@1.png	main	maglev::#ff5a6e:magterm@1:v=a&tod=morning	compose.py
+art/tod/morning/buildings/magpylon@1.png	main	maglev::#ff5a6e:magpylon@1:v=a&c=pylon&tod=morning	compose.py
+art/tod/morning/buildings/magpylon-cut@1.png	main	maglev::#ff5a6e:magpylon-cut@1:v=a&c=pylon&state=cut&tod=morning	compose.py
+art/tod/morning/bots/magpod@1.png	main	maglev::#ff5a6e:magpod@1:v=a&c=pod&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/bots/magpod-empty@1.png	main	maglev::#ff5a6e:magpod-empty@1:v=a&c=pod&load=0&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/morning/tiles/magdeck@1.png	main	maglev::#ff5a6e:magdeck@1:v=a&c=deck&tod=morning	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/buildings/magterm@0.png	main	maglev::#38d4ff:magterm@0:v=a&tod=evening	compose.py
+art/tod/evening/buildings/magpylon@0.png	main	maglev::#38d4ff:magpylon@0:v=a&c=pylon&tod=evening	compose.py
+art/tod/evening/buildings/magpylon-cut@0.png	main	maglev::#38d4ff:magpylon-cut@0:v=a&c=pylon&state=cut&tod=evening	compose.py
+art/tod/evening/bots/magpod@0.png	main	maglev::#38d4ff:magpod@0:v=a&c=pod&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/bots/magpod-empty@0.png	main	maglev::#38d4ff:magpod-empty@0:v=a&c=pod&load=0&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/tiles/magdeck@0.png	main	maglev::#38d4ff:magdeck@0:v=a&c=deck&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/buildings/magterm@1.png	main	maglev::#ff5a6e:magterm@1:v=a&tod=evening	compose.py
+art/tod/evening/buildings/magpylon@1.png	main	maglev::#ff5a6e:magpylon@1:v=a&c=pylon&tod=evening	compose.py
+art/tod/evening/buildings/magpylon-cut@1.png	main	maglev::#ff5a6e:magpylon-cut@1:v=a&c=pylon&state=cut&tod=evening	compose.py
+art/tod/evening/bots/magpod@1.png	main	maglev::#ff5a6e:magpod@1:v=a&c=pod&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/bots/magpod-empty@1.png	main	maglev::#ff5a6e:magpod-empty@1:v=a&c=pod&load=0&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/evening/tiles/magdeck@1.png	main	maglev::#ff5a6e:magdeck@1:v=a&c=deck&tod=evening	compose_any.py --b1 3.5 --b2 11
+art/tod/night/buildings/magterm@0.png	main	maglev::#38d4ff:magterm@0:v=a&tod=night	compose.py
+art/tod/night/buildings/magpylon@0.png	main	maglev::#38d4ff:magpylon@0:v=a&c=pylon&tod=night	compose.py
+art/tod/night/buildings/magpylon-cut@0.png	main	maglev::#38d4ff:magpylon-cut@0:v=a&c=pylon&state=cut&tod=night	compose.py
+art/tod/night/bots/magpod@0.png	main	maglev::#38d4ff:magpod@0:v=a&c=pod&tod=night	compose_any.py --b1 3.5 --b2 11
+art/tod/night/bots/magpod-empty@0.png	main	maglev::#38d4ff:magpod-empty@0:v=a&c=pod&load=0&tod=night	compose_any.py --b1 3.5 --b2 11
+art/tod/night/tiles/magdeck@0.png	main	maglev::#38d4ff:magdeck@0:v=a&c=deck&tod=night	compose_any.py --b1 3.5 --b2 11
+art/tod/night/buildings/magterm@1.png	main	maglev::#ff5a6e:magterm@1:v=a&tod=night	compose.py
+art/tod/night/buildings/magpylon@1.png	main	maglev::#ff5a6e:magpylon@1:v=a&c=pylon&tod=night	compose.py
+art/tod/night/buildings/magpylon-cut@1.png	main	maglev::#ff5a6e:magpylon-cut@1:v=a&c=pylon&state=cut&tod=night	compose.py
+art/tod/night/bots/magpod@1.png	main	maglev::#ff5a6e:magpod@1:v=a&c=pod&tod=night	compose_any.py --b1 3.5 --b2 11
+art/tod/night/bots/magpod-empty@1.png	main	maglev::#ff5a6e:magpod-empty@1:v=a&c=pod&load=0&tod=night	compose_any.py --b1 3.5 --b2 11
+art/tod/night/tiles/magdeck@1.png	main	maglev::#ff5a6e:magdeck@1:v=a&c=deck&tod=night	compose_any.py --b1 3.5 --b2 11

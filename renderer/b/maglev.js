@@ -1,6 +1,7 @@
 // The Maglev line (IDEAS.md "High-speed transit"): an elevated guideway on pylons, run straight across anything between
 // two Maglev Terminals, with pods carrying goods at several times a Freight Train's speed. A design study in three
-// directions for the owner to choose from; not installed. `v=` picks the direction, `c=` the piece:
+// directions for the owner to choose from. Direction A is installed in the game (tools/render_maglev_game.sh, then
+// tools/install_maglev.py), with B's hazard chevrons on its pylon caps. `v=` picks the direction, `c=` the piece:
 //   v=a  Accord Phase 2: the civic transit plan built at last. Pale weathered concrete and gunmetal: slender tapering
 //        pylons with a hammerhead cap, a slim box-girder guideway with a team-colour power rail along each edge, a
 //        round glass-sided terminal hall with a lit platform ring on its roof (empty shelters and benches at its
@@ -121,6 +122,7 @@ function pylonA(L, P, T, x, z, cut) {
     cyl(0.85, H, T.white, x, 0.35, z, { seg: 24, rTop: 0.6, dirtH: 2.4 });                             // the tapering column
     hoop(0.63, 0.04, T.gunD, x, Y - 1.4, z);
     box(D.w + 0.6, 0.5, 1.1, T.gunD, x, Y - 0.7, z, { dirt: 0 });                                       // the hammerhead cap
+    for (const s of [-1, 1]) box(0.3, 0.52, 1.12, M.hazard, x + s * ((D.w + 0.6) / 2 - 0.15), Y - 0.7, z, { dirt: 0 });   // B's hazard chevrons on the cap's ends (the owner's mix, Nov 2026)
     box(D.w + 0.3, 0.2, 0.9, T.steel, x, Y - 0.2, z, { dirt: 0 });                                      // the deck saddle
     beam([x, 1.0, z + 0.9], [x, Y - 0.95, z + 0.66], 0.07, 0.07, P.glow, { cast: false });              // a team strip up the front face
     box(0.4, 0.5, 0.06, T.dark, x, 0.45, z + 0.84, { dirt: 0 });                                        // an access hatch

@@ -6,3 +6,5 @@ const TOD_KEYS = ["tradepost", "tunnel-exit", "lander@0", "lander@1", "worker@0-
 const MURMUR_TOD_KEYS = ["scuttler-f0", "scuttler-f1", "scuttler-f2", "scuttler-f3", "brute-f0", "brute-f1", "brute-f2", "brute-f3", "leech-f0", "leech-f1", "leech-f2", "leech-f3", "leech-feed-f0", "leech-feed-f1", "leech-feed-f2", "leech-feed-f3", "spitter-f0", "spitter-f1", "spitter-f2", "spitter-f3", "spitter-spit-f0", "spitter-spit-f1", "spitter-spit-f2", "spitter-spit-f3", "sapper-f0", "sapper-f1", "sapper-f2", "sapper-f3", "sapper-dig-f0", "sapper-dig-f1", "sapper-dig-f2", "sapper-dig-f3", "sapper-under-f0", "sapper-under-f1", "sapper-under-f2", "sapper-under-f3", "sapper-up-f0", "sapper-up-f1", "sapper-up-f2", "sapper-up-f3", "sapper-up-f4"];
 // The crash sites (renderer/b/wreck.js), re-lit for each time of day too.
 TOD_KEYS.push('wreck-cargoplane', 'wreck-bomber', 'wreck-airship');
+// The Maglev line (renderer/tools/install_maglev.py): Terminals, pylons (and one shot down), pods and the guideway tile.
+for (const t of [0, 1]) TOD_KEYS.push(`magterm@${t}`, `magpylon@${t}`, `magpylon-cut@${t}`, `magpod@${t}`, `magpod-empty@${t}`, `magdeck@${t}`);
