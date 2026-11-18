@@ -255,6 +255,24 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
+  - **Grand Canyon** (the owner's idea, Nov 2026). Two high rims, a colony on each, with a deep gorge between them and a
+    river along its floor, the walls cut into layered terraces and crossed by side canyons. Unlike Rift or Canyon maze,
+    the middle is the richest ground (Crystal and Ore exposed in the rock layers, water, easy road building) but it is
+    overlooked from both rims: guns and Howitzers on the edge rule the floor, so whoever holds the rim holds the
+    canyon. A few switchback trails (Ramps) down each wall, narrow points for Viaducts, Ropeways, and Ports on the river
+    for ships. Side canyons from the edges to the floor let a rival flank round a blocked trail. The question it asks:
+    hold the rim and snipe, or take the floor and gamble? Lore: the Ring's biggest strikes cracked the crust.
+  - **The Spine:** a mountain range down the middle with three crossings of different character: a wide, easy pass, a
+    narrow high pass that can be walled off, and a tunnel through the rock (the game's tunnels). The far side is
+    richer. Clean chokepoint warfare, each crossing suiting a different plan; the easiest of these to build.
+  - **The Dam:** a high valley lake held back by a dam above a low valley with a colony in it. Wreck the dam and the lake
+    floods the lower valley. The upper colony has a threat to wield, the lower one a reason to strike early. Pairs
+    with Flood season (see the planetary events idea).
+  - **Isthmus:** two landmasses joined by a narrow neck, sea on both sides. Land armies fight over a tiny bridge while
+    ships, Ferries and Airships go round it, so every kind of unit has a job.
+  - **The Thaw** (polar; the most ambitious): a frozen sea that melts as the game goes on, so crossing routes open and
+    close over time: walk to the enemy early, not late, unless you build a Port. Needs terrain that changes during
+    play (a new piece of simulation).
 - **Interchanges.** An overpass is a grade-separated crossing: both roads run straight through it and nobody turns
   there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
   bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
