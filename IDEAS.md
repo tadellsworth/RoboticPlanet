@@ -69,6 +69,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
   on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
   regrowing (the Grove Planter).
+- **Nicer one-way road arrows** (the owner's to-do, Nov 18: for later). Today a one-way road shows a plain painted arrow
+  on each tile (`drawRoadArrow` in js/render.js, the Arrows tool in Paths). The owner wants them to look better than an
+  arrow on a road: candidates are painted lane markings in the road's style (a dashed centre line with chevrons, an edge
+  line, a "no entry" bar at the wrong-way end), small roadside signs or bollards at the entry, a lit cat's-eye string
+  at night as the Expressway has, or an arrow that fades out along the lane. Pair with the Express highway's art so the
+  two share a marking language. A small sheet of three looks first.
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
   Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
   `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
