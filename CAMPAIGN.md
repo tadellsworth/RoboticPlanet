@@ -13,7 +13,7 @@ Fifteen missions in three acts follow the last reserve Command Base on COBALT's 
 | 3 | The Ledger | The Long Grass | Trade for Crystal and protect convoys | 0.2% |
 | 4 | Arrival in One Day | Emberwood | Capture the Herald's Command Base | 0.2% |
 | 5 | Ringfall | Cinderlands | Hold the most land | 0.2% |
-| 6 | Day 12,054 | Hoarfell | Capture the Warden's Command Base | 0.15% |
+| 6 | Day 12,054 | The Polar Caps | Capture the Warden's Command Base | 0.15% |
 | 7 | The Delta | Blackwater | Move Fuel across the delta by water | 0.15% |
 | 8 | Listening on All Channels | The Shoals (islands) | Hold the Uplinks | 0.1% |
 | 9 | Floaters | Sky islands over the Rifts | Out-deliver the Architect by air | 0.1% |
@@ -71,7 +71,7 @@ The war turns serious, and the colony reaches for home. Every answer it gets is 
 
 ### 6. Day 12,054
 
-- **Map:** Hoarfell (polar snow). Rival: a TYRIAN colony run by the Warden (Turtle).
+- **Map:** the Polar Caps (polar snow). Rival: a TYRIAN colony run by the Warden (Turtle).
 - **Objectives:** Break through the Warden's walls and shields. Capture its Command Base.
 - **Teaches:** Howitzers, siege tactics.
 - **Story:** "Position held. Day 12,054." On defeat: "Relief has not arrived." Its archive dates the last transmission. Probability of contact: 0.15%.

@@ -92,7 +92,7 @@ function planetMaps(N) {
       c = mix(c, hex('#c4502f'), 0.12 + 0.18 * NZ.fbm(px * 3 + 50, py * 3, pz * 3, 3));
       // border seams (where two regions meet) a touch darker
       const edge = Math.sqrt(second) - Math.sqrt(best); if (edge < 0.012 && sk !== bk) c = c.map((v) => v * (0.93 + 6 * edge));
-      // Hoarfell: polar caps with ragged edges
+      // the Polar Caps: polar caps with ragged edges
       const cap = Math.abs(py) + (NZ.fbm(px * 5, py * 5, pz * 5, 4) - 0.5) * 0.22;
       const ice = Math.min(1, Math.max(0, (cap - 0.87) / 0.05));
       let glow = [0, 0, 0];

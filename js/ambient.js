@@ -9,7 +9,7 @@
  *   (underground), none with Weather switched off, and none on Graphics Saver.
  * - Remains (drawRemains): what a fight leaves behind outlasts the game's own marks (a building's rubble and burn, a
  *   robot's wreck), and over the minutes that follow it is taken back, by biome: grass, moss and vines in the green
- *   biomes, drifting snow in Hoarfell, sand in the Rust, ash in the Cinderlands, violet Bloom growth in the Bloom and the
+ *   biomes, drifting snow in the Polar Caps, sand in the Rust, ash in the Cinderlands, violet Bloom growth in the Bloom and the
  *   Hollow, only dust on Argos. They are found in the game's effects as they happen (a building's collapse with its fire,
  *   a wreck's fire) and kept in R: they don't outlive a save and load. They never stand in the way of anything, and go
  *   the moment a building or site, a road or track takes their tile. An aircraft's wreck is the game's own (S.wrecks, see
