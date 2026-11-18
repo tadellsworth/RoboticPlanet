@@ -462,18 +462,60 @@
 </div>
 
 <!-- Observer mode (main menu; js/watch.js): the map type and each computer colony's doctrine. -->
+<!-- Observer mode's setup (js/watch.js: openWatch, syncWatch): Custom Game's options that matter when the computer plays
+     every colony, in the same sections and with the same controls (segChoice, the map type and biome pickers). -->
 <div id="screen-watch" class="screen" role="dialog" aria-modal="true" aria-labelledby="w-title" tabindex="-1" hidden>
   <div class="card watch-setup">
-    <div class="stats-head"><h2 id="w-title">Observer mode</h2><button id="w-close" class="btn small">Back</button></div>
-    <p class="w-lead">Computer colonies fight it out while you observe, at up to 8× speed. Nothing is saved, and your own game stays as it was.</p>
-    <div class="w-row"><label class="m-rl" for="w-shape">Map type</label><select id="w-shape" class="w-select"></select></div>
-    <div class="w-row" id="w-n-row"><span class="m-rl" id="w-l-n">Colonies</span>
-      <div class="seg" id="w-n" role="radiogroup" aria-labelledby="w-l-n"><button type="button" role="radio" data-v="2">2</button><button type="button" role="radio" data-v="3">3</button><button type="button" role="radio" data-v="4">4</button></div></div>
-    <div class="w-row"><span class="m-rl" id="w-l-murmur">The Murmur</span>
-      <div class="seg" id="w-murmur" role="radiogroup" aria-labelledby="w-l-murmur" title="The planet's native life: by night their packs come up out of the nests and raid every colony alike"><button type="button" role="radio" data-v="off">Off</button><button type="button" role="radio" data-v="quiet">Quiet</button><button type="button" role="radio" data-v="active">Active</button></div></div>
-    <div class="w-row"><span class="m-rl" id="w-l-docs">Doctrines</span><div class="m-seats w-seats" id="w-seats" role="group" aria-labelledby="w-l-docs"></div></div>
-    <p class="w-note" id="w-note" aria-live="polite"></p>
-    <button id="w-start" class="btn primary big">Start observing</button>
+    <header class="w-head"><h2 id="w-title">Observer mode</h2><button id="w-close" class="btn small">Back</button></header>
+    <div class="w-body" id="w-body">
+      <p class="w-lead">Computer colonies fight it out while you observe, at up to 8× speed. Nothing is saved, and your own game stays as it was.</p>
+      <div class="m-sets w-sets">
+        <section class="m-sec" id="w-sec-match" aria-labelledby="w-h-match">
+          <h3 id="w-h-match">Match</h3>
+          <div class="m-row" id="w-n-row"><span class="m-rl" id="w-l-n">Colonies</span>
+            <div class="seg" id="w-n" role="radiogroup" aria-labelledby="w-l-n"><button type="button" role="radio" data-v="2">2</button><button type="button" role="radio" data-v="3">3</button><button type="button" role="radio" data-v="4">4</button></div></div>
+          <div class="m-row" id="w-teams-row" hidden><span class="m-rl" id="w-l-teams">Teams</span>
+            <div class="seg" id="w-teams" role="radiogroup" aria-labelledby="w-l-teams"><button type="button" role="radio" data-v="0">Free-for-all</button><button type="button" role="radio" data-v="1">2 vs 2</button></div></div>
+          <div class="m-row" id="w-victory-row"><span class="m-rl" id="w-l-victory">Victory</span>
+            <div class="seg" id="w-victory" role="radiogroup" aria-labelledby="w-l-victory"><button type="button" role="radio" data-v="capture">Capture</button><button type="button" role="radio" data-v="domination">Domination</button><button type="button" role="radio" data-v="uplinks">Uplinks</button></div></div>
+          <div class="m-row"><span class="m-rl" id="w-l-diff">Computer</span>
+            <div class="seg" id="w-diff" role="radiogroup" aria-labelledby="w-l-diff"><button type="button" role="radio" data-v="easy">Easy</button><button type="button" role="radio" data-v="medium">Medium</button><button type="button" role="radio" data-v="normal">Normal</button><button type="button" role="radio" data-v="hard">Hard</button></div></div>
+          <p class="m-info" id="w-match-info" aria-live="polite"></p>
+          <div class="w-row"><span class="m-rl" id="w-l-docs">Doctrines</span><div class="m-seats w-seats" id="w-seats" role="group" aria-labelledby="w-l-docs"></div></div>
+          <p class="w-note" id="w-note" aria-live="polite"></p>
+        </section>
+        <section class="m-sec" id="w-sec-planet" aria-labelledby="w-h-planet">
+          <h3 id="w-h-planet">Planet</h3>
+          <div class="m-row"><span class="m-rl">Map type</span>
+            <button type="button" class="m-pick" id="w-shape" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          <div class="m-row"><span class="m-rl">Biome</span>
+            <button type="button" class="m-pick" id="w-biome" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          <div class="m-row"><span class="m-rl" id="w-l-size">Size <output id="w-size-v" class="m-val"></output></span><div class="seg" id="w-size" role="radiogroup" aria-labelledby="w-l-size"></div></div>
+          <div class="m-row"><span class="m-rl" id="w-l-rough">Terrain <output id="w-rough-v" class="m-val"></output></span><div class="seg lv" id="w-rough" role="radiogroup" aria-labelledby="w-l-rough"></div></div>
+          <div class="m-row"><span class="m-rl" id="w-l-rich">Resources <output id="w-rich-v" class="m-val"></output></span><div class="seg lv" id="w-rich" role="radiogroup" aria-labelledby="w-l-rich"></div></div>
+          <div class="m-row" id="w-planet-row" hidden><label class="m-rl" for="w-planet">Planet</label><select id="w-planet" class="w-select"></select></div>
+          <p class="m-info" id="w-planet-info" aria-live="polite"></p>
+        </section>
+        <section class="m-sec m-rules" id="w-sec-rules" aria-labelledby="w-h-rules">
+          <h3 id="w-h-rules">Rules</h3>
+          <div class="m-rules-row">
+            <div class="tchips" role="group" aria-labelledby="w-h-rules">
+              <label class="tchip" id="w-nuke-row" data-info="Nuclear race: a few uranium deposits glow on the planet. Race for them and build the bomb."><input type="checkbox" id="w-nuke" role="switch"><span>Nuclear race</span></label>
+              <label class="tchip" id="w-events-row" data-info="Planetary events: dust storms, Ringfall (meteor showers), solar flares and the Wren, a trader ship, every few minutes."><input type="checkbox" id="w-events" role="switch"><span>Planetary events</span></label>
+            </div>
+            <div class="m-tod" id="w-murmur-row"><span class="m-rl" id="w-l-murmur">The Murmur</span>
+              <div class="seg tod-seg" id="w-murmur" role="radiogroup" aria-labelledby="w-l-murmur"><button type="button" role="radio" data-v="off">Off</button><button type="button" role="radio" data-v="quiet">Quiet</button><button type="button" role="radio" data-v="active">Active</button></div></div>
+          </div>
+          <p class="m-info" id="w-rules-info" aria-live="polite"></p>
+        </section>
+        <section class="m-sec m-rules m-challenge" id="w-sec-challenge" aria-labelledby="w-h-challenge">
+          <h3 id="w-h-challenge">Challenge</h3>
+          <div class="tchips" id="w-mods" role="group" aria-labelledby="w-h-challenge"></div>
+          <p class="m-info" id="w-challenge-info" aria-live="polite"></p>
+        </section>
+      </div>
+    </div>
+    <div class="w-go"><p class="w-sum" id="w-sum"></p><button id="w-start" class="btn primary big">Start observing</button></div>
   </div>
 </div>
 

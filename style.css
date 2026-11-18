@@ -1902,17 +1902,50 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
   .wc-lines li + li { display: none; } /* (one line on a phone on its side: the map needs the height) */
 }
 @media (pointer: coarse) { .wc-follow { min-height: 44px; } }
-.card.watch-setup { width: min(100%, 480px); background: #161820; }
-.w-lead { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.4; }
-.w-row { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
-.w-row .m-rl { font-size: 13px; font-weight: 700; color: var(--muted); }
-.w-select { width: 100%; min-height: 44px; padding: 8px 32px 8px 12px; font: inherit; font-weight: 650; color: var(--text); -webkit-appearance: none; appearance: none;
+/* Observer mode's setup (#screen-watch): Custom Game's sections (.m-sec, .m-row, .seg, .m-pick, .tchip), a header, the
+   settings scrolling between, and Start observing in a bar that stays in view. One column on a phone; two on a wider
+   screen (Match beside Planet, Rules and Challenge under them). */
+#screen-watch { padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 8px) calc(var(--safe-b) + 8px) calc(var(--safe-l) + 8px); }
+.card.watch-setup { width: min(100%, 560px); max-height: calc(100vh - 16px - var(--safe-t) - var(--safe-b)); max-height: calc(100dvh - 16px - var(--safe-t) - var(--safe-b));
+  display: flex; flex-direction: column; padding: 0; overflow: hidden; background: #161820; }
+.w-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--line); flex: none; }
+.watch-setup .w-head h2 { margin: 0; font-size: 18px; }
+.w-head .btn { min-height: 44px; }
+.w-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 12px; }
+.w-lead { margin: 0 2px 12px; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.watch-setup .m-sec h3 { margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 800; }
+.watch-setup .m-val, .watch-setup .m-pick-meta { font-size: 12px; }
+.watch-setup .m-info { -webkit-line-clamp: 5; }
+/* (a full finger's press for every choice, on any screen) */
+.watch-setup .seg button, .watch-setup .seg.lv button, .watch-setup .tchip { min-height: 44px; }
+.watch-setup .m-row .seg button { padding-top: 6px; padding-bottom: 6px; }
+.w-row { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 0; }
+.w-row .m-rl { font-size: 13.5px; }
+.w-select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 32px 8px 12px; font: inherit; font-size: 14px; font-weight: 650; color: var(--text); -webkit-appearance: none; appearance: none;
   background: var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aab2c0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center / 12px 8px;
-  border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+  border: 1px solid var(--line); border-radius: 12px; cursor: pointer; text-overflow: ellipsis; }
 .w-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .w-select option, .w-select optgroup { background: #1b1e27; color: #e8ecf2; }
-.w-row .seg button { min-height: 44px; }
 .w-seats .m-seat { max-width: none; flex: 1 1 calc(50% - 4px); }
 .w-seats .m-seat select { min-height: 44px; font-size: 14px; }
-.w-note { min-height: 40px; margin: 4px 0 2px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.w-note { min-height: 40px; margin: 4px 2px 2px; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .w-note .dot { transform: translateY(-1px); }
+.w-go { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); background: rgba(12, 13, 18, 0.55); }
+.w-go #w-start { width: auto; flex: none; min-width: 150px; padding: 12px 18px; font-size: 16px; }
+.w-sum { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+.w-sum .sum-main { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #c3cad6; font-weight: 600; }
+.w-sum .sum-extra { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 700px) {
+  .card.watch-setup { width: min(100%, 1000px); }
+  .w-sets { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .w-sets .m-sec .m-info { margin-top: auto; }
+  .w-go #w-start { min-width: 190px; }
+}
+/* A phone on its side: a slimmer header and bar, so more of the settings show. */
+@media (max-height: 500px) {
+  .w-head { padding: 4px 10px 4px 14px; }
+  .w-body { padding: 8px 12px; }
+  .w-lead { margin-bottom: 8px; }
+  .w-go { padding: 6px 12px; }
+  .w-go #w-start { padding: 10px 16px; }
+}

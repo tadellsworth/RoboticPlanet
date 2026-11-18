@@ -568,6 +568,44 @@ function showMenuView(v, focus) {
   if (focus) (setup ? $('m-back') : $('m-customise')).focus();
 }
 
+/**
+ * A row of choice buttons (all the options in view), shared by Custom Game and Observer mode: one per label, value its
+ * index; `info(v)` gives each its data-info line, `meter` draws Terrain and Resources as level meters (a bar per step).
+ * `onPick(v)` runs on a tap; `get()` (kept as el._get) is the value markSeg lights up.
+ */
+function segChoice(el, labels, get, onPick, info, meter) {
+  el.innerHTML = '';
+  labels.forEach((lab, v) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.v = v; b.setAttribute('role', 'radio');
+    if (meter) { b.innerHTML = `<i style="height:${Math.round(28 + (72 * v) / Math.max(1, labels.length - 1))}%"></i>`; b.setAttribute('aria-label', lab); b.title = lab; }
+    else b.textContent = lab;
+    if (info) b.dataset.info = info(v);
+    b.onclick = () => onPick(v);
+    el.appendChild(b);
+  });
+  el._get = get;
+}
+/** A segChoice row lit up for its value: the choice on (and, on a meter, every bar up to it). */
+function markSeg(el) {
+  const v = el._get();
+  for (const b of el.children) {
+    const on = +b.dataset.v === v;
+    b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.classList.toggle('lit', +b.dataset.v <= v);
+  }
+}
+/**
+ * One line per section about the option under the mouse, or focused (its data-info), shared by Custom Game and
+ * Observer mode: show(el or null) runs as that changes.
+ */
+function hoverInfo(sec, show) {
+  const pickEl = (t) => { const k = t && t.closest && t.closest('[data-info]'); return k && sec.contains(k) ? k : null; };
+  sec.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') show(pickEl(e.target)); });
+  sec.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(sec.contains(document.activeElement) && document.activeElement.matches(':focus-visible') ? pickEl(document.activeElement) : null); });
+  sec.addEventListener('focusin', (e) => show(pickEl(e.target)));
+  sec.addEventListener('focusout', (e) => { if (!sec.contains(e.relatedTarget)) show(null); });
+}
+
 function initMenu() {
   UI.menuHover = {};
   const pick = (fn) => () => { fn(); syncMenu(); saveSettings(); sfx('click'); };
@@ -576,21 +614,7 @@ function initMenu() {
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
   for (const btn of $('m-teams').children) btn.onclick = pick(() => { UI.menu.teams = +btn.dataset.v; });
   for (const btn of $('m-victory').children) { btn.dataset.info = VICTORY[btn.dataset.v].info; btn.onclick = pick(() => { UI.menu.victory = btn.dataset.v; }); }
-  // Choices are buttons (all the options in view). Terrain and Resources are level meters, a bar per step.
-  const choice = (id, labels, get, set, info, meter) => {
-    const el = $(id);
-    el.innerHTML = '';
-    labels.forEach((lab, v) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.dataset.v = v; b.setAttribute('role', 'radio');
-      if (meter) { b.innerHTML = `<i style="height:${Math.round(28 + (72 * v) / Math.max(1, labels.length - 1))}%"></i>`; b.setAttribute('aria-label', lab); b.title = lab; }
-      else b.textContent = lab;
-      if (info) b.dataset.info = info(v);
-      b.onclick = pick(() => set(v));
-      el.appendChild(b);
-    });
-    el._get = get;
-  };
+  const choice = (id, labels, get, set, info, meter) => segChoice($(id), labels, get, (v) => pick(() => set(v))(), info, meter);
   choice('m-size', SIZE_PRESETS.map((p) => p.name), menuSize, (v) => { UI.menu.size[UI.menu.mode] = v; });
   choice('m-rough', TERRAIN_PRESETS.map((p) => p.name), () => UI.menu.rough, (v) => { UI.menu.rough = v; }, terrainInfo, true);
   choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; }, resourceInfo, true);
@@ -665,13 +689,7 @@ function initMenu() {
     if (!over && UI.menuView === 'setup') { e.preventDefault(); showMenuView('home', true); }
   });
   // One line per section about the option under the mouse, or focused, or else what's chosen.
-  for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules', 'm-sec-challenge']) {
-    const el = $(sec), show = (t) => { const k = t && t.closest && t.closest('[data-info]'); UI.menuHover[sec] = k && el.contains(k) ? k : null; syncInfo(); };
-    el.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') show(e.target); });
-    el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(el.contains(document.activeElement) && document.activeElement.matches(':focus-visible') ? document.activeElement : null); });
-    el.addEventListener('focusin', (e) => show(e.target));
-    el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) show(null); });
-  }
+  for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules', 'm-sec-challenge']) hoverInfo($(sec), (k) => { UI.menuHover[sec] = k; syncInfo(); });
   // The preview follows the size of its box (and the info lines are measured again at the new width).
   if (window.ResizeObserver) new ResizeObserver(() => { PV.drawn = ''; schedulePreview(true); sizeInfoLines(); }).observe($('m-pv'));
   showMenuView('home');
@@ -802,10 +820,7 @@ function syncMenu() {
   $('m-seed').textContent = 'Planet #' + m.seed;
   renderPlanets();
   if (menuDocAll() !== -1) UI.docPeek = null; // (a chip looked at before a tap gives it to them all: only while they differ)
-  for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) {
-    const el = $(id), v = el._get();
-    for (const b of el.children) { mark(b, +b.dataset.v === v); b.classList.toggle('lit', +b.dataset.v <= v); }
-  }
+  for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) markSeg($(id));
   for (const b of $('m-style').children) b.classList.toggle('peek', UI.docPeek === +b.dataset.v);
   // (Random map type: sizes as on a Standard map; the others differ a little.)
   const players = menuPlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
@@ -889,32 +904,47 @@ function syncPvMods() {
 
 /** The Map type and Biome rows: the choice, with a thumbnail (redrawn as art arrives). */
 function syncPickRows() {
-  const m = UI.menu, three = menuThree(), shape = m.shape || 0, SH = SHAPE_PRESETS[shape];
-  const sRow = $('m-shape'), bRow = $('m-biome'), bk = BIOME_ORDER[m.biome || 0];
-  sRow.querySelector('.m-pick-name').textContent = m.shapeRnd ? 'Random' : SH.name;
-  const np = menuPlayers();
-  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (np === 4 ? 'any for 4 players' : three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
-  sRow.dataset.info = m.shapeRnd ? `Random map type: ${np === 4 ? 'one with room for four players' : three ? 'one with room for three players' : 'any made for two'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
-  sRow.setAttribute('aria-label', `Map type: ${m.shapeRnd ? 'Random' : SH.name}. Change`);
-  drawThumbOnce(sRow.querySelector('canvas'), 'shape:' + (m.shapeRnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, m.shapeRnd ? null : SH));
-  bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
-  bRow.querySelector('.m-pick-meta').textContent = m.biomeRnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
-  bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)} (${((BIOMES[bk] && BIOMES[bk].kind) || '').toLowerCase()}): ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
+  const m = UI.menu;
+  shapePickRow($('m-shape'), m.shapeRnd, m.shape || 0, menuPlayers());
+  biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
+}
+/**
+ * A Map type row (.m-pick), shared by Custom Game and Observer mode: Random (rnd, for np players) or map type `shape`.
+ * `when` says when Random picks ('when you land').
+ */
+function shapePickRow(row, rnd, shape, np, when = 'when you land') {
+  const SH = SHAPE_PRESETS[shape], three = np > 2;
+  row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : SH.name;
+  row.querySelector('.m-pick-meta').textContent = rnd ? (np === 4 ? 'any for 4 players' : three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
+  row.dataset.info = rnd ? `Random map type: ${np === 4 ? 'one with room for four players' : three ? 'one with room for three players' : 'any made for two'}, picked ${when}.` : `${SH.name}: ${SH.blurb || ''}`;
+  row.setAttribute('aria-label', `Map type: ${rnd ? 'Random' : SH.name}. Change`);
+  drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
+}
+/** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`hollow`: the map type is the Hollow, which has its own look). */
+function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
+  const bk = BIOME_ORDER[biome];
+  row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
+  row.querySelector('.m-pick-meta').textContent = rnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
+  row.dataset.info = rnd ? `Random biome: any of them, picked ${when}.` : `${biomeName(biome)} (${((BIOMES[bk] && BIOMES[bk].kind) || '').toLowerCase()}): ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
   // (The Hollow has its own underground look: the Biome setting waits for another map.)
-  if (!m.shapeRnd && SH.hollow) {
-    bRow.querySelector('.m-pick-meta').textContent = 'set by the map: The Hollow';
-    bRow.dataset.info = `The Hollow has its own look, whatever the biome: ${BIOMES.hollow.desc} (The biome you pick here is for other maps.)`;
+  if (hollow) {
+    row.querySelector('.m-pick-meta').textContent = 'set by the map: The Hollow';
+    row.dataset.info = `The Hollow has its own look, whatever the biome: ${BIOMES.hollow.desc} (The biome you pick here is for other maps.)`;
   }
-  bRow.setAttribute('aria-label', `Biome: ${m.biomeRnd ? 'Random' : biomeName(m.biome || 0)}. Change`);
-  drawThumbOnce(bRow.querySelector('canvas'), 'biome:' + (m.biomeRnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, m.biomeRnd ? null : bk));
+  row.setAttribute('aria-label', `Biome: ${rnd ? 'Random' : biomeName(biome)}. Change`);
+  drawThumbOnce(row.querySelector('canvas'), 'biome:' + (rnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, rnd ? null : bk));
 }
 
 /* ------------------------------------------------------------------ map type and biome pickers */
 
-function openPicker(kind) {
+/**
+ * The map type or biome picker. `ctx` says what it picks for: { shape, shapeRnd, biome, biomeRnd, want (players),
+ * pick(kind, v) } (v a number, or 'rnd'); Custom Game's by default (Observer mode passes its own: js/watch.js).
+ */
+function openPicker(kind, ctx = menuPickCtx()) {
   if (kind === 'biome' && typeof ensureBiomeArt === 'function') for (const b of BIOME_ORDER) ensureBiomeArt(b); // their swatches fill in as it arrives
-  const m = UI.menu, body = $('m-picker-body'), want = m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2;
-  UI.picker = { kind, opener: document.activeElement };
+  const m = ctx, body = $('m-picker-body'), want = ctx.want;
+  UI.picker = { kind, ctx, opener: document.activeElement };
   $('m-picker-title').textContent = kind === 'shape' ? 'Map type' : 'Biome';
   $('m-picker').classList.toggle('bio', kind === 'biome');
   const card = (v, on, inner, cls, tip) => `<button type="button" class="pcard${cls ? ' ' + cls : ''}" data-v="${v}"${on ? ' aria-current="true"' : ''}${tip ? ` title="${tip.replace(/"/g, '&quot;')}"` : ''}>${inner}</button>`;
@@ -939,7 +969,7 @@ function openPicker(kind) {
   body.innerHTML = h;
   for (const b of body.querySelectorAll('.pcard')) {
     b.setAttribute('aria-pressed', b.hasAttribute('aria-current') ? 'true' : 'false');
-    b.onclick = () => choosePicked(kind, b.dataset.v);
+    b.onclick = () => { sfx('click'); closePicker(); ctx.pick(kind, b.dataset.v); };
   }
   $('m-picker').hidden = false;
   body.scrollTop = 0;
@@ -959,13 +989,16 @@ function drawPickerArt() {
   }
 }
 
+/** Custom Game's picker context (see openPicker). */
+function menuPickCtx() {
+  const m = UI.menu;
+  return { shape: m.shape || 0, shapeRnd: m.shapeRnd, biome: m.biome || 0, biomeRnd: m.biomeRnd, want: m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2, pick: choosePicked };
+}
 function choosePicked(kind, v) {
   const m = UI.menu, rnd = v === 'rnd';
   if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
   if (kind === 'shape' && !rnd && SHAPE_PRESETS[m.shape].teamDefault) { m.teams = 1; m.players = 4; } // (a map made for 2 vs 2: four players, Teams on, which you can still turn off)
   if (kind === 'shape' && !rnd && murmurLevelOk(SHAPE_PRESETS[m.shape].murmur)) m.murmur = SHAPE_PRESETS[m.shape].murmur; // (a map type with its own Murmur: the Hollow)
-  sfx('click');
-  closePicker();
   syncMenu();
   saveSettings();
 }
@@ -1010,14 +1043,15 @@ function pickerKey(e) {
   if (j >= 0) { e.preventDefault(); cards[j].focus({ preventScroll: true }); cards[j].scrollIntoView({ block: 'nearest' }); }
 }
 
+/** A map type at random with room for `want` players (Random, in Custom Game and Observer mode). */
+function randomShape(want) {
+  const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
+}
 /** Random map type and biome: a concrete pick for the game about to start (3 players: map types with room for three). */
 function resolveRandom() {
   const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
-  if (m.shapeRnd) {
-    const want = m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2;
-    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
-    out.shape = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
-  }
+  if (m.shapeRnd) out.shape = randomShape(m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2);
   if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
   return out;
 }
@@ -1385,6 +1419,7 @@ function menuArtTick() {
   UI.menuArtN = n; UI.menuArtT = now;
   if ($('screen-menu').hidden) return;
   if (UI.menuView === 'setup') syncPickRows();
+  if (typeof watchPickRows === 'function' && !$('screen-watch').hidden) watchPickRows(); // (Observer mode's setup: js/watch.js)
   if (UI.picker && UI.picker.kind === 'biome') drawPickerArt();
 }
 
