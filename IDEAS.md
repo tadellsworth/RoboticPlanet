@@ -63,7 +63,9 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
     of a Worker: Workers saved in a big late colony.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
-  everyone, so rivals can race or raid them. The picks, if built: the Great Uplink, the Ring Breaker and Arrival City.
+  everyone, so rivals can race or raid them. The owner's order (Nov 18), after the high-speed transit items: the Ring
+  Breaker, the Sunlance, the Great Uplink, Arrival City, the Lance of Corvane and the Shield Dome; the Seismic Lance,
+  the Orbital Lift, the Atmosphere Engine and the power plant perhaps later.
   - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
     you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
     so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
@@ -109,7 +111,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
     powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
     ground assault.
-- **High-speed transit** (the owner, Nov 17 2026: saved for later). Late-game, high-capacity links for a big colony,
+- **High-speed transit** (the owner, Nov 17 2026: saved for later; Nov 18: next after the oil seeps, in this order: Maglev,
+  Express highways, Mass driver, each from a design sheet). Late-game, high-capacity links for a big colony,
   beyond roads, Freight Trains, Ropeways and Cargo Planes.
   - **Maglev line.** Elevated track on pylons, run straight over terrain, water and cliffs, between Maglev Terminals;
     pods carry goods at 3 to 4 times a Freight Train's speed. Dear in Alloy and Chips a tile, and it draws power from
