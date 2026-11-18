@@ -430,3 +430,13 @@ The Airship (the owner's decision, Nov 17 2026; built): an armoured freight airs
 that shuttles goods and robots back and forth between two Mooring Masts, over water, cliffs and rock alike. Plain
 lifting gas in its envelope keeps it up: nothing of the planet's own. Shot down, it settles burning and its wreck
 stays where it fell, as every downed aircraft's does.
+
+The Maglev line (the owner's decision, Nov 18 2026; built): the Accord's Phase 2. The road standards ran to a second
+volume that nobody opened: transit for the colonists, to be built when the roads were done. The roads have been done
+for thirty years. Now a colony builds it, to the standard: pale concrete pylons with hammerhead caps, a slim guideway
+lit along its edges at night, round glass-sided Terminals with platforms to passenger standard, a shelter and a
+timetable board at the door glowing blank, and pods with a band of lit windows and the seats folded inside. The pods
+run full of Ore. Flavour: the Terminal, "Phase 2 transit. Platforms to passenger standard. Departures on time; the seats
+stay folded"; the pod, "Twelve seats, folded. Forty crates"; the pylon, "Phase 2, structure type 4. Built to the
+standard, thirty years late." The line draws its power from the colony's Generators, so the Murmur hear it as they hear
+a Generator, and a pylon shot down cuts it until a Worker rides out and rebuilds it. No one rides it.

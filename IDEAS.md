@@ -63,6 +63,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
   run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
   the dead are drawn too.
+- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18: for later). The Fiber plant on the map is the
+  Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`, ART_GUIDE; the Bloom and the Hollow
+  use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
+  denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
+  on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
+  regrowing (the Grove Planter).
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
   Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
   `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
@@ -137,11 +143,22 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **High-speed transit** (the owner, Nov 17 2026: saved for later; Nov 18: next after the oil seeps, in this order: Maglev,
   Express highways, Mass driver, each from a design sheet). Late-game, high-capacity links for a big colony,
   beyond roads, Freight Trains, Ropeways and Cargo Planes.
-  - **Maglev line.** Elevated track on pylons, run straight over terrain, water and cliffs, between Maglev Terminals;
-    pods carry goods at 3 to 4 times a Freight Train's speed. Dear in Alloy and Chips a tile, and it draws power from
-    Generators: a solar flare or a blackout slows it to a crawl. Pylons can be shot down, cutting the line until it's
-    repaired. Lore: the Accord's road standards had a "Phase 2" transit plan for the colonists, never built; the robots
-    finally build it, for freight only. Lit up at night, it would look the part.
+  - **Maglev line** (built, Nov 18 2026: direction A, "Accord Phase 2", from the design sheet, every recommendation on
+    it accepted). Maglev Terminals (Build → Move; 8 Cement, 6 Alloy, 3 Chips; storage with conveyor joins like a Rail
+    Station's), a Paths tool (Maglev, Shift+M, two taps) for a straight line 6–40 tiles long in any direction over
+    anything, a pylon every 3 tiles (open ground, cliff tops or water; a chasm of up to two spans crossed), 1 Alloy, ½
+    Chip and 1 Cement a tile prepaid from storage, built out from the near Terminal by a Worker, the far Terminal
+    last; pods (4 Alloy, 2 Chips at a Terminal's pod bay, four to a line) carry 16 goods both ways at 3× a Freight
+    Train's speed with 4× its acceleration on the rail plan's loads; a Generator within 4 tiles of each Terminal or a
+    solar flare slows them to a Worker's pace; pylons have a Wall's toughness and cut the line when shot down (a pod on
+    the span is lost, the rest turn back), a Worker rides out and rebuilds one in 20 s; allowed in the Hollow, where a
+    running line draws the Murmur as a Generator does. Decided on the build: pylons clear a boulder or grove under
+    their foot (the sheet's "open ground" would have blocked most lines on a rich map); the far end may also be a
+    Terminal site or a finished Terminal (then the line's site is its first pylon); all water counts as shallow (a
+    pier), only chasms and rock are spanned. Open: the rival (below), riders (a Worker crew only, if ever), a line of
+    more than two Terminals, Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
+    whether 4× a train's acceleration is brisk enough on a short line (a 20-tile line takes about 5 s, not the sheet's 3).
+    Lit up at night, it looks the part.
   - **Express highways.** A road tier above Asphalt: wide, banked, one-way lanes with on-ramps, where Freight Trucks and
     Road Trains run twice as fast; Haulers aren't allowed on them. Dear Asphalt, kept up by a Roadworks; it builds on
     the one-way roads and junctions already in the game.
@@ -188,6 +205,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   learn to cut a line (Flak under its path, a raid on a Mast)? Also open from the build: lines of more than two Masts
   (a route of stops), an Airship you can fly by hand (a one-off drop of riders, like a Ferry's beach landing), vehicles
   aboard (a truck in the pod?). (Fuel and Crude both fly: the owner's call, Nov 17.)
+- **Maglev lines and the rival** (Nov 18). The Maglev is player-only too: no rival builds Terminals or lines, though its
+  warbots, Howitzers and bombers hit pylons and Terminals like any building. The sheet's answer stands: a Maglev joins
+  the rival's list when its late game gets a transit tier, and then only the Architect and the Steward, with a line from
+  their base to a far Depot cluster, once they have Chips to spare; and a rival should then learn to cut a line (guns
+  under a pylon). Also open from the build: riders (a Worker crew at most, never warbots), lines of more than two
+  Terminals, and a hand-driven pod.
 
 - **Room to grow in the single-file game** (owner's to-do, Nov 17; done Nov 18: every picture now lives in a bundle beside the page,
   `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,

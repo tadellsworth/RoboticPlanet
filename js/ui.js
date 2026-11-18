@@ -1824,18 +1824,20 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
-  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
+  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
 /**
- * The Paths tools on Shift and a letter, from anywhere: Viaducts and Ropeways (placed with two taps, see
+ * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
- * build menu (Move, V and Y), V beside Ramps. (Shift+F is the Bot Foundry's Order bots.)
+ * build menu (Move, V and Y), V beside Ramps, and M for the Maglev. (Shift+F is the Bot Foundry's Order bots.)
  */
-const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway' };
-/** Is a Viaduct or Ropeway being placed (a Paths tool, though it's placed like a building: R.mode 'place')? */
-function crossingPlacing() { return R.mode === 'place' && (UI.placeType === 'viaduct' || UI.placeType === 'ropeway'); }
+const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway', m: 'maglev' };
+/** The Paths tools placed with two taps like a building (R.mode 'place'): Viaducts, Ropeways and Maglev lines. */
+const CROSSING_TOOLS = ['viaduct', 'ropeway', 'maglev'];
+/** Is a Viaduct, Ropeway or Maglev line being placed (a Paths tool, though it's placed like a building: R.mode 'place')? */
+function crossingPlacing() { return R.mode === 'place' && CROSSING_TOOLS.includes(UI.placeType); }
 /**
  * Keys for the buttons on a building's or robot's panel, by button id. While that panel is open they win over
  * the same letter's usual job (the key is shown on the button on a computer). Delete or Backspace dismantles,
@@ -1851,8 +1853,8 @@ const SHEET_KEYS = {
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
   // A Trade Terminal's route: Start (or Change) it, Stop it, Escort on or off.
   'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
-  // A Mooring Mast's Link (or Unlink).
-  'sh-mlink': 'l', 'sh-munlink': 'l',
+  // A Mooring Mast's Link (or Unlink); a Maglev Terminal's Plan a line from here.
+  'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -1917,7 +1919,7 @@ function openRoadDraw() {
  * two taps, like a building (enterPlaceMode), with the Paths tools still showing and a plan sketched kept for after.
  */
 function openPaths(v) {
-  if (v === 'viaduct' || v === 'ropeway') { enterPlaceMode(v); sfx('click'); return; }
+  if (CROSSING_TOOLS.includes(v)) { enterPlaceMode(v); sfx('click'); return; }
   if (R.mode !== 'road') setMode('road');
   UI.roadMode = v;
   showRoadBanner();
@@ -4057,6 +4059,119 @@ function airPlacesText(b) {
     `A plane flies them what they're short of (their supply orders, Ammo for their warbots, a site's materials), ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
 }
 
+
+/* ------------------------------------------------------------------ Maglev lines */
+
+/** "the Terminal 14 tiles east of the Command Base" (or "the Terminal" with no Command Base). */
+function magWhere(m) {
+  const L = getE(S.players[m.owner] && S.players[m.owner].lander);
+  return L && !L.dead ? `the Terminal ${dirText(L, m)} of the Command Base` : 'the Terminal';
+}
+
+/** What Maglev Pod u is doing, in a few words. */
+function podStatus(u) {
+  const here = u.inside ? getE(u.inside) : null, goods = u.cargo ? sumValues(u.cargo) : 0;
+  if (u.magTo) { const to = getE(u.magTo); return `${u.crawl ? 'crawling (no power)' : 'running'} to ${to && !to.dead ? magWhere(to) : 'a Terminal'}${goods ? ` with ${goods} goods` : ', empty'}`; }
+  if (here && BDEFS[here.type].magterm) {
+    if (!magPartner(here)) return `docked at ${magWhere(here)}, waiting for a line`;
+    if (magLineCut(here)) return `docked at ${magWhere(here)}: the line is cut`;
+    return `docked at ${magWhere(here)}, loading when there's a trip worth making`;
+  }
+  return 'off its guideway';
+}
+
+/** The Maglev Terminal panel's section (filled in by renderMagSection), with the Auto supply switch. */
+function magSection() {
+  return `<div class="section-label">Maglev line</div><div id="sh-mag"></div>
+    <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
+    <p class="hint">Auto supply: the far Terminal (the one further from your Command Base) stocks what the buildings round it need, the Terminal nearer home keeps that ready for the line, and the far Terminal's spare goods come home: ${BOTS.magpod.carry} goods a pod, several kinds at once. Buildings touching a Terminal are joined to it by conveyor; Haulers bring the rest. Supply orders you set below come on top.</p>`;
+}
+
+/** Terminal b's line: its other end, its power, its pods, a line going up (rebuilt only when something changes). */
+function renderMagSection(b) {
+  const el = $('sh-mag');
+  if (!el) return;
+  const o = magPartner(b), pods = o ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id), site = magPending(b);
+  const cut = o && magLineCut(b), powered = o && magLinePowered(b), near = o && magNearEnd(b);
+  const sig = JSON.stringify([o && o.id, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, cut, powered, magPowered(b), o && magPowered(o), flareOn(), b.auto, b.autoOff, near && near.magFix && near.magFix.paid, sumValues(b.inc)]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  let h = '';
+  if (o) {
+    h += `<div class="status">On a line to ${magWhere(o)} (${dirText(b, o)} from here, ${Math.round(dist(b.x, b.y, o.x, o.y))} tiles).</div>`;
+    h += `<div class="kv"><span>Line</span><span>${cut ? '<span class="err">Cut: a pylon is down</span>' : powered ? 'Powered: pods run at speed' : '<span class="err">Unpowered: pods crawl</span>'}</span></div>`;
+    if (cut) h += `<p class="hint">${near.magFix && near.magFix.u ? 'A Worker is riding out to rebuild the pylon.' : near.magFix && !near.magFix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods wait at the Terminals until then.</p>`;
+    else if (!powered) h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : 'The other end'} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends need power.`}</p>`;
+    h += `<p class="hint">${farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
+    h += pods.length ? `<div class="kv"><span>Pods on the line</span><span>${pods.length} of ${MAGLEV.perLine}</span></div>` + pods.map((u) => `<div class="kv army-row"><span>${podStatus(u)}</span><span><button class="btn small ghost" data-pod="${u.id}">Pod ›</button></span></div>`).join('')
+      : '<p class="hint"><b>No pods yet:</b> order them in the pod bay below (4 Alloy, 2 Chips each).</p>';
+  } else if (site) {
+    h += `<div class="status">A line is going up from here: ${Math.round(site.progress * 100)}%.</div><p class="hint">A Worker standing here builds it out, pylon by pylon; the far Terminal goes up last. It is paid from storage as the goods come in (${costText(stillOwed(site))} still owed).</p>`;
+  } else if (b.magFrom) {
+    h += '<div class="status">A line is coming to it from another Terminal.</div>';
+  } else {
+    h += `<div class="status">Not on a line.</div><p class="hint">Plan one in Paths (<b>Maglev</b>, <kbd>Shift</kbd>+<kbd>M</kbd>): tap this Terminal, then the far end ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, straight across water, cliffs and chasms. ${costText(magLineCost(1))} a tile, paid from storage.</p><button class="btn primary" id="sh-magline">Plan a line from here</button>`;
+  }
+  const served = S.buildings.filter((c) => !c.dead && c.railBy === b.id).length;
+  if (served) h += `<p class="hint">It serves ${served} building${served > 1 ? 's' : ''} round it.</p>`;
+  const auto = b.auto && !b.autoOff ? Object.entries(b.auto).map(([g, n]) => goodTag(g, `${Math.min(b.stock[g] || 0, n)}/${n} ${GOOD[g].name}`, (b.stock[g] || 0) < n / 3)).join(' ') : '';
+  if (auto) h += `<div class="goodlist">${auto}</div>`;
+  const coming = Object.keys(b.inc).filter((g) => b.inc[g] > 0 && S.bots.some((u) => !u.dead && u.cargoTo === b.id && u.cargo && u.cargo[g] && BOTS[u.type].magpod));
+  if (coming.length) h += `<p class="hint">On their way by pod: ${coming.map((g) => `${b.inc[g]} ${GOOD[g].name}`).join(', ')}.</p>`;
+  el.innerHTML = h;
+  if ($('sh-magline')) $('sh-magline').onclick = () => { sfx('click'); openMaglevFrom(b); };
+  for (const btn of el.querySelectorAll('button[data-pod]')) btn.onclick = () => { const u = getE(+btn.dataset.pod); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
+}
+
+/** The Maglev tool with Terminal b picked as the near end: tap the far end next. */
+function openMaglevFrom(b) {
+  closeSheet();
+  enterPlaceMode('maglev');
+  UI.ropeA = { i: b.x, j: b.y, id: b.id };
+  R.overlay = null;
+  showBanner(maglevFarText(), null, 'Cancel');
+  crossingTools();
+}
+
+function maglevFarText() {
+  return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours. The preview shows the pylons' spots; the first bad one is red. ${costText(magLineCost(1))} a tile, from storage.`;
+}
+
+/** The preview of a line from the near Terminal picked to (i, j): R.ropeEnd (drawMaglevs draws it). */
+function maglevPreview(i, j, tapped) {
+  const A = getE(UI.ropeA && UI.ropeA.id);
+  if (!A || !inMap(i, j)) { R.ropeEnd = null; return null; }
+  const chk = magLineCheck(ME, A, i, j);
+  R.ropeEnd = { i, j, ok: !chk.why, why: chk.why, spots: chk.spots, far: chk.far ? chk.far.id : 0, tapped: !!tapped };
+  return R.ropeEnd;
+}
+
+/** Placing a Maglev line: the first tap picks the near Terminal, the second the far end (tap it again to build). */
+function maglevTap(i, j) {
+  if (!UI.ropeA) {
+    const b = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
+    const why = !b || b.owner !== ME || !BDEFS[b.type].magterm ? 'Tap one of your Maglev Terminals (highlighted) for the near end.' : !b.built ? 'That Terminal is still going up: the line starts from a finished one.'
+      : b.line ? 'That Terminal is on a line already: a Terminal is on one line at most.' : magPending(b) ? 'That Terminal\'s line is still going up.' : b.magFrom ? 'A line is coming to that Terminal already.' : '';
+    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); crossingTools(); return; }
+    UI.ropeA = { i, j, id: b.id };
+    R.overlay = null; R.ghost = null;
+    sfx('click');
+    showBanner(maglevFarText(), null, 'Cancel');
+    crossingTools();
+    return;
+  }
+  const A = getE(UI.ropeA.id);
+  if (!A || A.dead) { setMode('normal'); return; }
+  if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
+  const E = maglevPreview(i, j, true);
+  if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end.`, null, 'Cancel'); crossingTools(); return; }
+  const n = Math.round(dist(A.x, A.y, i, j)), far = E.far ? getE(E.far) : null, cost = magLineCost(n);
+  if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+  const pyl = E.spots.filter((s) => s.kind === 'ok').length, gaps = E.spots.filter((s) => s.kind === 'skip').length;
+  showBanner(`A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${gaps ? ` (${gaps} gap${gaps > 1 ? 's' : ''} spanned)` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
+  crossingTools();
+}
+
 /* ------------------------------------------------------------------ Mooring Masts and Airships */
 
 /** "the Mast 14 tiles east of the Command Base" (or "the Mast" with no Command Base). */
@@ -4399,6 +4514,9 @@ const CROSSING_HOW = {
   ropeway: () => `A Ropeway is a cable line with gondolas from a station by your roads straight across anything (cliffs, water, rock, down to a canyon floor) to a far end ${ROPE_MIN} to ${ROPE_MAX} tiles away on clear ground no rival holds. ` +
     `It's an ordinary site (${costText(BDEFS.ropeway.cost)}): Haulers bring the goods to the near station, so lay a road to it. Once it's built the cable goes across and the far station goes up. ` +
     'Haulers, Workers and warbots ride it as part of your road network; Freight Trucks, Road Trains and Crawlers are too heavy and keep to the roads.',
+  maglev: () => `A Maglev line is an elevated guideway on pylons between two Maglev Terminals (Build → Move → Maglev Terminal, ${costText(BDEFS.magterm.cost)}), ${MAGLEV.min} to ${MAGLEV.max} tiles apart in any direction, straight across water, cliffs and chasms. Tap a finished Terminal of yours, then the far end: a clear spot where the far Terminal goes up, or another Terminal of yours. ` +
+    `A pylon stands every ${MAGLEV.spacing} tiles from the near Terminal, on open ground or in shallow water, never on a building, a road or track; a chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles), the preview rings each spot and the first bad one is red. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
+    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it.`,
 };
 
 /**
@@ -4418,7 +4536,7 @@ function crossingTools() {
 
 function enterPlaceMode(type, moveFrom) {
   // (Viaducts and Ropeways are Paths tools: the Paths banner's place and look, Paths lit, and a plan sketched there kept.)
-  const crossing = type === 'viaduct' || type === 'ropeway';
+  const crossing = CROSSING_TOOLS.includes(type);
   closeSheet();
   setMode('place', crossing);
   UI.placeType = type;
@@ -4427,10 +4545,12 @@ function enterPlaceMode(type, moveFrom) {
   $('btn-road').classList.toggle('on', crossing);
   refreshOverlay(type);
   const have = playerGoods(ME);
-  showBanner(type === 'ropeway' ? `Tap a highlighted spot for the Ropeway's <b>near station</b>, where your roads are. Then tap the far end. ${costInline(BDEFS.ropeway.cost, have)}`
+  showBanner(type === 'maglev' ? `Tap one of your finished <b>Maglev Terminals</b> (highlighted) for the line's near end. Then tap the far end, ${MAGLEV.min} to ${MAGLEV.max} tiles away. ${costInline(magLineCost(1), have)} a tile, paid from storage as the goods come in.`
+    : type === 'ropeway' ? `Tap a highlighted spot for the Ropeway's <b>near station</b>, where your roads are. Then tap the far end. ${costInline(BDEFS.ropeway.cost, have)}`
     : type === 'viaduct' ? `Tap a highlighted spot on a clifftop for the Viaduct's <b>near end</b>, where your roads are. Then tap the far end, across the valley. ${costInline(BDEFS.viaduct.cost, have)} a tile spanned, paid from storage as the goods come in.`
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
+  if (type === 'maglev' && !R.overlay.valid.some((v) => v)) { showBanner(`<span class="err">No Maglev Terminal to start a line from: build one first (Build → Move → <b>Maglev Terminal</b>, <kbd>G</kbd>; ${costText(BDEFS.magterm.cost)}), finished and on no line.</span>`, null, 'Close'); crossingTools(); return; }
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
     const how = DEFENCE_TYPES.has(type) ? `inside your border${near}. Defences only go on your own land: an Outpost or Keep extends it.` : `within ${BUILD_REACH} tiles of your buildings, roads or track${near}. Lay a road out toward where you want it.`;
@@ -4503,6 +4623,18 @@ function confirmBanner() {
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
   if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
+  if (R.mode === 'place' && UI.placeType === 'maglev') {
+    const A = UI.ropeA, E = R.ropeEnd;
+    if (!A || !E || !E.ok) return;
+    act('magLine', [A.id, E.i, E.j], (res) => {
+      if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); crossingTools(); return; }
+      sfx('place'); haptic('order');
+      addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
+      toast('Maglev line planned: a Worker builds it out from the near Terminal, paid from storage as the goods come in.', 'good');
+      if (UI.planKept) { setMode('road'); showRoadBanner('Maglev line placed. Your plan is still here: tap Build for it.', true); } else setMode('normal');
+    });
+    return;
+  }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
     const A = UI.ropeA, E = R.ropeEnd, type = UI.placeType;
     if (!A || !E || !E.ok) return;
@@ -4681,6 +4813,7 @@ function onMapTap(i, j, wx, wy) {
     const type = UI.placeType;
     if (type === 'ropeway') { ropewayTap(i, j); return; }
     if (type === 'viaduct') { viaductTap(i, j); return; }
+    if (type === 'maglev') { maglevTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
     const chk = canPlace(ME, type, i, j);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
@@ -4911,6 +5044,7 @@ function onMapHover(i, j) {
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
   if (R.mode === 'bpplace') { bpHover(i, j); return; }
   if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'place' && UI.placeType === 'maglev') { if (UI.ropeA && !(R.ropeEnd && R.ropeEnd.tapped) && inMap(i, j)) maglevPreview(i, j, false); return; } // (the line to the pointer, its pylon spots ringed)
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -4926,8 +5060,8 @@ function tapStack(rally, b, wx, wy) {
   const bots = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
-    const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail ? 0.6 : 0.3; // (an Airship is big)
-    const d = dist2(u.x, u.y, wx, wy);
+    const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail || bt.magpod ? 0.6 : 0.3; // (an Airship is big)
+    const d = dist2(u.x, u.y - (bt.magpod ? MAGLEV.head : 0), wx, wy); // (a Maglev pod rides at deck height)
     if (d < r2) bots.push([d, u]);
   }
   bots.sort((p, q) => p[0] - q[0]);
@@ -5886,7 +6020,7 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Maglev lines, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
@@ -6106,8 +6240,9 @@ function openBuildingSheet(b) {
     ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div>${mine && def.inp && !def.pump ? '<div id="sh-why"></div>' : ''}<div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
-    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
-      <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
+    if (def.magterm && b.built && mine) html += magSection();
+    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
+      <p class="hint">${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
       '<div class="section-label">Market board <span class="label-note">the Post\'s ledger: what each good sells for and costs</span></div><div class="board" id="sh-board"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
@@ -6744,6 +6879,10 @@ function refreshBuildingSheet(b) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     renderMastSection(b);
   }
+  if ($('sh-mag')) {
+    for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
+    renderMagSection(b);
+  }
   if ($('sh-rail-status')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     $('sh-rail-status').innerHTML = railStatusText(b);
@@ -6859,6 +6998,7 @@ function renderFoundryOrders(b) {
 function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].airship) { const st = shipStatus(u); return st[0].toUpperCase() + st.slice(1); }
+  if (BOTS[u.type].magpod) { const st = podStatus(u); return st[0].toUpperCase() + st.slice(1); }
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
   if (recyclingNow(u)) return `Being taken apart at the Bot Foundry (${Math.max(1, Math.ceil(recycleTime(u.type) - t.t))} s)`;
@@ -7699,13 +7839,14 @@ function refreshSheet() {
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
-    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship)) { closeSheet(); return; } // (a ship tied up at a Port, a train at a station or an Airship at its Mast keeps its panel)
+    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship && !BOTS[u.type].magpod)) { closeSheet(); return; } // (a ship tied up at a Port, a train at a station, an Airship at its Mast or a pod at its Terminal keeps its panel)
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
+      (BOTS[u.type].magpod ? `<div class="kv"><span>Power</span><span>${u.magTo ? (u.crawl ? 'none: crawling at a Worker\'s pace' : 'from the Generators by the Terminals') : u.inside && magPartner(getE(u.inside) || {}) ? (magLinePowered(getE(u.inside)) ? 'the line is powered' : 'the line has no power: it would crawl') : 'no line'}</span></div><div class="kv"><span>Hold</span><span>${u.cargo ? sumValues(u.cargo) : 0} of ${BOTS[u.type].carry} goods</span></div>` :
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
-      `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
+      `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>`) +
       (BOTS[u.type].airship ? airshipRows(u) : BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
