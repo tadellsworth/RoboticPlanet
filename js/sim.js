@@ -5761,6 +5761,28 @@ function updateLoot() {
   S.loot = S.loot.filter((l) => l.until > S.time && lootLeft(l) > 0);
 }
 
+/**
+ * Is rival AI `owner`, with a decisive lead, gathering an army it already has for a march or a storm (massing for one,
+ * P.massFor with `lead`, with as many armed warbots as it takes, or with a storm under way, P.stormOn: see aiMarch)?
+ * Then a warbot that has carried a crate home stays there instead of going back for another (doLoot), so the march can
+ * draw on it. (Looting counts for nothing in aiSpare: only garrisoned warbots can be sent, and a warbot goes back for
+ * crates up to 50 tiles off until the pile is gone. On the Hollow, the hoards of the cleared nests never rot, and 9 to
+ * 18 of a rival's 30 warbots shuttled crates for half an hour while it "massed" for a storm it could then only send 12
+ * to; Hollow Small seed 21 ran out the clock with the rival at twice the army.) Not a colony without the lead or short
+ * of the warbots (massing for a nest strike, aiMurmur's P.massFor, for a march it hasn't the army for, or in an even
+ * war): the crates may be the Alloy it lives on, and an even war's rival masses for some fort most of the game. (Held
+ * whenever it massed, three of four Hollow Large games ran out the clock that had ended, their colonies starved.)
+ */
+function lootHeld(owner) {
+  const P = S.players[owner];
+  if (!P || !P.ai) return false;
+  if (P.stormOn) return true;
+  if (!P.massFor || !P.massFor.lead || S.time > P.massFor.until) return false;
+  let armed = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && botArmed(u)) armed++;
+  return armed >= P.massFor.need - 2;
+}
+
 /** A loot pile within `range` tiles of warbot u that it could walk to, or null. */
 function lootNear(u, range) {
   if (!S.loot || !S.loot.length || u.loot || u.noLoot > S.time) return null; // (called home: it leaves crates be a while)
@@ -5875,8 +5897,9 @@ function doLoot(u, t, dt) {
       u.task = back; u.path = null; return;
     }
   }
-  // More crates still lying there: back for another (a warbot only carries one at a time).
-  const more = botArmed(u) && !wantsRepair(u) && lootNear(u, 50);
+  // More crates still lying there: back for another (a warbot only carries one at a time); not a rival's while it
+  // gathers its army for a march or a storm (lootHeld): it stays home, where the march can draw on it.
+  const more = botArmed(u) && !wantsRepair(u) && !lootHeld(u.owner) && lootNear(u, 50);
   if (more) { goLoot(u, more); return; }
   // Yours stay here only if it's where they belong (their post, or with none the Command Base); otherwise
   // they walk back there (goGarrison), not into whichever garrison was nearest the pile.

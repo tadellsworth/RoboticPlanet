@@ -1253,7 +1253,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no
   Haulers) collect piles and take them to storage (`dispatch` step 4d, `doCrate`) while no enemy robot or gun is
   within `CRATE_SAFE` tiles (`foesNear`). Idle or victorious warbots nearby carry one crate each to their side's
-  nearest garrison and go back for more (`doLoot`). A player's warbots holding a flag (not the rival's) carry home piles within `FLAG_LOOT` (8)
+  nearest garrison and go back for more (`doLoot`); a rival's stays home instead while its colony, with a decisive lead,
+  gathers an army it already has for a march or a storm (`lootHeld`: `P.massFor` with `lead` and as many armed warbots
+  as it takes, or `P.stormOn`), since only garrisoned warbots can be sent (`aiSpare`), and on the Hollow, whose cleared
+  nests' hoards never rot, half its army shuttled crates while it "massed"; one without the lead or short of the
+  warbots keeps looting (the crates may be the Alloy it lives on). A player's warbots holding a flag (not the rival's) carry home piles within `FLAG_LOOT` (8)
   tiles of it once no enemy robot (the Murmur too) or gun is as near, up to half the squad at a time, and go back to the
   flag after (`flagLoot`, `flagPile`, `u.resume`); they used to stand beside a nest's hoard and leave it to rot. Crates
   left at an Outpost (`b.loot`) are hauled on to storage, and its panel lists them as Salvage (with a warning if no road
@@ -1439,7 +1443,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   masses: the army target rises (`P.massFor`, `aiWantArmy`), its Outposts with no enemy near keep no warbot back
   (`keepW` 0), the spot is softened (`P.soften`) and a Bulwark ordered (`P.shieldWant`), until it marches. With a
   decisive lead (half as many again as the enemy's army, and four more) the next march is a storm of the enemy Command
-  Base (`P.stormOn`): up to 30 warbots form up under a flag about 9 tiles out, on the side it comes from, where the
+  Base (`P.stormOn`): up to 30 warbots (or what the base takes and two more, when that is more and it can gather them;
+  it used to stop at 30 whatever the base took, and a base behind enough guns was never stormed) form up under a flag about 9 tiles out, on the side it comes from, where the
   fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
   flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
   the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.

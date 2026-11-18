@@ -2549,7 +2549,8 @@ function aiPush(p, lvl, army, enemyArmy) {
  * orders a Bulwark (P.soften, P.shieldWant), and goes once it has them. (It used to send the 10 to 14 it had to stand
  * beside the nearest fort, whatever guarded it, and lose most of them.)
  * With a decisive lead (half as many warbots again as the enemy and four more) the next march is a storm of the
- * enemy Command Base: with every warbot it can gather (up to 30), as soon as that is enough to take the base;
+ * enemy Command Base: with every warbot it can gather (up to 30, or what the base takes and two more when that is more),
+ * as soon as that is enough to take the base (while it masses, a warbot that brought a crate home stays there: lootHeld);
  * until then, while its whole army would be, it masses for the base and marches on nothing else, for up to four
  * minutes (P.stormT; then a cheaper fort first, as above). Against a crushed rival (twice its army and two more) it
  * goes however the base's guns count, once it can gather twice the enemy's whole army and two more, 8 at least, and
@@ -2581,7 +2582,12 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   const last = crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id));
   const eb = getE(S.players[enemy].lander), by = strong && eb && !eb.dead && eb.owner === enemy && !aiBeaten(P, eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
   if (by) {
-    const sp = aiSpare(p, { x: by.i, y: by.j }, last ? 'storm' : 'flag'), n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
+    const sp = aiSpare(p, { x: by.i, y: by.j }, last ? 'storm' : 'flag');
+    let n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
+    // (A base that takes more than 30: the storm is as big as that and two more, when it can gather them. It used to
+    // stop at 30 whatever the base took, so a base behind enough guns could never be stormed, and the rival marched
+    // on its cheapest Outpost with 18 instead, and lost them, to the end of the game.)
+    if (g > n && sp.n > n) { n = Math.min(sp.n, g + 2); g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n)); }
     let whole = 0; // (its armed army outside Bunkers)
     if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
     const go = crushing ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
@@ -2616,7 +2622,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     }
   } else if (hard) {
     // Held back: it masses for it, its Howitzers, Missiles and bomber soften the spot meanwhile, and a Bulwark comes to lead.
-    P.massFor = { need: hard.need + 2, until: S.time + 240 };
+    P.massFor = { need: hard.need + 2, until: S.time + 240, march: true, lead: strong }; // (`lead`: with a decisive lead its warbots stay home off the crates meanwhile, see lootHeld)
     P.siegeAt = { x: hard.b.x, y: hard.b.y, until: S.time + 60 };
     P.soften = { x: hard.b.x, y: hard.b.y, until: S.time + 60 };
     P.shieldWant = S.time;
