@@ -441,6 +441,20 @@ python3 preview/resource_sheet.py <sheet folder>  # the design sheet and the ren
 
 Resources are graded for the time of day in code, so each is one day render; its glow pass becomes a night glow image.
 
+## Oil seep puddle directions
+
+A design sheet for a new look for the oil seeps (IDEAS.md: "A new look for the oil seeps"), after the owner's reference
+picture of a glossy jet-black puddle: three directions, all the same kind of puddle, differing in character (A fresh
+spill, B spattered seep, C still pool). The puddle is built from a seep's tiles the way `drawSeep` builds its shape and
+shaded from the shape itself (rim light where the edge faces the player, sheen patches, a damp stain); pumping erodes
+the wet area inward. Pure Python, no 3D render; not installed. Run from this folder:
+
+```
+python3 terrain/oil_puddles.py                        # a quick test: the three puddles at three fills, on plain sand (out/res)
+python3 preview/oil_seep_mock.py out/preview/oil      # side by side with today's seep, close-ups, fill levels, a colony, phone size
+python3 preview/oil_seep_sheet.py out/preview/oil <sheet folder>   # the design sheet and its pictures
+```
+
 ## The Leech, the Spitter and the Sapper
 
 A design sheet for the three Murmur forms beside the Scuttler and the Brute, for the owner to approve; not installed.
