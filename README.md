@@ -59,7 +59,8 @@ how goods move.
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
-- **Observer mode:** the computer plays every colony (two to four, on any map type, each with the doctrine you pick) while you
+- **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,
+  victory, level, rules and challenge options) while you
   look on at up to 8×, with a scout report on what each is doing and a camera that follows the fighting; nothing is
   saved (see Observer mode below).
 - **Scout reports:** in your own games, a message now and then on what a computer rival is up to (massing for a push on
@@ -1136,14 +1137,27 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
   to the pause menu if it was opened from there; everything set aside comes back as it was.
 - **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Observer** pill on the main menu opens a setup card
-  (`openWatch`): the map type (grouped as in the Custom Game picker), how many colonies (2, or up to the map type's
-  `maxPlayers`), each one's doctrine (or Random: one no other colony has) and the Murmur (`w-murmur`: Off, Quiet or
-  Active, Active by default, `setup.murmur`; with them on the random biome is never Argos, `watchBiome`; the scout report
-  has nightfall, dawn and a nest or the Deep's mound wrecked as news, whoever has the most warbots round it named as the
-  wrecker, `watchEvents`), kept on this device in `terrafall.watch`. (It used to take the Murmur from the new-game screen.)
+  (`openWatch`, built once by `buildWatch`, kept up to date by `syncWatch`), laid out like Custom Game's (sections **Match**,
+  **Planet**, **Rules**, **Challenge**, `.m-sec`, with the summary and Start observing in a bar that stays in view) and
+  built from its parts: `segChoice`/`markSeg` (the choice rows), `hoverInfo` (each section's line), `shapePickRow`/
+  `biomePickRow` and `openPicker(kind, ctx)` (the map type and biome pickers, picking for `watchPickCtx`), `randomShape`,
+  `terrainInfo`, `resourceInfo`, `MURMUR_INFO`, `VICTORY`, `MODS`. The setup (`watchSetup`, kept on this device in
+  `terrafall.watch`; what an older one lacks comes as Observer mode always had it): `n` colonies (2, or the map type's
+  `minPlayers` to `maxPlayers`; Random: as asked), `teams` (2 vs 2 with four, Capture only: `watchTeams`), `victory`
+  (Capture, Domination, Uplinks; no Uplinks in the Hollow: `watchVictory`), `diff` (Normal by default; `humans: []`
+  gives every colony, player 0 too, the level's head start and pace: `WATCH_DIFF_INFO`), `docs` (each colony's doctrine
+  or Random: one no other colony has), `shape`/`shapeRnd`, `biome`/`biomeRnd` (Random by default; with the Murmur on, a
+  random biome is never Argos, `watchBiome`), `size`, `rough`, `rich`, `seed` (a saved planet picked from Custom Game's
+  saved planets, or null: a new planet each game; changing the map's settings drops it), `nuke` (on), `events` (off, as
+  before), `murmur` (`w-murmur`: Off, Quiet or Active, Active by default; none on Argos or a map type without room for
+  nests: `watchMurmur`) and `mods` (`WATCH_MODS`: every challenge modifier but No turrets, which only binds people; Rival
+  head start gives every colony the head start). Left out: Mode (always Versus), Unlimited resources (a player's own
+  colony), the device's Time of day, Weather and Graphics (set in the pause menu, they apply to a watched game too).
+  The scout report has nightfall, dawn and a nest or the Deep's mound wrecked as news (whoever has the most warbots
+  round it named as the wrecker), and with Domination or the Uplinks who takes or loses the lead (`watchEvents`).
   **Start observing** (`watchStart`) is a normal game in which the computer plays every colony: `newGame` with
   `humans: []` (each gets the rival's difficulty settings and doctrine; COBALT's doctrine is set straight after, since
-  `newGame` gives player 0 the Steward), Normal difficulty, Nuclear race on, no planetary events, a random biome. `ME`
+  `newGame` gives player 0 the Steward) and the setup's options. `ME`
   stays 0, a colony the computer plays like the rest (as in the menu's backdrop game), for what this device shows and
   hears; `S.watch` has the game play on to the last colony standing (`eliminate`: a game with nobody in it otherwise
   ends when COBALT falls), and `playerName` says COBALT, not You. Nothing is saved: `saveGame` and `autoSave` never save
@@ -1164,8 +1178,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the busiest fighting (`watchSpot`: warbots in a fight, buildings just hit, shells and missiles landing, in 10-tile
   cells; a spot keeps the camera while it's half as busy as the busiest), else the biggest band on the move, else each
   Command Base in turn; once the map is moved by hand it stays (**Follow the action**, or F, takes it back). The end
-  (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Observe another** (the same setup on a
-  new planet) and **Main menu**; `toMenu` ends Observer mode (`watchEnd`).
+  (`watchOver`, from `showGameOver`) says who won (a team: both colonies) and how, and when each colony fell, with
+  **Observe another** (the same setup, on a new planet unless a saved one was picked) and **Main menu**; `toMenu` ends Observer mode (`watchEnd`).
   Taps open the panel of the building or robot there (`watchTap`, `WATCH_INPUT.onTap`; tapping the same spot again steps
   to the next, as in a game), to look at only: while watching, style.css hides every button, field and switch in a
   panel (`body.watching #sheet-body`), no key presses one (`sheetKeyButton` finds none showing), and the owner line names
