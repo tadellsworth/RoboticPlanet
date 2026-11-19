@@ -292,7 +292,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     costs the Asphalt alone; the overpass is planned the moment the crossing exists (the sketches count and price it);
     the cat's-eyes are drawn live rather than baked, so the Murmur's dark puts them out tile by tile. Open: the rival
     (the Architect lays a pair base to Depot cluster once its late game has a Roadworks; raiders already tear lanes up
-    like roads); C's flyover as a later piece over a second lane; the sign gantries (drawn nowhere yet); nicer one-way
+    like roads); C's flyover as a later piece over a second lane; the sign gantries (built Nov 19 2026, drawn in code, blank boards); nicer one-way
     arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
     a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
     (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
