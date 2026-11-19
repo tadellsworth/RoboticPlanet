@@ -1818,12 +1818,13 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
  * 4 Defend, 5 All; Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
- * map, B closes the menu and R lays roads (the Move tab's Roads card), so no building uses those; the
+ * map and B closes the menu, so no building uses those. R lays roads (the Move tab's Roads card) except on a tab with a
+ * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
  * Defend tab's Walls card is X, as in Paths. On the All tab each card shows its tab's number and letter.
  */
 const BUILD_KEYS = {
-  gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
-  make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
+  gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
+  make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
 };
@@ -2005,7 +2006,7 @@ function initKeyboard() {
     if (sk) { e.preventDefault(); sk.click(); return; }
     // In the build menu, a building's letter on the tab that's showing picks it, R goes straight to
     // laying roads and X to Walls. W, A, S and D still pan the map (no building uses them).
-    if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openRoadDraw(); return; }
+    if (UI.sheetKind === 'build' && k === 'r' && !(BUILD_KEYS[UI.buildTab] && Object.values(BUILD_KEYS[UI.buildTab]).includes('r'))) { e.preventDefault(); openRoadDraw(); return; }
     if (UI.sheetKind === 'build' && k === 'x' && $('build-walls')) { e.preventDefault(); $('build-walls').click(); return; }
     // A letter that's no building's on this tab does what it does elsewhere (Q army, H base, M minimap...).
     if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && k !== 'b') {
@@ -2827,6 +2828,7 @@ function modsBriefing() {
 }
 
 function startNewGame() {
+  UI.buildTab = 'gather'; // (a new game's build menu opens on Gather, the owner's call; picking another tab is remembered as before)
   clearSave();
   closePicker(false);
   // Random map type or biome: picked now (see resolveRandom); the menu keeps Random for next time.
