@@ -1148,8 +1148,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
-- **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
-  close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
+- **Saving:** the game saves single-player progress every in-game minute and keeps the latest five checkpoints.
+  Use **Restore checkpoint** in the pause menu or on the game-over screen. Switching away or closing the tab also
+  updates the save used by **Continue**. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
