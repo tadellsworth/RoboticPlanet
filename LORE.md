@@ -65,6 +65,8 @@ The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds n
 | Blackwater | Swamp | Soft ground that Pavers hate. |
 | The Polar Caps | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
 | Cinderlands | Volcanic ash | Crust cracked open by the oldest strikes. |
+| Steamwells | Geothermal basin | Hot springs on sulfur terraces; the ground still warm from the strikes below. |
+| The Shoals | Tropical islands | Reefs and palm keys in the warm seas. Only reached by sea or air. |
 | The Bloom | Violet alien growth | Native life feeding on fallen Crystal (see Native life). |
 | The Hollow | Underground caverns | The Murmur's lair beneath the Bloom (see The Hollow). |
 
@@ -108,7 +110,7 @@ The Pathfinder carried more than relays. Its seed vaults held Earth: grasses, tr
 Sixty years on, Earth's animals thrive on a world made ready for people who never came. They are the only colonists that arrived.
 
 - **Where it took.** The green and temperate regions are mostly Earth's now: deer and songbirds in Greenreach, geese and foxes in Emberwood, herds on the Long Grass, herons in Blackwater, hares and owls in the Polar Caps. Only the hardiest Earth life holds on in the Rust: lizards, a hawk.
-- **Where it didn't.** The land the ringfall made strange keeps small native creatures of its own: ash beetles in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and crawlers, hinge-backs and cave sailwings in the Hollow. Argos has nothing.
+- **Where it didn't.** The land the ringfall made strange keeps small native creatures of its own: ash beetles and ember moths in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and blind crawlers, hinge-backs, cave sailwings and glow-worms in the Hollow. Argos has nothing.
 - **What the robots make of it.** Their orders file the animals as colony stock, held for the colonists, so no vanguard harms them on purpose. Flocks lift at the first shot and herds scatter from convoys. Even in quiet stretches, roads and outposts break up the places where they feed. The survey still counts the acres made ready for Arrival. Carrion birds circle every new wreck.
 - **The animals know first.** Before the Murmur come up, the birds stop singing and the herds move off. A colony that listens learns to read the quiet. At dawn they come back.
 - **Tone.** The garden is the planet's beauty and its sharpest sadness. Show it, never explain it: deer grazing the lawns of an empty town, birds nesting in a passenger shelter, a herd crossing a road lit for traffic that never comes.
@@ -119,7 +121,7 @@ The orbital survey missed the planet's native life because it lives underground 
 
 No robot has ever logged one alone. The Murmur is always plural, and it is the threat that outlasts every war.
 
-- **They feed on charge.** Before the landings the Murmur lived on the pulse of Ringfall and the slow recharge of buried seams. The long gaps gave the surface time to recover. Now batteries, charging stations and the colonies’ machinery spill charge every night. Expedition logs show the tunnels lengthening in the direction of the new power.
+- **They feed on charge.** Before the landings the Murmur lived on the pulse of Ringfall and the slow recharge of buried seams. The long gaps gave the surface time to recover. Now Crystal, batteries, charging stations and the colonies’ machinery spill charge every night. Crystal still registers as food above all, which is why a growing colony draws raids. Expedition logs show the tunnels lengthening in the direction of the new power.
 - **The war feeds them.** After every battle they drain the power from the wreckage. Each fight between colonies leaves them a little stronger.
 - **They're glimpsed, not seen.** A sensor blip, road lights going dark one by one at night, a Hauler that stops reporting.
 - **Their tunnels run under the old battlefields,** and the Research Lab finds the network has kept spreading for decades.
@@ -386,7 +388,8 @@ meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: t
 the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
 classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Sapper (the Delver until the owner renamed it, Nov 2026); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
 above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The polar region is the Polar Caps (the owner's name, Nov 18 2026; it was Hoarfell before, and the White before that) and the swamp is Blackwater (renamed from the White and the Sump
-by the owner, Nov 2026). The biomes take their region names everywhere, the new-game
+by the owner, Nov 2026). The geothermal basin is Steamwells and the tropical islands are the Shoals (named Nov 19 2026,
+at the owner's request; built as Boiling Springs and Tropical). The biomes take their region names everywhere, the new-game
 setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. The Hollow is in the game as a map
 of its own (Nov 2026), always night, under its own name in every text: Command Bases come down through **breaches** (shafts of
@@ -400,7 +403,9 @@ mode built around the Murmur.
 The living world (the owner's decision, Nov 17 2026; built): the Pathfinder's garden is on every map but Argos, as
 scenery only. Earth's animals live in the green regions (deer, songbirds, geese, foxes, herds, herons, hares, owls),
 the hardiest at the Rust's edges (lizards, a hawk), and native creatures where the land is strange (ash beetles and
-ember moths in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and cave life in the Hollow). They scatter
+ember moths in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and blind crawlers, hinge-backs, cave
+sailwings and glow-worms in the Hollow; the owner dropped the Bloom's jellyfish-like floaters, Nov 19 2026, and wants
+at least two land animals and one bird on every map). They scatter
 from the fighting, carrion birds circle new wrecks, moths circle the colony lights, and before a Murmur night the
 birds fall silent and the animals near the nests move off; at dawn they come back. Wrecks slowly overgrow, cloud
 shadows drift by day, and from dusk to dawn every Command Base shines a beam straight up into the sky, with nothing

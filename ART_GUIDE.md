@@ -1696,9 +1696,9 @@ the far Terminal.
 - Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
 
 
-### Boiling Springs
+### Steamwells (geothermal basin)
 
-Boiling Springs uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
+Steamwells uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
 terraces have bright carbonate lips and darker seams, with the same upper-left lighting as the
 other terrain. The 512 px textures tile seamlessly. The six centered transparent scenery sprites
 show baths, stacked pools, a geyser cone, a dry sulfur shelf and vents. The geyser and vents use
@@ -1708,16 +1708,16 @@ Regenerate the WebP set with
 `python renderer/terrain/terrain_springs.py art/biomes/springs` using the renderer's Python environment.
 
 
-### Tropical coasts and lava motion
+### The Shoals (tropical coasts) and lava motion
 
-Tropical sand has warm ripples and pale coral grit. Two rendered palm silhouettes, broadleaf
+The Shoals' tropical sand has warm ripples and pale coral grit. Two rendered palm silhouettes, broadleaf
 plants and low shoreline vegetation use the same camera and light as the other biome sprites.
 Warm sand shows through turquoise reef shallows. Seagulls have white bodies and dark wing tips.
 Small waves drift across open water. Fish, dolphins, and whale blows are canvas
 scenery, with water ripples and muted silhouettes at night. Lava reuses the baked crust texture
 under thin moving highlights and rising steam.
 
-Generate Tropical's WebP assets with
+Generate the Shoals' (tropical) WebP assets with
 `python renderer/terrain/terrain_tropical.py art/biomes/tropical`.
 
 

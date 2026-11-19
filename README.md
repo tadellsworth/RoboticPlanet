@@ -70,11 +70,11 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Boiling Springs, Tropical, the
+Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Steamwells (geothermal basin), the Shoals (tropical islands), the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -814,7 +814,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
     menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
-    mound as a nest everywhere), the night windows are surges (the only time packs come, as everywhere), and
+    mound as a nest everywhere), the night windows are surges (the only time packs come, as everywhere; once the Deep's mound has lost a quarter of its
+    armor it also sends packs of its own, bigger and more often as the armor falls: every 32, 20 then 10 seconds at
+    25%, 50% and 80% lost, `deepSurgeAt`/`deepSurgeTier`), and
     `veinLure` still pulls packs and tunnels toward a lured colony's veins (`murmurPrey`, `murmurGoals`). In Colony,
     `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
     night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,
@@ -1654,7 +1656,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
   **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the Polar Caps, Emberwood, the Long Grass, Blackwater,
-  Cinderlands, Boiling Springs and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
+  Cinderlands, Steamwells, the Shoals and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
@@ -2270,7 +2272,7 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 
 - **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): deer and foxes in Greenreach and Emberwood, wildebeest and hares on the Long
   Grass, alligators and turtles in Blackwater, hares and arctic foxes in the Polar Caps, lizards and hares in the Rust,
-  lizards and ash beetles in Cinderlands, and lizards and turtles at Boiling Springs and on Tropical maps. Shorebirds,
+  lizards and ash beetles in Cinderlands, and lizards and turtles in Steamwells and on the Shoals. Shorebirds,
   songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
   sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
@@ -2302,17 +2304,17 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 - **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
   (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
 
-### Tropical coasts and lava effects
+### The Shoals (tropical coasts) and lava effects
 
-Choose a naval map to enable **Tropical** in the biome picker. It uses coral sand, palms,
+Choose a naval map to enable **the Shoals** (tropical islands) in the biome picker. It uses coral sand, palms,
 reef water, pale shallows and seagulls along the shore. Small waves drift across open water. On naval maps, fish and dolphins leap in open
 water and whales sometimes surface to blow. Frozen water and lava have their own scenery.
 The Volcano map type and Cinderlands have drifting highlights on exposed lava and steam vents
 along the banks. These effects are drawn in the browser without changing terrain or movement.
 
-### Boiling Springs
+### Steamwells (geothermal basin)
 
-Select **Boiling Springs** under **Custom Game → Planet → Biome**. The geothermal basin has sulfur-stained
+Select **Steamwells** under **Custom Game → Planet → Biome**. The geothermal basin has sulfur-stained
 limestone textures, mineral bands along lake shores, and six terrain decorations, including steaming
 vents and periodic geysers. The mini pools are decorations cleared by construction. The selected
 map type still determines water crossings and resource placement. The terrain and Sky islands

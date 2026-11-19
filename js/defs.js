@@ -44,9 +44,9 @@ const BIOMES = {
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
-  springs: { name: 'Boiling Springs', kind: 'Geothermal basin', region: 'Boiling Springs', plants: 0.13, weights: [1, 0.85, 0.63, 0.34, 1.15, 0.46],
+  springs: { name: 'Steamwells', kind: 'Geothermal basin', region: 'Steamwells', plants: 0.13, weights: [1, 0.85, 0.63, 0.34, 1.15, 0.46],
     desc: 'Turquoise and amber hot springs on sulfur-stained limestone terraces. Steam drifts off the vents, and geysers break the surface.' },
-  tropical: { name: 'Tropical', kind: 'Tropical islands', region: 'the Tropical islands', plants: 0.30, groves: true, navalOnly: true,
+  tropical: { name: 'the Shoals', kind: 'Tropical islands', region: 'the Shoals', plants: 0.30, groves: true, navalOnly: true,
     desc: 'White coral sand, coconut palms, and clear turquoise water over the reefs. Available on naval maps.' },
   // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
   // (it isn't in BIOME_ORDER). Its own art (art/biomes/hollow) loads only when it is played (LAZY_BIOMES in render.js).
