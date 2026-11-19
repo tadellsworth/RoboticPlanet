@@ -31,7 +31,7 @@ const FAUNA_DREAD = 75;   // seconds before a Murmur night that the animals sens
 const FAUNA_CAP = 150;    // animals at once at Auto
 const FAUNA_STEP = { saver: 0, auto: 1, high: 1.25, ultra: 1.5 }; // how many next to Auto, by the Graphics step
 /** The biomes whose birdsong falls silent before a Murmur night and comes back as a dawn chorus (faunaHush, faunaChorus). */
-const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
+const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, tropical: 1 };
 
 /*
  * The animals. mode: how it lives (FAUNA_MODES); act: when it's out ('day', 'night', 'dusk' or 'all'); hab: the cell
@@ -41,8 +41,20 @@ const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
  * it soars (tiles); bold: it doesn't flee the fighting (the scavengers, the geese passing high over).
  */
 const FAUNA_KINDS = {
+  turtle: { mode: 'herd', draw: 'turtle', act: 'day', hab: 'shore', alt: 'open', min: 3, p: 0.61, n: [1, 3], z: 16, size: 0.36,
+    speed: 0.25, run: 0.88, roam: true, col: ['#6b794c', '#c4b583', '#384531'] },
+  alligator: { mode: 'herd', draw: 'alligator', act: 'all', hab: 'shore', alt: 'open', min: 3, p: 0.55, n: [1, 2], z: 12, size: 0.71,
+    speed: 0.32, run: 2.0, roam: true, col: ['#4f6147', '#94a06b', '#293c32'] },
+  hinge: { mode: 'herd', draw: 'hinge', act: 'all', hab: 'open', min: 6, p: 0.71, n: [2, 3], z: 12, size: 0.54,
+    speed: 0.38, run: 2.2, roam: true, col: ['#624952', '#ffa660', '#352738'], lift: 0.27 },
+  switchtail: { mode: 'herd', draw: 'switchtail', act: 'all', hab: 'open', min: 8, p: 0.56, n: [1, 3], z: 13, size: 0.49,
+    speed: 0.47, run: 2.6, roam: true, col: ['#336459', '#a4e2ab', '#1f3043'], lift: 0.32 },
+  sailwing: { mode: 'soar', draw: 'sailwing', act: 'all', hab: 'open', min: 7, p: 0.31, n: [1, 2], z: 10, size: 0.46,
+    high: 1.5, col: ['#753a61', '#edb494', '#3d224f'], lift: 0.35 },
+  gull: { mode: 'flock', draw: 'gull', act: 'day', hab: 'shore', alt: 'open', min: 3, p: 0.84, n: [3, 6], z: 13, size: 0.33,
+    col: ['#f1f0e8', '#bcc5c7', '#343d42'], ground: true },
   songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
-  snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', min: 1, p: 0.55, n: [6, 10], z: 22, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
+  snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', alt: 'open', min: 1, p: 0.55, n: [6, 10], z: 22, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
   deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 12, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
   herd: { mode: 'herd', draw: 'antelope', act: 'day', hab: 'open', min: 26, p: 0.5, n: [5, 10], z: 9, size: 0.46, speed: 0.26, run: 2.9, col: ['#4c4038', '#8c7c6a', '#1c1814'], spread: 1.6 },
   fox: { mode: 'herd', draw: 'fox', act: 'day', hab: 'open', min: 10, p: 0.45, n: [1, 1], z: 14, size: 0.38, speed: 0.6, run: 2.5, col: ['#c0602c', '#f2e6d6', '#2a1a10'], roam: true },
@@ -51,7 +63,7 @@ const FAUNA_KINDS = {
   heron: { mode: 'wade', draw: 'heron', act: 'day', hab: 'shallow', min: 2, p: 0.65, n: [1, 1], z: 12, size: 0.52, col: ['#8e98a2', '#e4e8ec', '#2c3036'] },
   geese: { mode: 'swim', draw: 'goose', act: 'day', hab: 'shallow', min: 5, p: 0.4, n: [3, 6], z: 12, size: 0.38, col: ['#8a7e6e', '#ece4d4', '#1e1c1a'] },
   frog: { mode: 'small', draw: 'frog', act: 'all', hab: 'shore', min: 2, p: 0.6, n: [2, 4], z: 24, size: 0.09, col: ['#5f7c36', '#a8c65c', '#222e18'], hop: true },
-  lizard: { mode: 'small', draw: 'lizard', act: 'day', hab: 'rock', min: 2, p: 0.7, n: [1, 3], z: 20, size: 0.24, col: ['#d6ae7a', '#f2dcae', '#6a4424'], dart: true },
+  lizard: { mode: 'small', draw: 'lizard', act: 'day', hab: 'rock', alt: 'open', min: 2, p: 0.7, n: [1, 3], z: 20, size: 0.24, col: ['#d6ae7a', '#f2dcae', '#6a4424'], dart: true },
   beetle: { mode: 'small', draw: 'beetle', act: 'day', hab: 'open', min: 10, p: 0.6, n: [2, 5], z: 22, size: 0.16, col: ['#221c1a', '#f08a3a', '#000000'] },
   crawler: { mode: 'small', draw: 'crawler', act: 'all', hab: 'open', min: 8, p: 0.6, n: [1, 3], z: 16, size: 0.24, col: ['#c4bcc8', '#ece6f0', '#6a6070'], lift: 0.45 },
   owl: { mode: 'perch', draw: 'owl', act: 'night', hab: 'tree', min: 6, p: 0.4, n: [1, 1], z: 14, size: 0.24, col: ['#7c644a', '#ccb48e', '#2a2018'], eyes: '#ffc860', lift: 0.45 },
@@ -60,7 +72,6 @@ const FAUNA_KINDS = {
   bat: { mode: 'flit', draw: 'bat', act: 'night', hab: 'tree', min: 4, p: 0.5, n: [2, 4], z: 11, size: 0.26, col: ['#625458', '#9a8a90', '#3a3034'], lift: 0.55 },
   duskbat: { mode: 'flit', draw: 'bat', act: 'dusk', hab: 'rock', min: 2, p: 0.5, n: [2, 4], z: 11, size: 0.26, col: ['#4a3a34', '#8a7068', '#2e221c'], lift: 0.3 },
   embermoth: { mode: 'flit', draw: 'moth', act: 'night', hab: 'open', min: 8, p: 0.55, n: [3, 6], z: 11, size: 0.07, col: ['#5a2a14', '#ffb060', '#1a0c06'], glow: '#ff8a30', slow: true },
-  floater: { mode: 'drift', draw: 'floater', act: 'all', hab: 'open', min: 6, p: 0.65, n: [1, 3], z: 9, size: 0.3, col: ['#c8a0e8', '#f6dcff', '#6a3a92'], glow: '#d890ff' },
   vulture: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'open', min: 20, p: 0.16, n: [1, 3], z: 8, size: 0.62, col: ['#3e322a', '#a8987e', '#1a1412'], bold: true, high: 2.6 },
   hawk: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0.14, n: [1, 1], z: 8, size: 0.44, col: ['#7a5236', '#dcc4a2', '#2a1a10'], bold: true, high: 2.2 },
   crow: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0, n: [2, 4], z: 8, size: 0.3, col: ['#222026', '#4e4a56', '#0c0c0e'], bold: true, high: 1.5 },
@@ -73,17 +84,19 @@ const FAUNA_KINDS = {
  * birds perch in, shrubs, grass and dead trees.
  */
 const FAUNA_LIFE = {
-  jungle: { kinds: ['songbird', 'deer', 'owl'], glows: ['firefly'], light: 'moth', carrion: 'crow', trees: [1, 2, 3, 4] },
-  autumn: { kinds: ['fox', 'geese', 'bat'], migrant: 'vgeese', light: 'moth', carrion: 'crow', trees: [1, 2, 3, 4, 6] },
-  savanna: { kinds: ['herd', 'vulture'], glows: ['eyes'], light: 'moth', carrion: 'vulture', trees: [1, 2, 5, 6] },
-  swamp: { kinds: ['heron', 'frog'], glows: ['firefly'], light: 'moth', carrion: 'crow', trees: [1, 4, 6] },
+  jungle: { kinds: ['deer', 'fox', 'songbird', 'owl'], glows: ['firefly'], light: 'moth', carrion: 'crow', trees: [1, 2, 3, 4] },
+  autumn: { kinds: ['deer', 'fox', 'geese', 'songbird'], migrant: 'vgeese', light: 'moth', carrion: 'crow', trees: [1, 2, 3, 4, 6] },
+  savanna: { kinds: ['herd', 'hare', 'vulture'], glows: ['eyes'], light: 'moth', carrion: 'vulture', trees: [1, 2, 5, 6] },
+  swamp: { kinds: ['alligator', 'turtle', 'heron', 'songbird'], glows: ['firefly'], light: 'moth', carrion: 'crow', trees: [1, 4, 6] },
   polar: { kinds: ['hare', 'snowbird', 'snowyowl', 'arcticfox'], light: 'moth', carrion: 'raven', trees: [3], perch: [1, 3, 5] },
-  desert: { kinds: ['lizard', 'hawk', 'duskbat'], light: 'moth', carrion: 'vulture', trees: [] },
-  volcanic: { kinds: ['beetle', 'crow1', 'embermoth'], light: 'embermoth', carrion: 'crow', trees: [], dead: [1] },
-  alien: { kinds: ['floater'], light: 'mote', carrion: 'floater', trees: [] },
-  hollow: { kinds: ['crawler'], glows: ['glowworm'], trees: [] },
+  desert: { kinds: ['lizard', 'hare', 'hawk', 'duskbat'], light: 'moth', carrion: 'vulture', trees: [] },
+  volcanic: { kinds: ['beetle', 'lizard', 'crow1', 'hawk', 'embermoth'], light: 'embermoth', carrion: 'crow', trees: [], dead: [1] },
+  springs: { kinds: ['lizard', 'turtle', 'gull'], trees: [] },
+  tropical: { kinds: ['lizard', 'turtle', 'gull', 'songbird'], light: 'moth', trees: [1, 2, 3] },
+  alien: { kinds: ['hinge', 'switchtail', 'sailwing'], trees: [] },
+  hollow: { kinds: ['crawler', 'hinge', 'sailwing'], glows: ['glowworm'], trees: [] },
 };
-const FAUNA_GLOW = { firefly: '#d4ff6a', eyes: '#d8ff8a', glowworm: '#7fe8ff', moth: '#fff0d0', embermoth: '#ff8a30', mote: '#e6a0ff' };
+const FAUNA_GLOW = { firefly: '#d4ff6a', eyes: '#d8ff8a', glowworm: '#7fe8ff', moth: '#fff0d0', embermoth: '#ff8a30' };
 /** How far (tiles) each kind of effect in S.fx is heard: gunfire, blasts, fire. */
 const FAUNA_FEAR = { muzzle: 7, flash: 10, boom: 10, nuke: 40, fuelblast: 14, flak: 8, pulsebeam: 7, flame: 6, arc: 5, collapse: 9, quake: 9 };
 
@@ -155,6 +168,23 @@ function faunaReset() {
 
 /** Is tile t in use (a road, a building, a deposit, a plan, a rail or a pipe): nothing rests on it. */
 function faunaBusy(t) { return S.road[t] || S.bAt[t] || S.res[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]); }
+/** Visible footprint of roads, track and buildings. Planned roads only matter once laid. */
+function faunaDevelopment(x, y) {
+  const i = Math.floor(x), j = Math.floor(y);
+  let pressure = 0, nearby = null;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const xx = i + dx, yy = j + dy;
+    if (Math.abs(dx) + Math.abs(dy) > 2 || !inMap(xx, yy)) continue;
+    const t = tIdx(xx, yy), owner = S.bAt[t] ? getE(S.bAt[t])?.owner : -1;
+    const building = owner >= 0 && !isWild(owner);
+    if (!building && !S.road[t] && !S.rail?.[t]) continue;
+    const d = Math.abs(dx) + Math.abs(dy);
+    if (d <= 1) return { x: xx + 0.5, y: yy + 0.5 };
+    pressure += building ? 1.5 : 0.38;
+    nearby = { x: xx + 0.5, y: yy + 0.5 };
+  }
+  return pressure >= 3 ? nearby : null;
+}
 /** Is (i, j) water an animal could stand or swim in (not lava, not the ashlands' lakes, which are lava too)? */
 function faunaWet(i, j) { if (!inMap(i, j)) return false; const t = j * S.W + i; return S.terrain[t] === T_WATER && !(S.lava && S.lava[t]) && biome() !== 'volcanic'; }
 function faunaNext(i, j, ter) {
@@ -169,13 +199,13 @@ function faunaHab(ci, cj) {
   for (let j = j0; j < Math.min(S.H, j0 + FAUNA_CELL); j++) for (let i = i0; i < Math.min(W, i0 + FAUNA_CELL); i++) {
     const t = j * W + i, ter = S.terrain[t];
     if (ter === T_WATER) {
-      if (!faunaWet(i, j)) continue;
+      if (!faunaWet(i, j) || faunaDevelopment(i + 0.5, j + 0.5)) continue;
       H.water.push(t);
       if (faunaNext(i, j, T_GROUND)) H.shallow.push(t);
     } else if (ter === T_ROCK) {
-      if (faunaNext(i, j, T_GROUND)) H.rock.push(t);
+      if (faunaNext(i, j, T_GROUND) && !faunaDevelopment(i + 0.5, j + 0.5)) H.rock.push(t);
     } else if (ter === T_GROUND) {
-      if (faunaBusy(t)) continue;
+      if (faunaBusy(t) || faunaDevelopment(i + 0.5, j + 0.5)) continue;
       const v = S.decor ? S.decor[t] : 0, k = v ? ((v - 1) % PLANT_KINDS) + 1 : 0;
       if (k && Lf.perch && Lf.perch.includes(k)) H.perch.push(t);
       if (k && Lf.dead && Lf.dead.includes(k)) H.dead.push(t);
@@ -206,7 +236,7 @@ function faunaRoster(c) {
   Lf.kinds.forEach((kind, ki) => {
     const K = FAUNA_KINDS[kind];
     let hab = K.hab, n = hab === 'any' ? 64 : c.hab[hab].length;
-    if (n < K.min && K.alt && c.hab[K.alt].length >= K.min * 3) { hab = K.alt; n = c.hab[hab].length; } // (deer: lake shores, else forest edges)
+    if (n < K.min && K.alt && c.hab[K.alt].length >= K.min * 2) { hab = K.alt; n = c.hab[hab].length; } // (deer: lake shores, else forest edges)
     if (n < K.min) return;
     const groups = n >= K.min * 5 && K.mode !== 'soar' ? 2 : 1;
     for (let g = 0; g < groups; g++) {
@@ -267,7 +297,7 @@ function faunaHear(v) {
   }
 }
 
-/** A new wreck at (x, y): carrion birds (or, over the Bloom, floaters) come and circle it for a minute or two. */
+/** A new wreck at (x, y): carrion birds come and circle it for a minute or two. */
 function faunaCarrion(x, y) {
   const F = FAUNA;
   if (!F.life || !F.life.carrion) return;
@@ -329,10 +359,10 @@ function faunaFrame(z, v0, v1) {
   F.t += dt; F.z = z; F.dt = dt; F.frame = (F.frame || 0) + 1;
   F.L = faunaLight();
   const v = F.v = { x0: v0.x, y0: v0.y, x1: v1.x, y1: v1.y };
-  // The weather: storms keep the birds down; rain puts the fireflies out; an aurora lights the floaters.
-  F.storm = 0; F.rain = 0; F.aurora = 0;
+  // The weather: storms keep the birds down; rain puts the fireflies out.
+  F.storm = 0; F.rain = 0;
   const W = weatherOn() && typeof weatherAt === 'function' ? weatherAt(S.time) : null;
-  if (W) { if (['rain', 'snow', 'sand', 'leaves', 'dust'].includes(W.kind)) F.storm = W.k; if (W.kind === 'rain') F.rain = W.k; if (W.kind === 'aurora') F.aurora = W.k; }
+  if (W) { if (['rain', 'snow', 'sand', 'leaves', 'dust'].includes(W.kind)) F.storm = W.k; if (W.kind === 'rain') F.rain = W.k; }
   if (S.event && S.event.type === 'dust') F.storm = 1;
   faunaHear(v);
   if (F.t >= F.murAt) { F.murAt = F.t + 0.5; faunaMurmur(v); }
@@ -363,6 +393,7 @@ function faunaFrame(z, v0, v1) {
     if (a.done) continue;
     faunaReact(a);
     FAUNA_MODES[a.K.mode].tick(a, dt, bots);
+    if (a.displaced && a.m.every((m) => !m.mv && !m.fly && !m.wait)) a.out = true;
     if (a.out) a.vis -= dt * 1.2;
     if (a.vis <= 0 && (a.out || a.st === 'leave' || a.st === 'flee')) a.done = true;
     // (gone far off the view, or too far out to be seen at this zoom)
@@ -392,7 +423,7 @@ function faunaTrySpawn(c, e) {
   const F = FAUNA, K = e.K, M = F.mur;
   if (e.back - S.time > 60) e.back = 0; // (the clock went back: a save loaded in its place)
   if (F.z < K.z || e.back > S.time || !faunaActive(e) || e.rank > Math.min(1, 0.8 * F.k) || F.n >= faunaCap()) return;
-  if (!faunaQuiet(c)) return;
+  if (!faunaQuiet(c) || (e.hab !== 'any' && c.hab[e.hab].length < K.min)) return;
   if ((K.mode === 'soar' || K.mode === 'flit' || K.mode === 'vee') && F.storm > 0.35) return;
   const cx = c.x0 + FAUNA_CELL / 2, cy = c.y0 + FAUNA_CELL / 2;
   if (M.on && (M.night || M.lull) && (faunaNearest(M.danger, cx, cy, 12) || faunaNearest(M.packs, cx, cy, 9))) return;
@@ -417,6 +448,17 @@ function faunaReact(a) {
   if (a.st === 'flee' || a.out) return;
   const p = a.m[0];
   if (!p) return;
+  if (!K.bold && F.t >= (a.developmentAt || 0)) {
+    a.developmentAt = F.t + 0.65;
+    for (const m of a.m) {
+      const works = faunaDevelopment(m.x, m.y);
+      if (!works) continue;
+      a.displaced = true;
+      const sx = works.x === m.x && works.y === m.y ? p.x - 1 : works.x;
+      faunaFlee(a, sx, works.y);
+      return;
+    }
+  }
   // Shots and blasts within its reach (the scavengers don't mind them).
   if (!K.bold) for (const f of F.fear) if (dist2(p.x, p.y, f.x, f.y) < f.r * f.r) { faunaFlee(a, f.x, f.y); return; }
   if (M.on) {
@@ -466,29 +508,30 @@ function faunaStand(x, y, rest) {
   if (!inMap(i, j)) return false;
   const t = j * S.W + i;
   if (S.terrain[t] !== T_GROUND || S.bAt[t]) return false;
-  return !rest || !faunaBusy(t);
+  return !rest || (!faunaBusy(t) && !faunaDevelopment(x, y));
 }
 /** Can a walker go straight from (x0, y0) to (x1, y1): open ground all the way, no climbing a cliff (but by a ramp)? */
 function faunaPath(x0, y0, x1, y1, swim) {
   const d = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.ceil(d / 0.4));
   let pe = -1;
+  const start = tIdx(Math.floor(x0), Math.floor(y0));
   for (let k = 0; k <= n; k++) {
     const x = x0 + ((x1 - x0) * k) / n, y = y0 + ((y1 - y0) * k) / n, i = Math.floor(x), j = Math.floor(y);
     if (!inMap(i, j)) return false;
     const t = j * S.W + i;
     if (swim) { if (!faunaWet(i, j)) return false; continue; }
-    if (S.terrain[t] !== T_GROUND || S.bAt[t]) return false;
+    if (S.terrain[t] !== T_GROUND || (t !== start && S.bAt[t])) return false;
     if (pe >= 0 && S.elev[t] !== pe && !S.ramp[t]) return false;
     pe = S.elev[t];
   }
   return true;
 }
 /** Somewhere to run to from (x, y), away from (sx, sy), about d tiles: the straightest way that's open, or null. */
-function faunaAway(x, y, sx, sy, d, swim) {
+function faunaAway(x, y, sx, sy, d, swim, habitat) {
   const a0 = Math.atan2(y - sy, x - sx) + (Math.random() - 0.5) * 0.4;
   for (const dd of [d, d * 0.6, d * 0.35]) for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35]) {
     const tx = x + Math.cos(a0 + off) * dd, ty = y + Math.sin(a0 + off) * dd;
-    if (faunaPath(x, y, tx, ty, swim)) return { x: tx, y: ty };
+    if ((!habitat || faunaStand(tx, ty, true)) && faunaPath(x, y, tx, ty, swim)) return { x: tx, y: ty };
   }
   return null;
 }
@@ -540,7 +583,7 @@ function faunaNearSpot(x, y, r, hab) {
   return { x, y };
 }
 /** Is (x, y) in one of the given habitat tiles (a Set of tile indices)? */
-function faunaInHab(x, y, set) { const i = Math.floor(x), j = Math.floor(y); return inMap(i, j) && set.has(j * S.W + i); }
+function faunaInHab(x, y, set) { const i = Math.floor(x), j = Math.floor(y); return inMap(i, j) && set.has(j * S.W + i) && !faunaBusy(j * S.W + i) && !faunaDevelopment(x, y); }
 /** A point well inside tile t (its middle, nudged at random within m of it). */
 function faunaIn(t, m) { return { x: (t % S.W) + 0.5 + (Math.random() - 0.5) * 2 * m, y: ((t / S.W) | 0) + 0.5 + (Math.random() - 0.5) * 2 * m }; }
 
@@ -614,8 +657,8 @@ const FAUNA_MODES = {
    * then; they step aside from robots, bolt from shots, and walk off into cover to bed down. */
   herd: {
     make(a, c, how, n) {
-      const K = a.K, list = c.hab[a.hab];
-      a.set = new Set(c.hab.open);
+      const K = a.K, list = c.hab[a.hab].filter((t) => faunaStand(t % S.W + 0.5, (t / S.W | 0) + 0.5, true));
+      a.set = new Set(c.hab.open.concat(c.hab[a.hab]));
       const at = faunaPick(list);
       if (!at) return false;
       a.x = at.x; a.y = at.y;
@@ -625,6 +668,7 @@ const FAUNA_MODES = {
         const s = faunaNearSpot(at.x, at.y, K.spread || 1, a.set);
         const m = faunaMember(s.x, s.y);
         m.head = Math.random() < 0.5;
+        m.antlers = a.kind === 'deer' && Math.random() < 0.38;
         if (from && faunaPath(from.x, from.y, s.x, s.y)) { m.x = from.x + (Math.random() - 0.5) * 0.6; m.y = from.y + (Math.random() - 0.5) * 0.6; m.sp = K.speed * 2; m.mv = 1; }
         a.m.push(m);
       }
@@ -647,8 +691,9 @@ const FAUNA_MODES = {
       if (a.st === 'live' && a.t <= 0 && a.cell) {
         a.t = (K.roam ? 5 : 15) + Math.random() * (K.roam ? 10 : 25);
         const to = faunaPick(a.cell.hab[a.hab].length ? a.cell.hab[a.hab] : a.cell.hab.open, a.x, a.y, K.roam ? 6 : 4);
-        if (to) {
+        if (to && faunaStand(to.x, to.y, true)) {
           a.x = to.x; a.y = to.y;
+          a.set = new Set(a.cell.hab.open.concat(a.cell.hab[a.hab]));
           for (const m of a.m) {
             const s = faunaNearSpot(to.x, to.y, K.spread || 1, a.set);
             if (faunaPath(m.x, m.y, s.x, s.y)) { m.tx = s.x; m.ty = s.y; m.sp = K.speed * (0.8 + Math.random() * 0.4); m.mv = 1; m.wait = Math.random() * 2; }
@@ -684,11 +729,11 @@ const FAUNA_MODES = {
           m.t = 2 + Math.random() * (K.roam ? 3 : 7);
           const r = Math.random();
           if (r < 0.4) m.head = !m.head;
-          else if (r < 0.8) { const s = faunaNearSpot(a.x, a.y, K.spread || 1, a.set); if (faunaPath(m.x, m.y, s.x, s.y)) { m.tx = s.x; m.ty = s.y; m.sp = K.speed * 0.6; m.mv = 1; m.head = false; } }
+          else if (r < 0.8) { const s = faunaNearSpot(a.x, a.y, K.spread || 1, a.set); if (faunaStand(s.x, s.y, true) && faunaPath(m.x, m.y, s.x, s.y)) { m.tx = s.x; m.ty = s.y; m.sp = K.speed * 0.6; m.mv = 1; m.head = false; } }
           else m.f += (Math.random() - 0.5) * 1.5;
         }
       }
-      if (a.st === 'flee' && a.m.every((m) => !m.mv)) {
+      if (a.st === 'flee' && !a.displaced && a.m.every((m) => !m.mv)) {
         // (out of breath and off the screen: gone; still on it: they stand a moment, then graze where they are)
         const p = a.m[0], v = F.v;
         if (p.x < v.x0 - 1 || p.x > v.x1 + 1 || p.y < v.y0 - 1 || p.y > v.y1 + 1) a.done = true;
@@ -696,12 +741,13 @@ const FAUNA_MODES = {
       }
     },
     flee(a, sx, sy) {
-      const p = a.m[0], to = faunaAway(p.x, p.y, sx, sy, 9);
+      const p = a.m[0], to = faunaAway(p.x, p.y, sx, sy, 9, false, a.displaced);
       if (!to) { a.out = true; return; }
       for (const m of a.m) {
-        const s = faunaAway(m.x, m.y, sx, sy, 9) || { x: to.x, y: to.y };
+        const s = faunaAway(m.x, m.y, sx, sy, 9, false, a.displaced) || to;
+        if (!faunaPath(m.x, m.y, s.x, s.y)) { m.mv = 0; m.wait = 0; continue; }
         m.tx = s.x + (Math.random() - 0.5); m.ty = s.y + (Math.random() - 0.5); m.sp = a.K.run * (0.85 + Math.random() * 0.3); m.mv = 1; m.head = true; m.wait = Math.random() * 0.3;
-        if (!faunaPath(m.x, m.y, m.tx, m.ty)) { m.tx = s.x; m.ty = s.y; }
+        if ((a.displaced && !faunaStand(m.tx, m.ty, true)) || !faunaPath(m.x, m.y, m.tx, m.ty)) { m.tx = s.x; m.ty = s.y; }
       }
     },
     leave(a) {
@@ -914,44 +960,6 @@ const FAUNA_MODES = {
     leave(a) { /* (they fade into the dark: see tick) */ },
   },
 
-  /* The Bloom's floaters: bells drifting slowly on the air, pulsing, trailing their threads; they glow after dark. */
-  drift: {
-    make(a, c, how, n) {
-      const at = faunaPick(c.hab[a.hab]) || faunaPick(c.hab.water);
-      if (!at) return false;
-      a.x = at.x; a.y = at.y;
-      for (let k = 0; k < n; k++) {
-        const m = faunaMember(at.x + (Math.random() - 0.5) * 2, at.y + (Math.random() - 0.5) * 2);
-        m.h = 0.7 + Math.random() * 0.6; m.vx = 0; m.vy = 0; m.sc = 0.8 + Math.random() * 0.45;
-        a.m.push(m);
-      }
-      if (how !== 'place') a.vis = 0;
-      return true;
-    },
-    tick(a, dt) {
-      const F = FAUNA;
-      if (a.st === 'flee' || a.st === 'leave') a.vis -= dt * 0.35;
-      else a.vis = Math.min(1, a.vis + dt * 0.3);
-      if (a.vis <= 0 && a.st !== 'live') a.out = true;
-      // (drawn to a fresh wreck, as the Murmur are: they hang over it a while)
-      const goal = a.goal;
-      if (goal && S.time > goal.until && a.st === 'live') faunaLeave(a);
-      for (const m of a.m) {
-        const ang = Math.sin(F.t * 0.07 + m.ph) * 3 + m.ph;
-        let ax = Math.cos(ang) * 0.05, ay = Math.sin(ang) * 0.05;
-        const gx = goal ? goal.x : a.x, gy = goal ? goal.y : a.y, far = Math.hypot(gx - m.x, gy - m.y);
-        if (far > (goal ? 1.2 : 3)) { ax += ((gx - m.x) / far) * 0.06; ay += ((gy - m.y) / far) * 0.06; }
-        if (a.st === 'flee' && a.from) { const d = Math.hypot(m.x - a.from.x, m.y - a.from.y) || 1; ax += ((m.x - a.from.x) / d) * 0.2; ay += ((m.y - a.from.y) / d) * 0.2; }
-        m.vx = (m.vx + ax * dt) * (1 - dt * 0.3); m.vy = (m.vy + ay * dt) * (1 - dt * 0.3);
-        const sp = Math.hypot(m.vx, m.vy), most = a.st === 'flee' ? 0.6 : 0.22;
-        if (sp > most) { m.vx *= most / sp; m.vy *= most / sp; }
-        m.x += m.vx * dt; m.y += m.vy * dt;
-        m.ph += dt;
-      }
-    },
-    flee(a, sx, sy) { a.from = { x: sx, y: sy }; },
-  },
-
   /* Big birds circling on the air: vultures over the Long Grass, the Rust's hawk, and carrion birds over a new wreck. */
   soar: {
     make(a, c, how, n) {
@@ -1046,14 +1054,11 @@ function faunaCarrionTick() {
     if (s.a || S.time < s.at || S.time > s.until - 15) continue;
     if (s.x < v.x0 - 2 || s.x > v.x1 + 2 || s.y < v.y0 - 2 || s.y > v.y1 + 2) continue;
     const K = FAUNA_KINDS[kind];
-    if (F.z < K.z || (kind !== 'floater' && (F.L > 0.5 || F.storm > 0.35))) continue;
+    if (F.z < K.z || F.L > 0.5 || F.storm > 0.35) continue;
     const a = { K, kind, e: null, cell: null, m: [], st: 'live', t: 0, vis: 1, out: false, done: false, goal: s };
-    if (kind === 'floater') {
-      const ang = Math.random() * Math.PI * 2, fx = clamp(Math.floor(s.x + Math.cos(ang) * 4), 0, S.W - 1), fy = clamp(Math.floor(s.y + Math.sin(ang) * 4), 0, S.H - 1);
-      a.hab = 'open';
-      FAUNA_MODES.drift.make(a, { hab: { open: [tIdx(fx, fy)], water: [] } }, 'arrive', 2);
-    }
-    else { FAUNA_MODES.soar.make(a, null, 'arrive', Math.round(K.n[0] + Math.random() * (K.n[1] - K.n[0]))); a.x = s.x; a.y = s.y; a.r = 1 + Math.random() * 0.6; for (const m of a.m) m.rr = a.r * (0.7 + Math.random() * 0.5); }
+    FAUNA_MODES.soar.make(a, null, 'arrive', Math.round(K.n[0] + Math.random() * (K.n[1] - K.n[0])));
+    a.r = 1 + Math.random() * 0.6;
+    for (const m of a.m) m.rr = a.r * (0.7 + Math.random() * 0.5);
     s.a = a;
     F.list.push(a);
   }
@@ -1130,7 +1135,7 @@ function faunaGroundDraw(ctx, ox, oy, z, v0, v1) {
     const D = FAUNA_DRAW[a.K.draw];
     for (const m of a.m) {
       if (m.h > 0.25 && a.K.mode !== 'herd' && a.K.mode !== 'small') continue; // (in the air: faunaAir)
-      if (a.K.mode === 'soar' || a.K.mode === 'vee' || a.K.mode === 'flit' || a.K.mode === 'drift') continue;
+      if (a.K.mode === 'soar' || a.K.mode === 'vee' || a.K.mode === 'flit') continue;
       const x = ox + m.x * z, y = oy + m.y * z;
       if (x < -z || y < -z || x > R.w + z || y > R.h + z) continue;
       ctx.globalAlpha = clamp(a.vis, 0, 1);
@@ -1154,7 +1159,7 @@ function faunaAirDraw(ctx, ox, oy, z) {
   const air = [];
   for (const a of F.list) {
     if (a.done || a.vis <= 0) continue;
-    const mode = a.K.mode, flier = mode === 'soar' || mode === 'vee' || mode === 'flit' || mode === 'drift';
+    const mode = a.K.mode, flier = mode === 'soar' || mode === 'vee' || mode === 'flit';
     for (const m of a.m) {
       if (!flier && !(m.h > 0.25 && mode !== 'herd' && mode !== 'small')) continue;
       const x = ox + m.x * z, y = oy + m.y * z, s = Math.max(2, a.K.size * z) * (1 + 0.08 * m.h);
@@ -1264,7 +1269,7 @@ function faunaGlows(ctx, ox, oy, z) {
       }
     }
   }
-  // Owls' eyes, ember moths and the floaters' glow.
+  // Owls' eyes, ember moths.
   for (const a of F.list) {
     if (a.done || a.vis <= 0) continue;
     const K = a.K;
@@ -1275,17 +1280,16 @@ function faunaGlows(ctx, ox, oy, z) {
       faunaDot(ctx, hx - sz * 0.06, hy, r, K.eyes, 0.9 * a.vis); faunaDot(ctx, hx + sz * 0.06, hy, r, K.eyes, 0.9 * a.vis);
     }
     if (K.glow) {
-      const k = K.mode === 'drift' ? clamp(L * 1.2 + F.aurora * 0.6, 0, 1) : 1;
-      if (k > 0.02) for (const m of a.m) {
+      for (const m of a.m) {
         const x = ox + m.x * z, y = oy + m.y * z;
-        const pulse = K.mode === 'drift' ? 0.75 + 0.25 * Math.sin(m.ph * 2.2) : 0.6 + 0.4 * Math.sin(m.ph * 0.5 + F.t * 5);
-        faunaDot(ctx, x, y, z * (K.mode === 'drift' ? K.size * m.sc * 1.3 : 0.16), K.glow, (K.mode === 'drift' ? 0.55 : 1) * k * pulse * a.vis);
+        const pulse = 0.6 + 0.4 * Math.sin(m.ph * 0.5 + F.t * 5);
+        faunaDot(ctx, x, y, z * 0.16, K.glow, pulse * a.vis);
       }
     }
   }
   // Moths (or the biome's own) round the colony's lights.
   const kind = F.life.light, col = FAUNA_GLOW[kind];
-  if (kind && L > 0.3 && z >= 12) {
+  if (kind && L > 0.3 && z >= 12 && gfxStep() !== 'saver' && !(onTouch() && Math.min(R.w, R.h) < 600)) {
     const on = clamp((L - 0.3) / 0.4, 0, 1);
     for (const l of F.lights) {
       let sc = F.scatter.get(l.key);
@@ -1297,14 +1301,14 @@ function faunaGlows(ctx, ox, oy, z) {
       if (gone > 1) F.scatter.delete(l.key);
       const lx = ox + l.x * z, ly = oy + (l.y - l.up) * z;
       if (lx < -z || ly < -z || lx > R.w + z || ly > R.h + z) continue;
-      const n = Math.round(l.n * Math.min(1.5, F.k));
+      const n = Math.round(l.n * Math.min(1, F.k) * 0.45);
       for (let k = 0; k < n; k++) {
         const h1 = hash2(l.x * 13 | 0, k, 51), h2 = hash2(l.y * 13 | 0, k, 52), h3 = hash2(k, l.x * 7 | 0, 53);
         const w = (1.4 + 2.2 * h1) * (h2 < 0.5 ? -1 : 1), th = t * w + h3 * 6.3, r = z * (0.12 + 0.24 * h2) * (1 + 0.25 * Math.sin(t * 1.7 + k));
         let x = lx + Math.cos(th) * r, y = ly + Math.sin(th) * r * 0.6 + Math.sin(t * 6 + k) * z * 0.03, a = on;
         if (gone >= 0 && gone <= 1) { x += Math.cos(th) * gone * z * 3; y += Math.sin(th) * gone * z * 2 - gone * z; a *= 1 - gone; }
         const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * 30 + k * 3));
-        faunaDot(ctx, x, y, Math.max(2.2, z * (kind === 'moth' ? 0.07 : 0.09)), col, 0.85 * a * flick);
+        faunaDot(ctx, x, y, Math.max(1.8, z * (kind === 'moth' ? 0.056 : 0.072)), col, 0.85 * a * flick);
       }
     }
   }
@@ -1336,6 +1340,15 @@ function faunaWings(ctx, x, y, s, f, flap, cols, part, o) {
   faunaEll(ctx, x, y, s * 0.22, s * 0.07, f);
   if (s < 10) faunaEll(ctx, hb[0], hb[1], s * 0.06, s * 0.05, f); // (small: all in one shape)
   ctx.fill();
+  if (!shadow && o && o.tips) {
+    ctx.fillStyle = faunaCol(cols[2]); ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const tip = P(-back, side * half), inner = P(-back * 0.63, side * half * 0.78), outer = P(-back - chord * 0.11, side * half * 0.88);
+      ctx.moveTo(inner[0], inner[1]); ctx.quadraticCurveTo(tip[0] + c * s * 0.04, tip[1] + sn * s * 0.04, tip[0], tip[1]);
+      ctx.lineTo(outer[0], outer[1]); ctx.closePath();
+    }
+    ctx.fill();
+  }
   if (shadow || s < 10) return;
   // (the head: a goose's black neck stretched out ahead)
   ctx.fillStyle = faunaCol(o && o.neck ? cols[2] : cols[0], o && o.lift);
@@ -1374,9 +1387,24 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
+  gull(ctx, x, y, s, m, a, air) {
+    if (air) { faunaWings(ctx, x, y, s * 2.05, m.f, m.ph * 0.72, a.K.col, air, { broad: true, tips: true }); return; }
+    faunaShadow(ctx, x, y, s * 0.35, s * 0.13);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m), 1);
+    ctx.fillStyle = faunaCol(a.K.col[0]); ctx.beginPath();
+    faunaEll(ctx, -s * 0.045, -s * 0.22, s * 0.32, s * 0.16, -0.24);
+    faunaEll(ctx, s * 0.22, -s * 0.37, s * 0.13, s * 0.11, 0.05);
+    ctx.fill();
+    ctx.fillStyle = faunaCol(a.K.col[1]); ctx.beginPath();
+    faunaEll(ctx, -s * 0.14, -s * 0.23, s * 0.22, s * 0.10, -0.22); ctx.fill();
+    ctx.fillStyle = faunaCol('#ca9d4c'); ctx.beginPath();
+    ctx.moveTo(s * 0.32, -s * 0.41); ctx.lineTo(s * 0.50, -s * 0.34); ctx.lineTo(s * 0.33, -s * 0.32); ctx.fill();
+    ctx.restore();
+  },
+
   /** Four-footed animals, seen from the side (as the game's three-quarter view shows them): a deer, an antelope, a fox, a hare. */
-  deer(ctx, x, y, s, m, a, air) { FAUNA_DRAW.beast(ctx, x, y, s, m, a, 'deer'); },
-  antelope(ctx, x, y, s, m, a, air) { FAUNA_DRAW.beast(ctx, x, y, s, m, a, 'antelope'); },
+  deer(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, false); },
+  antelope(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, true); },
   fox(ctx, x, y, s, m, a, air) { FAUNA_DRAW.beast(ctx, x, y, s, m, a, 'fox'); },
   hare(ctx, x, y, s, m, a, air) { FAUNA_DRAW.hare(ctx, x, y, s, m, a); },
   /**
@@ -1436,6 +1464,74 @@ const FAUNA_DRAW = {
     }
     ctx.restore();
   },
+  /** Jointed gait and species-specific silhouette under the same light as the rest of the wildlife. */
+  hoofed(ctx, x, y, s, m, a, wildebeest) {
+    faunaShadow(ctx, x, y, s * 0.40, s * 0.11);
+    const gait = m.mv ? m.ph : 0, run = m.mv && m.sp > a.K.speed * 1.5;
+    const bob = run ? Math.sin(gait * 2) * 0.04 : 0;
+    const back = wildebeest ? -0.35 : -0.43, shoulder = wildebeest ? -0.57 : -0.51;
+    const [coat, light, shade] = a.K.col;
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const leg = (front, far) => {
+      const hip = front ? 0.18 : -0.24, h = (front ? -0.34 : -0.31) + bob + (far ? -0.035 : 0);
+      const stride = m.mv ? Math.sin(gait + (front === far ? Math.PI : 0)) : 0;
+      const step = stride * (run ? 0.20 : 0.088), foot = (far ? -0.06 : 0) - Math.max(0, stride) * (m.mv ? (run ? 0.10 : 0.036) : 0);
+      const knee = hip + (front ? 0.028 : -0.067) + step * 0.42;
+      ctx.strokeStyle = faunaCol(far ? shade : coat); ctx.lineWidth = front ? 0.049 : 0.059;
+      ctx.beginPath(); ctx.moveTo(hip, h); ctx.quadraticCurveTo(knee, h + 0.10, knee, h + 0.17); ctx.stroke();
+      ctx.strokeStyle = faunaCol(far ? shade : coat); ctx.lineWidth = 0.028;
+      ctx.beginPath(); ctx.moveTo(knee, h + 0.165); ctx.lineTo(hip + step, foot - 0.024); ctx.stroke();
+      ctx.strokeStyle = faunaCol(shade); ctx.lineWidth = 0.034;
+      ctx.beginPath(); ctx.moveTo(hip + step - 0.016, foot - 0.017); ctx.lineTo(hip + step + 0.030, foot - 0.015); ctx.stroke();
+    };
+    leg(false, true); leg(true, true);
+    ctx.translate(0, bob);
+    const g = ctx.createLinearGradient(-0.1, shoulder, 0, -0.23);
+    g.addColorStop(0, faunaCol(wildebeest ? shade : coat));
+    g.addColorStop(0.43, faunaCol(coat)); g.addColorStop(1, faunaCol(light));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-0.38, back);
+    ctx.bezierCurveTo(-0.27, back - 0.08, 0.04, shoulder + 0.09, 0.17, shoulder);
+    ctx.bezierCurveTo(0.34, shoulder - 0.016, 0.34, -0.40, 0.25, -0.32);
+    ctx.bezierCurveTo(0.11, -0.235, -0.08, -0.27, -0.19, -0.29);
+    ctx.bezierCurveTo(-0.31, -0.23, -0.40, -0.30, -0.38, back); ctx.fill();
+    ctx.strokeStyle = faunaCol(wildebeest ? shade : light); ctx.lineWidth = wildebeest ? 0.034 : 0.045;
+    ctx.beginPath(); ctx.moveTo(-0.365, back + 0.039);
+    ctx.quadraticCurveTo(-0.47, back + 0.06 + Math.sin(gait) * 0.02, wildebeest ? -0.41 : -0.49, wildebeest ? -0.14 : back + 0.09); ctx.stroke();
+    if (wildebeest && s >= 14) {
+      ctx.strokeStyle = faunaCol(shade, 0, 0.7); ctx.lineWidth = 0.018;
+      for (let k = 0; k < 5; k++) {
+        const xx = -0.055 + k * 0.05, yy = -0.43 - k * 0.023;
+        ctx.beginPath(); ctx.moveTo(xx, yy); ctx.quadraticCurveTo(xx - 0.02, yy + 0.095, xx + 0.036, yy + 0.12); ctx.stroke();
+      }
+    }
+    const up = m.mv || m.head, hx = up ? 0.36 : 0.43, hy = up ? (wildebeest ? -0.563 : -0.66) : -0.14, tilt = up ? (wildebeest ? 0.24 : 0.02) : 1.03;
+    ctx.fillStyle = faunaCol(coat); ctx.beginPath(); ctx.moveTo(0.12, shoulder + 0.027);
+    ctx.quadraticCurveTo(0.23, shoulder - 0.04, hx - 0.069, hy - 0.041); ctx.lineTo(hx + 0.017, hy + 0.034);
+    ctx.quadraticCurveTo(0.36, -0.37, 0.22, -0.335); ctx.fill();
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(tilt);
+    ctx.fillStyle = faunaCol(wildebeest ? shade : coat); ctx.beginPath();
+    ctx.moveTo(-0.10, -0.064); ctx.quadraticCurveTo(0.016, -0.09, 0.055, -0.049);
+    ctx.lineTo(0.13, -0.016); ctx.quadraticCurveTo(0.16, 0.021, 0.089, 0.039);
+    ctx.lineTo(-0.055, 0.037); ctx.fill();
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, 0.024, -0.027, 0.016, 0.014, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(wildebeest ? coat : light); ctx.beginPath();
+    faunaEll(ctx, -0.058, -0.069, wildebeest ? 0.079 : 0.090, 0.026, -2.44); ctx.fill();
+    ctx.strokeStyle = faunaCol(wildebeest ? '#b6a891' : '#cbb58c'); ctx.lineWidth = 0.020;
+    if (wildebeest) {
+      ctx.beginPath(); ctx.moveTo(-0.044, -0.061); ctx.bezierCurveTo(-0.143, -0.022, -0.189, -0.093, -0.141, -0.143);
+      ctx.moveTo(-0.013, -0.066); ctx.bezierCurveTo(0.017, -0.156, 0.061, -0.155, 0.062, -0.125); ctx.stroke();
+      ctx.strokeStyle = faunaCol(shade); ctx.beginPath(); ctx.moveTo(0.012, 0.022); ctx.lineTo(-0.008, 0.137); ctx.stroke();
+    } else if (m.antlers && s >= 13) {
+      ctx.beginPath(); ctx.moveTo(-0.036, -0.055); ctx.quadraticCurveTo(-0.11, -0.19, -0.191, -0.244);
+      ctx.moveTo(-0.11, -0.173); ctx.lineTo(-0.073, -0.251); ctx.moveTo(-0.142, -0.208); ctx.lineTo(-0.138, -0.292);
+      ctx.moveTo(-0.014, -0.055); ctx.quadraticCurveTo(0.001, -0.157, -0.046, -0.220);
+      ctx.moveTo(-0.018, -0.174); ctx.lineTo(0.038, -0.215); ctx.stroke();
+    }
+    ctx.restore(); ctx.translate(0, -bob);
+    leg(false, false); leg(true, false);
+    ctx.restore();
+  },
   /** A hare: hunched on its big hind legs, long ears up (laid back as it runs), a white scut; it bounds. */
   hare(ctx, x, y, s, m, a) {
     const K = a.K, col = K.col, d = faunaSide(m), hop = (m.h || 0) * FAUNA.z, run = !!m.mv;
@@ -1451,6 +1547,112 @@ const FAUNA_DRAW = {
     ctx.fill();
     ctx.fillStyle = faunaCol(col[1], K.lift); ctx.beginPath(); faunaEll(ctx, -s * 0.22, -s * 0.17, s * 0.05, s * 0.05, 0); ctx.fill();
     if (s > 6) { ctx.fillStyle = faunaCol(col[2], K.lift); ctx.beginPath(); faunaEll(ctx, s * (run ? 0.0 : 0.11), -s * (run ? 0.3 : 0.56), s * 0.02, s * 0.03, 0); ctx.fill(); }
+    ctx.restore();
+  },
+
+  turtle(ctx, x, y, s, m, a) {
+    faunaShadow(ctx, x, y, s * 0.39, s * 0.24);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    const [shell, scutes, skin] = a.K.col, p = m.mv ? Math.sin(m.ph) * 0.12 : 0;
+    ctx.fillStyle = faunaCol(skin);
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      faunaEll(ctx, 0.14 + side * p, side * 0.225, 0.15, 0.075, side * -0.65);
+      faunaEll(ctx, -0.22 - side * p, side * 0.195, 0.13, 0.07, side * 0.75);
+    }
+    faunaEll(ctx, 0.34, 0.015, 0.17, 0.09, 0); ctx.fill();
+    const g = ctx.createLinearGradient(0, -0.24, 0.1, 0.25);
+    g.addColorStop(0, faunaCol(scutes)); g.addColorStop(0.39, faunaCol(shell)); g.addColorStop(1, faunaCol(skin));
+    ctx.fillStyle = g; ctx.beginPath(); faunaEll(ctx, -0.025, 0, 0.35, 0.26, 0); ctx.fill();
+    ctx.strokeStyle = faunaCol(skin, 0, 0.72); ctx.lineWidth = 0.028;
+    ctx.beginPath(); ctx.moveTo(-0.35, 0); ctx.lineTo(-0.17, -0.10); ctx.lineTo(0.06, -0.12); ctx.lineTo(0.22, 0);
+    ctx.lineTo(0.06, 0.11); ctx.lineTo(-0.17, 0.10); ctx.closePath();
+    for (const side of [-1, 1]) { ctx.moveTo(-0.17, side * 0.1); ctx.lineTo(-0.2, side * 0.22); ctx.moveTo(0.06, side * 0.11); ctx.lineTo(0.12, side * 0.2); }
+    ctx.stroke(); ctx.restore();
+  },
+
+  alligator(ctx, x, y, s, m, a) {
+    faunaShadow(ctx, x, y, s * 0.47, s * 0.13);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    const [olive, ridge, dark] = a.K.col, wag = Math.sin(m.ph * 0.9) * (m.mv ? 0.19 : 0.09);
+    ctx.strokeStyle = faunaCol(dark); ctx.lineWidth = 0.072; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [xx, i] of [[-0.21, 1], [0.15, -1]]) for (const side of [-1, 1]) {
+      const stride = m.mv ? Math.sin(m.ph + i * side) * 0.07 : 0;
+      ctx.moveTo(xx, side * 0.06); ctx.lineTo(xx - 0.045 + stride, side * 0.175); ctx.lineTo(xx + 0.055 + stride, side * 0.205);
+    }
+    ctx.stroke();
+    const g = ctx.createLinearGradient(0, -0.13, 0, 0.18);
+    g.addColorStop(0, faunaCol(ridge)); g.addColorStop(0.5, faunaCol(olive)); g.addColorStop(1, faunaCol(dark));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0.15, -0.095);
+    ctx.bezierCurveTo(0.32, -0.085, 0.42, -0.063, 0.56, -0.06);
+    ctx.quadraticCurveTo(0.62, 0, 0.55, 0.065); ctx.lineTo(0.2, 0.088);
+    ctx.bezierCurveTo(-0.16, 0.19, -0.31, 0.11, -0.48, 0.095);
+    ctx.quadraticCurveTo(-0.62, 0.07 + wag, -0.84, wag);
+    ctx.quadraticCurveTo(-0.55, -0.06 + wag, -0.45, -0.055);
+    ctx.quadraticCurveTo(-0.15, -0.19, 0.15, -0.095); ctx.fill();
+    ctx.fillStyle = faunaCol(dark, 0, 0.7);
+    for (let k = 0; k < 6; k++) {
+      const at = -0.38 + 0.09 * k;
+      ctx.beginPath(); ctx.moveTo(at, -0.048); ctx.lineTo(at + 0.053, -0.01); ctx.lineTo(at, 0.043); ctx.fill();
+    }
+    ctx.fillStyle = faunaCol('#c5aa67'); ctx.beginPath();
+    faunaEll(ctx, 0.29, -0.042, 0.022, 0.019, 0); faunaEll(ctx, 0.29, 0.041, 0.022, 0.019, 0); ctx.fill();
+    ctx.restore();
+  },
+
+  /** An armored native walker. Its shell opens like overlapping stone blades to reveal a warm seam. */
+  hinge(ctx, x, y, s, m, a) {
+    faunaShadow(ctx, x, y, s * 0.44, s * 0.16);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    const [rock, seam, shade] = a.K.col, gap = 0.022 + (0.5 + 0.5 * Math.sin(FAUNA.t * 1.1 + m.ph)) * 0.039;
+    ctx.strokeStyle = faunaCol(shade, 0.12); ctx.lineWidth = 0.07; ctx.lineCap = 'round'; ctx.beginPath();
+    for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const leg = -0.25 + k * 0.22, swing = m.mv ? Math.sin(m.ph + side * 0.9 + k * 1.9) * 0.11 : 0;
+      ctx.moveTo(leg, 0); ctx.lineTo(leg + 0.08 + swing, side * 0.19); ctx.lineTo(leg + swing, side * 0.27);
+    }
+    ctx.stroke();
+    ctx.fillStyle = faunaCol(seam, 0.68); ctx.beginPath(); faunaEll(ctx, -0.035, 0, 0.39, gap * 1.5, 0); ctx.fill();
+    for (const side of [-1, 1]) {
+      const g = ctx.createLinearGradient(0, 0, -0.17, side * 0.23);
+      g.addColorStop(0, faunaCol(shade, 0.28)); g.addColorStop(0.57, faunaCol(rock, 0.2)); g.addColorStop(1, faunaCol('#a17585', 0.24));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-0.49, side * gap);
+      ctx.bezierCurveTo(-0.28, side * 0.24, 0.10, side * 0.25, 0.30, side * 0.14); ctx.lineTo(0.42, side * gap);
+      ctx.lineTo(-0.49, side * gap); ctx.fill();
+    }
+    ctx.restore();
+  },
+
+  /** A native runner with counter-swinging tails and a pair of tall sensory vanes. */
+  switchtail(ctx, x, y, s, m, a) {
+    faunaShadow(ctx, x, y, s * 0.4, s * 0.12);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    const [body, vane, shade] = a.K.col, stride = m.mv ? Math.sin(m.ph) : 0;
+    ctx.lineCap = 'round'; ctx.strokeStyle = faunaCol(shade, 0.24); ctx.lineWidth = 0.052; ctx.beginPath();
+    for (const side of [-1, 1]) {
+      ctx.moveTo(-0.13, -0.23); ctx.lineTo(-0.13 + side * stride * 0.10, -0.10);
+      ctx.lineTo(-0.24 + side * stride * 0.17, side * 0.04);
+      ctx.moveTo(-0.18, -0.23); ctx.quadraticCurveTo(-0.47, -0.14 + side * 0.07, -0.64, -0.24 - side * (0.12 + stride * 0.07));
+    }
+    ctx.stroke();
+    ctx.fillStyle = faunaCol(body, 0.46); ctx.beginPath(); faunaEll(ctx, 0.01, -0.25, 0.23, 0.12, -0.21);
+    faunaEll(ctx, 0.20, -0.35, 0.12, 0.076, -0.18); ctx.fill();
+    ctx.fillStyle = faunaCol(vane, 0.65); ctx.beginPath(); ctx.moveTo(0.15, -0.34);
+    ctx.quadraticCurveTo(0.01, -0.49, 0.10, -0.63); ctx.quadraticCurveTo(0.24, -0.53, 0.24, -0.36); ctx.fill();
+    ctx.restore();
+  },
+
+  /** A native flier whose folding triangular sails are edged with dim light. */
+  sailwing(ctx, x, y, s, m, a, part) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    const shadow = part === 'shadow', wing = 0.54 + 0.29 * Math.sin(m.ph * 1.1) ** 2;
+    ctx.fillStyle = shadow ? '#111' : faunaCol(a.K.col[0], 0.39);
+    ctx.strokeStyle = faunaCol(a.K.col[1], 0.63, 0.8); ctx.lineWidth = 0.035;
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(0.38, 0); ctx.quadraticCurveTo(0.14, side * wing, -0.22, side * wing);
+      ctx.lineTo(-0.35, side * 0.32); ctx.lineTo(-0.11, side * 0.15); ctx.lineTo(-0.49, 0); ctx.closePath();
+      ctx.fill(); if (!shadow) ctx.stroke();
+    }
     ctx.restore();
   },
 
@@ -1595,31 +1797,131 @@ const FAUNA_DRAW = {
     ctx.fillStyle = faunaCol(a.K.col[0], 0.4); ctx.beginPath(); faunaEll(ctx, x, y, s * 0.3, w, m.f); ctx.fill();
   },
 
-  /** A floater: a translucent bell, pulsing, its threads trailing under it (lit from within after dark: faunaGlows). */
-  floater(ctx, x, y, s, m, a, part) {
-    const col = a.K.col, sc = m.sc || 1, pulse = 1 + 0.08 * Math.sin(m.ph * 2.2), r = s * 0.5 * sc * pulse, hy = s * 0.42 * sc / pulse;
-    if (part === 'shadow') { ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.5, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,1)'; ctx.fill(); return; }
-    const L = FAUNA.L, lit = clamp(L * 1.2 + FAUNA.aurora * 0.6, 0, 1), lift = 0.35 + 0.5 * lit;
-    // the threads
-    ctx.strokeStyle = faunaCol(col[1], lift, 0.45); ctx.lineWidth = Math.max(0.6, s * 0.025); ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (let k = 0; k < 5; k++) {
-      const u = (k / 4 - 0.5) * r * 1.4, sw = Math.sin(m.ph * 1.6 + k) * s * 0.08;
-      ctx.moveTo(x + u, y); ctx.quadraticCurveTo(x + u + sw, y + s * 0.35 * sc, x + u - sw * 0.5, y + s * (0.7 + 0.1 * Math.sin(k)) * sc);
-    }
-    ctx.stroke();
-    // the bell
-    ctx.fillStyle = faunaCol(col[0], lift, 0.55);
-    ctx.beginPath(); ctx.ellipse(x, y, r, hy, 0, Math.PI, 0); ctx.ellipse(x, y, r, r * 0.22, 0, 0, Math.PI); ctx.fill();
-    ctx.fillStyle = faunaCol(col[1], lift, 0.5);
-    ctx.beginPath(); ctx.ellipse(x - r * 0.2, y - hy * 0.55, r * 0.35, hy * 0.25, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = faunaCol(col[2], lift, 0.5); ctx.lineWidth = Math.max(0.6, s * 0.02);
-    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.22, 0, 0, Math.PI * 2); ctx.stroke();
-  },
-
   /** A big bird on the air: a vulture, a hawk, a crow or a raven, gliding round (a few beats now and then). */
   raptor(ctx, x, y, s, m, a, part) {
     const beat = Math.sin(m.ph * 0.5) > 0.85;
     faunaWings(ctx, x, y, s, m.f, beat ? m.ph * 7 : 0, a.K.col, part === 'shadow' ? 'shadow' : true, { glide: !beat, broad: true, band: a.kind === 'vulture' || a.kind === 'hawk' });
   },
 };
+
+/* ------------------------------------------------------------------ marine wildlife */
+
+/** Open liquid water, including on a tidal map after the tide has changed. */
+function marineWater(x, y) {
+  const i = Math.floor(x), j = Math.floor(y);
+  if (!faunaWet(i, j)) return false;
+  const t = tIdx(i, j);
+  return !(S.road[t] || S.rail[t] || S.ford?.[t] || S.tidal?.[t]);
+}
+
+/** Stable, short appearances in open water that neither ships nor the simulation have to track. */
+function drawSeaLife(ctx, ox, oy, z, v0, v1) {
+  if (!navalMap() || z < 12 || (LESS_MOTION && LESS_MOTION.matches) || biome() === 'lunar' || biome() === 'volcanic') return;
+  const cell = 7, now = R.time, seed = S.seed | 0, night = TOD.active ? TOD.state.lights : 0;
+  let budget = gfxStep() === 'saver' ? 3 : 9;
+  ctx.save();
+  for (let j = Math.max(0, Math.floor(v0.y / cell) - 1); j <= Math.min(S.H / cell, v1.y / cell + 1) && budget > 0; j++) {
+    for (let i = Math.max(0, Math.floor(v0.x / cell) - 1); i <= Math.min(S.W / cell, v1.x / cell + 1) && budget > 0; i++) {
+      const period = 13 + 12 * hash2(i, j, seed + 371);
+      const clock = now + period * hash2(j, i, seed + 372), cycle = Math.floor(clock / period), age = clock - cycle * period;
+      const toss = hash2(i * 11 + cycle, j * 5, seed + 373);
+      const kind = toss < 0.61 ? 'fish' : toss < 0.94 ? 'dolphin' : 'whale';
+      const duration = kind === 'whale' ? 4.6 : kind === 'dolphin' ? 3.7 : 2.4;
+      if (age >= duration) continue;
+      const x = i * cell + 1.1 + (cell - 2.2) * hash2(i, j + cycle * 7, seed + 374);
+      const y = j * cell + 1.1 + (cell - 2.2) * hash2(i - cycle * 11, j, seed + 375);
+      const angle = hash2(i + cycle, j, seed + 376) * Math.PI * 2, dx = Math.cos(angle), dy = Math.sin(angle);
+      const width = kind === 'whale' ? 2.6 : kind === 'dolphin' ? 1.55 : 0.7;
+      if (!marineWater(x, y) || !marineWater(x - dx * width, y - dy * width) || !marineWater(x + dx * width, y + dy * width) ||
+        !marineWater(x - dy * width * 0.55, y + dx * width * 0.55) || !marineWater(x + dy * width * 0.55, y - dx * width * 0.55)) continue;
+      if (kind === 'whale' && (!marineWater(x - 2.6, y - 2.6) || !marineWater(x + 2.6, y + 2.6))) continue;
+      ctx.globalAlpha = (1 - 0.62 * night) * Math.min(1, age * 5, (duration - age) * 2.5);
+      if (kind === 'whale') drawWhaleBlow(ctx, ox + x * z, oy + y * z, z, angle, age);
+      else {
+        const dolphin = kind === 'dolphin', spacing = dolphin ? 0.12 : 0.18;
+        for (let k = 0; k < (dolphin ? 2 : 3); k++) {
+          const local = age - k * (dolphin ? 0.48 : 0.23);
+          if (local <= 0 || local >= duration - 0.65) continue;
+          const run = (local / (duration - 0.65) - 0.5) * width * 1.8 - k * spacing;
+          const side = (k % 2 ? -1 : 1) * k * spacing;
+          const sx = x + dx * run - dy * side, sy = y + dy * run + dx * side;
+          if (marineWater(sx, sy)) drawSeaLeap(ctx, ox + sx * z, oy + sy * z, z, angle, local, dolphin);
+        }
+      }
+      budget--;
+    }
+  }
+  ctx.restore();
+}
+
+function marineRipple(ctx, x, y, z, p, strength) {
+  ctx.save();
+  ctx.globalAlpha *= strength * (1 - p);
+  ctx.strokeStyle = '#c8eadf'; ctx.lineWidth = Math.max(0.55, z * 0.016);
+  const size = (0.07 + p * 0.36) * z;
+  ctx.beginPath(); ctx.ellipse(x, y, size, size * 0.48, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSeaLeap(ctx, x, y, z, angle, time, dolphin) {
+  const cycle = dolphin ? 1.48 : 0.83, flight = dolphin ? 0.72 : 0.40;
+  const t = time % cycle, p = t / flight;
+  if (p >= 1) { marineRipple(ctx, x, y, z, Math.min(1, (t - flight) * 2.7), dolphin ? 0.85 : 0.6); return; }
+  const rise = Math.sin(p * Math.PI) * z * (dolphin ? 0.48 : 0.24), size = z * (dolphin ? 0.47 : 0.21);
+  if (p < 0.2 || p > 0.8) marineRipple(ctx, x, y, z, p < 0.2 ? p * 2 : (p - 0.8) * 2, 0.84);
+  ctx.save();
+  ctx.translate(x, y - rise);
+  const left = Math.cos(angle) < 0;
+  if (left) ctx.scale(-1, 1);
+  ctx.rotate(Math.sin(angle) * (left ? -0.43 : 0.43) + (p - 0.5) * 0.99);
+  ctx.scale(size, size);
+  const g = ctx.createLinearGradient(0, -0.26, 0, 0.25);
+  g.addColorStop(0, dolphin ? '#244858' : '#427585');
+  g.addColorStop(0.52, dolphin ? '#789fa7' : '#a4cbbe');
+  g.addColorStop(1, '#d6e4d4');
+  ctx.fillStyle = g;
+  if (!dolphin) {
+    ctx.beginPath(); ctx.moveTo(-0.24, 0);
+    ctx.quadraticCurveTo(0.04, -0.36, 0.43, -0.04);
+    ctx.quadraticCurveTo(0.2, 0.27, -0.24, 0.09);
+    ctx.lineTo(-0.61, 0.24); ctx.lineTo(-0.48, 0.04); ctx.lineTo(-0.64, -0.17);
+    ctx.closePath(); ctx.fill(); ctx.restore(); return;
+  }
+  ctx.beginPath(); ctx.moveTo(-0.42, 0.02);
+  ctx.bezierCurveTo(-0.20, -0.13, 0.10, -0.35, 0.37, -0.21);
+  ctx.quadraticCurveTo(0.45, -0.18, 0.44, -0.07);
+  ctx.quadraticCurveTo(0.64, -0.03, 0.54, 0.045);
+  ctx.quadraticCurveTo(0.18, 0.08, -0.43, 0.09);
+  ctx.lineTo(-0.66, 0.21); ctx.lineTo(-0.57, 0.045); ctx.lineTo(-0.72, -0.12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#365d6d';
+  ctx.beginPath(); ctx.moveTo(-0.18, -0.18);
+  ctx.quadraticCurveTo(-0.28, -0.40, -0.06, -0.39); ctx.lineTo(0.12, -0.23); ctx.fill();
+  ctx.restore();
+}
+
+function drawWhaleBlow(ctx, x, y, z, angle, age) {
+  const fade = Math.sin(Math.PI * Math.min(1, age / 4.5));
+  marineRipple(ctx, x, y + z * 0.1, z * 2.5, (age * 0.6) % 1, fade * 0.55);
+  ctx.save();
+  ctx.globalAlpha *= 0.55 * fade;
+  ctx.translate(x, y); ctx.rotate(angle);
+  ctx.fillStyle = '#1e485a'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.77, z * 0.19, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#70969f'; ctx.lineWidth = Math.max(0.6, z * 0.021);
+  ctx.beginPath(); ctx.ellipse(0, 0, z * 0.67, z * 0.135, 0, Math.PI * 1.08, Math.PI * 1.85); ctx.stroke();
+  ctx.restore();
+  const mist = wxCloud('225,240,236'), t = age - 0.45;
+  if (t <= 0 || t > 2.4) return;
+  ctx.save();
+  const alpha = ctx.globalAlpha;
+  for (let k = 0; k < 7; k++) {
+    const p = t - k * 0.1;
+    if (p < 0 || p > 1.65) continue;
+    const up = Math.min(1, p * 1.8), width = z * (0.17 + p * 0.24);
+    ctx.globalAlpha = alpha * 0.8 * (1 - p / 1.65);
+    for (const side of [-1, 1]) {
+      const xx = x + (side * up * up * (0.16 + p * 0.12) + p * 0.09) * z, yy = y - z * (0.08 + up * 1.12);
+      ctx.drawImage(mist, xx - width / 2, yy - width / 2, width, width);
+    }
+  }
+  ctx.restore();
+}

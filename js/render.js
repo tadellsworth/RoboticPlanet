@@ -134,6 +134,26 @@ const BIOME_LOOK = {
     mm: { ground: [97, 73, 130], water: [133, 47, 112], rock: [38, 37, 58], ramp: [138, 114, 176] },
     plantScale: [1.32, 1.12, 1.12, 1.15, 1.1, 1.1],
   },
+  springs: {
+    level: [['#746855', '#897c61'], ['#93846b', '#a7997b'], ['#a99475', '#bdab88'], ['#c2ae90', '#d1c29d'], ['#d2c29f', '#e3d5ae']],
+    theme: { cliffTop: '#ad9972', cliffBottom: '#645244', slope: '#c3aa7c', water: '#258c88', waterEdge: '#80bf9f',
+      rock: '#6d6255', rockTop: '#8e806a', rockHi: '#b8a784', rockShadow: '#43362d' },
+    tex: { ground: ['#71624c', '#ac9873', '#ddd1aa'], water: ['#0d545d', '#288b87', '#8ae1bb'], rock: ['#453b31', '#766957', '#b3a17f'] },
+    hi: '255,244,213', lo: 'rgba(49,36,29,0.26)',
+    grain: ['rgba(96,68,41,0.2)', 'rgba(248,230,180,0.2)', 'rgba(197,157,78,0.54)', 'rgba(65,52,42,0.3)'],
+    mm: { ground: [178, 158, 123], water: [40, 140, 135], rock: [109, 98, 85], ramp: [195, 170, 124] },
+    plantScale: [1.31, 1.22, 1.38, 0.95, 1.02, 1.07],
+  },
+  tropical: {
+    level: [['#a08b69', '#bcaa82'], ['#c3ad83', '#d7c39b'], ['#caaf81', '#dcc89e'], ['#d3c098', '#e7d5ac'], ['#e4d0ad', '#f0dfbf']],
+    theme: { cliffTop: '#a28e71', cliffBottom: '#5d5445', slope: '#cbb585', water: '#1a8896', waterEdge: '#82d5bc',
+      rock: '#716d5f', rockTop: '#a59d81', rockHi: '#cac2a0', rockShadow: '#4d4740' },
+    tex: { ground: ['#8f805c', '#cbb586', '#eddcaa'], water: ['#08677d', '#27aaa3', '#83d5b6'], rock: ['#4f4b3e', '#827c65', '#bcb28d'] },
+    hi: '255,247,209', lo: 'rgba(60,55,33,0.22)',
+    grain: ['rgba(96,68,41,0.2)', 'rgba(248,230,180,0.2)', 'rgba(197,157,78,0.54)', 'rgba(65,52,42,0.3)'],
+    mm: { ground: [193, 178, 139], water: [33, 133, 151], rock: [121, 119, 101], ramp: [203, 181, 133] },
+    plantScale: [1.42, 1.4, 1.26, 1.08, 1.03, 1.1],
+  },
   // The Hollow (always night): grey-violet silt and stone under the Bloom's moss; black lakes; black rock walls.
   hollow: {
     level: [['#3a3644', '#433e4e'], ['#46404f', '#4f485a'], ['#524a5c', '#5b5266'], ['#5c5466', '#655c70'], ['#665d70', '#70667a']],
@@ -263,7 +283,7 @@ function bakedArt(key) {
  * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js), which keeps the page under
  * its 16 MB (the Forest's and the Polar Caps' joined the newer biomes there, Nov 2026: about 1 MB of the page).
  */
-const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow'];
+const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'tropical', 'hollow'];
 function lazyBiomeOf(key) {
   for (const b of LAZY_BIOMES) if (key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) return b;
   return null;
@@ -1072,6 +1092,10 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
+      if (plainShore(t)) {
+        if (R.biome === 'springs') drawMineralBanks(ctx, i, j, x, y);
+        if (R.biome === 'tropical') drawReefShallows(ctx, i, j, x, y);
+      }
       ctx.fillStyle = 'rgba(159,217,208,0.5)';
       if (terrAt(i, j - 1) !== T_WATER) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_WATER) ctx.fillRect(x, y, 2, TP);
@@ -1288,7 +1312,7 @@ function drawLava(ctx, i, j, x, y) {
       ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
     }
   }
-  const lava = (a, b) => S.lava && inMap(a, b) && S.lava[tIdx(a, b)] && S.terrain[tIdx(a, b)] === T_WATER;
+  const lava = (a, b) => inMap(a, b) && lavaSurface(tIdx(a, b));
   ctx.fillStyle = 'rgba(28,12,8,0.75)';
   if (!lava(i, j - 1)) ctx.fillRect(x, y, TP, 3);
   if (!lava(i - 1, j)) ctx.fillRect(x, y, 3, TP);
@@ -1417,12 +1441,70 @@ function shoreCorners(ctx, i, j, x, y) {
     const { cx, cy, rr, a1, a2, ccw } = shoreCornerPath(ctx, x, y, dx, dy);
     ctx.clip();
     if (fill === 'land') groundPatch(ctx, i, j, x, y, Math.max(S.elev[tIdx(i + dx, j)], S.elev[tIdx(i, j + dy)]));
-    else drawTexture(ctx, tex.water, i, j, x, y);
+    else {
+      drawTexture(ctx, tex.water, i, j, x, y);
+      if (R.biome === 'tropical') {
+        const g = ctx.createRadialGradient(cx, cy, rr, cx, cy, rr * 1.62);
+        g.addColorStop(0, 'rgba(215,220,169,0.72)');
+        g.addColorStop(0.67, 'rgba(127,219,181,0.47)');
+        g.addColorStop(1, 'rgba(65,199,181,0.20)');
+        ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+      }
+    }
     ctx.restore();
     ctx.beginPath(); ctx.arc(cx, cy, rr, a1, a2, ccw);
+    if (R.biome === 'springs' && fill === 'land') strokeMineralBank(ctx, mineralBankShade(i, j));
     ctx.strokeStyle = dy < 0 ? 'rgba(159,217,208,0.5)' : 'rgba(10,30,40,0.35)'; ctx.lineWidth = 2; ctx.stroke();
   }
 }
+function plainShore(t) {
+  return !(S.lava?.[t] || S.ford?.[t] || S.tidal?.[t]);
+}
+
+/** Pale coral sand under the first few feet of water. */
+function drawReefShallows(ctx, i, j, x, y) {
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    if (terrAt(i + dx, j + dy) !== T_GROUND) continue;
+    const depth = TP * (0.58 + fbm(i / 4, j / 4, 851, 2) * 0.28);
+    const sx = x + (0.5 + dx * 0.5) * TP, sy = y + (0.5 + dy * 0.5) * TP;
+    const g = ctx.createLinearGradient(sx, sy, sx - dx * depth, sy - dy * depth);
+    g.addColorStop(0, 'rgba(220,220,167,0.78)');
+    g.addColorStop(0.17, 'rgba(161,215,180,0.65)');
+    g.addColorStop(0.52, 'rgba(60,201,184,0.37)');
+    g.addColorStop(1, 'rgba(65,199,181,0)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+  }
+}
+
+/** Mineral bands on the wet side of the bank. Leave space for the rounded corners. */
+function drawMineralBanks(ctx, i, j, x, y) {
+  const edges = [[0, -1, 0, 0, 1, 0], [1, 0, 1, 0, 1, 1], [0, 1, 0, 1, 1, 1], [-1, 0, 0, 0, 0, 1]]
+    .filter(([dx, dy]) => terrAt(i + dx, j + dy) === T_GROUND);
+  if (!edges.length) return;
+  const corners = shoreRounds(i, j), shade = mineralBankShade(i, j);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
+  for (const [dx, dy, x0, y0, x1, y1] of edges) {
+    const gap = (cx, cy) => corners.some((c) => c.dx === cx * 2 - 1 && c.dy === cy * 2 - 1) ? SHORE_R : 0;
+    const left = gap(x0, y0), right = gap(x1, y1);
+    const ax = x + (x0 + (x1 - x0) * left) * TP, ay = y + (y0 + (y1 - y0) * left) * TP;
+    const bx = x + (x1 - (x1 - x0) * right) * TP, by = y + (y1 - (y1 - y0) * right) * TP;
+    const bow = TP * (0.03 + 0.07 * hash2(i, j, 843 + dx + 2 * dy));
+    ctx.beginPath(); ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo((ax + bx) / 2 - dx * bow, (ay + by) / 2 - dy * bow, bx, by);
+    strokeMineralBank(ctx, shade);
+  }
+  ctx.restore();
+}
+
+function mineralBankShade(i, j) { return fbm(i / 3, j / 3, 816, 2); }
+
+function strokeMineralBank(ctx, shade) {
+  ctx.strokeStyle = `rgba(157,197,128,${0.24 + 0.23 * shade})`; ctx.lineWidth = TP * (0.22 + 0.08 * shade); ctx.stroke();
+  ctx.strokeStyle = `rgba(198,${Math.round(105 + 49 * shade)},61,${0.38 + 0.22 * shade})`; ctx.lineWidth = TP * (0.15 + 0.05 * shade); ctx.stroke();
+  ctx.strokeStyle = 'rgba(236,220,175,0.69)'; ctx.lineWidth = TP * 0.062; ctx.stroke();
+}
+
 /** Plain ground at elevation e over tile (i, j) (clipped by the caller): its level's colour, the texture and the level's tint. */
 function groundPatch(ctx, i, j, x, y, e) {
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
@@ -2282,7 +2364,7 @@ function drawCrossingGates(ctx, ox, oy, z, inView) {
   const ver = (S.roadVer || 0) + '/' + (S.railVer || 0);
   if (!R.xings || R.xings.ver !== ver || R.xings.of !== S) {
     const list = [];
-    for (let t = 0; t < S.W * S.H; t++) if (S.rail[t] && S.road[t] && !S.bAt[t]) { const pc = railPiece(t); if (pc.key === 'rail-level-crossing') list.push([t, pc.q]); }
+    for (let t = 0; t < S.W * S.H; t++) if (S.rail[t] && S.road[t] && (!S.bAt[t] || pylonAt(t))) { const pc = railPiece(t); if (pc.key === 'rail-level-crossing') list.push([t, pc.q]); }
     R.xings = { ver, of: S, list };
   }
   for (const [t, q] of R.xings.list) {
@@ -5689,11 +5771,11 @@ function vehicleSmoke(u, x, y, face) {
   const P = typeof EXHAUST_POINTS !== 'undefined' && EXHAUST_POINTS[BOTS[u.type].train ? 'roadtrain' : u.type];
   if (!P || u.inside || !driveFrame(u)) return;
   const v = u.vel || 0, heavy = !!u.path && u.drive > 0 && v < (u.vtop || 1) * 0.8;
-  if (!smokeReady(u.id, heavy ? 0.08 : v > 0.05 ? 0.25 : 0.4)) return;
+  if (!smokeReady(u.id, heavy ? 0.12 : v > 0.05 ? 0.32 : 0.52)) return;
   const k = 0.9 / P.canvas, c = Math.cos(face), s = Math.sin(face);
   for (const [px, py] of P.tips) {
     const ax = (px - P.canvas / 2) * k, ay = (py - P.canvas / 2) * k;
-    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.9 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
+    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.8 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
   }
 }
 
@@ -5984,10 +6066,13 @@ function render(dtReal) {
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
+  drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
+  drawWaterRipples(ctx, ox, oy, z, v0, v1);
+  drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -6277,6 +6362,8 @@ function render(dtReal) {
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
+  drawLavaVents(ctx, ox, oy, z, v0, v1);
+  if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
@@ -8679,6 +8766,14 @@ function magLinesToDraw() {
     if (b.dead || !BDEFS[b.type].magterm) continue;
     const o = magPartner(b);
     if (o && magNearEnd(b) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
+    if (b.magMissing) {
+      // Use the missing dock's old coordinates for spans. Pylons still belong to the survivor.
+      const end = { ...b.magMissing, id: 0 }, missingNear = b.magMissing.near;
+      const A = missingNear ? { ...end, id: b.id, owner: b.owner, magLayout: b.magLayout } : b, B = missingNear ? { ...b, id: 0 } : end;
+      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y),
+        spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
+      continue;
+    }
     const s = magPending(b);
     if (s) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
   }
@@ -8699,8 +8794,23 @@ function drawMaglevShadows(ctx, ox, oy, z) {
   ctx.restore();
 }
 
+/** Shift the footing to the shoulder of a road or track, leaving the lane visible and open. */
+function magPylonOffset(i, j) {
+  const way = (x, y) => {
+    if (!inMap(x, y)) return false;
+    const t = tIdx(x, y);
+    return !!(S.road[t] || S.plan[t] || S.rail[t] || S.railPlan[t]);
+  };
+  if (!way(i, j)) return [0, 0];
+  const h = Number(way(i - 1, j)) + Number(way(i + 1, j));
+  const v = Number(way(i, j - 1)) + Number(way(i, j + 1));
+  return h >= v ? [0, 0.36] : [0.36, 0];
+}
+
 /** Pylon b (a building) at its foot (cx, cy): squashed or stretched so its head sits under the band (MAG_LEVEL a level of ground). */
 function drawMagPylon(ctx, b, cx, cy, z, cut) {
+  const [dx, dy] = magPylonOffset(b.x, b.y);
+  cx += dx * z; cy += dy * z;
   const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
   let hs = 1;
   if (!cut && b.line) {
@@ -8709,6 +8819,19 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
       const L = dist(A.x, A.y, B.x, B.y) || 1, f = clamp(((b.k || 1) * MAGLEV.spacing) / L, 0, 1);
       const ref = S.elev[tIdx(A.x, A.y)] * (1 - f) + S.elev[tIdx(B.x, B.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
       hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
+    }
+  }
+  if (!cut && b.line && b.k) {
+    const A = getE(b.line), B = magPartner(A) || A?.magMissing;
+    if (A && B) {
+      const [first, last] = A.magMissing?.near ? [B, A] : [A, B];
+      const f = (b.k * MAGLEV.spacing) / (dist(first.x, first.y, last.x, last.y) || 1);
+      const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
+      const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
+      ctx.save();
+      ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
+      ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.restore();
     }
   }
   if (!art) {
@@ -8762,11 +8885,11 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
     if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
     // a fallen pylon in every cut
     if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
-    const powered = ln.B ? magLinePowered(ln.A) : false;
+    const powered = !ln.suspended && ln.B ? magLinePowered(ln.A) : false;
     for (const [d0, d1] of ln.spans) {
       const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
       magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
-      if (ln.B && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
+      if (ln.B && !ln.suspended && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
     }
     if (ln.building) {
       // the rest of the line marked out, dashed, to the far end
@@ -8778,13 +8901,21 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
       continue;
     }
     // pods: running (at their place along the line), one docked at each end, the repair pod on its way out
+    const docks = ln.suspended ? [ln.survivor] : [ln.A, ln.B];
     for (const u of S.bots) {
-      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !(u.magTo === ln.A.id || u.magTo === ln.B.id)) continue;
+      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !docks.some((d) => u.magTo === d.id)) continue;
       drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
     }
-    for (const T of [ln.A, ln.B]) {
+    for (const T of docks) {
       const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
       if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+    }
+    if (ln.suspended) {
+      ctx.save();
+      ctx.strokeStyle = '#f2ae63'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.15, z * 0.1]);
+      ctx.beginPath(); ctx.arc(ox + (ln.missing.x + 0.5) * z, oy + (ln.missing.y + 0.5) * z, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      continue;
     }
     const F = ln.A.magFix;
     if (F && F.u && F.since > 0) {

@@ -96,17 +96,16 @@ function workerWhy(crew) {
 function haulWhy(g, cons, have, who) {
   const G = goodN(g, have), inc = (cons.inc && cons.inc[g]) || 0;
   const f = insFoundry(), fid = f ? f.id : 0, liquid = isLiquid(g), carrier = liquid ? 'Tanker' : 'Hauler';
-  if (inc > 0) return { text: `${inc} ${goodN(g, inc)} ${inc === 1 ? 'is' : 'are'} on the way`, ok: true };
   if (cons.unlinked && needsRoad(cons)) return { text: `${who} has no road to storage, so haulers can't bring it ${goodN(g, 2)}`, at: cons.id, road: true };
-  let carriers = 0, idle = 0;
+  if (inc > 0) return { text: `${inc} ${goodN(g, inc)} ${inc === 1 ? 'is' : 'are'} on the way`, ok: true };
+  const carriers = [];
   for (const u of S.bots) {
     if (u.dead || u.owner !== ME) continue;
     const bt = BOTS[u.type];
-    if (liquid ? !bt.tanker : !bt.haul || bt.tanker || bt.sea || bt.rail || bt.train) continue;
-    carriers++;
-    if (!u.carry && (!u.task || u.task.type === 'home')) idle++;
+    if (!bt.haul || bt.sea || bt.rail || bt.train || (!liquid && bt.tanker) || (liquid && bt.truck && !bt.tanker)) continue;
+    if (!u.recycleTo) carriers.push(u);
   }
-  if (!carriers && (liquid || !S.players[ME].noHaulers)) return { text: `you have ${have} ${G} but no ${carrier} to carry ${have === 1 ? 'it' : 'them'}: order one at the Bot Foundry`, at: fid };
+  if (!carriers.length && !S.players[ME].noHaulers) return { text: `you have ${have} ${G} but no ${carrier} to carry ${have === 1 ? 'it' : 'them'}: order one at the Bot Foundry`, at: fid };
   const src = S.buildings.filter((s) => !s.dead && s.owner === ME && s !== cons && supplyOf(s, g) >= 1);
   if (!src.length) return { text: `every ${GOOD[g].name} you have is promised to other buildings and sites`, ok: true };
   const linked = src.filter((s) => roadLinked(s, cons));
@@ -122,8 +121,12 @@ function haulWhy(g, cons, have, who) {
     }
     if (linked.every((s) => shunned(s))) return { text: `enemy guns or robots cover the storage holding your ${G}, so haulers keep clear`, at: linked[0].id };
   }
-  if (!idle) return { text: `you have ${have} ${G}, but every ${carrier} is busy: order more at the Bot Foundry`, at: fid, soft: true };
-  return { text: `${aOrAn(carrier)} should bring ${goodN(g, 2)} soon`, ok: true };
+  const connected = carriers.filter((u) => linked.some((s) => !BOTS[u.type].roadOnly || haulRoadConnected(u, s, cons)));
+  if (carriers.length && !connected.length && !cons.airSupply && linked.every(onHomeNet)) {
+    return { text: `your road carriers can’t reach the route from storage to ${who}: connect their roads to the supply route`, at: linked[0].id };
+  }
+  if (connected.length && connected.every((u) => u.carry || (u.task && u.task.type !== 'home'))) return { text: `you have ${have} ${G}, but the road carriers that can reach it are busy`, at: fid, soft: true };
+  return { text: `you have ${have} ${G}, and no delivery is assigned yet`, ok: true };
 }
 
 /** Deposits in gatherer b's reach: { all, own (on no rival's land), safe (and out of enemy guns' reach), ripe (and grown) }. */
@@ -215,7 +218,7 @@ function siteWhy(site, depth, seen) {
  */
 function goodWhy(g, cons, depth, seen, who) {
   const have = goodTotal(ME, g);
-  if (have >= 1) { const c = haulWhy(g, cons, have, who); return c && { ...c, have: true }; }
+  if (have >= 1 || (cons.inc?.[g] || 0) > 0) { const c = haulWhy(g, cons, have, who); return c && { ...c, have: true }; }
   const types = insMakers(g), mine = insMine().filter((b) => types.includes(b.type));
   const built = mine.filter((b) => b.built), sites = mine.filter((b) => !b.built);
   const main = MAIN_MAKER[g] && types.includes(MAIN_MAKER[g]) ? MAIN_MAKER[g] : types[0];

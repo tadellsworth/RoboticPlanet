@@ -44,6 +44,10 @@ const BIOMES = {
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  springs: { name: 'Boiling Springs', kind: 'Geothermal basin', region: 'Boiling Springs', plants: 0.13, weights: [1, 0.85, 0.63, 0.34, 1.15, 0.46],
+    desc: 'Turquoise and amber hot springs on sulfur-stained limestone terraces. Steam drifts off the vents, and geysers break the surface.' },
+  tropical: { name: 'Tropical', kind: 'Tropical islands', region: 'the Tropical islands', plants: 0.30, groves: true, navalOnly: true,
+    desc: 'White coral sand, coconut palms, and clear turquoise water over the reefs. Available on naval maps.' },
   // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
   // (it isn't in BIOME_ORDER). Its own art (art/biomes/hollow) loads only when it is played (LAZY_BIOMES in render.js).
   hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
@@ -56,7 +60,10 @@ const BIOME_ART = {};
 /** The biome whose art draws biome b. */
 function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
-const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
+const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'tropical'];
+function biomeAllowed(key, shape) {
+  return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval));
+}
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers
@@ -649,6 +656,8 @@ const SHAPE_PRESETS = [
   // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
   { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
     tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
+  { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook a winding river and a floor rich in Ore and Crystal. Switchbacks and side canyons offer different ways down.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true,
+    tip: 'Grand Canyon: your colony starts on a high rim. Take the switchbacks or the trail through the side canyon down to the richest fields. Robots can wade at the fords, ships can sail along the river, and a Viaduct can cross the gorge at its narrows.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;

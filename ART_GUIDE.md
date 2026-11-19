@@ -1612,6 +1612,8 @@ read from `S` and never written to it; the simulation never reads it.
 
 ### Batch 21: the Maglev line (installed)
 
+In play, pylons sharing a road or track show their footing on the shoulder, with a support arm connecting to the straight guideway.
+
 The owner chose direction **A, Accord Phase 2**, from the design sheet (`renderer/preview/maglev_sheet.py`), with the two
 mixes the sheet suggested: the pylon caps and the Terminal's dock in gunmetal (as drawn) and B's hazard chevrons on A's
 pylon caps. Rendered with `renderer/b/maglev.js` (`v=a`), both teams, at every time of day, by
@@ -1692,3 +1694,36 @@ the far Terminal.
 - If a building looks too small or too big in the game, change its `scale` in the manifest rather than
   re-exporting. `scale: 1.2` draws it 20% larger.
 - Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
+
+
+### Boiling Springs
+
+Boiling Springs uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
+terraces have bright carbonate lips and darker seams, with the same upper-left lighting as the
+other terrain. The 512 px textures tile seamlessly. The six centered transparent scenery sprites
+show baths, stacked pools, a geyser cone, a dry sulfur shelf and vents. The geyser and vents use
+the same tile offsets for their animated steam. The Sky islands use layered limestone canyon art.
+
+Regenerate the WebP set with
+`python renderer/terrain/terrain_springs.py art/biomes/springs` using the renderer's Python environment.
+
+
+### Tropical coasts and lava motion
+
+Tropical sand has warm ripples and pale coral grit. Two rendered palm silhouettes, broadleaf
+plants and low shoreline vegetation use the same camera and light as the other biome sprites.
+Warm sand shows through turquoise reef shallows. Seagulls have white bodies and dark wing tips.
+Small waves drift across open water. Fish, dolphins, and whale blows are canvas
+scenery, with water ripples and muted silhouettes at night. Lava reuses the baked crust texture
+under thin moving highlights and rising steam.
+
+Generate Tropical's WebP assets with
+`python renderer/terrain/terrain_tropical.py art/biomes/tropical`.
+
+
+### Wildlife silhouettes
+
+Deer have a high, slender neck, articulated legs, pale rump and occasional branching antlers. Wildebeest have
+a heavy shoulder, lower rump, mane, hooked horns and dark hooves. The game draws these shapes and their gait
+from `js/wildlife.js`. Blackwater adds plated alligator backs and domed turtle shells. The Bloom uses folding
+shell plates, vane-headed runners and triangular sailwings in place of the drifting bells.

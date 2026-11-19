@@ -24,6 +24,21 @@ function liveE(id) { return liveB(id) || liveU(id); }
 function armyN(want, avail) { return want < 0 ? avail : Math.min(avail, want | 0); }
 
 const ORDERS = {
+  rivalDifficulty(p, diff) {
+    if (S.mission || !human(p) || !ownKey(DIFFICULTY, diff) || !S.players.some((r) => r.ai && !r.out)) return false;
+    // The first active human is the host, using simulation state at the order's tick.
+    if (p !== S.players.findIndex((r) => !r.ai && !r.out && !r.absent)) return false;
+    if (S.difficulty === diff) return true;
+    const after = DIFFICULTY[diff];
+    S.difficulty = diff;
+    for (const r of S.players) {
+      if (!r.ai) continue;
+      r.mult = after.mult * (tech(r.id, 'tools') ? 1.15 : 1);
+      r.aiT = Math.min(r.aiT || 0, after.think);
+    }
+    for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival AI difficulty is now ${after.label}.`, undefined, undefined, 'info');
+    return true;
+  },
   /* ---------------------------------------------------------------- building settings (its panel) */
   prio(p, id, v) {
     const b = ownB(p, id); if (!b) return;
@@ -118,7 +133,7 @@ const ORDERS = {
   yard(p, id, k, n) { const b = ownB(p, id); if (b && BDEFS[b.type].yard && BDEFS[b.type].yard.includes(k)) orderAtYard(b, k, n | 0); },
   /** The Bot Foundry's queue: d more of kind k (0 clears it). */
   foundryOrder(p, id, k, d) {
-    const b = ownB(p, id); if (!b || b.type !== 'foundry' || !BOTS[k]) return;
+    const b = ownB(p, id); if (!b || b.type !== 'foundry' || !ownKey(BOTS, k) || BOTS[k].magpod) return;
     b.orders = b.orders || {};
     b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + (d | 0), 0, 99);
     if (!hasOrders(b)) delete b.orders;
@@ -235,7 +250,11 @@ const ORDERS = {
     if (foe && foes(foe.owner, p)) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe); }
     else if (b && foes(b.owner, p)) { out.kind = 'attack'; out.n = orderAttack(p, ids, b); }
     else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b); }
-    else if (!b && inMap(s.i, s.j) && walkable(tIdx(s.i, s.j))) { out.kind = 'move'; out.n = orderMove(p, ids, s.i, s.j); }
+    else if (!b && inMap(s.i, s.j)) {
+      if (!walkable(tIdx(s.i, s.j))) return { why: 'No route to that tile. Choose ground the selected units can reach.' };
+      out.kind = 'move';
+      out.n = orderMove(p, ids, s.i, s.j, out);
+    }
     else out.kind = 'none';
     return out;
   },

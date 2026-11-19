@@ -258,8 +258,10 @@ const ART_MANIFEST = {
 
   // Biomes: plants for the Red desert, Jungle and Polar worlds, and the Jungle and Polar terrain
   // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.
+  ...Object.fromEntries(['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e']
+    .map((k) => [k + '-springs', `biomes/springs/${k}-springs.webp`])),
   ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
-  ...biomeSet('autumn'), ...biomeSet('savanna'), ...biomeSet('swamp'), ...biomeSet('volcanic'), ...biomeSet('lunar'), ...biomeSet('alien'),
+  ...biomeSet('autumn'), ...biomeSet('savanna'), ...biomeSet('swamp'), ...biomeSet('volcanic'), ...biomeSet('lunar'), ...biomeSet('alien'), ...biomeSet('springs'), ...biomeSet('tropical'),
   // The Hollow (renderer/b/hollow.js, murmur_moles.js and terrain/*_hollow.py): its own terrain and plants above, and
   // its pieces. Every key ends -hollow, so it all loads only when the Hollow is played (LAZY_BIOMES). The standing
   // pieces (pillars, the Deep's mound) are night renders, drawn as they are; the rest are lit like the ground and

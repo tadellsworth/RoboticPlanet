@@ -403,7 +403,7 @@ function generateMap(seed, W, H, cfg) {
   }
 
   // Nuclear race: a few single uranium deposits, mostly out towards the middle of the map.
-  if (cfg.nuke) {
+  if (cfg.nuke && !SH.grandCanyon) {
     let placed = 0;
     for (let tries = 0; tries < 600 && placed < URANIUM_DEPOSITS; tries++) {
       const [x, y] = np === 2 ? [1 + Math.floor(rng() * (W - 2)), half + 1 + Math.floor(rng() * (H - half - 2))] : canonPoint(rng, 2).map(Math.floor);
@@ -863,6 +863,86 @@ function generateMap(seed, W, H, cfg) {
     for (let i = 0; i < W; i++) { const j = half + hw(i); if (j < H && terrain[id(i, j)] === T_GROUND && cr() < 0.55) putRes(id(i, j), F_FERTILE); }
     links = [[fc, half + hw(fc)], [W - 1 - fc, half + hw(W - 1 - fc)]];
   };
+  // Grand Canyon: put the south bank and its half-turn in together, even where the river bends
+  // past the middle row. Two terraces rise to each rim, with a side canyon opening at one end.
+  const grandCanyonShape = () => {
+    const cr = makeRng(seed ^ 0x4c671f), bend = cr() < 0.5 ? -1 : 1, wave = 2 + cr();
+    const narrow = Math.round(W * (0.32 + 0.04 * cr())), ford = Math.round(W * 0.42);
+    const river = (i) => {
+      const x = (i - ccx) / ccx, a = Math.abs(x);
+      return ccy + Math.sign(x) * Math.round(bend * (1.8 * dsin(a * wave) + 0.6 * dsin(a * 8)));
+    };
+    const main = Math.floor(ccx) - 2, flank = Math.round(W * 0.14);
+    const onMain = (i) => i >= main && i <= main + 4;
+    const onFlank = (i) => i >= flank - 3 && i <= flank + 1;
+    const fromNarrows = (i) => Math.min(Math.abs(i - narrow), Math.abs(i - (W - 1 - narrow)));
+    const floorEdge = (i) => {
+      if (fromNarrows(i) <= 1) return 3;
+      if (onMain(i)) return 7;
+      if (onFlank(i)) return 11;
+      const bank = 7 + (fbm(i / 8, 0, sE, 2) - 0.5) * (1 + TPR.levels * 0.4);
+      const side = 6 * clamp(1 - i / (W * 0.24), 0, 1);
+      return Math.max(3, bank - Math.max(0, 5 - fromNarrows(i))) + side;
+    };
+    for (let i = 0; i < W; i++) {
+      const mid = river(i), edge = floorEdge(i), n = fromNarrows(i);
+      const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
+      for (let j = Math.ceil(mid); j < H; j++) {
+        const t = id(i, j), depth = j - mid;
+        if (depth < (n <= 1 ? 1.5 : 2)) {
+          put(t, T_WATER, undefined, true);
+          flag(elev, t, 0);
+          if (i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford) flag(fordA, t);
+          continue;
+        }
+        const level = depth < edge ? 0 : depth < edge + step ? 1 : depth < edge + 2 * step ? 2 : 3;
+        // Keep the starter fields on the rim. Clear the river flats and terraces for roads, docks and ramps.
+        const abutment = n <= 1 && depth < edge + 2 * step + 1;
+        if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
+        else flag(elev, t, level);
+      }
+    }
+
+    // Two descents per rim. Shift the middle ramp sideways so there is a switchback on the terrace.
+    for (const [x, dir] of [[main, 1], [flank, -1]]) {
+      for (let level = 0; level < 3; level++) {
+        const start = x + (level === 1 ? 3 * dir : 0);
+        for (let i = start; i < start + 2; i++) {
+          for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
+            const t = id(i, j);
+            if (elev[t] !== level || elev[t + W] !== level + 1) continue;
+            put(t, T_GROUND, level);
+            flag(ramp, t);
+            break;
+          }
+        }
+      }
+    }
+
+    // Ore and Crystal on broad river flats, with stretches of bare shoreline for Ports.
+    for (const [part, type, rad] of [[0.11, R_ORE, 1.8], [0.23, R_CRYSTAL, 1.5], [0.47, R_ORE, 1.8],
+      [0.55, R_CRYSTAL, 1.5], [0.78, R_ORE, 1.9], [0.91, R_CRYSTAL, 1.6]]) {
+      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + 3.8);
+      stampRes(cr, i, j, rad, type, 0.85 * stampDens);
+      putRes(id(i, j), type);
+    }
+    if (cfg.nuke) {
+      const spots = [];
+      for (let i = 2; i < W - 2; i++) {
+        for (let j = Math.ceil(river(i) + 2.5); j < river(i) + floorEdge(i); j++) {
+          const t = id(i, j);
+          if (!res[t] && !ramp[t]) spots.push(t);
+        }
+      }
+      for (let n = 0; n < URANIUM_DEPOSITS && spots.length; n++) {
+        const k = Math.floor(cr() * spots.length);
+        putRes(spots[k], R_URANIUM);
+        spots[k] = spots[spots.length - 1];
+        spots.pop();
+      }
+    }
+    for (let t = 0; t < N; t++) if (ramp[t]) { res[t] = R_NONE; fert[t] = 0; }
+  };
   // Volcano: a cone in the middle of the planet, rising level by level to a crater of lava, with lava
   // rivers running down its flanks (bridge them, or go round where they end) and the richest deposits
   // on its slopes. It erupts every few minutes (see updateVolcano).
@@ -1031,6 +1111,7 @@ function generateMap(seed, W, H, cfg) {
       else crossShape4();
     }
     else if (np !== 2) return;
+    else if (SH.grandCanyon) { grandCanyonShape(); return; }
     else if (SH.rift) riftShape();
     else if (SH.ring) ringShape();
     else if (SH.oases) oasesShape();
@@ -1339,7 +1420,7 @@ function generateMap(seed, W, H, cfg) {
   }
 
   // 6) Shape the levels into clean terraces, then connect them with ramps.
-  if (L > 1) {
+  if (L > 1 && !SH.grandCanyon) {
     const levelComponents = () => {
       const comp = new Int32Array(N).fill(-1), sizes = [];
       for (let t = 0; t < N; t++) {
@@ -1648,7 +1729,7 @@ function generateMap(seed, W, H, cfg) {
     // Safety net: if the bases still can't reach each other, flatten the map (Islands are joined
     // by bridges, not land).
     if (!SH.islands && !joinedAll(true)) { elev.fill(baseLevel); ramp.fill(0); }
-  } else {
+  } else if (!SH.grandCanyon) {
     elev.fill(0);
   }
 
@@ -1704,7 +1785,8 @@ function generateMap(seed, W, H, cfg) {
     let d = Infinity;
     for (const b of bases) d = Math.min(d, dist(i, j, b.x, b.y));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
-    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich), 1, 255);
+    const canyonRich = SH.grandCanyon && elev[t] === 0 && (res[t] === R_ORE || res[t] === R_CRYSTAL) ? 1.5 : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich * canyonRich), 1, 255);
   }
   const grow = new Float32Array(N).fill(1);
   // Sky islands: no water anywhere. The islands are towering mesas (the middle one and the islets a
@@ -2458,7 +2540,7 @@ function newGame(opts) {
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
-  settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
+  settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   const { W, H } = mapDims(settings);
@@ -2557,10 +2639,13 @@ function newGame(opts) {
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
+  // Reserve the canyon's scarce landing pads before the Murmur claim the river flats.
+  const grandCanyon = SHAPE_PRESETS[settings.shape].grandCanyon;
+  if (grandCanyon) placePosts(seed);
   if (murmur !== 'off') murmurStart(murmur);
   // The Hollow's side chambers: robot parts laid out in rows, crates for warbots to carry home (they never rot).
   if (m.hollow) for (const r of m.hollow.relics) if (!S.bAt[tIdx(r.x, r.y)]) addLoot(r.x, r.y, r.goods, true);
-  placePosts(seed);
+  if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
@@ -2686,6 +2771,7 @@ function passTile(t, who) {
   const b = getE(id);
   if (!b) return false;
   if (b.type === 'viaduct') return true;
+  if (BDEFS[b.type].pylon) return !!S.road[t];
   return (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
@@ -3555,10 +3641,12 @@ function placeSite(owner, type, i, j, cost, fromStore) {
  * out over the water beyond your border, a tile at a time from your land or the end of a bridge
  * (so a channel the enemy's border covers can still be crossed).
  */
+function pylonAt(t) { return !!(S.bAt[t] && getE(S.bAt[t])?.type === 'magpylon'); }
+
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
+  if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -4211,7 +4299,7 @@ function roadSearch(owner, seeds, done) {
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
-  const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
+  const open = (t) => passTile(t, owner) || canRoad(owner, t % W, (t / W) | 0) || (!S.bAt[t] && S.road[t]);
   const turn = done ? ROAD_TURN : 0, ov = anyOverpass(), rope = hollowOn();
   const step = (a, b) => (like(a) && like(b) ? canStep(a, b) : stepPlan(a, b));
   // The way the route came into tile t: from prev[t], or straight over the overpass(es) just behind it.
@@ -4424,7 +4512,7 @@ function roadReach(owner) {
 /* ------------------------------------------------------------------ removal */
 
 /** Release any reservations a bot's current task holds, then clear the task. */
-function cancelTask(bot) {
+function cancelTask(bot, keepLoad = false) {
   const t = bot.task;
   if (!t) return;
   switch (t.type) {
@@ -4433,7 +4521,7 @@ function cancelTask(bot) {
       if (t.phase === 'toSrc' && src) bump(src.res, t.good, -(t.n || 1));
       if (dst) bump(dst.inc, t.good, -(t.n || 1));
       if (t.mix) for (const k in t.mix) { if (t.phase === 'toSrc' && src) bump(src.res, k, -t.mix[k]); if (dst) bump(dst.inc, k, -t.mix[k]); }
-      dropCarried(bot); // called off with a load on board: it's put down in crates, not lost
+      if (!keepLoad) dropCarried(bot); // interruption by danger still puts its load down in crates
       break;
     }
     case 'arty': { // a supply run for a Howitzer: release the Ammo it reserved, put down what it carries
@@ -4447,7 +4535,7 @@ function cancelTask(bot) {
       if (l) unclaimCrate(l, t.good, t.n);
       const dst = t.phase === 'toDst' && getE(t.dst);
       if (dst) bump(dst.inc, t.good, -t.n);
-      dropCarried(bot);
+      if (!keepLoad) dropCarried(bot);
       break;
     }
     case 'build': {
@@ -4497,7 +4585,7 @@ function cancelTask(bot) {
 
 function taskRefs(task, id) {
   if (!task) return false;
-  return task.src === id || task.dst === id || task.site === id || task.bld === id || task.target === id || task.home === id;
+  return (task.src === id && (task.type !== 'haul' || task.phase === 'toSrc')) || task.dst === id || task.site === id || task.bld === id || task.target === id || task.home === id;
 }
 
 function killBot(bot, quiet) {
@@ -4564,7 +4652,7 @@ function releaseBotsFrom(b, killInside) {
   for (const u of S.bots) {
     if (u.dead) continue;
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
-    if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
+    if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u, u.task?.dst === b.id);
     if (u.inside === b.id) {
       // Aboard a Ferry or a plane that took it on here ("inside" only keeps it out of sight and out of reach):
       // it isn't in the building, wherever its ride is by now. It stays aboard, and stays hidden.
@@ -4596,11 +4684,11 @@ function offDeck(a, c) {
     u.x = near.x + 0.5; u.y = near.y + 0.5; u.deck = null;
     if (u.path) {
       u.path = null; u.pi = 0;
-      // A civilian bot drops its order with the route (its load is put down in crates), like one whose next
+      // A civilian bot releases its delivery reservation but keeps any load, like one whose next
       // step jumps a gap that's gone (see moveAlong): left with the order and no route, it counted as arrived,
       // and delivered across the canyon. Warbots, Howitzers, Crawlers and creatures plan their way again (travel).
       const bt = BOTS[u.type];
-      if (u.task && !bt.army && !bt.siege && !bt.wild && !bt.crawler) cancelTask(u);
+      if (u.task && !bt.army && !bt.siege && !bt.wild && !bt.crawler) cancelTask(u, true);
     }
     u.vel = 0;
   }
@@ -4617,6 +4705,7 @@ function destroyBuilding(b, burn, quiet) {
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect. A construction
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
   if (typeof dropLoot === 'function' && (b.built || !burn)) dropLoot(b);
+  if (BDEFS[b.type].magterm) magTermDown(b);
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
   // destroyed by force (P.avoid, see aiSearchSpot): it used to put the next one up in the same crater.
@@ -4642,9 +4731,8 @@ function destroyBuilding(b, burn, quiet) {
     if (o && o.ferryTo === b.id) o.ferryTo = 0;
     if (typeof ferryChanged === 'function') ferryChanged();
   }
-  // A Maglev pylon down cuts its line; a Maglev Terminal takes its line (and the pods in it) with it.
+  // A Maglev pylon down cuts its line.
   if (BDEFS[b.type].pylon && typeof magPylonDown === 'function') { if (b.built) magPylonDown(b); else if (b.magFrom) magLineCancel(b); }
-  if (BDEFS[b.type].magterm && typeof magTermDown === 'function') magTermDown(b);
   // So does a Mooring Mast at one end of an Airship line (its Airships wait at the other Mast for a new one).
   if (BDEFS[b.type].mast && b.line) {
     const o = getE(b.line);
@@ -4868,6 +4956,7 @@ function checkSave(o) {
   if (!obj(o) || o.v !== 1) bad();
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
+  if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
   // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
   if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
@@ -4878,7 +4967,9 @@ function checkSave(o) {
     if (M.shut != null && !(Array.isArray(M.shut) && M.shut.every((e) => obj(e) && Number.isInteger(e.x) && Number.isInteger(e.y) && Number.isFinite(e.until)))) bad();
     // Their craft (Active: see murmurPlan): plans of numbers, memories of [x, y, weight], their dead, the dark they made.
     const nums = (e, ks) => obj(e) && ks.every((k) => e[k] == null || Number.isFinite(e[k]));
-    if (M.plans != null && !(Array.isArray(M.plans) && M.plans.length < 64 && M.plans.every((pl) => nums(pl, Object.keys(pl).filter((k) => k !== 'cut')) &&
+    if (M.plans != null && !(Array.isArray(M.plans) && M.plans.length < 64 && M.plans.every((pl) => obj(pl) &&
+      nums(pl, Object.keys(pl).filter((k) => k !== 'cut' && k !== 'feintGuard')) &&
+      (pl.feintGuard == null || (Array.isArray(pl.feintGuard) && pl.feintGuard.length <= 10000 && pl.feintGuard.every((id) => Number.isSafeInteger(id) && id > 0))) &&
       Array.isArray(pl.cut) && pl.cut.every((c) => Array.isArray(c) && c.length <= 5 && c.every(Number.isFinite))))) bad();
     if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
     if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();
@@ -4892,11 +4983,17 @@ function checkSave(o) {
     (P.trade.offers || []).forEach(deal); // (a save from before trade routes: its contracts)
     for (const g in P.trade.sat || {}) if (!ownKey(GOOD, g)) bad();
   }
+  const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
   for (const b of o.buildings) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
+    if (b.magMissing != null && (b.type !== 'magterm' || !obj(b.magMissing) || !Number.isInteger(b.magMissing.x) ||
+      !Number.isInteger(b.magMissing.y) || b.magMissing.x < 0 || b.magMissing.x >= o.W ||
+      b.magMissing.y < 0 || b.magMissing.y >= o.H || typeof b.magMissing.near !== 'boolean')) bad();
+    if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
+      !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -4923,7 +5020,6 @@ function checkSave(o) {
   }
   if (o.tremor != null && !(obj(o.tremor) && Number.isFinite(o.tremor.next) && (o.tremor.rock == null || Array.isArray(o.tremor.rock)))) bad();
   // Aircraft wrecks (S.wrecks, see crashLand): numbers, a plain word for the aircraft, the tiles under it on the map.
-  const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
   if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
@@ -4954,6 +5050,7 @@ function checkSave(o) {
 function deserializeGame(json) {
   const o = JSON.parse(json);
   checkSave(o);
+  o.difficulty = o.difficulty || 'normal';
   // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
   if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.
@@ -5078,10 +5175,10 @@ function wayOwnersFromLand() {
   }
 }
 
-function saveGame() {
+function saveGame(json) {
   if (!S || S.winner >= 0 || S.players[0].ai) return false;
   if (typeof MP !== 'undefined' && MP.on) return false; // (a multiplayer game lives on everyone's devices: it isn't saved for Continue)
-  try { localStorage.setItem(SAVE_KEY, serializeGame()); return true; } catch (e) { return false; }
+  try { localStorage.setItem(SAVE_KEY, json || serializeGame()); return true; } catch (e) { return false; }
 }
 
 function hasSave() {
@@ -5175,7 +5272,7 @@ function railBlocked(owner, t) {
     if (crossTile(t)) { if (!bridgeable(t) || !bridgeHead(owner, i, j, (u) => (S.rail[u] && wayOwner(u) === owner) || S.railPlan[u] === owner + 1)) return 'Track can only bridge out from your land or your own track.'; }
     else if (!reachZone(owner, t)) return 'Your bots can\'t reach there yet.';
   }
-  if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
+  if (S.bAt[t] && !pylonAt(t) && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t] && S.res[t] !== R_OIL) return 'Clear the resources here first.'; // (an oil seep stays underground, under the track)
   if (S.tidal && S.tidal[t]) return 'Tidal flats: the sea covers this at high tide.';
   if (scorched(t)) return 'This ground is still scorched.';
@@ -5203,7 +5300,7 @@ function setRail(t, on, owner) {
  * it is (afloat, or tied up at a Port: from its docks) to a dock of the building at (x, y), the water beside
  * shore tile (x, y), or water tile (x, y). Null if there is none. A ship tied up starts out at its dock.
  */
-function seaRoute(u, x, y) {
+function seaRoute(u, x, y, arrivalComps) {
   const W = S.W, H = S.H, N = W * H, comp = seaNet().comp;
   let starts = [];
   if (u.inside) { const b = getE(u.inside); if (b) starts = portDocks(b.x, b.y); }
@@ -5214,7 +5311,7 @@ function seaRoute(u, x, y) {
   if (S.bAt[g]) goals = portDocks(x, y);
   else if (S.terrain[g] === T_WATER) goals = [g];
   else goals = portDocks(x, y);
-  goals = goals.filter((t) => starts.some((s) => comp[s] === comp[t]));
+  goals = goals.filter((t) => (!arrivalComps || arrivalComps.includes(comp[t])) && starts.some((s) => comp[s] === comp[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), gx = x, gy = y;
   // (Costs in doubles: kept as floats, a cost that rounded up looked "beaten" by itself again and again,
@@ -5251,13 +5348,14 @@ function seaRoute(u, x, y) {
  * A train's route along the track from where it is (on the track, or inside a station: from its
  * platforms) to the platform of the building at (x, y) (or to track tile (x, y)). Null if there is none.
  */
-function railRoute(u, x, y) {
+function railRoute(u, x, y, arrivalComps) {
   const W = S.W, N = W * S.H, net = railNet().comp;
   let starts = [];
   if (u.inside) { const b = getE(u.inside); if (b) starts = railPlatforms(b.x, b.y); }
   else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.rail[t]) starts = [t]; }
   if (!starts.length) return null;
-  const g = tIdx(x, y), goals = S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [];
+  const g = tIdx(x, y), goals = (S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [])
+    .filter((t) => !arrivalComps || arrivalComps.includes(net[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), from = new Int32Array(N).fill(-2), q = [];
   for (const s of starts) { from[s] = -1; q.push(s); }

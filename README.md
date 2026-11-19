@@ -74,7 +74,7 @@ Volcano, Fault line, Canyon maze or The Hollow, and for three or four players on
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, the
+Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Boiling Springs, Tropical, the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -121,7 +121,7 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Progress auto-saves in the browser every 20 seconds and whenever you leave the page.
+Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
 
 ## How to play
 
@@ -194,6 +194,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
+- **Interrupted deliveries.** Dispatch considers alternate suppliers and checks the carrier's network against both
+  endpoints. Trains and ships pick up on a platform or dock that reaches the delivery point. The dispatcher reserves
+  stock once the pickup route is found, and the carrier checks the delivery route before loading. A blocked route
+  releases the incoming reservation and lets the carrier take its existing load to reachable storage or wait for an
+  opening. Freight Trains check for removed track and use a detour if one is available. Workers, Haulers, trucks and
+  ships use reachable charging or fuel stops when deciding whether to wait for a top-up.
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road (the Goal card's red line counts only those with no road planned to them either:
@@ -478,7 +484,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (then the line's site is a pylon site on the first spot, `s.magFar`). The far end is previewed on hover and tap
   (`maglevPreview`, `R.ropeEnd`: the band and every pylon spot ringed, the first bad one red). Pylon spots
   (`magSpotsAt`, `magSpotsChecked`): every `spacing` (3) tiles from the near Terminal, none within 2 of the far end; a
-  spot must be open ground, a cliff top or water, never a building, road, track, slope, oil seep, runway, Trade Post or
+  spot may share a road or track, and can shift to a nearby tile around other obstructions. Its footing can't occupy a building, slope, oil seep, runway, Trade Post or
   Uplink, scorched ground or a rival's land (`magSpotWhy`); a boulder or grove there is cleared when the pylon goes up
   (`magClearSpot`); a chasm or rock under a spot is `skip` (the span goes over) unless the spot before it was skipped too,
   so a line crosses a gap of at most `gap` (6) tiles. It costs `MAGLEV.cost` a tile (1 Alloy, ½ Chip, 1 Cement, Chips
@@ -486,8 +492,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   standing at the near Terminal (`siteWorkAt`, `assignBuild`), `time` (3) s a tile plus the Terminal's own build time, and
   the pylons go up one by one as it gets along (`magBuildStep`, buildings of type `magpylon` with `b.k` and `b.line` the
   near Terminal's id); `completeBuilding` opens the line (`magLineDone`: `b.line` on both Terminals, `b.magNear` on the
-  near one; `magPartner`, `magNearEnd`, `magLines`). A Terminal is on one line at most; the site cancelled or an end lost
-  takes the pylons down (`magLineCancel`, `magTermDown`). Pylons claim no land (`civClaims`).
+  near one; `magPartner`, `magNearEnd`, `magLines`). Each Terminal belongs to one line. Put a Terminal from each of two lines side by side for a conveyor transfer, with pods serving both lines (`magRelayPlan`, `magRelaySwap`). Cancelling a new line site takes its pylons down. Pylons claim no land (`civClaims`).
   **Pods** (`BOTS.magpod`: 16 goods, mixed, no riders; speed 3 × a Freight Train's, 4 × its acceleration and braking)
   are built at either Terminal's **Pod bay** (its yard: two rounds of `BOTS.magpod.round`, 2 Alloy and 1 Chip, so 4 and
   2 each), `perLine` (4) to a line (`magPodRoom`, `yardOpen`). Docked, a pod is inside its Terminal (`u.home`); running,
@@ -513,8 +518,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`magCut`: standing spots with no pylon) stops the pods at the Terminals (`magLineCut`; the Terminals' status and
   panel say so). **Repair**: the near Terminal's `b.magFix` (`updateMagTerm`): once `spacing` tiles' worth of goods is
   paid from storage, a Worker from the end nearer the break (`magFixEnd`, `assignMagFix`, task `magfix`) walks there,
-  rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s. A Terminal destroyed takes its line
-  and pylons down; pods inside it are lost and those running turn back to the other end (`magTermDown`).
+  rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s. Losing one Terminal suspends the line. Pods regroup at the surviving Terminal, and its **Rebuild the missing Terminal** button puts a replacement on the same tile without charging for the original guideway (`magTermDown`, `magReconnect`).
   **Drawn** by `drawMaglevShadows` (the bands' shadows on the ground, `MAG_SHADOW` of the deck height down-sun, before
   the buildings) and `drawMaglevs` (after the buildings and robots, under the air): the pylon sprites (`magpylon@T`, a
   `B3D` building with no pad; squashed or stretched so its head stays under the band, `MAG_LEVEL` 0.3 a level of ground
@@ -901,6 +905,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`spreadOut`) instead of stacking on a single point. On the march (not in a fight) warbots, Bulwarks and Torches
   plan round enemy guns: a tile an enemy gun reaches (`dangerMap` bit 1, the map civilians keep clear of) costs
   `COVER_COST` (4) more (`routeOpts` sets `opts.cover`, see `findPath`), so a short detour beats walking through it.
+  A nearby armed foe that can be hit takes priority over a quarry out of reach. Detours belong to the current
+  target, and a long chase is rejected before moving. Torches advance into flame range before firing. Warbots
+  and Torches take nearby Bulwark cover when there is a firing position under the active shield. Auto-repair
+  waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
 - **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
   `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
   one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
@@ -930,7 +938,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the Smelter, every factory with a recipe) shows **Why idle?** under its status (`whyIdle`, `refreshWhy`), worked out
   for the open panel only, once a second. It follows the missing input back down the chain and stops at the first real
   cause (`goodWhy`, `makerWhy`, `siteWhy`, at most three links down): is any in storage (then: no road, no Hauler or
-  Tanker, storage no road joins to it, enemy guns, every Hauler busy: `haulWhy`)? Is there a building that makes it,
+  Tanker, storage no road joins to it, enemy guns, disconnected road carriers or reachable carriers busy: `haulWhy`)? Is there a building that makes it,
   and is it paused, cut off, under enemy guns, unstaffed (no free Worker: `workerWhy`), waiting for its own input
   (asked again, a link down), with no road, or for a gatherer out of deposits in reach (`insLeft`: none left, all on a
   rival's land, or all under guns; "ran dry N minutes ago" from `b.dryAt`, set in `updateDepleted`)? With none, is one
@@ -1140,8 +1148,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
-- **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
-  close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
+- **Saving:** the game saves single-player progress every in-game minute and keeps the latest five checkpoints.
+  Use **Restore checkpoint** in the pause menu or on the game-over screen. The main menu opens the latest saved solo
+  checkpoint history, even after a reload following defeat. Switching away or closing the tab also
+  updates the save used by **Continue**. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
@@ -1152,6 +1162,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way). One that fails is refused and changes nothing; if
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
+  If the browser refuses the new resume save, the loaded game still plays and the warning points to **Save → File**.
 - **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
   and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
@@ -1643,7 +1654,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
   **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the Polar Caps, Emberwood, the Long Grass, Blackwater,
-  Cinderlands and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
+  Cinderlands, Boiling Springs and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
@@ -1779,23 +1790,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     the dusk warning `murmurDusk` makes one for each colony (`murmurPlan(p, n, round)`): the target is the weak spot
     (its building scoring most on charge `chargeWorth`, Bloom-vein lure, being alone, out of every colony gun's reach
     with 3 to spare (`murmurGuns`/`murmurGunAt`: `gunReach` of every colony building, made once a tick), where they fed
-    and not where they were killed, within the networks' reach, in the nests' walkable zone); the rally point
-    `craft.rally` off it, out of the guns, off its land, toward the nests; the watcher's spot at the edge of its land
-    on the line in; up to two Fuel Stations or Generators within `cutR` to cut first (else two of its streetlamp tiles);
-    and from night `feintFrom`, with `feintArmy` armed warbots in the colony, a feint target at least `feintFar` off,
-    by a garrison if it can. A watcher (task `watch`) surfaces there facing the target and goes down after nightfall
-    (`Contact at the edge of sensor range…`). At each wave `murmurCraftWave` (round 1, and a fresh plan for round 2)
-    sends every exit within `join` of a plan's rally point up with task `rally` (an exit no plan draws: a plain pack,
-    as on Quiet), and the first wave a feint of `feintN` from the exit nearest the feint target (role `feint`).
-    `murmurPlansTick` once a second: when all are at the rally point (or `wait` after the first, `waitMax` in all, and
-    a feint's warbots drawn, `murmurDrawn`, or `feintWait`) `murmurLaunch` sends them: Brutes (else one Scuttler) to cut
-    (role `cut`, `murmurCutStep`, `cutTime` at each: `murmurCut` sets `b.murCut` to the night's end: a cut Fuel Station
-    charges nothing (`insideCharger`, `canCharge`, the charging trips), a cut Generator powers nothing, its panel says
-    so; `S.mur.dark` zones of `dark` tiles, `lampDark` for a lamp, put out the lamps, road glow and building light
-    pools in the drawing, `murmurDarkAt`), the rest held (`task.wait`) until the first cut (or `cutWait`), then the
-    Brutes straight at the target and the Scuttlers `leadGap` later, spread round it (`spread`). A strike that's down
-    to `half` of the number it set out with goes back down (`murmurPullBack`, task `back`; `again` seconds later, with
-    `againLeft` of night to come, as many as got down come up again, `murmurAgain`). On the way in and about, night
+    and not where they were killed, within the network's reach). The rally point is outside the colony and close
+    to the target. On each wave, the planner checks paths from live exits to the rally and from the rally to the
+    objective. A blocked route can send the pack to another rally point or make it withdraw. Unassigned exits may
+    send an independent pack if it has a route to nearby prey. A dusk watcher (task `watch`) marks the initial
+    approach and goes down after nightfall.
+    The first wave can send a feint from a reachable exit after night `feintFrom`. It records armed defenders
+    covering the main target. If one of those defenders moves to the feint and overall coverage drops, the main
+    pack can go early. A defender who was already there does not trigger the strike. The main pack otherwise
+    proceeds once the feint ends or `feintWait` elapses.
+    `murmurPlansTick` launches once all are physically at the rally, or after a wait with at least two-thirds
+    present. Stragglers go back down. `murmurLaunch` favors cuts to fuelled chargers that lack a backup, working
+    generators with dependent factories, and active Maglev Terminals. A Leech, Scuttler or Brute cuts power while
+    the main group holds its position (`role: 'cut'`, `murmurCutStep`). When the first cut succeeds, the cutters
+    are gone, or `cutWait` expires, Brutes batter the assigned target and Scuttlers spread out to hunt nearby.
+    A cut building stays out until dawn or repair (`b.murCut`). Nearby lamps and road glow fade (`murmurDarkAt`).
+    A strike that's down to `half` of the number it set out with goes back down (`murmurPullBack`, task `back`).
+    If night has enough time left, survivors that reached an exit can regroup for another strike. On the way in and about, night
     creatures route with the guns' cover as a cost (`routeOpts` `coverMap`: `murmurGunMap`, every 15 ticks; findPath
     adds `COVER_COST` there), `murmurPrey` scores what a gun covers 6 a gun lower, and Scuttlers scatter `scatterFor` s
     when `scatterN` armed warbots are within `scatter` tiles (`murmurScatter`, `murmurFlee`; not again for
@@ -1812,7 +1823,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Their other forms (Active only).** `leech`, `spitter`, `sapper` in `BOTS` (wild; `drain`, `spit`, `sap`), numbers in
     `MURMUR.forms`, the section after the craft in `js/sim.js`. From each form's night `from` (a mission can bring them
     sooner: `S.mur.formsFrom`, and `formsAll` for all three whatever the target), a plan's wave brings at most one of
-    each from the exit nearest its rally point (`murmurFormsFor`: the Leech where there's power to cut, the Spitter and
+    each from an exit that supplied the main pack (`murmurFormsFor`: the Leech where there's power to cut, the Spitter and
     the Sapper where a gun or Wall of the colony stands within 8 tiles of the target, `murmurDefenceNear`), gathering
     with the pack. At `murmurLaunch`: the Leech takes the cutting (role `cut`): there it feeds (`murmurFeed`, pose
     `feed`, `u.charge` up by `rate` a second; the building is cut and stays dark while it feeds, a Fuel every
@@ -2247,6 +2258,9 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
   column lights, the turret's charge-up, the walls' sparks) are never graded.
 
+On Active outside missions, working industry near Murmur exits can feed up to two additional Scuttlers per pack
+from the second night onward. Existing raid population limits still apply.
+
 ### Wildlife
 
 Animals on the map, for looks only (`js/wildlife.js`): the Pathfinder's garden (LORE.md), Earth's animals in the green
@@ -2254,19 +2268,14 @@ regions and, the hardiest, at their edges; small native creatures where the land
 the game reads them: they live in `FAUNA` (never in `S`, a save or an order), move by the frame's clock with
 `Math.random`, and two players needn't see the same ones. They can't be selected or tapped and carry no team colours.
 
-- **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): Greenreach, songbird flocks in the trees (feeding at the forest edge) and deer by
-  the lakes (or the forest edges), owls and fireflies at night; Emberwood, foxes and geese on the lakes, a V of geese
-  crossing over now and then (`faunaMigrants`), bats at night; the Long Grass, wildebeest herds drifting over the open
-  grass and vultures circling, eyes in the grass at night; Blackwater, herons in the shallows and frogs at the water's
-  edge, fireflies every night; The Polar Caps, white hares and snow buntings, snowy owls and an arctic fox leaving tracks in
-  the snow at night; the Rust, lizards on the rocks and a hawk, bats at dusk; the Cinderlands, ash beetles and a crow on
-  a dead tree, ember moths at night; the Bloom, floaters drifting like jellyfish, glowing after dark and under an aurora;
-  the Hollow, blind crawlers and glow-worms on the cavern walls.
-- **Where** (`faunaHab`, `faunaRoster`): the map is read in cells of `FAUNA_CELL` (8) tiles: trees (each biome's tree
-  plants in `S.decor`), open ground, lake shores and shallows, rock faces. A cell's roster comes from the planet's seed
-  (`hash2`), so panning back finds the same animals; only the cells round the view are kept, moved and drawn, and each
-  kind only from its own zoom up (`z`). Nothing rests on a road, building, deposit, plan, rail, pipe or water it can't
-  stand in; walkers cross a road but never stop on one, and don't climb cliffs but by a ramp (`faunaPath`).
+- **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): deer and foxes in Greenreach and Emberwood, wildebeest and hares on the Long
+  Grass, alligators and turtles in Blackwater, hares and arctic foxes in the Polar Caps, lizards and hares in the Rust,
+  lizards and ash beetles in Cinderlands, and lizards and turtles at Boiling Springs and on Tropical maps. Shorebirds,
+  songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
+  sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
+- **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
+  usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
+  stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.
 - **When**: by the light on screen (`TOD.state.lights`, so the Time of day setting and photo mode's slider): the day
   animals bed down a few at a time through the evening (each roster entry has its own threshold: `faunaActive`) and the
   night ones come out. Storms keep the birds down; rain puts the fireflies out.
@@ -2274,7 +2283,7 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   off the view (with a soft flutter near the camera, `faunaFlutter`), herds bolt, small things hide. The cells round
   the noise stay empty until it has been quiet `FAUNA_QUIET` (40) game seconds; then the animals come back in from off
   the view. They step aside from robots and convoys, and a warbot on the move puts a herd to flight. A burning wreck
-  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures; over the Bloom, floaters) to circle
+  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures) to circle
   over it for a minute or two (`faunaCarrion`).
 - **The Murmur** (read only: `murmurNight`, `dayClock` and `NIGHT_FROM`, the nests, mounds and tunnel exits, the
   packs; `faunaMurmur`): `FAUNA_DREAD` (75) seconds before a Murmur night the day animals within 18 tiles of a nest or
@@ -2292,6 +2301,22 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   ambience.
 - **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
   (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
+
+### Tropical coasts and lava effects
+
+Choose a naval map to enable **Tropical** in the biome picker. It uses coral sand, palms,
+reef water, pale shallows and seagulls along the shore. Small waves drift across open water. On naval maps, fish and dolphins leap in open
+water and whales sometimes surface to blow. Frozen water and lava have their own scenery.
+The Volcano map type and Cinderlands have drifting highlights on exposed lava and steam vents
+along the banks. These effects are drawn in the browser without changing terrain or movement.
+
+### Boiling Springs
+
+Select **Boiling Springs** under **Custom Game → Planet → Biome**. The geothermal basin has sulfur-stained
+limestone textures, mineral bands along lake shores, and six terrain decorations, including steaming
+vents and periodic geysers. The mini pools are decorations cleared by construction. The selected
+map type still determines water crossings and resource placement. The terrain and Sky islands
+cliffs are rendered by `renderer/terrain/terrain_springs.py` and load in their own biome bundle.
 
 ### Cloud shadows, remains and beacons
 
@@ -2405,7 +2430,8 @@ How it plays opens the whole of it) and taps
   of you (anyone can resume). The game runs at one speed for everyone.
 - If someone's connection drops, the others' games wait for it; after 12 seconds the computer runs that colony.
   When the device comes back it catches up and the colony is handed back. A page that reloads (or a phone app that
-  was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others.
+  was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others. Rejoining a
+  paused match keeps it paused. **Cancel** keeps the seat available for another attempt.
 - **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
   Continue.
 

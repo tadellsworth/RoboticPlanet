@@ -46,6 +46,7 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  *   their armor), so it goes round a short way and plans to shoot through a long one.
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  * opts.coverMap: the same from a map of its own (1 where a gun reaches): the Murmur's on Active (murmurGunMap).
+ * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
  *
  * An overpass (S.over) carries two roads that cross without meeting: nobody turns on one. A route only goes onto
  * an overpass straight on and out the far side: one move from the tile before it to the tile after it (across any
@@ -115,7 +116,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     if (closed[cur] === gen) continue;
     closed[cur] = gen;
     if (cur === goal) break;
-    if (++expanded > N) break;
+    if (++expanded > (opts?.maxExpanded || N)) break;
     const ci = cur % W, cj = (cur / W) | 0;
     for (let d = 0; d < 8; d++) {
       const dir = _DIRS[d];

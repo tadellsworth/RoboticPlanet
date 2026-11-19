@@ -830,7 +830,7 @@ const MISSIONS = [
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='magterm']" },
       { kind: 'magLine', n: 1, text: 'Run a Maglev line across the river', at: 'magterm',
         count: () => magLines(0).length,
-        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>): tap the Terminal, then a clear spot by the Crystal across the river; <b>Build</b>.',
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>): tap the Terminal, then a clear spot by the Crystal across the river. The preview shows where the pylons will stand, including roadside supports. Tap <b>Build</b>.',
         ui: "#btn-road, #banner-seg [data-v='maglev'], #banner-ok, #sh-magline" },
       { kind: 'magRun', n: 1, text: 'A pod on the line, powered both ends', at: 'magterm',
         count: () => (magLines(0).some(([a, b]) => linePods(a).length > 0 && magPowered(a) && magPowered(b)) ? 1 : 0),
@@ -1167,8 +1167,8 @@ const MISSIONS = [
     id: 'forms', name: 'What Comes Up', chapter: 'First Contact',
     brief: 'On Active the Murmur hunt with craft, and other forms come up with the packs. Read the signs, guard the power and catch them.',
     intro: [
-      'At dusk one of them stands at the edge of your land, facing it: <b>the night\'s strike falls there</b>.',
-      'They go for the power first. Last night a <b>Leech</b> drank a Fuel Station dry: tap it → <b>Repair</b> (<kbd>E</kbd>).',
+      'At dusk one of them stands at the edge of your land, watching <b>the approach the main pack plans to take</b>.',
+      'The main pack waits while cutters go for the power. A <b>Leech</b> drank from a Fuel Station last night. Tap the station, then <b>Repair</b> (<kbd>E</kbd>).',
       'A <b>Spitter</b> shorts out your guns from a few tiles off. A <b>Sapper</b> digs under and comes up inside.',
       'Nothing reaches a Sapper underground: catch it as it heaves up. And they take their dead with them.',
       'Your warbots wait in the Command Base: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) sends them.',
@@ -1431,7 +1431,7 @@ const MISSIONS = [
     brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through, and burn its farmland, with Torches; shield the push with a Bulwark and send in missiles.',
     intro: [
       'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
-      '<b>Torches</b> burn through Walls fast, and <b>Scorch the earth</b> burns farmland for good; a <b>Bulwark</b>\'s shield covers the robots behind it.',
+      '<b>Torches</b> burn through Walls and can <b>Scorch the earth</b>. Send them with a <b>Bulwark</b> and they can fire from behind its shield if the Wall is in reach.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
       'Their base can wait: this is about breaking in.',

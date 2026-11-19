@@ -1,0 +1,281 @@
+study,name,seed,mode,first,six,all,at45,at90,at120,dispatchP95,rankings,paths,dispatchMs,dispatches,assigned,pickups
+pilot,open,43011,distance,8.9,17.7,27.033333,12,12,12,,0,0,7.76563,101,,near near near near near near
+pilot,open,43011,eta-road,8.9,17.7,27.033333,12,12,12,,6,24,6.061211,101,,near near near near near near
+pilot,open,43011,eta-ferry,8.9,17.7,27.033333,12,12,12,,6,24,4.086873,101,,near near near near near near
+pilot,open,43011,eta,8.9,17.7,27.033333,12,12,12,,6,24,3.384877,101,,near near near near near near
+pilot,detour,43011,distance,27.7,55.433333,83.7,4,12,12,,0,0,13.499875,314,,near near near near near near
+pilot,detour,43011,eta-road,21.433333,42.766667,64.633333,8,12,12,,6,24,14.462427,242,,far far far far far far
+pilot,detour,43011,eta-ferry,21.433333,42.766667,64.633333,8,12,12,,6,24,9.762126,242,,far far far far far far
+pilot,detour,43011,eta,21.433333,42.766667,64.633333,8,12,12,,6,24,8.73959,242,,far far far far far far
+pilot,asphalt,43011,distance,8.9,17.7,27.033333,12,12,12,,0,0,2.599164,101,,near near near near near near
+pilot,asphalt,43011,eta-road,8.633333,17.166667,26.233333,12,12,12,,6,24,4.726751,98,,far far far far far far
+pilot,asphalt,43011,eta-ferry,8.633333,17.166667,26.233333,12,12,12,,6,24,2.930372,98,,far far far far far far
+pilot,asphalt,43011,eta,8.633333,17.433333,26.5,12,12,12,,6,24,3.036503,99,,far far near near far far
+pilot,congestion,43011,distance,15.733333,32.433333,50.933333,8,12,12,,0,0,10.328753,191,,near near near near near near
+pilot,congestion,43011,eta-road,15.733333,32.433333,50.933333,8,12,12,,6,24,34.885634,191,,near near near near near near
+pilot,congestion,43011,eta-ferry,15.733333,32.433333,50.933333,8,12,12,,6,24,11.298461,191,,near near near near near near
+pilot,congestion,43011,eta,11.566667,23.033333,35.033333,12,12,12,,6,24,13.484411,131,,far far far far far far
+pilot,rush,43011,distance,18.2,38.166667,51.8,8,12,12,,0,0,21.770335,194,,near near near near near near
+pilot,rush,43011,eta-road,18.2,38.166667,51.8,8,12,12,,6,24,18.328205,194,,near near near near near near
+pilot,rush,43011,eta-ferry,18.2,38.166667,51.8,8,12,12,,6,24,18.204205,194,,near near near near near near
+pilot,rush,43011,eta,11.566667,23.033333,35.033333,12,12,12,,6,24,5.835916,131,,far far far far far far
+pilot,ferry,43011,distance,29.933333,55.333333,81.433333,4,12,12,,0,0,19.622669,306,,near near near near near near
+pilot,ferry,43011,eta-road,29.933333,55.333333,81.433333,4,12,12,,216,24,18.031212,306,,near near near near near near
+pilot,ferry,43011,eta-ferry,13.0,26.066667,39.666667,12,12,12,,106,24,9.049447,149,,far far far far far far
+pilot,ferry,43011,eta,13.0,26.066667,39.666667,12,12,12,,106,24,8.398451,149,,far far far far far far
+pilot,ferry-ready,43011,distance,25.333333,50.733333,76.633333,4,12,12,,0,0,13.030579,288,,near near near near near near
+pilot,ferry-ready,43011,eta-road,25.333333,50.733333,76.633333,4,12,12,,198,24,14.020078,288,,near near near near near near
+pilot,ferry-ready,43011,eta-ferry,13.0,26.066667,39.666667,12,12,12,,106,24,8.163451,149,,far far far far far far
+pilot,ferry-ready,43011,eta,13.0,26.066667,39.666667,12,12,12,,106,24,10.053831,149,,far far far far far far
+delivery,open,43011,distance,8.9,17.7,27.033333,12,12,12,0.0805,0,0,7.520794,101,,near near near near near near
+delivery,open,43011,eta,8.9,17.7,27.033333,12,12,12,0.078583,6,24,5.803246,101,,near near near near near near
+delivery,open,43011,eta-guarded,8.9,17.7,27.033333,12,12,12,0.046291,6,24,5.504539,101,,near near near near near near
+delivery,open,43012,eta-guarded,8.9,17.7,27.033333,12,12,12,0.031334,6,24,4.02146,101,,near near near near near near
+delivery,open,43012,eta,8.9,17.7,27.033333,12,12,12,0.121041,6,24,3.673372,101,,near near near near near near
+delivery,open,43012,distance,8.9,17.7,27.033333,12,12,12,0.03025,0,0,2.339592,101,,near near near near near near
+delivery,open,43013,distance,8.9,17.7,27.033333,12,12,12,0.035625,0,0,2.241289,101,,near near near near near near
+delivery,open,43013,eta,8.9,17.7,27.033333,12,12,12,0.028834,6,24,3.132958,101,,near near near near near near
+delivery,open,43013,eta-guarded,8.9,17.7,27.033333,12,12,12,0.029834,6,24,3.894875,101,,near near near near near near
+delivery,open,43014,eta-guarded,8.9,17.7,27.033333,12,12,12,0.042166,6,24,3.944789,101,,near near near near near near
+delivery,open,43014,eta,8.9,17.7,27.033333,12,12,12,0.024209,6,24,3.168424,101,,near near near near near near
+delivery,open,43014,distance,8.9,17.7,27.033333,12,12,12,0.024292,0,0,1.955751,101,,near near near near near near
+delivery,open,43015,distance,8.9,17.7,27.033333,12,12,12,0.025916,0,0,1.954784,101,,near near near near near near
+delivery,open,43015,eta,8.9,17.7,27.033333,12,12,12,0.026416,6,24,3.038333,101,,near near near near near near
+delivery,open,43015,eta-guarded,8.9,17.7,27.033333,12,12,12,0.036875,6,24,3.627333,101,,near near near near near near
+delivery,open,43016,eta-guarded,8.9,17.7,27.033333,12,12,12,0.02475,6,24,3.559959,101,,near near near near near near
+delivery,open,43016,eta,8.9,17.7,27.033333,12,12,12,0.035583,6,24,2.720039,101,,near near near near near near
+delivery,open,43016,distance,8.9,17.7,27.033333,12,12,12,0.023375,0,0,1.944666,101,,near near near near near near
+delivery,detour,43011,distance,27.7,55.433333,83.7,4,12,12,0.024541,0,0,6.289302,314,,near near near near near near
+delivery,detour,43011,eta,21.433333,42.766667,64.633333,8,12,12,0.02475,6,24,7.253244,242,,far far far far far far
+delivery,detour,43011,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.02075,6,24,9.226918,242,,far far far far far far
+delivery,detour,43012,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.026583,6,24,9.279999,242,,far far far far far far
+delivery,detour,43012,eta,21.433333,42.766667,64.633333,8,12,12,0.025292,6,24,7.219048,242,,far far far far far far
+delivery,detour,43012,distance,27.7,55.433333,83.7,4,12,12,0.031292,0,0,6.836296,314,,near near near near near near
+delivery,detour,43013,distance,27.7,55.433333,83.7,4,12,12,0.021458,0,0,6.521754,314,,near near near near near near
+delivery,detour,43013,eta,21.433333,42.766667,64.633333,8,12,12,0.029375,6,24,7.24645,242,,far far far far far far
+delivery,detour,43013,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.020375,6,24,9.004,242,,far far far far far far
+delivery,detour,43014,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.021375,6,24,9.049128,242,,far far far far far far
+delivery,detour,43014,eta,21.433333,42.766667,64.633333,8,12,12,0.027666,6,24,7.138713,242,,far far far far far far
+delivery,detour,43014,distance,27.7,55.433333,83.7,4,12,12,0.01975,0,0,6.174922,314,,near near near near near near
+delivery,detour,43015,distance,27.7,55.433333,83.7,4,12,12,0.01825,0,0,5.709879,314,,near near near near near near
+delivery,detour,43015,eta,21.433333,42.766667,64.633333,8,12,12,0.023583,6,24,6.754466,242,,far far far far far far
+delivery,detour,43015,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.01675,6,24,8.644415,242,,far far far far far far
+delivery,detour,43016,eta-guarded,21.433333,42.766667,64.633333,8,12,12,0.019042,6,24,9.077998,242,,far far far far far far
+delivery,detour,43016,eta,21.433333,42.766667,64.633333,8,12,12,0.018375,6,24,6.808923,242,,far far far far far far
+delivery,detour,43016,distance,27.7,55.433333,83.7,4,12,12,0.018042,0,0,5.999255,314,,near near near near near near
+delivery,asphalt,43011,distance,8.9,17.7,27.033333,12,12,12,0.039084,0,0,2.191874,101,,near near near near near near
+delivery,asphalt,43011,eta,8.633333,17.433333,26.5,12,12,12,0.2395,6,24,3.738086,99,,far far near near far far
+delivery,asphalt,43011,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.365209,6,24,3.627246,98,,far far far far far far
+delivery,asphalt,43012,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.36025,6,24,3.700542,98,,far far far far far far
+delivery,asphalt,43012,eta,8.633333,17.433333,26.5,12,12,12,0.223042,6,24,2.850122,99,,far far near near far far
+delivery,asphalt,43012,distance,8.9,17.7,27.033333,12,12,12,0.0225,0,0,1.888799,101,,near near near near near near
+delivery,asphalt,43013,distance,8.9,17.7,27.033333,12,12,12,0.047709,0,0,1.974748,101,,near near near near near near
+delivery,asphalt,43013,eta,8.633333,17.433333,26.5,12,12,12,0.230833,6,24,3.240834,99,,far far near near far far
+delivery,asphalt,43013,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.34875,6,24,3.500377,98,,far far far far far far
+delivery,asphalt,43014,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.369166,6,24,3.561124,98,,far far far far far far
+delivery,asphalt,43014,eta,8.633333,17.433333,26.5,12,12,12,0.254542,6,24,3.048386,99,,far far near near far far
+delivery,asphalt,43014,distance,8.9,17.7,27.033333,12,12,12,0.017875,0,0,1.824082,101,,near near near near near near
+delivery,asphalt,43015,distance,8.9,17.7,27.033333,12,12,12,0.048209,0,0,1.852496,101,,near near near near near near
+delivery,asphalt,43015,eta,8.633333,17.433333,26.5,12,12,12,0.209667,6,24,2.732,99,,far far near near far far
+delivery,asphalt,43015,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.344625,6,24,3.791333,98,,far far far far far far
+delivery,asphalt,43016,eta-guarded,8.633333,17.166667,26.233333,12,12,12,0.345125,6,24,4.561833,98,,far far far far far far
+delivery,asphalt,43016,eta,8.633333,17.433333,26.5,12,12,12,0.227209,6,24,3.069831,99,,far far near near far far
+delivery,asphalt,43016,distance,8.9,17.7,27.033333,12,12,12,0.033833,0,0,2.354953,101,,near near near near near near
+delivery,congestion,43011,distance,15.733333,32.433333,50.933333,8,12,12,0.049458,0,0,6.971788,191,,near near near near near near
+delivery,congestion,43011,eta,11.566667,23.033333,35.033333,12,12,12,0.065042,6,24,5.731707,131,,far far far far far far
+delivery,congestion,43011,eta-guarded,11.566667,23.033333,41.166667,12,12,12,0.044625,6,24,6.795841,154,,far far far far near near
+delivery,congestion,43012,eta-guarded,11.566667,23.033333,40.666667,12,12,12,0.059917,6,24,6.947748,153,,far far far far near near
+delivery,congestion,43012,eta,11.566667,23.033333,35.033333,12,12,12,0.046208,6,24,5.291823,131,,far far far far far far
+delivery,congestion,43012,distance,15.066667,25.6,42.533333,12,12,12,0.064834,0,0,5.493092,160,,near near near near near near
+delivery,congestion,43013,distance,16.733333,26.5,52.1,10,12,12,0.06175,0,0,6.561249,195,,near near near near near near
+delivery,congestion,43013,eta,11.566667,23.033333,35.033333,12,12,12,0.071791,6,24,5.655045,131,,far far far far far far
+delivery,congestion,43013,eta-guarded,11.566667,23.033333,41.566667,12,12,12,0.036584,6,24,6.574752,156,,far far far far near near
+delivery,congestion,43014,eta-guarded,11.566667,23.033333,40.733333,12,12,12,0.037916,6,24,6.268449,153,,far far far far near near
+delivery,congestion,43014,eta,11.566667,23.033333,35.033333,12,12,12,0.05375,6,24,4.983795,131,,far far far far far far
+delivery,congestion,43014,distance,16.766667,32.866667,53.1,8,12,12,0.040375,0,0,5.193873,199,,near near near near near near
+delivery,congestion,43015,distance,15.733333,32.433333,50.933333,8,12,12,0.037166,0,0,4.98771,191,,near near near near near near
+delivery,congestion,43015,eta,11.566667,23.033333,35.033333,12,12,12,0.041667,6,24,4.928545,131,,far far far far far far
+delivery,congestion,43015,eta-guarded,11.566667,23.033333,41.166667,12,12,12,0.034416,6,24,6.290036,154,,far far far far near near
+delivery,congestion,43016,eta-guarded,11.566667,23.033333,40.666667,12,12,12,0.036917,6,24,6.22342,153,,far far far far near near
+delivery,congestion,43016,eta,11.566667,23.033333,35.033333,12,12,12,0.098042,6,24,5.479336,131,,far far far far far far
+delivery,congestion,43016,distance,15.066667,25.6,42.533333,12,12,12,0.038375,0,0,4.283011,160,,near near near near near near
+delivery,rush,43011,distance,18.2,38.166667,51.8,8,12,12,0.050208,0,0,6.289785,194,,near near near near near near
+delivery,rush,43011,eta,11.566667,23.033333,35.033333,12,12,12,0.060166,6,24,5.848791,131,,far far far far far far
+delivery,rush,43011,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.053916,6,24,6.915534,131,,far far far far far far
+delivery,rush,43012,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.092833,6,24,7.407705,131,,far far far far far far
+delivery,rush,43012,eta,11.566667,23.033333,35.033333,12,12,12,0.065167,6,24,6.029123,131,,far far far far far far
+delivery,rush,43012,distance,17.933333,38.3,58.933333,8,12,12,0.0795,0,0,10.431465,221,,near near near near near near
+delivery,rush,43013,distance,17.633333,38.733333,59.2,8,12,12,0.05825,0,0,8.737675,222,,near near near near near near
+delivery,rush,43013,eta,11.566667,23.033333,35.033333,12,12,12,0.056458,6,24,6.195285,131,,far far far far far far
+delivery,rush,43013,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.199041,6,24,11.541252,131,,far far far far far far
+delivery,rush,43014,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.061416,6,24,7.093579,131,,far far far far far far
+delivery,rush,43014,eta,11.566667,23.033333,35.033333,12,12,12,0.064708,6,24,6.567245,131,,far far far far far far
+delivery,rush,43014,distance,17.933333,38.333333,51.966667,8,12,12,0.052667,0,0,6.491788,195,,near near near near near near
+delivery,rush,43015,distance,18.2,38.166667,51.8,8,12,12,0.051417,0,0,6.939214,194,,near near near near near near
+delivery,rush,43015,eta,11.566667,23.033333,35.033333,12,12,12,0.047708,6,24,5.788543,131,,far far far far far far
+delivery,rush,43015,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.044416,6,24,6.495959,131,,far far far far far far
+delivery,rush,43016,eta-guarded,11.566667,23.033333,35.033333,12,12,12,0.04775,6,24,6.430089,131,,far far far far far far
+delivery,rush,43016,eta,11.566667,23.033333,35.033333,12,12,12,0.049167,6,24,6.110335,131,,far far far far far far
+delivery,rush,43016,distance,17.933333,38.3,58.933333,8,12,12,0.05,0,0,7.026214,221,,near near near near near near
+delivery,cleared,43011,distance,9.566667,19.166667,29.3,12,12,12,0.073792,0,0,3.390712,110,,near near near near near near
+delivery,cleared,43011,eta,11.566667,23.033333,33.033333,12,12,12,0.047375,6,24,4.666961,124,,far far far far near near
+delivery,cleared,43011,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.037208,6,24,5.031168,110,,near near near near near near
+delivery,cleared,43012,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.038791,6,24,4.948793,110,,near near near near near near
+delivery,cleared,43012,eta,11.566667,23.033333,33.033333,12,12,12,0.039292,6,24,4.532715,124,,far far far far near near
+delivery,cleared,43012,distance,9.566667,19.166667,29.3,12,12,12,0.037417,0,0,3.080792,110,,near near near near near near
+delivery,cleared,43013,distance,9.566667,19.166667,29.3,12,12,12,0.076291,0,0,3.246921,110,,near near near near near near
+delivery,cleared,43013,eta,11.566667,23.033333,33.033333,12,12,12,0.03925,6,24,4.622333,124,,far far far far near near
+delivery,cleared,43013,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.043791,6,24,5.044206,110,,near near near near near near
+delivery,cleared,43014,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.0415,6,24,5.014417,110,,near near near near near near
+delivery,cleared,43014,eta,11.566667,23.033333,33.033333,12,12,12,0.051084,6,24,4.666499,124,,far far far far near near
+delivery,cleared,43014,distance,9.566667,19.166667,29.3,12,12,12,0.051291,0,0,3.077082,110,,near near near near near near
+delivery,cleared,43015,distance,9.566667,19.166667,29.3,12,12,12,0.033042,0,0,2.765214,110,,near near near near near near
+delivery,cleared,43015,eta,11.566667,23.033333,33.033333,12,12,12,0.041125,6,24,4.46824,124,,far far far far near near
+delivery,cleared,43015,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.030792,6,24,4.776493,110,,near near near near near near
+delivery,cleared,43016,eta-guarded,9.566667,19.166667,29.3,12,12,12,0.032916,6,24,4.664042,110,,near near near near near near
+delivery,cleared,43016,eta,11.566667,23.033333,33.033333,12,12,12,0.032458,6,24,4.2977,124,,far far far far near near
+delivery,cleared,43016,distance,9.566667,19.166667,29.3,12,12,12,0.028458,0,0,2.775579,110,,near near near near near near
+delivery,ferry,43011,distance,29.933333,55.333333,81.433333,4,12,12,0.09275,0,0,19.493092,306,,near near near near near near
+delivery,ferry,43011,eta,13.0,26.066667,39.666667,12,12,12,0.075875,6,24,9.789246,149,,far far far far far far
+delivery,ferry,43011,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.060458,6,24,9.50621,149,,far far far far far far
+delivery,ferry,43012,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.070167,6,24,9.126832,149,,far far far far far far
+delivery,ferry,43012,eta,13.0,26.066667,39.666667,12,12,12,0.079375,6,24,8.546705,149,,far far far far far far
+delivery,ferry,43012,distance,29.933333,55.333333,81.433333,4,12,12,0.053125,0,0,13.720289,306,,near near near near near near
+delivery,ferry,43013,distance,29.933333,55.333333,81.433333,4,12,12,0.049667,0,0,13.492081,306,,near near near near near near
+delivery,ferry,43013,eta,13.0,26.066667,39.666667,12,12,12,0.086459,6,24,8.405544,149,,far far far far far far
+delivery,ferry,43013,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.082916,6,24,8.787793,149,,far far far far far far
+delivery,ferry,43014,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.075333,6,24,8.818468,149,,far far far far far far
+delivery,ferry,43014,eta,13.0,26.066667,39.666667,12,12,12,0.073916,6,24,8.446712,149,,far far far far far far
+delivery,ferry,43014,distance,29.933333,55.333333,81.433333,4,12,12,0.068125,0,0,14.353586,306,,near near near near near near
+delivery,ferry,43015,distance,29.933333,55.333333,81.433333,4,12,12,0.057709,0,0,13.720462,306,,near near near near near near
+delivery,ferry,43015,eta,13.0,26.066667,39.666667,12,12,12,0.080375,6,24,8.078249,149,,far far far far far far
+delivery,ferry,43015,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.049792,6,24,8.42662,149,,far far far far far far
+delivery,ferry,43016,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.067666,6,24,9.047327,149,,far far far far far far
+delivery,ferry,43016,eta,13.0,26.066667,39.666667,12,12,12,0.053083,6,24,7.942709,149,,far far far far far far
+delivery,ferry,43016,distance,29.933333,55.333333,81.433333,4,12,12,0.050333,0,0,13.113952,306,,near near near near near near
+delivery,ferry-ready,43011,distance,25.333333,50.733333,76.633333,4,12,12,0.054583,0,0,12.436707,288,,near near near near near near
+delivery,ferry-ready,43011,eta,13.0,26.066667,39.666667,12,12,12,0.050583,6,24,7.585301,149,,far far far far far far
+delivery,ferry-ready,43011,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.113417,6,24,8.961919,149,,far far far far far far
+delivery,ferry-ready,43012,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.065709,6,24,8.448964,149,,far far far far far far
+delivery,ferry-ready,43012,eta,13.0,26.066667,39.666667,12,12,12,0.090208,6,24,7.903457,149,,far far far far far far
+delivery,ferry-ready,43012,distance,25.333333,50.733333,76.633333,4,12,12,0.046792,0,0,11.896431,288,,near near near near near near
+delivery,ferry-ready,43013,distance,25.333333,50.733333,76.633333,4,12,12,0.047333,0,0,11.808325,288,,near near near near near near
+delivery,ferry-ready,43013,eta,13.0,26.066667,39.666667,12,12,12,0.06425,6,24,8.05345,149,,far far far far far far
+delivery,ferry-ready,43013,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.062166,6,24,8.352333,149,,far far far far far far
+delivery,ferry-ready,43014,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.09925,6,24,8.555755,149,,far far far far far far
+delivery,ferry-ready,43014,eta,13.0,26.066667,39.666667,12,12,12,0.080417,6,24,8.209254,149,,far far far far far far
+delivery,ferry-ready,43014,distance,25.333333,50.733333,76.633333,4,12,12,0.050958,0,0,12.113111,288,,near near near near near near
+delivery,ferry-ready,43015,distance,25.333333,50.733333,76.633333,4,12,12,0.05,0,0,12.127044,288,,near near near near near near
+delivery,ferry-ready,43015,eta,13.0,26.066667,39.666667,12,12,12,0.052875,6,24,7.554169,149,,far far far far far far
+delivery,ferry-ready,43015,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.066666,6,24,8.454539,149,,far far far far far far
+delivery,ferry-ready,43016,eta-guarded,13.0,26.066667,39.666667,12,12,12,0.080709,6,24,8.892208,149,,far far far far far far
+delivery,ferry-ready,43016,eta,13.0,26.066667,39.666667,12,12,12,0.067542,6,24,7.873287,149,,far far far far far far
+delivery,ferry-ready,43016,distance,25.333333,50.733333,76.633333,4,12,12,0.050708,0,0,12.311292,288,,near near near near near near
+delivery,ferry-best,43011,distance,29.933333,55.333333,81.433333,4,12,12,0.045042,0,0,12.689103,306,,near near near near near near
+delivery,ferry-best,43011,eta,29.933333,55.333333,81.433333,4,12,12,0.047417,6,24,16.26829,306,,near near near near near near
+delivery,ferry-best,43011,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.075375,6,24,18.541293,306,,near near near near near near
+delivery,ferry-best,43012,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.047666,6,24,16.62279,306,,near near near near near near
+delivery,ferry-best,43012,eta,29.933333,55.333333,81.433333,4,12,12,0.04775,6,24,14.903778,306,,near near near near near near
+delivery,ferry-best,43012,distance,29.933333,55.333333,81.433333,4,12,12,0.050125,0,0,12.928424,306,,near near near near near near
+delivery,ferry-best,43013,distance,29.933333,55.333333,81.433333,4,12,12,0.045125,0,0,12.603641,306,,near near near near near near
+delivery,ferry-best,43013,eta,29.933333,55.333333,81.433333,4,12,12,0.050333,6,24,15.101548,306,,near near near near near near
+delivery,ferry-best,43013,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.05425,6,24,17.060369,306,,near near near near near near
+delivery,ferry-best,43014,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.049833,6,24,16.735653,306,,near near near near near near
+delivery,ferry-best,43014,eta,29.933333,55.333333,81.433333,4,12,12,0.047625,6,24,15.01195,306,,near near near near near near
+delivery,ferry-best,43014,distance,29.933333,55.333333,81.433333,4,12,12,0.048166,0,0,12.875865,306,,near near near near near near
+delivery,ferry-best,43015,distance,29.933333,55.333333,81.433333,4,12,12,0.046125,0,0,12.679672,306,,near near near near near near
+delivery,ferry-best,43015,eta,29.933333,55.333333,81.433333,4,12,12,0.05275,6,24,15.331247,306,,near near near near near near
+delivery,ferry-best,43015,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.046542,6,24,16.279666,306,,near near near near near near
+delivery,ferry-best,43016,eta-guarded,29.933333,55.333333,81.433333,4,12,12,0.045667,6,24,16.099875,306,,near near near near near near
+delivery,ferry-best,43016,eta,29.933333,55.333333,81.433333,4,12,12,0.045375,6,24,14.72605,306,,near near near near near near
+delivery,ferry-best,43016,distance,29.933333,55.333333,81.433333,4,12,12,0.0615,0,0,13.339658,306,,near near near near near near
+bounded_delivery,open,43011,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.079167,6,24,9.546295,101,,near near near near near near
+bounded_delivery,open,43012,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.064375,6,24,5.669464,101,,near near near near near near
+bounded_delivery,open,43013,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.047916,6,24,4.355292,101,,near near near near near near
+bounded_delivery,open,43014,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.03575,6,24,3.951247,101,,near near near near near near
+bounded_delivery,open,43015,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.030125,6,24,3.828119,101,,near near near near near near
+bounded_delivery,open,43016,eta-guarded-budget,8.9,17.7,27.033333,12,12,12,0.024291,6,24,3.741081,101,,near near near near near near
+bounded_delivery,detour,43011,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.025625,6,24,9.480045,242,,far far far far far far
+bounded_delivery,detour,43012,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.023166,6,24,9.176457,242,,far far far far far far
+bounded_delivery,detour,43013,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.0165,6,24,8.368081,242,,far far far far far far
+bounded_delivery,detour,43014,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.01875,6,24,8.433297,242,,far far far far far far
+bounded_delivery,detour,43015,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.018542,6,24,8.498163,242,,far far far far far far
+bounded_delivery,detour,43016,eta-guarded-budget,21.433333,42.766667,64.633333,8,12,12,0.016292,6,24,8.401047,242,,far far far far far far
+bounded_delivery,asphalt,43011,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.418334,6,24,4.214162,98,,far far far far far far
+bounded_delivery,asphalt,43012,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.33825,6,24,3.562866,98,,far far far far far far
+bounded_delivery,asphalt,43013,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.326375,6,24,3.455042,98,,far far far far far far
+bounded_delivery,asphalt,43014,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.322834,6,24,3.391128,98,,far far far far far far
+bounded_delivery,asphalt,43015,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.318125,6,24,3.351376,98,,far far far far far far
+bounded_delivery,asphalt,43016,eta-guarded-budget,8.633333,17.166667,26.233333,12,12,12,0.326084,6,24,3.508123,98,,far far far far far far
+bounded_delivery,congestion,43011,eta-guarded-budget,11.566667,23.033333,41.166667,12,12,12,0.047917,6,24,8.288872,154,,far far far far near near
+bounded_delivery,congestion,43012,eta-guarded-budget,11.566667,23.033333,40.666667,12,12,12,0.042334,6,24,6.820289,153,,far far far far near near
+bounded_delivery,congestion,43013,eta-guarded-budget,11.566667,23.033333,41.566667,12,12,12,0.038542,6,24,6.644873,156,,far far far far near near
+bounded_delivery,congestion,43014,eta-guarded-budget,11.566667,23.033333,40.733333,12,12,12,0.045667,6,24,6.611621,153,,far far far far near near
+bounded_delivery,congestion,43015,eta-guarded-budget,11.566667,23.033333,41.166667,12,12,12,0.052166,6,24,6.075,154,,far far far far near near
+bounded_delivery,congestion,43016,eta-guarded-budget,11.566667,23.033333,40.666667,12,12,12,0.033875,6,24,5.925082,153,,far far far far near near
+bounded_delivery,rush,43011,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.169916,6,24,7.212745,131,,far far far far far far
+bounded_delivery,rush,43012,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.041584,6,24,6.053039,131,,far far far far far far
+bounded_delivery,rush,43013,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.04125,6,24,6.05642,131,,far far far far far far
+bounded_delivery,rush,43014,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.056417,6,24,6.265796,131,,far far far far far far
+bounded_delivery,rush,43015,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.055084,6,24,6.197538,131,,far far far far far far
+bounded_delivery,rush,43016,eta-guarded-budget,11.566667,23.033333,35.033333,12,12,12,0.034,6,24,6.030005,131,,far far far far far far
+bounded_delivery,cleared,43011,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.041708,6,24,4.452913,110,,near near near near near near
+bounded_delivery,cleared,43012,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.04475,6,24,4.468956,110,,near near near near near near
+bounded_delivery,cleared,43013,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.049375,6,24,4.404378,110,,near near near near near near
+bounded_delivery,cleared,43014,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.049625,6,24,4.448082,110,,near near near near near near
+bounded_delivery,cleared,43015,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.040166,6,24,4.46233,110,,near near near near near near
+bounded_delivery,cleared,43016,eta-guarded-budget,9.566667,19.166667,29.3,12,12,12,0.027833,6,24,4.362627,110,,near near near near near near
+bounded_delivery,ferry,43011,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.107584,6,24,12.323088,149,,far far far far far far
+bounded_delivery,ferry,43012,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.063208,6,24,9.061332,149,,far far far far far far
+bounded_delivery,ferry,43013,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.069958,6,24,8.699381,149,,far far far far far far
+bounded_delivery,ferry,43014,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.067,6,24,8.513544,149,,far far far far far far
+bounded_delivery,ferry,43015,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.071625,6,24,9.023544,149,,far far far far far far
+bounded_delivery,ferry,43016,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.069208,6,24,8.474874,149,,far far far far far far
+bounded_delivery,ferry-ready,43011,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.060709,6,24,8.617328,149,,far far far far far far
+bounded_delivery,ferry-ready,43012,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.06775,6,24,8.489457,149,,far far far far far far
+bounded_delivery,ferry-ready,43013,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.063667,6,24,8.564507,149,,far far far far far far
+bounded_delivery,ferry-ready,43014,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.06425,6,24,8.376286,149,,far far far far far far
+bounded_delivery,ferry-ready,43015,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.056667,6,24,8.422703,149,,far far far far far far
+bounded_delivery,ferry-ready,43016,eta-guarded-budget,13.0,26.066667,39.666667,12,12,12,0.063375,6,24,8.701957,149,,far far far far far far
+bounded_delivery,ferry-best,43011,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.065458,6,24,19.28899,306,,near near near near near near
+bounded_delivery,ferry-best,43012,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.068667,6,24,18.703928,306,,near near near near near near
+bounded_delivery,ferry-best,43013,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.048167,6,24,16.368379,306,,near near near near near near
+bounded_delivery,ferry-best,43014,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.04675,6,24,16.479992,306,,near near near near near near
+bounded_delivery,ferry-best,43015,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.048208,6,24,16.528499,306,,near near near near near near
+bounded_delivery,ferry-best,43016,eta-guarded-budget,29.933333,55.333333,81.433333,4,12,12,0.048833,6,24,16.44553,306,,near near near near near near
+dispatch_burst,burst,43011,distance,,,,,,,,,0,10.161125,,24,
+dispatch_burst,burst,43011,eta-guarded,,,,,,,,,192,46.751375,,24,
+dispatch_burst,burst,43011,eta-guarded-budget,,,,,,,,,32,9.962417,,24,
+dispatch_burst,burst,43012,eta-guarded-budget,,,,,,,,,32,10.045542,,24,
+dispatch_burst,burst,43012,eta-guarded,,,,,,,,,192,41.366417,,24,
+dispatch_burst,burst,43012,distance,,,,,,,,,0,3.378416,,24,
+dispatch_burst,burst,43013,distance,,,,,,,,,0,3.430375,,24,
+dispatch_burst,burst,43013,eta-guarded,,,,,,,,,192,40.717833,,24,
+dispatch_burst,burst,43013,eta-guarded-budget,,,,,,,,,32,9.308917,,24,
+dispatch_burst,burst,43014,eta-guarded-budget,,,,,,,,,32,9.382042,,24,
+dispatch_burst,burst,43014,eta-guarded,,,,,,,,,192,40.837542,,24,
+dispatch_burst,burst,43014,distance,,,,,,,,,0,3.496041,,24,
+dispatch_burst,burst,43015,distance,,,,,,,,,0,3.596417,,24,
+dispatch_burst,burst,43015,eta-guarded,,,,,,,,,192,40.396959,,24,
+dispatch_burst,burst,43015,eta-guarded-budget,,,,,,,,,32,9.012666,,24,
+dispatch_burst,burst,43016,eta-guarded-budget,,,,,,,,,32,9.172375,,24,
+dispatch_burst,burst,43016,eta-guarded,,,,,,,,,192,40.510167,,24,
+dispatch_burst,burst,43016,distance,,,,,,,,,0,3.269375,,24,
+dispatch_burst,burst,43017,distance,,,,,,,,,0,3.224875,,24,
+dispatch_burst,burst,43017,eta-guarded,,,,,,,,,192,40.414708,,24,
+dispatch_burst,burst,43017,eta-guarded-budget,,,,,,,,,32,8.959208,,24,
+dispatch_burst,burst,43018,eta-guarded-budget,,,,,,,,,32,9.311542,,24,
+dispatch_burst,burst,43018,eta-guarded,,,,,,,,,192,41.355916,,24,
+dispatch_burst,burst,43018,distance,,,,,,,,,0,3.319125,,24,
+dispatch_burst,burst,43019,distance,,,,,,,,,0,3.159458,,24,
+dispatch_burst,burst,43019,eta-guarded,,,,,,,,,192,40.300458,,24,
+dispatch_burst,burst,43019,eta-guarded-budget,,,,,,,,,32,8.990958,,24,
+dispatch_burst,burst,43020,eta-guarded-budget,,,,,,,,,32,9.157417,,24,
+dispatch_burst,burst,43020,eta-guarded,,,,,,,,,192,39.897791,,24,
+dispatch_burst,burst,43020,distance,,,,,,,,,0,3.170833,,24,
+dispatch_burst,burst,43021,distance,,,,,,,,,0,3.078,,24,
+dispatch_burst,burst,43021,eta-guarded,,,,,,,,,192,39.625167,,24,
+dispatch_burst,burst,43021,eta-guarded-budget,,,,,,,,,32,9.01625,,24,
+dispatch_burst,burst,43022,eta-guarded-budget,,,,,,,,,32,8.701791,,24,
+dispatch_burst,burst,43022,eta-guarded,,,,,,,,,192,40.234917,,24,
+dispatch_burst,burst,43022,distance,,,,,,,,,0,3.110459,,24,

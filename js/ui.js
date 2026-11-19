@@ -112,7 +112,8 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; syncSaved(); syncGfx(); sfx('click'); };
+  $('p-difficulty').onchange = () => act('rivalDifficulty', [$('p-difficulty').value], syncSaved);
+  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
@@ -280,7 +281,6 @@ function initUI() {
   document.addEventListener('contextmenu', (e) => { if ((e.pointerType ? e.pointerType !== 'mouse' : onTouch()) && !(e.target.closest && e.target.closest('input, textarea, a'))) e.preventDefault(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); syncWakeLock(); });
   window.addEventListener('pagehide', () => { if (UI.inGame) autoSave(); });
-  setInterval(() => { if (UI.inGame && !UI.paused) autoSave(); }, AUTOSAVE_EVERY * 1000);
   syncMenu();
 }
 
@@ -384,7 +384,7 @@ function pauseSwitch(id, on) {
 function checkMenuSettings() {
   const m = UI.menu, ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
   if (!ok(m.shape, SHAPE_PRESETS.length)) m.shape = 0;
-  if (!ok(m.biome || 0, BIOME_ORDER.length)) m.biome = 0;
+  if (!ok(m.biome || 0, BIOME_ORDER.length) || !biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
   if (!ok(m.rough, TERRAIN_PRESETS.length)) m.rough = DEFAULT_ROUGH;
   if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
@@ -885,6 +885,7 @@ function syncMenu() {
   const sum = menuSummary();
   $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra"><span class="vh"> · </span>${sum.extra}</span>` : '');
   $('m-continue').hidden = !hasSave();
+  if (UI.menuView === 'home') showCheckpoints('m');
   syncInfo();
   schedulePreview();
 }
@@ -964,7 +965,7 @@ function openPicker(kind, ctx = menuPickCtx()) {
   } else {
     const inner = (name, desc) => `<canvas class="pc-swatch" aria-hidden="true"></canvas><span class="pc-name">${name}</span><span class="pc-blurb">${desc}</span>`;
     h += '<div class="pgrid">' + card('rnd', m.biomeRnd, inner('Random', 'Any biome, picked when you land.'), 'rnd')
-      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, `<b>${BIOMES[k].kind}.</b> ${BIOMES[k].desc || ''}`), '', `${BIOMES[k].kind}: ${BIOMES[k].desc}`)).join('') + '</div>';
+      + BIOME_ORDER.map((k, i) => biomeAllowed(k, m.shapeRnd ? -1 : m.shape) ? card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, `<b>${BIOMES[k].kind}.</b> ${BIOMES[k].desc || ''}`), '', `${BIOMES[k].kind}: ${BIOMES[k].desc}`) : '').join('') + '</div>';
   }
   body.innerHTML = h;
   for (const b of body.querySelectorAll('.pcard')) {
@@ -997,6 +998,7 @@ function menuPickCtx() {
 function choosePicked(kind, v) {
   const m = UI.menu, rnd = v === 'rnd';
   if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
+  if (!biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
   if (kind === 'shape' && !rnd && SHAPE_PRESETS[m.shape].teamDefault) { m.teams = 1; m.players = 4; } // (a map made for 2 vs 2: four players, Teams on, which you can still turn off)
   if (kind === 'shape' && !rnd && murmurLevelOk(SHAPE_PRESETS[m.shape].murmur)) m.murmur = SHAPE_PRESETS[m.shape].murmur; // (a map type with its own Murmur: the Hollow)
   syncMenu();
@@ -1048,11 +1050,17 @@ function randomShape(want) {
   const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
 }
+function randomBiomeFor(shape, needsMurmur = false) {
+  const list = BIOME_ORDER.filter((k) => biomeAllowed(k, shape) && (!needsMurmur || murmurGround(k)));
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 /** Random map type and biome: a concrete pick for the game about to start (3 players: map types with room for three). */
 function resolveRandom() {
   const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
   if (m.shapeRnd) out.shape = randomShape(m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2);
-  if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
+  if (m.biomeRnd) out.biome = BIOME_ORDER.indexOf(randomBiomeFor(out.shape));
+  else if (!biomeAllowed(BIOME_ORDER[out.biome], out.shape)) out.biome = 0;
   return out;
 }
 
@@ -1240,6 +1248,18 @@ function drawShapeThumb(cv, P) {
     for (const v of [0.5, 0.34, 0.66]) { ctx.fillStyle = '#ffd166'; ctx.fillRect(X(0.5) - U * 0.03, Y(v) - U * 0.03, U * 0.06, U * 0.06); }
     marks = [[0.28, 0.9], [0.72, 0.9], [0.72, 0.1], [0.28, 0.1]]; crags = 0;
   }
+  if (P.grandCanyon) {
+    const river = [[-0.05, 0.46], [0.14, 0.43], [0.34, 0.48], [0.5, 0.5], [0.66, 0.52], [0.86, 0.57], [1.05, 0.54]];
+    line(river, THUMB.rock, U * 0.44);
+    line(river, THUMB.lo, U * 0.32);
+    line(river, THUMB.floor, U * 0.21);
+    line(river, THUMB.waterHi, U * 0.09);
+    line(river, THUMB.water, U * 0.055);
+    const trail = [[0.55, 0.73], [0.49, 0.65], [0.55, 0.59], [0.48, 0.55]];
+    line(trail, THUMB.ramp, Math.max(1, U * 0.024));
+    line(trail.map(([u, v]) => [1 - u, 1 - v]), THUMB.ramp, Math.max(1, U * 0.024));
+    crags = 0;
+  }
   if (P.lakes) for (let k = 0; k < 4; k++) { const u = 0.12 + rnd() * 0.76, v = 0.52 + rnd() * 0.3; blob(u, v, 0.07 + rnd() * 0.05, 0.035 + rnd() * 0.025, THUMB.water, THUMB.waterHi, true); }
   if (P.oases) {
     ctx.fillStyle = 'rgba(70,38,22,0.45)'; ctx.fillRect(x0, y0, mw, mh);
@@ -1386,7 +1406,8 @@ function drawBiomeSwatch(cv, b) {
   swatchGround(ctx, w, h, b);
   // Plants: a big one, a middling one and a small one, the way they'd stand on the ground.
   const s = Math.min(w * 0.62, h);
-  const spots = w / h > 1.4 ? [[0.22, 0.6, 0.95, 1], [0.58, 0.42, 0.8, 3], [0.84, 0.72, 0.6, 6]] : [[0.32, 0.4, 0.95, 1], [0.72, 0.68, 0.7, 3]];
+  const spots = b === 'springs' ? [[0.29, 0.47, 1.12, 1], [0.71, 0.58, 0.96, 2], [0.55, 0.36, 0.46, 4]]
+    : w / h > 1.4 ? [[0.22, 0.6, 0.95, 1], [0.58, 0.42, 0.8, 3], [0.84, 0.72, 0.6, 6]] : [[0.32, 0.4, 0.95, 1], [0.72, 0.68, 0.7, 3]];
   for (const [u, v, f, n] of spots) {
     const A = ART[`plant-${b}-${n}`] || ART[`plant-${b}-1`];
     if (!A || !A.img) continue;
@@ -1556,16 +1577,98 @@ function renderPreview(cv, m, p) {
 
 /* ------------------------------------------------------------------ autosave */
 
-/*
- * The game saves itself every AUTOSAVE_EVERY seconds while you play (and whenever you switch away
- * or close it), so a long game is never lost: Continue on the main menu picks it up. The pause menu
- * says when it last saved; if a save fails (storage full or blocked), you're told once.
- */
-const AUTOSAVE_EVERY = 20;
-function autoSave() {
+// Continue keeps its usual local save. The rolling history uses IndexedDB so large maps
+// can keep several snapshots without competing for localStorage's small quota.
+const AUTOSAVE_EVERY = 60, CHECKPOINT_LIMIT = 5;
+let checkpointDB;
+
+function checkpointStore(run, update) {
+  if (!checkpointDB) {
+    checkpointDB = new Promise((resolve, reject) => {
+      const req = indexedDB.open('terrafall.checkpoints', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('history');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return checkpointDB.then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction('history', update ? 'readwrite' : 'readonly'), store = tx.objectStore('history');
+    const read = store.get('recent');
+    let entries = [];
+    read.onsuccess = () => {
+      const book = read.result;
+      entries = book && (run === null || book.run === run) ? book.entries : [];
+      if (update) {
+        const next = [update, ...entries.filter((e) => e.time !== update.time)].slice(0, CHECKPOINT_LIMIT);
+        store.put({ run, entries: next }, 'recent');
+      }
+    };
+    tx.oncomplete = () => resolve(entries);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+
+function canRestoreCheckpoint() {
+  return S && UI.inGame && !UI.watch && !MP.on && !S.players[ME].ai;
+}
+
+function canChooseCheckpoint(prefix) {
+  if (prefix === 'm') return !UI.inGame && UI.menuView === 'home' && !$('screen-menu').hidden;
+  return canRestoreCheckpoint();
+}
+
+function canCheckpoint() {
+  return canRestoreCheckpoint() && !UI.saveHold && S.winner < 0;
+}
+
+function checkpointTick() {
+  if (!canCheckpoint() || UI.paused || S.time + 1e-6 < UI.nextCheckpoint) return;
+  const time = UI.nextCheckpoint;
+  UI.nextCheckpoint += AUTOSAVE_EVERY;
+  const json = serializeGame();
+  autoSave(json);
+  const run = S.checkpointRun;
+  checkpointStore(run, { time, json }).catch(() => {
+    if (S?.checkpointRun !== run || UI.checkpointFailed) return;
+    UI.checkpointFailed = true;
+    toast('This browser couldn’t keep the rolling save history.', 'warn');
+  });
+}
+
+async function showCheckpoints(prefix = 'p') {
+  const game = S, row = $(prefix + '-checkpoint-row'), select = $(prefix + '-checkpoint');
+  const fromMenu = prefix === 'm';
+  const run = fromMenu ? null : game?.checkpointRun;
+  row.hidden = true;
+  if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
+  try {
+    const entries = await checkpointStore(run);
+    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix) || !entries.length) return;
+    if (fromMenu) {
+      let seed;
+      try { seed = JSON.parse(entries[0].json)?.seed; } catch (e) { /* The selected entry is checked when restored. */ }
+      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent checkpoints for Planet #${seed}` : 'Recent solo checkpoints';
+    }
+    select.replaceChildren(...entries.map((e, i) => new Option(fmtClock(e.time) + ' game time', i)));
+    $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value], prefix);
+    row.hidden = false;
+  } catch (e) { /* history is unavailable; Continue remains independent */ }
+}
+
+function restoreCheckpoint(entry, prefix) {
+  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the checkpoint from ${fmtClock(entry.time)} game time?`)) return;
+  if (prefix === 'm') audioUnlock();
+  if (loadSaveText(entry.json, 'Checkpoint restored.')) {
+    $('screen-pause').hidden = true;
+    $('screen-over').hidden = true;
+  } else if (prefix === 'm') menuMsg('That checkpoint couldn’t be loaded.');
+  else toast('That checkpoint couldn’t be loaded.', 'warn');
+}
+
+function autoSave(json) {
   // (UI.saveHold: the game keeps failing, see `stage` in main.js. The last good save is left alone.)
-  if (!S || UI.saveHold || S.winner >= 0 || S.players[ME].ai) return;
-  if (saveGame()) { UI.savedAt = Date.now(); UI.saveFailed = false; }
+  if (!canCheckpoint()) return;
+  if (saveGame(json)) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
     toast('Couldn\'t save the game: this browser\'s storage is full or blocked. Keep this tab open to keep playing.', 'warn');
@@ -1619,6 +1722,10 @@ function initDialogs() {
 }
 
 function syncSaved() {
+  const diff = $('p-difficulty');
+  $('p-difficulty-row').hidden = !S || !!S.mission || !!UI.watch || !S.players.some((r) => r.ai && !r.out);
+  if (S) diff.value = S.difficulty;
+  diff.disabled = MP.on && !mpIsHost();
   syncPauseMods();
   if (UI.syncTod) UI.syncTod();
   syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
@@ -1627,8 +1734,8 @@ function syncSaved() {
   if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
-    : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
-    : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
+    : UI.saveFailed ? 'Saving isn’t working in this browser right now. Keep this tab open or choose Save → File to keep a copy.'
+    : 'Your game saves itself every in-game minute'  + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
 /** The pause menu's line of this game's challenge modifiers (each named in full when pointed at), and the Murmur setting. */
@@ -1854,7 +1961,7 @@ const SHEET_KEYS = {
   // A Trade Terminal's route: Start (or Change) it, Stop it, Escort on or off.
   'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
   // A Mooring Mast's Link (or Unlink); a Maglev Terminal's Plan a line from here.
-  'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l',
+  'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l', 'sh-magrebuild': 'l',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -2446,22 +2553,24 @@ function onMapCommand(i, j, wx, wy, done) {
     if (r.kind === 'none') { sfx('error'); toast(where, 'warn'); return; }
     const n = r.n, nr = r.nr;
     const what = r.kind === 'hunt' ? `going after the rival's ${foeName}` : r.kind === 'attack' ? `attacking the ${bName}` : r.kind === 'station' ? `heading to the ${bName}` : 'moving to hold that ground';
+    const blocked = r.blocked ? ` No route for ${r.blocked} warbot${r.blocked === 1 ? '' : 's'}.` : '';
     if (nr && !n) {
       sfx('order');
       addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
-      toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.`, 'info');
+      toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.${blocked}`, blocked ? 'warn' : 'info');
       if (done) done();
       refreshSelection();
       return;
     }
     if (!n) {
       sfx('error');
-      toast(mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
+      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} armed warbots`}.`
+        : mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
       return;
     }
     sfx('order');
     addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
-    toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
+    toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.${blocked}`, blocked ? 'warn' : 'info');
     if (done) done();
     refreshSelection();
   });
@@ -2969,8 +3078,13 @@ function loadSaveText(text, welcome) {
   } catch (e) { S = prev; return false; }
   if (!enterLoaded(prev)) return false;
   try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
-  saveGame();
-  postMsg(ME, welcome, 0, 0, 'info');
+  if (saveGame()) {
+    UI.savedAt = Date.now();
+    postMsg(ME, welcome, 0, 0, 'info');
+  } else {
+    UI.saveFailed = true;
+    toast('Game loaded for this tab. Continue couldn’t be updated. Use Save → File in the pause menu to keep a copy.', 'warn');
+  }
   return true;
 }
 
@@ -2993,6 +3107,11 @@ function enterGame(unsaved) {
   UI.msgLog = []; $('btn-msgs').hidden = true;
   UI.objAuto = false; UI.objManual = false; UI.objStep = undefined;
   UI.saveHold = false;
+  UI.savedAt = 0; UI.saveFailed = false; UI.checkpointFailed = false;
+  if (!MP.on && !UI.watch && !S.checkpointRun) S.checkpointRun = `${Date.now()}-${randomSeed()}`;
+  UI.nextCheckpoint = (Math.floor((S.time + 1e-6) / AUTOSAVE_EVERY) + 1) * AUTOSAVE_EVERY;
+  UI.nextTransmission = unsaved ? (Math.floor(S.time / 480) + 1) * 480 : S.time + 1;
+  UI.transmission = unsaved ? 1 + Math.floor(S.time / 480) : 0;
   setSpeed(1, true);
   $('btn-speed').hidden = MP.on; // (a multiplayer game runs at one speed for everyone)
   $('screen-menu').hidden = true;
@@ -3178,6 +3297,7 @@ function helpForTouch() {
 
 function showGameOver() {
   UI.overShown = true;
+  showCheckpoints('o');
   if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
   clearSave();
   UI.overNew = null; UI.overMenu = null;
@@ -4093,7 +4213,7 @@ function renderMagSection(b) {
   if (!el) return;
   const o = magPartner(b), pods = o ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id), site = magPending(b);
   const cut = o && magLineCut(b), powered = o && magLinePowered(b), near = o && magNearEnd(b);
-  const sig = JSON.stringify([o && o.id, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, cut, powered, magPowered(b), o && magPowered(o), flareOn(), b.auto, b.autoOff, near && near.magFix && near.magFix.paid, sumValues(b.inc)]);
+  const sig = JSON.stringify([o && o.id, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, b.magMissing, b.magRelay, cut, powered, magPowered(b), o && magPowered(o), flareOn(), b.auto, b.autoOff, near && near.magFix && near.magFix.paid, sumValues(b.inc)]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let h = '';
@@ -4105,6 +4225,12 @@ function renderMagSection(b) {
     h += `<p class="hint">${farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
     h += pods.length ? `<div class="kv"><span>Pods on the line</span><span>${pods.length} of ${MAGLEV.perLine}</span></div>` + pods.map((u) => `<div class="kv army-row"><span>${podStatus(u)}</span><span><button class="btn small ghost" data-pod="${u.id}">Pod ›</button></span></div>`).join('')
       : '<p class="hint"><b>No pods yet:</b> order them in the pod bay below (4 Alloy, 2 Chips each).</p>';
+  } else if (b.magMissing) {
+    const end = b.magMissing, check = magLineCheck(ME, b, end.x, end.y);
+    h += '<div class="status">Service suspended: a Terminal is down.</div><p class="hint">The guideway and surviving pods can be used again when that Terminal is rebuilt.</p>';
+    if (site) h += `<p class="hint">Replacement Terminal: ${Math.round(site.progress * 100)}% complete.</p>`;
+    else if (check.why) h += `<p class="hint">${check.why}</p>`;
+    else h += `<button class="btn primary" id="sh-magrebuild">Rebuild the missing Terminal</button>`;
   } else if (site) {
     h += `<div class="status">A line is going up from here: ${Math.round(site.progress * 100)}%.</div><p class="hint">A Worker standing here builds it out, pylon by pylon; the far Terminal goes up last. It is paid from storage as the goods come in (${costText(stillOwed(site))} still owed).</p>`;
   } else if (b.magFrom) {
@@ -4112,6 +4238,8 @@ function renderMagSection(b) {
   } else {
     h += `<div class="status">Not on a line.</div><p class="hint">Plan one in Paths (<b>Maglev</b>, <kbd>Shift</kbd>+<kbd>M</kbd>): tap this Terminal, then the far end ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, straight across water, cliffs and chasms. ${costText(magLineCost(1))} a tile, paid from storage.</p><button class="btn primary" id="sh-magline">Plan a line from here</button>`;
   }
+  const relay = getE(b.magRelay);
+  if (relay) h += `<p class="hint">This Terminal exchanges freight by conveyor with the Terminal ${dirText(b, relay)}.</p>`;
   const served = S.buildings.filter((c) => !c.dead && c.railBy === b.id).length;
   if (served) h += `<p class="hint">It serves ${served} building${served > 1 ? 's' : ''} round it.</p>`;
   const auto = b.auto && !b.autoOff ? Object.entries(b.auto).map(([g, n]) => goodTag(g, `${Math.min(b.stock[g] || 0, n)}/${n} ${GOOD[g].name}`, (b.stock[g] || 0) < n / 3)).join(' ') : '';
@@ -4119,6 +4247,15 @@ function renderMagSection(b) {
   const coming = Object.keys(b.inc).filter((g) => b.inc[g] > 0 && S.bots.some((u) => !u.dead && u.cargoTo === b.id && u.cargo && u.cargo[g] && BOTS[u.type].magpod));
   if (coming.length) h += `<p class="hint">On their way by pod: ${coming.map((g) => `${b.inc[g]} ${GOOD[g].name}`).join(', ')}.</p>`;
   el.innerHTML = h;
+  if ($('sh-magrebuild')) $('sh-magrebuild').onclick = () => {
+    const { x, y } = b.magMissing;
+    sfx('click');
+    act('magLine', [b.id, x, y], (result) => {
+      if (!result?.ok) { toast(result?.reason || 'The Terminal could not be rebuilt.', 'warn'); return; }
+      centerOn(x + 0.5, y + 0.5);
+      openBuildingSheet(getE(result.id) || b);
+    });
+  };
   if ($('sh-magline')) $('sh-magline').onclick = () => { sfx('click'); openMaglevFrom(b); };
   for (const btn of el.querySelectorAll('button[data-pod]')) btn.onclick = () => { const u = getE(+btn.dataset.pod); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
 }
@@ -4129,11 +4266,12 @@ function openMaglevFrom(b) {
   enterPlaceMode('maglev');
   UI.ropeA = { i: b.x, j: b.y, id: b.id };
   R.overlay = null;
-  showBanner(maglevFarText(), null, 'Cancel');
+  showBanner(maglevFarText(b), null, 'Cancel');
   crossingTools();
 }
 
-function maglevFarText() {
+function maglevFarText(b) {
+  if (b.magMissing) return 'Tap the original end of the guideway to reconnect the line. You only pay for a replacement Terminal.';
   return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours. The preview shows the pylons' spots; the first bad one is red. ${costText(magLineCost(1))} a tile, from storage.`;
 }
 
@@ -4156,7 +4294,7 @@ function maglevTap(i, j) {
     UI.ropeA = { i, j, id: b.id };
     R.overlay = null; R.ghost = null;
     sfx('click');
-    showBanner(maglevFarText(), null, 'Cancel');
+    showBanner(maglevFarText(b), null, 'Cancel');
     crossingTools();
     return;
   }
@@ -4165,8 +4303,13 @@ function maglevTap(i, j) {
   if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
   const E = maglevPreview(i, j, true);
   if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end.`, null, 'Cancel'); crossingTools(); return; }
-  const n = Math.round(dist(A.x, A.y, i, j)), far = E.far ? getE(E.far) : null, cost = magLineCost(n);
+  const n = Math.round(dist(A.x, A.y, i, j)), far = E.far ? getE(E.far) : null, cost = A.magMissing ? {} : magLineCost(n);
   if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+  if (A.magMissing) {
+    showBanner(far?.built ? 'Reconnect the surviving guideway to this Terminal?' : `Rebuild the missing Terminal? ${far ? 'Continue its construction.' : costInline(cost, playerGoods(ME))}`, far?.built ? 'Reconnect' : 'Build', 'Cancel');
+    crossingTools();
+    return;
+  }
   const pyl = E.spots.filter((s) => s.kind === 'ok').length, gaps = E.spots.filter((s) => s.kind === 'skip').length;
   showBanner(`A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${gaps ? ` (${gaps} gap${gaps > 1 ? 's' : ''} spanned)` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
   crossingTools();
@@ -4515,8 +4658,8 @@ const CROSSING_HOW = {
     `It's an ordinary site (${costText(BDEFS.ropeway.cost)}): Haulers bring the goods to the near station, so lay a road to it. Once it's built the cable goes across and the far station goes up. ` +
     'Haulers, Workers and warbots ride it as part of your road network; Freight Trucks, Road Trains and Crawlers are too heavy and keep to the roads.',
   maglev: () => `A Maglev line is an elevated guideway on pylons between two Maglev Terminals (Build → Move → Maglev Terminal, ${costText(BDEFS.magterm.cost)}), ${MAGLEV.min} to ${MAGLEV.max} tiles apart in any direction, straight across water, cliffs and chasms. Tap a finished Terminal of yours, then the far end: a clear spot where the far Terminal goes up, or another Terminal of yours. ` +
-    `A pylon stands every ${MAGLEV.spacing} tiles from the near Terminal, on open ground or in shallow water, never on a building, a road or track; a chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles), the preview rings each spot and the first bad one is red. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
-    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it.`,
+    `A pylon stands every ${MAGLEV.spacing} tiles from the near Terminal, on open ground or in shallow water, with roadside supports over roads and track. A blocked support can shift to a nearby tile. A chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles), the preview rings each spot and the first bad one is red. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
+    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it. Put the Terminals of two lines next to each other to transfer freight by conveyor. If a Terminal falls, rebuild it to reuse the guideway.`,
 };
 
 /**
@@ -6325,7 +6468,7 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
         <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
-    if (def.pump && b.built && b.owner === ME) {
+    if (def.pump && b.built && b.owner === ME && !feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'))) {
       const pr = pipeToRefinery(ME, b);
       if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it in: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
         <p class="hint">A pipeline to the nearest Refinery or Fuel Tank sends its Crude there every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
@@ -8309,6 +8452,23 @@ function nightfallLine() {
   if (todNow().lights >= 0.9) narrate(ME, 'night');
 }
 
+const COMMAND_RADIO_ENABLED = false;
+const COMMAND_TRANSMISSIONS = [
+  { text: 'Command online. Execute settlement directives.', speech: 'e o a  i e  o u e a' },
+  { text: 'Colony status received. Continue operations.', speech: 'i a u  e e u  o a i' },
+  { text: 'Long-range relay silent. Continue local directives.', speech: 'o i  a o u  i e a u' },
+];
+
+function commandTransmissionTick() {
+  if (!COMMAND_RADIO_ENABLED || UI.paused || UI.briefing || UI.watch || S.winner >= 0 || !(S.time >= UI.nextTransmission)) return;
+  const line = COMMAND_TRANSMISSIONS[UI.transmission === 0 ? 0 : (UI.transmission - 1) % 2 + 1];
+  UI.transmission++;
+  UI.nextTransmission = (Math.floor(S.time / 480) + 1) * 480;
+  UI.toastBatch = (UI.toastBatch || 0) + 1;
+  toast('Command radio · ' + line.text, 'voice');
+  commandVoice(line.speech);
+}
+
 function uiTick(dt) {
   briefingTick();
   netTick();
@@ -8318,6 +8478,8 @@ function uiTick(dt) {
   siteUndoTick(); // (hides itself out of a game)
   nowPlayingTick(); // (desktop only: the music's title, in the menu and in a game)
   if (!UI.inGame || !S) return;
+  checkpointTick();
+  commandTransmissionTick();
   if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
   else scoutTick(); // (scout reports on the rivals, js/scout.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
