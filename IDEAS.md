@@ -138,6 +138,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   only a look, how craters affect movement (slow? none, like wrecks?), what the biggest weapons do (a nuke leaves a
   glassed crater field; the Lance of Corvane a trench), and the cost cap so a 60-minute war stays fast. LORE.md's
   tone fits (the garden the Pathfinder planted, harmed by the war; "the war feeds them": the Murmur get stronger).
+  The owner again, Nov 19 2026: wants to work on this; animals scared off and killed on the map during war, the map
+  slowly turning from green nature into a WW1 battlefield of craters and destruction, and **robot scrap that stays on
+  the ground** wherever robots are destroyed, so the old battlefields read as robot graveyards (today a destroyed bot
+  leaves only a fading decal; aircraft already leave lasting wrecks, `S.wrecks`). "Anything to help in this theme":
+  the somber side plot of the planet and its animals suffering for a meaningless war on behalf of humans who never
+  arrive, and the Murmur, held in balance until the robots brought them so much energy, growing ever more dominant.
 - **Fauna: better looks and movement** (the owner, Nov 18 2026: for later; the fauna models were added by the other chat
   with basic tools). Review every animal in js/wildlife.js (deer, songbirds, geese, foxes, herds, herons, hares, owls,
   lizards, hawks, vultures, beetles, ember moths, floaters, blind crawlers, glow-worms, the carrion birds) and rework
