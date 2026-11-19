@@ -121,7 +121,7 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu lists the latest five checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
+Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
 
 ## How to play
 
@@ -1149,7 +1149,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
 - **Saving:** the game saves single-player progress every in-game minute and keeps the latest five checkpoints.
-  Use **Restore checkpoint** in the pause menu or on the game-over screen. Switching away or closing the tab also
+  Use **Restore checkpoint** in the pause menu or on the game-over screen. The main menu opens the latest saved solo
+  checkpoint history, even after a reload following defeat. Switching away or closing the tab also
   updates the save used by **Continue**. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
@@ -1161,6 +1162,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way). One that fails is refused and changes nothing; if
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
+  If the browser refuses the new resume save, the loaded game still plays and the warning points to **Save → File**.
 - **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
   and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in

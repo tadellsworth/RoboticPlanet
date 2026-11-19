@@ -2,6 +2,8 @@
 
 November 19, 2026. Tested in local headless Chromium with controlled single-player fixtures.
 
+Follow-up on November 19. Both findings below have been fixed on the working branch. In a phone-sized Chromium viewport, the main menu listed the stored checkpoint after a defeat and page reload. Cancel left the stored state intact, and accepting the restore recovered the Hauler's cargo and updated **Continue**. A simulated quota failure during load kept the old resume save and displayed the **Save → File** warning.
+
 ## Checkpoint restoration
 
 The one-minute checkpoint contained a Hauler carrying 2 Ore, a Worker partway through building a Depot, and a Warbot walking to a rally. The test recorded cargo, stock and reservations, construction progress and costs, and the Warbot's position and order. It advanced the simulation by 40 game seconds, opened the Defeat screen, and restored the checkpoint through **Restore checkpoint**.

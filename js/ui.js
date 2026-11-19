@@ -885,6 +885,7 @@ function syncMenu() {
   const sum = menuSummary();
   $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra"><span class="vh"> · </span>${sum.extra}</span>` : '');
   $('m-continue').hidden = !hasSave();
+  if (UI.menuView === 'home') showCheckpoints('m');
   syncInfo();
   schedulePreview();
 }
@@ -1595,8 +1596,8 @@ function checkpointStore(run, update) {
     const read = store.get('recent');
     let entries = [];
     read.onsuccess = () => {
-      const book = read.result || {};
-      entries = book.run === run ? book.entries : [];
+      const book = read.result;
+      entries = book && (run === null || book.run === run) ? book.entries : [];
       if (update) {
         const next = [update, ...entries.filter((e) => e.time !== update.time)].slice(0, CHECKPOINT_LIMIT);
         store.put({ run, entries: next }, 'recent');
@@ -1609,6 +1610,11 @@ function checkpointStore(run, update) {
 
 function canRestoreCheckpoint() {
   return S && UI.inGame && !UI.watch && !MP.on && !S.players[ME].ai;
+}
+
+function canChooseCheckpoint(prefix) {
+  if (prefix === 'm') return !UI.inGame && UI.menuView === 'home' && !$('screen-menu').hidden;
+  return canRestoreCheckpoint();
 }
 
 function canCheckpoint() {
@@ -1631,23 +1637,32 @@ function checkpointTick() {
 
 async function showCheckpoints(prefix = 'p') {
   const game = S, row = $(prefix + '-checkpoint-row'), select = $(prefix + '-checkpoint');
+  const fromMenu = prefix === 'm';
+  const run = fromMenu ? null : game?.checkpointRun;
   row.hidden = true;
-  if (!canRestoreCheckpoint() || !game.checkpointRun) return;
+  if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
   try {
-    const entries = await checkpointStore(game.checkpointRun);
-    if (S !== game || !canRestoreCheckpoint() || !entries.length) return;
+    const entries = await checkpointStore(run);
+    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix) || !entries.length) return;
+    if (fromMenu) {
+      let seed;
+      try { seed = JSON.parse(entries[0].json)?.seed; } catch (e) { /* The selected entry is checked when restored. */ }
+      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent checkpoints for Planet #${seed}` : 'Recent solo checkpoints';
+    }
     select.replaceChildren(...entries.map((e, i) => new Option(fmtClock(e.time) + ' game time', i)));
-    $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value]);
+    $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value], prefix);
     row.hidden = false;
   } catch (e) { /* history is unavailable; Continue remains independent */ }
 }
 
-function restoreCheckpoint(entry) {
-  if (!entry || !canRestoreCheckpoint() || !window.confirm(`Restore the checkpoint from ${fmtClock(entry.time)} game time?`)) return;
+function restoreCheckpoint(entry, prefix) {
+  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the checkpoint from ${fmtClock(entry.time)} game time?`)) return;
+  if (prefix === 'm') audioUnlock();
   if (loadSaveText(entry.json, 'Checkpoint restored.')) {
     $('screen-pause').hidden = true;
     $('screen-over').hidden = true;
-  } else toast('That checkpoint couldn’t be loaded.', 'warn');
+  } else if (prefix === 'm') menuMsg('That checkpoint couldn’t be loaded.');
+  else toast('That checkpoint couldn’t be loaded.', 'warn');
 }
 
 function autoSave(json) {
@@ -1719,7 +1734,7 @@ function syncSaved() {
   if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
-    : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
+    : UI.saveFailed ? 'Saving isn’t working in this browser right now. Keep this tab open or choose Save → File to keep a copy.'
     : 'Your game saves itself every in-game minute'  + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
@@ -3061,8 +3076,13 @@ function loadSaveText(text, welcome) {
   } catch (e) { S = prev; return false; }
   if (!enterLoaded(prev)) return false;
   try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
-  saveGame();
-  postMsg(ME, welcome, 0, 0, 'info');
+  if (saveGame()) {
+    UI.savedAt = Date.now();
+    postMsg(ME, welcome, 0, 0, 'info');
+  } else {
+    UI.saveFailed = true;
+    toast('Game loaded for this tab. Continue couldn’t be updated. Use Save → File in the pause menu to keep a copy.', 'warn');
+  }
   return true;
 }
 
