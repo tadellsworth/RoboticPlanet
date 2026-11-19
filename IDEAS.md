@@ -391,10 +391,16 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
     a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
     (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
-  - **Mass driver.** A long electromagnetic rail that fires sealed cargo canisters in an arc to a Catcher building far
-    across the map (up to about 30 tiles), one every 10 seconds or so. A big build, and power for every shot. Canisters
-    fly over everything, but a rival's Flak can shoot them down, and a missed catch spills the cargo as crates. The
-    Missile Silo's peaceful twin; none in the Hollow (nothing flies under the cavern roof).
+  - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
+    shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
+    aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
+    the air, from a goods list of up to 3 goods (each with a reserve the colony keeps at home); enemy Flak bursts
+    canisters (crates where they fall), a canister with no Catcher lands as crates; none in the Hollow; the mission The
+    Schedule teaches it. Decided after (the owner, Nov 19 2026): Flak as a hard counter is fine (a Flak Gun right under
+    the arc bursts every canister that crosses its reach, so a line has to go round rival Flak); two tiles ("a 2x1
+    footprint would be cooler"), laid east-west or north-south as it's placed, firing off the end facing its Catcher.
+    Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each end works today);
+    a Catcher full of goods nobody fetches (no cap today).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
@@ -637,8 +643,15 @@ or drop.
   already come from a seed plus settings; a saved edit layer on top).
 - **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
   "text size" question); captions for alert sounds.
-- **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
-  fights), on the lockstep that's there.
+- **Shared colony co-op** (decided by the owner, Nov 19 2026: shared control, no fixed roles). Two players run one
+  colony against the computer, both with full control of everything: one economy, one set of buildings and robots, one
+  win or loss. Each keeps their own camera, selection and menus. The partner's cursor shows as a coloured dot with
+  their name; a ping key marks a spot for both (with a sound); build sites, plans and army orders carry a small badge
+  of who placed them, and the log names who did what. An optional role preference in the lobby (Economy, Military,
+  Both) only filters which alerts and quick menus pop up, never what a player may do. Dismantling something the
+  partner placed under a minute ago asks to confirm. Technically: two humans share one player seat on the lockstep
+  (orders carry the issuer), plus the cursor, pings and badges. It can ship as a Custom Game option before the co-op
+  scenarios, which build on it.
 
 ## Trade routes and the finished-goods market (built Nov 2026)
 

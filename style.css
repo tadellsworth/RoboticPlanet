@@ -1962,3 +1962,5 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
   #screen-watch .w-more { display: block; }
   #screen-watch #w-sec-challenge:not(.open) { display: none; }
 }
+#sh-mdlist .keep-cell { grid-template-columns: 1fr 44px 48px 48px 40px; }
+#sh-mdlist .keep-cell small { color: var(--muted); font-weight: normal; }

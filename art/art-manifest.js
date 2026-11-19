@@ -62,6 +62,7 @@
  * The 3D building set (512x512, 57° three-quarter view): each building stands on its own pad, and
  * the centre of the pad's top surface sits on the tile centre. Tune the size for all of them here.
  */
+const MD_FRAME = { scale: 2.4789, anchor: [0.5, 0.57] }; // (the Mass Driver's wide frame: see tools/install_massdriver.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
@@ -226,6 +227,14 @@ const ART_MANIFEST = {
   'magpylon-cut@0': B3D('buildings/magpylon-cut@0.webp'), 'magpylon-cut@1': B3D('buildings/magpylon-cut@1.webp'),
   'magpod@0': 'bots/magpod@0.webp', 'magpod@1': 'bots/magpod@1.webp', 'magpod-empty@0': 'bots/magpod-empty@0.webp', 'magpod-empty@1': 'bots/magpod-empty@1.webp',
   'magdeck@0': 'tiles/magdeck@0.webp', 'magdeck@1': 'tiles/magdeck@1.webp',
+  // The Mass Driver (renderer/b/massdriver.js, look A "Coil Ramp", two tiles long, installed by
+  // tools/install_massdriver.py): its ramp pointing each of four ways (e or w lying east-west, n or s north-south:
+  // drawBuilding shows the end facing its Catcher; 'mdriver' alone, for the menu, points east), framed wide (MD_FRAME:
+  // its scale in tiles and the anchor, the middle of its two tiles, as the install prints them), and the Catcher with its
+  // arms open and swung in (as a canister lands).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`mdriver@${t}`, { src: `buildings/mdriver-e@${t}.webp`, ...MD_FRAME }],
+    ...['e', 'w', 'n', 's'].map((d) => [`mdriver-${d}@${t}`, { src: `buildings/mdriver-${d}@${t}.webp`, ...MD_FRAME }]),
+    [`catcher@${t}`, B3D(`buildings/catcher@${t}.webp`)], [`catcher-closed@${t}`, B3D(`buildings/catcher-closed@${t}.webp`)]])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

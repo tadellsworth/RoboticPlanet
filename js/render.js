@@ -2999,6 +2999,10 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     const k = siloRise(b, type === 'silo' ? siloReady(b) : !!b.armed);
     if (empty && k < 1) { full = k > 0 ? art : null; fade = k; art = empty; }
   }
+  // A Mass Driver's ramp points along its two tiles toward its Catcher (mdriver-<dir>: e, w, n, s); a Catcher's arms swing in as a
+  // canister lands (catcher-closed).
+  if (art && b && b.built && type === 'mdriver') art = artFor('mdriver-' + mdDir(b), owner) || art;
+  if (art && b && b.built && type === 'catcher' && mdArmsIn(b)) art = artFor('catcher-closed', owner) || art;
   // A Viaduct's abutment: the tile facing its span (viaduct-abut-e: the span leaves eastward).
   if (type === 'viaduct' && ART['viaduct-abut-e']) {
     const [ax, ay] = viaductDir(b);
@@ -3905,7 +3909,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
     ctx.save();
     ctx.beginPath(); ctx.rect(cx - s, cy + s * 0.45 - s * 0.9 * b.progress, s * 2, s * 2); ctx.clip();
     ctx.globalAlpha = 0.85;
-    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, x: b.x, y: b.y });
+    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, x: b.x, y: b.y, mdAxis: b.mdAxis });
     ctx.restore();
     ctx.globalAlpha = 1;
     // delivered materials
@@ -6172,7 +6176,7 @@ function refreshOverlay(type) {
   }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
     const t = j * S.W + i;
-    if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
+    if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j, false, BDEFS[type] && BDEFS[type].long && typeof UI !== 'undefined' ? UI.mdAxis : undefined).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
   }
   R.overlay = { type, valid, at: R.time };
 }
@@ -6442,7 +6446,8 @@ function render(dtReal) {
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
     if (e.ent === 'b') {
-      const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
+      const c0 = BDEFS[e.type].long ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles)
+      const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       buildingSmoke(e);
       const def = BDEFS[e.type];
@@ -6546,12 +6551,13 @@ function render(dtReal) {
     if (rwy) { ctx.globalAlpha = 0.7; drawRunway(ctx, ox, oy, z, R.ghost.x, R.ghost.y, rwy, true); ctx.globalAlpha = 1; }
   }
   if (R.ghost) {
+    const L = BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long, ns = L && typeof UI !== 'undefined' && UI.mdAxis === 'ns', gw = L && !ns ? 2 : 1, gh = ns ? 2 : 1; // (a Mass Driver: two tiles)
     ctx.globalAlpha = 0.75;
-    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + 0.5) * z, oy + (R.ghost.y + 0.5) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2 });
+    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + gw / 2) * z, oy + (R.ghost.y + gh / 2) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, mdAxis: ns ? 'ns' : 'ew' });
     ctx.globalAlpha = 1;
     ctx.strokeStyle = R.ghost.ok ? '#9dffb8' : '#ff6b6b';
     ctx.lineWidth = 2.5;
-    ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
+    ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, gw * z - 2, gh * z - 2);
   }
   if (typeof drawBlueprint === 'function') drawBlueprint(ctx, ox, oy, z); // (blueprints being picked or placed: js/blueprint.js)
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
@@ -6564,8 +6570,8 @@ function render(dtReal) {
     ctx.lineWidth = 2;
     ctx.setLineDash([z * 0.15, z * 0.1]);
     ctx.lineDashOffset = -R.time * z * 0.5;
-    const r = sel.type === 'lander' ? z * 0.95 : z * 0.6;
-    ctx.beginPath(); ctx.arc(ox + (sel.x + 0.5) * z, oy + (sel.y + 0.5) * z, r, 0, Math.PI * 2); ctx.stroke();
+    const r = sel.type === 'lander' ? z * 0.95 : BDEFS[sel.type] && BDEFS[sel.type].long ? z * 1.1 : z * 0.6, sc = BDEFS[sel.type] && BDEFS[sel.type].long ? bCentre(sel) : { x: sel.x + 0.5, y: sel.y + 0.5 };
+    ctx.beginPath(); ctx.arc(ox + sc.x * z, oy + sc.y * z, r, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
   }
   const sb = typeof UI !== 'undefined' && UI.selBot ? getE(UI.selBot) : null;
@@ -9548,6 +9554,7 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
       });
     }
   }
+  drawMassDrivers(ctx, ox, oy, z, inView); // (Mass Drivers charging and firing, their canisters in flight, a Driver being aimed)
   drawFlakSearchlights(ctx, ox, oy, z, inView, 'beams'); // at night: the flak guns' searchlights sweeping the sky
   // A Mooring Mast selected (or being linked), or an Airship: its line, from mooring cup to mooring cup.
   {
@@ -9565,6 +9572,191 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
   drawFlakSearchlights(ctx, ox, oy, z, inView, 'lit');
   drawFlakTracers(ctx, ox, oy, z, inView);
   for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) { drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z); if (f.t < 0.4) fxGround(ctx, ox + f.x * z, oy + f.y * z + z, z * 1.6, '#ff9a3c', 0.6 * (1 - f.t / 0.4)); }
+}
+
+/* ------------------------------------------------------------------ the Mass Driver */
+
+/*
+ * The Mass Driver's art (renderer/b/massdriver.js, look A "Coil Ramp", two tiles long) points four ways; MD_ART holds, for
+ * each, where its breech (b), muzzle (m) and eleven coils (c) are, in tiles from the middle of its two tiles on screen (the renders' marks, by
+ * tools/install_massdriver.py), and where the Catcher's cradle is. Everything drawn here is render-only: the coils
+ * lighting in sequence as it charges with arcs of light crackling along the rail, the muzzle flash, a faint guidance
+ * beam toward the Catcher while a canister flies, the canister with its short glowing streak, and the aiming preview.
+ */
+const MD_ART = {
+  e: { b: [-0.754, -0.084], m: [1.005, -0.442], c: [[-0.664, -0.102], [-0.516, -0.132], [-0.366, -0.163], [-0.214, -0.194], [-0.059, -0.225], [0.097, -0.257], [0.256, -0.289], [0.416, -0.322], [0.579, -0.355], [0.745, -0.389], [0.912, -0.423]] },
+  w: { b: [0.754, -0.084], m: [-1.005, -0.442], c: [[0.664, -0.102], [0.516, -0.132], [0.366, -0.163], [0.214, -0.194], [0.059, -0.225], [-0.097, -0.257], [-0.256, -0.289], [-0.416, -0.322], [-0.579, -0.355], [-0.745, -0.389], [-0.912, -0.423]] },
+  n: { b: [0.0, 0.593], m: [0.0, -1.205], c: [[0.0, 0.49], [0.0, 0.321], [0.0, 0.154], [0.0, -0.012], [0.0, -0.175], [0.0, -0.337], [0.0, -0.497], [0.0, -0.655], [0.0, -0.812], [0.0, -0.968], [0.0, -1.121]] },
+  s: { b: [0.0, -0.686], m: [0.0, 0.45], c: [[0.0, -0.635], [0.0, -0.55], [0.0, -0.461], [0.0, -0.37], [0.0, -0.274], [0.0, -0.176], [0.0, -0.073], [0.0, 0.034], [0.0, 0.145], [0.0, 0.261], [0.0, 0.382]] },
+  cradle: [0, -0.069],
+  lift: 0.5, // (a canister's arc drawn this much of its height up the screen)
+};
+
+/**
+ * Which way Mass Driver b's ramp points: along its two tiles (b.mdAxis), toward the end nearer its Catcher, so an
+ * east-west Driver fires east or west and a north-south one north or south (east, or north, with none yet).
+ */
+function mdDir(b) {
+  const ns = b && b.mdAxis === 'ns', c = b && b.mdTo ? getE(b.mdTo) : null;
+  if (!c || b.x === undefined) return (b && b.mdFace) || (ns ? 'n' : 'e');
+  const o = bCentre(b);
+  b.mdFace = ns ? (c.y + 0.5 >= o.y ? 's' : 'n') : (c.x + 0.5 >= o.x ? 'e' : 'w'); // (it keeps pointing that way if its Catcher goes)
+  return b.mdFace;
+}
+
+/** Are Catcher c's arms swung in: a canister about to land or just landed? */
+function mdArmsIn(c) {
+  if (S.time - (c.mdCaught ?? -99) < 1.4) return true;
+  for (const m of S.cans || []) if (m.to === c.id && m.dur - m.t < 0.45) return true;
+  return false;
+}
+
+/** A jagged line of light from (x0, y0) to (x1, y1) on screen: `w` wide, `n` kinks, `j` how far they wander. */
+function mdBolt(ctx, x0, y0, x1, y1, w, n, j, col) {
+  ctx.beginPath(); ctx.moveTo(x0, y0);
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, px = -dy / L, py = dx / L;
+  for (let k = 1; k < n; k++) { const t = k / n, o = (Math.random() - 0.5) * 2 * j * Math.sin(Math.PI * t); ctx.lineTo(x0 + dx * t + px * o, y0 + dy * t + py * o); }
+  ctx.lineTo(x1, y1);
+  ctx.strokeStyle = col; ctx.lineWidth = w * 3; ctx.globalAlpha = 0.25; ctx.stroke();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = w; ctx.globalAlpha = 0.9; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/** A soft round glow at (x, y), radius r, in colour col (additive). */
+function mdGlow(ctx, x, y, r, col, a) {
+  if (r <= 0 || a <= 0) return;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(235,247,255,${a})`); g.addColorStop(0.18, col.replace('A', a * 0.7)); g.addColorStop(0.55, col.replace('A', a * 0.22)); g.addColorStop(1, col.replace('A', 0));
+  ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+}
+
+/** Where canister m is on screen: { x, y, gx, gy (the ground under it) }. */
+function canScreen(m, ox, oy, z, t) {
+  const k = clamp(t / m.dur, 0, 1), from = getE(m.from), dir = MD_ART[from && !from.dead ? mdDir(from) : 'e'], c0 = dir.m, c1 = MD_ART.cradle;
+  const gx = m.x0 + (m.x1 - m.x0) * k, gy = m.y0 + (m.y1 - m.y0) * k, alt = canAlt(m, k) * MD_ART.lift;
+  return { x: ox + (gx + c0[0] * (1 - k) + c1[0] * k) * z, y: oy + (gy + c0[1] * (1 - k) + c1[1] * k - alt) * z, gx: ox + gx * z, gy: oy + gy * z, k };
+}
+
+function drawMassDrivers(ctx, ox, oy, z, inView) {
+  const ui = typeof UI !== 'undefined' ? UI : {}, BLUE = 'rgba(191,227,255,A)';
+  ctx.save();
+  // the aiming preview: the Driver's reach (12 to 30 tiles), its Catchers ringed, an arc to the one under the pointer
+  const aimB = R.mode === 'mdaim' ? getE(ui.mdAim) : null, selB = getE(R.selected);
+  const showLine = (b) => b && !b.dead && BDEFS[b.type] && BDEFS[b.type].mdriver;
+  if (showLine(aimB)) {
+    const b = aimB, bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, col = PLAYER_COLORS[b.owner] || '#fff';
+    ctx.fillStyle = 'rgba(191,227,255,0.07)';
+    ctx.beginPath(); ctx.arc(cx, cy, MASSDRIVER.max * z, 0, Math.PI * 2); ctx.arc(cx, cy, MASSDRIVER.min * z, 0, Math.PI * 2, true); ctx.fill();
+    ctx.strokeStyle = 'rgba(191,227,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.3]);
+    for (const r of [MASSDRIVER.min, MASSDRIVER.max]) { ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.setLineDash([]);
+    for (const c of S.buildings) {
+      if (c.dead || c.owner !== b.owner || !BDEFS[c.type].catcher) continue;
+      const ok = !mdAimWhy(b.owner, b, c);
+      ctx.strokeStyle = ok ? col : 'rgba(255,107,107,0.7)'; ctx.lineWidth = Math.max(2, z * 0.05);
+      ctx.beginPath(); ctx.arc(ox + (c.x + 0.5) * z, oy + (c.y + 0.5) * z, z * 0.7, 0, Math.PI * 2); ctx.stroke();
+    }
+    const h = R.aimHover;
+    if (h) {
+      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = !!c && BDEFS[c.type].catcher && !mdAimWhy(b.owner, b, c);
+      mdArc(ctx, b, h.i + 0.5, h.j + 0.5, ox, oy, z, ok ? col : '#ff6b6b');
+    }
+  } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
+  ctx.globalCompositeOperation = 'lighter';
+  const dark = typeof TOD !== 'undefined' && TOD.active && TOD.state ? TOD.state.lights || 0 : 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].mdriver || !inView(b.x, b.y, 3)) continue;
+    const A = MD_ART[mdDir(b)], bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, P = (q) => [cx + q[0] * z, cy + q[1] * z];
+    const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
+    if (charging) {
+      // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
+      const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
+      for (let k = 0; k < NC; k++) {
+        const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
+        mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
+      }
+      const [bx, by] = P(A.b), [tx, ty] = P(A.c[Math.max(0, lit - 1)]);
+      if (lit > 0) for (let n = 0; n < 1 + Math.floor(p * 2); n++) mdBolt(ctx, bx, by - z * 0.04, tx, ty - z * 0.04, Math.max(1, z * 0.01), 6 + lit, z * 0.07, 'rgba(120,195,255,1)');
+      for (let k = 1; k < lit; k++) if (Math.random() < 0.5) { const [x0, y0] = P(A.c[k - 1]), [x1, y1] = P(A.c[k]); mdBolt(ctx, x0, y0 - z * 0.09, x1, y1 - z * 0.09, Math.max(1, z * 0.008), 3, z * 0.06, 'rgba(120,195,255,1)'); }
+      // a ray of light along the whole rail, breech to muzzle, gathering as it charges
+      const [mx, my] = P(A.m), g = ctx.createLinearGradient(bx, by, mx, my);
+      g.addColorStop(0, `rgba(150,210,255,${0.35 * p})`); g.addColorStop(1, `rgba(150,210,255,${0.12 * p})`);
+      ctx.strokeStyle = g; ctx.lineWidth = Math.max(1.5, z * 0.035 * p); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+    }
+    if (since < 0.5) {
+      // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
+      const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
+      for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
+      mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
+      ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+    } else if (!charging && dark > 0.3) {
+      // after dark the coils glow faintly between shots
+      for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
+    }
+  }
+  // canisters in flight: the guidance beam from the muzzle toward the Catcher, the canister and its glowing streak
+  for (const m of S.cans || []) {
+    const from = getE(m.from), p = canScreen(m, ox, oy, z, m.t);
+    if (!inView(m.x0 + (m.x1 - m.x0) * p.k, m.y0 + (m.y1 - m.y0) * p.k, 6) && !inView(m.x1, m.y1, 2)) continue;
+    if (from && !from.dead && from.built) {
+      const A = MD_ART[mdDir(from)], fc = bCentre(from), mx = ox + (fc.x + A.m[0]) * z, my = oy + (fc.y + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
+      const fade = Math.min(1, p.k * 6, (1 - p.k) * 6) * 0.3, g = ctx.createLinearGradient(mx, my, tx, ty);
+      g.addColorStop(0, `rgba(191,227,255,${fade})`); g.addColorStop(0.5, `rgba(191,227,255,${fade * 0.35})`); g.addColorStop(1, `rgba(191,227,255,${fade * 0.8})`);
+      ctx.strokeStyle = g; ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(4, z * 0.22); ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(tx, ty); ctx.stroke(); ctx.globalAlpha = 1; // (a soft haze under it)
+      ctx.lineWidth = Math.max(1.5, z * 0.05);
+      ctx.setLineDash([z * 0.5, z * 0.35]); ctx.lineDashOffset = -(R.time * z * 4) % (z * 0.85);
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
+      mdGlow(ctx, tx, ty, z * 0.45, BLUE, fade * 1.6); // (the Catcher's cradle lit, waiting)
+    }
+    // the streak: where it was over the last moment
+    const N = 10, tail = 0.24;
+    for (let k = N; k >= 1; k--) {
+      const q0 = canScreen(m, ox, oy, z, Math.max(0, m.t - tail * k / N)), q1 = canScreen(m, ox, oy, z, Math.max(0, m.t - tail * (k - 1) / N)), a = (1 - k / (N + 1)) * 0.7;
+      ctx.strokeStyle = `rgba(191,227,255,${a})`; ctx.lineWidth = Math.max(1.5, z * 0.11 * (1 - k / (N + 2)));
+      ctx.beginPath(); ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); ctx.stroke();
+    }
+    mdGlow(ctx, p.x, p.y, z * 0.3, BLUE, 0.55);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  for (const m of S.cans || []) {
+    const p = canScreen(m, ox, oy, z, m.t), q = canScreen(m, ox, oy, z, Math.min(m.dur, m.t + 0.05)), a = Math.atan2(q.y - p.y, q.x - p.x);
+    if (!inView((p.gx - ox) / z, (p.gy - oy) / z, 4)) continue;
+    // its shadow on the ground, smaller and fainter the higher it flies
+    const hk = clamp((p.gy - p.y) / (z * 3), 0, 1);
+    ctx.fillStyle = `rgba(0,0,0,${0.3 - 0.18 * hk})`;
+    ctx.save(); ctx.translate(p.gx + z * 0.25 * hk, p.gy + z * 0.15 * hk); ctx.rotate(Math.atan2(m.y1 - m.y0, m.x1 - m.x0)); ctx.fillRect(-z * (0.23 - 0.06 * hk), -z * (0.1 - 0.03 * hk), z * (0.46 - 0.12 * hk), z * (0.2 - 0.06 * hk)); ctx.restore(); // (its box's shadow)
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a);
+    // A stubby cargo container holding its heading along the arc: gunmetal, ribbed sides, dark corner castings, a band
+    // in its team's colour and an amber running light blinking at its nose.
+    const L = z * 0.46, W = z * 0.24, lw = Math.max(1, z * 0.014);
+    ctx.fillStyle = '#2c3137'; ctx.strokeStyle = 'rgba(6,8,10,0.85)'; ctx.lineWidth = lw;
+    ctx.fillRect(-L / 2, -W / 2, L, W); ctx.strokeRect(-L / 2, -W / 2, L, W);
+    ctx.fillStyle = '#434b53'; ctx.fillRect(-L / 2 + lw, -W / 2 + lw, L - 2 * lw, W * 0.38); // (its lit top)
+    ctx.strokeStyle = 'rgba(12,14,17,0.75)'; ctx.lineWidth = Math.max(0.6, z * 0.008);
+    for (let k = 1; k < 8; k++) { const x = -L / 2 + (L * k) / 8; ctx.beginPath(); ctx.moveTo(x, -W / 2 + lw); ctx.lineTo(x, W / 2 - lw); ctx.stroke(); } // ribs
+    ctx.fillStyle = PLAYER_COLORS[m.owner] || '#fff'; ctx.fillRect(-L * 0.18, -W / 2 + lw, L * 0.09, W - 2 * lw);
+    const cc = Math.max(1.5, z * 0.05);
+    ctx.fillStyle = '#121518'; for (const sx of [-1, 1]) for (const sy of [-1, 1]) ctx.fillRect(sx * L / 2 - (sx > 0 ? cc : 0), sy * W / 2 - (sy > 0 ? cc : 0), cc, cc); // corner castings
+    const blink = 0.55 + 0.45 * Math.sin(R.time * 9 + m.id);
+    ctx.globalCompositeOperation = 'lighter'; mdGlow(ctx, L / 2 - cc * 0.9, 0, z * 0.12, 'rgba(255,170,60,A)', 0.7 * blink); ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(255,190,90,${0.6 + 0.4 * blink})`; ctx.beginPath(); ctx.arc(L / 2 - cc * 0.9, 0, Math.max(1, z * 0.022), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** The arc a canister would fly from Mass Driver b to ground point (x, y), dashed, in colour col. */
+function mdArc(ctx, b, x, y, ox, oy, z, col) {
+  const A = MD_ART[mdDir(b)], bc = bCentre(b), x0 = bc.x, y0 = bc.y, d = Math.hypot(x - x0, y - y0), h = MASSDRIVER.arc * (0.5 + 0.5 * clamp((d - MASSDRIVER.min) / (MASSDRIVER.max - MASSDRIVER.min), 0, 1)) * MD_ART.lift;
+  ctx.save();
+  ctx.lineCap = 'round';
+  const path = () => { ctx.beginPath(); for (let k = 0; k <= 32; k++) { const t = k / 32, px = x0 + (x - x0) * t + A.m[0] * (1 - t) + MD_ART.cradle[0] * t, py = y0 + (y - y0) * t + A.m[1] * (1 - t) + MD_ART.cradle[1] * t - 4 * h * t * (1 - t); if (k) ctx.lineTo(ox + px * z, oy + py * z); else ctx.moveTo(ox + px * z, oy + py * z); } };
+  ctx.strokeStyle = 'rgba(8,12,18,0.5)'; ctx.lineWidth = Math.max(4, z * 0.1); path(); ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, z * 0.05); ctx.setLineDash([z * 0.35, z * 0.22]); ctx.lineDashOffset = -((R.time || 0) * z * 0.8) % (z * 0.57); path(); ctx.stroke();
+  ctx.restore();
 }
 
 /** Air drop: the plane's reach round its Airfield, and the spot under the pointer or picked. */

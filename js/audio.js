@@ -233,7 +233,7 @@ function _noise(dur, vol, o) {
 
 const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
-  launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, mdcharge: 0.8, mdlaunch: 0.4, mdcatch: 0.3, mdburst: 0.2, mdthud: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
@@ -252,6 +252,7 @@ const BLAST_SIZE = {
   bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
   flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
+  mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
 };
 
 /**
@@ -670,6 +671,28 @@ function sfx(name, dest, y, dur) {
       _noise(0.04, 0.12, { type: 'highpass', freq: 1800, attack: 0.002, dest: D });
       _noise(0.6, 0.12, { type: 'bandpass', freq: 600, to: 2600, q: 1.1, attack: 0.04, dest: D });
       break;
+    // The Mass Driver: its coils charging (a whine rising through the charge, a buzz under it), the hard crack of the
+    // shot with the canister's whistle falling away over its flight, and the clang of the Catcher's arms closing on it.
+    case 'mdcharge':
+      _tone(180, 1.6, 'sawtooth', 0.025, 1900, 0, D);
+      _tone(360, 1.6, 'sine', 0.03, 3800, 0, D);
+      _noise(1.5, 0.05, { type: 'bandpass', freq: 600, to: 4200, q: 3, attack: 1.2, dest: D });
+      break;
+    case 'mdlaunch':
+      _noise(0.05, 0.3, { type: 'highpass', freq: 2200, attack: 0.001, dest: D });
+      _tone(1400, 0.08, 'square', 0.07, 300, 0, D);
+      _tone(62, 0.35, 'sine', 0.2, 34, 0, D);
+      _noise(0.4, 0.12, { freq: 900, to: 200, attack: 0.002, dest: D });
+      _tone(2600, 2.4, 'sine', 0.022, 900, 0.1, D); // (the whistle in flight)
+      _noise(2.2, 0.03, { type: 'bandpass', freq: 3000, to: 1100, q: 6, attack: 0.3, delay: 0.1, dest: D });
+      break;
+    case 'mdcatch':
+      _tone(520, 0.6, 'triangle', 0.08, 500, 0, D); _tone(1310, 0.45, 'sine', 0.05, 1290, 0, D); _tone(2090, 0.3, 'sine', 0.025, null, 0, D);
+      _noise(0.12, 0.14, { freq: 700, to: 300, attack: 0.001, dest: D });
+      _tone(90, 0.3, 'sine', 0.12, 50, 0, D);
+      break;
+    case 'mdburst': blast(D, { size: 0.45, far: Math.max(far, 0.3), gain: 0.8, air: true }); _tone(1800, 0.3, 'triangle', 0.04, 600, 0, D); break;
+    case 'mdthud': _tone(80, 0.3, 'sine', 0.15, 45, 0, D); _noise(0.25, 0.12, { freq: 500, to: 150, attack: 0.002, dest: D }); _tone(700, 0.25, 'triangle', 0.03, 400, 0.02, D); break;
     case 'launch':
       _noise(0.07, 0.18, { type: 'highpass', freq: 1500, attack: 0.002, dest: D });
       _tone(70, 0.3, 'sine', 0.16, 40, 0, D);

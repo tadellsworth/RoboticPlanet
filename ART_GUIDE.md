@@ -1647,6 +1647,18 @@ median, and a strip in the team's colour runs along the barrier. The one-way arr
 make). The sign gantries are drawn in code (`drawGantry`: a steel lattice beam, posts on the verges, a blank green board with a
 white rim over each lane, a small lamp under each at night); a sprite could replace them later. A nicer arrow is for later (IDEAS.md).
 
+### Batch 23: the Mass Driver and Catcher (installed)
+
+The owner chose look **A, "Coil Ramp"** from the design sheet (Nov 19 2026). Rendered with `renderer/b/massdriver.js`,
+both teams, at every time of day, by `renderer/tools/render_massdriver.sh`; `renderer/tools/install_massdriver.py`
+writes the WebP files (jobs.txt lists each one; RENDERER.md, "The Mass Driver and Catcher").
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `mdriver-<dir>@0`, `mdriver-<dir>@1` (dir: e w (lying east-west), n s (north-south); + morning, evening, night) | The Mass Driver, two tiles long on a 2 × 1 pad: a pale concrete ramp with buttresses down its flanks carrying a coil-gun rail of eleven copper coil rings on gunmetal yokes, rising to a flared muzzle with a team-light ring and a red light; a breech house with a hopper at its foot, capacitor banks on both flanks cabled to the coils, three sealed canisters on a rack; the coils' inner bands glow pale blue-white after dark. 512 px, the buildings' angle, framed wide (the pad's two tiles across 0.85 of the frame) | `MD_FRAME` in the manifest (its scale and anchor, from the render: the anchor is the middle of its two tiles); drawn over the middle of its tiles, the end facing its Catcher (`mdDir`); `mdriver@T` (the menu, a Driver not yet aimed) is the east one |
+| `catcher@0`, `catcher@1`, `catcher-closed@0`, `catcher-closed@1` (+ times of day) | The Catcher: a wide ribbed steel funnel cradle on an octagonal concrete plinth, its rim lit in the team colour, copper braking rings glowing in its throat, four magnetic arms in hazard yellow on legs round it, swung up and out (open) or in over the funnel with their magnet heads lit (closed); a small control cabin, a floodlight pole. 512 px | `B3D` at scale 1.4; the closed art while a canister is landing (`mdArmsIn`) |
+| (code) | The shot | `drawMassDrivers`: the coils light blue-white in sequence breech to muzzle as it charges, arcs of light crackling between them and up the rail, a ray along the rail; on the shot every coil blazes and a flash at the muzzle; a faint dashed guidance beam from the muzzle to the Catcher's cradle while a canister flies; the canister, a stubby gunmetal cargo container (ribbed sides, dark corner castings, a band in the team colour, an amber running light blinking at its nose) holding its heading along the arc, with a short glowing streak and its shadow on the ground; after dark the coils glow faintly between shots. `MD_ART` holds the renders' marks |
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
