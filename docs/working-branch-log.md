@@ -75,3 +75,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Reviewed the existing simulation, browser smoke, help, and save service checks. Found that the README's Saving section still says 20 seconds, while the game and the quick-start section use one-minute checkpoints.
 - Recommended auditing save and recovery first, then whether players can diagnose stalled work. Other candidates are first-session onboarding, phone and desktop controls, map and difficulty checks, late-game performance, and multiplayer reconnects. These are proposed audits.
+
+### Multiplayer reconnect audit
+
+- Tested two browser clients against the local relay. Short socket interruptions, host and guest computer takeovers, and reloading into a running match on the default map recovered. Compared stocks, in-flight cargo, pending order execution, and Uplink progress at the same game ticks.
+- Reproduced a Huge-map snapshot failure that can stop the match, reloads that wait on paused or finished games, the loss of the saved seat after **Cancel**, both clients waiting after simultaneous reloads, a silently discarded offline order, and a host-disconnect countdown that reaches zero early.
+- Recorded reproduction steps, recommended fixes, and remaining coverage in the [multiplayer reconnect audit](multiplayer-reconnect-audit.md).
