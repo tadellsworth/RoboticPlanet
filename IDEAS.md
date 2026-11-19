@@ -599,8 +599,15 @@ or drop.
   already come from a seed plus settings; a saved edit layer on top).
 - **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
   "text size" question); captions for alert sounds.
-- **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
-  fights), on the lockstep that's there.
+- **Shared colony co-op** (decided by the owner, Nov 19 2026: shared control, no fixed roles). Two players run one
+  colony against the computer, both with full control of everything: one economy, one set of buildings and robots, one
+  win or loss. Each keeps their own camera, selection and menus. The partner's cursor shows as a coloured dot with
+  their name; a ping key marks a spot for both (with a sound); build sites, plans and army orders carry a small badge
+  of who placed them, and the log names who did what. An optional role preference in the lobby (Economy, Military,
+  Both) only filters which alerts and quick menus pop up, never what a player may do. Dismantling something the
+  partner placed under a minute ago asks to confirm. Technically: two humans share one player seat on the lockstep
+  (orders carry the issuer), plus the cursor, pings and badges. It can ship as a Custom Game option before the co-op
+  scenarios, which build on it.
 
 ## Trade routes and the finished-goods market (built Nov 2026)
 
