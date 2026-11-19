@@ -1,0 +1,77 @@
+# Robotic Planet working branch log
+
+This log covers the chat that started November 18, 2026, with a GitHub access check. Work from the chat is saved on `codex/working-branch` for review before any integration into `main`. Add dated entries as work is completed, with commit links, verification, and any open follow-up.
+
+## November 18, 2026
+
+### Repository and workflow
+
+- Verified read and push access to RoboticPlanet and created `codex/working-branch` from `main` at `f9689e4`. Discussed how branches, commits, pushes, and review work. The owner reserved any eventual merge to `main` for a separate review.
+- Discussed accessing this local desktop chat from a phone, how that differs from a cloud task, and approval settings for unattended work.
+
+### Maglev, recovery, and gameplay fixes
+
+- A completed Maglev line keeps its guideway and pylons if one terminal is destroyed. The surviving end can rebuild the missing terminal. Adjacent terminals on separate lines can transfer freight by conveyor. Pylons can shift around obstructions and share road or track tiles, with their feet drawn to the side. Pods are built at Maglev Terminals.
+- Single-player games retain up to five checkpoints at one-minute in-game intervals, with restore available from the pause or defeat screen. Custom games allow changes to rival AI difficulty from the pause menu. The host controls it in multiplayer.
+- On the Hollow, The Deep sends larger packs more often as its armor falls. Idle Haulers prioritize dismantled-building crates. Oil pumps hide the pipe shortcut when an adjacent refinery or fuel tank already receives crude by conveyor.
+- Reduced truck smoke, truck brake noise, insects around night lights, and the height of the Command Base beacon. Added synthesized Command radio with translated captions at landing and every eight game minutes. See the November 19 entry for its current status.
+- Simulation and phone-sized browser checks covered Maglev operation through terminal loss and rebuilding, pod production, adjacent crude delivery, AI difficulty, and checkpoint restore after defeat. Live multiplayer was left for a playtest.
+
+[Gameplay fixes and checkpoints commit](https://github.com/tadellsworth/RoboticPlanet/commit/24bf853051d938d600379e8d291942028ddae953)
+
+### New biomes and scenery
+
+- **Boiling Springs** adds turquoise and amber mineral pools, sulfur-stained limestone terraces, steam, and erupting geysers. The map preset still controls crossings and resources. Checked both browser builds, save and reload, and repeatability from the same seed. [Boiling Springs commit](https://github.com/tadellsworth/RoboticPlanet/commit/ef15ce65dcb7819b8cd0906e9bca6585601ddf6a)
+- **Tropical** is selectable on naval maps and has coconut palms, coral beaches, turquoise reefs, and seagulls. Open water has gentle waves, including lakes. Naval maps also have leaping fish, dolphins, and occasional whale spouts. Volcano maps and Cinderlands have animated lava highlights and steaming vents. Checked the picker and effects in both browser builds. [Tropical, water, and lava commit](https://github.com/tadellsworth/RoboticPlanet/commit/303f9fa667ef051008cdb5d111b258da4bfff545)
+
+### Wildlife and concept art
+
+- Gave all 11 inhabited biomes at least two ground species and a moving bird or native flier. Blackwater has alligators and turtles. The Bloom gained three native creatures. Deer and wildebeest have distinct, more natural silhouettes and gaits.
+- Roads, railways, and construction displace nearby animals. This supports the story of development and war disturbing local habitats. Working industry can feed up to two extra Scuttlers per pack on Active from night two, within the existing population cap. Browser and simulation checks covered the species roster, movement, displacement, and responses to war. [Wildlife commit](https://github.com/tadellsworth/RoboticPlanet/commit/36d7939dc6875c1c4f183712458cde1cd8c50476)
+- Shared in-game previews of Boiling Springs, Tropical coasts, lava vents, and wildlife in the chat. Reviewed the megastructure ideas in [IDEAS.md](../IDEAS.md) and shared `megastructure-concepts.png` with concept art for the **Great Uplink**, **Arrival City**, and **Shield Dome**. The concepts are awaiting art review before game integration.
+
+### Murmur tactics review
+
+- Reproduced three problems in isolated simulations. A failed route could count as arriving at a rally point, waiting Brutes could abandon the raid for a passing Worker, and a stationary defender could count as having fallen for a feint. Proposed physical rally checks, sabotage aimed at consequential infrastructure, and feints that depend on defenders actually moving.
+- Also proposed a separate freight-road ambush for possible later testing.
+
+## November 19, 2026
+
+### Active Murmur raids
+
+- Packs check their route, wait for enough creatures to physically reach the rally, and try another approach or withdraw if the route closes.
+- Cutters choose power infrastructure whose loss would disrupt the target. The pack holds during the sabotage window, and Brutes stay focused on the assigned building.
+- A feint can trigger an early strike if a defender moves away from the real target and nobody replaces them.
+- Targeted simulations covered the three improvements, save compatibility, and Quiet raids. Full nights ran in Colony, the Hollow, and the Murmur tutorial.
+
+[Active Murmur commit](https://github.com/tadellsworth/RoboticPlanet/commit/ecd246ddc0aa92dd6e213b1a67b0f8ebb7251e30)
+
+### Freight and Worker assignments
+
+- Audited pickups, deliveries, work assignments, and routing by road, rail, water, and air. Dispatch looks at other suppliers when the closest supplier has no carrier that can complete the trip. **Call a worker** checks that the Worker can reach the job.
+- Interrupted trips release their reservations. Loaded carriers look for reachable storage or hold their cargo. Trains recheck broken track for detours. Low-charge vehicles can keep working slowly if the available charger is unreachable.
+- Haulers can collect the dry goods from a dismantling crate while its liquid cargo waits for a Tanker. Supply drops use Airfields with Cargo Planes, and Airships recalculate how much Fuel they can carry after refuelling.
+- Targeted simulations checked alternate suppliers, cargo conservation, rail and ferry interruptions, separate port basins, loading and refuelling, and Worker routing. A 12-minute simulated match completed.
+
+[Freight dispatch commit](https://github.com/tadellsworth/RoboticPlanet/commit/a815e7c154640942708966184cb1ab539e481f90)
+
+### Hauler trip-time benchmark
+
+- Compared supplier ranking by distance with estimates that account for driving time, congestion, and ferry waits. Saved the harness, report, and 280 trial records. The strongest candidate checked traffic at dispatch and capped extra route searches.
+- In the controlled tests, the candidate cut median delivery time for 12 Ore from 55.4 to 35.0 game seconds in heavy traffic and from 81.4 to 39.7 in an avoidable ferry crossing. Clear-road delivery tied at 27.0 seconds. A burst of 24 assignments took a median 9.16 ms with the cap, 40.46 ms with the uncapped estimator, and 3.29 ms with the current dispatcher.
+- The estimator runs in the benchmark harness. A crowded-colony playtest with mixed vehicles is pending before deciding whether to use it in the game.
+
+[Benchmark commit](https://github.com/tadellsworth/RoboticPlanet/commit/bf94cab826420b8490958c9c81e694a88943007e) · [Report](../tools/benchmarks/haul-eta.md) · [Trial records](../tools/benchmarks/haul-eta-results.csv)
+
+### Command radio and military movement
+
+- Disabled the generated Command radio voice and translated captions in-game. The toggle can restore both later. Checked that the opening and recurring transmission triggers stay silent. [Radio commit](https://github.com/tadellsworth/RoboticPlanet/commit/51716c405911be8772cf94cba0901a76830ebed3)
+- Warbots and Torches favor immediate, shootable threats, keep their facing when blocked, and try short reachable moves under an active Bulwark shield when they can stay in firing range. Torches only spend Fuel on targets they can hit. Automatic repairs respect active combat and explicit marches. Reload trips preserve their destination and follow-up orders.
+- [Nine automated combat scenarios](../tools/army-pathing-test.cjs) passed. Twelve-minute headless simulations completed on Standard and Grand Canyon. Grand Canyon's implementation and map tests are documented in the [separate map handoff](codex-grand-canyon-handoff.md).
+
+[Military movement commit](https://github.com/tadellsworth/RoboticPlanet/commit/9107b7421af9763dc3c91dd6fd0a7c6d98ed2b37)
+
+### General audit review
+
+- Reviewed the existing simulation, browser smoke, help, and save service checks. Found that the README's Saving section still says 20 seconds, while the game and the quick-start section use one-minute checkpoints.
+- Recommended auditing save and recovery first, then whether players can diagnose stalled work. Other candidates are first-session onboarding, phone and desktop controls, map and difficulty checks, late-game performance, and multiplayer reconnects. These are proposed audits.
