@@ -108,3 +108,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Direct ground orders now warn when armed Warbots have no route and report the reachable part of a split squad. **Why idle?** identifies isolated road carriers, avoids promising an unassigned delivery, and shows disconnection ahead of a delivery reservation. Verified both original cases and their reachable controls in Chromium.
 - A reloaded multiplayer client can receive the current snapshot while the match stays paused. Cancel preserves the player's seat for a later retry. Two browsers against the local relay verified the frozen tick, the queued order after resuming, and a successful retry with the original seat.
+
+### First 15 minutes audit
+
+- Completed **Touchdown** with touch controls and ran a Standard Colony through 15 game minutes with Active Murmur. Both openings got Fiber from field to base after fixing an unconnected placement.
+- Recorded where fresh players can miss the tutorial, where freeform landing and dusk could give a clearer next step, and where the touch briefing still shows keyboard-only directions. [First 15 minutes audit](first-15-minutes-audit.md)
