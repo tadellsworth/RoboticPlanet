@@ -2294,7 +2294,9 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 
 - **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): deer and foxes in Greenreach and Emberwood, wildebeest and hares on the Long
   Grass, alligators and turtles in Blackwater, hares and arctic foxes in the Polar Caps, lizards and hares in the Rust,
-  lizards and ash beetles in Cinderlands, and lizards and turtles in Steamwells and on the Shoals. Shorebirds,
+  lizards and ash beetles in Cinderlands, lizards and turtles on the Shoals, and bison herds (`bison`, the wildebeest build with a dark shaggy hump), lizards and
+  turtles in Steamwells. Gulls cry over both (`gullCry` in js/audio.js), mud pots pop in Steamwells, and a geyser going
+  off in view is heard (`geyserSound`, from `drawSpringSteam` in js/ambient.js: render-only, at most one every 1.5 s). Shorebirds,
   songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
   sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces

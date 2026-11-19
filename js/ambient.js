@@ -920,6 +920,8 @@ function drawAmbientSky(ctx, ox, oy, z) {
   drawBeacons(ctx, ox, oy, z);
 }
 
+const SPRING_PHASE = new Map(), SPRING_HEARD = { at: -99 }; // (render-only: each vent's last phase, for the eruption sound)
+
 /** Local steam and intermittent jets. Vent positions are the same as the baked mineral deposits. */
 function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
   if (z < 11 || (LESS_MOTION && LESS_MOTION.matches)) return;
@@ -935,6 +937,12 @@ function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
       const hx = hash2(i, j, 911), hy = hash2(j, i, 912);
       const x = ox + (i + 0.5 + (hx - 0.5) * 0.1) * z, y = oy + (j + 0.5 + (hy - 0.5) * 0.1) * z;
       const period = 10 + 8 * hx, phase = (now + hy * period) % period;
+      // A geyser going off in view is heard (at most one every 1.5 s, louder zoomed in).
+      if (kind === 4) {
+        const last = SPRING_PHASE.get(t);
+        SPRING_PHASE.set(t, phase);
+        if (last !== undefined && phase < last && now - SPRING_HEARD.at > 1.5 && typeof geyserSound === 'function') { SPRING_HEARD.at = now; geyserSound(z / 40); }
+      }
       const surge = kind === 4 ? ambStep(phase, 0, 0.4) * (1 - ambStep(phase, 1.2, 1.7)) : 0;
       if (surge > 0.02) drawGeyserJet(ctx, x, y, z, surge, now);
       for (let k = 0; k < count; k++) {

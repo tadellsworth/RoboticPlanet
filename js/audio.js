@@ -1476,7 +1476,7 @@ function groundMurmur(v) {
  * the owner turned them down to in Nov 2026, about 5 dB under where they were with the effects.
  */
 const NATURE_LEVEL = 0.9;
-const BIOME_CALLS = { tropical: 1, jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
+const BIOME_CALLS = { springs: 1, tropical: 1, jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
 
 /**
  * Something heard somewhere out in the biome (w: how wild the view is, night: 0 to 1): birds by day and a night
@@ -1485,6 +1485,26 @@ const BIOME_CALLS = { tropical: 1, jungle: 1, autumn: 1, savanna: 1, swamp: 1, a
  * the ashlands, sand skittering and the wind whistling through the rocks in the desert (rock ticking as it cools at
  * night), ice cracking and groaning and snow sliding at the poles.
  */
+/** A seagull's cry: a few falling "kee-ow" calls, a little raspy. */
+function gullCry(g) {
+  const f = 1500 + Math.random() * 500, n = 1 + Math.floor(Math.random() * 3);
+  for (let k = 0; k < n; k++) {
+    const d = k * (0.32 + Math.random() * 0.1), p = f * (1 - k * 0.04);
+    _tone(p, 0.26, 'sawtooth', 0.007, p * 0.55, d, g);
+    _tone(p * 1.01, 0.26, 'triangle', 0.012, p * 0.6, d, g);
+  }
+}
+
+/** A geyser going off on screen (js/ambient.js drawSpringSteam): a rumble, a rushing whoosh, then a hissing fall. */
+function geyserSound(vol) {
+  if (!natureReady()) return;
+  const g = aroundVoice(0.6, Math.max(0.2, Math.min(1, vol || 1)), AUDIO.natureBus);
+  _tone(55, 0.9, 'sine', 0.03, 38, 0, g);
+  _noise(0.5, 0.012, { type: 'lowpass', freq: 220, attack: 0.25, dest: g });
+  _noise(1.6, 0.04, { type: 'bandpass', freq: 500, to: 2600, q: 0.7, attack: 0.18, delay: 0.3, dest: g });
+  _noise(2.4, 0.02, { type: 'highpass', freq: 3000, attack: 0.4, delay: 1.2, dest: g });
+}
+
 function biomeCall(b, w, night) {
   if (!natureReady()) return;
   w = w === undefined ? 1 : w;
@@ -1494,6 +1514,11 @@ function biomeCall(b, w, night) {
   if (b === 'jungle' || b === 'autumn') {
     if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird
     else jungleCall(g, dark);
+  } else if ((b === 'tropical' || b === 'springs') && !dark && r < (b === 'tropical' ? 0.55 : 0.35)) {
+    gullCry(g);
+  } else if (b === 'springs') {
+    // Mud pots popping, or a hot pool bubbling.
+    for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) _tone(120 + Math.random() * 80, 0.08, 'sine', 0.018, 70, k * (0.1 + Math.random() * 0.18), g);
   } else if (b === 'tropical' && !dark) {
     const f = 960 + r * 420;
     for (let k = 0; k < 3; k++) {

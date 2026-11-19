@@ -56,6 +56,8 @@ const FAUNA_KINDS = {
   songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
   snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', alt: 'open', min: 1, p: 0.55, n: [6, 10], z: 22, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
   deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 12, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
+  // Bison (Steamwells): a small herd grazing the warm grassland between the springs.
+  bison: { mode: 'herd', draw: 'bison', act: 'day', hab: 'open', min: 20, p: 0.6, n: [3, 6], z: 10, size: 0.7, speed: 0.2, run: 2.2, col: ['#5a3a24', '#8a6440', '#20140c'], spread: 1.4 },
   herd: { mode: 'herd', draw: 'antelope', act: 'day', hab: 'open', min: 26, p: 0.5, n: [5, 10], z: 9, size: 0.46, speed: 0.26, run: 2.9, col: ['#4c4038', '#8c7c6a', '#1c1814'], spread: 1.6 },
   fox: { mode: 'herd', draw: 'fox', act: 'day', hab: 'open', min: 10, p: 0.45, n: [1, 1], z: 14, size: 0.38, speed: 0.6, run: 2.5, col: ['#c0602c', '#f2e6d6', '#2a1a10'], roam: true },
   hare: { mode: 'herd', draw: 'hare', act: 'day', hab: 'open', min: 12, p: 0.55, n: [1, 3], z: 16, size: 0.28, speed: 0.45, run: 3.2, col: ['#f4eee2', '#ffffff', '#3a3632'], hop: true, spread: 2.4, roam: true },
@@ -91,7 +93,7 @@ const FAUNA_LIFE = {
   polar: { kinds: ['hare', 'snowbird', 'snowyowl', 'arcticfox'], light: 'moth', carrion: 'raven', trees: [3], perch: [1, 3, 5] },
   desert: { kinds: ['lizard', 'hare', 'hawk', 'duskbat'], light: 'moth', carrion: 'vulture', trees: [] },
   volcanic: { kinds: ['beetle', 'lizard', 'crow1', 'hawk', 'embermoth'], light: 'embermoth', carrion: 'crow', trees: [], dead: [1] },
-  springs: { kinds: ['lizard', 'turtle', 'gull'], trees: [] },
+  springs: { kinds: ['bison', 'lizard', 'turtle', 'gull'], trees: [] },
   tropical: { kinds: ['lizard', 'turtle', 'gull', 'songbird'], light: 'moth', trees: [1, 2, 3] },
   alien: { kinds: ['hinge', 'switchtail', 'sailwing'], trees: [] },
   hollow: { kinds: ['crawler', 'hinge', 'sailwing'], glows: ['glowworm'], trees: [] },
@@ -1405,6 +1407,16 @@ const FAUNA_DRAW = {
   /** Four-footed animals, seen from the side (as the game's three-quarter view shows them): a deer, an antelope, a fox, a hare. */
   deer(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, false); },
   antelope(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, true); },
+  // A bison: the wildebeest's build with a heavy, shaggy shoulder hump and a low, dark head.
+  bison(ctx, x, y, s, m, a) {
+    FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, true);
+    const shade = a.K.col[2], coat = a.K.col[0];
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, 0.14, -0.33, 0.21, 0.17, -0.1); ctx.fill(); // the dark, shaggy forequarters
+    ctx.beginPath(); faunaEll(ctx, 0.08, -0.43, 0.15, 0.1, -0.35); ctx.fill(); // the hump over the shoulders
+    ctx.fillStyle = faunaCol(coat, 0, 0.6); ctx.beginPath(); faunaEll(ctx, 0.05, -0.47, 0.08, 0.04, -0.35); ctx.fill(); // (light on its crest)
+    ctx.restore();
+  },
   fox(ctx, x, y, s, m, a, air) { FAUNA_DRAW.beast(ctx, x, y, s, m, a, 'fox'); },
   hare(ctx, x, y, s, m, a, air) { FAUNA_DRAW.hare(ctx, x, y, s, m, a); },
   /**
