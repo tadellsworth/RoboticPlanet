@@ -194,6 +194,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
+- **Interrupted deliveries.** Dispatch considers alternate suppliers and checks the carrier's network against both
+  endpoints. Trains and ships pick up on a platform or dock that reaches the delivery point. The dispatcher reserves
+  stock once the pickup route is found, and the carrier checks the delivery route before loading. A blocked route
+  releases the incoming reservation and lets the carrier take its existing load to reachable storage or wait for an
+  opening. Freight Trains check for removed track and use a detour if one is available. Workers, Haulers, trucks and
+  ships use reachable charging or fuel stops when deciding whether to wait for a top-up.
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road (the Goal card's red line counts only those with no road planned to them either:

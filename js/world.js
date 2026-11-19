@@ -4427,7 +4427,7 @@ function roadReach(owner) {
 /* ------------------------------------------------------------------ removal */
 
 /** Release any reservations a bot's current task holds, then clear the task. */
-function cancelTask(bot) {
+function cancelTask(bot, keepLoad = false) {
   const t = bot.task;
   if (!t) return;
   switch (t.type) {
@@ -4436,7 +4436,7 @@ function cancelTask(bot) {
       if (t.phase === 'toSrc' && src) bump(src.res, t.good, -(t.n || 1));
       if (dst) bump(dst.inc, t.good, -(t.n || 1));
       if (t.mix) for (const k in t.mix) { if (t.phase === 'toSrc' && src) bump(src.res, k, -t.mix[k]); if (dst) bump(dst.inc, k, -t.mix[k]); }
-      dropCarried(bot); // called off with a load on board: it's put down in crates, not lost
+      if (!keepLoad) dropCarried(bot); // interruption by danger still puts its load down in crates
       break;
     }
     case 'arty': { // a supply run for a Howitzer: release the Ammo it reserved, put down what it carries
@@ -4450,7 +4450,7 @@ function cancelTask(bot) {
       if (l) unclaimCrate(l, t.good, t.n);
       const dst = t.phase === 'toDst' && getE(t.dst);
       if (dst) bump(dst.inc, t.good, -t.n);
-      dropCarried(bot);
+      if (!keepLoad) dropCarried(bot);
       break;
     }
     case 'build': {
@@ -4500,7 +4500,7 @@ function cancelTask(bot) {
 
 function taskRefs(task, id) {
   if (!task) return false;
-  return task.src === id || task.dst === id || task.site === id || task.bld === id || task.target === id || task.home === id;
+  return (task.src === id && (task.type !== 'haul' || task.phase === 'toSrc')) || task.dst === id || task.site === id || task.bld === id || task.target === id || task.home === id;
 }
 
 function killBot(bot, quiet) {
@@ -4567,7 +4567,7 @@ function releaseBotsFrom(b, killInside) {
   for (const u of S.bots) {
     if (u.dead) continue;
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
-    if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
+    if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u, u.task?.dst === b.id);
     if (u.inside === b.id) {
       // Aboard a Ferry or a plane that took it on here ("inside" only keeps it out of sight and out of reach):
       // it isn't in the building, wherever its ride is by now. It stays aboard, and stays hidden.
@@ -4599,11 +4599,11 @@ function offDeck(a, c) {
     u.x = near.x + 0.5; u.y = near.y + 0.5; u.deck = null;
     if (u.path) {
       u.path = null; u.pi = 0;
-      // A civilian bot drops its order with the route (its load is put down in crates), like one whose next
+      // A civilian bot releases its delivery reservation but keeps any load, like one whose next
       // step jumps a gap that's gone (see moveAlong): left with the order and no route, it counted as arrived,
       // and delivered across the canyon. Warbots, Howitzers, Crawlers and creatures plan their way again (travel).
       const bt = BOTS[u.type];
-      if (u.task && !bt.army && !bt.siege && !bt.wild && !bt.crawler) cancelTask(u);
+      if (u.task && !bt.army && !bt.siege && !bt.wild && !bt.crawler) cancelTask(u, true);
     }
     u.vel = 0;
   }
@@ -5215,7 +5215,7 @@ function setRail(t, on, owner) {
  * it is (afloat, or tied up at a Port: from its docks) to a dock of the building at (x, y), the water beside
  * shore tile (x, y), or water tile (x, y). Null if there is none. A ship tied up starts out at its dock.
  */
-function seaRoute(u, x, y) {
+function seaRoute(u, x, y, arrivalComps) {
   const W = S.W, H = S.H, N = W * H, comp = seaNet().comp;
   let starts = [];
   if (u.inside) { const b = getE(u.inside); if (b) starts = portDocks(b.x, b.y); }
@@ -5226,7 +5226,7 @@ function seaRoute(u, x, y) {
   if (S.bAt[g]) goals = portDocks(x, y);
   else if (S.terrain[g] === T_WATER) goals = [g];
   else goals = portDocks(x, y);
-  goals = goals.filter((t) => starts.some((s) => comp[s] === comp[t]));
+  goals = goals.filter((t) => (!arrivalComps || arrivalComps.includes(comp[t])) && starts.some((s) => comp[s] === comp[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), gx = x, gy = y;
   // (Costs in doubles: kept as floats, a cost that rounded up looked "beaten" by itself again and again,
@@ -5263,13 +5263,14 @@ function seaRoute(u, x, y) {
  * A train's route along the track from where it is (on the track, or inside a station: from its
  * platforms) to the platform of the building at (x, y) (or to track tile (x, y)). Null if there is none.
  */
-function railRoute(u, x, y) {
+function railRoute(u, x, y, arrivalComps) {
   const W = S.W, N = W * S.H, net = railNet().comp;
   let starts = [];
   if (u.inside) { const b = getE(u.inside); if (b) starts = railPlatforms(b.x, b.y); }
   else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.rail[t]) starts = [t]; }
   if (!starts.length) return null;
-  const g = tIdx(x, y), goals = S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [];
+  const g = tIdx(x, y), goals = (S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [])
+    .filter((t) => !arrivalComps || arrivalComps.includes(net[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), from = new Int32Array(N).fill(-2), q = [];
   for (const s of starts) { from[s] = -1; q.push(s); }
