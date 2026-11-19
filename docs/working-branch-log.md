@@ -113,3 +113,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Completed **Touchdown** with touch controls and ran a Standard Colony through 15 game minutes with Active Murmur. Both openings got Fiber from field to base after fixing an unconnected placement.
 - Recorded where fresh players can miss the tutorial, where freeform landing and dusk could give a clearer next step, and where the touch briefing still shows keyboard-only directions. [First 15 minutes audit](first-15-minutes-audit.md)
+
+### Phone and desktop controls audit
+
+- Checked mouse, keyboard, and emulated touch drawing, zooming, selection, and undo at five viewport sizes. Reproduced warning replacement on phones in landscape and a first tap that opens a rally flag where it overlaps a Warbot. [Controls audit](controls-audit.md)
