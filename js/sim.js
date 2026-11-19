@@ -569,12 +569,16 @@ function keepOf(b) {
 /** The buildings of b's owner on the 8 tiles round b. */
 function touching(b) {
   const out = [];
-  for (const [di, dj] of FEED_NB) {
-    const i = b.x + di, j = b.y + dj;
-    if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
-    const c = getE(S.bAt[tIdx(i, j)]);
-    if (c && c !== b && !c.dead && c.owner === b.owner) out.push(c);
-  }
+  const at = (x, y) => {
+    for (const [di, dj] of FEED_NB) {
+      const i = x + di, j = y + dj;
+      if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
+      const c = getE(S.bAt[tIdx(i, j)]);
+      if (c && c !== b && !c.dead && c.owner === b.owner && !out.includes(c)) out.push(c);
+    }
+  };
+  at(b.x, b.y);
+  if (BDEFS[b.type] && BDEFS[b.type].long) at(...longTile(b.x, b.y, b.mdAxis)); // (round both tiles of a Mass Driver)
   return out;
 }
 
@@ -8890,7 +8894,7 @@ function undoSite(b) {
 
 /** Settings a building keeps when it moves. */
 const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply', 'yard', 'yardParts',
-  'partsBy', 'yardT', 'reload', 'armed']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
+  'partsBy', 'yardT', 'reload', 'armed', 'mdTo', 'mdSend', 'mdSent']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -8907,10 +8911,10 @@ function movable(b) {
  * that workers put together in its usual build time. b keeps working meanwhile; when the new one is
  * finished it takes over b's goods, settings and warbots, and b is taken down (see finishMove).
  */
-function startMove(owner, b, i, j) {
+function startMove(owner, b, i, j, axis) {
   if (!b || b.owner !== owner || !movable(b)) return { ok: false, reason: 'This building can\'t be moved.' };
-  if (b.x === i && b.y === j) return { ok: false, reason: 'That\'s where it is now.' };
-  const res = placeSite(owner, b.type, i, j, {});
+  if (b.x === i && b.y === j && (!BDEFS[b.type].long || (axis || b.mdAxis) === b.mdAxis)) return { ok: false, reason: 'That\'s where it is now.' };
+  const res = placeSite(owner, b.type, i, j, {}, false, axis || b.mdAxis);
   if (!res.ok) return res;
   res.building.moveFrom = b.id;
   b.moving = res.building.id;
@@ -8960,6 +8964,7 @@ function finishMove(nb) {
     if (far && !far.dead && far.ferryTo === old.id && setFerryLine(nb, far)) far.ferryTo = 0;
     old.ferryTo = 0;
   }
+  if (BDEFS[nb.type].catcher) for (const d of S.buildings) if (!d.dead && d.owner === nb.owner && d.mdTo === old.id) d.mdTo = nb.id; // (the Drivers aimed at it follow it)
   old.gone = 1; // (moved, not lost: see noteGone)
   destroyBuilding(old, false, true);
   addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
@@ -15815,7 +15820,7 @@ function hashState() {
     if (b.magMissing) { int(b.id); int(b.magMissing.x); int(b.magMissing.y); num(b.magMissing.near); }
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
-    if (b.mdTo || b.mdSend) { int(b.id); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
+    if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
   }
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
   return h >>> 0;
@@ -15984,10 +15989,10 @@ function mdLaunch(b, C) {
     for (const g in b.mdSend || {}) if (n < M.load && Math.floor(b.stock[g] || 0) >= 1) { goods[g] = (goods[g] || 0) + 1; n++; bump(b.stock, g, -1); more = true; }
   }
   if (!n) return;
-  const d = dist(b.x, b.y, C.x, C.y), k = clamp((d - M.min) / (M.max - M.min), 0, 1);
+  const d = dist(b.x, b.y, C.x, C.y), k = clamp((d - M.min) / (M.max - M.min), 0, 1), o = bCentre(b);
   S.cans = S.cans || [];
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
-    x0: b.x + 0.5, y0: b.y + 0.5, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
+    x0: o.x, y0: o.y, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
   b.mdCd = M.reload - M.charge; // (a shot every `reload` s, its coils' charge included)
   b.mdLast = S.time;
   b.mdShot = S.time; // (the muzzle flash and the guidance beam: see drawMassDrivers)

@@ -353,6 +353,31 @@ function pad() {
   for (const [x, z] of [[-4.55, -4.55], [4.55, -4.55], [-4.55, 4.55], [4.55, 4.55]]) { box(0.9, 0.05, 0.9, st, x, 0, z, { dirt: 0, cast: false }); for (const [a, b] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) cyl(0.05, 0.05, M.chrome, x + a, 0.05, z + b, { seg: 10, dirt: 0, cast: false }); }
   root.children.slice(padStart).forEach(o => (o.userData.pad = true));
 }
+// The usual pad stretched over w x d world units (a building more than a tile: the Mass Driver's 2 x 1), the same
+// concrete, hazard border, steel edging and corner plates; for a scene that inits with { pad: false }.
+export function longPad(w, d) {
+  const n = 1024, cw = Math.round(n * w / 10), ch = Math.round(n * d / 10), c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d');
+  g.fillStyle = '#857e73'; g.fillRect(0, 0, cw, ch);
+  const N = Math.max(cw, ch);
+  blotches(g, N, 260 * w * d / 100, 10, 120, 0.07); blotches(g, N, 90 * w * d / 100, 10, 80, 0.06, '255,250,240'); speckle(g, N, 40000 * w * d / 100, 0.2);
+  g.strokeStyle = 'rgba(45,38,30,0.6)'; g.lineWidth = 3;
+  for (let x = n / 3; x < cw - 60; x += n / 3) line(g, x, 60, x, ch - 60);
+  for (let y = n / 3; y < ch - 60; y += n / 3) line(g, 60, y, cw - 60, y);
+  const bw = 34, inset = 22;
+  hazardStripes(g, inset, inset, cw - 2 * inset, bw); hazardStripes(g, inset, ch - inset - bw, cw - 2 * inset, bw);
+  g.save(); g.translate(cw, 0); g.rotate(Math.PI / 2); hazardStripes(g, inset, inset, ch - 2 * inset, bw); hazardStripes(g, inset, cw - inset - bw, ch - 2 * inset, bw); g.restore();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const conc = M.concrete, topMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9, metalness: 0, vertexColors: true }); topMat.envMapIntensity = 0.35;
+  const geo = new THREE.BoxGeometry(w, 0.6, d, 1, 3, 1); geo.translate(0, -0.3, 0);
+  scaleUV(geo, { 0: [d, 0.6], 1: [d, 0.6], 2: [T, T], 3: [w, d], 4: [w, 0.6], 5: [w, 0.6] }, true); colorize(geo, { dirt: 0.6, dirtH: 0.6 });
+  const m = new THREE.Mesh(geo, [conc, conc, topMat, conc, conc, conc]); m.receiveShadow = true; m.castShadow = false; root.add(m);
+  const start = root.children.length - 1, st = M.paint('#3f4449', { rivets: false }), hw = w / 2, hd = d / 2;
+  box(w + 0.08, 0.16, 0.12, st, 0, -0.12, hd - 0.02, { dirt: 0, cast: false }); box(w + 0.08, 0.16, 0.12, st, 0, -0.12, -hd + 0.02, { dirt: 0, cast: false });
+  box(0.12, 0.16, d + 0.08, st, hw - 0.02, -0.12, 0, { dirt: 0, cast: false }); box(0.12, 0.16, d + 0.08, st, -hw + 0.02, -0.12, 0, { dirt: 0, cast: false });
+  for (const [x, z] of [[-hw + 0.45, -hd + 0.45], [hw - 0.45, -hd + 0.45], [-hw + 0.45, hd - 0.45], [hw - 0.45, hd - 0.45]]) { box(0.9, 0.05, 0.9, st, x, 0, z, { dirt: 0, cast: false }); for (const [a, b] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) cyl(0.05, 0.05, M.chrome, x + a, 0.05, z + b, { seg: 10, dirt: 0, cast: false }); }
+  root.children.slice(start).forEach(o => (o.userData.pad = true));
+}
 export function hidePad() { root.children.forEach(o => { if (o.userData.pad) o.visible = false; }); }
 
 // ---------- camera framing + render passes ----------

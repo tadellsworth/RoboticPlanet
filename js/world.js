@@ -3078,9 +3078,30 @@ function addBuilding(owner, type, x, y, built) {
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
+  if (def.long) { b.mdAxis = 'ew'; longClaim(b); } // (a Mass Driver: two tiles, see longTile)
   if (type === 'outpost' || type === 'keep' || type === 'gate' || type === 'ropeway' || type === 'viaduct') outpostRoads(x, y); // roads run through it
   return b;
 }
+
+/**
+ * A two-tile building (def.long: the Mass Driver) stands on its own tile (b.x, b.y) and the tile east of it (b.mdAxis
+ * 'ew') or south of it ('ns'): longTile gives that second tile. S.bAt holds the building on both, so the second tile
+ * blocks the way, can't be built on, and a tap on it picks the building; everything else (its door, its conveyors'
+ * reach, its land) works from its own tile, with touching() looking round both.
+ */
+function longTile(x, y, axis) { return axis === 'ns' ? [x, y + 1] : [x + 1, y]; }
+function longClaim(b) {
+  const [i, j] = longTile(b.x, b.y, b.mdAxis);
+  if (inMap(i, j) && !S.bAt[tIdx(i, j)]) { S.bAt[tIdx(i, j)] = b.id; clearDecor(tIdx(i, j)); }
+}
+function longRelease(b) {
+  const [i, j] = longTile(b.x, b.y, b.mdAxis);
+  if (inMap(i, j) && S.bAt[tIdx(i, j)] === b.id) S.bAt[tIdx(i, j)] = 0;
+}
+/** Lay two-tile building b along `axis` ('ew' or 'ns'). */
+function setLongAxis(b, axis) { longRelease(b); b.mdAxis = axis === 'ns' ? 'ns' : 'ew'; longClaim(b); }
+/** The middle of building b's footprint (a two-tile one's between its tiles). */
+function bCentre(b) { const L = BDEFS[b.type] && BDEFS[b.type].long, ns = b.mdAxis === 'ns'; return { x: b.x + 0.5 + (L && !ns ? 0.5 : 0), y: b.y + 0.5 + (L && ns ? 0.5 : 0) }; }
 
 function addBot(owner, type, x, y) {
   const maxHp = BOTS[type].hp;
@@ -3439,9 +3460,19 @@ function runwayEnds(b) {
   return { x0: b.x + 0.5 + r.dx * 1.45, y0: b.y + 0.5 + r.dy * 1.45, x1: b.x + 0.5 + r.dx * RUNWAY_LEN, y1: b.y + 0.5 + r.dy * RUNWAY_LEN, dx: r.dx, dy: r.dy };
 }
 
-function canPlace(owner, type, i, j, skipBlockCheck) {
+function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   const def = BDEFS[type];
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
+  // A two-tile building (the Mass Driver): both its tiles must do, on one level. (axis '_': one tile's own checks.)
+  if (def.long && axis !== '_') {
+    const r = canPlace(owner, type, i, j, skipBlockCheck, '_');
+    if (!r.ok) return r;
+    const [i2, j2] = longTile(i, j, axis);
+    const r2 = canPlace(owner, type, i2, j2, skipBlockCheck, '_');
+    if (!r2.ok) return { ok: false, reason: `It is two tiles long, and its other end won't go there: ${r2.reason}` };
+    if (S.elev[tIdx(i, j)] !== S.elev[tIdx(i2, j2)]) return { ok: false, reason: 'It is two tiles long and needs level ground under both.' };
+    return r;
+  }
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
   const t = tIdx(i, j);
   if (postAt(t)) return { ok: false, reason: 'A neutral Trade Post stands here: dock a Trade Terminal beside it.' };
@@ -3605,8 +3636,8 @@ function missingGoods(owner, cost) {
   return Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]).map((g) => GOOD[g].name).join(' or ') || 'materials';
 }
 
-function placeSite(owner, type, i, j, cost, fromStore) {
-  const chk = canPlace(owner, type, i, j);
+function placeSite(owner, type, i, j, cost, fromStore, axis) {
+  const chk = canPlace(owner, type, i, j, false, axis);
   if (!chk.ok) return chk;
   const def = BDEFS[type];
   if (!def.prepaid && !def.ramp && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
@@ -3617,7 +3648,9 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   const held = type === 'gate' && S.road[t] > 0 && roadOwnedBy(owner, t);
   if (S.plan[t]) cancelPlan(t);
   if (S.road[t]) removeRoad(owner, i, j, held);
+  if (def.long) { const [i2, j2] = longTile(i, j, axis), t2 = tIdx(i2, j2); if (S.plan[t2]) cancelPlan(t2); if (S.road[t2]) removeRoad(owner, i2, j2, false); markDirty(i2, j2); }
   const b = addBuilding(owner, type, i, j, false);
+  if (def.long) setLongAxis(b, axis);
   if (held) b.road = true;
   if (chk.rwy) { b.rwy = chk.rwy; _rwy.S = null; } // an Airfield's runway is kept clear from now on (see runwayMap)
   // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
@@ -4759,6 +4792,7 @@ function destroyBuilding(b, burn, quiet) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
+  if (BDEFS[b.type].long) { longRelease(b); const [i2, j2] = longTile(b.x, b.y, b.mdAxis); if (inMap(i2, j2)) markDirty(i2, j2); }
   if (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway' || b.type === 'viaduct') outpostRoads(b.x, b.y);
   // A Ropeway is two stations, a Viaduct two abutments: one going takes the other with it.
   if ((b.type === 'ropeway' || b.type === 'viaduct') && b.link) {
@@ -5042,6 +5076,7 @@ function checkSave(o) {
       !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
     // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves
     if (b.mdTo != null && !(Number.isSafeInteger(b.mdTo) && b.mdTo >= 0)) bad();
+    if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();
     if (b.mdSend != null && !(obj(b.mdSend) && Object.keys(b.mdSend).length <= MASSDRIVER.goods && Object.keys(b.mdSend).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdSend[g])))) bad();
     for (const k of ['mdFire', 'mdCd', 'mdLast', 'mdShot', 'mdSent', 'mdGot', 'mdCaught']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
@@ -5185,6 +5220,7 @@ function deserializeGame(json) {
     for (const b of S.buildings) {
       S.byId.set(b.id, b);
       S.bAt[tIdx(b.x, b.y)] = b.id;
+      if (BDEFS[b.type].long) { b.mdAxis = b.mdAxis === 'ns' ? 'ns' : 'ew'; const [i2, j2] = longTile(b.x, b.y, b.mdAxis); if (inMap(i2, j2)) S.bAt[tIdx(i2, j2)] = b.id; } // (a save from before the Mass Driver's two tiles: laid east)
       if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
     }
     for (const u of S.bots) {

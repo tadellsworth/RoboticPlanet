@@ -1164,8 +1164,8 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp: it throws sealed canisters of 12 goods in an arc over everything, one every 10 seconds, to a Catcher 12 to 30 tiles away. On its panel, Aim at a Catcher, then tap one; then pick up to 3 goods to send. Haulers bring it what your colony holds of them beyond the reserve you set (20 to start), and buildings touching it hand it their output by conveyor. It burns no Fuel, but it fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight, and a canister with no Catcher to land in still lands: either way its goods fall as crates.',
-    cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, armor: 16, buildTime: 18,
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher): it throws sealed canisters of 12 goods in an arc over everything, one every 10 seconds, to a Catcher 12 to 30 tiles away. On its panel, Aim at a Catcher, then tap one; then pick up to 3 goods to send. Haulers bring it what your colony holds of them beyond the reserve you set (20 to start), and buildings touching it hand it their output by conveyor. It burns no Fuel, but it fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight, and a canister with no Catcher to land in still lands: either way its goods fall as crates.',
+    cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
     name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. What lands here is shared out like any Depot\'s stock: Haulers take it where it is needed, and buildings touching it are fed by conveyor. Aim a Mass Driver at it from the Driver\'s panel, 12 to 30 tiles away; one Catcher can take several Drivers.',

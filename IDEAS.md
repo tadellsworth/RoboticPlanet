@@ -301,9 +301,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
     the air, from a goods list of up to 3 goods (each with a reserve the colony keeps at home); enemy Flak bursts
     canisters (crates where they fall), a canister with no Catcher lands as crates; none in the Hollow; the mission The
-    Schedule teaches it. Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each
-    end works today); whether Flak is too sure a counter (in the test a Flak Gun right under the arc burst every
-    canister that crossed its reach: a line has to go round rival Flak); a Catcher full of goods nobody fetches (no cap today).
+    Schedule teaches it. Decided after (the owner, Nov 19 2026): Flak as a hard counter is fine (a Flak Gun right under
+    the arc bursts every canister that crosses its reach, so a line has to go round rival Flak); two tiles ("a 2x1
+    footprint would be cooler"), laid east-west or north-south as it's placed, firing off the end facing its Catcher.
+    Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each end works today);
+    a Catcher full of goods nobody fetches (no cap today).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no

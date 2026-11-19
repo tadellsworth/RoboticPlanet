@@ -565,20 +565,21 @@ python3 preview/maglev_sheet.py out/maglev out/preview/maglev <sheet folder>    
 ## The Mass Driver and Catcher
 
 The owner's look A, "Coil Ramp" (Nov 2026; IDEAS.md, "High-speed transit"), in `b/massdriver.js`. `c=driver` (the
-default) is the Mass Driver: a concrete ramp with buttresses carrying a coil-gun rail of seven copper coil rings on steel
+default) is the Mass Driver, two tiles long on a 2 x 1 pad (`longPad` in `lib.js`, framed wide with
+`frameCompoundOpts`: the pad's 20 units across 0.85 of the frame): a concrete ramp with buttresses carrying a coil-gun rail of eleven copper coil rings on steel
 yokes up to a flared muzzle, a breech house with a hopper at its foot, capacitor banks along its flanks cabled up to the
-yokes, a rack of sealed canisters; `dir=e|se|s|sw|w|nw|n|ne` turns it (the game shows the way nearest its Catcher). Marks
-`breech`, `muzzle` and `c0`..`c6` (the coils' centres) let the game light the coils in sequence and send the canister
+yokes, a rack of sealed canisters; `dir=e|w|n|s` turns it (e/w lying east-west, n/s north-south; the game shows the end facing its
+Catcher). Marks `breech`, `muzzle` and `c0`..`c10` (the coils' centres) let the game light the coils in sequence and send the canister
 off the muzzle. `c=catcher` is the Catcher: a wide steel funnel cradle on an octagonal plinth, copper braking rings in
 its throat, four magnetic arms on legs, `arms=open` (swung up and out) or `arms=closed` (swung in, the magnet heads
 lit); mark `cradle`. The coils' inner bands and the magnet faces glow pale blue-white in the evening and night renders.
 Run from this folder:
 
 ```
-sh tools/render_massdriver.sh            # 8 ways x 2 teams + the Catcher open and closed, every time of day (~10 min)
-python3 tools/install_massdriver.py      # writes the WebP files into ../art, prints MD_ART for js/render.js
+sh tools/render_massdriver.sh [out] [driver]   # 4 ways x 2 teams + the Catcher open and closed, every time of day (~8 min)
+python3 tools/install_massdriver.py            # writes the WebP files into ../art, prints MD_FRAME and MD_ART
 ```
 
-Both compose like buildings (`compose.py`); the game draws them as `B3D` buildings (the Driver at scale 1.6, the
-Catcher at 1.4). The coil sequence, arcs, guidance beam, canisters and their streaks are drawn in code
+Both compose like buildings (`compose.py`); the game draws the Catcher as a `B3D` building (scale 1.4) and the
+Driver by `MD_FRAME` (art-manifest.js: the scale and anchor the install prints). The coil sequence, arcs, guidance beam, canisters and their streaks are drawn in code
 (`drawMassDrivers` in `js/render.js`), from the marks.

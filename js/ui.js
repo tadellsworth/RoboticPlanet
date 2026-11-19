@@ -2129,6 +2129,8 @@ function initKeyboard() {
     }
     // Placing a blueprint: R turns it.
     if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
+    // Placing a Mass Driver: R turns its two tiles (east-west or north-south).
+    if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].long && k === 'r') { e.preventDefault(); mdTurn(); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
@@ -4772,6 +4774,7 @@ function enterPlaceMode(type, moveFrom) {
   setMode('place', crossing);
   UI.placeType = type;
   UI.moveFrom = moveFrom || 0;
+  if (BDEFS[type] && BDEFS[type].long) { const f = moveFrom ? getE(moveFrom) : null; UI.mdAxis = (f && f.mdAxis) || UI.mdAxis || 'ew'; }
   document.body.classList.toggle('mode-road', crossing);
   $('btn-road').classList.toggle('on', crossing);
   refreshOverlay(type);
@@ -4781,12 +4784,31 @@ function enterPlaceMode(type, moveFrom) {
     : type === 'viaduct' ? `Tap a highlighted spot on a clifftop for the Viaduct's <b>near end</b>, where your roads are. Then tap the far end, across the valley. ${costInline(BDEFS.viaduct.cost, have)} a tile spanned, paid from storage as the goods come in.`
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
+  if (BDEFS[type] && BDEFS[type].long) mdTurnBanner();
   if (type === 'maglev' && !R.overlay.valid.some((v) => v)) { showBanner(`<span class="err">No Maglev Terminal to start a line from: build one first (Build → Move → <b>Maglev Terminal</b>, <kbd>G</kbd>; ${costText(BDEFS.magterm.cost)}), finished and on no line.</span>`, null, 'Close'); crossingTools(); return; }
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
     const how = DEFENCE_TYPES.has(type) ? `inside your border${near}. Defences only go on your own land: an Outpost or Keep extends it.` : `within ${BUILD_REACH} tiles of your buildings, roads or track${near}. Lay a road out toward where you want it.`;
     showBanner(`<span class="err">There is no valid spot for ${aOrAn(BDEFS[type].name)} ${how}</span>`, null, 'Close');
   }
+}
+
+/** Placing a Mass Driver: its two tiles lie east-west or north-south; the banner says which and offers Turn (R). */
+function mdTurnBanner() {
+  const t = $('banner-text');
+  if (!t || t.querySelector('#md-turn')) return;
+  t.insertAdjacentHTML('beforeend', ` <span class="md-turn">It is two tiles long, lying <b>${UI.mdAxis === 'ns' ? 'north-south' : 'east-west'}</b>: <button class="btn small" id="md-turn">Turn <kbd>R</kbd></button></span>`);
+  $('md-turn').onclick = (e) => { e.stopPropagation(); mdTurn(); };
+}
+
+/** Turn the Mass Driver being placed: east-west ↔ north-south (the spots where it fits, and the ghost, follow). */
+function mdTurn() {
+  UI.mdAxis = UI.mdAxis === 'ns' ? 'ew' : 'ns';
+  sfx('click');
+  refreshOverlay(UI.placeType);
+  if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long) R.ghost.ok = !!R.overlay.valid[tIdx(R.ghost.x, R.ghost.y)];
+  const s = document.querySelector('#banner-text .md-turn'); if (s) s.remove();
+  mdTurnBanner();
 }
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
@@ -4881,7 +4903,8 @@ function confirmBanner() {
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const from = UI.moveFrom ? getE(UI.moveFrom) : null;
-  act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y] : [type, x, y], (res) => {
+  const ax = BDEFS[type].long ? [UI.mdAxis || 'ew'] : []; // (a Mass Driver: which way its two tiles lie)
+  act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y, ...ax] : [type, x, y, ...ax], (res) => {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
     else noteSiteUndo(res.id);
@@ -5046,7 +5069,7 @@ function onMapTap(i, j, wx, wy) {
     if (type === 'viaduct') { viaductTap(i, j); return; }
     if (type === 'maglev') { maglevTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
-    const chk = canPlace(ME, type, i, j);
+    const chk = canPlace(ME, type, i, j, false, type === 'mdriver' ? UI.mdAxis : undefined);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
     if (chk.ok) {
       let extra = '';

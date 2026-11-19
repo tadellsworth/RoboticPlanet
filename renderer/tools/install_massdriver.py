@@ -2,8 +2,9 @@
 folder as WebP, from the composed renders tools/render_massdriver.sh makes. Run from renderer/:
     python3 tools/install_massdriver.py [<game>/art]
 
-  buildings/mdriver-<dir>@T.webp   the Mass Driver, its rail pointing <dir> (e se s sw w nw n ne: the game shows the one
-                                   nearest its Catcher), 512, B3D scale 1.6
+  buildings/mdriver-<dir>@T.webp   the Mass Driver, two tiles long, its rail pointing <dir> (e w: lying east-west; n s:
+                                   north-south; the game shows the end nearer its Catcher), 512, framed wide: the scale
+                                   and anchor it prints go in art/art-manifest.js (MD_FRAME)
   buildings/catcher@T.webp         the Catcher, its four magnetic arms swung up and out, 512, B3D scale 1.4
   buildings/catcher-closed@T.webp  the same, its arms swung in over the funnel as a canister lands
   tod/<time>/...                   the same, re-lit for morning, evening and night
@@ -19,7 +20,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, '..', 'art')
 OUT = os.path.join(ROOT, 'out', 'massdriver-game')
-DIRS = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne']
+DIRS = ['e', 'w', 'n', 's']
 written = []
 
 
@@ -38,9 +39,12 @@ for tod in ('day', 'morning', 'evening', 'night'):
 
 # The marks the game draws by (MD_ART in js/render.js).
 def rel(g, p, sc): return [round((p[0] - g['anchor'][0]) * sc, 3), round((p[1] - g['anchor'][1]) * sc, 3)]
+g = json.load(open(f'{OUT}/day/mdriver-e@0.geom.json'))
+SC = round(1 / (g['padTop'][2][0] - g['padTop'][3][0]), 4)   # the frame in tiles: one over a tile's front edge
+print('MD_FRAME', json.dumps({'scale': SC, 'anchor': [round(v, 4) for v in g['anchor']]}))
 for d in DIRS:
     g = json.load(open(f'{OUT}/day/mdriver-{d}@0.geom.json')); m = g['marks']
-    print(d, json.dumps({'b': rel(g, m['breech'], 1.6), 'm': rel(g, m['muzzle'], 1.6), 'c': [rel(g, m[f'c{k}'], 1.6) for k in range(7)]}))
+    print(d, json.dumps({'b': rel(g, m['breech'], SC), 'm': rel(g, m['muzzle'], SC), 'c': [rel(g, m[f'c{k}'], SC) for k in range(11)]}))
 g = json.load(open(f'{OUT}/day/catcher@0.geom.json'))
 print('cradle', rel(g, g['marks']['cradle'], 1.4))
 total = sum(n for _, n in written)
