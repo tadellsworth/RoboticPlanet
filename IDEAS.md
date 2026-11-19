@@ -131,12 +131,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     resort; the rival AI must learn to answer blobs (Mortar Pits, Torches) or it loses to them whatever is added. Fits
     the doctrines: Salvager with Skirmishers, Warden with Mortars and Lancers, Herald with Warbot masses, Architect with
     Howitzers and megastructures, Steward a mix.
-  - **The owner's plan (Nov 19 2026):** after war scars and shared co-op, before any megastructure, build the
-    **Skirmisher, Arc Caster and Rail Lancer** (the Rail Lancer may need another name: the warbot art is already "Lancer"),
+  - **The owner's plan (Nov 19 2026; order swapped the same day):** after war scars and shared co-op come the
+    **Lance of Corvane and the Shield Dome** first, then the **Skirmisher, Arc Caster and Rail Lancer** (the Rail Lancer may need another name: the warbot art is already "Lancer"),
     balanced in with the three ground units there now (Warbot, Bulwark, Torch). The owner's view: the Bulwark is too
     strong; two Bulwarks and a big blob of warbots win almost any game, which is too easy. So the pass includes
-    toning the Bulwark down and a measured blob arena test before and after. Then the megastructures, starting with the
-    **Lance of Corvane and the Shield Dome**.
+    toning the Bulwark down and a measured blob arena test before and after (with the Lance and the Dome in the game).
   - **Suggested order:** first wave Skirmisher, Howitzer (rebalanced), Arc Caster (they close the main loops); then Rail
     Lancer and Mine Layer; later Interceptor and Gunboat. Design sheets for the new units could go through Gemini, as the
     megastructures did (handoff/ in the repo).
