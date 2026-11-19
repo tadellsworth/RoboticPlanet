@@ -1,12 +1,12 @@
 # Terrafall Lore Bible: The Long Silence
 
-Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; timeline moved 100 years later by the owner, 2026-11-19; planet named Ithaca I; Earth destroyed by its own war; set in 2265). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
+Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; timeline moved 100 years later by the owner, 2026-11-19; planet named Ithaca I; Earth's fate left open; set in 2265). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
 
 ## The pitch
 
 Earth's great powers were tearing their world apart, so each sent robot vanguards to other star systems to find and prepare a new home. Four of those vanguards landed on Ithaca I.
 
-It is 2265. The colony ships were due 31 years ago and never came: the powers destroyed each other, and Earth with them. The robots suspect, but their orders have no end date. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
+It is 2265. The colony ships were due 31 years ago and never came, and nothing has been heard from home since. The robots have their guesses, but their orders have no end date. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
 
 Each match is one new landing, a *terrafall*: a reserve Command Base dropped from orbit into a contested region. The player is that base's command intelligence. You never see a human because none ever made it here.
 
@@ -19,7 +19,7 @@ Quiet sadness under a loud war. The robots never mourn or explain themselves; th
 - **Machines, not people.** Robots speak in logs, status lines and protocol. Feeling shows in what they do, never in what they say.
 - **Objects over speeches.** Show the silence with things: an Arrival clock counting up, lit welcome signs, empty passenger shelters, cargo lists for children's shoes.
 - **Dry, not jokey.** Humor comes from machines applying old rules to a world that moved on. No winks at the player.
-- **Imply Earth's fate, never state it.** The truth is settled (see The truth about Earth), but players should piece it together.
+- **Never state Earth's fate.** It is left open on purpose (see The question of Earth): players draw their own conclusions from the silence.
 - **The war is real.** "Build. Expand. Annihilate." stays a confident tagline. The sadness lives in the margins, not in the gameplay.
 - **Night carries the mood.** Empty roads lit for traffic that never comes.
 
@@ -34,7 +34,7 @@ The robots keep time by the Arrival clock. Zero was the day the colony ships wer
 | 2174 | T−60 | Before the wars, a joint survey ranks nearby habitable worlds in the Ithaca Catalog. First on the list: a coral world with a ring, circling the star Corvane. |
 | 2179 | T−55 | The Pathfinder, the last mission the great powers build together, launches for Ithaca I. |
 | 2184 | T−50 | War breaks out between the powers on Earth. |
-| 2189 | T−45 | With Earth failing, four warring Sponsors sign the Ithaca Accord, a truce for the stars only. Each launches vanguards to the top Catalog worlds, and all four send one to Ithaca I. |
+| 2189 | T−45 | With the war at home worsening, four warring Sponsors sign the Ithaca Accord, a truce for the stars only. Each launches vanguards to the top Catalog worlds, and all four send one to Ithaca I. |
 | 2194 | T−40 | The Pathfinder arrives, builds the Trade Posts and Uplinks, sows Earth life from its seed vaults, then goes dormant. |
 | 2199 | T−35 | The four vanguard Carriers reach orbit and land the first Command Bases. The Accord years begin: a race of roads, not guns. |
 | 2225 | T−9 | The Sponsors report the colony arks are "on schedule." The shipyards are already gone. |
@@ -297,7 +297,7 @@ Every system keeps working exactly as it does now; the lore only explains it.
 | Fiber, Cement, Alloy, Chips | The Accord's standard industrial chain, the same in every vanguard. |
 | Bot Foundry | Builds robots and vehicles from Alloy and Chips. The colonies were designed to grow themselves. |
 | Bio Farms, oil wells, refineries | Two fuel paths: VIRIDIAN's farm designs and the older drilling kit. |
-| Uranium and nuclear missiles | Enrichment was meant for the colonists' reactors. The contingency orders added the warheads, the same kind that ended Earth. |
+| Uranium and nuclear missiles | Enrichment was meant for the colonists' reactors. The contingency orders added the warheads, the same kind the Sponsors were aiming at each other back home. |
 | Workers, Agribots, Pavers | Construction and farming crews, built to get land ready for people. |
 | Freight Trucks, Road Trains, Freight Trains | Heavy freight stock from the Accord's later phases. |
 | Warbots | Colony security, meant to protect settlers. |
@@ -354,9 +354,9 @@ Short lines for tooltips, loading screens and event banners. Same voice througho
 - "Every road on Ithaca I is wide enough for a bus."
 - "The arks were due 31 years ago. The welcome signs are still lit."
 
-## The truth about Earth
+## The question of Earth
 
-Canon, never stated outright in the game: the Sponsors' war destroyed Earth around T−2. As far as the archives show, the arks were never finished and no one is coming. The robots fight an endless war for nations that no longer exist.
+Left open on purpose (the owner, Nov 19 2026): what became of Earth is never decided, in the game or in this bible. The last transmission came at T−2; since then, silence. The archives show the shipyards gone and the arks unfinished, but not why. Earth may have burned, may have fallen quiet, or may simply have stopped answering. The robots fight on for Sponsors who may no longer exist, and no one on Ithaca I will ever know for certain.
 
 How the game hints at it:
 
