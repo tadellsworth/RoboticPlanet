@@ -1644,7 +1644,8 @@ barrier along the shared edge. Ordinary roads join as ramps (a hazard-striped ap
 (the lane narrows onto the road); bends are the lanes' own arms; worn lanes crack and pothole like asphalt. At night
 the cat's-eyes light (`drawRoadGlow` in `js/daynight.js`), the asphalt street lamps (`streetlamp-asphalt`) stand on the
 median, and a strip in the team's colour runs along the barrier. The one-way arrow is the road's (`oneway`, still to
-make). Nothing to swap: the sign gantries and a nicer arrow are for later (IDEAS.md).
+make). The sign gantries are drawn in code (`drawGantry`: a steel lattice beam, posts on the verges, a blank green board with a
+white rim over each lane, a small lamp under each at night); a sprite could replace them later. A nicer arrow is for later (IDEAS.md).
 
 ### Not swappable yet (ask Claude Code if you want these)
 

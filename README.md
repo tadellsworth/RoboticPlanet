@@ -307,7 +307,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and the paths order; the sketches count them, `draftOverpasses`); lanes never cross each other. The art is drawn in
   code (`drawExpress` in `js/render.js`: median, barrier, amber and white lines, cat's-eyes, hazard aprons at ramps,
   ends narrowing onto a road; `laneMate` finds the partner lane); at night `drawRoadGlow` lights the cat's-eyes and a
-  strip in the owner's colour along the median, and `streetLamps` puts the asphalt lamps on the median. Under
+  strip in the owner's colour along the median, and `streetLamps` puts the asphalt lamps on the median. Sign gantries (render-only, `expressGantries`/`drawGantry` in
+  js/render.js): one every `GANTRY_GAP` (14) tiles along a straight stretch of a pair, never over an overpass or a bend, a
+  steel lattice beam across both carriageways with a blank green board over each lane on its oncoming side, lit at night. Under
   `EXPRESS.minLen` (8) tiles the tool says it's too short to pay. Rivals build none yet; raiders tear lanes up like roads.
   Allowed in the Hollow. `hashState` covers `S.pave`, `S.paveMark` and `S.xdir`.
 - **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, and through

@@ -1843,6 +1843,62 @@ function drawExpress(ctx, i, j, x, y, t) {
   drawRoadArrow(ctx, t, x, y);
 }
 
+/**
+ * Sign gantries over Express pairs (render-only, the design sheet's "Destinations left blank"): one every GANTRY_GAP
+ * tiles along a straight stretch, the same tiles always, spanning both carriageways, carried by the lane whose
+ * partner lies south or east of it. Not over an overpass or a building, and not where either lane bends or ends.
+ */
+const GANTRY_GAP = 14;
+function expressGantries(v0, v1) {
+  const out = [];
+  if (!S.pave || z0Gantry()) return out;
+  const i0 = Math.max(1, Math.floor(v0.x) - 2), i1 = Math.min(S.W - 2, Math.ceil(v1.x) + 2);
+  const j0 = Math.max(1, Math.floor(v0.y) - 3), j1 = Math.min(S.H - 2, Math.ceil(v1.y) + 2);
+  const lane = (i, j, r) => inMap(i, j) && isExpress(tIdx(i, j)) && S.road[tIdx(i, j)] === r && !S.over[tIdx(i, j)] && !S.bAt[tIdx(i, j)];
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = tIdx(i, j);
+    if (!isExpress(t)) continue;
+    const r = S.road[t], ew = r === 2 || r === 4, m = laneMate(t);
+    if (ew ? m !== 2 : m !== 1) continue;
+    if ((ew ? i : j) % GANTRY_GAP !== GANTRY_GAP >> 1) continue;
+    const pi = ew ? i : i + 1, pj = ew ? j + 1 : j, pr = S.road[tIdx(pi, pj)];
+    const ok = ew ? lane(i - 1, j, r) && lane(i, j, r) && lane(i + 1, j, r) && lane(pi - 1, pj, pr) && lane(pi, pj, pr) && lane(pi + 1, pj, pr)
+      : lane(i, j - 1, r) && lane(i, j, r) && lane(i, j + 1, r) && lane(pi, pj - 1, pr) && lane(pi, pj, pr) && lane(pi, pj + 1, pr);
+    if (!ok) continue;
+    // (each board faces the traffic coming at it: on the side of the beam that lane's traffic comes from)
+    const side = (rr) => -(ROAD_DIRS[rr][ew ? 0 : 1]);
+    out.push({ ent: 'gantry', ew, i, j, x: ew ? i + 0.5 : i + 1, y: ew ? j + 2.02 : j + 0.56, sides: [side(r), side(pr)] });
+  }
+  return out;
+}
+function z0Gantry() { return R.cam.z < 10; } // (too far out to see one)
+
+/** A sign gantry: two grey steel posts on the verges, a lattice beam across both carriageways, and a blank green board
+ * over each lane (white border); at night a small lamp under each board lights it. */
+function drawGantry(ctx, e, ox, oy, z) {
+  // Seen from nearly straight above: a steel beam across both carriageways (lifted a little, its shadow on the road),
+  // a post at each end on the verge, and a blank green board over each lane hanging from the beam.
+  const lift = z * 0.22, steel = '#9aa1a8', dark = '#4f555b', green = '#1f6b3e', rim = '#eef3ef';
+  const on = TOD.active && !murmurDarkAt(e.i, e.j) ? TOD.state.lights : 0;
+  // Along u (0..1 across both lanes) and v (thickness across the beam), mapped to the screen for either direction.
+  const P = e.ew ? (u, v) => [ox + (e.i + 0.5 + v) * z, oy + (e.j - 0.04 + u * 2.08) * z - lift]
+    : (u, v) => [ox + (e.i - 0.04 + u * 2.08) * z, oy + (e.j + 0.5 + v) * z - lift];
+  const rect = (u0, u1, v0, v1, col, dy) => { const [a, b] = P(u0, v0), [c, d] = P(u1, v1); ctx.fillStyle = col; ctx.fillRect(Math.min(a, c), Math.min(b, d) + (dy || 0), Math.abs(c - a), Math.abs(d - b)); };
+  ctx.save();
+  rect(0, 1, -0.05, 0.12, 'rgba(0,0,0,0.25)', lift * 1.1); // shadow
+  for (const u of [0, 1]) { rect(u - 0.02, u + 0.02, -0.06, 0.06, dark, lift * 0.5); rect(u - 0.025, u + 0.025, -0.07, 0.07, dark); } // posts
+  rect(0, 1, -0.06, 0.06, steel);
+  ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1, z * 0.015);
+  for (let k = 0; k < 12; k++) { const [a, b] = P(k / 12, -0.06), [c, d] = P((k + 1) / 12, 0.06); ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); }
+  [0.25, 0.75].forEach((c, k) => { // the boards, each on its lane's oncoming side of the beam
+    const sg = e.sides ? e.sides[k] : 1, V = (a) => a * sg;
+    rect(c - 0.2, c + 0.2, V(0.06), V(0.34), rim);
+    rect(c - 0.19, c + 0.19, V(0.075), V(0.325), green);
+    if (on > 0.02) { ctx.globalAlpha = on * 0.85; rect(c - 0.16, c + 0.16, V(0.335), V(0.36), '#fff3c8'); ctx.globalAlpha = 1; }
+  });
+  ctx.restore();
+}
+
 /** A small arrow glyph pointing along angle a (for sketched and planned Express lanes). */
 function drawArrowGlyph(ctx, cx, cy, s, a, color) {
   ctx.save();
@@ -6336,6 +6392,7 @@ function render(dtReal) {
     { const face = Math.atan2(dx, -dy); items.push({ ...sh, ent: 'u', docked: true, x: b.x + 0.5 + dx * 1.05, y: b.y + 0.5 + dy * 1.05, face, rface: face, path: null, vel: 0 }); }
   }
   if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
+  for (const g of expressGantries(v0, v1)) items.push(g); // (sign gantries over Express pairs)
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
@@ -6379,6 +6436,7 @@ function render(dtReal) {
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'pillar') { drawPillar(ctx, ox + (e.x + 0.5) * z, oy + e.y * z, z, e.x, e.y); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
