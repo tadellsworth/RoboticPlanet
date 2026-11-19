@@ -943,3 +943,9 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   `SIGHT_R` (6) tiles of the colony on this device (`colonySees` in js/render.js), so the tap and hover there (js/ui.js)
   should skip one the player can't see; the regional variants (`v=rust|white|bloom` in murmur_moles.js) aren't rendered
   for the game yet; and whether the Murmur's light should show on the minimap at night.
+
+- **AI stalemate: the Hollow, Medium, seed 11** (found Nov 19 2026 merging the codex branch and Express highways): a
+  computer-against-computer game there passes on the codex branch with the rival AI fixes but runs past 45 minutes once
+  the Express highway code is in, though rivals never build Express lanes; these single-seed AI games flip with almost
+  any change. Look at it with the other stalemates (Hollow Small seed 25, Islands). Also: the oil seep shimmer timing
+  check measures a full redraw when the seep is on screen (it passes only when it isn't): rewrite that test's timing.
