@@ -121,7 +121,7 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu lists the latest five checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone. Command radio plays synthesized machine speech with captions at landing and every eight game minutes.
+Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu lists the latest five checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
 
 ## How to play
 

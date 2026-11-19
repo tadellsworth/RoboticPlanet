@@ -8430,6 +8430,7 @@ function nightfallLine() {
   if (todNow().lights >= 0.9) narrate(ME, 'night');
 }
 
+const COMMAND_RADIO_ENABLED = false;
 const COMMAND_TRANSMISSIONS = [
   { text: 'Command online. Execute settlement directives.', speech: 'e o a  i e  o u e a' },
   { text: 'Colony status received. Continue operations.', speech: 'i a u  e e u  o a i' },
@@ -8437,7 +8438,7 @@ const COMMAND_TRANSMISSIONS = [
 ];
 
 function commandTransmissionTick() {
-  if (UI.paused || UI.briefing || UI.watch || S.winner >= 0 || !(S.time >= UI.nextTransmission)) return;
+  if (!COMMAND_RADIO_ENABLED || UI.paused || UI.briefing || UI.watch || S.winner >= 0 || !(S.time >= UI.nextTransmission)) return;
   const line = COMMAND_TRANSMISSIONS[UI.transmission === 0 ? 0 : (UI.transmission - 1) % 2 + 1];
   UI.transmission++;
   UI.nextTransmission = (Math.floor(S.time / 480) + 1) * 480;
