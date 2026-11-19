@@ -1,12 +1,12 @@
 # Terrafall Lore Bible: The Long Silence
 
-Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; planet named Ithaca I; Earth destroyed by its own war; set in 2165). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
+Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; timeline moved 100 years later by the owner, 2026-11-19; planet named Ithaca I; Earth destroyed by its own war; set in 2265). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
 
 ## The pitch
 
 Earth's great powers were tearing their world apart, so each sent robot vanguards to other star systems to find and prepare a new home. Four of those vanguards landed on Ithaca I.
 
-It is 2165. The colony ships were due 31 years ago and never came: the powers destroyed each other, and Earth with them. The robots suspect, but their orders have no end date. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
+It is 2265. The colony ships were due 31 years ago and never came: the powers destroyed each other, and Earth with them. The robots suspect, but their orders have no end date. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
 
 Each match is one new landing, a *terrafall*: a reserve Command Base dropped from orbit into a contested region. The player is that base's command intelligence. You never see a human because none ever made it here.
 
@@ -27,30 +27,30 @@ Core vocabulary: Arrival, the Sponsor, the Accord, vanguard, Command, colonists,
 
 ## History
 
-The robots keep time by the Arrival clock. Zero was the day the colony ships were due, in 2134. Today it reads T+31 years: the game is set in 2165.
+The robots keep time by the Arrival clock. Zero was the day the colony ships were due, in 2234. Today it reads T+31 years: the game is set in 2265.
 
 | Year | Arrival clock | Event |
 | --- | --- | --- |
-| 2074 | T−60 | Before the wars, a joint survey ranks nearby habitable worlds in the Ithaca Catalog. First on the list: a coral world with a ring, circling the star Corvane. |
-| 2079 | T−55 | The Pathfinder, the last mission the great powers build together, launches for Ithaca I. |
-| 2084 | T−50 | War breaks out between the powers on Earth. |
-| 2089 | T−45 | With Earth failing, four warring Sponsors sign the Ithaca Accord, a truce for the stars only. Each launches vanguards to the top Catalog worlds, and all four send one to Ithaca I. |
-| 2094 | T−40 | The Pathfinder arrives, builds the Trade Posts and Uplinks, sows Earth life from its seed vaults, then goes dormant. |
-| 2099 | T−35 | The four vanguard Carriers reach orbit and land the first Command Bases. The Accord years begin: a race of roads, not guns. |
-| 2125 | T−9 | The Sponsors report the colony arks are "on schedule." The shipyards are already gone. |
-| 2132 | T−2 | The last transmission from home: "Hold position. Further instructions to follow." |
-| 2134 | T 0 | Arrival Day. Nothing arrives. |
-| 2135 | T+1 | After 1,000 days with no reply from Accord arbitration, every vanguard's code rules the Accord void. Sealed contingency orders open, and the war begins again on a new world. |
-| 2165 | T+31 | Now. The Carriers' reserve Command Bases are running low. Every terrafall could be one of the last. |
+| 2174 | T−60 | Before the wars, a joint survey ranks nearby habitable worlds in the Ithaca Catalog. First on the list: a coral world with a ring, circling the star Corvane. |
+| 2179 | T−55 | The Pathfinder, the last mission the great powers build together, launches for Ithaca I. |
+| 2184 | T−50 | War breaks out between the powers on Earth. |
+| 2189 | T−45 | With Earth failing, four warring Sponsors sign the Ithaca Accord, a truce for the stars only. Each launches vanguards to the top Catalog worlds, and all four send one to Ithaca I. |
+| 2194 | T−40 | The Pathfinder arrives, builds the Trade Posts and Uplinks, sows Earth life from its seed vaults, then goes dormant. |
+| 2199 | T−35 | The four vanguard Carriers reach orbit and land the first Command Bases. The Accord years begin: a race of roads, not guns. |
+| 2225 | T−9 | The Sponsors report the colony arks are "on schedule." The shipyards are already gone. |
+| 2232 | T−2 | The last transmission from home: "Hold position. Further instructions to follow." |
+| 2234 | T 0 | Arrival Day. Nothing arrives. |
+| 2235 | T+1 | After 1,000 days with no reply from Accord arbitration, every vanguard's code rules the Accord void. Sealed contingency orders open, and the war begins again on a new world. |
+| 2265 | T+31 | Now. The Carriers' reserve Command Bases are running low. Every terrafall could be one of the last. |
 
 ## Ithaca I
 
-Ithaca I is a coral-red world with a bright ring, the fourth planet of a restless orange star called Corvane. Up close it is a patchwork, because the ring keeps falling on it.
+Ithaca I is a coral-red world with a bright ring, the fourth planet of a restless orange star called Corvane. From orbit its face looks stitched together: desert, forest, ice and ash lie side by side, each region shaped by where the ring's pieces came down.
 
-The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds named for Odysseus's island, the home he took 20 years to reach while rivals moved into his house. Ithaca I ranked first, which is why every Sponsor sent a vanguard here. The vanguards sent to Ithaca II and beyond have not been heard from.
+The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds. Ithaca I ranked first, which is why every Sponsor sent a vanguard here. The vanguards sent to Ithaca II and beyond have not been heard from.
 
 - **The Ring.** What's left of a moon that broke apart long before the probe arrived. Its pieces still fall in showers the robots call *ringfall*.
-- **Argos.** Ithaca I's surviving moon, named for Odysseus's old dog, who waited 20 years for him to come home. Its twin broke apart to form the Ring. Argos is a grey, airless field of craters, and the Accord counted it as claimable land, so the Carriers drop Command Bases there too. No Murmur live there: it is the only silent ground the robots have.
+- **Argos.** Ithaca I's surviving moon, still circling, still keeping watch. Its twin broke apart to form the Ring. Argos is a grey, airless field of craters, and the Accord counted it as claimable land, so the Carriers drop Command Bases there too. No Murmur live there: it is the only silent ground the robots have.
 - **Why Ithaca I was chosen.** Ringfall keeps restocking the surface with Ore and Crystal, so the planet never mines out. To the Sponsors it was a self-refilling quarry.
 - **Why the faces differ.** The largest strikes cracked the crust into volcanic zones and left craters in every region. The rest is ordinary climate, from equator to pole.
 - **Crystal.** Ring Crystal is slightly weightless. Rock rich in it floats, which is where the sky islands over the canyons come from.
@@ -373,7 +373,7 @@ How the game hints at it:
 
 ### Open decisions
 
-- [x] Length of the Silence: 31 years (decided). The present stays 2165.
+- [x] Length of the Silence: 31 years (decided). The present stays 2265 (2165 until the owner moved the whole timeline 100 years later, Nov 19 2026). The names Ithaca and Argos are never explained in the text (the owner, Nov 19 2026): players should catch the echo themselves.
 - [x] Name the four Sponsors? No: they stay faceless (decided).
 - [x] Are the Murmur only animals? Never answered: it stays ambiguous (decided).
 - [x] Where do the surface animals come from? The Pathfinder's garden: Earth life sown from its seed vaults where it
