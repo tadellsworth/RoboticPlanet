@@ -8,3 +8,5 @@ const MURMUR_TOD_KEYS = ["scuttler-f0", "scuttler-f1", "scuttler-f2", "scuttler-
 TOD_KEYS.push('wreck-cargoplane', 'wreck-bomber', 'wreck-airship');
 // The Maglev line (renderer/tools/install_maglev.py): Terminals, pylons (and one shot down), pods and the guideway tile.
 for (const t of [0, 1]) TOD_KEYS.push(`magterm@${t}`, `magpylon@${t}`, `magpylon-cut@${t}`, `magpod@${t}`, `magpod-empty@${t}`, `magdeck@${t}`);
+// The Mass Driver (eight ways) and the Catcher (renderer/tools/install_massdriver.py).
+for (const t of [0, 1]) TOD_KEYS.push(`mdriver@${t}`, ...['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'].map((d) => `mdriver-${d}@${t}`), `catcher@${t}`, `catcher-closed@${t}`);

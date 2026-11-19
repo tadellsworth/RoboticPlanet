@@ -843,6 +843,48 @@ const MISSIONS = [
     ],
   },
   {
+    id: 'driver', name: 'The Schedule', chapter: 'Industry and Trade',
+    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and throw its supplies over everything, on the old schedule.',
+    intro: [
+      'A <b>Mass Driver</b> throws sealed canisters of goods in an arc over anything to a <b>Catcher</b> 12 to 30 tiles away.',
+      'On the Driver\'s panel, <b>Aim at a Catcher</b>, then pick up to 3 <b>Goods to send</b>: Haulers keep it loaded.',
+      'It burns no Fuel, but it fires only with a <b>Generator</b> (with Fuel) within 4 tiles.',
+      'A canister of 12 goods flies every 10 seconds. Enemy Flak can burst one; a canister with no Catcher lands as crates.',
+    ],
+    mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const L = getE(S.players[0].lander), P = S.players[0];
+      // The survey camp: an Outpost about 24 tiles north, its road home the long way.
+      let camp = null;
+      for (let r = 0; r <= 6 && !camp; r++) for (let j = L.y - 24 - r; j <= L.y - 24 + r && !camp; j++) for (let i = L.x + 3 - r; i <= L.x + 3 + r && !camp; i++) {
+        const t = inMap(i, j) ? tIdx(i, j) : -1;
+        if (t >= 0 && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.ramp[t] && S.zone[t] === S.zone[tIdx(L.x, L.y)]) camp = addBuilding(0, 'outpost', i, j, true);
+      }
+      computeTerritory();
+      if (camp) { const route = roadRouteTo(0, camp) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); }
+      L.stock.cement += 120; L.stock.alloy += 30; L.stock.chip += 16; L.stock.fuel += 12; // (Cement to spare for the camp: what goes over the reserve flies)
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generator's Fuel)
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'mdriver', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mass Driver</b> (<kbd>V</kbd>), by your base, by a road.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='mdriver']" },
+      { kind: 'built', type: 'catcher', n: 1,
+        hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>) by the survey camp\'s Outpost, far to the north.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='catcher']" },
+      { kind: 'mdAim', n: 1, text: 'Aim the Mass Driver at the Catcher', at: 'mdriver',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b)) ? 1 : 0),
+        hint: 'Tap the <b>Mass Driver</b> → <b>Aim at a Catcher</b>, then tap your Catcher in the north.',
+        ui: '#sh-mdaim' },
+      { kind: 'mdFreight', n: [24, 36, 48], text: 'Catch {n} goods by canister', at: 'mdriver',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].catcher ? b.mdGot || 0 : 0), 0),
+        hint: 'Driver panel: <b>Goods to send</b> → <b>Cement</b>; a <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles.',
+        ui: "#sh-mdadd [data-g='cement'], #btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+    ],
+  },
+  {
     id: 'trade', name: 'Trade Winds', chapter: 'Industry and Trade',
     brief: 'Dock a Trade Terminal at a neutral Trade Post and run a trade route by Road Train, through the planet\'s storms.',
     intro: [

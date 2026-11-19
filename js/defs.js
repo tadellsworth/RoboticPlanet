@@ -338,6 +338,22 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
  */
 const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
+/**
+ * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods
+ * in an arc over everything to a Catcher `min` to `max` tiles away (b.mdTo on the Driver: one Catcher per Driver, a
+ * Catcher may take several). Both are storage. The Driver's goods list (b.mdSend: up to `goods` goods, each with the
+ * reserve its colony keeps at home, `reserve` by default) is a standing supply order: Haulers bring it what the colony
+ * holds beyond that reserve, up to `hopper` of each, and buildings touching it hand over their output by conveyor. A
+ * full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more); the coils charge for
+ * `charge` s, then it fires, `reload` s between shots. The flight takes `flight` s at full range (`flightMin` at the
+ * shortest), its arc `arc` tiles high at full range. Power: no Fuel of its own, but it fires only with a Generator
+ * (with Fuel) within the Generator's radius (genPowered); without one it waits. A canister has `hp`: an enemy Flak Gun
+ * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
+ * its cargo falls as crates where it comes down; if the Catcher is gone when it lands, it lands anyway, as crates. None
+ * in the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
+ */
+const MASSDRIVER = { min: 12, max: 30, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 24, load: 12, partWait: 30, partMin: 4, charge: 1.6, reload: 10,
+  flight: 3, flightMin: 2, arc: 5, hp: 4, low: 0.1, feed: 1, muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
@@ -1001,7 +1017,7 @@ const BDEFS = {
     mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, most: 6, flight: 1.6 },
   },
   flak: {
-    name: 'Flak Gun', desc: 'A twin anti-aircraft gun. It fills the sky round enemy aircraft out to 7 tiles with bursting shells, leading them as they fly: each burst hurts any aircraft within about a tile of it. A plane can get through one quick pass, but not circling over a few of these. It can\'t hit anything on the ground. Fires Ammo (8 shells each).',
+    name: 'Flak Gun', desc: 'A twin anti-aircraft gun. It fills the sky round enemy aircraft out to 7 tiles with bursting shells, leading them as they fly: each burst hurts any aircraft within about a tile of it. A plane can get through one quick pass, but not circling over a few of these. It bursts an enemy Mass Driver\'s canisters flying over too, when no aircraft is in reach. It can\'t hit anything on the ground. Fires Ammo (8 shells each).',
     cost: { cement: 4, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 7, armor: 14, buildTime: 10, war: true,
     flak: { reload: 1.0, shells: 8, salvo: 2, damage: 4, splash: 1.0, speed: 14, scatter: 0.7 },
   },
@@ -1146,6 +1162,15 @@ const BDEFS = {
     desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
     cost: { cement: 3, alloy: 3, chip: 1 }, pylon: true, armor: 24, buildTime: 20,
   },
+  mdriver: {
+    name: 'Mass Driver', short: 'Driver',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp: it throws sealed canisters of 12 goods in an arc over everything, one every 10 seconds, to a Catcher 12 to 30 tiles away. On its panel, Aim at a Catcher, then tap one; then pick up to 3 goods to send. Haulers bring it what your colony holds of them beyond the reserve you set (20 to start), and buildings touching it hand it their output by conveyor. It burns no Fuel, but it fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight, and a canister with no Catcher to land in still lands: either way its goods fall as crates.',
+    cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, armor: 16, buildTime: 18,
+  },
+  catcher: {
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. What lands here is shared out like any Depot\'s stock: Haulers take it where it is needed, and buildings touching it are fed by conveyor. Aim a Mass Driver at it from the Driver\'s panel, 12 to 30 tiles away; one Catcher can take several Drivers.',
+    cost: { cement: 6, alloy: 4, chip: 2 }, store: true, catcher: true, armor: 12, buildTime: 12,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1177,12 +1202,12 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'port', 'airfield', 'mast', 'terminal'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
@@ -1719,6 +1744,8 @@ const FLAVOR = {
   dropost: 'Survey stake, by air.',
   station: 'Platform signs in four languages. Every train is freight.',
   magterm: 'Phase 2 transit. Platforms to passenger standard. Departures on time; the seats stay folded.',
+  mdriver: 'Survey kit for moving supplies between settlements before the roads were in. The settlements never came. The schedule still runs.',
+  catcher: 'Built to the survey schedule: a canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',

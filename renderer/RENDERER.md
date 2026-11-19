@@ -561,3 +561,24 @@ python3 preview/maglev_sheet.py out/maglev out/preview/maglev <sheet folder>    
   Terminal's `head` to the other's, lifted the pylon's height (its `head` over its `anchor`) up the screen, its shadow
   down-sun on the ground, a pylon sprite every three tiles with its head on the band (shorter on high ground, as the
   Viaduct's piers are), and the pods turned to the line; a cut line is two bands with a gap.
+
+## The Mass Driver and Catcher
+
+The owner's look A, "Coil Ramp" (Nov 2026; IDEAS.md, "High-speed transit"), in `b/massdriver.js`. `c=driver` (the
+default) is the Mass Driver: a concrete ramp with buttresses carrying a coil-gun rail of seven copper coil rings on steel
+yokes up to a flared muzzle, a breech house with a hopper at its foot, capacitor banks along its flanks cabled up to the
+yokes, a rack of sealed canisters; `dir=e|se|s|sw|w|nw|n|ne` turns it (the game shows the way nearest its Catcher). Marks
+`breech`, `muzzle` and `c0`..`c6` (the coils' centres) let the game light the coils in sequence and send the canister
+off the muzzle. `c=catcher` is the Catcher: a wide steel funnel cradle on an octagonal plinth, copper braking rings in
+its throat, four magnetic arms on legs, `arms=open` (swung up and out) or `arms=closed` (swung in, the magnet heads
+lit); mark `cradle`. The coils' inner bands and the magnet faces glow pale blue-white in the evening and night renders.
+Run from this folder:
+
+```
+sh tools/render_massdriver.sh            # 8 ways x 2 teams + the Catcher open and closed, every time of day (~10 min)
+python3 tools/install_massdriver.py      # writes the WebP files into ../art, prints MD_ART for js/render.js
+```
+
+Both compose like buildings (`compose.py`); the game draws them as `B3D` buildings (the Driver at scale 1.6, the
+Catcher at 1.4). The coil sequence, arcs, guidance beam, canisters and their streaks are drawn in code
+(`drawMassDrivers` in `js/render.js`), from the marks.
