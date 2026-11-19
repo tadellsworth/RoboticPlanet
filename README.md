@@ -74,7 +74,7 @@ Volcano, Fault line, Canyon maze or The Hollow, and for three or four players on
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, the
+Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Boiling Springs, the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -1641,7 +1641,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
   **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the Polar Caps, Emberwood, the Long Grass, Blackwater,
-  Cinderlands and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
+  Cinderlands, Boiling Springs and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
@@ -2290,6 +2290,14 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   ambience.
 - **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
   (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
+
+### Boiling Springs
+
+Select **Boiling Springs** under **Custom Game → Planet → Biome**. The geothermal basin has sulfur-stained
+limestone textures, mineral bands along lake shores, and six terrain decorations, including steaming
+vents and periodic geysers. The mini pools are decorations cleared by construction. The selected
+map type still determines water crossings and resource placement. The terrain and Sky islands
+cliffs are rendered by `renderer/terrain/terrain_springs.py` and load in their own biome bundle.
 
 ### Cloud shadows, remains and beacons
 

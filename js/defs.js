@@ -44,6 +44,8 @@ const BIOMES = {
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  springs: { name: 'Boiling Springs', kind: 'Geothermal basin', region: 'Boiling Springs', plants: 0.13, weights: [1, 0.85, 0.63, 0.34, 1.15, 0.46],
+    desc: 'Turquoise and amber hot springs on sulfur-stained limestone terraces. Steam drifts off the vents, and geysers break the surface.' },
   // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
   // (it isn't in BIOME_ORDER). Its own art (art/biomes/hollow) loads only when it is played (LAZY_BIOMES in render.js).
   hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
@@ -56,7 +58,7 @@ const BIOME_ART = {};
 /** The biome whose art draws biome b. */
 function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
-const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
+const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs'];
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers

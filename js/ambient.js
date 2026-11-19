@@ -55,6 +55,7 @@ const AMB_GROW = {
   volcanic: { kind: 'ash', fill: '#8b8d8e', shade: '#363839', hi: '#a9abac' },
   alien: { kind: 'bloom', ground: '#5d4389', vein: '#a066ee', node: '#cfa3ff', crystal: '#efe2ff', glow: '#b070ff' },
   hollow: { kind: 'bloom', ground: '#463463', vein: '#8a52d6', node: '#c093ff', crystal: '#e2d4ff', glow: '#a464ff', dust: '#6e6678' },
+  springs: { kind: 'sand', fill: '#c3b397', shade: '#9f875e', hi: '#e1d2ab' },
   lunar: { kind: 'dust', fill: '#a2a4a9', shade: '#6c6e73', slow: 1.6 },
 };
 
@@ -916,4 +917,55 @@ function drawAmbientSky(ctx, ox, oy, z) {
   if (!S || !S.settings) return;
   drawCloudShadows(ctx, ox, oy, z);
   drawBeacons(ctx, ox, oy, z);
+}
+
+/** Local steam and intermittent jets. Vent positions are the same as the baked mineral deposits. */
+function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
+  if (z < 11 || (LESS_MOTION && LESS_MOTION.matches)) return;
+  const night = TOD.active ? TOD.state.lights : 0, cloud = wxCloud(night > 0.65 ? '139,174,188' : '235,242,225');
+  const wind = ambWind(Math.floor(S.time / WEATHER.slot)).x, now = R.time;
+  const saver = gfxStep() === 'saver', count = saver ? 3 : 7;
+  let budget = saver ? 10 : 25;
+  ctx.save();
+  for (let j = Math.max(0, Math.floor(v0.y) - 1); j < Math.min(S.H, v1.y + 3) && budget > 0; j++) {
+    for (let i = Math.max(0, Math.floor(v0.x) - 1); i < Math.min(S.W, v1.x + 1) && budget > 0; i++) {
+      const t = tIdx(i, j), kind = S.decor[t];
+      if ((kind !== 4 && kind !== 6) || S.bAt[t] || S.road[t] || S.plan[t]) continue;
+      const hx = hash2(i, j, 911), hy = hash2(j, i, 912);
+      const x = ox + (i + 0.5 + (hx - 0.5) * 0.1) * z, y = oy + (j + 0.5 + (hy - 0.5) * 0.1) * z;
+      const period = 10 + 8 * hx, phase = (now + hy * period) % period;
+      const surge = kind === 4 ? ambStep(phase, 0, 0.4) * (1 - ambStep(phase, 1.2, 1.7)) : 0;
+      if (surge > 0.02) drawGeyserJet(ctx, x, y, z, surge, now);
+      for (let k = 0; k < count; k++) {
+        const age = (now * 0.45 + hy + k / count) % 1;
+        const width = z * (0.34 + age * (0.72 + surge * 0.41)), height = width * 0.74;
+        const px = x + z * (Math.sin(age * 8 + hx * 5) * 0.12 + wind * age), py = y - z * age * (0.75 + surge * 1.2);
+        ctx.globalAlpha = Math.sin(age * Math.PI) * (0.33 + surge * 0.30);
+        ctx.drawImage(cloud, px - width / 2, py - height / 2, width, height);
+      }
+      budget--;
+    }
+  }
+  ctx.restore();
+}
+
+function drawGeyserJet(ctx, x, y, z, force, time) {
+  const rise = z * (0.24 + 1.05 * force), top = y - rise;
+  const column = ctx.createLinearGradient(x, top, x, y);
+  column.addColorStop(0, 'rgba(213,248,239,0)');
+  column.addColorStop(0.36, 'rgba(229,250,242,0.69)');
+  column.addColorStop(1, 'rgba(210,244,230,0.74)');
+  ctx.globalAlpha = force; ctx.fillStyle = column;
+  ctx.beginPath(); ctx.moveTo(x - z * 0.04, y);
+  const sway = Math.sin(time * 5) * z * 0.061;
+  ctx.bezierCurveTo(x - z * 0.18, y - rise * 0.44, x + sway, y - rise * 0.73, x + sway * 2, top);
+  ctx.quadraticCurveTo(x + z * 0.20, y - rise * 0.55, x + z * 0.035, y); ctx.fill();
+  ctx.fillStyle = '#e4f9ee';
+  for (let k = 0; k < 8; k++) {
+    const age = (time * 1.9 + k / 8) % 1, dir = k % 2 ? 1 : -1;
+    ctx.globalAlpha = force * Math.sin(age * Math.PI) * 0.8;
+    ctx.beginPath();
+    ctx.arc(x + dir * age * z * (0.16 + k * 0.025), y - rise * (2.7 * age - 2 * age * age), Math.max(0.6, z * 0.018), 0, Math.PI * 2);
+    ctx.fill();
+  }
 }

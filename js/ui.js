@@ -1386,7 +1386,8 @@ function drawBiomeSwatch(cv, b) {
   swatchGround(ctx, w, h, b);
   // Plants: a big one, a middling one and a small one, the way they'd stand on the ground.
   const s = Math.min(w * 0.62, h);
-  const spots = w / h > 1.4 ? [[0.22, 0.6, 0.95, 1], [0.58, 0.42, 0.8, 3], [0.84, 0.72, 0.6, 6]] : [[0.32, 0.4, 0.95, 1], [0.72, 0.68, 0.7, 3]];
+  const spots = b === 'springs' ? [[0.29, 0.47, 1.12, 1], [0.71, 0.58, 0.96, 2], [0.55, 0.36, 0.46, 4]]
+    : w / h > 1.4 ? [[0.22, 0.6, 0.95, 1], [0.58, 0.42, 0.8, 3], [0.84, 0.72, 0.6, 6]] : [[0.32, 0.4, 0.95, 1], [0.72, 0.68, 0.7, 3]];
   for (const [u, v, f, n] of spots) {
     const A = ART[`plant-${b}-${n}`] || ART[`plant-${b}-1`];
     if (!A || !A.img) continue;

@@ -12,7 +12,7 @@
 const WEATHER = {
   slot: 420,     // seconds: at most one spell of weather in each stretch this long (none in the first)
   chance: 0.5,   // of a spell in a stretch
-  kinds: { desert: 'sand', jungle: 'rain', polar: 'snow', volcanic: 'ash', lunar: 'meteors', autumn: 'leaves', savanna: 'dust', alien: 'aurora', swamp: 'fog' },
+  kinds: { desert: 'sand', jungle: 'rain', polar: 'snow', volcanic: 'ash', lunar: 'meteors', autumn: 'leaves', savanna: 'dust', alien: 'aurora', swamp: 'fog', springs: 'fog' },
   names: { sand: 'A sandstorm', rain: 'A rainstorm', snow: 'A blizzard', ash: 'An ashfall', meteors: 'Ring dust', leaves: 'A gale', dust: 'Dust devils', aurora: 'An aurora', fog: 'A thick fog' },
 };
 let WX_ON = true;
@@ -316,7 +316,7 @@ function wxFog(ctx, W, night, camX, camY) {
     ctx.drawImage(fog, x - s / 2, y - s * 0.2, s, s * 0.4);
   }
   ctx.globalAlpha = 1;
-  if (!night) return;
+  if (!night || biome() === 'springs') return;
   ctx.globalCompositeOperation = 'lighter';
   for (let n = 0, N = wxCount(110); n < N; n++) {
     const h1 = hash2(n, 73, 91), h2 = hash2(n, 79, 93), blink = Math.max(0, Math.sin(t * (1.6 + h2 * 2) + n * 1.7));

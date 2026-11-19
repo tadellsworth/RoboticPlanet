@@ -1694,3 +1694,15 @@ the far Terminal.
 - If a building looks too small or too big in the game, change its `scale` in the manifest rather than
   re-exporting. `scale: 1.2` draws it 20% larger.
 - Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
+
+
+### Boiling Springs
+
+Boiling Springs uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
+terraces have bright carbonate lips and darker seams, with the same upper-left lighting as the
+other terrain. The 512 px textures tile seamlessly. The six centered transparent scenery sprites
+show baths, stacked pools, a geyser cone, a dry sulfur shelf and vents. The geyser and vents use
+the same tile offsets for their animated steam. The Sky islands use layered limestone canyon art.
+
+Regenerate the WebP set with
+`python renderer/terrain/terrain_springs.py art/biomes/springs` using the renderer's Python environment.

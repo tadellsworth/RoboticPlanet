@@ -134,6 +134,16 @@ const BIOME_LOOK = {
     mm: { ground: [97, 73, 130], water: [133, 47, 112], rock: [38, 37, 58], ramp: [138, 114, 176] },
     plantScale: [1.32, 1.12, 1.12, 1.15, 1.1, 1.1],
   },
+  springs: {
+    level: [['#746855', '#897c61'], ['#93846b', '#a7997b'], ['#a99475', '#bdab88'], ['#c2ae90', '#d1c29d'], ['#d2c29f', '#e3d5ae']],
+    theme: { cliffTop: '#ad9972', cliffBottom: '#645244', slope: '#c3aa7c', water: '#258c88', waterEdge: '#80bf9f',
+      rock: '#6d6255', rockTop: '#8e806a', rockHi: '#b8a784', rockShadow: '#43362d' },
+    tex: { ground: ['#71624c', '#ac9873', '#ddd1aa'], water: ['#0d545d', '#288b87', '#8ae1bb'], rock: ['#453b31', '#766957', '#b3a17f'] },
+    hi: '255,244,213', lo: 'rgba(49,36,29,0.26)',
+    grain: ['rgba(96,68,41,0.2)', 'rgba(248,230,180,0.2)', 'rgba(197,157,78,0.54)', 'rgba(65,52,42,0.3)'],
+    mm: { ground: [178, 158, 123], water: [40, 140, 135], rock: [109, 98, 85], ramp: [195, 170, 124] },
+    plantScale: [1.31, 1.22, 1.38, 0.95, 1.02, 1.07],
+  },
   // The Hollow (always night): grey-violet silt and stone under the Bloom's moss; black lakes; black rock walls.
   hollow: {
     level: [['#3a3644', '#433e4e'], ['#46404f', '#4f485a'], ['#524a5c', '#5b5266'], ['#5c5466', '#655c70'], ['#665d70', '#70667a']],
@@ -263,7 +273,7 @@ function bakedArt(key) {
  * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js), which keeps the page under
  * its 16 MB (the Forest's and the Polar Caps' joined the newer biomes there, Nov 2026: about 1 MB of the page).
  */
-const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow'];
+const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'hollow'];
 function lazyBiomeOf(key) {
   for (const b of LAZY_BIOMES) if (key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) return b;
   return null;
@@ -1072,6 +1082,7 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
+      if (R.biome === 'springs' && thermalShore(t)) drawMineralBanks(ctx, i, j, x, y);
       ctx.fillStyle = 'rgba(159,217,208,0.5)';
       if (terrAt(i, j - 1) !== T_WATER) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_WATER) ctx.fillRect(x, y, 2, TP);
@@ -1420,9 +1431,43 @@ function shoreCorners(ctx, i, j, x, y) {
     else drawTexture(ctx, tex.water, i, j, x, y);
     ctx.restore();
     ctx.beginPath(); ctx.arc(cx, cy, rr, a1, a2, ccw);
+    if (R.biome === 'springs' && fill === 'land') strokeMineralBank(ctx, mineralBankShade(i, j));
     ctx.strokeStyle = dy < 0 ? 'rgba(159,217,208,0.5)' : 'rgba(10,30,40,0.35)'; ctx.lineWidth = 2; ctx.stroke();
   }
 }
+function thermalShore(t) {
+  return !(S.lava?.[t] || S.ford?.[t] || S.tidal?.[t]);
+}
+
+/** Mineral bands on the wet side of the bank. Leave space for the rounded corners. */
+function drawMineralBanks(ctx, i, j, x, y) {
+  const edges = [[0, -1, 0, 0, 1, 0], [1, 0, 1, 0, 1, 1], [0, 1, 0, 1, 1, 1], [-1, 0, 0, 0, 0, 1]]
+    .filter(([dx, dy]) => terrAt(i + dx, j + dy) === T_GROUND);
+  if (!edges.length) return;
+  const corners = shoreRounds(i, j), shade = mineralBankShade(i, j);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
+  for (const [dx, dy, x0, y0, x1, y1] of edges) {
+    const gap = (cx, cy) => corners.some((c) => c.dx === cx * 2 - 1 && c.dy === cy * 2 - 1) ? SHORE_R : 0;
+    const left = gap(x0, y0), right = gap(x1, y1);
+    const ax = x + (x0 + (x1 - x0) * left) * TP, ay = y + (y0 + (y1 - y0) * left) * TP;
+    const bx = x + (x1 - (x1 - x0) * right) * TP, by = y + (y1 - (y1 - y0) * right) * TP;
+    const bow = TP * (0.03 + 0.07 * hash2(i, j, 843 + dx + 2 * dy));
+    ctx.beginPath(); ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo((ax + bx) / 2 - dx * bow, (ay + by) / 2 - dy * bow, bx, by);
+    strokeMineralBank(ctx, shade);
+  }
+  ctx.restore();
+}
+
+function mineralBankShade(i, j) { return fbm(i / 3, j / 3, 816, 2); }
+
+function strokeMineralBank(ctx, shade) {
+  ctx.strokeStyle = `rgba(157,197,128,${0.24 + 0.23 * shade})`; ctx.lineWidth = TP * (0.22 + 0.08 * shade); ctx.stroke();
+  ctx.strokeStyle = `rgba(198,${Math.round(105 + 49 * shade)},61,${0.38 + 0.22 * shade})`; ctx.lineWidth = TP * (0.15 + 0.05 * shade); ctx.stroke();
+  ctx.strokeStyle = 'rgba(236,220,175,0.69)'; ctx.lineWidth = TP * 0.062; ctx.stroke();
+}
+
 /** Plain ground at elevation e over tile (i, j) (clipped by the caller): its level's colour, the texture and the level's tint. */
 function groundPatch(ctx, i, j, x, y, e) {
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
@@ -6277,6 +6322,7 @@ function render(dtReal) {
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
+  if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
