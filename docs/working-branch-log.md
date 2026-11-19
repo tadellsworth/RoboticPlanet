@@ -117,3 +117,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Phone and desktop controls audit
 
 - Checked mouse, keyboard, and emulated touch drawing, zooming, selection, and undo at five viewport sizes. Reproduced warning replacement on phones in landscape and a first tap that opens a rally flag where it overlaps a Warbot. [Controls audit](controls-audit.md)
+
+### Map fairness and difficulty audit
+
+- Scanned 250 seeded maps across every preset and paired 12 Easy and Hard openings. All tested starts had the four basic deposits on connected terrain, and all naval starts had a potential reachable shore. Some Small maps had no Trade Posts, and four three-colony Four Isles cases placed only one Uplink. [Map fairness audit](map-fairness-audit.md)
