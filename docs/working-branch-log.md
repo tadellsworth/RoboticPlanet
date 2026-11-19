@@ -81,3 +81,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Tested two browser clients against the local relay. Short socket interruptions, host and guest computer takeovers, and reloading into a running match on the default map recovered. Compared stocks, in-flight cargo, pending order execution, and Uplink progress at the same game ticks.
 - Reproduced a Huge-map snapshot failure that can stop the match, reloads that wait on paused or finished games, the loss of the saved seat after **Cancel**, both clients waiting after simultaneous reloads, a silently discarded offline order, and a host-disconnect countdown that reaches zero early.
 - Recorded reproduction steps, recommended fixes, and remaining coverage in the [multiplayer reconnect audit](multiplayer-reconnect-audit.md).
+
+### Stalled jobs and failed orders audit
+
+- Exercised factory diagnostics, freight dispatch, worker assignment, Fuel guidance, and map commands in local Chromium. Reproduced misleading delivery predictions for isolated Haulers, contradictory road and delivery messages, missing or incorrect staffing guidance, and a success message for an unreachable Warbot move.
+- Recorded the positive controls, reproduction steps, and proposed fixes in the [stalled jobs and failed orders audit](stalled-jobs-audit.md).
