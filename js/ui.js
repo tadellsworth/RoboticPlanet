@@ -1940,7 +1940,7 @@ const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
  * build menu (Move, V and Y), V beside Ramps, and M for the Maglev. (Shift+F is the Bot Foundry's Order bots.)
  */
-const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway', m: 'maglev' };
+const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway', m: 'maglev', e: 'express' };
 /** The Paths tools placed with two taps like a building (R.mode 'place'): Viaducts, Ropeways and Maglev lines. */
 const CROSSING_TOOLS = ['viaduct', 'ropeway', 'maglev'];
 /** Is a Viaduct, Ropeway or Maglev line being placed (a Paths tool, though it's placed like a building: R.mode 'place')? */
@@ -5015,7 +5015,7 @@ function onMapTap(i, j, wx, wy) {
       // Turn the arrow: east, south, west, north, then back to two-way.
       if (S.road[t] && !roadOwnedBy(ME, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads, or ones on land you hold.'); return; }
       // (Remembered as a stroke of the plan, so Undo turns it back.)
-      if (S.road[t]) { if (!UI.draft) draftReset(); UI.draft.strokes.push([{ t, op: 'dir', from: S.road[t] }]); act('roadDir', [i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1], () => showRoadBanner()); sfx('click'); }
+      if (S.road[t]) { if (!UI.draft) draftReset(); UI.draft.strokes.push([{ t, op: 'dir', from: S.road[t] }]); act('roadDir', [i, j, S.road[t] >= 5 ? (S.pave[t] === 3 ? 2 : 1) : S.road[t] + 1], () => showRoadBanner()); sfx('click'); } // (an Express lane stays one-way)
       return;
     }
     if (!UI.draft) draftReset();
@@ -5067,6 +5067,12 @@ function onMapTap(i, j, wx, wy) {
       UI.draft.strokes.push(stroke);
       sfx('click');
       showRoadBanner();
+      return;
+    }
+    if (UI.roadMode === 'express') {
+      // Express: a tap on a sketched lane tile drops it; anywhere else, how to lay one.
+      if (UI.draft.express.has(t)) { const stroke = []; draftOp(stroke, t, 'unxp'); if (UI.draft.addSet.has(t)) draftOp(stroke, t, 'unadd'); UI.draft.strokes.push(stroke); sfx('click'); showRoadBanner(); }
+      else showRoadBanner('Drag to lay Express lanes: a drag lays a pair, out and back; Shift and drag (or Single lane) lays one.', true);
       return;
     }
     if (routeOn()) { routeTap(i, j); return; }
@@ -5222,8 +5228,8 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), pipe: new Set(), pipeDel: new Set(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size && !UI.draft.pipe.size && !UI.draft.pipeDel.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), pipe: new Set(), pipeDel: new Set(), express: new Map(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size && !UI.draft.pipe.size && !UI.draft.pipeDel.size && !UI.draft.express.size); }
 
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
 function draftBridge(t) {
@@ -5261,7 +5267,16 @@ function draftOp(stroke, t, op) {
   else if (op === 'unpipe') { if (!d.pipe.has(t)) return; d.pipe.delete(t); }
   else if (op === 'pipedel') { if (d.pipeDel.has(t)) return; d.pipeDel.add(t); }
   else if (op === 'unpipedel') { if (!d.pipeDel.has(t)) return; d.pipeDel.delete(t); }
+  else if (op === 'unxp') { if (!d.express.has(t)) return; stroke.push({ t, op, v: d.express.get(t) }); d.express.delete(t); return; }
   stroke.push({ t, op });
+}
+
+/** Sketch an Express lane on tile t pointing v (2 east, 3 south, 4 west, 5 north), remembering it for Undo. */
+function draftLane(stroke, t, v) {
+  const d = UI.draft, had = d.express.get(t);
+  if (had === v) return;
+  d.express.set(t, v);
+  stroke.push({ t, op: 'xp', v, from: had });
 }
 
 /** Take back the last drag or tap. */
@@ -5274,6 +5289,8 @@ function draftUndo() {
   const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
   for (let k = s.length - 1; k >= 0; k--) {
     if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
+    if (s[k].op === 'xp') { if (s[k].from) d.express.set(s[k].t, s[k].from); else d.express.delete(s[k].t); continue; }
+    if (s[k].op === 'unxp') { d.express.set(s[k].t, s[k].v); continue; }
     if (s[k].op === 'dir') { act('roadDir', [s[k].t % S.W, (s[k].t / S.W) | 0, s[k].from]); continue; } // an arrow turned back
     draftOp([], s[k].t, back[s[k].op]);
   }
@@ -5311,12 +5328,36 @@ function draftSummary() {
   // Pipe too: paid when you tap Build (or as the goods come in); taken up, it gives its goods back.
   for (const t of d.pipe) if (!S.pipe[t]) { const pc = pipeCost(t); for (const g in pc) cost[g] = (cost[g] || 0) + pc[g]; }
   for (const t of d.pipeDel) if (S.pipe[t]) { const pc = pipeCost(t); for (const g in pc) back[g] = (back[g] || 0) + pc[g]; }
+  // Express lanes: where an ordinary road crosses one, an overpass (paid from storage once the lane is down).
+  const over = draftOverpasses();
+  for (const g in OVERPASS_COST) if (over) cost[g] = (cost[g] || 0) + OVERPASS_COST[g] * over;
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
   // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
   for (const g in net) net[g] = Math.round(net[g] * 100) / 100;
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, cost, back, net, can: true,
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, express: d.express.size, over, cost, back, net, can: true,
     short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(ME, { [g]: net[g] })) };
+}
+
+/**
+ * The overpasses this plan brings: Express lane tiles (sketched, or already there and marked) that an ordinary road
+ * will cross once the plan is down (road, sketched or planned, on both sides across the lane), none there yet.
+ */
+function draftOverpasses() {
+  const d = UI.draft, W = S.W, seen = new Set();
+  const roadish = (u) => u >= 0 && u < W * S.H && (S.road[u] || S.plan[u] || d.addSet.has(u));
+  const laneAt = (u) => d.express.has(u) ? d.express.get(u) : S.road[u] && S.paveMark[u] === 2 && S.road[u] >= 2 ? S.road[u] : 0;
+  const look = (L) => {
+    const v = laneAt(L);
+    if (!v || seen.has(L) || S.over[L] || junPlanAt(L) || !S.road[L] && !d.addSet.has(L)) return;
+    const i = L % W, ew = v === 2 || v === 4;
+    const a = ew ? L - W : i > 0 ? L - 1 : -1, b = ew ? L + W : i < W - 1 ? L + 1 : -1;
+    const across = (u) => roadish(u) && !laneAt(u);
+    if (across(a) && across(b)) seen.add(L);
+  };
+  for (const [t] of d.express) look(t);
+  for (const t of d.add) { const i = t % W; for (const u of [t - W, t + W, i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1]) if (u >= 0 && u < W * S.H) look(u); }
+  return seen.size;
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
@@ -5325,20 +5366,20 @@ function commitDraft() {
   const d = UI.draft;
   // The whole plan goes as one order (ORDERS.paths): take up, then Ramps first (so the road or track planned over one
   // waits for it), Walls and Gates, road, track and pipe; it's paid for from storage as far as it goes, oldest plans first.
-  const plan = { del: [...d.del], railDel: [...d.railDel], ramps: [...d.ramps], walls: [...d.walls], add: [...d.add], rail: [...d.rail], pipeDel: [...d.pipeDel], pipe: [...d.pipe] };
+  const plan = { del: [...d.del], railDel: [...d.railDel], ramps: [...d.ramps], walls: [...d.walls], add: [...d.add], rail: [...d.rail], pipeDel: [...d.pipeDel], pipe: [...d.pipe], express: [...d.express] };
   draftReset();
   act('paths', [plan], (r) => draftDone(r));
 }
 
 /** What the plan made in Paths came to (ORDERS.paths' counts): the messages, and back to the map if it all went down. */
 function draftDone(r) {
-  const { removed, laid, ramps, walls, gates, why, wallWhy, rampWhy, rails, railsUp, railWhy, pipes, pipesUp } = r;
+  const { removed, laid, ramps, walls, gates, why, wallWhy, rampWhy, rails, railsUp, railWhy, pipes, pipesUp, lanes } = r;
   const wp = plansWaiting(ME), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
   // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
   if (!why && R.mode === 'road') setMode('normal');
   const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); haptic('order'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  else { sfx('place'); haptic('order'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (lanes ? ` ${lanes} Express lane tile${lanes === 1 ? '' : 's'} marked: a Roadworks' Paver lays the surface (1 Asphalt and a quarter Alloy a tile).` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
@@ -5393,12 +5434,81 @@ function onRoadPaint(i, j, first) {
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
+  if (UI.roadMode === 'express') { expressDrag(i, j, first); return; }
   if (routeOn()) { routeDrag(i, j, first); return; }
   // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
   if (UI.roadMode === 'pave' && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   paintTiles(line);
   UI.lastPaint = { i, j };
   paintBanner();
+}
+
+/**
+ * The Express tool's drag: the whole drag so far (UI.xpath) is laid again as lanes each time the finger moves, so a
+ * pair's corners come out right (expressLanes). A drag lays a pair (the dragged tiles go the drag's way, the lane on
+ * their left comes back); with Shift held when it starts, or Single lane on in the banner, one lane. Each lane tile is
+ * a road tile planned as usual (Cement) where there is none, or one of your roads upgraded in place.
+ */
+function expressDrag(i, j, first) {
+  if (first) { UI.xpath = []; UI.xSingleDrag = !!UI.xSingle || !!(INPUT.gesture && INPUT.gesture.shift); }
+  if (!inMap(i, j)) return;
+  const path = UI.xpath, from = path.length ? path[path.length - 1] : null;
+  const line = from ? tileLine(from % S.W, (from / S.W) | 0, i, j) : [[i, j]];
+  for (const [x, y] of line) { if (!inMap(x, y)) break; const t = tIdx(x, y); if (path[path.length - 1] !== t) path.push(t); }
+  // Lay the stroke afresh: take back what it sketched, then sketch the lanes of the drag so far.
+  const back = { add: 'unadd', unadd: 'add' };
+  for (let k = UI.stroke.length - 1; k >= 0; k--) { const o = UI.stroke[k]; if (o.op === 'xp') { if (o.from) UI.draft.express.set(o.t, o.from); else UI.draft.express.delete(o.t); } else if (o.op === 'unxp') UI.draft.express.set(o.t, o.v); else draftOp([], o.t, back[o.op]); }
+  UI.stroke.length = 0;
+  paintFlagsReset(); UI.paintLanes = 0; UI.paintCrossLane = false;
+  for (const [t, v] of expressLanes(path, UI.xSingleDrag)) {
+    const x = t % S.W, y = (t / S.W) | 0;
+    if (UI.draft.express.has(t) || UI.draft.ramps.has(t) || S.bAt[t]) continue;
+    if (S.road[t]) {
+      if (!roadOwnedBy(ME, t)) { UI.paintSkipped = true; continue; }
+      if (S.paveMark[t] === 2 && S.road[t] >= 2 && S.road[t] % 2 !== v % 2) { UI.paintCrossLane = true; continue; } // lanes never cross each other
+    } else if (S.plan[t]) {
+      if (S.plan[t] !== ME + 1) { UI.paintSkipped = true; continue; }
+    } else if (S.res[t]) { UI.paintSkipped = true; continue; }
+    else if (canRoad(ME, x, y) || draftBridge(t)) { draftOp(UI.stroke, t, 'add'); if (crossTile(t)) { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; } }
+    else { if (crossTile(t)) UI.paintCross = true; else UI.paintSkipped = true; continue; }
+    draftLane(UI.stroke, t, v);
+    UI.paintLanes++;
+  }
+  UI.lastPaint = { i, j };
+  paintBanner();
+}
+
+/**
+ * The lane tiles of an Express drag along `path` (tile indices, each next to the one before): [tile, direction] for the
+ * dragged tiles (each pointing at the next; the last the way before it) and, unless `single`, the lane back: the tiles
+ * on the drag's left (so the dragged lane is on the right of the pair, as bots drive on the right), going the other way;
+ * at a corner the outer lane fills the 2 x 2 bend. A drag of one tile lays nothing.
+ */
+function expressLanes(path, single) {
+  const W = S.W, N = W * S.H, out = [];
+  if (path.length < 2) return out;
+  const dirOf = (a, b) => { const d = b - a; return d === 1 ? 2 : d === W ? 3 : d === -1 ? 4 : d === -W ? 5 : 0; };
+  const dirs = [];
+  for (let k = 0; k < path.length - 1; k++) dirs.push(dirOf(path[k], path[k + 1]) || (k ? dirs[k - 1] : 2));
+  dirs.push(dirs[dirs.length - 1]);
+  for (let k = 0; k < path.length; k++) out.push([path[k], dirs[k]]);
+  if (single) return out;
+  // The left-hand lane: each dragged tile shifted to the left of the way in and the way out (and both, round a corner).
+  const inPath = new Set(path), left = (v) => (v === 2 ? -W : v === 3 ? 1 : v === 4 ? W : -1); // (east: north; south: east; west: south; north: west)
+  const ret = [], seen = new Set();
+  const push = (t, a) => { if (t < 0 || t >= N || inPath.has(t) || seen.has(t) || Math.abs((t % W) - (a % W)) > 1) return; seen.add(t); ret.push(t); };
+  for (let k = 0; k < path.length; k++) {
+    const t = path[k], vin = k ? dirs[k - 1] : dirs[k], vout = dirs[k];
+    push(t + left(vin), t);
+    if (vin !== vout) { push(t + left(vin) + left(vout), t); push(t + left(vout), t); }
+  }
+  // Going back: each tile points at the one before it in the sequence (the first, on as the second does).
+  const flip = (v) => ((v - 2 + 2) % 4) + 2;
+  for (let k = 0; k < ret.length; k++) {
+    const v = k ? dirOf(ret[k], ret[k - 1]) : ret.length > 1 ? dirOf(ret[1], ret[0]) : 0;
+    out.push([ret[k], v || flip(dirs[Math.min(k, dirs.length - 1)])]);
+  }
+  return out;
 }
 
 /** A planned tile of yours the current tool (Roads, Bridges or Rail) can call off with a drag: in this sketch, or waiting for workers. */
@@ -5502,6 +5612,14 @@ function paintBanner(lead) {
   const pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail', arrows = UI.roadMode === 'arrows';
   lead = lead ? lead + ' ' : '';
   if (pave) { showRoadBanner(); return; }
+  if (UI.roadMode === 'express') {
+    const n = UI.xpath ? UI.xpath.length : 0;
+    showRoadBanner(lead + [n && n < EXPRESS.minLen ? `Only ${n} tile${n === 1 ? '' : 's'} long: too short to pay (trucks gain under a second on less than ${EXPRESS.minLen}), but you can lay it.` : '',
+      UI.paintCrossLane ? 'Lanes never cross each other: the drag skipped another lane.' : '',
+      UI.paintSkipped ? 'The drag skipped tiles it can\'t lay on: resources, a rival\'s roads or ground, or planned road that isn\'t yours.' : '',
+      UI.paintBridge || UI.paintTunnel ? 'Over water or rock a lane is a bridge or tunnel first (their usual cost), surfaced once it\'s built.' : ''].filter(Boolean).join(' '), true);
+    return;
+  }
   if (UI.paintErase) {
     const n = UI.paintErased || 0, what = rail ? 'track' : 'road';
     showRoadBanner(n ? `${n} planned ${what} tile${n === 1 ? '' : 's'} called off along the drag (ones only sketched drop out; ones waiting for workers go when you tap <b>Build</b>, their cost back). <b>Undo</b> puts ${n === 1 ? 'it' : 'them'} back.` : '', true);
@@ -5741,7 +5859,7 @@ function pipeAllPumps() {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe', 'express'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(ME);
   let line, how;
@@ -5777,6 +5895,12 @@ function showRoadBanner(problem, info) {
       'Asphalt <b>wears</b> as traffic drives over it, heavy Freight Trucks three times as fast: worn asphalt fades, cracks and slows bots a little, and worn right through it drops back to plain road. ' +
       'The Paver resurfaces marked roads once they are half worn, so a Roadworks near your busiest roads keeps them fast. Red outlines show worn asphalt. ' +
       `Marking is free; you have ${works} Roadworks.`;
+  } else if (mode === 'express' && draftEmpty()) {
+    let works = 0;
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && b.type === 'roadworks') works++;
+    line = `<b>Drag</b> to lay a <b>pair of Express lanes</b>, one out (the way you drag) and one back beside it; ${INPUT.mouse ? '<kbd>Shift</kbd> and drag, or ' : ''}<b>Single lane</b>, lays one. Over your own roads it upgrades them in place; elsewhere the base is a road (${costText(roadCost())} a tile). <button class="btn${UI.xSingle ? ' on' : ''}" id="x-single">Single lane${UI.xSingle ? ': on' : ''}</button>` +
+      (works ? '' : ' <span class="err">Build a Roadworks: its Paver lays the surface.</span>');
+    how = expressHow();
   } else if (mode === 'arrows') {
     line = 'Drag along a road to make it <b>one-way</b> the way you drag (a drag that starts off your roads moves the map). Tap a road to turn its arrow. <b>Undo</b> puts arrows back.';
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
@@ -5810,12 +5934,15 @@ function showRoadBanner(problem, info) {
       if (sm.railDel) parts.push(`<b>${sm.railDel}</b> of track to take up`);
       if (sm.pipe) parts.push(`<b>${sm.pipe}</b> tile${sm.pipe === 1 ? '' : 's'} of pipe`);
       if (sm.pipeDel) parts.push(`<b>${sm.pipeDel}</b> of pipe to take up`);
+      if (sm.express) parts.push(`<b>${sm.express}</b> Express lane tile${sm.express === 1 ? '' : 's'} (${UI.xSingleDrag ? 'a single lane' : 'a pair'}; the surface, ${costText(PAVE[3].cost)} a tile, is laid by your Roadworks)`);
+      if (sm.over) parts.push(`<b>${sm.over}</b> overpass${sm.over === 1 ? '' : 'es'} where a road crosses a lane`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (!sm.short.length ? '.' : `. <span class="ok">Short of ${sm.short.map((g) => GOOD[g].name).join(' and ')} for now: what you can't pay for waits and is paid from storage as the goods come in, oldest plans first.</span>`);
     }
     const waiting = planList(ME).length, wp = plansWaiting(ME), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
     const owedText = owedN ? ` <b>Waiting for goods now:</b> ${[wp.tiles ? `${wp.tiles} road tile${wp.tiles === 1 ? '' : 's'}` : '', wp.track ? `${wp.track} of track` : '', wp.pipes ? `${wp.pipes} of pipe` : '', wp.sites ? `${wp.sites} site${wp.sites === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} (${costText(wp.owed)} to go).` : '';
     if (mode === 'pipe') how = pipeHow + owedText;
+    else if (mode === 'express') how = expressHow() + owedText;
     else if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track (build them first if you like, and drag from one to the other); Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
@@ -5843,12 +5970,14 @@ function showRoadBanner(problem, info) {
     $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '') + (wl ? ` + ${wl} wall` : '')
       : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` + (wl ? ` + ${wl} wall` : '')
       : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
-      : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : sm.pipe ? `Lay ${sm.pipe} pipe tile${sm.pipe === 1 ? '' : 's'}` : 'Take up';
+      : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : sm.pipe ? `Lay ${sm.pipe} pipe tile${sm.pipe === 1 ? '' : 's'}` : sm.express ? `Lay ${sm.express} lane tile${sm.express === 1 ? '' : 's'}` : 'Take up';
+    if (sm.express && sm.add) $('banner-ok').textContent = `Lay ${sm.express} lane tile${sm.express === 1 ? '' : 's'}`;
     $('banner-ok').disabled = !sm.can;
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
   }
   $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
   if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
+  if ($('x-single')) $('x-single').onclick = (e) => { e.stopPropagation(); UI.xSingle = !UI.xSingle; sfx('click'); showRoadBanner(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
   tb.classList.toggle('on', !!R.traffic);
@@ -5867,6 +5996,13 @@ function showRoadBanner(problem, info) {
   if (R.goodsMap) { UI.flowKey = goodsFlowKey(); $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key flow-key">${UI.flowKey}</span>`); }
   bannerMissionHint();
   toolFit();
+}
+
+/** How Express lanes work: the Express tool's How it works. */
+function expressHow() {
+  return `An <b>Express lane</b> is a road tier above asphalt: a one-way motorway lane a tile wide. <b>Freight Trucks and Tankers</b> run on it at ${EXPRESS.truck}× (asphalt: ${PAVE[2].speed}×), <b>Road Trains</b> at ${EXPRESS.train}×, warbots at asphalt speed; <b>Haulers</b>, Workers, Agribots and Crawlers never drive along one (they cross at an overpass), so keep an ordinary road for them. ` +
+    `Workers lay the base as a road; then a <b>Roadworks</b>' Paver lays the surface, nearest first, for ${costText(PAVE[3].cost)} a tile from its stock (Alloy only when it first goes up). A lane wears like asphalt (resurfaced at half worn, marked as it is); worn through it drops to asphalt and its lights go out. ` +
+    `Where an ordinary road touches a lane's side it's a <b>ramp</b> (a junction: bots give way); where a lane ends on a road, an end. An ordinary road <b>crosses</b> a lane only on an <b>overpass</b> (${costText(OVERPASS_COST)}, planned for you), and lanes never cross each other. Bends are 90°. Under ${EXPRESS.minLen} tiles a lane barely pays: trucks keep their acceleration.`;
 }
 
 /** Paths' maps over the roads, one at a time: 'traffic' (the Traffic map), 'goods' (the Goods flow map) or '' (neither). */
@@ -7430,7 +7566,7 @@ function paveCounts(owner) {
   for (let t = 0; t < S.W * S.H; t++) {
     if (!S.paveMark[t] || !(S.road[t] ? wayOwner(t) === owner : S.plan[t] === owner + 1)) continue;
     c.marked++;
-    if (S.pave[t] !== 2) c.todo++;
+    if (S.pave[t] < paveWant(t)) c.todo++;
     else if (S.wear[t] >= REPAVE_AT) c.worn++;
     else c.fresh++;
   }
@@ -7450,19 +7586,19 @@ function openRoadSheet(t) {
 
 function refreshRoadSheet(t) {
   if (!S.road[t]) { closeSheet(); return; }
-  const asphalt = S.pave[t] === 2, w = Math.round(S.wear[t] / 10);
+  const lane = S.pave[t] === 3, asphalt = S.pave[t] >= 2, w = Math.round(S.wear[t] / 10);
   const cross = crossTile(t) ? (S.terrain[t] === T_ROCK ? ' tunnel' : S.terrain[t] === T_CHASM ? ' sky bridge' : ' bridge') : '';
-  $('rd-name').textContent = (asphalt ? 'Asphalt' : 'Concrete') + (cross || ' road');
-  const speed = asphalt ? asphaltSpeed(S.wear[t]) : PAVE[1].speed;
+  $('rd-name').textContent = lane ? 'Express lane' + (cross ? ` (${cross.trim()})` : '') : (asphalt ? 'Asphalt' : 'Concrete') + (cross || ' road');
+  const speed = lane ? expressSpeed(BOTS.truck, S.wear[t]) : asphalt ? asphaltSpeed(S.wear[t]) : PAVE[1].speed;
   $('sh-dyn').innerHTML = (S.over[t] ? '<div class="kv"><span>Overpass</span><span>Straight through only, no turning</span></div>'
       : S.lights[t] ? '<div class="kv"><span>Traffic light</span><span>One way across at a time</span></div>' : '') +
-    `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road</span></div>` +
+    `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road${lane ? ` for trucks (Road Trains ${Math.round(expressSpeed(BOTS.roadtrain, S.wear[t]) * 100) / 100}×; Haulers never drive along it)` : ''}</span></div>` +
     (asphalt ? `<div class="kv"><span>Wear</span><span>${w}%${S.wear[t] >= REPAVE_AT ? ' (due for resurfacing)' : ''}</span></div>
       <div class="bar"><div style="width:${w}%;background:${w >= 75 ? '#ff4d4d' : w >= 50 ? '#ffb347' : '#7ee08a'}"></div></div>` : '') +
-    `<p class="desc">${S.paveMark[t] ? 'Marked for asphalt: a Roadworks joined to it paves it and resurfaces it as it wears.'
-      : asphalt ? 'Not marked: once it wears through it drops back to plain road. Mark it to have a Roadworks maintain it.'
-      : 'Mark it for asphalt and a Roadworks joined to it will pave it (2¾× speed).'} Busy roads wear fastest, and Freight Trucks wear them three times as fast as other bots.</p>`;
-  $('rd-mark').textContent = S.paveMark[t] ? 'Clear the asphalt mark' : 'Mark for asphalt';
+    `<p class="desc">${S.paveMark[t] === 2 ? 'Marked as an Express lane: a Roadworks joined to it lays the surface and resurfaces it as it wears.' : S.paveMark[t] ? 'Marked for asphalt: a Roadworks joined to it paves it and resurfaces it as it wears.'
+      : asphalt ? `Not marked: once it wears through it drops back to ${lane ? 'asphalt' : 'plain road'}. Mark it to have a Roadworks maintain it.`
+      : 'Mark it for asphalt and a Roadworks joined to it will pave it (2¾× speed).'} Busy roads wear fastest, and Freight Trucks wear them three times as fast as other bots.</p>` + (lane ? flavorLine('express') : '');
+  $('rd-mark').textContent = S.paveMark[t] === 2 ? 'Clear the Express mark' : S.paveMark[t] ? 'Clear the asphalt mark' : 'Mark for asphalt';
 }
 
 /** A neutral Trade Post: what it is, who has docked there, and how to start trading. */

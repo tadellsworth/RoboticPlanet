@@ -2557,7 +2557,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
-    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, fires: [],
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, fires: [],
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
@@ -3925,13 +3925,14 @@ function setRoad(i, j, on, owner) {
   if (S.wear) S.wear[t] = 0;
   if (on) clearDecor(t);
   if (!on && S.paveMark) S.paveMark[t] = 0;
+  if (!on && S.xdir) S.xdir[t] = 0;
   S.roadVer = (S.roadVer || 0) + 1;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
   dirtySpan(t);
 }
 
-/** Set an existing road tile's surface: 1 road, 2 asphalt (fresh). */
+/** Set an existing road tile's surface: 1 road, 2 asphalt (fresh), 3 an Express lane (fresh). */
 function setPave(i, j, tier) {
   const t = tIdx(i, j);
   if (!S.road[t] || S.pave[t] === tier) return;
@@ -3945,7 +3946,7 @@ function setPave(i, j, tier) {
 function topPave() {
   if (S.topPaveCache) return S.topPaveCache;
   let top = 1;
-  for (let t = 0; t < S.W * S.H && top < 2; t++) if (S.road[t] && S.pave[t] > top) top = S.pave[t];
+  for (let t = 0; t < S.W * S.H && top < 3; t++) if (S.road[t] && S.pave[t] > top) top = S.pave[t];
   S.topPaveCache = top;
   return top;
 }
@@ -3954,6 +3955,7 @@ function topPave() {
 function setRoadDir(i, j, v) {
   const t = tIdx(i, j);
   if (!S.road[t] || S.road[t] === v) return;
+  if (v < 2 && S.pave[t] === 3) return; // an Express lane is always one-way
   S.road[t] = v;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
@@ -3973,26 +3975,53 @@ function dirtySpan(t) {
 /** How a Roadworks chooses roads: 'marked' (the roads marked in Paths) or 'all' joined to it. */
 function paveMode(b) { return b.pmode || (S.players[b.owner].ai ? 'all' : 'marked'); }
 
-/** Does this tile want a Paver: a road not yet asphalt, or asphalt worn enough to resurface? */
-function needsPaving(t) { return S.road[t] && (S.pave[t] < 2 || S.wear[t] >= REPAVE_AT); }
+/** The surface tile t is marked for: 3 an Express lane (paveMark 2), else 2 asphalt. */
+function paveWant(t) { return S.paveMark[t] === 2 ? 3 : 2; }
+
+/** Does this tile want a Paver: a road not yet at the surface it's marked for, or one worn enough to resurface? */
+function needsPaving(t) { return S.road[t] && (S.pave[t] < paveWant(t) || S.wear[t] >= REPAVE_AT); }
+
+/** Is road tile t an Express lane (surface tier 3)? */
+function isExpress(t) { return S.road[t] > 0 && S.pave[t] === 3; }
+
+/**
+ * The side (0 N, 1 E, 2 S, 3 W) of Express lane t where its partner lane runs the other way beside it (the median
+ * goes between them), or -1 for a lane on its own. Only the sides across the lane's own direction count.
+ */
+function laneMate(t) {
+  const r = S.road[t], i = t % S.W, j = (t / S.W) | 0;
+  if (!(r >= 2)) return -1;
+  const ew = r === 2 || r === 4, back = r === 2 ? 4 : r === 4 ? 2 : r === 3 ? 5 : 3;
+  for (const [k, di, dj] of ew ? [[0, 0, -1], [2, 0, 1]] : [[1, 1, 0], [3, -1, 0]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (isExpress(u) && S.road[u] === back) return k;
+  }
+  return -1;
+}
+
+/** Speed multiplier for bot kind `bt` on an Express lane with this much wear: its own lane speed (Asphalt's for a bot only crossing it), worn like asphalt. */
+function expressSpeed(bt, w) { return (laneSpeed(bt) || PAVE[2].speed) * asphaltSpeed(w) / PAVE[2].speed; }
 
 /** Speed multiplier for a bot on asphalt with this much wear. */
 function asphaltSpeed(w) {
   return w <= WEAR_SLOW ? PAVE[2].speed : PAVE[2].speed - (PAVE[2].speed - WEAR_WORN_SPEED) * (w - WEAR_SLOW) / (WEAR_MAX - WEAR_SLOW);
 }
 
-/** Wear asphalt as a bot drives onto it. Worn right through, it drops back to plain road. */
+/** Wear asphalt (or an Express lane) as a bot drives onto it. Worn right through, asphalt drops back to plain road, a lane to asphalt. */
 function wearRoad(t, u) {
-  if (S.pave[t] !== 2 || !S.wear) return;
+  if (S.pave[t] < 2 || !S.wear) return;
   const before = S.wear[t], w = Math.min(WEAR_MAX, before + (BOTS[u.type].train ? WEAR_TRAIN : BOTS[u.type].truck ? WEAR_TRUCK : WEAR_BOT));
   S.wear[t] = w;
   const i = t % S.W, j = (t / S.W) | 0;
   if (w >= WEAR_MAX) {
-    setPave(i, j, 1);
+    const lane = S.pave[t] === 3;
+    setPave(i, j, lane ? 2 : 1);
     const P = S.players[wayOwner(t)];
     if (P && !P.ai && isMe(wayOwner(t)) && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
       P.wornMsgAt = S.time;
-      postMsg(ME, 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
+      postMsg(ME, lane ? 'A busy Express lane has worn down to asphalt: its lights are out and the trucks slow. Mark it in Paths (Express) and a Roadworks will keep it surfaced.'
+        : 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
     }
   } else if ((before / 250 | 0) !== (w / 250 | 0)) markDirty(i, j); // shows its cracks
 }
@@ -4004,13 +4033,29 @@ function roadsMarked(owner) {
   return n;
 }
 
-/** Mark (or unmark) a road for asphalt: a Roadworks paves and maintains marked roads. */
-function setPaveMark(owner, i, j, on) {
-  const t = tIdx(i, j);
-  if (!S.road[t] || wayOwner(t) !== owner || !!S.paveMark[t] === !!on) return false;
-  S.paveMark[t] = on ? 1 : 0;
+/**
+ * Mark (or unmark) a road for asphalt (tier 2, the default) or an Express lane (tier 3): a Roadworks paves and
+ * maintains marked roads. Marking for asphalt leaves an Express mark as it is.
+ */
+function setPaveMark(owner, i, j, on, tier) {
+  const t = tIdx(i, j), v = !on ? 0 : tier === 3 ? 2 : 1;
+  if (!S.road[t] || wayOwner(t) !== owner || S.paveMark[t] === v || (v === 1 && S.paveMark[t] === 2)) return false;
+  S.paveMark[t] = v;
   markDirty(i, j);
   return true;
+}
+
+/** Does `owner` have any road marked (or planned) as an Express lane? Looked up once a second. */
+const _xm = { of: null, at: -1, by: [] };
+function expressMarked(owner) {
+  if (_xm.of !== S || _xm.at !== (S.tick >> 5)) {
+    _xm.of = S; _xm.at = S.tick >> 5; _xm.by = S.players.map(() => false);
+    for (let t = 0; t < S.W * S.H; t++) {
+      if (S.paveMark[t] === 2 && S.road[t]) { const o = wayOwner(t); if (o >= 0) _xm.by[o] = true; }
+      else if (S.xdir && S.xdir[t] && S.plan[t]) _xm.by[S.plan[t] - 1] = true;
+    }
+  }
+  return !!_xm.by[owner];
 }
 
 /* ------------------------------------------------------------------ road network */
@@ -4922,7 +4967,7 @@ const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-ti
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
-  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
+  wear: Uint16Array, paveMark: Uint8Array, xdir: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
   heat: Float32Array, // (the traffic map's flow: see HEAT)
   tun: Uint8Array, // (the Murmur's tunnels: see murmurTick)
@@ -5090,6 +5135,7 @@ function deserializeGame(json) {
   o.planQ = o.planQ || [];
   o.junPlan = o.junPlan || {};
   if (!o.paveMark) { o.paveMark = new Array(o.W * o.H).fill(0); for (const b of o.buildings) if (b.type === 'roadworks' && !b.pmode) b.pmode = 'all'; }
+  if (!o.xdir) o.xdir = new Array(o.W * o.H).fill(0); // saves from before Express lanes: no lane planned
   o.lights = o.lights || {};
   o.over = o.over || {};
   o.scorch = o.scorch || {};

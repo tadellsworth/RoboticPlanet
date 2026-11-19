@@ -18,13 +18,17 @@ function _pfEnsure(N) {
   _pf.gen = 0;
 }
 
-/** Cost of crossing tile t while moving in direction (dx, dy); off-road tiles cost `offMul` times more. */
-function tileCost(t, dx, dy, offMul) {
+/**
+ * Cost of crossing tile t while moving in direction (dx, dy); off-road tiles cost `offMul` times more. `lane` is the
+ * bot's speed factor on an Express lane (laneSpeed; 0 for one that may only cross a lane, at Asphalt speed).
+ */
+function tileCost(t, dx, dy, offMul, lane) {
   if (S.tidal && S.tidal[t] && flatsClosing()) return 40; // the tide is about to cover the flats: keep off them
   const r = S.road[t];
   if (r) {
     // The wrong way up a one-way road: slow, plus a penalty so bots only do it when there's no other way.
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
+    if (S.pave[t] === 3) return ROAD_PREFERENCE / (lane || PAVE[2].speed);
     return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
   }
   if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[throughPave(t)].speed : 1; // an Outpost a road runs through (as fast as the road into it), or the building a trip starts or ends at
@@ -47,6 +51,8 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  * opts.coverMap: the same from a map of its own (1 where a gun reaches): the Murmur's on Active (murmurGunMap).
  * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
+ * opts.lane: the bot's speed factor along an Express lane (laneSpeed), 0 or unset for a bot barred from them: it may
+ *   only step onto a lane across its direction (crossing it, at an overpass or a ramp), never along it.
  *
  * An overpass (S.over) carries two roads that cross without meeting: nobody turns on one. A route only goes onto
  * an overpass straight on and out the far side: one move from the tile before it to the tile after it (across any
@@ -54,7 +60,7 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * route may still start on one (any way off it) or end on one (from any side).
  */
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
-  const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
+  const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1, lane = (opts && opts.lane) || 0;
   const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
   const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
   const airOk = who !== undefined && !(opts && opts.noAir) && airLines().size > 0; // (Workers and Warbots ride Airship lines)
@@ -70,7 +76,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const gen = ++_pf.gen;
   const g = _pf.g, from = _pf.from, stamp = _pf.stamp, closed = _pf.closed, heap = _pf.heap;
   heap.clear();
-  const minStep = ROAD_PREFERENCE / PAVE[topPave()].speed;
+  const top = topPave(), minStep = ROAD_PREFERENCE / Math.max(PAVE[top].speed, top === 3 ? lane : 0);
   const h = (i, j) => {
     const dx = Math.abs(i - gx), dy = Math.abs(j - gy);
     return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * minStep;
@@ -81,7 +87,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   // more overpasses in a row), or the goal if it lies on one of them. The way there is kept as from = -2 - cur.
   const overpass = (cur, a, dir, wall) => {
     const dx = dir[0], dy = dir[1];
-    let ng = g[cur] + (tileCost(cur, dx, dy, offMul) + tileCost(a, dx, dy, offMul)) * 0.5 + wall + extra(a);
+    let ng = g[cur] + (tileCost(cur, dx, dy, offMul, lane) + tileCost(a, dx, dy, offMul, lane)) * 0.5 + wall + extra(a);
     let ai = a % W, aj = (a / W) | 0, b = a;
     while (b !== goal && S.over[b]) {
       const bi = ai + dx, bj = aj + dy;
@@ -94,7 +100,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         w = BREACH_COST + Math.max(0, getE(S.bAt[nb]).armor) * BREACH_PER_ARMOR;
       }
       if (roadOnly && !roadLike(nb) && nb !== goal && !(ferryOk && ferryLink(nb) >= 0)) return;
-      ng += (tileCost(b, dx, dy, offMul) + tileCost(nb, dx, dy, offMul)) * 0.5 + w + extra(nb);
+      ng += (tileCost(b, dx, dy, offMul, lane) + tileCost(nb, dx, dy, offMul, lane)) * 0.5 + w + extra(nb);
       b = nb; ai = bi; aj = bj;
     }
     if (closed[b] === gen) return;
@@ -131,6 +137,8 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         wall = BREACH_COST + Math.max(0, getE(S.bAt[nt]).armor) * BREACH_PER_ARMOR;
       }
       if (roadOnly && (dir[2] > 1 || (!roadLike(nt) && nt !== goal && !(ferryOk && ferryLink(nt) >= 0)))) continue;
+      // An Express lane: a bot barred from it may only step onto it across its direction (crossing it), never along.
+      if (!lane && nt !== goal && S.road[nt] >= 2 && S.pave[nt] === 3 && dir[0] * ROAD_DIRS[S.road[nt]][0] + dir[1] * ROAD_DIRS[S.road[nt]][1] !== 0) continue;
       if (dir[2] > 1) {
         // Bots follow roads round their corners: no cutting diagonally on or off a road.
         if (S.road[cur] || S.road[nt]) continue;
@@ -142,7 +150,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
       else if (ov && S.road[nt] && S.over[nt] && nt !== goal) { overpass(cur, nt, dir, wall); continue; }
-      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5 + wall;
+      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul, lane) + tileCost(nt, dir[0], dir[1], offMul, lane)) * 0.5 + wall;
       // Workers steer clear of enemy territory unless there is no other way, and well clear of enemy guns.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; if (guns && guns[nt]) ng += DANGER_COST; }
       // The army keeps out of the enemy's guns where the way round is short.

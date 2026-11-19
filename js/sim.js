@@ -218,6 +218,7 @@ function needsOf(b) {
     if (!b.armed) for (const g in NUKE.parts) out.push([g, NUKE.parts[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
+    if (expressMarked(b.owner)) out.push(['alloy', 2 - (b.stock.alloy || 0) - (b.inc.alloy || 0)]); // (an Express lane's barrier and lamps: a quarter a tile)
   } else if (def.store && keepOf(b) && b.smode !== 'empty') {
     // A Depot's supply orders (a Rail Station's own stock too): keep this much of each good here (goods
     // already promised to someone don't count). What a far station stocks automatically comes by train
@@ -439,7 +440,7 @@ function feedPreview(owner, type, x, y) {
 /** Does a building of this kind use good g (as an input, ammo, fuel or repairs)? */
 function typeUses(def, g) {
   return !!((def.inp && def.inp[g]) || def.ammo === g || (def.fuelCap && g === 'fuel') || (def.repair && g === 'alloy') ||
-    (def.roadworks && g === 'asphalt') || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.bots && (g === 'alloy' || g === 'chip')));
+    (def.roadworks && (g === 'asphalt' || g === 'alloy')) || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.bots && (g === 'alloy' || g === 'chip')));
 }
 
 /** Is building b being fed by a neighbour (so it works FEED_BOOST faster)? */
@@ -1141,7 +1142,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)) }; // (Airships carry Workers and Warbots, no vehicles)
+  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
@@ -1278,7 +1279,7 @@ function countTraffic() {
     if (u.dead || u.inside || !u.path) continue;
     const t = Math.floor(u.y) * S.W + Math.floor(u.x);
     if (!S.road[t]) continue;
-    if (u.wt !== t) { u.wt = t; if (S.pave[t] === 2) wearRoad(t, u); }
+    if (u.wt !== t) { u.wt = t; if (S.pave[t] >= 2) wearRoad(t, u); }
     HEAT.flow[t] += SIM_STEP;
     if (!u.moved) HEAT.jam[t] += SIM_STEP;
     const k = t * 4 + heading(u.face);
@@ -1663,8 +1664,9 @@ function moveAlong(u, dt) {
     const deck = !S.road[here] && viaLink(here) >= 0; // a Viaduct's deck is smooth concrete: as good as fresh asphalt
     const through = !deck && !S.road[here]; // an Outpost or Gate: as good as the best road into it (throughPave)
     const pv = deck ? 2 : through ? throughPave(here) : S.pave[here];
-    speed *= wrong ? ONEWAY_WRONG : (pv === 2 ? asphaltSpeed(deck || through ? 0 : S.wear[here]) : PAVE[pv || 1].speed) / (1 + trafficJam(u, here, next));
-    if (bt.truck && pv !== 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
+    const wear = deck || through ? 0 : S.wear[here];
+    speed *= wrong ? ONEWAY_WRONG : (pv === 3 ? expressSpeed(bt, wear) : pv === 2 ? asphaltSpeed(wear) : PAVE[pv || 1].speed) / (1 + trafficJam(u, here, next)); // (an Express lane: its own speed for trucks, see expressSpeed)
+    if (bt.truck && pv < 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
@@ -2925,6 +2927,9 @@ function layRoad(t) {
   setPlan(t, -1);
   if (S.paveRes) delete S.paveRes[t];
   setRoad(t % S.W, (t / S.W) | 0, true, o >= 0 ? o : undefined);
+  // Planned as an Express lane (S.xdir): one-way the way it was dragged, and marked for the Paver to surface.
+  if (S.xdir && S.xdir[t]) { setRoadDir(t % S.W, (t / S.W) | 0, S.xdir[t]); S.paveMark[t] = 2; S.xdir[t] = 0; }
+  expressJoins(t);
   narrate(o, 'road', t % S.W, (t / S.W) | 0); // (a colony's first road: once a game)
   if (crossTile(t)) computeZones(); // a bridge or tunnel joins new land
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory(); // a bridge's landing claims a little ground
@@ -2936,6 +2941,7 @@ function cancelPlan(t) {
   if (owner < 0) return;
   const cost = roadTileCost(t), owed = S.owe && S.owe[t];
   setPlan(t, -1);
+  if (S.xdir) S.xdir[t] = 0;
   if (!owed) refundRoad(owner, cost, t % S.W, (t / S.W) | 0); // a tile still waiting for its goods cost nothing yet
 }
 
@@ -3638,6 +3644,41 @@ function findPaveSpot(b, x, y) {
   return -1;
 }
 
+/**
+ * What Roadworks b is short of to lay (or resurface) Express lane tile t: 1 Asphalt, and when the lane first goes up a
+ * quarter Alloy (PAVE[3].cost; whole Alloy taken as b.alloyCr runs out). '' when it has them.
+ */
+function expressShort(b, t) {
+  if (!((b.stock.asphalt || 0) >= PAVE[3].cost.asphalt)) return 'Asphalt';
+  if (S.pave[t] < 3 && !((b.alloyCr || 0) >= PAVE[3].cost.alloy - 1e-9) && !((b.stock.alloy || 0) >= 1)) return 'Alloy';
+  return '';
+}
+
+/** Pay for Express lane tile t from Roadworks b's stock (see expressShort). */
+function expressPay(b, t) {
+  bump(b.stock, 'asphalt', -PAVE[3].cost.asphalt); usedGood(b.owner, 'asphalt', PAVE[3].cost.asphalt);
+  if (S.pave[t] < 3) {
+    if (!((b.alloyCr || 0) >= PAVE[3].cost.alloy - 1e-9)) { bump(b.stock, 'alloy', -1); usedGood(b.owner, 'alloy', 1); b.alloyCr = (b.alloyCr || 0) + 1; }
+    b.alloyCr = Math.round(((b.alloyCr || 0) - PAVE[3].cost.alloy) * 1000) / 1000;
+  }
+}
+
+/**
+ * A road tile went down (or became a lane) at t: an Express lane that an ordinary road now crosses (four roads meeting
+ * on a lane tile) gets an overpass planned, as the rule has it (roads cross a lane only on an overpass). The tile and
+ * its four neighbours are looked at. Not for a rival's lanes (it builds none).
+ */
+function expressJoins(t) {
+  const W = S.W, N = W * S.H, i = t % W;
+  for (const u of [t, i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+    if (u < 0 || u >= N || !S.road[u] || S.paveMark[u] !== 2 || S.over[u] || junPlanAt(u) || !isCrossing(u)) continue;
+    const o = wayOwner(u);
+    if (o < 0 || S.players[o].ai) continue;
+    if (S.lights[u]) removeLight(u);
+    planJunction(o, u, 'over');
+  }
+}
+
 /** Count goods a player produced (for statistics and mission goals). */
 function madeGood(owner, g, n) {
   const P = S.players[owner];
@@ -3751,16 +3792,23 @@ function doStaff(u, t, dt) {
         node = findPaveSpot(b, b.x, b.y);
         if (node < 0) {
           b.status = paveMode(b) === 'all' ? 'Every joined road is asphalt, in good repair'
-            : roadsMarked(b.owner) ? 'Every marked road is asphalt, in good repair' : 'No roads marked: mark roads to pave in Paths (Pave)';
+            : roadsMarked(b.owner) ? 'Every marked road is surfaced, in good repair' : 'No roads marked: mark roads to pave in Paths (Pave or Express)';
           t.wait = 3;
           return;
         }
-        if (!(b.charges > 0)) {
-          if (!((b.stock.asphalt || 0) > 0)) { b.status = 'Waiting for Asphalt'; t.wait = 1; return; }
-          bump(b.stock, 'asphalt', -1); usedGood(b.owner, 'asphalt', 1);
-          b.charges = ASPHALT_TILES;
+        if (paveWant(node) === 3) {
+          // An Express lane: 1 Asphalt a tile, and a quarter Alloy when it first goes up (see expressPay).
+          const short = expressShort(b, node);
+          if (short) { b.status = `Waiting for ${short}`; t.wait = 1; return; }
+          b.status = 'Laying an Express lane';
+        } else {
+          if (!(b.charges > 0)) {
+            if (!((b.stock.asphalt || 0) > 0)) { b.status = 'Waiting for Asphalt'; t.wait = 1; return; }
+            bump(b.stock, 'asphalt', -1); usedGood(b.owner, 'asphalt', 1);
+            b.charges = ASPHALT_TILES;
+          }
+          b.status = 'Laying asphalt';
         }
-        b.status = 'Laying asphalt';
       } else {
         if (reachableRes(b.x, b.y, def.radius, def.plant) >= 16) { b.status = 'The grove is full'; t.wait = 4; return; }
         node = findPlantSpot(b, def.radius);
@@ -3842,15 +3890,23 @@ function doStaff(u, t, dt) {
         }
       } else if (def.roadworks) {
         if (needsPaving(node)) {
-          if (S.pave[node] < 2) setPave(ni, nj, 2); else { S.wear[node] = 0; markDirty(ni, nj); }
-          b.charges = Math.max(0, (b.charges || 0) - 1);
-          S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
+          const want = paveWant(node);
+          if (want === 3) {
+            // An Express lane is paid for from the Roadworks' stock as the Paver reaches each tile; short of it, the tile waits.
+            if (!expressShort(b, node)) {
+              expressPay(b, node);
+              if (S.pave[node] < 3) { setPave(ni, nj, 3); S.players[u.owner].xlaid = (S.players[u.owner].xlaid || 0) + 1; } else { S.wear[node] = 0; markDirty(ni, nj); }
+              S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
+            }
+          } else {
+            if (S.pave[node] < 2) setPave(ni, nj, 2); else { S.wear[node] = 0; markDirty(ni, nj); }
+            b.charges = Math.max(0, (b.charges || 0) - 1);
+            S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
+          }
         }
-        // Keep going along the paths while there's asphalt left in the hopper.
-        if (b.charges > 0) {
-          const next = findPaveSpot(b, ni, nj);
-          if (next >= 0 && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
-        }
+        // Keep going along the paths while there's asphalt left in the hopper (or Express tiles the stock can pay for).
+        const next = findPaveSpot(b, ni, nj);
+        if (next >= 0 && (paveWant(next) === 3 ? !expressShort(b, next) : b.charges > 0) && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
       } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
         S.res[node] = def.plant;
         S.amt[node] = RES[def.plant].amount;
@@ -15711,7 +15767,7 @@ function hashState() {
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
-  for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)

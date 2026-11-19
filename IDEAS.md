@@ -165,9 +165,21 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     more than two Terminals, Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
     whether 4× a train's acceleration is brisk enough on a short line (a 20-tile line takes about 5 s, not the sheet's 3).
     Lit up at night, it looks the part.
-  - **Express highways.** A road tier above Asphalt: wide, banked, one-way lanes with on-ramps, where Freight Trucks and
-    Road Trains run twice as fast; Haulers aren't allowed on them. Dear Asphalt, kept up by a Roadworks; it builds on
-    the one-way roads and junctions already in the game.
+  - **Express highways** (built, Nov 19 2026: direction A, the Expressway, on B's mechanics, from the design sheet,
+    every recommendation on it accepted). A road tier above Asphalt (`S.pave` 3): a one-way lane a tile wide, laid in
+    pairs (or singly with Shift) by the Paths tool Express (Shift+E), the base a road laid by Workers, the surface by
+    the Roadworks' Paver for 1 Asphalt and a quarter Alloy a tile; Road Trains 2× Asphalt (5.5), Freight Trucks and
+    Tankers 1.64× (4.5), warbots at Asphalt speed, Haulers and the light bots never along it (only across, at an
+    overpass); wear as Asphalt, worn through it drops to Asphalt; ramps and ends autotiled; roads cross a lane only on
+    an overpass, planned for you; lanes never cross; 90° bends; allowed in the Hollow. Decided on the build: the Paver
+    may drive a lane (it has to lay and resurface it); the Alloy is paid only when a lane first goes up, resurfacing
+    costs the Asphalt alone; the overpass is planned the moment the crossing exists (the sketches count and price it);
+    the cat's-eyes are drawn live rather than baked, so the Murmur's dark puts them out tile by tile. Open: the rival
+    (the Architect lays a pair base to Depot cluster once its late game has a Roadworks; raiders already tear lanes up
+    like roads); C's flyover as a later piece over a second lane; the sign gantries (drawn nowhere yet); nicer one-way
+    arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
+    a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
+    (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
   - **Mass driver.** A long electromagnetic rail that fires sealed cargo canisters in an arc to a Catcher building far
     across the map (up to about 30 tiles), one every 10 seconds or so. A big build, and power for every shot. Canisters
     fly over everything, but a rival's Flak can shoot them down, and a missed catch spills the cargo as crates. The

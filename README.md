@@ -164,7 +164,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
-| Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles) |
+| Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles), and lays Express lanes (1 Asphalt and a quarter Alloy a tile) |
 | Ammo Plant | Alloy + Cement → 3 **Ammo**; warbots reload it in the Command Base and Outposts, 5 shots per Ammo (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 22 tiles away; holds 2, reloads in 60 s (Versus; 25 s until Nov 2026, the owner's call) |
@@ -288,6 +288,28 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
+- **Express highways** (`PAVE[3]`, `EXPRESS`, `laneSpeed` in `js/defs.js`; built Nov 2026 from the design sheet's
+  direction A, the Expressway, on B's mechanics): a road tier above asphalt, `S.pave` 3, a one-way motorway lane a tile
+  wide (always one-way: `setRoadDir` refuses two-way on it). Paths → **Express** (Shift+E, beside Pave): a drag lays a
+  **pair** (the dragged tiles the drag's way, the lane on their left back, the outer lane filling a 2×2 bend:
+  `expressLanes` in `js/ui.js`), Shift-drag or the banner's **Single lane** one lane. Over your own roads it upgrades in
+  place; elsewhere the base is a planned road (Cement) with the lane's direction noted in `S.xdir` until Workers lay it
+  (`layRoad`), when it turns one-way and marked `S.paveMark` 2 (1 is the asphalt mark; `paveWant`). The Roadworks'
+  Paver then surfaces it exactly as it paves asphalt, nearest first (`findPaveSpot`, `needsPaving`), paid from the
+  Roadworks' stock as it reaches each tile: 1 Asphalt, and a quarter Alloy when it first goes up (`expressShort`,
+  `expressPay`; Haulers bring the Roadworks Alloy once any lane is marked, `expressMarked`). Speeds (`expressSpeed`):
+  Road Trains 5.5× (2× asphalt), Freight Trucks and Tankers 4.5×, warbots and the Paver at asphalt speed; Haulers,
+  Workers, Agribots and Crawlers never drive along one: `findPath` (`opts.lane`, from `routeOpts`) lets a barred bot
+  step onto a lane only across its direction (an overpass, a ramp), never along it, so keep an ordinary road for them.
+  Wear as asphalt (same counters, slows past half, resurfaced at `REPAVE_AT`, 1 Asphalt); worn through it drops to
+  asphalt, lights out (`wearRoad`). An ordinary road touching a lane's side is a ramp (a junction: give way); where a
+  road crosses a lane (four roads on a lane tile) an overpass is planned for its owner (`expressJoins`, from `layRoad`
+  and the paths order; the sketches count them, `draftOverpasses`); lanes never cross each other. The art is drawn in
+  code (`drawExpress` in `js/render.js`: median, barrier, amber and white lines, cat's-eyes, hazard aprons at ramps,
+  ends narrowing onto a road; `laneMate` finds the partner lane); at night `drawRoadGlow` lights the cat's-eyes and a
+  strip in the owner's colour along the median, and `streetLamps` puts the asphalt lamps on the median. Under
+  `EXPRESS.minLen` (8) tiles the tool says it's too short to pay. Rivals build none yet; raiders tear lanes up like roads.
+  Allowed in the Hollow. `hashState` covers `S.pave`, `S.paveMark` and `S.xdir`.
 - **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, and through
   rocky crags as a tunnel, so there's no need to switch tools. The **Bridges** tool in Paths plans them too:
   a bridge costs 2 Cement and half an Alloy a tile (cheaper than a Viaduct span: Islands live on bridges), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;

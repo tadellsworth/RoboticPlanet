@@ -22,7 +22,19 @@ const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much ch
 const PAVE = [null,
   { key: 'road', name: 'Road', speed: 2.0, cost: { cement: 0.2 } },
   { key: 'asphalt', name: 'Asphalt road', speed: 2.75 },
+  // The Express lane (tier 3): a one-way motorway lane a tile wide, laid by the Roadworks' Paver over a road base at
+  // `cost` a tile (the Alloy for the barrier, lamps and cat's-eyes only when it goes up, not when it's resurfaced). Its
+  // `speed` is what a warbot (or a bot crossing it) gets: Asphalt's. Trucks go faster (EXPRESS), the rest never drive along it.
+  { key: 'express', name: 'Express lane', speed: 2.75, cost: { asphalt: 1, alloy: 0.25 } },
 ];
+/**
+ * Express lanes: Road Trains run at EXPRESS.train times off-road speed on one (2x Asphalt), Freight Trucks and Tankers
+ * at EXPRESS.truck (1.64x); warbots and Pavers at Asphalt speed; Haulers, Workers, Agribots and Crawlers never drive
+ * along one (they cross at an overpass). Under EXPRESS.minLen tiles the Express tool says a lane is too short to pay.
+ */
+const EXPRESS = { truck: 4.5, train: 5.5, minLen: 8 };
+/** The speed factor bot kind `bt` (a BOTS entry) gets along an Express lane, or 0 if it may not drive along one. */
+function laneSpeed(bt) { return bt.train ? EXPRESS.train : bt.truck ? EXPRESS.truck : bt.army || bt.siege || bt.wild || bt.crew === 'paver' ? PAVE[2].speed : 0; }
 /**
  * Biomes: the look of the planet, chosen on the new-game screen. Purely cosmetic: ground, water,
  * rock and decorative plants (`plants` is the share of open tiles with one). Plants never block
@@ -1017,7 +1029,7 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles.',
+    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles. It also lays Express lanes (Paths, Express): 1 Asphalt and a quarter Alloy a tile.',
     cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, armor: 8, buildTime: 10,
   },
   armory: {
@@ -1719,6 +1731,7 @@ const FLAVOR = {
   hauler: 'Certified for paved roads. Will not go anywhere else. Do not ask.',
   agribot: 'Plants for a harvest nobody has scheduled.',
   paver: 'Every road built to passenger standard. No passengers yet.',
+  express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',
   magpod: 'Twelve seats, folded. Forty crates.',
