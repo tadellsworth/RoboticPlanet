@@ -1546,15 +1546,14 @@ function moveAlong(u, dt) {
   if (!u.path) return true;
   if (u.rv !== routeVer() && !routeCheck(u)) return false;
   let here = Math.floor(u.y) * S.W + Math.floor(u.x);
-  // The next step jumps a gap (a Viaduct or Ropeway) that has come down since the route was
-  // planned: back to the end it set out from, and the order is dropped so it plans again.
+  // A span has come down. Go back to the end it set out from. A planned Murmur raid can reroute from there.
   {
     const nx = u.path[u.pi], pv = u.path[u.pi - 1], W = S.W;
     if (u.pi > 0 && nx !== undefined && Math.max(Math.abs((nx % W) - (pv % W)), Math.abs(((nx / W) | 0) - ((pv / W) | 0))) > 1 &&
       viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && airLink(pv) !== nx && !(u.ride >= 0)) {
       u.x = (pv % W) + 0.5; u.y = ((pv / W) | 0) + 0.5;
       u.path = null; u.deck = null; u.vel = 0;
-      cancelTask(u); u.task = null;
+      if (!(BOTS[u.type].wild && u.plan && u.task?.night)) { cancelTask(u); u.task = null; }
       return false;
     }
   }
@@ -10083,11 +10082,11 @@ function updateNest(b) {
   b.status = `Level ${b.level} nest · ${guards} on guard`;
 }
 
-/** The nearest colony bot out in the open within r tiles of (x, y) (with `zone`: only one standing in that walkable area). */
-function wildPrey(x, y, r, zone) {
+/** The nearest colony bot out in the open. The zone and candidate filter are optional. */
+function wildPrey(x, y, r, zone, accept) {
   let best = null, bd = r * r;
   for (const v of S.bots) {
-    if (v.dead || v.inside || v.owner === wildOwner()) continue;
+    if (v.dead || v.inside || v.owner === wildOwner() || (accept && !accept(v))) continue;
     const d = dist2(v.x, v.y, x, y);
     if (d >= bd || (zone !== undefined && S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== zone)) continue;
     bd = d; best = v;
@@ -10160,12 +10159,17 @@ function updateCritter(u, dt) {
   const t = u.task || (u.task = { type: 'guard' });
   // The other forms' pose (for the drawing): 'walk' but where their own step says otherwise (see murmurPose).
   if (u.pose !== undefined) { u.poseT = (u.poseT || 0) + dt; if (!u.under && !(t.type === 'raid' && (t.role === 'spit' || t.role === 'sap' || (t.role === 'cut' && t.feeding)))) murmurPose(u, 'walk'); }
+  if (t.type === 'raid' && t.wait > S.time) {
+    u.path = null; u.fight = 0;
+    u.face = datan2(t.y + 0.5 - u.y, t.x + 0.5 - u.x);
+    return;
+  }
   // The Murmur's craft (Active: see murmurPlan): Scuttlers on a strike scatter when warbots close in, and come back;
   // a watcher stands facing the colony; the dead are dragged off; a beaten pack goes back down; cutters go for the power.
   if (t.night && u.type === 'scuttler' && (t.type === 'raid' || t.type === 'rally') && t.role !== 'cut' && murmurSmart()) {
     if (t.scat) {
       if (t.scat > S.time) { murmurFlee(u, t, dt); return; }
-      t.scat = 0; t.arrived = false; t.at = 0; u.path = null;
+      t.scat = 0; t.arrived = false; u.path = null;
     }
     u.sct = (u.sct || 0) - dt;
     if (u.sct <= 0) { u.sct = 0.5; if (!(t.scatCd > S.time) && murmurScatter(u, t)) { murmurFlee(u, t, dt); return; } }
@@ -10178,36 +10182,68 @@ function updateCritter(u, dt) {
   }
   if (t.type === 'drag') { murmurDrag(u, t, dt, nest); return; }
   if (t.type === 'back') {
-    let ex = getE(t.exit);
-    if (!ex || ex.dead) { ex = murmurNearExit(u.x, u.y, 60); if (!ex) { u.task = { type: 'dig', at: S.time + 1 }; u.path = null; return; } t.exit = ex.id; u.path = null; }
-    const r = travel(u, ex.x, ex.y, dt);
-    if (r || r === null || dist2(u.x, u.y, ex.x + 0.5, ex.y + 0.5) < 2.2) { murmurWentDown(u); despawnCritter(u); }
+    const ex = getE(t.exit);
+    if (!ex || ex.dead || travel(u, ex.x, ex.y, dt) === null) { murmurBack(u, t.exit); return; }
+    if (dist2(u.x, u.y, ex.x + 0.5, ex.y + 0.5) < 2.2) { murmurWentDown(u); despawnCritter(u); }
     return;
   }
   if (t.type === 'raid' && t.role === 'cut') { murmurCutStep(u, t, dt); return; }
   // The other forms (Active): a Spitter at the guns, a Sapper under them, a full Leech going home.
   if (t.type === 'raid' && t.role === 'sap') { murmurSapStep(u, t, dt); return; }
-  if (t.type === 'raid' && t.role === 'spit' && !(t.wait > S.time)) { murmurSpitStep(u, t, dt); return; }
+  if (t.type === 'raid' && t.role === 'spit') { murmurSpitStep(u, t, dt); return; }
   if (t.type === 'carry') { murmurCarry(u, t, dt, nest); return; }
+  if (t.type === 'rally') {
+    if (murmurAtRally(u, t.x, t.y)) {
+      u.path = null; u.face = datan2(t.fy + 0.5 - u.y, t.fx + 0.5 - u.x);
+    } else {
+      travel(u, t.x, t.y, dt);
+    }
+    return;
+  }
+  let atObjective;
+  if (t.type === 'raid' && t.focus) {
+    const b = getE(t.focus);
+    if (!b || b.dead || !foes(u.owner, b.owner) || calmB(b) || S.time > t.until) { murmurBack(u); return; }
+    if (bt.smash) {
+      if (b.armor <= 1 && b.built) { murmurBack(u); return; }
+      if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 1.7) {
+        u.path = null;
+        if (u.cd <= 0) critterBite(u, b);
+      } else if (travel(u, b.x, b.y, dt) === null) murmurBack(u);
+      return;
+    }
+    if (!t.arrived) {
+      const r = travel(u, t.x, t.y, dt);
+      if (r || dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) < 2.5) {
+        t.arrived = true; u.path = null;
+      } else if (r === null && (t.x !== b.x || t.y !== b.y)) {
+        t.x = b.x; t.y = b.y; u.path = null; // The flank closed. Take the main approach.
+      } else if (r === null) {
+        murmurBack(u);
+      }
+      return;
+    }
+    atObjective = (v) => v.owner === b.owner && !BOTS[v.type].air && !BOTS[v.type].sea &&
+      dist2(v.x, v.y, b.x + 0.5, b.y + 0.5) < 36 && !calmAt(v.x, v.y);
+  }
   // Something to bite: guards only near the nest, raiders anywhere near them.
   let foe = u.fight ? getE(u.fight) : null;
   // (A guard keeps to its nest: in Colony it goes for what comes within 7 tiles of it; in Versus, where the colonies'
   // roads and fields lie closer, within GUARD_VERSUS: the nests' danger is at night, when their Murmur come up.)
   const keep = t.type === 'guard' ? (S.mode === 'colony' ? 7 : GUARD_VERSUS) : 0;
-  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > 36 || (t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > (keep + 1) * (keep + 1)))) foe = null;
+  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > 36 || (atObjective && !atObjective(foe)) || (t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > (keep + 1) * (keep + 1)))) foe = null;
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
-    if (u.scanT <= 0 && t.type !== 'home' && t.type !== 'down' && t.type !== 'dig' && t.type !== 'rally') { // (gathering, they keep still: see murmurLaunch)
+    if (u.scanT <= 0 && t.type !== 'home' && t.type !== 'down' && t.type !== 'dig') {
       u.scanT = 0.4;
-      foe = wildPrey(u.x, u.y, t.type === 'guard' ? 4 : 4.5);
+      foe = wildPrey(u.x, u.y, t.type === 'guard' ? 4 : 4.5, undefined, atObjective);
       if (foe && t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > keep * keep) foe = null;
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
       if (foe) u.fight = foe.id;
     }
   }
   if (foe) {
-    if (t.type === 'rally') t.at = 0; // (it walks back to the rally point after)
     if (dist(u.x, u.y, foe.x, foe.y) > 0.75) {
       if (!moveDirect(u, foe.x, foe.y, dt) && travel(u, Math.floor(foe.x), Math.floor(foe.y), dt) === null) {
         u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5;
@@ -10215,14 +10251,8 @@ function updateCritter(u, dt) {
     } else if (u.cd <= 0) critterBite(u, foe);
     return;
   }
-  if (t.type === 'rally') {
-    if (!t.at) { const r = travel(u, t.x, t.y, dt); if (r || r === null || dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) < 2.2) { t.at = 1; u.path = null; } return; }
-    u.path = null; u.face = datan2(t.fy + 0.5 - u.y, t.fx + 0.5 - u.x);
-    return;
-  }
   if (t.type === 'raid') {
     if (S.time > t.until) { u.task = { type: 'home' }; u.path = null; return; }
-    if (t.wait > S.time) { u.path = null; u.face = datan2(t.y + 0.5 - u.y, t.x + 0.5 - u.x); return; } // (held back: see murmurLaunch)
     if (!t.arrived) {
       const r = travel(u, t.x, t.y, dt);
       if (r === null || dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) < 2.5) { t.arrived = true; u.path = null; }
@@ -10250,8 +10280,12 @@ function updateCritter(u, dt) {
     // A Scuttler: hunt for bots a little further out (WILD.hunt: it makes for the nearest it can walk to, and
     // goes for it once it's close: see above), or move on to the colony's next spot. (It used to pick prey up
     // to 12 tiles off and then drop it at once for being over 6 away, so it stood still for the whole raid.)
-    const prey = wildPrey(u.x, u.y, WILD.hunt, S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]);
+    const prey = wildPrey(u.x, u.y, WILD.hunt, S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], atObjective);
     if (prey && travel(u, Math.floor(prey.x), Math.floor(prey.y), dt) !== null) return;
+    if (atObjective) {
+      if (dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) >= 2.2) travel(u, t.x, t.y, dt);
+      return;
+    }
     if (t.night) murmurOnward(u, t); else t.until = Math.min(t.until, S.time + 10);
     return;
   }
@@ -10628,16 +10662,11 @@ function murmurWave(n, C) {
 /* ------------------------------------------------------------------ the Murmur's craft (Active only) */
 
 /*
- * On Active the Murmur hunt with craft (MURMUR.craft; Quiet keeps the plain packs above: the owner's call). At dusk a
- * watcher surfaces at the edge of each colony's land, facing it, and goes down at nightfall: where it stood is where
- * the night's strike falls (murmurPlan picks the weak spot: what charges the colony, out of its guns' reach, alone,
- * where they fed before and not where they were killed). The packs come up at the exits nearest it and gather at a
- * rally point out of the guns' reach and outside the colony's land (task 'rally'), wait for each other, then a few go
- * first for what lights and charges the colony round the target (the lights go dark one by one: murmurCut), and the
- * rest rush it together, Brutes ahead, Scuttlers from several sides, scattering when warbots close in. A pack that
- * loses half its number goes back down (task 'back') and comes again later that night. They drag their dead
- * underground (murmurBody, task 'drag'). They remember where they were killed and where they fed (S.mur.mem, fading
- * night by night), and from the third night, with warbots about, a small pack strikes the far side first (a feint).
+ * On Active a dusk watcher marks the plan's approach. Packs come up through reachable exits and gather outside
+ * the colony. They can regroup if the route closes. Cutters attack useful power while the others hold, then
+ * Brutes batter the chosen target and Scuttlers hunt nearby. From night three a feint can draw away its defenders.
+ * A beaten pack can go back down and try again. They drag their dead underground and remember where they were
+ * killed or fed (S.mur.mem, fading by night).
  * Plans live in S.mur.plans (saved): { id, p, n, round, tb, tx, ty, rx, ry, wx, wy, cut, fb, fx, fy, phase (0 the
  * watch, 1 gathering, 2 the strike, 3 gone back down, 4 over), at, ... }. Never a word of what they are: the colony
  * only logs what it sees.
@@ -10713,19 +10742,133 @@ function murmurZoneBy(b) {
   return -1;
 }
 
+/** Check candidate routes with the same terrain and gate rules as a creature on the march. */
+function murmurRoute(from, x, y, limit = MURMUR.craft.join * 2) {
+  const sx = Math.floor(from.x), sy = Math.floor(from.y);
+  if (!inMap(sx, sy) || dist2(sx, sy, x, y) > limit * limit) return false;
+  const path = findPath(sx, sy, x, y, undefined, { who: wildOwner(), noRope: true, noFerry: true, noAir: true, coverMap: murmurGunMap(), maxExpanded: 2500 });
+  return !!path && path.length <= limit;
+}
+
+function murmurExits(x, y, r) {
+  return S.buildings.filter((e) => {
+    if (e.dead || e.type !== 'burrow' || dist2(e.x, e.y, x, y) > r * r) return false;
+    const nest = getE(e.nest);
+    return nest && !nest.dead;
+  })
+    .sort((a, b) => dist2(a.x, a.y, x, y) - dist2(b.x, b.y, x, y) || a.id - b.id);
+}
+
+function murmurRallyOpen(x, y) {
+  return inMap(x, y) && walkable(tIdx(x, y)) && !S.bAt[tIdx(x, y)] && !calmAt(x + 0.5, y + 0.5);
+}
+
+function murmurAtRally(u, x, y) {
+  if (u.task.scat > S.time || dist2(u.x, u.y, x + 0.5, y + 0.5) >= 2.2) return false;
+  const i = Math.floor(u.x), j = Math.floor(u.y);
+  if (i === x && j === y) return true;
+  if (Math.abs(i - x) + Math.abs(j - y) !== 1 || !inMap(i, j)) return false;
+  const t = tIdx(i, j);
+  return walkable(t) && (!S.bAt[t] || passTile(t, u.owner)) && canStep(t, tIdx(x, y));
+}
+
+/** Pick a staging tile near the objective with a usable route from the exits or the regrouping pack. */
+function murmurRally(p, n, round, tgt, origins, minimum = 1, avoid = -1) {
+  if (origins.length < minimum) return null;
+  const K = MURMUR.craft, tiles = new Map();
+  for (let k = 0; k < 24; k++) for (const r of [K.rally - 2, K.rally, K.rally + 2]) {
+    const a = (k / 24) * Math.PI * 2, x = Math.round(tgt.x + dcos(a) * r), y = Math.round(tgt.y + dsin(a) * r);
+    if (!murmurRallyOpen(x, y)) continue;
+    const t = tIdx(x, y);
+    if (t === avoid || tiles.has(t) || S.owner[t] === p) continue;
+    let d = Infinity;
+    for (const e of origins) d = Math.min(d, dist(e.x, e.y, x, y));
+    if (d > K.join) continue;
+    let seen = 0;
+    for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) {
+      if (!inMap(i, j)) continue;
+      const v = tIdx(i, j);
+      if ((S.road[v] && wayOwner(v) === p) || (S.bAt[v] && getE(S.bAt[v])?.owner === p)) seen++;
+    }
+    const score = -murmurGunAt(x + 0.5, y + 0.5, 2) * 20 - d * 0.2 - murmurMem('kill', x, y) * 3
+      - (S.owner[t] >= 0 ? 2 : 0) - seen * 0.8 + hash2(t, n * 3 + round, 73);
+    tiles.set(t, { x, y, t, score });
+  }
+  const candidates = [...tiles.values()].sort((a, b) => b.score - a.score || a.t - b.t);
+  for (const rally of candidates.slice(0, 10)) {
+    if (!murmurRoute(rally, tgt.x, tgt.y, 30)) continue;
+    let reaches = 0;
+    for (const e of origins) {
+      if (dist2(e.x, e.y, rally.x, rally.y) > K.join * K.join || !murmurRoute(e, rally.x, rally.y)) continue;
+      if (++reaches >= minimum) return rally;
+    }
+  }
+  return null;
+}
+
+/** A service the Murmur can interrupt. A dry charger or an idle, unfuelled generator has little to cut. */
+function murmurCutPower(b) {
+  if (!b || b.dead || !b.built || b.cut || b.paused || murmurCutOn(b) || calmB(b)) return false;
+  const def = BDEFS[b.type];
+  if (def.charger) return !chargerDry(b);
+  if (def.burner) return !!((b.energy || 0) > 0 || b.stock.fuel > 0);
+  return !!(def.magterm && magPartner(b));
+}
+
+/** Value the charging or production that would go down with the cut. */
+function murmurCutValue(b, mine, power) {
+  const def = BDEFS[b.type];
+  if (def.charger) {
+    const backup = power.some((c) => c !== b && BDEFS[c.type].charger && dist2(c.x, c.y, b.x, b.y) <= 64 && murmurZoneBy(c) === murmurZoneBy(b));
+    const users = S.bots.filter((u) => !u.dead && u.owner === b.owner && (u.inside === b.id || u.task?.charger === b.id || (u.task?.type === 'charge' && u.task.bld === b.id))).length;
+    return (backup ? 2 : 7) + Math.min(4, users) * 2;
+  }
+  if (def.magterm) return b.working ? 8 : 1;
+  const radius = sq(def.burner.radius);
+  let value = b.working ? 3 : 1;
+  for (const c of mine) {
+    if (!c.built || c.paused || !c.working || murmurCutOn(c) || (!BDEFS[c.type].work && !BDEFS[c.type].magterm) || dist2(c.x, c.y, b.x, b.y) > radius) continue;
+    const backup = power.some((g) => g !== b && BDEFS[g.type].burner && dist2(g.x, g.y, c.x, c.y) <= sq(BDEFS[g.type].burner.radius));
+    if (!backup) value += BDEFS[c.type].magterm ? 5 : 2;
+  }
+  return value;
+}
+
+function murmurCuts(p, tgt, rally, mine) {
+  const K = MURMUR.craft, power = mine.filter(murmurCutPower), cuts = [];
+  for (const b of power) {
+    if (dist2(b.x, b.y, tgt.x, tgt.y) > K.cutR * K.cutR) continue;
+    const score = murmurCutValue(b, mine, power) - murmurGunAt(b.x + 0.5, b.y + 0.5, 1) * 8 - dist(b.x, b.y, rally.x, rally.y) * 0.2;
+    cuts.push({ c: [1, b.id, b.x, b.y], score });
+  }
+  const best = cuts.sort((a, b) => b.score - a.score || a.c[1] - b.c[1]).slice(0, 8)
+    .filter(({ c }) => murmurRoute(rally, c[2], c[3], 30)).slice(0, 2);
+  if (best.length) return best.map(({ c }) => c);
+
+  const lamps = [];
+  for (let y = tgt.y - 6; y <= tgt.y + 6; y++) for (let x = tgt.x - 6; x <= tgt.x + 6; x++) {
+    if (!inMap(x, y) || (x + 2 * y) % 3 !== 0) continue;
+    const t = tIdx(x, y);
+    if (!S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t] || wayOwner(t) !== p || murmurGunAt(x + 0.5, y + 0.5, 1) || calmAt(x + 0.5, y + 0.5)) continue;
+    lamps.push({ c: [2, t, x, y], distance: dist2(x, y, rally.x, rally.y) });
+  }
+  return lamps.sort((a, b) => a.distance - b.distance || a.c[1] - b.c[1]).slice(0, 8)
+    .filter(({ c }) => murmurRoute(rally, c[2], c[3], 30)).slice(0, 2).map(({ c }) => c);
+}
+
 /**
  * Tonight's strike on colony p (night n, `round` 1 at dusk, 2 for the second wave): the weak spot (what draws them,
  * out of the guns' reach, alone, where they fed and not where they were killed, within the networks' reach), the
  * rally point out of the guns and outside its land, the watcher's spot at the edge of its land, what to cut first,
  * and from the third night, with warbots about, a feint on the far side. Null if nothing of p's is in reach.
  */
-function murmurPlan(p, n, round) {
+function murmurPlan(p, n, round, exits) {
   const K = MURMUR.craft, M = S.mur;
   const nests = S.buildings.filter((b) => !b.dead && isNestB(b));
   if (!nests.length) return null;
   const mine = S.buildings.filter((b) => !b.dead && b.owner === p);
   const nearNest = (x, y) => { let best = null, bd = Infinity; for (const b of nests) { const d = dist2(b.x, b.y, x, y); if (d < bd) { bd = d; best = b; } } return best; };
-  let tgt = null, ts = -Infinity;
+  const targets = [];
   for (const e of mine) {
     const def = BDEFS[e.type];
     if (!e.built || def.barrier || def.viaduct || def.wild || e.type === 'lander' || calmB(e)) continue;
@@ -10735,24 +10878,15 @@ function murmurPlan(p, n, round) {
     for (const o of mine) if (o !== e && dist2(o.x, o.y, e.x, e.y) < 36) crowd++;
     const s = chargeWorth(e) * 2 + (veinLure(e) ? 4 : 0) + Math.max(0, 4 - crowd * 0.6) - murmurGunAt(e.x + 0.5, e.y + 0.5, 3) * 7
       - murmurMem('kill', e.x, e.y) * 2 + murmurMem('fed', e.x, e.y) * 1.5 - nd * 0.05 + hash2(e.id, n * 3 + round, 71) * 1.2;
-    if (s > ts) { ts = s; tgt = e; }
+    targets.push({ e, nb, s });
   }
-  if (!tgt) return null;
-  const nest = nearNest(tgt.x, tgt.y), zone = murmurZoneBy(tgt);
-  // The rally point: out of the guns' reach and outside p's land, about MURMUR.craft.rally tiles off, toward the nests.
-  let rally = null, rs = -Infinity;
-  for (let k = 0; k < 24; k++) for (const r of [K.rally - 2, K.rally, K.rally + 2]) {
-    const a = (k / 24) * Math.PI * 2, i = Math.round(tgt.x + Math.cos(a) * r), j = Math.round(tgt.y + Math.sin(a) * r);
-    if (!inMap(i, j)) continue;
-    const t = tIdx(i, j);
-    if (!walkable(t) || S.bAt[t] || S.zone[t] !== zone || S.owner[t] === p || calmAt(i + 0.5, j + 0.5)) continue;
-    // (out of sight: off the colony's roads and away from its buildings, where its robots pass)
-    let seen = 0;
-    for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) { const v = inMap(i + di, j + dj) ? tIdx(i + di, j + dj) : -1; if (v >= 0 && ((S.road[v] && wayOwner(v) === p) || (S.bAt[v] && (getE(S.bAt[v]) || {}).owner === p))) seen++; }
-    const s = -murmurGunAt(i + 0.5, j + 0.5, 2) * 20 - dist(i, j, nest.x, nest.y) * 0.2 - murmurMem('kill', i, j) * 3 - (S.owner[t] >= 0 ? 2 : 0) - seen * 0.8 + hash2(t, n * 3 + round, 73);
-    if (s > rs) { rs = s; rally = { x: i, y: j }; }
+  let tgt, rally;
+  for (const { e, nb } of targets.sort((a, b) => b.s - a.s || a.e.id - b.e.id).slice(0, 6)) {
+    rally = murmurRally(p, n, round, e, exits || [nb]);
+    if (rally) { tgt = e; break; }
   }
   if (!rally) return null;
+  const zone = murmurZoneBy(tgt);
   // The watcher stands at the edge of p's land on the way in, facing it.
   let watch = { x: rally.x, y: rally.y };
   const steps = Math.ceil(dist(rally.x, rally.y, tgt.x, tgt.y) * 2);
@@ -10764,24 +10898,7 @@ function murmurPlan(p, n, round) {
     if (walkable(t) && !S.bAt[t] && S.zone[t] === zone) watch = { x: i, y: j };
   }
   // What lights and charges the colony round the target: its Fuel Stations and Generators, else its streetlamps.
-  const cut = [];
-  for (const e of mine) {
-    if (!e.built || e.id === tgt.id || !(BDEFS[e.type].charger || BDEFS[e.type].burner || (BDEFS[e.type].magterm && magPartner(e))) || dist(e.x, e.y, tgt.x, tgt.y) > K.cutR || murmurZoneBy(e) !== zone) continue;
-    cut.push([1, e.id, e.x, e.y, murmurGunAt(e.x + 0.5, e.y + 0.5, 1)]);
-  }
-  cut.sort((a, b) => a[4] - b[4] || dist2(a[2], a[3], rally.x, rally.y) - dist2(b[2], b[3], rally.x, rally.y) || a[1] - b[1]);
-  cut.length = Math.min(cut.length, 2);
-  if (!cut.length) {
-    const lamps = [];
-    for (let j = tgt.y - 6; j <= tgt.y + 6; j++) for (let i = tgt.x - 6; i <= tgt.x + 6; i++) {
-      if (!inMap(i, j) || (i + 2 * j) % 3 !== 0) continue;
-      const t = tIdx(i, j);
-      if (!S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t] || wayOwner(t) !== p || S.zone[t] !== zone || murmurGunAt(i + 0.5, j + 0.5, 1)) continue;
-      lamps.push([2, t, i, j, dist2(i, j, rally.x, rally.y)]);
-    }
-    lamps.sort((a, b) => a[4] - b[4] || a[1] - b[1]);
-    for (const l of lamps.slice(0, 2)) cut.push(l);
-  }
+  const cut = murmurCuts(p, tgt, rally, mine);
   // A feint: from the third night, with warbots in the colony to draw, a small pack on the far side first.
   let feint = null;
   const army = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u) && botArmed(u)).length;
@@ -10798,7 +10915,7 @@ function murmurPlan(p, n, round) {
   }
   M.planSeq = (M.planSeq || 0) + 1;
   return { id: M.planSeq, p, n, round, tb: tgt.id, tx: tgt.x, ty: tgt.y, rx: rally.x, ry: rally.y, wx: watch.x, wy: watch.y,
-    cut: cut.map((c) => c.slice(0, 4)), fb: feint ? feint.id : 0, fx: feint ? feint.x : 0, fy: feint ? feint.y : 0, phase: 0, at: S.time };
+    cut, fb: feint ? feint.id : 0, fx: feint ? feint.x : 0, fy: feint ? feint.y : 0, phase: 0, at: S.time };
 }
 
 /** Dusk (night n coming): tonight's plans, and a watcher at the edge of each colony's land where the strike will fall. */
@@ -10838,6 +10955,14 @@ function murmurNearExit(x, y, r) {
   return best;
 }
 
+/** Switch to another exit if the first is cut off. A creature that digs down here doesn't rejoin the raid. */
+function murmurBack(u, avoid) {
+  u.path = null; u.fight = 0;
+  if (u.under) { murmurWentDown(u); despawnCritter(u); return; }
+  const ex = murmurExits(u.x, u.y, 60).slice(0, 8).find((e) => e.id !== avoid && murmurRoute(u, e.x, e.y));
+  u.task = ex ? { type: 'back', exit: ex.id, night: 1 } : { type: 'dig', at: S.time + 1 };
+}
+
 /**
  * A night's wave on Active: each colony's plan for this round (made now if dusk made none) draws the packs of the exits
  * within MURMUR.craft.join of its rally point; they come up and gather there. An exit no plan draws sends a plain pack
@@ -10846,31 +10971,40 @@ function murmurNearExit(x, y, r) {
 function murmurCraftWave(n, C, wave) {
   const K = MURMUR.craft, M = S.mur;
   M.plans = M.plans || [];
+  const exits = murmurExits(0, 0, Math.hypot(S.W, S.H));
   for (const P of S.players) {
-    if (P.absent || P.out || isWild(P.id) || M.plans.some((pl) => pl.p === P.id && pl.n === n && pl.round === wave)) continue;
-    const pl = murmurPlan(P.id, n, wave);
+    if (P.absent || P.out || isWild(P.id)) continue;
+    const old = M.plans.find((pl) => pl.p === P.id && pl.n === n && pl.round === wave);
+    if (old) {
+      const target = getE(old.tb), rally = { x: old.rx, y: old.ry };
+      if (target && !target.dead && target.owner === P.id && !calmB(target) && murmurRallyOpen(rally.x, rally.y) &&
+          murmurRoute(rally, target.x, target.y, 30) && murmurExits(rally.x, rally.y, K.join).some((e) => murmurRoute(e, rally.x, rally.y))) {
+        old.cut = murmurCuts(P.id, target, rally, S.buildings.filter((e) => !e.dead && e.owner === P.id));
+        continue;
+      }
+      old.phase = 4;
+    }
+    const pl = murmurPlan(P.id, n, wave, exits);
     if (pl) M.plans.push(pl);
   }
   const plans = M.plans.filter((pl) => pl.n === n && pl.round === wave && pl.phase === 0);
   let up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length;
   const room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
   const size = murmurBy(C.pack, n), brutes = n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0, until = S.time + 600;
-  const told = {}, packs = [];
-  // (Each plan draws the packs of its `joinMost` exits nearest its rally point; the others in its reach stay down.)
+  const told = {}, packs = [], openedByPlan = new Map();
+  // Only exits with a usable approach can supply a plan. If two plans can use one, the nearer one gets it.
   const draws = new Map();
   for (const q of plans) {
-    const near = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && dist2(e.x, e.y, q.rx, q.ry) < K.join * K.join).sort((a, b) => dist2(a.x, a.y, q.rx, q.ry) - dist2(b.x, b.y, q.rx, q.ry) || a.id - b.id);
+    const near = murmurExits(q.rx, q.ry, K.join).filter((e) => murmurRoute(e, q.rx, q.ry));
     near.forEach((e, k) => { const was = draws.get(e.id); if (!was || dist2(e.x, e.y, q.rx, q.ry) < dist2(e.x, e.y, was.pl.rx, was.pl.ry)) draws.set(e.id, { pl: q, k }); });
   }
   for (const e of S.buildings) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead || up + size > room) continue;
-    // Only surface if there's prey near this exit.
-    const g = murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
-    if (!g) continue;
-    const dr = draws.get(e.id), pl = dr && dr.k < K.joinMost && dr.pl.p === g.owner ? dr.pl : null;
-    if (dr && !pl && dr.pl.p === g.owner) continue;
+    const dr = draws.get(e.id), pl = dr && dr.k < K.joinMost ? dr.pl : null;
+    const g = pl ? null : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
+    if (!pl && (!g || dr?.pl.p === g.owner || !murmurRoute(e, g.x, g.y))) continue;
     const task = pl ? { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 } : { type: 'raid', x: g.x, y: g.y, until, night: 1 };
     for (let k = 0; k < size; k++) {
       const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
@@ -10882,28 +11016,34 @@ function murmurCraftWave(n, C, wave) {
     const owner = pl ? pl.p : g.owner;
     if (owner >= 0) { const T = told[owner] || (told[owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
     packs.push({ e, nest, pl, task, owner });
-    if (pl && !pl.phase) { pl.phase = 1; pl.at = S.time; }
+    if (pl && !pl.phase) { pl.phase = 1; pl.at = S.time; openedByPlan.set(pl.id, e); }
   }
   // The other forms (Active, from their nights: murmurFormsFor), from the exit nearest each plan's rally point.
   for (const pl of plans) {
     if (pl.phase !== 1 || pl.at !== S.time) continue;
-    const ex = murmurNearExit(pl.rx + 0.5, pl.ry + 0.5, K.join), nest = ex && getE(ex.nest);
+    const ex = openedByPlan.get(pl.id), nest = ex && getE(ex.nest);
     if (!ex || !nest || nest.dead) continue;
     for (const type of murmurFormsFor(pl, n)) { if (up + 1 > room) break; murmurSpawnForm(type, ex, nest, pl); up++; if (pl.p >= 0) { const T = told[pl.p] || (told[pl.p] = { n: 0, x: ex.x, y: ex.y }); T.n++; T.forms = (T.forms || []).concat(BOTS[type].name); } }
   }
-  // The feints: a small pack from the exit nearest the far side, at once.
+  // The first wave can send a feint from a usable exit near the far side.
   for (const pl of plans) {
-    if (pl.phase !== 1 || !pl.fb || pl.feintAt) continue;
-    const fb = getE(pl.fb), ex = fb && !fb.dead ? murmurNearExit(pl.fx + 0.5, pl.fy + 0.5, 40) : null;
+    if (wave !== 1 || pl.phase !== 1 || !pl.fb || pl.feintAt) continue;
+    const defenders = murmurDefenders(pl);
+    const guards = defenders.filter((u) => dist2(u.x, u.y, pl.fx + 0.5, pl.fy + 0.5) >= 100);
+    if (!guards.length) continue;
+    const fb = getE(pl.fb), ex = fb && !fb.dead && fb.owner === pl.p && !calmB(fb)
+      ? murmurExits(pl.fx, pl.fy, 40).find((e) => murmurRoute(e, pl.fx, pl.fy, 55)) : null;
     if (!ex || up + K.feintN > room) continue;
     const nest = getE(ex.nest);
     if (!nest || nest.dead) continue;
     for (let k = 0; k < K.feintN; k++) {
-      const u = spawnCritter(ex, k === 0 && brutes ? 'brute' : 'scuttler', { type: 'raid', role: 'feint', x: pl.fx, y: pl.fy, until, night: 1 });
+      const u = spawnCritter(ex, k === 0 && brutes ? 'brute' : 'scuttler', { type: 'raid', role: 'feint', focus: fb.id, x: pl.fx, y: pl.fy, until, night: 1 });
       u.nest = nest.id; u.exit = ex.id; u.plan = pl.id;
       up++;
     }
     pl.feintAt = S.time;
+    pl.feintCover = defenders.length;
+    pl.feintGuard = guards.map((u) => u.id);
     addFx('dust', ex.x + 0.5, ex.y + 0.5, { r: 0.8 });
   }
   // Feed the packs using only the capacity left after the scheduled raids, forms and feints.
@@ -10930,51 +11070,72 @@ function murmurCraftWave(n, C, wave) {
   }
 }
 
-/** Has colony pl.p sent warbots toward the feint (any of its army out in the open within 10 tiles of it)? */
+/** Armed defenders close enough to cover the main objective, including nearby garrisons. */
+function murmurDefenders(pl) {
+  return S.bots.filter((u) => {
+    if (u.dead || u.owner !== pl.p || !isArmy(u) || !botArmed(u)) return false;
+    const at = getE(u.inside) || u;
+    return dist2(at.x, at.y, pl.tx + 0.5, pl.ty + 0.5) < 64;
+  });
+}
+
+/** The feint drew a defender from the main objective and the colony has not replaced that coverage. */
 function murmurDrawn(pl) {
-  for (const u of S.bots) if (!u.dead && u.owner === pl.p && isArmy(u) && !u.inside && dist2(u.x, u.y, pl.fx + 0.5, pl.fy + 0.5) < 100) return true;
-  return false;
+  if (!pl.feintGuard?.length) return false;
+  const stillThere = murmurDefenders(pl);
+  if (stillThere.length >= pl.feintCover) return false;
+  return pl.feintGuard.some((id) => {
+    const u = getE(id);
+    return u && !u.dead && !u.inside && u.owner === pl.p &&
+      dist2(u.x, u.y, pl.tx + 0.5, pl.ty + 0.5) >= 64 && dist2(u.x, u.y, pl.fx + 0.5, pl.fy + 0.5) < 100;
+  });
 }
 
 /**
- * The strike: the gathered go. A few first for what lights and charges the colony round the target (Brutes if there
- * are any; murmurCut), the rest held back until the first light is out (or MURMUR.craft.cutWait), then Brutes straight
- * at the target and the Scuttlers a moment after, spread round it.
+ * Cutters go first. The rest hold for the first cut or the timeout, then the Brutes go to the target
+ * and the Scuttlers fan out behind them.
  */
 function murmurLaunch(pl, main, drawn) {
-  const K = MURMUR.craft, until = S.time + 600;
-  let tb = getE(pl.tb);
-  if (!tb || tb.dead) {
-    const g = murmurPrey(pl.rx + 0.5, pl.ry + 0.5, MURMUR.prey + 6);
-    if (!g) { for (const u of main) { u.task = { type: 'back', exit: (murmurNearExit(u.x, u.y, 60) || {}).id || 0, night: 1 }; u.path = null; } pl.phase = 4; return; }
-    pl.tb = S.bAt[tIdx(g.x, g.y)] || 0; pl.tx = g.x; pl.ty = g.y; tb = getE(pl.tb);
-  }
-  pl.phase = 2; pl.at = S.time; pl.n0 = main.length; pl.released = 0;
+  const K = MURMUR.craft, until = S.time + 600, tb = getE(pl.tb), rally = { x: pl.rx, y: pl.ry };
+  pl.phase = 2; pl.at = S.time; pl.n0 = main.length; pl.released = 0; pl.cutDone = 0;
   main.sort((a, b) => a.id - b.id);
-  const cuts = pl.cut.filter((c) => (c[0] === 1 ? (getE(c[1]) || { dead: 1 }).dead !== true : S.road[c[1]]) && !c[4]);
-  const bru = main.filter((u) => u.type === 'brute'), leeches = main.filter((u) => u.type === 'leech');
-  // (A Leech goes for the power if there is one; else Brutes, else a Scuttler.)
-  const cutters = cuts.length ? (leeches.length ? leeches : bru.length ? bru.slice(0, 2) : main.length >= 3 ? main.slice(0, 1).filter((u) => !murmurForm(u)) : []) : [];
-  cutters.forEach((u, k) => { const c = cuts[k % cuts.length]; u.task = { type: 'raid', role: 'cut', ci: pl.cut.indexOf(c), x: c[2], y: c[3], until, night: 1 }; u.path = null; });
-  // (A Spitter goes in behind the Brutes for the guns and Walls; a Sapper digs in at once, to come up by the target.)
+  pl.cut = murmurCuts(pl.p, tb, rally, S.buildings.filter((b) => !b.dead && b.owner === pl.p));
+  // Send a Leech if there's one. Otherwise keep a Brute for the main strike when a Scuttler can make the cut.
+  const cutters = main.filter((u) => u.type === 'leech').slice(0, pl.cut.length);
+  if (!cutters.length && pl.cut.length && main.length > 1) {
+    const cutter = main.find((u) => u.type === 'scuttler') || main.find((u) => u.type === 'brute');
+    if (cutter) cutters.push(cutter);
+  }
+  cutters.forEach((u, ci) => { const c = pl.cut[ci]; u.task = { type: 'raid', role: 'cut', ci, focus: tb.id, x: c[2], y: c[3], until, night: 1 }; u.path = null; u.fight = 0; });
   const spit = main.filter((u) => u.type === 'spitter'), sap = main.filter((u) => u.type === 'sapper');
-  for (const u of sap) { const st = murmurStand(pl.tx + 0.5, pl.ty + 0.5) || { x: pl.tx, y: pl.ty }; u.task = { type: 'raid', role: 'sap', x: st.x, y: st.y, until, night: 1 }; u.path = null; }
   const rest = main.filter((u) => !cutters.includes(u) && !sap.includes(u)), scut = rest.filter((u) => u.type !== 'brute' && !spit.includes(u));
   pl.lead = rest.some((u) => u.type === 'brute') ? 1 : 0;
   const hold = cutters.length ? S.time + K.cutWait : 0, base = datan2(pl.ry - pl.ty, pl.rx - pl.tx);
+  for (const u of sap) {
+    const st = murmurStand(pl.tx + 0.5, pl.ty + 0.5) || tb;
+    u.task = { type: 'raid', role: 'sap', focus: tb.id, x: st.x, y: st.y, until, night: 1, wait: hold };
+    u.path = null; u.fight = 0;
+  }
   for (const u of rest) {
     let x = pl.tx, y = pl.ty;
-    if (u.type !== 'brute') {
-      const k = scut.indexOf(u), a = base + (k * Math.PI * 2) / Math.max(3, scut.length), s = murmurStand(pl.tx + 0.5 + Math.cos(a) * K.spread, pl.ty + 0.5 + Math.sin(a) * K.spread);
-      if (s) { x = s.x; y = s.y; }
+    if (scut.includes(u)) {
+      const k = scut.indexOf(u), a = base + (k * Math.PI * 2) / Math.max(3, scut.length), s = murmurStand(pl.tx + 0.5 + dcos(a) * K.spread, pl.ty + 0.5 + dsin(a) * K.spread);
+      if (s && murmurRoute(rally, s.x, s.y, 30)) { x = s.x; y = s.y; }
     }
-    u.task = { type: 'raid', x, y, until, night: 1, wait: hold ? hold + (u.type !== 'brute' && pl.lead ? K.leadGap : 0) : u.type !== 'brute' && pl.lead ? S.time + K.leadGap : 0 };
+    const lead = u.type !== 'brute' && pl.lead ? K.leadGap : 0;
+    u.task = { type: 'raid', role: 'main', focus: tb.id, x, y, until, night: 1, wait: (hold || S.time) + lead };
     if (spit.includes(u)) u.task.role = 'spit';
-    if (u.type === 'leech') u.task.role = 'main'; // (no power to cut: it goes in with the rest)
-    u.path = null;
+    u.path = null; u.fight = 0;
   }
   if (!cutters.length) pl.released = 1;
   if (drawn && tb) postMsg(pl.p, `Second contact, far side, at your ${BDEFS[tb.type].name}. The first group drew your warbots off.`, pl.tx, pl.ty, 'bad');
+}
+
+function murmurCutReady(pl, c) {
+  if (!c || c[4]) return false;
+  if (c[0] !== 1) return !!S.road[c[1]] && !S.bAt[c[1]] && wayOwner(c[1]) === pl.p && !calmAt(c[2] + 0.5, c[3] + 0.5);
+  const b = getE(c[1]);
+  return b?.owner === pl.p && murmurCutPower(b);
 }
 
 /**
@@ -11028,11 +11189,12 @@ function murmurCutStep(u, t, dt) {
   const K = MURMUR.craft, pl = murmurPlanBy(u.plan), c = pl && pl.cut[t.ci];
   if (t.feeding) { if (pl && c) murmurFeed(u, t, dt, pl, c); else { u.task = { type: 'carry', night: 1 }; u.path = null; } return; } // (a Leech at it)
   const done = () => {
-    const next = pl ? pl.cut.findIndex((d) => !d[4] && (d[0] === 1 ? !!getE(d[1]) && !getE(d[1]).dead : !!S.road[d[1]])) : -1;
+    const next = pl ? pl.cut.findIndex((d, ci) => murmurCutReady(pl, d) && !S.bots.some((v) =>
+      v !== u && !v.dead && v.plan === pl.id && v.task?.role === 'cut' && v.task.ci === ci)) : -1;
     if (next >= 0) { t.ci = next; t.x = pl.cut[next][2]; t.y = pl.cut[next][3]; t.work = 0; u.path = null; return; }
     t.role = 'main'; t.x = pl ? pl.tx : t.x; t.y = pl ? pl.ty : t.y; t.arrived = false; u.path = null;
   };
-  if (!pl || !c || c[4] || (c[0] === 1 ? !getE(c[1]) || getE(c[1]).dead : !S.road[c[1]])) { done(); return; }
+  if (!pl || !murmurCutReady(pl, c)) { done(); return; }
   const gx = c[2] + 0.5, gy = c[3] + 0.5;
   if (dist2(u.x, u.y, gx, gy) > (c[0] === 1 ? 1.7 : 0.6)) {
     if (!murmurStep(u, gx, gy, dt)) { c[4] = 1; done(); }
@@ -11047,8 +11209,8 @@ function murmurCutStep(u, t, dt) {
 /** A pack that lost half its number: back down the nearest exits, to come again later in the night if there's time. */
 function murmurPullBack(pl, fighters) {
   const K = MURMUR.craft;
-  for (const u of fighters) { const ex = murmurNearExit(u.x, u.y, 60); u.task = { type: 'back', exit: ex ? ex.id : 0, night: 1 }; u.path = null; u.fight = 0; }
   pl.phase = 3; pl.backed = 1; pl.home = 0; pl.homeB = 0;
+  for (const u of fighters) murmurBack(u);
   pl.again = NIGHT_TO - dayClock(S.time) > K.againLeft ? S.time + K.again : 0;
   const tb = getE(pl.tb);
   postMsg(pl.p, `Contact withdrawing underground${tb ? ` at your ${BDEFS[tb.type].name}` : ''}. The night isn't over.`, pl.tx, pl.ty, 'info');
@@ -11057,20 +11219,40 @@ function murmurPullBack(pl, fighters) {
 /** Those that went back come up again: at the exit nearest the rally point, gathering at a new one. */
 function murmurAgain(pl) {
   pl.again = 0;
-  const n = pl.home || 0;
-  if (!n) { pl.phase = 4; return; }
-  const ex = murmurNearExit(pl.rx + 0.5, pl.ry + 0.5, 60), nest = ex && getE(ex.nest);
+  const room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  const up = S.bots.filter((u) => !u.dead && u.task?.night).length;
+  const n = Math.min(pl.home || 0, room - up);
+  if (n <= 0) { pl.phase = 4; return; }
+  const exits = murmurExits(pl.rx, pl.ry, 60), fresh = murmurPlan(pl.p, pl.n, pl.round, exits);
+  if (!fresh) { pl.phase = 4; return; }
+  const ex = exits.find((e) => murmurRoute(e, fresh.rx, fresh.ry)), nest = ex && getE(ex.nest);
   if (!ex || !nest || nest.dead) { pl.phase = 4; return; }
-  const fresh = murmurPlan(pl.p, pl.n, pl.round);
-  if (fresh) { pl.rx = fresh.rx; pl.ry = fresh.ry; pl.tb = fresh.tb; pl.tx = fresh.tx; pl.ty = fresh.ty; pl.cut = fresh.cut; }
+  pl.rx = fresh.rx; pl.ry = fresh.ry; pl.tb = fresh.tb; pl.tx = fresh.tx; pl.ty = fresh.ty; pl.cut = fresh.cut;
   const until = S.time + 600;
   for (let k = 0; k < n; k++) {
     const u = spawnCritter(ex, k < (pl.homeB || 0) ? 'brute' : 'scuttler', { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 });
     u.nest = nest.id; u.exit = ex.id; u.plan = pl.id;
   }
   addFx('dust', ex.x + 0.5, ex.y + 0.5, { r: 0.8 });
-  pl.phase = 1; pl.at = S.time; pl.first = 0; pl.home = 0; pl.homeB = 0; pl.released = 0;
+  pl.phase = 1; pl.at = S.time; pl.first = 0; pl.home = 0; pl.homeB = 0;
+  pl.released = 0; pl.cutDone = 0; pl.redirected = 0; pl.feintAt = 0;
   postMsg(pl.p, `The Murmur are up again: ${n} of them, near your ${(getE(pl.tb) && BDEFS[getE(pl.tb).type].name) || 'colony'}.`, ex.x, ex.y, 'bad');
+}
+
+/** Give a cut-off pack one new rally point. If its objective is gone or sealed, it withdraws. */
+function murmurRegroup(pl, main, target, minimum) {
+  const old = tIdx(pl.rx, pl.ry);
+  const next = target && !pl.redirected && murmurRally(pl.p, pl.n, pl.round, target, main, minimum, old);
+  if (!next) {
+    pl.phase = 4;
+    for (const u of main) murmurBack(u);
+    return;
+  }
+  pl.rx = next.x; pl.ry = next.y; pl.first = 0; pl.at = S.time; pl.redirected = 1;
+  for (const u of main) {
+    const t = u.task;
+    t.x = next.x; t.y = next.y; u.path = null;
+  }
 }
 
 /** Each second of the night: every plan's next step (gathering, the strike, going back, coming again). */
@@ -11084,13 +11266,28 @@ function murmurPlansTick() {
     if (pl.phase === 1) {
       const main = fighters.filter((u) => u.task.type === 'rally');
       if (!main.length) { pl.phase = 4; continue; }
-      const at = main.filter((u) => u.task.at).length;
-      if (at && !pl.first) pl.first = S.time;
+      const arrived = main.filter((u) => murmurAtRally(u, pl.rx, pl.ry));
+      const minimum = Math.ceil(main.length * 2 / 3);
+      if (arrived.length && !pl.first) pl.first = S.time;
+      const expired = S.time - pl.at >= K.waitMax;
+      const b = getE(pl.tb), target = b && !b.dead && b.owner === pl.p && !calmB(b) ? b : null;
+      if (!target || !murmurRallyOpen(pl.rx, pl.ry) || (expired && arrived.length < minimum)) {
+        murmurRegroup(pl, main, target, minimum);
+        continue;
+      }
+      const ready = arrived.length === main.length || (arrived.length >= minimum && (expired || S.time - pl.first >= K.wait));
+      if (!ready) continue;
       const drawn = pl.feintAt ? murmurDrawn(pl) : false;
-      const ready = at === main.length || (pl.first && S.time - pl.first >= K.wait) || S.time - pl.at >= K.waitMax;
-      if (ready && (!pl.feintAt || drawn || S.time - pl.feintAt >= K.feintWait)) murmurLaunch(pl, main, drawn);
+      const feintLive = pl.feintAt && S.bots.some((u) => !u.dead && u.plan === pl.id && u.task?.role === 'feint');
+      if (feintLive && !drawn && S.time - pl.feintAt < K.feintWait) continue;
+      if (!murmurRoute({ x: pl.rx, y: pl.ry }, target.x, target.y, 30)) {
+        murmurRegroup(pl, main, target, minimum);
+        continue;
+      }
+      murmurLaunch(pl, arrived, drawn);
+      for (const u of main) if (u.task.type === 'rally') murmurBack(u);
     } else if (pl.phase === 2) {
-      if (!pl.released && (pl.cutDone || S.time - pl.at >= K.cutWait)) {
+      if (!pl.released && (pl.cutDone || S.time - pl.at >= K.cutWait || !fighters.some((u) => u.task.role === 'cut'))) {
         pl.released = 1;
         for (const u of fighters) if (u.task.wait > S.time) u.task.wait = S.time + (u.type !== 'brute' && pl.lead ? K.leadGap : 0);
       }
@@ -11168,7 +11365,8 @@ function murmurDeadTick() {
     let best = null, bd = K.dragR * K.dragR;
     for (const u of S.bots) {
       // (Scuttlers and Brutes fetch their dead; the other forms keep to their own work: a Sapper underground never does.)
-      if (u.dead || !isWildBot(u) || murmurForm(u) || u.under || u.drag || u.fight || !u.task || !['raid', 'rally', 'guard', 'back'].includes(u.task.type)) continue;
+      if (u.dead || !isWildBot(u) || murmurForm(u) || u.under || u.drag || u.fight || !u.task || u.task.focus ||
+          u.task.role === 'cut' || u.task.wait > S.time || !['raid', 'guard', 'back'].includes(u.task.type)) continue;
       const dd = dist2(u.x, u.y, d.x, d.y);
       if (dd < bd || (dd === bd && best && u.id < best.id)) { bd = dd; best = u; }
     }
@@ -15333,6 +15531,7 @@ function hashState() {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
+    if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
@@ -15349,7 +15548,12 @@ function hashState() {
   if (S.mur) { int(S.mur.night || 0); int(S.mur.wave || 0); int(S.mur.warned || 0); for (const e of S.mur.shut || []) { int(e.x); int(e.y); num(e.until); } }
   // Their craft (Active): the night's plans, what they remember, their dead, the dark they made.
   if (S.mur) {
-    for (const pl of S.mur.plans || []) { int(pl.id); int(pl.phase); int(pl.tb); int(pl.rx); int(pl.ry); num(pl.at); }
+    for (const pl of S.mur.plans || []) {
+      int(pl.id); int(pl.phase); int(pl.tb); int(pl.rx); int(pl.ry); num(pl.at);
+      int(pl.redirected || 0); int(pl.feintCover || 0); num(pl.feintAt);
+      int(pl.feintGuard?.length || 0);
+      for (const id of pl.feintGuard || []) int(id);
+    }
     for (const k of ['kill', 'fed']) for (const e of (S.mur.mem && S.mur.mem[k]) || []) { num(e[0]); num(e[1]); num(e[2]); }
     for (const d of S.mur.dead || []) { int(d.id); num(d.x); num(d.y); int(d.by); }
     for (const d of S.mur.dark || []) { int(d.x); int(d.y); num(d.until); }

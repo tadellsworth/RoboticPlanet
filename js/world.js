@@ -4882,7 +4882,9 @@ function checkSave(o) {
     if (M.shut != null && !(Array.isArray(M.shut) && M.shut.every((e) => obj(e) && Number.isInteger(e.x) && Number.isInteger(e.y) && Number.isFinite(e.until)))) bad();
     // Their craft (Active: see murmurPlan): plans of numbers, memories of [x, y, weight], their dead, the dark they made.
     const nums = (e, ks) => obj(e) && ks.every((k) => e[k] == null || Number.isFinite(e[k]));
-    if (M.plans != null && !(Array.isArray(M.plans) && M.plans.length < 64 && M.plans.every((pl) => nums(pl, Object.keys(pl).filter((k) => k !== 'cut')) &&
+    if (M.plans != null && !(Array.isArray(M.plans) && M.plans.length < 64 && M.plans.every((pl) => obj(pl) &&
+      nums(pl, Object.keys(pl).filter((k) => k !== 'cut' && k !== 'feintGuard')) &&
+      (pl.feintGuard == null || (Array.isArray(pl.feintGuard) && pl.feintGuard.length <= 10000 && pl.feintGuard.every((id) => Number.isSafeInteger(id) && id > 0))) &&
       Array.isArray(pl.cut) && pl.cut.every((c) => Array.isArray(c) && c.length <= 5 && c.every(Number.isFinite))))) bad();
     if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
     if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();

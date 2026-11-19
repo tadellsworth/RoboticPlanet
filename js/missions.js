@@ -1167,8 +1167,8 @@ const MISSIONS = [
     id: 'forms', name: 'What Comes Up', chapter: 'First Contact',
     brief: 'On Active the Murmur hunt with craft, and other forms come up with the packs. Read the signs, guard the power and catch them.',
     intro: [
-      'At dusk one of them stands at the edge of your land, facing it: <b>the night\'s strike falls there</b>.',
-      'They go for the power first. Last night a <b>Leech</b> drank a Fuel Station dry: tap it → <b>Repair</b> (<kbd>E</kbd>).',
+      'At dusk one of them stands at the edge of your land, watching <b>the approach the main pack plans to take</b>.',
+      'The main pack waits while cutters go for the power. A <b>Leech</b> drank from a Fuel Station last night. Tap the station, then <b>Repair</b> (<kbd>E</kbd>).',
       'A <b>Spitter</b> shorts out your guns from a few tiles off. A <b>Sapper</b> digs under and comes up inside.',
       'Nothing reaches a Sapper underground: catch it as it heaves up. And they take their dead with them.',
       'Your warbots wait in the Command Base: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) sends them.',
