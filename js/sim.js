@@ -9771,10 +9771,12 @@ function placeNests(seed) {
   const rng = makeRng((seed ^ 0x6e357) >>> 0), zone = S.zone[tIdx(L.x, L.y)];
   if (S.hollow) { placeHollowNests(rng); return; }
   const want = colonyNests(), nests = [];
+  const grandCanyon = SHAPE_PRESETS[S.settings.shape || 0].grandCanyon;
   for (let tries = 0; tries < 4000 && nests.length < want; tries++) {
     const i = 1 + Math.floor(rng() * (S.W - 2)), j = 1 + Math.floor(rng() * (S.H - 2)), t = tIdx(i, j);
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.bAt[t] || S.owner[t] >= 0 || S.zone[t] !== zone) continue;
     if (dist(i, j, L.x, L.y) < 16 || nests.some((n) => dist(i, j, n.x, n.y) < 9)) continue;
+    if (grandCanyon && S.posts.some((p) => dist2(p.x, p.y, i, j) < 64)) continue;
     let open = 0;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (walkable(tIdx(i + di, j + dj)) && !S.bAt[tIdx(i + di, j + dj)]) open++;
     if (open < 3) continue;
@@ -9822,6 +9824,7 @@ function placePosts(seed) {
   if (S.hollow) return; // (none in the Hollow: the Pathfinder, which built them, never mapped it)
   const Ls = S.players.filter((P) => !P.absent && !isWild(P.id)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
   if (!Ls.length) return;
+  const grandCanyon = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0].grandCanyon;
   const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
   const homes = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
   const wild = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
@@ -9829,7 +9832,7 @@ function placePosts(seed) {
   const cands = [];
   for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
     const t = tIdx(i, j);
-    if (!free(t) || S.fert[t] || S.owner[t] >= 0) continue;
+    if (!free(t) || S.fert[t] || S.owner[t] >= 0 || (grandCanyon && !homes.has(S.zone[t]))) continue;
     let room = 0;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
     if (room < 14 || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
@@ -9856,7 +9859,7 @@ function placePosts(seed) {
       if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
       else {
         const unfair = k === 0 && allFair ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
-        if (unfair > lim) continue; // (no post nearer one colony than another by more than that)
+        if (!grandCanyon && unfair > lim) continue; // Grand Canyon's remaining flat pads can be further from one rim.
         s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
       }
       if (S.posts.length) s += Math.min(near, 40) * 0.25;
@@ -9935,11 +9938,13 @@ function placeUplinks(seed) {
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && nColonies() >= 3) || haul4Map(S.settings);
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
+  const canyonZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
+  const reachableSite = (t) => !SH.grandCanyon || S.zone[t] === canyonZone;
   const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
   const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
   for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
     const t = tIdx(i, j);
-    if (!free(t)) continue;
+    if (!free(t) || !reachableSite(t)) continue;
     let room = 0;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
     roomAt[t] = room;
@@ -9968,7 +9973,7 @@ function placeUplinks(seed) {
     for (let j = Math.floor(cy - 5); j <= Math.ceil(cy + 5); j++) for (let i = Math.floor(cx - 5); i <= Math.ceil(cx + 5); i++) {
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j), dc = dist(i, j, cx, cy);
-      if (dc > 4.6 || S.terrain[t] !== T_GROUND || S.ramp[t] || S.road[t] || S.bAt[t] || (S.tidal && S.tidal[t]) || (S.lava && S.lava[t]) || (SH.sky && S.elev[t] < 3)) continue;
+      if (dc > 4.6 || !reachableSite(t) || S.terrain[t] !== T_GROUND || S.ramp[t] || S.road[t] || S.bAt[t] || (S.tidal && S.tidal[t]) || (S.lava && S.lava[t]) || (SH.sky && S.elev[t] < 3)) continue;
       if (S.fault && near(t, 3, (u) => S.fault[u])) continue;
       if (S.lava && near(t, 2, (u) => S.lava[u])) continue;
       if ((S.posts || []).some((p) => Math.abs(p.x - i) <= 2 && Math.abs(p.y - j) <= 2)) continue;

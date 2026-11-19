@@ -889,7 +889,7 @@ function generateMap(seed, W, H, cfg) {
       const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
       for (let j = Math.ceil(mid); j < H; j++) {
         const t = id(i, j), depth = j - mid;
-        if (depth < 2) {
+        if (depth < (n <= 1 ? 1.5 : 2)) {
           put(t, T_WATER, undefined, true);
           flag(elev, t, 0);
           if (i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford) flag(fordA, t);
@@ -2639,10 +2639,13 @@ function newGame(opts) {
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
+  // Reserve the canyon's scarce landing pads before the Murmur claim the river flats.
+  const grandCanyon = SHAPE_PRESETS[settings.shape].grandCanyon;
+  if (grandCanyon) placePosts(seed);
   if (murmur !== 'off') murmurStart(murmur);
   // The Hollow's side chambers: robot parts laid out in rows, crates for warbots to carry home (they never rot).
   if (m.hollow) for (const r of m.hollow.relics) if (!S.bAt[tIdx(r.x, r.y)]) addLoot(r.x, r.y, r.goods, true);
-  placePosts(seed);
+  if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
