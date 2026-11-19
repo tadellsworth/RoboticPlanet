@@ -626,7 +626,8 @@ function aiThink(p) {
   // More Pulse Turrets as the game goes on: one more every so often, up to its doctrine's number (aiFort; a
   // Turtle starts early and builds most).
   // (The Murmur cut the power at one of our buildings lately, with no gun over it: one Pulse Turret more, beside it: see aiMurCut.)
-  const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) / FT.every)) + (aiMurCut(P) ? 1 : 0);
+  const defAt = AI_DEFENCE_AT * (st.turrets ? 0.5 : 1);
+  const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - defAt) / FT.every)) + (aiMurCut(P) ? 1 : 0);
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
@@ -670,8 +671,14 @@ function aiThink(p) {
     if (AI_OPEN_FIRST.every(([t, n]) => (built[t] || 0) >= n)) P.opened = S.time;
     else plan = AI_OPEN_FIRST.filter(([t, n]) => (counts[t] || 0) < n).concat(plan);
   }
+  // The first Pulse Turret waits for its doctrine's time (a Warden's comes at half of it, and first once it is due):
+  // as a plain plan entry it went up whenever the goods happened to be there, a Herald's three minutes in and a
+  // Warden's a minute late, behind the Refinery and the rest of the plan.
+  const firstTurret = S.mode !== 'colony' && !counts.turret;
+  if (firstTurret && st.turrets && S.time > defAt && counts.foundry) plan = [['turret', 1]].concat(plan);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
+      if (type === 'turret' && firstTurret && S.time <= defAt && !aiMurCut(P)) continue;
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
       // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester, a Mine or a Crystal Tap)
       if ((cementStarved || fiberStarved || starved.length) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') && !starved.includes(type)) continue;
