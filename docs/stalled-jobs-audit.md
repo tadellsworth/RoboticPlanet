@@ -2,6 +2,8 @@
 
 November 19, 2026. Tested [working-branch commit `43c3170`](https://github.com/tadellsworth/RoboticPlanet/commit/43c3170221c6b0be3bdf35342ced4081aab2cda6).
 
+Follow-up on November 19. Fixed the two high-priority findings and the conflicting road warning. Local browser tests verified a split squad, a squad with no route, an isolated Hauler, and a cut road with an Ore delivery still reserved. The Worker guidance finding is open.
+
 The most misleading feedback came from two actions the game acknowledged as moving forward. A factory predicted a delivery that dispatch could not assign, and a Warbot reported moving toward a destination it could not reach.
 
 ## Confirmed findings

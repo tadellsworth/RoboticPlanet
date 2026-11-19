@@ -2553,22 +2553,24 @@ function onMapCommand(i, j, wx, wy, done) {
     if (r.kind === 'none') { sfx('error'); toast(where, 'warn'); return; }
     const n = r.n, nr = r.nr;
     const what = r.kind === 'hunt' ? `going after the rival's ${foeName}` : r.kind === 'attack' ? `attacking the ${bName}` : r.kind === 'station' ? `heading to the ${bName}` : 'moving to hold that ground';
+    const blocked = r.blocked ? ` No route for ${r.blocked} warbot${r.blocked === 1 ? '' : 's'}.` : '';
     if (nr && !n) {
       sfx('order');
       addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
-      toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.`, 'info');
+      toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.${blocked}`, blocked ? 'warn' : 'info');
       if (done) done();
       refreshSelection();
       return;
     }
     if (!n) {
       sfx('error');
-      toast(mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
+      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} armed warbots`}.`
+        : mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
       return;
     }
     sfx('order');
     addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
-    toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
+    toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.${blocked}`, blocked ? 'warn' : 'info');
     if (done) done();
     refreshSelection();
   });

@@ -250,7 +250,11 @@ const ORDERS = {
     if (foe && foes(foe.owner, p)) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe); }
     else if (b && foes(b.owner, p)) { out.kind = 'attack'; out.n = orderAttack(p, ids, b); }
     else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b); }
-    else if (!b && inMap(s.i, s.j) && walkable(tIdx(s.i, s.j))) { out.kind = 'move'; out.n = orderMove(p, ids, s.i, s.j); }
+    else if (!b && inMap(s.i, s.j)) {
+      if (!walkable(tIdx(s.i, s.j))) return { why: 'No route to that tile. Choose ground the selected units can reach.' };
+      out.kind = 'move';
+      out.n = orderMove(p, ids, s.i, s.j, out);
+    }
     else out.kind = 'none';
     return out;
   },

@@ -2,7 +2,7 @@
 
 November 19, 2026. Tested the browser client and local relay from [working-branch commit `7f4c887`](https://github.com/tadellsworth/RoboticPlanet/commit/7f4c887630763b7db8c8755e1c686693438a49ec).
 
-Follow-up on November 19. The large-snapshot sender fix passed a two-browser Huge-map rejoin through the local relay. The other findings below are open.
+Follow-ups on November 19. The large-snapshot sender fix passed a two-browser Huge-map rejoin through the local relay. Paused rejoin and Cancel now work as well. The guest loaded the host's frozen tick, kept the shared pause, and could retry from the same seat after cancelling. Finished matches, simultaneous reloads, undelivered offline orders, and the countdown finding are open.
 
 Short interruptions, computer takeovers, and reloading into a running match on the default map recovered in testing. Fix **large snapshot delivery**, **rejoining a paused match**, and **preserving the seat when a player cancels** first. These failures can hold up or prevent a player from returning.
 

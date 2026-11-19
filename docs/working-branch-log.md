@@ -103,3 +103,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Added **Restore checkpoint** to the main menu when recent solo checkpoints exist. It names the planet and asks before restoring. The menu reads the existing IndexedDB history, so checkpoints already stored before this fix can be recovered after refreshing the Defeat screen.
 - Imports and checkpoint restores now warn when the loaded game is playable and the browser could not update **Continue**. The warning and pause menu point to **Save → File**.
 - Phone-sized Chromium checks covered cancel and confirm after defeat and reload, in-progress jobs, blocked browser writes, older file import, and **Continue**. Updated the in-game help, illustrated guide, and README.
+
+### Order feedback and paused multiplayer recovery
+
+- Direct ground orders now warn when armed Warbots have no route and report the reachable part of a split squad. **Why idle?** identifies isolated road carriers, avoids promising an unassigned delivery, and shows disconnection ahead of a delivery reservation. Verified both original cases and their reachable controls in Chromium.
+- A reloaded multiplayer client can receive the current snapshot while the match stays paused. Cancel preserves the player's seat for a later retry. Two browsers against the local relay verified the frozen tick, the queued order after resuming, and a successful retry with the original seat.

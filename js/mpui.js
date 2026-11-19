@@ -110,14 +110,22 @@ function initMulti() {
   });
   $('mp-start').onclick = () => { sfx('click'); mpHostStart(); };
   $('mp-leave').onclick = () => { sfx('click'); mpLeaveLobby(); };
-  $('mp-joincancel').onclick = () => { sfx('click'); mpStop(); netClose(); netRemember(false); mpView('connect'); closeMulti(); syncRejoin(); };
+  $('mp-joincancel').onclick = () => {
+    sfx('click'); mpStop(); netClose();
+    UI.mpRejoining = false; UI.mpWasRejoin = false;
+    mpView('connect'); closeMulti(); syncRejoin();
+  };
   $('m-rejoin').onclick = () => { sfx('click'); audioUnlock(); mpRejoinGame(); };
   $('p-mppause').onclick = () => { sfx('click'); mpPause(!MP.paused); };
   $('mp-banner-btn').onclick = () => { sfx('click'); if (MP.paused) mpPause(false); };
 
   NET.onError = (why) => {
     if (why === 'taken' && NET.create) { netConnect(netRandomCode(), { create: true, name: NET.name }); return; } // (that code's in use: another)
-    if (MPJ.on || UI.mpRejoining) { UI.mpRejoining = false; mpStop(); netRemember(false); mpView('connect'); syncRejoin(); }
+    if (MPJ.on || UI.mpRejoining) {
+      UI.mpRejoining = false; mpStop();
+      if (why === 'none' || why === 'started') netRemember(false);
+      mpView('connect'); syncRejoin();
+    }
     if ($('screen-mp').hidden && !UI.inGame) openMulti();
     mpMsg(why === 'none' && UI.mpWasRejoin ? 'That game has ended (or everyone left it).' : MP_ERRORS[why] || MP_ERRORS.bad);
     UI.mpWasRejoin = false;

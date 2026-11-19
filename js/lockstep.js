@@ -63,7 +63,7 @@ function mpStart(opts) {
     on: true, me: opts.me, humans: opts.humans.slice().sort((a, b) => a - b), send: opts.send, speed: opts.speed || 1,
     turn: S.tick / LS.TURN | 0, begun: -1, acc: 0, stalled: 0, waitFor: [], q: [], seq: 0, cbs: new Map(),
     packets: new Map(), last: S.players.map(() => -1), hashes: new Map(), sentTo: -1, ctl: new Map(), seen: 0,
-    paused: false, pausedBy: -1, desyncs: 0, snapAt: -1, snapTo: null, snapTurn: -1, snaps: 0, linkOK: true,
+    paused: false, pausedBy: -1, desyncs: 0, snapAt: -1, snapTo: null, snapFull: false, snapTurn: -1, snaps: 0, linkOK: true, rejoinT: -99,
     d: LS.DELAY, clock: 0, sentAt: new Map(), rtt: 0, adaptT: 0, peerD: S.players.map(() => LS.DELAY),
   });
   MP.t0 = MP.turn;
@@ -74,26 +74,29 @@ function mpStart(opts) {
 }
 
 /**
- * Join a game under way, from a full snap (a reloaded page asked for it with want): the game as it was at the start of
- * turn msg.turn, and the players' state then. The relay's messages after msg.seen are taken in next, as usual.
+ * Join a game from a full snapshot. A paused sender may have already started the current turn.
+ * The relay's messages after msg.seen are taken in next.
  */
 function mpStartFrom(msg, opts) {
   deserializeGame(msg.data);
   S.msgs = [];
   mpStart({ ...opts, humans: msg.humans });
-  MP.turn = MP.t0 = msg.turn;
+  MP.turn = msg.turn;
+  MP.t0 = msg.t0 ?? msg.turn;
+  MP.begun = msg.begun ?? -1;
   MP.ctl = new Map(msg.ctl.map(([p, list]) => [p, list.map((e) => ({ ...e }))]));
   MP.last = msg.last.slice();
   MP.peerD = msg.peerD.slice();
   MP.seen = msg.seen;
   MP.paused = !!msg.paused;
+  MP.pausedBy = MP.paused ? (msg.pausedBy ?? -1) : -1;
   MP.snapTurn = msg.turn; MP.snaps = 1;
   MP.packets = new Map(msg.packets.map(([T, list]) => [T, new Map(list)]));
   MP.sentTo = MP.last[MP.me]; // (the server ran turn - 1 with my packets: everything after the last that reached it goes out from here)
-  mpSetAI(MP.turn);
+  mpSetAI(MP.paused && MP.begun >= 0 ? MP.begun : MP.turn);
 }
 
-function mpStop() { MP.on = false; MP.send = null; MP.q = []; MP.cbs.clear(); MPJ.on = false; }
+function mpStop() { MP.on = false; MP.send = null; MP.q = []; MP.cbs.clear(); MPJ.on = false; MPJ.held = []; }
 
 /**
  * A device with no game joining one under way (a reloaded page): it asks for the game (want), holds on to the relay's
@@ -197,12 +200,18 @@ function mpReceive(msg) {
       mpDrop(msg.p);
       const server = mpLive().find((q) => q !== msg.p);
       if (server !== MP.me) return;
+      if (MP.paused && S.winner < 0) {
+        // Send the frozen tick and its order cursor without running any simulation to make a snapshot.
+        mpSendSnapshot(MP.turn, [msg.p], true, hashState());
+        return;
+      }
       MP.snapTo = (MP.snapTo || []).concat(msg.p);
       MP.snapFull = true;
       if (MP.snapAt < MP.turn) MP.snapAt = Math.ceil((MP.turn + 1) / LS.HASH_EVERY) * LS.HASH_EVERY;
       return;
     }
     case 'snap': {
+      if (msg.full && msg.paused) return; // A paused join snapshot is for a freshly loaded page only.
       if (msg.from === MP.me || (msg.to && !msg.to.includes(MP.me))) return;
       const groups = S && S.groups, bgroups = S && S.bgroups;
       // (the narrator's first nightfall is said on each device by its interface, not the simulation: the sender's game
@@ -276,6 +285,17 @@ function mpMissing(T) {
   return MP.humans.filter((p) => !mpAI(p, T) && !(m && m.has(p)));
 }
 
+function mpSendSnapshot(turn, to, full, hash) {
+  const msg = { t: 'snap', from: MP.me, to, turn, data: serializeGame(), hash };
+  if (full) Object.assign(msg, {
+    full: true, humans: MP.humans, ctl: [...MP.ctl], last: MP.last, peerD: MP.peerD, seen: MP.seen,
+    t0: MP.t0, begun: MP.begun, paused: MP.paused, pausedBy: MP.pausedBy,
+    packets: [...MP.packets].filter(([k]) => k >= turn).map(([k, m]) => [k, [...m]]),
+  });
+  mpSend(msg);
+  MP.snaps++;
+}
+
 /** Start turn MP.turn: the fingerprint (on a whole second), my packet for a few turns on, then everyone's orders. */
 function mpBeginTurn() {
   const T = MP.turn;
@@ -287,18 +307,8 @@ function mpBeginTurn() {
     const hv = hashState();
     h = [T, hv];
     if (MP.snapAt === T) {
-      const full = !!MP.snapFull;
-      const msg = { t: 'snap', from: MP.me, to: MP.snapTo && MP.snapTo.length ? [...new Set(MP.snapTo)] : null, turn: T, data: serializeGame(), hash: hv };
-      if (full) {
-        // Everything a device with no game needs to play on from here: the players' state, and the packets for the turns
-        // ahead (the rest of the relay's messages, from `seen` on, it takes in as usual).
-        Object.assign(msg, {
-          full: true, humans: MP.humans, ctl: [...MP.ctl], last: MP.last, peerD: MP.peerD, seen: MP.seen, paused: MP.paused,
-          packets: [...MP.packets].filter(([k]) => k >= T).map(([k, m]) => [k, [...m]]),
-        });
-      }
-      mpSend(msg);
-      MP.snaps++; MP.snapTurn = T; MP.snapTo = null; MP.snapFull = false;
+      mpSendSnapshot(T, MP.snapTo && MP.snapTo.length ? [...new Set(MP.snapTo)] : null, MP.snapFull, hv);
+      MP.snapTurn = T; MP.snapTo = null; MP.snapFull = false;
     }
   }
   // My packet for turn T + my delay (and any missed on the way: after a jump forward, or when the delay grows).

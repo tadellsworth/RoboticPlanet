@@ -7706,12 +7706,19 @@ function readyForOrder(u) {
   u.path = null;
 }
 
-/** Send selected warbots to hold the ground at (i, j) under a rally flag. Only armed ones go. */
-function orderMove(owner, ids, i, j) {
+/** Send selected warbots to a rally. Direct move commands also report which armed bots have no route. */
+function orderMove(owner, ids, i, j, result) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
-  const bots = orderable(owner, ids).filter((u) => botArmed(u));
-  if (!bots.length) return 0;
+  const armed = orderable(owner, ids).filter((u) => botArmed(u));
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  const goalX = r ? Math.floor(r.x) : i, goalY = r ? Math.floor(r.y) : j;
+  const bots = result ? armed.filter((u) => {
+    if (u.ferryWait?.ferry) return false;
+    const start = deckEnds(u)?.[0] ?? tIdx(Math.floor(u.x), Math.floor(u.y));
+    return !!squadRoute(u, start, goalX, goalY);
+  }) : armed;
+  if (result) result.blocked = armed.length - bots.length;
+  if (!bots.length) return 0;
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }

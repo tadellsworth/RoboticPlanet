@@ -938,7 +938,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the Smelter, every factory with a recipe) shows **Why idle?** under its status (`whyIdle`, `refreshWhy`), worked out
   for the open panel only, once a second. It follows the missing input back down the chain and stops at the first real
   cause (`goodWhy`, `makerWhy`, `siteWhy`, at most three links down): is any in storage (then: no road, no Hauler or
-  Tanker, storage no road joins to it, enemy guns, every Hauler busy: `haulWhy`)? Is there a building that makes it,
+  Tanker, storage no road joins to it, enemy guns, disconnected road carriers or reachable carriers busy: `haulWhy`)? Is there a building that makes it,
   and is it paused, cut off, under enemy guns, unstaffed (no free Worker: `workerWhy`), waiting for its own input
   (asked again, a link down), with no road, or for a gatherer out of deposits in reach (`insLeft`: none left, all on a
   rival's land, or all under guns; "ran dry N minutes ago" from `b.dryAt`, set in `updateDepleted`)? With none, is one
@@ -2430,7 +2430,8 @@ How it plays opens the whole of it) and taps
   of you (anyone can resume). The game runs at one speed for everyone.
 - If someone's connection drops, the others' games wait for it; after 12 seconds the computer runs that colony.
   When the device comes back it catches up and the colony is handed back. A page that reloads (or a phone app that
-  was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others.
+  was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others. Rejoining a
+  paused match keeps it paused. **Cancel** keeps the seat available for another attempt.
 - **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
   Continue.
 
