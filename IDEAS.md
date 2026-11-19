@@ -96,6 +96,63 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Neutral sites to find and use, as in Warcraft 3** (the owner, Nov 2026: saved for later). Neutral buildings, caches and
+  oddities spread over the maps: they reward exploring, give objectives away from home, and add personality. We have a
+  few already (Trade Posts, Uplinks, the Murmur's nests with their hoards, the *Wren*). The tone (LORE.md): dry and a
+  little sad, machines applying old rules to a world that moved on, never slapstick.
+  - **How it would work:** neutral buildings that belong to no colony and are claimed or used by standing near them for a
+    while (as the Uplinks); placed from the seed and mirrored for fairness in Versus (as the Trade Posts); a Custom Game
+    setting "Neutral sites: Off, Some, Many" (like the Murmur's); rivals seek them out too (the biggest piece of new
+    work). Reuses: the Trade Posts' neutral ownership and no-fire zones, loot crates, parachute drops, Murmur hoards.
+    New: a neutral-site system, the placement logic, the rivals' use of them, and art. Suggested first set: Charge Pool,
+    Mercenary Foundry, Feral Sentinels, Archive Vault, Transit Stubs; then Weather Station, Seed Vault Annex, Hum Stone,
+    Lottery Terminal, Salvage Field.
+  - **Shops and services:** *Orphaned Mercenary Foundry* (an old vanguard stock never claimed: pay Alloy and Chips for a
+    one-time squad of Bulwarks or Torches); *Charge Pool* (a hum of Ring Crystal where robots nearby recharge and repair
+    free); *Accord Welcome Kiosk* (still running its script: greets you, hands out an "orientation brochure" of goods,
+    charges a few Chips for a "map update"); *Empty Passenger Shelter* (a neutral rest stop with a no-fire zone: any side's
+    robots recharge and repair there, so it is contested); *Carrier Callbox* (pay Chips for a one-time supply drop from
+    the Carrier, by parachute); *Proving Ground* (destroy a set of target drones in 60 s for a temporary army buff).
+  - **Guarded caches:** *Feral Sentinels* (old vanguard warbots still obeying orders from 31 years ago, "Position held",
+    guarding a bridge or a cache; beat them for the salvage); *crashed supply pods* (dormant Carrier reserve pods: Workers
+    pry them open, often guarded by a nest); *Lost Luggage* (crates from the arks that never came: goods, and now and
+    then a pair of children's shoes).
+  - **Map-changers:** *Accord Transit Stubs* (unfinished "Phase 2" transit stations from the lore: hold one to teleport
+    to its twin, as Warcraft's Waygates; on big maps they change which routes matter; ties in with the Maglev idea);
+    *Toll Gate* (a neutral checkpoint on a shortcut that demands "papers": 3 Chips to pass, or wreck it); *hazards*
+    (steam geysers that burst now and then, hot springs that heal in Hoarfell, a "singing" Bloom patch).
+  - **Information:** *Weather Station* (an Accord instrument array: a forecast of the next planetary event and the next
+    Murmur night, "Dust storm in 2:40"); *Observatory* (on a high mesa: shows where the next Ringfall will land);
+    *Survey Tower* (reveals hidden rich deposits within 20 tiles: a new mechanic, seams hidden until surveyed);
+    *Listening Post* (stray machine traffic from other Catalog worlds: lore logs and a small bonus).
+  - **Story sites:** *Archive Vault* (a sealed Accord data vault: hold it for a minute to open it: a lore log or a
+    one-time perk; a way to deliver the campaign's story); *ghost town* (the empty Accord settlement of mission 2: claim it
+    with an Outpost for lit streetlights, a free storage building and deer on the lawns); *Seed Vault Annex* (the
+    Pathfinder's garden: plant a grove of Earth trees for free Fiber, or let Bio Farms grow anywhere near).
+  - **Bargains and dry humor:** *Lottery Terminal* (5 Chips for a random reward, usually "Your number was not selected.
+    Thank you for participating. Probability of contact: 0.2%."); *Tribunal* (the Accord's court that "has not met in
+    decades": pay to file a complaint and call a 3-minute ceasefire; tied to the truce idea on the hold list);
+    *Lost-and-Found Office* (pay a fee to recover half the goods lost to raids in the last five minutes; needs limits
+    against exploiting it).
+  - **The strange ones:** *Hum Stone* (a neutral monolith the Murmur gather round: leave it Crystal and they leave your
+    colony alone for one night; bribery, ritual or both: the lore never answers); *Derelict Locomotive or Crawler* (an old
+    machine waiting for orders: repair it with Alloy and it is yours).
+  - **Contested economy:** *Salvage Field* (a graveyard of old robots with a big, finite pool of Alloy and Chips: a neutral
+    mine to expand toward; the Murmur's Leeches feed on it, so it comes with a fight).
+- **Easter eggs** (the owner asked for ideas, Nov 2026: saved for later). Quiet objects in the world and dry machine logs,
+  not winks (LORE.md). There is one hidden feature already: tapping the clock three times opens Boosts. Small objects:
+  *ARGOS*, a Hauler on the moon mission that waits idle beside the Pathfinder relay (the dog who waited twenty years;
+  tapped, the log reads "Waiting."); *the ball*, a child's ball on a lawn of the empty town, nudged by the wind ("Object:
+  ball. Purpose: unknown. Retained."); *the shoes*, a rare *Wren* offer of its 31-year-old cargo, 4,000 pairs of children's
+  shoes, that does nothing useful but shows in the end-of-game stats; *the day counts always match* (the Warden's 12,054
+  days, the Uplink's 11,324 days of static and the Arrival clock's 31 years agree). Hidden signals: the campaign ending's
+  "one signal that matches no robot protocol" as real decodable data (Morse in the Uplink static, a repeating pattern)
+  with a clue for the sequel; a console message ("Arrival clock: T+31 years. Probability of contact: 0.2%."). Hidden
+  achievements (the game has the system): *Waited* (leave a game idle 31 minutes), *Lights On* (keep every road lit through
+  a night), *Listener* (stay zoomed on an Uplink a full minute at night). Special seeds (cheap, easy to share): 2165 lands
+  beside the Pathfinder wreck, 11324 gives a map where the animals are all deer, a text seed such as "Odysseus" triggers
+  one; they change map generation, so need testing. The Murmur: a very rare Scuttler that follows a Hauler home and
+  never attacks (deepens "are they only animals?", never answered).
 - **Cutscenes: recorded game scenes with speech, and a glimmer of hope at the end** (the owner, Nov 2026: saved for
   later; the campaign itself is on hold until the new buildings, units, megastructures, biomes and maps are settled in
   the other chat, then it is rethought from the full roster: see CAMPAIGN.md).
