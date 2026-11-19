@@ -1247,6 +1247,18 @@ function drawShapeThumb(cv, P) {
     for (const v of [0.5, 0.34, 0.66]) { ctx.fillStyle = '#ffd166'; ctx.fillRect(X(0.5) - U * 0.03, Y(v) - U * 0.03, U * 0.06, U * 0.06); }
     marks = [[0.28, 0.9], [0.72, 0.9], [0.72, 0.1], [0.28, 0.1]]; crags = 0;
   }
+  if (P.grandCanyon) {
+    const river = [[-0.05, 0.46], [0.14, 0.43], [0.34, 0.48], [0.5, 0.5], [0.66, 0.52], [0.86, 0.57], [1.05, 0.54]];
+    line(river, THUMB.rock, U * 0.44);
+    line(river, THUMB.lo, U * 0.32);
+    line(river, THUMB.floor, U * 0.21);
+    line(river, THUMB.waterHi, U * 0.09);
+    line(river, THUMB.water, U * 0.055);
+    const trail = [[0.55, 0.73], [0.49, 0.65], [0.55, 0.59], [0.48, 0.55]];
+    line(trail, THUMB.ramp, Math.max(1, U * 0.024));
+    line(trail.map(([u, v]) => [1 - u, 1 - v]), THUMB.ramp, Math.max(1, U * 0.024));
+    crags = 0;
+  }
   if (P.lakes) for (let k = 0; k < 4; k++) { const u = 0.12 + rnd() * 0.76, v = 0.52 + rnd() * 0.3; blob(u, v, 0.07 + rnd() * 0.05, 0.035 + rnd() * 0.025, THUMB.water, THUMB.waterHi, true); }
   if (P.oases) {
     ctx.fillStyle = 'rgba(70,38,22,0.45)'; ctx.fillRect(x0, y0, mw, mh);

@@ -403,7 +403,7 @@ function generateMap(seed, W, H, cfg) {
   }
 
   // Nuclear race: a few single uranium deposits, mostly out towards the middle of the map.
-  if (cfg.nuke) {
+  if (cfg.nuke && !SH.grandCanyon) {
     let placed = 0;
     for (let tries = 0; tries < 600 && placed < URANIUM_DEPOSITS; tries++) {
       const [x, y] = np === 2 ? [1 + Math.floor(rng() * (W - 2)), half + 1 + Math.floor(rng() * (H - half - 2))] : canonPoint(rng, 2).map(Math.floor);
@@ -863,6 +863,86 @@ function generateMap(seed, W, H, cfg) {
     for (let i = 0; i < W; i++) { const j = half + hw(i); if (j < H && terrain[id(i, j)] === T_GROUND && cr() < 0.55) putRes(id(i, j), F_FERTILE); }
     links = [[fc, half + hw(fc)], [W - 1 - fc, half + hw(W - 1 - fc)]];
   };
+  // Grand Canyon: put the south bank and its half-turn in together, even where the river bends
+  // past the middle row. Two terraces rise to each rim, with a side canyon opening at one end.
+  const grandCanyonShape = () => {
+    const cr = makeRng(seed ^ 0x4c671f), bend = cr() < 0.5 ? -1 : 1, wave = 2 + cr();
+    const narrow = Math.round(W * (0.32 + 0.04 * cr())), ford = Math.round(W * 0.42);
+    const river = (i) => {
+      const x = (i - ccx) / ccx, a = Math.abs(x);
+      return ccy + Math.sign(x) * Math.round(bend * (1.8 * dsin(a * wave) + 0.6 * dsin(a * 8)));
+    };
+    const main = Math.floor(ccx) - 2, flank = Math.round(W * 0.14);
+    const onMain = (i) => i >= main && i <= main + 4;
+    const onFlank = (i) => i >= flank - 3 && i <= flank + 1;
+    const fromNarrows = (i) => Math.min(Math.abs(i - narrow), Math.abs(i - (W - 1 - narrow)));
+    const floorEdge = (i) => {
+      if (fromNarrows(i) <= 1) return 3;
+      if (onMain(i)) return 7;
+      if (onFlank(i)) return 11;
+      const bank = 7 + (fbm(i / 8, 0, sE, 2) - 0.5) * (1 + TPR.levels * 0.4);
+      const side = 6 * clamp(1 - i / (W * 0.24), 0, 1);
+      return Math.max(3, bank - Math.max(0, 5 - fromNarrows(i))) + side;
+    };
+    for (let i = 0; i < W; i++) {
+      const mid = river(i), edge = floorEdge(i), n = fromNarrows(i);
+      const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
+      for (let j = Math.ceil(mid); j < H; j++) {
+        const t = id(i, j), depth = j - mid;
+        if (depth < 2) {
+          put(t, T_WATER, undefined, true);
+          flag(elev, t, 0);
+          if (i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford) flag(fordA, t);
+          continue;
+        }
+        const level = depth < edge ? 0 : depth < edge + step ? 1 : depth < edge + 2 * step ? 2 : 3;
+        // Keep the starter fields on the rim. Clear the river flats and terraces for roads, docks and ramps.
+        const abutment = n <= 1 && depth < edge + 2 * step + 1;
+        if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
+        else flag(elev, t, level);
+      }
+    }
+
+    // Two descents per rim. Shift the middle ramp sideways so there is a switchback on the terrace.
+    for (const [x, dir] of [[main, 1], [flank, -1]]) {
+      for (let level = 0; level < 3; level++) {
+        const start = x + (level === 1 ? 3 * dir : 0);
+        for (let i = start; i < start + 2; i++) {
+          for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
+            const t = id(i, j);
+            if (elev[t] !== level || elev[t + W] !== level + 1) continue;
+            put(t, T_GROUND, level);
+            flag(ramp, t);
+            break;
+          }
+        }
+      }
+    }
+
+    // Ore and Crystal on broad river flats, with stretches of bare shoreline for Ports.
+    for (const [part, type, rad] of [[0.11, R_ORE, 1.8], [0.23, R_CRYSTAL, 1.5], [0.47, R_ORE, 1.8],
+      [0.55, R_CRYSTAL, 1.5], [0.78, R_ORE, 1.9], [0.91, R_CRYSTAL, 1.6]]) {
+      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + 3.8);
+      stampRes(cr, i, j, rad, type, 0.85 * stampDens);
+      putRes(id(i, j), type);
+    }
+    if (cfg.nuke) {
+      const spots = [];
+      for (let i = 2; i < W - 2; i++) {
+        for (let j = Math.ceil(river(i) + 2.5); j < river(i) + floorEdge(i); j++) {
+          const t = id(i, j);
+          if (!res[t] && !ramp[t]) spots.push(t);
+        }
+      }
+      for (let n = 0; n < URANIUM_DEPOSITS && spots.length; n++) {
+        const k = Math.floor(cr() * spots.length);
+        putRes(spots[k], R_URANIUM);
+        spots[k] = spots[spots.length - 1];
+        spots.pop();
+      }
+    }
+    for (let t = 0; t < N; t++) if (ramp[t]) { res[t] = R_NONE; fert[t] = 0; }
+  };
   // Volcano: a cone in the middle of the planet, rising level by level to a crater of lava, with lava
   // rivers running down its flanks (bridge them, or go round where they end) and the richest deposits
   // on its slopes. It erupts every few minutes (see updateVolcano).
@@ -1031,6 +1111,7 @@ function generateMap(seed, W, H, cfg) {
       else crossShape4();
     }
     else if (np !== 2) return;
+    else if (SH.grandCanyon) { grandCanyonShape(); return; }
     else if (SH.rift) riftShape();
     else if (SH.ring) ringShape();
     else if (SH.oases) oasesShape();
@@ -1339,7 +1420,7 @@ function generateMap(seed, W, H, cfg) {
   }
 
   // 6) Shape the levels into clean terraces, then connect them with ramps.
-  if (L > 1) {
+  if (L > 1 && !SH.grandCanyon) {
     const levelComponents = () => {
       const comp = new Int32Array(N).fill(-1), sizes = [];
       for (let t = 0; t < N; t++) {
@@ -1648,7 +1729,7 @@ function generateMap(seed, W, H, cfg) {
     // Safety net: if the bases still can't reach each other, flatten the map (Islands are joined
     // by bridges, not land).
     if (!SH.islands && !joinedAll(true)) { elev.fill(baseLevel); ramp.fill(0); }
-  } else {
+  } else if (!SH.grandCanyon) {
     elev.fill(0);
   }
 
@@ -1704,7 +1785,8 @@ function generateMap(seed, W, H, cfg) {
     let d = Infinity;
     for (const b of bases) d = Math.min(d, dist(i, j, b.x, b.y));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
-    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich), 1, 255);
+    const canyonRich = SH.grandCanyon && elev[t] === 0 && (res[t] === R_ORE || res[t] === R_CRYSTAL) ? 1.5 : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich * canyonRich), 1, 255);
   }
   const grow = new Float32Array(N).fill(1);
   // Sky islands: no water anywhere. The islands are towering mesas (the middle one and the islets a
