@@ -89,7 +89,7 @@ function onPointerDown(e) {
     const box = armed || (mouse && e.button === 0 && (R.mode === 'normal' || R.mode === 'bppick') && !!INPUT.onBox); // (bppick: buildings for a blueprint)
     // (grab: something on the map this finger has taken hold of, the aiming crosshair say; its drag moves that, not the map)
     const grab = !mouse && INPUT.onGrab ? INPUT.onGrab(e.clientX, e.clientY) : null;
-    const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, armed, grab, button: e.button, hold: 0 };
+    const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, armed, grab, button: e.button, hold: 0, shift: !!e.shiftKey }; // (shift: the Express tool lays a single lane)
     // ...or once the finger has rested where it landed for LONG_PRESS ms (a short buzz says so), if there are warbots to box.
     if (!mouse && !box && R.mode === 'normal' && INPUT.onBox && (!INPUT.canBox || INPUT.canBox())) {
       g.hold = setTimeout(() => { if (INPUT.gesture === g && !g.moved) { g.box = true; haptic('hold'); } }, LONG_PRESS);

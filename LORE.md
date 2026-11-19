@@ -440,3 +440,13 @@ run full of Ore. Flavour: the Terminal, "Phase 2 transit. Platforms to passenger
 stay folded"; the pod, "Twelve seats, folded. Forty crates"; the pylon, "Phase 2, structure type 4. Built to the
 standard, thirty years late." The line draws its power from the colony's Generators, so the Murmur hear it as they hear
 a Generator, and a pylon shot down cuts it until a Worker rides out and rebuilds it. No one rides it.
+
+Express highways (the owner's decision, Nov 19 2026; built): the road standards had a chapter on arterials: dual
+carriageways between the towns, banked for speed and lit all night, for the day the towns had traffic to send each
+other. COBALT wrote it, for coastal cities that were already losing their coasts; every vanguard carried a copy. The
+first arterial on Ithaca I runs from a Smelter to a Depot. The trucks keep to the limit. In the game: a pair of one-way
+lanes with a median barrier, the street lamps between them and cat's-eyes down every lane, laid by the Roadworks' Paver
+over a road base; freight only (Haulers are not certified for it), and in the Hollow's dark a lit pair is the main
+light, which the Murmur cut as they cut the roads'. Flavour: the lane, "Arterial, built to the standard. Speed limit
+posted. Nobody reads it"; the Roadworks laying one, "Arterial online. Passenger standard, freight only"; a gantry,
+should one be drawn, "Destinations left blank. The towns were to be named on arrival."

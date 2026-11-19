@@ -174,6 +174,22 @@ const ORDERS = {
       if (out.why) break;
       out.laid++;
     }
+    // Express lanes ([tile, direction 2-5]): a road of yours is turned one-way that way and marked for the Paver to
+    // surface as a lane (a crossing with an ordinary road gets its overpass planned); a tile planned above (or planned
+    // already) is noted (S.xdir) so it becomes a lane when Workers lay its base. Lanes never cross each other.
+    out.lanes = 0;
+    for (const e of L(d.express)) {
+      const [t, v] = Array.isArray(e) ? e : [];
+      if (!(t >= 0 && t < S.W * S.H) || !(v >= 2 && v <= 5)) continue;
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (S.road[t]) {
+        if (!roadOwnedBy(p, t) || (S.paveMark[t] === 2 && S.road[t] >= 2 && (S.road[t] % 2) !== (v % 2))) continue;
+        setRoadDir(i, j, v | 0);
+        setPaveMark(p, i, j, true, 3);
+        expressJoins(t);
+        out.lanes++;
+      } else if (S.plan[t] === p + 1) { S.xdir[t] = v | 0; out.lanes++; }
+    }
     for (const t of L(d.rail)) { const w = queueRail(p, t); if (w) { out.railWhy = out.railWhy || w; } else out.rails++; }
     for (const t of L(d.pipeDel)) if (S.pipe[t] === p + 1 || S.pipePlan[t] === p + 1) { takeUpPipe(p, t); out.pipesUp++; }
     for (const t of L(d.pipe)) if (!queuePipe(p, t)) out.pipes++;
@@ -182,7 +198,7 @@ const ORDERS = {
   },
   paveMark(p, i, j, on) { if (inMap(i, j)) setPaveMark(p, i, j, !!on); },
   /** Turn a road's arrow: v 1 two-way, 2-5 one-way (east, south, west, north). */
-  roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); },
+  roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); }, // (an Express lane stays one-way: setRoadDir)
   /**
    * The junction tool, one tap: a light becomes a (planned) overpass, an overpass comes down, a planned overpass is
    * called off, and a plain junction gets a (planned) light. A light where an overpass can't go (a T-junction: only

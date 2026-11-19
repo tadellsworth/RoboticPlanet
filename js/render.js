@@ -1649,13 +1649,16 @@ function drawSlope(ctx, i, j, x, y, t, n) {
   else { ctx.fillRect(x, y, TP, 3); ctx.fillRect(x, y + TP - 3, TP, 3); }
 }
 
-/** Road surfaces: concrete (pale slabs) and asphalt (near-black). */
-const ROAD_LOOK = [null, { edge: '#5d636b', fill: '#b9bec5', w: 12 }, { edge: '#15171b', fill: '#33363d', w: 12 }];
+/** Road surfaces: concrete (pale slabs), asphalt (near-black) and the Express lane (darker and bluer, the width of a tile). */
+const ROAD_LOOK = [null, { edge: '#5d636b', fill: '#b9bec5', w: 12 }, { edge: '#15171b', fill: '#33363d', w: 12 }, { edge: '#111317', fill: '#24272e', w: 28 }];
+/** The Express lane's colours (the design sheet's A, renderer/preview/highway_tiles.py): shoulder, median, barrier, lines, cat's-eyes. */
+const XL = { shoulder: '#2f333a', median: '#3a3e44', barrier: '#9ca2a9', barrierSide: '#60666e', amber: 'rgba(255,209,102,0.85)', white: 'rgba(236,238,232,0.85)', red: '#ff463c', cat: '#fafaf0', hazY: '#e8b228', hazK: '#1c1c20' };
 
 function drawRoad(ctx, i, j, x, y) {
   const c = TP / 2;
   const t = tIdx(i, j);
   const tier = S.pave[t] || 1, look = ROAD_LOOK[tier], w = look.w;
+  if (tier === 3) { drawExpress(ctx, i, j, x, y, t); return; }
   const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && roadLike(tIdx(i + di, j + dj)) && canStep(t, tIdx(i + di, j + dj)));
   for (const [col, ww] of [[look.edge, w + 4], [look.fill, w]]) {
     ctx.fillStyle = col;
@@ -1682,21 +1685,110 @@ function drawRoad(ctx, i, j, x, y) {
   drawRoadArrow(ctx, t, x, y);
 }
 
-/** Roads marked for asphalt (amber), and worn asphalt that's due for resurfacing (red outline). */
+/**
+ * An Express lane tile (surface tier 3, always one-way): a motorway lane the width of the tile in the road's own
+ * style, after the design sheet's A. Along its direction: the dark surface, a hard shoulder with a white edge line and
+ * red cat's-eyes on the outside, a broken white lane line with white cat's-eyes down the middle, and where a lane
+ * running the other way lies beside it (laneMate) the median half between them: an amber edge line, hard standing and
+ * the concrete barrier along the shared edge (the street lamps stand on it: streetLamps). An ordinary road touching a
+ * side is a ramp: a road-width connector over a hazard-striped apron on the shoulder; a lane ending on an ordinary road
+ * narrows onto it; an Express neighbour across the lane's direction (not its mate) is a bend. Wear and the one-way
+ * arrow are the road's own.
+ */
+function drawExpress(ctx, i, j, x, y, t) {
+  const c = TP / 2, LW = ROAD_LOOK[3].w, RW = ROAD_LOOK[1].w, look = ROAD_LOOK[3];
+  const r = S.road[t], d = r >= 2 ? r : 2, ew = d === 2 || d === 4, mate = laneMate(t);
+  const SIDES = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // N E S W
+  const nbT = SIDES.map(([di, dj]) => (inMap(i + di, j + dj) ? tIdx(i + di, j + dj) : -1));
+  const nb = nbT.map((u) => u >= 0 && roadLike(u) && canStep(t, u));
+  const lane = nbT.map((u) => u >= 0 && isExpress(u));
+  const axis = (k) => (ew ? k === 1 || k === 3 : k === 0 || k === 2); // a side along the lane's direction
+  // The shapes: a square of lane width, arms to each neighbour (lane width to a lane or round a bend, road width to an
+  // ordinary road: a ramp at the side, an end along the axis), none across the median.
+  const arm = (k, ww, ox, oy) => {
+    if (k === 0) ctx.fillRect(x + c - ww / 2 + ox, y + oy, ww, c); else if (k === 1) ctx.fillRect(x + c + ox, y + c - ww / 2 + oy, c, ww);
+    else if (k === 2) ctx.fillRect(x + c - ww / 2 + ox, y + c + oy, ww, c); else ctx.fillRect(x + ox, y + c - ww / 2 + oy, c, ww);
+  };
+  const shape = (grow) => {
+    const ww = LW + grow;
+    ctx.fillRect(x + c - ww / 2, y + c - ww / 2, ww, ww);
+    for (let k = 0; k < 4; k++) {
+      if (!nb[k] || k === mate) continue;
+      if (lane[k]) arm(k, ww, 0, 0);
+      else if (axis(k)) { arm(k, RW + grow, 0, 0); ctx.beginPath(); const s0 = ww / 2, s1 = (RW + grow) / 2, cx = x + c, cy = y + c, L = c * 0.55; // the end: a wedge from lane to road width
+        if (k === 1) { ctx.moveTo(cx, cy - s0); ctx.lineTo(cx + L, cy - s1); ctx.lineTo(cx + L, cy + s1); ctx.lineTo(cx, cy + s0); } else if (k === 3) { ctx.moveTo(cx, cy - s0); ctx.lineTo(cx - L, cy - s1); ctx.lineTo(cx - L, cy + s1); ctx.lineTo(cx, cy + s0); }
+        else if (k === 2) { ctx.moveTo(cx - s0, cy); ctx.lineTo(cx - s1, cy + L); ctx.lineTo(cx + s1, cy + L); ctx.lineTo(cx + s0, cy); } else { ctx.moveTo(cx - s0, cy); ctx.lineTo(cx - s1, cy - L); ctx.lineTo(cx + s1, cy - L); ctx.lineTo(cx + s0, cy); }
+        ctx.closePath(); ctx.fill(); }
+      else arm(k, RW + grow, 0, 0); // a ramp: the ordinary road joins over the shoulder
+    }
+  };
+  ctx.fillStyle = look.edge; shape(4);
+  ctx.fillStyle = look.fill; shape(0);
+  // Markings along the axis, kept on the surface.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + c - LW / 2, y + c - LW / 2, LW, LW);
+  for (let k = 0; k < 4; k++) if (nb[k] && k !== mate && (lane[k] || !axis(k))) { const ww = lane[k] ? LW : RW; if (k === 0) ctx.rect(x + c - ww / 2, y, ww, c); else if (k === 1) ctx.rect(x + c, y + c - ww / 2, c, ww); else if (k === 2) ctx.rect(x + c - ww / 2, y + c, ww, c); else ctx.rect(x, y + c - ww / 2, c, ww); }
+  ctx.clip();
+  // Across the lane (perpendicular to its direction): the median side is `lo` (N or W) or `hi` (S or E), or neither.
+  const lo = mate === 0 || mate === 3, hi = mate === 2 || mate === 1;
+  const band = (p0, p1, col) => { ctx.fillStyle = col; if (ew) ctx.fillRect(x, y + p0, TP, p1 - p0); else ctx.fillRect(x + p0, y, p1 - p0, TP); }; // a strip across the whole tile at offsets p0..p1 across the lane
+  const e0 = c - LW / 2, e1 = c + LW / 2; // the surface's edges across the lane (2 and 30)
+  // Shoulders (and the median's hard standing) along the edges.
+  if (lo) { band(e0, e0 + 3.5, XL.median); band(e0, e0 + 1.6, XL.barrier); band(e0 + 1.6, e0 + 2.2, XL.barrierSide); } else band(e0, e0 + 3, XL.shoulder);
+  if (hi) { band(e1 - 3.5, e1, XL.median); band(e1 - 1.6, e1, XL.barrier); band(e1 - 2.2, e1 - 1.6, XL.barrierSide); } else band(e1 - 3, e1, XL.shoulder);
+  // Edge lines: amber by the median, white by a shoulder; the lane line dashed down the middle of the carriageway.
+  const in0 = e0 + (lo ? 4.5 : 3.5), in1 = e1 - (hi ? 4.5 : 3.5), mid = (in0 + in1) / 2;
+  band(in0 - 0.6, in0 + 0.6, lo ? XL.amber : XL.white);
+  band(in1 - 0.6, in1 + 0.6, hi ? XL.amber : XL.white);
+  ctx.fillStyle = XL.white;
+  for (let k = 0; k < 4; k++) { const a0 = k * TP / 4 + 1.5, len = TP / 4 - 3.5; if (ew) ctx.fillRect(x + a0, y + mid - 0.5, len, 1); else ctx.fillRect(x + mid - 0.5, y + a0, 1, len); }
+  // Cat's-eyes at a quarter and three quarters along: white on the lane line, amber by the median, red on the shoulder side.
+  const eye = (along, across, col) => { ctx.fillStyle = col; if (ew) ctx.fillRect(x + along - 0.7, y + across - 0.7, 1.4, 1.4); else ctx.fillRect(x + across - 0.7, y + along - 0.7, 1.4, 1.4); };
+  for (const a of [TP * 0.25, TP * 0.75]) { eye(a, mid, XL.cat); eye(a, in0 - 1.4, lo ? XL.amber : XL.red); eye(a, in1 + 1.4, hi ? XL.amber : XL.red); }
+  // Ramps: a hazard-striped apron across the shoulder on the side the road joins from.
+  for (let k = 0; k < 4 && !S.over[t]; k++) { // (under an overpass nothing joins: no apron)
+    if (!nb[k] || lane[k] || axis(k) || k === mate) continue;
+    const p0 = k === 0 || k === 3 ? e0 : e1 - 3, p1 = p0 + 3;
+    for (let a = 0; a < TP; a += 3) { ctx.fillStyle = ((a / 3) | 0) % 2 ? XL.hazK : XL.hazY; if (ew) ctx.fillRect(x + a, y + p0, 3, p1 - p0); else ctx.fillRect(x + p0, y + a, p1 - p0, 3); }
+  }
+  ctx.restore();
+  // A faint aggregate speckle, then wear and the one-way arrow as any road has them.
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  for (let k = 0; k < 6; k++) ctx.fillRect(x + 3 + hash2(i, j, 30 + k) * (TP - 6), y + 3 + hash2(j, i, 40 + k) * (TP - 6), 1, 1);
+  const wb = S.wear ? (S.wear[t] / 250) | 0 : 0;
+  if (wb) drawWear(ctx, i, j, x, y, LW - 6, nb, wb);
+  drawRoadArrow(ctx, t, x, y);
+}
+
+/** A small arrow glyph pointing along angle a (for sketched and planned Express lanes). */
+function drawArrowGlyph(ctx, cx, cy, s, a, color) {
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(a);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(s * 0.5, 0); ctx.lineTo(-s * 0.1, -s * 0.4); ctx.lineTo(-s * 0.1, -s * 0.15); ctx.lineTo(-s * 0.5, -s * 0.15);
+  ctx.lineTo(-s * 0.5, s * 0.15); ctx.lineTo(-s * 0.1, s * 0.15); ctx.lineTo(-s * 0.1, s * 0.4); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Roads marked for asphalt (amber) or as Express lanes (blue-white), and worn surfaces due for resurfacing (red outline). */
 function drawPaveMarks(ctx, ox, oy, z, inView) {
   const pulse = 0.75 + 0.25 * Math.sin(R.time * 3);
   ctx.lineWidth = Math.max(1.5, z * 0.05);
   for (let t = 0; t < S.W * S.H; t++) {
     if (!(S.road[t] ? wayOwner(t) === ME : S.plan[t] === 1)) continue;
-    const worn = S.road[t] && S.pave[t] === 2 && S.wear[t] >= REPAVE_AT;
+    const worn = S.road[t] && S.pave[t] >= 2 && S.wear[t] >= REPAVE_AT;
     if (!S.paveMark[t] && !worn) continue;
     const i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 1)) continue;
     const x = ox + i * z, y = oy + j * z;
     if (S.paveMark[t]) {
-      ctx.fillStyle = S.pave[t] === 2 ? 'rgba(255,196,70,0.16)' : 'rgba(255,196,70,0.34)';
+      const done = S.pave[t] >= paveWant(t), xp = S.paveMark[t] === 2;
+      ctx.fillStyle = xp ? (done ? 'rgba(150,210,255,0.14)' : 'rgba(150,210,255,0.3)') : done ? 'rgba(255,196,70,0.16)' : 'rgba(255,196,70,0.34)';
       ctx.fillRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
-      ctx.strokeStyle = `rgba(255,196,70,${0.7 * pulse})`;
+      ctx.strokeStyle = xp ? `rgba(150,210,255,${0.7 * pulse})` : `rgba(255,196,70,${0.7 * pulse})`;
       ctx.strokeRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
     }
     if (worn) {
@@ -6093,7 +6185,7 @@ function render(dtReal) {
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
     const selB = getE(R.selected);
-    if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === ME) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
+    if ((R.mode === 'road' && (UI.roadMode === 'pave' || UI.roadMode === 'express')) || (selB && selB.type === 'roadworks' && selB.owner === ME) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
   }
   if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
   else if (typeof UI !== 'undefined' && UI.planKept) drawDraft(ctx, ox, oy, z, inView); // (a Paths plan, kept while a Viaduct or Ropeway is placed)
@@ -6686,6 +6778,7 @@ function drawPlans(ctx, ox, oy, z, inView) {
       ctx.fillRect(x + m, y + m, z - 2 * m, z - 2 * m);
       ctx.strokeStyle = p === ME ? (owed ? 'rgba(255,140,60,0.95)' : 'rgba(255,209,102,0.9)') : 'rgba(255,120,120,0.5)';
       ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
+      if (S.xdir && S.xdir[t]) drawArrowGlyph(ctx, x + z / 2, y + z / 2, z * 0.5, Math.atan2(ROAD_DIRS[S.xdir[t]][1], ROAD_DIRS[S.xdir[t]][0]), p === ME ? 'rgba(150,210,255,0.9)' : 'rgba(255,120,120,0.5)'); // (a planned Express lane)
       const by = getE(S.paveRes[t]);
       if (by && by.task && by.task.type === 'pave' && by.task.tile === t && by.task.phase === 'work') {
         const f = Math.min(1, by.task.prog / (roadClears(t) ? PAVE_CLEAR_TIME : PAVE_TIME));
@@ -6829,7 +6922,18 @@ function drawRouteGhost(ctx, ox, oy, z) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size) && !(d.pipe && d.pipe.size) && !(d.pipeDel && d.pipeDel.size))) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size) && !(d.pipe && d.pipe.size) && !(d.pipeDel && d.pipeDel.size) && !(d.express && d.express.size))) return;
+  // Sketched Express lanes: an arrow the way each lane runs (a road upgraded in place gets a blue-white outline too).
+  if (d.express && d.express.size) {
+    ctx.lineWidth = Math.max(1.5, z * 0.05);
+    for (const [t, v] of d.express) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!inView(i, j, 1)) continue;
+      const x = ox + i * z, y = oy + j * z;
+      if (S.road[t]) { ctx.fillStyle = 'rgba(150,210,255,0.22)'; ctx.fillRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8); ctx.strokeStyle = '#96d2ff'; ctx.strokeRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8); }
+      drawArrowGlyph(ctx, x + z / 2, y + z / 2, z * 0.55, Math.atan2(ROAD_DIRS[v][1], ROAD_DIRS[v][0]), 'rgba(235,245,255,0.95)');
+    }
+  }
   // Sketched pipe: a pale pipe joined to the pipe it meets; pipe marked to take up: a red cross.
   if (d.pipe && d.pipe.size) {
     const { segs } = pipeSegments((t) => (d.pipe.has(t) || S.pipe[t] === 1 ? 1 : 0), inView, ox, oy, z, true);

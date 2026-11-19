@@ -1631,6 +1631,19 @@ before the air (`drawMaglevs`); nothing of it is baked, because lines come and g
 band at 75% with every pylon spot ringed (green standing, dashed grey spanned, the first bad one red) and a ghost of
 the far Terminal.
 
+### Batch 22: Express highways (installed; drawn in code)
+
+The Express lane (direction A, the Expressway, from the November 2026 design sheet: `renderer/preview/highway_tiles.py`,
+`highway_mock.py`, `highway_sheet.py` keep the three directions' painters and mock-ups) is drawn by the game the way its
+roads are, in `drawExpress` (`js/render.js`), with no images: a surface a shade darker and bluer than asphalt filling
+the tile (28/32), a hard shoulder with a white edge line and red cat's-eyes, a broken white lane line with white
+cat's-eyes, and between two lanes running opposite ways the median: an amber edge line, hard standing and the concrete
+barrier along the shared edge. Ordinary roads join as ramps (a hazard-striped apron on the shoulder, B's mix) or ends
+(the lane narrows onto the road); bends are the lanes' own arms; worn lanes crack and pothole like asphalt. At night
+the cat's-eyes light (`drawRoadGlow` in `js/daynight.js`), the asphalt street lamps (`streetlamp-asphalt`) stand on the
+median, and a strip in the team's colour runs along the barrier. The one-way arrow is the road's (`oneway`, still to
+make). Nothing to swap: the sign gantries and a nicer arrow are for later (IDEAS.md).
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

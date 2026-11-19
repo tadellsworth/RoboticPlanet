@@ -377,6 +377,14 @@ function streetLamps(v0, v1) {
     for (let i = rem ? i0 + 3 - rem : i0; i <= i1; i += 3) {
       const t = tIdx(i, j);
       if (!S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t]) continue;
+      if (S.pave[t] === 3) {
+        // An Express lane: the lamp stands on the median barrier between a pair (carried by the lane whose partner lies
+        // south or east of it), on a lone lane's shoulder.
+        const m = laneMate(t), lew = S.road[t] === 2 || S.road[t] === 4;
+        if (m === 0 || m === 3) continue;
+        out.push({ ent: 'lamp', i, j, kind: 'asphalt', owner: Math.max(0, wayOwner(t)), x: m === 1 ? i + 1 : lew ? i + 0.5 : i + 0.08, y: m === 2 ? j + 1 : lew ? j + 0.94 : j + 0.5 });
+        continue;
+      }
       const ew = (road(i - 1, j) || road(i + 1, j)) && !road(i, j - 1) && !road(i, j + 1);
       out.push({ ent: 'lamp', i, j, kind: S.pave[t] === 2 ? 'asphalt' : 'road', owner: Math.max(0, wayOwner(t)), x: ew ? i + 0.5 : i + 0.125, y: ew ? j + 0.875 : j + 0.5 });
     }
@@ -506,10 +514,11 @@ function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
   const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(W - 1, Math.ceil(v1.x) + 1);
   const j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(H - 1, Math.ceil(v1.y) + 1);
   const road = (i, j) => i >= 0 && j >= 0 && i < W && j < H && S.road[j * W + i];
-  const paths = {};
+  const paths = {}, lanes = [];
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
     const t = j * W + i;
     if (!S.road[t] || S.bAt[t] || murmurDarkAt(i, j)) continue; // (where the Murmur put the lights out: dark)
+    if (S.pave[t] === 3) { lanes.push(t); continue; } // (an Express lane lights its own cat's-eyes and median: below)
     const o = wayOwner(t), key = (o >= 0 ? o : 'n') + (S.pave[t] === 2 ? 'a' : 'r');
     const P = paths[key] || (paths[key] = new Path2D());
     const x0 = ox + (i + inset) * z, x1 = ox + (i + 1 - inset) * z, y0 = oy + (j + inset) * z, y1 = oy + (j + 1 - inset) * z;
@@ -527,6 +536,25 @@ function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
     ctx.strokeStyle = col;
     if (gfx().night) { ctx.globalAlpha = on * (asph ? 0.2 : 0.13); ctx.lineWidth = Math.max(2, z * 0.11); ctx.stroke(paths[key]); } // the glow
     ctx.globalAlpha = on * (asph ? 0.85 : 0.6); ctx.lineWidth = Math.max(1, z * 0.028); ctx.stroke(paths[key]); // the strip
+  }
+  // Express lanes: strings of cat's-eyes (white down the lane line, amber by the median, red along the shoulder) at a
+  // quarter and three quarters along each tile, and a strip in the owner's colour along the median barrier of a pair
+  // (drawn by the lane whose partner lies south or east). A lane worn through is asphalt, and dark.
+  if (lanes.length) {
+    const e = Math.max(1.2, z * 0.06), LW = 28 / 32, e0 = (1 - LW) / 2, e1 = 1 - e0;
+    ctx.globalAlpha = on * 0.9;
+    for (const t of lanes) {
+      const i = t % W, j = (t / W) | 0, r = S.road[t], ew = r === 2 || r === 4, m = laneMate(t), lo = m === 0 || m === 3, hi = m === 2 || m === 1;
+      const in0 = e0 + (lo ? 4.5 : 3.5) / 32, in1 = e1 - (hi ? 4.5 : 3.5) / 32, mid = (in0 + in1) / 2;
+      const dot = (along, across, col) => { ctx.fillStyle = col; const px = ox + (ew ? i + along : i + across) * z, py = oy + (ew ? j + across : j + along) * z; ctx.fillRect(px - e / 2, py - e / 2, e, e); };
+      for (const a of [0.25, 0.75]) { dot(a, mid, '#fafaf0'); dot(a, in0 - 1.4 / 32, lo ? '#ffd166' : '#ff463c'); dot(a, in1 + 1.4 / 32, hi ? '#ffd166' : '#ff463c'); }
+      if (hi) {
+        const o = wayOwner(t), col = o >= 0 ? PLAYER_COLORS[o] || '#ffd9a0' : '#ffd9a0';
+        ctx.fillStyle = col; ctx.globalAlpha = on * 0.7;
+        if (ew) ctx.fillRect(ox + i * z, oy + (j + e1) * z - e * 0.4, z, e * 0.8); else ctx.fillRect(ox + (i + e1) * z - e * 0.4, oy + j * z, e * 0.8, z);
+        ctx.globalAlpha = on * 0.9;
+      }
+    }
   }
   ctx.restore();
 }
