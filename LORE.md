@@ -1,6 +1,6 @@
 # Terrafall Lore Bible: The Long Silence
 
-Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; timeline moved 100 years later by the owner, 2026-11-19; planet named Ithaca I; Earth's fate left open; set in 2265). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
+Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; timeline moved 100 years later by the owner, 2026-11-19; planet named Ithaca I; Earth implied gone, never confirmed; set in 2265). The editable working copy is the Claude Doc "Terrafall Lore Bible: The Long Silence"; update this file when the canon changes.
 
 ## The pitch
 
@@ -19,7 +19,7 @@ Quiet sadness under a loud war. The robots never mourn or explain themselves; th
 - **Machines, not people.** Robots speak in logs, status lines and protocol. Feeling shows in what they do, never in what they say.
 - **Objects over speeches.** Show the silence with things: an Arrival clock counting up, lit welcome signs, empty passenger shelters, cargo lists for children's shoes.
 - **Dry, not jokey.** Humor comes from machines applying old rules to a world that moved on. No winks at the player.
-- **Never state Earth's fate.** It is left open on purpose (see The question of Earth): players draw their own conclusions from the silence.
+- **Imply Earth is gone, never confirm it.** Every sign points to the end of Earth and humanity, but the door stays open for a future expansion (see The question of Earth). Players piece it together from the silence.
 - **The war is real.** "Build. Expand. Annihilate." stays a confident tagline. The sadness lives in the margins, not in the gameplay.
 - **Night carries the mood.** Empty roads lit for traffic that never comes.
 
@@ -356,7 +356,7 @@ Short lines for tooltips, loading screens and event banners. Same voice througho
 
 ## The question of Earth
 
-Left open on purpose (the owner, Nov 19 2026): what became of Earth is never decided, in the game or in this bible. The last transmission came at T−2; since then, silence. The archives show the shipyards gone and the arks unfinished, but not why. Earth may have burned, may have fallen quiet, or may simply have stopped answering. The robots fight on for Sponsors who may no longer exist, and no one on Ithaca I will ever know for certain.
+The owner's call (Nov 19 2026): everything points to Earth, and humanity with it, being gone, but nothing ever confirms it, so a future expansion can open that door. The last transmission came at T−2; since then, silence. The archives show the shipyards gone, the arks unfinished and the Sponsors' warheads aimed at each other; every robot reading the record draws the same conclusion. No body is ever found, though: no final broadcast, no proof. The robots fight on for Sponsors who almost certainly no longer exist, and the game never says "almost" out loud.
 
 How the game hints at it:
 
