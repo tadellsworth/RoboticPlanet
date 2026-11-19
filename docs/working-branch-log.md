@@ -125,3 +125,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Late-game performance audit
 
 - Profiled 14 browser samples with 297 live units, road and rail freight, combat, and a checkpoint write per sample. In the phone-sized stress run, Auto had 19 frame gaps over 50 ms across two repeats. Saver had none, and both kept the intended simulation pace. [Performance audit](late-game-performance-audit.md)
+
+### Gemini and Codex audit synthesis
+
+- Saved the three original Gemini reports under `docs/audits/gemini/` and compared them with the current game rules and prior branch tests. The [combined audit handoff](audit-synthesis.md) links the evidence, corrects outdated premises, and lists the startup, memory, combat, and economy checks that remain for review.
