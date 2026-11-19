@@ -33,7 +33,9 @@ const ORDERS = {
     S.difficulty = diff;
     for (const r of S.players) {
       if (!r.ai) continue;
-      r.mult = after.mult * (tech(r.id, 'tools') ? 1.15 : 1);
+      // (keeping its personality's economy bonus, as newGame gives it, and the Tools tech's)
+      const econ = (r.style && PERSONALITIES[r.style] && PERSONALITIES[r.style].econ) || 1;
+      r.mult = after.mult * econ * (tech(r.id, 'tools') ? 1.15 : 1);
       r.aiT = Math.min(r.aiT || 0, after.think);
     }
     for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival AI difficulty is now ${after.label}.`, undefined, undefined, 'info');
