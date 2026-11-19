@@ -285,7 +285,7 @@ const MISSIONS = [
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Quarry</b> (<kbd>Q</kbd>), by the boulders, touching your new road.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='quarry'], #banner-ok" },
       { kind: 'built', type: 'kiln', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Cement Works</b> (<kbd>K</kbd>), touching the Quarry and a road: a conveyor feeds it.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Cement Works</b> (<kbd>C</kbd>), touching the Quarry and a road: a conveyor feeds it.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='kiln']" },
       { kind: 'made', good: 'cement', n: [8, 10, 14],
         hint: 'Each Stone bakes into 2 Cement; a road costs 1 Cement for 5 tiles. The <b>1×</b> chip (<kbd>]</kbd>) speeds time up.',
@@ -309,7 +309,7 @@ const MISSIONS = [
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Fuel Station</b> (<kbd>F</kbd>), touching a road near the work.',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='charger']" },
       { kind: 'built', type: 'mine', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Ore Mine</b> (<kbd>M</kbd>) by the dark ore veins above your base, joined to your roads.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Ore Mine</b> (<kbd>R</kbd>) by the dark ore veins above your base, joined to your roads.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='mine']" },
       { kind: 'built', type: 'tap', n: 1,
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Crystal Tap</b> (<kbd>C</kbd>) by the violet crystals above your base, with a road.',
@@ -467,7 +467,7 @@ const MISSIONS = [
         hint: 'Put Outposts out past your border, well apart, for the most land. The <b>% land</b> chip at the top counts it.',
         ui: '#clock' },
       { kind: 'made', good: 'ore', n: [20, 30, 40],
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Ore Mine</b> (<kbd>M</kbd>), by the rich veins past the old border. <b>Lay road</b>.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Ore Mine</b> (<kbd>R</kbd>), by the rich veins past the old border. <b>Lay road</b>.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='mine'], #goods .res-chip[data-g='ore']" },
     ],
   },
@@ -649,7 +649,7 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'built', type: 'refinery', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Refinery</b> (<kbd>V</kbd>), by your base but not right beside it.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Refinery</b> (<kbd>R</kbd>), by your base but not right beside it.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='refinery']" },
       { kind: 'crudePipe', n: 1, text: 'Pipe Crude to the Refinery', at: 'pump',
         count: (P, S) => {
@@ -743,7 +743,7 @@ const MISSIONS = [
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Freight Trucks <b>+1</b>. They take the runs of 12+ tiles.',
         ui: "#sh-orders .order-row[data-k='truck'] [data-d='1']" },
       { kind: 'made', good: 'ore', n: [30, 40, 60], at: 'depot',
-        hint: '<b>Build</b> → <b>Gather</b> → <b>Ore Mines</b> (<kbd>M</kbd>) by the Depot. Its <b>Storage</b> (Fill first, Empty out) picks where goods go.',
+        hint: '<b>Build</b> → <b>Gather</b> → <b>Ore Mines</b> (<kbd>R</kbd>) by the Depot. Its <b>Storage</b> (Fill first, Empty out) picks where goods go.',
         // (Not the Ore counter: always on screen, it was all that ever lit up. Now: Build → Gather → Ore Mine, and a ring
         // on the Depot for its Storage setting.)
         ui: "#build-tabs [data-g='gather'], .bcard[data-t='mine'], #sh-smode" },
@@ -1493,7 +1493,7 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'built', type: 'reactor', n: 1,
-        hint: 'An <b>Ore Mine</b> (<kbd>B</kbd> <kbd>1</kbd> <kbd>M</kbd>) by the green Uranium, then <b>Make</b> (<kbd>2</kbd>) → <b>Nuclear Reactor</b> (<kbd>Y</kbd>).',
+        hint: 'An <b>Ore Mine</b> (<kbd>B</kbd> <kbd>1</kbd> <kbd>R</kbd>) by the green Uranium, then <b>Make</b> (<kbd>2</kbd>) → <b>Nuclear Reactor</b> (<kbd>Y</kbd>).',
         ui: "#btn-build, .bcard[data-t='mine'], .bcard[data-t='reactor']" },
       { kind: 'made', good: 'fissile', n: 6,
         hint: 'The Reactor turns 2 Uranium into 1. A <b>Generator</b> (<b>Make</b> → <kbd>G</kbd>) beside it speeds it up.',
