@@ -129,3 +129,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Gemini and Codex audit synthesis
 
 - Saved the three original Gemini reports under `docs/audits/gemini/` and compared them with the current game rules and prior branch tests. The [combined audit handoff](audit-synthesis.md) links the evidence, corrects outdated premises, and lists the startup, memory, combat, and economy checks that remain for review.
+
+### Two-rival late-game stalemate audit
+
+- Ran 16 seeded AI matches. All ten Standard matches finished, including two with no water. Chokepoint Wardens kept making some goods after Warbot and trade counts flattened from minute 42 to 45, then one side won before minute 48.
+- On Islands seed 21, both AIs could afford a replacement Mine and still had Ore deposits, but their placement rule required two deposits near one candidate. An isolated experiment allowing one deposit from minute 45 restored Alloy and military production. The match still lacked ferries and was open at minute 55. On Islands seed 17, the leader's Foundry idled while saving for a crossing. Recorded the baselines and experiment in the [late-game stalemate audit](ai-stalemate-audit.md).

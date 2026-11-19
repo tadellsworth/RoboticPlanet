@@ -47,5 +47,6 @@ These reports sit alongside the Gemini review and give context for an overall br
 | [First 15 minutes](first-15-minutes-audit.md) and [phone and desktop controls](controls-audit.md) | Findings include tutorial discovery, first-build and dusk guidance, touch briefing copy, landscape warning priority, and overlapping rally flag and unit taps. |
 | [Map fairness and difficulty](map-fairness-audit.md) | Some Small maps lack Trade Posts, and some three-colony Four Isles starts have only one Uplink. These are documented findings from the seeded matrix. |
 | [Late-game performance](late-game-performance-audit.md) | Saves the timing data and the reproducible stress fixture's conditions. Physical phones, naturally developed colonies, sea and air freight, and long sessions remain open. |
+| [Two-rival late-game stalemates](ai-stalemate-audit.md) | Tests Standard maps and reproduces an Islands production deadlock. An isolated one-deposit Mine experiment restarted military production. The reported water-free Standard match remains undiagnosed. |
 
 Suggested review order is a short real-phone pass for cold loading, memory, and frame pacing, then paired Crystal and siege playtests. Keep the architecture changes tied to a measured bottleneck. The [working-branch log](working-branch-log.md) links the earlier commits and scenario coverage.
