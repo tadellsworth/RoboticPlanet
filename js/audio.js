@@ -524,6 +524,42 @@ function incoming(D, kind, dur) {
   roar.start(t0); roar.stop(t1 + 0.05);
 }
 
+/** Vowel formants shape a synthetic carrier into the vanguard's spoken radio code. */
+function commandVoice(speech) {
+  if (!sfxReady()) return;
+  const ac = AUDIO.ctx, start = ac.currentTime, formants = {
+    a: [720, 1150, 2500], e: [480, 1770, 2500], i: [280, 2250, 3000],
+    o: [500, 850, 2400], u: [300, 650, 2250],
+  };
+  let delay = 0.2, syllable = 0;
+  _tone(620, 0.11, 'sine', 0.024, 970, 0);
+  for (const sound of speech) {
+    if (sound === ' ') { delay += 0.065; continue; }
+    const at = start + delay, dur = [0.18, 0.12, 0.24, 0.16][syllable % 4];
+    const buzz = ac.createOscillator(), envelope = ac.createGain();
+    buzz.type = 'sawtooth';
+    buzz.frequency.setValueAtTime([108, 135, 100, 153][syllable % 4], at);
+    buzz.frequency.exponentialRampToValueAtTime([93, 119, 83, 111][syllable % 4], at + dur);
+    for (const hz of formants[sound]) {
+      const vowel = ac.createBiquadFilter();
+      vowel.type = 'bandpass';
+      vowel.Q.value = 5;
+      vowel.frequency.setValueAtTime(hz * 0.89, at);
+      vowel.frequency.linearRampToValueAtTime(hz, at + 0.06);
+      buzz.connect(vowel).connect(envelope);
+    }
+    envelope.gain.setValueAtTime(0, at);
+    envelope.gain.linearRampToValueAtTime(0.24, at + 0.026);
+    envelope.gain.exponentialRampToValueAtTime(0.001, at + dur);
+    envelope.connect(AUDIO.fxBus);
+    buzz.start(at); buzz.stop(at + dur);
+    _noise(dur * 0.5, 0.012, { type: 'bandpass', freq: 1700, to: 950, q: 1.5, delay });
+    delay += dur;
+    syllable++;
+  }
+  _tone(710, 0.12, 'sine', 0.018, 410, delay);
+}
+
 function sfxReady() { return AUDIO.on && !AUDIO.suppress && AUDIO.ctx && AUDIO.ctx.state === 'running' && AUDIO.fx > 0; }
 /** As sfxReady, for the land's own sounds: the Ambience volume, not the Effects one. */
 function natureReady() { return AUDIO.on && !AUDIO.suppress && AUDIO.ctx && AUDIO.ctx.state === 'running' && AUDIO.amb > 0; }
@@ -751,8 +787,8 @@ function sfx(name, dest, y, dur) {
     case 'hiss': _noise(0.7, 0.035, { type: 'highpass', freq: 3500, to: 6000, attack: 0.12, dest: D }); break;
     // A Freight Truck's air brakes.
     case 'airbrake':
-      _tone(170, 0.06, 'square', 0.03, 90, 0, D);
-      _noise(0.45, 0.06, { type: 'highpass', freq: 2500, to: 5000, attack: 0.01, delay: 0.04, dest: D });
+      _tone(170, 0.06, 'square', 0.018, 90, 0, D);
+      _noise(0.4, 0.038, { type: 'highpass', freq: 2500, to: 5000, attack: 0.01, delay: 0.04, dest: D });
       break;
     // Busy streets (see audioTick: from where the traffic on screen bunches up).
     case 'passby': { const f = 85 + Math.random() * 30; _tone(f, 0.9, 'sawtooth', 0.011, f * 0.8, 0, D); _noise(0.9, 0.02, { type: 'bandpass', freq: 380, to: 820, q: 0.8, attack: 0.35, dest: D }); break; } // an engine going by
@@ -1048,7 +1084,7 @@ function audioTick(dt) {
     else if (t && t.type === 'staff' && t.phase === 'work' && u.type === 'paver') pavers.push(u);
     if (BOTS[u.type].truck) {
       // Air brakes when a truck pulls up hard; the horn when it's been stuck in a jam a while.
-      if (u.drive < 0 && (u.vel || 0) > 0.6 && S.time - (WORLD.brake[u.id] || -99) > 6) { WORLD.brake[u.id] = S.time; at(u, 'airbrake', 0.9); }
+      if (u.drive < 0 && (u.vel || 0) > 0.6 && S.time - (WORLD.brake[u.id] || -99) > 9) { WORLD.brake[u.id] = S.time; at(u, 'airbrake', 0.9); }
       WORLD.honk[u.id] = u.path && !u.moved ? (WORLD.honk[u.id] || 0) + 0.3 : 0;
       if (WORLD.honk[u.id] > 3) { WORLD.honk[u.id] = -8; at(u, 'honk', 0.9); }
     }

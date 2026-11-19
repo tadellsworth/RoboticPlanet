@@ -1285,7 +1285,7 @@ function faunaGlows(ctx, ox, oy, z) {
   }
   // Moths (or the biome's own) round the colony's lights.
   const kind = F.life.light, col = FAUNA_GLOW[kind];
-  if (kind && L > 0.3 && z >= 12) {
+  if (kind && L > 0.3 && z >= 12 && gfxStep() !== 'saver' && !(onTouch() && Math.min(R.w, R.h) < 600)) {
     const on = clamp((L - 0.3) / 0.4, 0, 1);
     for (const l of F.lights) {
       let sc = F.scatter.get(l.key);
@@ -1297,14 +1297,14 @@ function faunaGlows(ctx, ox, oy, z) {
       if (gone > 1) F.scatter.delete(l.key);
       const lx = ox + l.x * z, ly = oy + (l.y - l.up) * z;
       if (lx < -z || ly < -z || lx > R.w + z || ly > R.h + z) continue;
-      const n = Math.round(l.n * Math.min(1.5, F.k));
+      const n = Math.round(l.n * Math.min(1, F.k) * 0.45);
       for (let k = 0; k < n; k++) {
         const h1 = hash2(l.x * 13 | 0, k, 51), h2 = hash2(l.y * 13 | 0, k, 52), h3 = hash2(k, l.x * 7 | 0, 53);
         const w = (1.4 + 2.2 * h1) * (h2 < 0.5 ? -1 : 1), th = t * w + h3 * 6.3, r = z * (0.12 + 0.24 * h2) * (1 + 0.25 * Math.sin(t * 1.7 + k));
         let x = lx + Math.cos(th) * r, y = ly + Math.sin(th) * r * 0.6 + Math.sin(t * 6 + k) * z * 0.03, a = on;
         if (gone >= 0 && gone <= 1) { x += Math.cos(th) * gone * z * 3; y += Math.sin(th) * gone * z * 2 - gone * z; a *= 1 - gone; }
         const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * 30 + k * 3));
-        faunaDot(ctx, x, y, Math.max(2.2, z * (kind === 'moth' ? 0.07 : 0.09)), col, 0.85 * a * flick);
+        faunaDot(ctx, x, y, Math.max(1.8, z * (kind === 'moth' ? 0.056 : 0.072)), col, 0.85 * a * flick);
       }
     }
   }

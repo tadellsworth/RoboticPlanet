@@ -496,6 +496,8 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .card.p-card { padding: 16px 16px 14px; }
 .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .p-row { display: flex; gap: 8px; }
+#p-checkpoint-row, #o-checkpoint-row { margin-top: 8px; }
+#p-checkpoint, #o-checkpoint, #p-difficulty { min-width: 0; padding: 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
 .p-row > .btn { flex: 1 1 0; min-width: 0; }
 .p-grid .btn, .p-row .btn { min-height: 44px; padding: 8px 6px; font-size: 15px; line-height: 1.2; }
 .p-save { margin-top: 12px; }

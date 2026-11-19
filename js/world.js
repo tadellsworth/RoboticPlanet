@@ -2686,6 +2686,7 @@ function passTile(t, who) {
   const b = getE(id);
   if (!b) return false;
   if (b.type === 'viaduct') return true;
+  if (BDEFS[b.type].pylon) return !!S.road[t];
   return (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
@@ -3555,10 +3556,12 @@ function placeSite(owner, type, i, j, cost, fromStore) {
  * out over the water beyond your border, a tile at a time from your land or the end of a bridge
  * (so a channel the enemy's border covers can still be crossed).
  */
+function pylonAt(t) { return !!(S.bAt[t] && getE(S.bAt[t])?.type === 'magpylon'); }
+
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
+  if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -4211,7 +4214,7 @@ function roadSearch(owner, seeds, done) {
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
-  const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
+  const open = (t) => passTile(t, owner) || canRoad(owner, t % W, (t / W) | 0) || (!S.bAt[t] && S.road[t]);
   const turn = done ? ROAD_TURN : 0, ov = anyOverpass(), rope = hollowOn();
   const step = (a, b) => (like(a) && like(b) ? canStep(a, b) : stepPlan(a, b));
   // The way the route came into tile t: from prev[t], or straight over the overpass(es) just behind it.
@@ -4617,6 +4620,7 @@ function destroyBuilding(b, burn, quiet) {
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect. A construction
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
   if (typeof dropLoot === 'function' && (b.built || !burn)) dropLoot(b);
+  if (BDEFS[b.type].magterm) magTermDown(b);
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
   // destroyed by force (P.avoid, see aiSearchSpot): it used to put the next one up in the same crater.
@@ -4642,9 +4646,8 @@ function destroyBuilding(b, burn, quiet) {
     if (o && o.ferryTo === b.id) o.ferryTo = 0;
     if (typeof ferryChanged === 'function') ferryChanged();
   }
-  // A Maglev pylon down cuts its line; a Maglev Terminal takes its line (and the pods in it) with it.
+  // A Maglev pylon down cuts its line.
   if (BDEFS[b.type].pylon && typeof magPylonDown === 'function') { if (b.built) magPylonDown(b); else if (b.magFrom) magLineCancel(b); }
-  if (BDEFS[b.type].magterm && typeof magTermDown === 'function') magTermDown(b);
   // So does a Mooring Mast at one end of an Airship line (its Airships wait at the other Mast for a new one).
   if (BDEFS[b.type].mast && b.line) {
     const o = getE(b.line);
@@ -4868,6 +4871,7 @@ function checkSave(o) {
   if (!obj(o) || o.v !== 1) bad();
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
+  if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
   // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
   if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
@@ -4892,11 +4896,17 @@ function checkSave(o) {
     (P.trade.offers || []).forEach(deal); // (a save from before trade routes: its contracts)
     for (const g in P.trade.sat || {}) if (!ownKey(GOOD, g)) bad();
   }
+  const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
   for (const b of o.buildings) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
+    if (b.magMissing != null && (b.type !== 'magterm' || !obj(b.magMissing) || !Number.isInteger(b.magMissing.x) ||
+      !Number.isInteger(b.magMissing.y) || b.magMissing.x < 0 || b.magMissing.x >= o.W ||
+      b.magMissing.y < 0 || b.magMissing.y >= o.H || typeof b.magMissing.near !== 'boolean')) bad();
+    if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
+      !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -4923,7 +4933,6 @@ function checkSave(o) {
   }
   if (o.tremor != null && !(obj(o.tremor) && Number.isFinite(o.tremor.next) && (o.tremor.rock == null || Array.isArray(o.tremor.rock)))) bad();
   // Aircraft wrecks (S.wrecks, see crashLand): numbers, a plain word for the aircraft, the tiles under it on the map.
-  const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
   if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
@@ -4954,6 +4963,7 @@ function checkSave(o) {
 function deserializeGame(json) {
   const o = JSON.parse(json);
   checkSave(o);
+  o.difficulty = o.difficulty || 'normal';
   // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
   if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.
@@ -5078,10 +5088,10 @@ function wayOwnersFromLand() {
   }
 }
 
-function saveGame() {
+function saveGame(json) {
   if (!S || S.winner >= 0 || S.players[0].ai) return false;
   if (typeof MP !== 'undefined' && MP.on) return false; // (a multiplayer game lives on everyone's devices: it isn't saved for Continue)
-  try { localStorage.setItem(SAVE_KEY, serializeGame()); return true; } catch (e) { return false; }
+  try { localStorage.setItem(SAVE_KEY, json || serializeGame()); return true; } catch (e) { return false; }
 }
 
 function hasSave() {
@@ -5175,7 +5185,7 @@ function railBlocked(owner, t) {
     if (crossTile(t)) { if (!bridgeable(t) || !bridgeHead(owner, i, j, (u) => (S.rail[u] && wayOwner(u) === owner) || S.railPlan[u] === owner + 1)) return 'Track can only bridge out from your land or your own track.'; }
     else if (!reachZone(owner, t)) return 'Your bots can\'t reach there yet.';
   }
-  if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
+  if (S.bAt[t] && !pylonAt(t) && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t] && S.res[t] !== R_OIL) return 'Clear the resources here first.'; // (an oil seep stays underground, under the track)
   if (S.tidal && S.tidal[t]) return 'Tidal flats: the sea covers this at high tide.';
   if (scorched(t)) return 'This ground is still scorched.';

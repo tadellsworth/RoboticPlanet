@@ -830,7 +830,7 @@ const MISSIONS = [
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='magterm']" },
       { kind: 'magLine', n: 1, text: 'Run a Maglev line across the river', at: 'magterm',
         count: () => magLines(0).length,
-        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>): tap the Terminal, then a clear spot by the Crystal across the river; <b>Build</b>.',
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>): tap the Terminal, then a clear spot by the Crystal across the river. The preview shows where the pylons will stand, including roadside supports. Tap <b>Build</b>.',
         ui: "#btn-road, #banner-seg [data-v='maglev'], #banner-ok, #sh-magline" },
       { kind: 'magRun', n: 1, text: 'A pod on the line, powered both ends', at: 'magterm',
         count: () => (magLines(0).some(([a, b]) => linePods(a).length > 0 && magPowered(a) && magPowered(b)) ? 1 : 0),

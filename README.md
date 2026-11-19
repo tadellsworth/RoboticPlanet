@@ -121,7 +121,7 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Progress auto-saves in the browser every 20 seconds and whenever you leave the page.
+Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu lists the latest five checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone. Command radio plays synthesized machine speech with captions at landing and every eight game minutes.
 
 ## How to play
 
@@ -478,7 +478,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (then the line's site is a pylon site on the first spot, `s.magFar`). The far end is previewed on hover and tap
   (`maglevPreview`, `R.ropeEnd`: the band and every pylon spot ringed, the first bad one red). Pylon spots
   (`magSpotsAt`, `magSpotsChecked`): every `spacing` (3) tiles from the near Terminal, none within 2 of the far end; a
-  spot must be open ground, a cliff top or water, never a building, road, track, slope, oil seep, runway, Trade Post or
+  spot may share a road or track, and can shift to a nearby tile around other obstructions. Its footing can't occupy a building, slope, oil seep, runway, Trade Post or
   Uplink, scorched ground or a rival's land (`magSpotWhy`); a boulder or grove there is cleared when the pylon goes up
   (`magClearSpot`); a chasm or rock under a spot is `skip` (the span goes over) unless the spot before it was skipped too,
   so a line crosses a gap of at most `gap` (6) tiles. It costs `MAGLEV.cost` a tile (1 Alloy, ½ Chip, 1 Cement, Chips
@@ -486,8 +486,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   standing at the near Terminal (`siteWorkAt`, `assignBuild`), `time` (3) s a tile plus the Terminal's own build time, and
   the pylons go up one by one as it gets along (`magBuildStep`, buildings of type `magpylon` with `b.k` and `b.line` the
   near Terminal's id); `completeBuilding` opens the line (`magLineDone`: `b.line` on both Terminals, `b.magNear` on the
-  near one; `magPartner`, `magNearEnd`, `magLines`). A Terminal is on one line at most; the site cancelled or an end lost
-  takes the pylons down (`magLineCancel`, `magTermDown`). Pylons claim no land (`civClaims`).
+  near one; `magPartner`, `magNearEnd`, `magLines`). Each Terminal belongs to one line. Put a Terminal from each of two lines side by side for a conveyor transfer, with pods serving both lines (`magRelayPlan`, `magRelaySwap`). Cancelling a new line site takes its pylons down. Pylons claim no land (`civClaims`).
   **Pods** (`BOTS.magpod`: 16 goods, mixed, no riders; speed 3 × a Freight Train's, 4 × its acceleration and braking)
   are built at either Terminal's **Pod bay** (its yard: two rounds of `BOTS.magpod.round`, 2 Alloy and 1 Chip, so 4 and
   2 each), `perLine` (4) to a line (`magPodRoom`, `yardOpen`). Docked, a pod is inside its Terminal (`u.home`); running,
@@ -513,8 +512,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`magCut`: standing spots with no pylon) stops the pods at the Terminals (`magLineCut`; the Terminals' status and
   panel say so). **Repair**: the near Terminal's `b.magFix` (`updateMagTerm`): once `spacing` tiles' worth of goods is
   paid from storage, a Worker from the end nearer the break (`magFixEnd`, `assignMagFix`, task `magfix`) walks there,
-  rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s. A Terminal destroyed takes its line
-  and pylons down; pods inside it are lost and those running turn back to the other end (`magTermDown`).
+  rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s. Losing one Terminal suspends the line. Pods regroup at the surviving Terminal, and its **Rebuild the missing Terminal** button puts a replacement on the same tile without charging for the original guideway (`magTermDown`, `magReconnect`).
   **Drawn** by `drawMaglevShadows` (the bands' shadows on the ground, `MAG_SHADOW` of the deck height down-sun, before
   the buildings) and `drawMaglevs` (after the buildings and robots, under the air): the pylon sprites (`magpylon@T`, a
   `B3D` building with no pad; squashed or stretched so its head stays under the band, `MAG_LEVEL` 0.3 a level of ground

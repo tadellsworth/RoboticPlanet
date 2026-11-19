@@ -2282,7 +2282,7 @@ function drawCrossingGates(ctx, ox, oy, z, inView) {
   const ver = (S.roadVer || 0) + '/' + (S.railVer || 0);
   if (!R.xings || R.xings.ver !== ver || R.xings.of !== S) {
     const list = [];
-    for (let t = 0; t < S.W * S.H; t++) if (S.rail[t] && S.road[t] && !S.bAt[t]) { const pc = railPiece(t); if (pc.key === 'rail-level-crossing') list.push([t, pc.q]); }
+    for (let t = 0; t < S.W * S.H; t++) if (S.rail[t] && S.road[t] && (!S.bAt[t] || pylonAt(t))) { const pc = railPiece(t); if (pc.key === 'rail-level-crossing') list.push([t, pc.q]); }
     R.xings = { ver, of: S, list };
   }
   for (const [t, q] of R.xings.list) {
@@ -5689,11 +5689,11 @@ function vehicleSmoke(u, x, y, face) {
   const P = typeof EXHAUST_POINTS !== 'undefined' && EXHAUST_POINTS[BOTS[u.type].train ? 'roadtrain' : u.type];
   if (!P || u.inside || !driveFrame(u)) return;
   const v = u.vel || 0, heavy = !!u.path && u.drive > 0 && v < (u.vtop || 1) * 0.8;
-  if (!smokeReady(u.id, heavy ? 0.08 : v > 0.05 ? 0.25 : 0.4)) return;
+  if (!smokeReady(u.id, heavy ? 0.12 : v > 0.05 ? 0.32 : 0.52)) return;
   const k = 0.9 / P.canvas, c = Math.cos(face), s = Math.sin(face);
   for (const [px, py] of P.tips) {
     const ax = (px - P.canvas / 2) * k, ay = (py - P.canvas / 2) * k;
-    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.9 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
+    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.8 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
   }
 }
 
@@ -8679,6 +8679,14 @@ function magLinesToDraw() {
     if (b.dead || !BDEFS[b.type].magterm) continue;
     const o = magPartner(b);
     if (o && magNearEnd(b) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
+    if (b.magMissing) {
+      // Use the missing dock's old coordinates for spans. Pylons still belong to the survivor.
+      const end = { ...b.magMissing, id: 0 }, missingNear = b.magMissing.near;
+      const A = missingNear ? { ...end, id: b.id, owner: b.owner, magLayout: b.magLayout } : b, B = missingNear ? { ...b, id: 0 } : end;
+      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y),
+        spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
+      continue;
+    }
     const s = magPending(b);
     if (s) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
   }
@@ -8699,8 +8707,23 @@ function drawMaglevShadows(ctx, ox, oy, z) {
   ctx.restore();
 }
 
+/** Shift the footing to the shoulder of a road or track, leaving the lane visible and open. */
+function magPylonOffset(i, j) {
+  const way = (x, y) => {
+    if (!inMap(x, y)) return false;
+    const t = tIdx(x, y);
+    return !!(S.road[t] || S.plan[t] || S.rail[t] || S.railPlan[t]);
+  };
+  if (!way(i, j)) return [0, 0];
+  const h = Number(way(i - 1, j)) + Number(way(i + 1, j));
+  const v = Number(way(i, j - 1)) + Number(way(i, j + 1));
+  return h >= v ? [0, 0.36] : [0.36, 0];
+}
+
 /** Pylon b (a building) at its foot (cx, cy): squashed or stretched so its head sits under the band (MAG_LEVEL a level of ground). */
 function drawMagPylon(ctx, b, cx, cy, z, cut) {
+  const [dx, dy] = magPylonOffset(b.x, b.y);
+  cx += dx * z; cy += dy * z;
   const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
   let hs = 1;
   if (!cut && b.line) {
@@ -8709,6 +8732,19 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
       const L = dist(A.x, A.y, B.x, B.y) || 1, f = clamp(((b.k || 1) * MAGLEV.spacing) / L, 0, 1);
       const ref = S.elev[tIdx(A.x, A.y)] * (1 - f) + S.elev[tIdx(B.x, B.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
       hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
+    }
+  }
+  if (!cut && b.line && b.k) {
+    const A = getE(b.line), B = magPartner(A) || A?.magMissing;
+    if (A && B) {
+      const [first, last] = A.magMissing?.near ? [B, A] : [A, B];
+      const f = (b.k * MAGLEV.spacing) / (dist(first.x, first.y, last.x, last.y) || 1);
+      const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
+      const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
+      ctx.save();
+      ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
+      ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.restore();
     }
   }
   if (!art) {
@@ -8762,11 +8798,11 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
     if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
     // a fallen pylon in every cut
     if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
-    const powered = ln.B ? magLinePowered(ln.A) : false;
+    const powered = !ln.suspended && ln.B ? magLinePowered(ln.A) : false;
     for (const [d0, d1] of ln.spans) {
       const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
       magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
-      if (ln.B && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
+      if (ln.B && !ln.suspended && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
     }
     if (ln.building) {
       // the rest of the line marked out, dashed, to the far end
@@ -8778,13 +8814,21 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
       continue;
     }
     // pods: running (at their place along the line), one docked at each end, the repair pod on its way out
+    const docks = ln.suspended ? [ln.survivor] : [ln.A, ln.B];
     for (const u of S.bots) {
-      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !(u.magTo === ln.A.id || u.magTo === ln.B.id)) continue;
+      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !docks.some((d) => u.magTo === d.id)) continue;
       drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
     }
-    for (const T of [ln.A, ln.B]) {
+    for (const T of docks) {
       const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
       if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+    }
+    if (ln.suspended) {
+      ctx.save();
+      ctx.strokeStyle = '#f2ae63'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.15, z * 0.1]);
+      ctx.beginPath(); ctx.arc(ox + (ln.missing.x + 0.5) * z, oy + (ln.missing.y + 0.5) * z, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      continue;
     }
     const F = ln.A.magFix;
     if (F && F.u && F.since > 0) {

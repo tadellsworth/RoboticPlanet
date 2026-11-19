@@ -836,10 +836,10 @@ function drawBeacons(ctx, ox, oy, z) {
     const fx = ox + (b.x + 0.5) * z + (Array.isArray(an) && sc ? (0.537 - an[0]) * sc * z : 0);
     const fy = oy + (b.y + 0.5) * z + (Array.isArray(an) && sc ? (0.098 - an[1]) * sc * z : -0.9 * z);
     const under = !S.hollow || breachAt(b.x + 0.5, b.y + 0.5, 1.5);
-    const L = under ? Math.max(z * 24, R.h * 0.5) * (1 - 0.35 * wx) : z * 2.4;
+    const L = under ? Math.min(z * 9, R.h * 0.33) * (1 - 0.35 * wx) : z * 2.4;
     if (fx < -z * 3 || fx > R.w + z * 3 || fy - L > R.h || fy > R.h + z * 4) continue;
     if (!drew) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; drew = true; }
-    ambBeam(ctx, fx, fy, L, z, PLAYER_COLORS[b.owner] || '#dfe9ff', k * pulse, wx, !under, b.id);
+    ambBeam(ctx, fx, fy, L, z, PLAYER_COLORS[b.owner] || '#dfe9ff', k * pulse * 0.8, wx, !under, b.id);
   }
   if (drew) ctx.restore();
 }

@@ -615,7 +615,7 @@ function railPlan(p) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== p) continue;
     if (b.railBy) b.railBy = 0;
-    if ((BDEFS[b.type].station && !BDEFS[b.type].terminal) || BDEFS[b.type].mast || BDEFS[b.type].magterm) { b.auto = null; b.home = 0; if (b.built) sts.push(b); } // (a Mooring Mast or Maglev Terminal: its line's two ends, see bulkLinked)
+    if ((BDEFS[b.type].station && !BDEFS[b.type].terminal) || BDEFS[b.type].mast || BDEFS[b.type].magterm) { b.auto = null; b.home = 0; delete b.magRelay; if (b.built) sts.push(b); } // (a Mooring Mast or Maglev Terminal: its line's two ends, see bulkLinked)
     else if (b.type === 'depot') { b.auto = null; if (b.built) deps.push(b); }
   }
   if (!hub || hub.dead || hub.owner !== p || (!sts.length && !deps.length)) return;
@@ -625,6 +625,7 @@ function railPlan(p) {
     for (const o of sts) if (o !== s && dh(o) < dh(h) && bulkLinked(s, o)) h = o;
     s.home = h.id;
   }
+  const magRoute = magRelayPlan(sts, dh);
   // Lines with a train on them (inside a station, on the track, or on a run between stations), remembered
   // for half a minute so a train pulling out or in doesn't switch its line's automatic stock off and on.
   P.railSeen = P.railSeen || {};
@@ -680,7 +681,7 @@ function railPlan(p) {
   }
   // Home stations: what their far stations keep (automatically or by supply orders), so a train loads at once.
   for (const s of sts) {
-    if (s.home !== s.id || s.autoOff || !served.has(s.id)) continue;
+    if (s.home !== s.id || s.autoOff || !served.has(s.id) || BDEFS[s.type].magterm) continue;
     const want = Object.assign({}, s.auto || {});
     for (const f of sts) {
       if (f === s || f.home !== s.id) continue;
@@ -689,6 +690,52 @@ function railPlan(p) {
     }
     for (const g in want) want[g] = Math.min(RAIL_AUTO_MAX, want[g]);
     s.auto = Object.keys(want).length ? want : null;
+  }
+  // The links form a tree, so demand can roll up from the last stop to the Base end in one pass.
+  for (const child of magRoute.reverse()) {
+    const parent = getE(child.home), keep = keepOf(child);
+    if (!parent || parent === child || parent.autoOff || !keep) continue;
+    const want = parent.auto || (parent.auto = {});
+    for (const g in keep) if (storeTakes(parent, g)) want[g] = Math.min(RAIL_AUTO_MAX, (want[g] || 0) + keep[g]);
+  }
+}
+
+/** Join touching Maglev lines with conveyors. Assign each served line one way back toward the Base. */
+function magRelayPlan(stations, distanceFromBase) {
+  const active = stations.filter((b) => BDEFS[b.type].magterm && magRunning(b));
+  active.sort((a, b) => distanceFromBase(a) - distanceFromBase(b) || a.id - b.id);
+  const left = new Set(active), route = [];
+  const addLine = (entry, parent) => {
+    const end = magPartner(entry);
+    left.delete(entry); left.delete(end);
+    entry.home = parent ? parent.id : entry.id;
+    if (parent) entry.magRelay = parent.id;
+    end.home = entry.id;
+    route.push(entry, end);
+  };
+  for (const root of active) {
+    if (!left.has(root)) continue;
+    let at = route.length;
+    addLine(root, null);
+    while (at < route.length) {
+      const parent = route[at++];
+      for (const entry of touching(parent)) if (left.has(entry)) addLine(entry, parent);
+    }
+  }
+  return route;
+}
+
+function magRelaySwap(child, mark) {
+  const parent = getE(child.magRelay);
+  if (!parent || parent.dead || parent.owner !== child.owner || !magPartner(parent) || !magPartner(child)) return;
+  const keep = keepOf(child) || {};
+  let sent = 0, returned = 0;
+  for (const g of GOODS) {
+    if (sent < STATION_SWAP && (keep[g] || 0) > supplyOf(child, g) + (child.inc[g] || 0) && supplyOf(parent, g) >= 1 && storeTakes(child, g)) {
+      bump(parent.stock, g, -1); bump(child.stock, g, 1); sent++; mark(parent, g, false);
+    } else if (returned < STATION_SWAP && keepSupply(child, g) > EXPORT_RESERVE && storeTakes(parent, g)) {
+      bump(child.stock, g, -1); bump(parent.stock, g, 1); returned++; mark(parent, g, true);
+    }
   }
 }
 
@@ -729,9 +776,10 @@ function stationStep(b, dt) {
   if (b.feedT > 0) return;
   b.feedT = STATION_FEED;
   const links = stationLinks(b);
-  if (!links.length) return;
+  if (!links.length && !b.magRelay) return;
   const keep = keepOf(b) || {};
   const mark = (c, g, out) => { (b.sfed = b.sfed || {})[c.id] = { t: S.time, g, out }; };
+  if (b.magRelay) magRelaySwap(b, mark);
   for (const { c, store } of links) {
     if (store) {
       let moved = 0;
@@ -1790,7 +1838,7 @@ function dispatch(p) {
   // Planned roads the border no longer covers are called off (and refunded), except a bridge
   // still reaching out over the water from our side.
   for (const t of planAll(p).slice()) {
-    if (S.bAt[t] || (S.owner[t] >= 0 && S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
+    if ((S.bAt[t] && !pylonAt(t)) || (S.owner[t] >= 0 && S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
   // Supply by air switches itself off once a road from home reaches the place (onHomeNet: a road, not a ferry line,
   // the sea or a conveyor): Haulers supply it from then on. Only places switched to it are looked at. A finished
@@ -1923,6 +1971,44 @@ function dispatch(p) {
     for (const n of buildingGroups(b, true)) if (tankNets.has(n)) return true;
     return false;
   }
+
+  // Dismantled buildings' crates get first call on the colony's idle haulers.
+  function collectCrates(priority) {
+    for (const l of S.loot || []) {
+      if (!idle.length) return;
+      if ((l.dismantled === p) !== priority) continue;
+      const lo = S.owner[tIdx(l.x, l.y)];
+      if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
+      if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
+      const nets = pileNets(l, false, p), netsT = pileNets(l, true, p);
+      for (let guard = 0; guard < 12 && idle.length; guard++) {
+        // The good there's most of, not yet promised to a hauler.
+        let g = null, left = 0;
+        for (const k in l.goods) { const a = l.goods[k] - ((l.held && l.held[k]) || 0); if (a > left) { left = a; g = k; } }
+        if (!g || lootLeft(l) - (l.claimed || 0) <= 0) break;
+        // A Freight Truck for a big pile, else a Hauler (or, with no Haulers, a worker), that can get there.
+        // Barrels of Crude or Fuel wait for a Tanker, if one can get there.
+        let best = -1, bd = Infinity;
+        const liq = isLiquid(g), wants = liq ? [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul'] : left >= TRUCK_MIN_LOAD * 2 ? (priority ? ['haul', 'truck'] : ['truck', 'haul']) : ['haul'];
+        for (const want of wants) {
+          for (let k = 0; k < idle.length; k++) {
+            const u = idle[k], bt = BOTS[u.type];
+            if (bt.rail || bt.sea || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
+            if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
+            if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
+            const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
+            if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck ? P.canRefuel : P.canCharge)) continue;
+            if (d < bd) { bd = d; best = k; }
+          }
+          if (best >= 0) break;
+        }
+        if (best < 0) break;
+        const u = idle.splice(best, 1)[0];
+        if (!assignCrate(u, l, g, Math.max(1, Math.min(left, carryOf(u, g))))) { idle.push(u); break; }
+      }
+    }
+  }
+  collectCrates(true);
 
   // 0) Specialist buildings get a bot of their crew.
   for (const b of blds) {
@@ -2258,42 +2344,7 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, avail, g));
     }
   }
-  // 4d) Crates lying on our land (spilled from a wrecked or dismantled building, or dropped by a
-  //     robot) go to storage, a load at a time, unless enemy robots or guns are about.
-  if (S.loot && S.loot.length) {
-    for (const l of S.loot) {
-      if (!idle.length) return;
-      const lo = S.owner[tIdx(l.x, l.y)];
-      if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
-      if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
-      const nets = pileNets(l, false, p), netsT = pileNets(l, true, p);
-      for (let guard = 0; guard < 12 && idle.length; guard++) {
-        // The good there's most of, not yet promised to a hauler.
-        let g = null, left = 0;
-        for (const k in l.goods) { const a = l.goods[k] - ((l.held && l.held[k]) || 0); if (a > left) { left = a; g = k; } }
-        if (!g || lootLeft(l) - (l.claimed || 0) <= 0) break;
-        // A Freight Truck for a big pile, else a Hauler (or, with no Haulers, a worker), that can get there.
-        // Barrels of Crude or Fuel wait for a Tanker, if one can get there.
-        let best = -1, bd = Infinity;
-        const liq = isLiquid(g), wants = liq ? [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul'] : left >= TRUCK_MIN_LOAD * 2 ? ['truck', 'haul'] : ['haul'];
-        for (const want of wants) {
-          for (let k = 0; k < idle.length; k++) {
-            const u = idle[k], bt = BOTS[u.type];
-            if (bt.rail || bt.sea || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
-            if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
-            if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
-            const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
-            if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck ? P.canRefuel : P.canCharge)) continue;
-            if (d < bd) { bd = d; best = k; }
-          }
-          if (best >= 0) break;
-        }
-        if (best < 0) break;
-        const u = idle.splice(best, 1)[0];
-        if (!assignCrate(u, l, g, Math.max(1, Math.min(left, carryOf(u, g))))) break;
-      }
-    }
-  }
+  collectCrates(false);
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
   if ((trucks || trains || tankers || ships) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail || BOTS[u.type].sea)) trunkRuns(p, blds, take, canCarry, vans, trains, ships);
   // 4e) A Trade Terminal's goods (the trades it paid, and anything beyond the lot it's gathering) go home by
@@ -3319,6 +3370,10 @@ function completeBuilding(b) {
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
   if (b.magFrom) magLineDone(b); // (a Maglev line's site: the line opens)
+  else if (def.magterm) {
+    const other = S.buildings.find((c) => !c.dead && c.owner === b.owner && c.magMissing?.x === b.x && c.magMissing.y === b.y);
+    if (other) magReconnect(other, b);
+  }
   b.status = ''; // (a site's "Under construction" mustn't outlive it)
   b.stock = {};
   b.inc = {};
@@ -3975,10 +4030,11 @@ function foundryParts(b, kind) {
  * The Foundry's build order: the bot types in the order its owner arranged them (b.order), every type
  * once (types it doesn't list follow in the usual order). Without one, BOT_ORDER.
  */
+const FOUNDRY_ORDER = BOT_ORDER.filter((k) => !BOTS[k].magpod);
 function foundryList(b) {
-  if (!Array.isArray(b.order) || !b.order.length) return BOT_ORDER;
-  const list = b.order.filter((k, i) => BOT_ORDER.includes(k) && b.order.indexOf(k) === i);
-  for (const k of BOT_ORDER) if (!list.includes(k)) list.push(k);
+  if (!Array.isArray(b.order) || !b.order.length) return FOUNDRY_ORDER;
+  const list = b.order.filter((k, i) => FOUNDRY_ORDER.includes(k) && b.order.indexOf(k) === i);
+  for (const k of FOUNDRY_ORDER) if (!list.includes(k)) list.push(k);
   return list;
 }
 
@@ -4011,7 +4067,7 @@ function nextBotKind(b) {
     }
   }
   const m = b.mode === 'alt' ? b.altNext : b.mode;
-  if (m && no(m)) return b.mode === 'alt' && !no('worker') ? 'worker' : 'off';
+  if (m && (no(m) || BOTS[m]?.magpod)) return b.mode === 'alt' && !no('worker') ? 'worker' : 'off';
   return m;
 }
 
@@ -5274,7 +5330,7 @@ function dropLoot(b) {
     if (k > 0 && GOOD[g]) { goods[g] = k; n += k; b.stock[g] -= k; }
   }
   if (b.loot) b.loot = null;
-  if (n) addLoot(b.x, b.y, goods);
+  if (n) addLoot(b.x, b.y, goods, false, b.gone ? b.owner : undefined);
   b.spilt = (b.spilt || 0) + n; // (for the game's story, noteLost: it is coming down)
   return n;
 }
@@ -5756,11 +5812,11 @@ function doCrate(u, t, dt) {
 }
 
 /** Crates of `goods` on tile (x, y). `keep`: they never rot (the Hollow's side chambers: robot parts laid out in rows). */
-function addLoot(x, y, goods, keep) {
+function addLoot(x, y, goods, keep, dismantled) {
   S.loot = S.loot || [];
   const pile = S.loot.find((l) => l.x === x && l.y === y);
-  if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); return; }
-  S.loot.push({ id: S.nextId++, x, y, goods: { ...goods }, until: keep ? LOOT_KEEP : S.time + LOOT_TIME });
+  if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); if (dismantled !== undefined) pile.dismantled = dismantled; return; }
+  S.loot.push({ id: S.nextId++, x, y, goods: { ...goods }, dismantled, until: keep ? LOOT_KEEP : S.time + LOOT_TIME });
 }
 
 function lootLeft(pile) { let n = 0; for (const g in pile.goods) n += pile.goods[g]; return n; }
@@ -8558,7 +8614,7 @@ function demolish(b) {
   const cost = {};
   if (b.built && S.players[b.owner]) S.players[b.owner].stats.dismantled = (S.players[b.owner].stats.dismantled || 0) + 1;
   if (b.built) {
-    const c = siteCost(near);
+    const c = def.magterm || def.pylon ? def.cost : siteCost(near);
     for (const g in c) if (GOOD[g] && c[g] >= 1) cost[g] = Math.floor(c[g]);
     if (def.nukeSilo && b.armed) { for (const g in NUKE.parts) bump(b.stock, g, NUKE.parts[g]); b.armed = 0; }
   }
@@ -8566,7 +8622,7 @@ function demolish(b) {
   const inside = dropLoot(b);
   let n = 0;
   for (const g in cost) n += cost[g];
-  if (n) addLoot(near.x, near.y, cost);
+  if (n) addLoot(near.x, near.y, cost, false, b.owner);
   destroyBuilding(b, false);
   return { cost, crates: inside + n, inside };
 }
@@ -10008,6 +10064,21 @@ function updateNest(b) {
   if (guards < nestGuards(b) && S.time >= (b.guardT || 0)) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
+  }
+  if (b.type === 'mound' && b.armor < BDEFS.mound.armor * 0.75) {
+    const lost = 1 - b.armor / BDEFS.mound.armor;
+    const tier = lost >= 0.8 ? 3 : lost >= 0.5 ? 2 : 1;
+    if (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0)) {
+      b.deepSurgeAt = S.time + [0, 32, 20, 10][tier];
+      b.deepSurgeTier = tier;
+      const guardsNow = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+      const target = wildPrey(b.x + 0.5, b.y + 0.5, 18);
+      for (let k = 0; k < Math.min(tier * 2, tier * 5 - guardsNow); k++) {
+        const task = target ? { type: 'raid', x: Math.floor(target.x), y: Math.floor(target.y), until: S.time + 28 } : null;
+        const u = spawnCritter(b, tier >= 2 && k % 3 === 0 ? 'brute' : 'scuttler', task);
+        u.deepGuard = true;
+      }
+    }
   }
   b.status = `Level ${b.level} nest · ${guards} on guard`;
 }
@@ -14163,7 +14234,7 @@ function setShipLine(owner, u, b) {
  */
 function shipLoad(u, A, B) {
   const cap = BOTS[u.type].carry, goods = {}, L = getE(S.players[u.owner].lander);
-  const dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0), lend = dh(A) < dh(B);
+  const dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0), lend = BDEFS[A.type].magterm ? B.home === A.id : dh(A) < dh(B);
   const has = (g) => Math.floor(lend && (g !== 'fuel' || BDEFS[A.type].magterm) ? supplyOf(A, g) : keepSupply(A, g)) - (goods[g] || 0); // (never the Fuel A keeps for its own Airships; a Maglev Terminal keeps none for itself)
   const k = keepOf(B) || {};
   let total = 0, low = false;
@@ -14433,10 +14504,8 @@ function magSpotWhy(owner, t, own) {
   const tr = S.terrain[t];
   if (tr === T_CHASM || tr === T_ROCK) return 'skip';
   const b = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (b && !(BDEFS[b.type].pylon && b.owner === owner && (!own || b.line === own))) return `a ${BDEFS[b.type].name} stands where a pylon must go`;
+  if (b && !(BDEFS[b.type].pylon && b.owner === owner && b.line === own)) return `a ${BDEFS[b.type].name} stands where a pylon must go`;
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'a rival holds the ground where a pylon must go';
-  if (S.road[t] || S.plan[t]) return 'a road runs where a pylon must go';
-  if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) return 'track runs where a pylon must go';
   if (S.ramp[t]) return 'a slope is where a pylon must go';
   if (S.res[t] === R_OIL && !b) return 'an oil seep is where a pylon must go';
   if (S.res[t] && !b && S.resRes && S.resRes[t]) return 'a robot is working the resources where a pylon must go'; // (other resource nodes go: a pylon's foot clears them, see magClearSpot)
@@ -14453,19 +14522,37 @@ function magSpotWhy(owner, t, own) {
  * goes over: a chasm or rock, with a pylon either side) or `bad` with its `why`. Two skips in a row (a gap wider than
  * MAGLEV.gap) make the second bad.
  */
-function magSpotsChecked(owner, ax, ay, bx, by, own) {
-  const spots = magSpotsAt(ax, ay, bx, by);
+function magSpotsChecked(owner, ax, ay, bx, by, own, layout) {
+  const spots = magSpotsAt(ax, ay, bx, by), used = new Set();
   let prevSkip = false;
-  for (const s of spots) {
-    const why = magSpotWhy(owner, s.t, own);
+  for (const sp of spots) {
+    let t = layout?.[sp.k - 1] ?? sp.t;
+    let why = t === -1 ? 'skip' : magSpotWhy(owner, t, own);
+    if (!layout && (why || used.has(t))) {
+      // Try a shoulder within one tile of the guideway. Fix that choice when the line is ordered.
+      const x = ax + (bx - ax) * sp.d / dist(ax, ay, bx, by), y = ay + (by - ay) * sp.d / dist(ax, ay, bx, by);
+      const options = FEED_NB.map(([di, dj]) => [sp.i + di, sp.j + dj])
+        .filter(([i, j]) => inMap(i, j) && dist2(i + 0.5, j + 0.5, x, y) <= 2.25 &&
+          tIdx(i, j) !== tIdx(Math.floor(bx), Math.floor(by)) && !used.has(tIdx(i, j)))
+        .sort(([i, j], [k, l]) => dist2(i + 0.5, j + 0.5, x, y) - dist2(k + 0.5, l + 0.5, x, y));
+      const shoulder = options.find(([i, j]) => !magSpotWhy(owner, tIdx(i, j), own));
+      if (shoulder) { t = tIdx(...shoulder); why = ''; }
+      else if (!why) why = 'two pylons would need the same tile';
+    }
+    if (t >= 0) {
+      sp.t = t; sp.i = t % S.W; sp.j = (t / S.W) | 0;
+      used.add(t);
+    }
     if (why === 'skip') {
-      if (prevSkip) { s.kind = 'bad'; s.why = `the chasm there is wider than ${MAGLEV.gap} tiles: a line spans at most two pylon gaps`; }
-      else s.kind = 'skip';
+      if (prevSkip) { sp.kind = 'bad'; sp.why = `the gap there is wider than ${MAGLEV.gap} tiles`; }
+      else sp.kind = 'skip';
       prevSkip = true;
-    } else { s.kind = why ? 'bad' : 'ok'; if (why) s.why = why; prevSkip = false; }
+    } else { sp.kind = why ? 'bad' : 'ok'; if (why) sp.why = why; prevSkip = false; }
   }
   return spots;
 }
+
+function magLayout(spots) { return spots.map((sp) => sp.kind === 'skip' ? -1 : sp.t); }
 
 /** A pylon stands on tile t: the resource node there (a boulder, a grove, never an oil seep) is cleared under its foot. */
 function magClearSpot(t) {
@@ -14513,14 +14600,19 @@ function magLineCheck(owner, A, bi, bj) {
   if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
   if (L > MAGLEV.max) { out.why = `Too far: a Maglev line reaches ${MAGLEV.max} tiles.`; return out; }
   const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (A.magMissing && (A.magMissing.x !== bi || A.magMissing.y !== bj)) {
+    out.why = 'Rebuild the Terminal at the end of the surviving guideway.';
+    return out;
+  }
   if (far) {
     if (far.owner !== owner || !BDEFS[far.type].magterm) { out.why = `There is ${aOrAn(BDEFS[far.type].name)} at the far end: pick a clear spot, or a Maglev Terminal of yours.`; return out; }
-    if (far.line || magPending(far) || far.magFrom) { out.why = 'That Terminal is on a line already (or one is going up to it).'; return out; }
+    if (far.line || far.magMissing || magPending(far) || far.magFrom) { out.why = 'That Terminal is on a line already (or one is going up to it).'; return out; }
     out.far = far;
   } else {
     const why = magFarBlocked(owner, bi, bj);
     if (why) { out.why = why; return out; }
   }
+  if (A.magMissing) return out;
   out.spots = magSpotsChecked(owner, A.x + 0.5, A.y + 0.5, bi + 0.5, bj + 0.5, 0);
   const bad = out.spots.find((s) => s.kind === 'bad');
   if (bad) out.why = `No line this way: ${bad.why} (${bad.d} tiles out).`;
@@ -14542,6 +14634,20 @@ function magLineCost(n) {
 function placeMagLine(owner, A, bi, bj) {
   const chk = magLineCheck(owner, A, bi, bj);
   if (chk.why) return { ok: false, reason: chk.why };
+  if (A.magMissing) {
+    if (chk.far?.built) {
+      magReconnect(A, chk.far);
+      return { ok: true, reason: '', id: chk.far.id };
+    }
+    const site = chk.far || addBuilding(owner, 'magterm', bi, bj, false);
+    site.fromStore = true;
+    site.magFrom = A.id;
+    A.magSite = site.id;
+    queuePlan('b', site.id, owner);
+    settlePlans();
+    markDirty(bi, bj);
+    return { ok: true, reason: '', id: site.id };
+  }
   const n = Math.round(dist(A.x, A.y, bi, bj)), cost = magLineCost(n);
   let s;
   if (chk.far && chk.far.built) {
@@ -14567,7 +14673,7 @@ function placeMagLine(owner, A, bi, bj) {
     s.buildTime = BDEFS.magterm.buildTime + MAGLEV.time * n;
   }
   if (s.type === 'magpylon') s.cost = cost;
-  s.magFrom = A.id; s.magN = n;
+  s.magFrom = A.id; s.magN = n; s.magLayout = magLayout(chk.spots);
   A.magSite = s.id;
   if (S.players[owner].ai) { if (!payInto(s)) queuePlan('b', s.id, owner); }
   else { queuePlan('b', s.id, owner); settlePlans(); }
@@ -14590,10 +14696,12 @@ function magSiteFar(s) {
 /** Line site s has got to `progress`: the pylons that far out go up (a pylon every MAGLEV.spacing tiles from the near end). */
 function magBuildStep(s) {
   const A = getE(s.magFrom);
-  if (!A || A.dead) return;
-  const [fx, fy] = magSiteFar(s), reach = s.progress * (s.magN || dist(A.x + 0.5, A.y + 0.5, fx, fy));
+  if (!A || A.dead || A.magMissing) return;
+  const [fx, fy] = magSiteFar(s), ax = A.x + 0.5, ay = A.y + 0.5;
+  const reach = s.progress * dist(ax, ay, fx, fy);
+  const layout = s.magLayout || magLayout(magSpotsAt(ax, ay, fx, fy));
   let any = false;
-  for (const sp of magSpotsChecked(A.owner, A.x + 0.5, A.y + 0.5, fx, fy, A.id)) {
+  for (const sp of magSpotsChecked(A.owner, ax, ay, fx, fy, A.id, layout)) {
     if (sp.kind !== 'ok' || sp.d > reach + 1e-9 || S.bAt[sp.t]) continue;
     magClearSpot(sp.t);
     const p = addBuilding(A.owner, 'magpylon', sp.i, sp.j, true);
@@ -14608,8 +14716,12 @@ function magBuildStep(s) {
 function magLineDone(s) {
   const A = getE(s.magFrom), B = s.type === 'magpylon' ? getE(s.magFar) : s;
   if (!A || A.dead || !A.built || !B || B.dead || !B.built || A.owner !== B.owner || A.line || B.line) { magLineCancel(s); return; }
+  if (A.magMissing) { magReconnect(A, B); return; }
   s.progress = 1;
   magBuildStep(s);
+  A.magLayout = s.magLayout;
+  delete s.magLayout;
+  delete s.cost;
   A.line = B.id; B.line = A.id; A.magNear = 1; delete B.magNear;
   A.magSite = 0; delete B.magFrom; delete s.magFrom;
   if (s !== B) { s.line = A.id; delete s.magFar; }
@@ -14625,7 +14737,7 @@ function magLineCancel(s) {
   const far = s.magFar ? getE(s.magFar) : null;
   if (far && far.magFrom === (A && A.id)) delete far.magFrom;
   delete s.magFrom;
-  if (A) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === A.id && p.built && !magPartner(A)) destroyBuilding(p, false, true);
+  if (A && !A.magMissing) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === A.id && p.built && !magPartner(A)) destroyBuilding(p, false, true);
 }
 
 /** The standing spots of the line A–B (A the near end) with no pylon on them: the breaks. [] on a whole line. */
@@ -14633,10 +14745,14 @@ function magCut(A, B) {
   B = B || magPartner(A);
   if (!B) return [];
   const out = [];
-  for (const sp of magSpotsChecked(A.owner, A.x + 0.5, A.y + 0.5, B.x + 0.5, B.y + 0.5, A.id)) {
-    const p = S.bAt[sp.t] ? getE(S.bAt[sp.t]) : null;
-    if (sp.kind === 'skip') continue;
-    if (!p || p.dead || !p.built || !BDEFS[p.type].pylon || p.owner !== A.owner) out.push(sp);
+  const ownerId = A.id, layout = A.magLayout;
+  for (const sp of magSpots(A, B)) {
+    const t = layout?.[sp.k - 1] ?? sp.t;
+    if (t === -1 || (layout?.[sp.k - 1] == null && (S.terrain[t] === T_CHASM || S.terrain[t] === T_ROCK))) continue;
+    const p = S.bAt[t] ? getE(S.bAt[t]) : null;
+    if (!p || p.dead || !p.built || !BDEFS[p.type].pylon || p.line !== ownerId || p.k !== sp.k) {
+      out.push({ ...sp, t, i: t % S.W, j: (t / S.W) | 0 });
+    }
   }
   return out;
 }
@@ -14728,25 +14844,61 @@ function magPylonDown(p) {
   computeZones();
 }
 
-/** Terminal b is lost (destroyed, dismantled, moved): its line goes with it, pods inside it too; the pylons come down. */
-function magTermDown(b) {
-  const o = b.line ? getE(b.line) : null, near = b.magNear || !o ? b : o;
-  // Pods: those inside are lost with it; those running turn back to the other end, or are lost with the line.
-  for (const u of S.bots) {
-    if (u.dead || u.owner !== b.owner || !BOTS[u.type].magpod) continue;
-    if (u.inside === b.id || (u.home === b.id && !u.magTo)) { podLost(u); killBot(u, true); continue; }
-    if (u.magTo === b.id) { if (!(o && !o.dead && podReverse(u))) { podLost(u); killBot(u, true); } }
-    else if (u.magFrom === b.id) u.magFrom = 0;
+/** Restore a suspended guideway when its missing Terminal is rebuilt. */
+function magReconnect(survivor, replacement) {
+  const missing = survivor.magMissing;
+  const A = missing.near ? replacement : survivor, B = A === survivor ? replacement : survivor;
+  if (A !== survivor) {
+    A.magLayout = survivor.magLayout;
+    delete survivor.magLayout;
+    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === survivor.id) p.line = A.id;
   }
-  if (o && o.line === b.id) o.line = 0;
-  b.line = 0;
+  A.magNear = 1; delete B.magNear;
+  A.line = B.id; B.line = A.id;
+  survivor.magSite = 0;
+  delete survivor.magMissing; delete replacement.magFrom;
+  S.players[A.owner].railT = undefined;
+  postMsg(A.owner, 'Maglev Terminal rebuilt. The guideway is connected again.', replacement.x, replacement.y, 'good');
+}
+
+/** Lose one end, keeping the guideway for its surviving Terminal to reopen. */
+function magTermDown(b) {
+  const o = magPartner(b), A = o && magNearEnd(b);
   const pending = magPending(b);
   if (pending) { magLineCancel(pending); destroyBuilding(pending, false, true); }
-  if (b.magFrom) { const A = getE(b.magFrom); const s = A && magPending(A); if (s) { magLineCancel(s); if (s !== b) destroyBuilding(s, false, true); } }
-  if (b.magFix) { const w = getE(b.magFix.u); if (w && !w.dead && w.task && w.task.type === 'magfix') cancelTask(w); b.magFix = null; }
-  for (const p of S.buildings) if (!p.dead && BDEFS[p.type].pylon && p.line === near.id) destroyBuilding(p, false, true);
-  if (o && !o.dead) { S.players[o.owner].railT = undefined; if (o.magFix) o.magFix = null; }
-  computeZones();
+  if (b.magFrom) {
+    const from = getE(b.magFrom), site = magPending(from);
+    if (site) { magLineCancel(site); if (site !== b) destroyBuilding(site, false, true); }
+  }
+  for (const end of o ? [b, o] : [b]) {
+    if (!end.magFix) continue;
+    const w = getE(end.magFix.u);
+    if (w && !w.dead && w.task?.type === 'magfix') cancelTask(w);
+    end.magFix = null;
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== b.owner || !BOTS[u.type].magpod) continue;
+    if (u.inside === b.id || (u.home === b.id && !u.magTo)) {
+      if (o) podArrive(u, o);
+      else { podLost(u); killBot(u, true); }
+    } else if (u.magTo === b.id) {
+      if (!o || !podReverse(u)) { podLost(u); killBot(u, true); continue; }
+      u.home = o.id; u.magFrom = 0;
+    } else if (u.magFrom === b.id && o) {
+      u.home = o.id; u.magFrom = 0;
+    }
+  }
+  if (o) {
+    o.line = 0;
+    o.magMissing = { x: b.x, y: b.y, near: A === b };
+    if (A === b) o.magLayout = b.magLayout;
+    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === A.id) p.line = o.id;
+    S.players[o.owner].railT = undefined;
+    postMsg(o.owner, 'Maglev service suspended. Rebuild the lost Terminal to reuse the guideway.', b.x, b.y, 'warn');
+  } else if (b.magMissing) {
+    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === b.id) destroyBuilding(p, false, true);
+  }
+  b.line = 0;
 }
 
 /** Pod u sets out from Terminal T for O with `load` ({ goods, total }, or null to run across empty). */
@@ -14841,7 +14993,7 @@ function updateMagTerm(b, dt) {
   b.working = false;
   if (!o) {
     const s = magPending(b);
-    b.status = s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
+    b.status = b.magMissing ? 'Maglev service suspended: rebuild the missing Terminal' : s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
     return;
   }
   const pods = linePods(b), running = pods.some((u) => u.magTo);
@@ -15144,7 +15296,7 @@ function hashState() {
   const num = (v) => { if (typeof v !== 'number') { int(v === undefined ? -7 : v === null ? -8 : v === true ? -9 : v === false ? -10 : -11); return; } _hv[0] = v; int(_hu[0]); int(_hu[1]); };
   const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
-  int(S.tick); num(S.time); int(S.nextId); int(S.winner);
+  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty);
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
@@ -15155,9 +15307,10 @@ function hashState() {
     obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
-  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
-  int(S.loot ? S.loot.length : 0); int(S.fires ? S.fires.length : 0);
+  int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
+  int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
   // The Murmur's tunnels, their nests' branches and the exits shut for now (see murmurTick).
   if (S.tun) for (let t = 0; t < S.tun.length; t++) if (S.tun[t]) { int(t); int(S.tun[t]); }
@@ -15178,5 +15331,10 @@ function hashState() {
   // Maglev lines: the pods (their ends and load), the lines going up and the repairs.
   for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); }
   for (const b of S.buildings) { if (b.magSite) { int(b.id); int(b.magSite); } if (b.magFrom) { int(b.id); int(b.magFrom); } if (b.magFix) { int(b.id); int(b.magFix.k); int(b.magFix.u); num(b.magFix.since); int(b.magFix.paid); } if (BDEFS[b.type].pylon) { int(b.id); int(b.k || 0); int(b.line || 0); } }
+  for (const b of S.buildings) {
+    if (b.magMissing) { int(b.id); int(b.magMissing.x); int(b.magMissing.y); num(b.magMissing.near); }
+    if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
+    if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
+  }
   return h >>> 0;
 }

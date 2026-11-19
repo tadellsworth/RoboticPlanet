@@ -1612,6 +1612,8 @@ read from `S` and never written to it; the simulation never reads it.
 
 ### Batch 21: the Maglev line (installed)
 
+In play, pylons sharing a road or track show their footing on the shoulder, with a support arm connecting to the straight guideway.
+
 The owner chose direction **A, Accord Phase 2**, from the design sheet (`renderer/preview/maglev_sheet.py`), with the two
 mixes the sheet suggested: the pylon caps and the Terminal's dock in gunmetal (as drawn) and B's hazard chevrons on A's
 pylon caps. Rendered with `renderer/b/maglev.js` (`v=a`), both teams, at every time of day, by
