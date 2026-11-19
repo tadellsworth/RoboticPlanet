@@ -158,14 +158,14 @@ const ORDERS = {
   evac(p) { return startEvac(p); },
 
   /* ---------------------------------------------------------------- building and paths */
-  place(p, type, i, j) {
+  place(p, type, i, j, axis) {
     if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' };
     if (modNoBuild(type)) return { ok: false, reason: modNoBuild(type) }; // (No turrets, a challenge modifier)
-    const r = placeSite(p, type, i, j);
+    const r = placeSite(p, type, i, j, undefined, undefined, axis === 'ns' ? 'ns' : 'ew'); // (axis: a Mass Driver's two tiles, east-west or north-south)
     if (r.ok) r.building.placedAt = S.time; // (when: it can be taken back for SITE_UNDO s, see undoSite)
     return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 };
   },
-  moveBuilding(p, id, i, j) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That building is gone.' }; const r = startMove(p, b, i, j); return { ok: r.ok, reason: r.reason }; },
+  moveBuilding(p, id, i, j, axis) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That building is gone.' }; const r = startMove(p, b, i, j, axis === 'ns' || axis === 'ew' ? axis : undefined); return { ok: r.ok, reason: r.reason }; },
   link(p, kind, ai, aj, bi, bj) {
     const r = kind === 'viaduct' ? placeViaduct(p, ai, aj, bi, bj) : placeRopeway(p, ai, aj, bi, bj);
     if (r.ok) settlePlans(); // a Viaduct is paid from storage: what's there now goes in at once

@@ -2999,7 +2999,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     const k = siloRise(b, type === 'silo' ? siloReady(b) : !!b.armed);
     if (empty && k < 1) { full = k > 0 ? art : null; fade = k; art = empty; }
   }
-  // A Mass Driver's ramp points the way of its Catcher (mdriver-<dir>, eight ways); a Catcher's arms swing in as a
+  // A Mass Driver's ramp points along its two tiles toward its Catcher (mdriver-<dir>: e, w, n, s); a Catcher's arms swing in as a
   // canister lands (catcher-closed).
   if (art && b && b.built && type === 'mdriver') art = artFor('mdriver-' + mdDir(b), owner) || art;
   if (art && b && b.built && type === 'catcher' && mdArmsIn(b)) art = artFor('catcher-closed', owner) || art;
@@ -3909,7 +3909,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
     ctx.save();
     ctx.beginPath(); ctx.rect(cx - s, cy + s * 0.45 - s * 0.9 * b.progress, s * 2, s * 2); ctx.clip();
     ctx.globalAlpha = 0.85;
-    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, x: b.x, y: b.y });
+    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, x: b.x, y: b.y, mdAxis: b.mdAxis });
     ctx.restore();
     ctx.globalAlpha = 1;
     // delivered materials
@@ -6176,7 +6176,7 @@ function refreshOverlay(type) {
   }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
     const t = j * S.W + i;
-    if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
+    if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j, false, BDEFS[type] && BDEFS[type].long && typeof UI !== 'undefined' ? UI.mdAxis : undefined).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
   }
   R.overlay = { type, valid, at: R.time };
 }
@@ -6446,7 +6446,8 @@ function render(dtReal) {
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
     if (e.ent === 'b') {
-      const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
+      const c0 = BDEFS[e.type].long ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles)
+      const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       buildingSmoke(e);
       const def = BDEFS[e.type];
@@ -6550,12 +6551,13 @@ function render(dtReal) {
     if (rwy) { ctx.globalAlpha = 0.7; drawRunway(ctx, ox, oy, z, R.ghost.x, R.ghost.y, rwy, true); ctx.globalAlpha = 1; }
   }
   if (R.ghost) {
+    const L = BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long, ns = L && typeof UI !== 'undefined' && UI.mdAxis === 'ns', gw = L && !ns ? 2 : 1, gh = ns ? 2 : 1; // (a Mass Driver: two tiles)
     ctx.globalAlpha = 0.75;
-    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + 0.5) * z, oy + (R.ghost.y + 0.5) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2 });
+    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + gw / 2) * z, oy + (R.ghost.y + gh / 2) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, mdAxis: ns ? 'ns' : 'ew' });
     ctx.globalAlpha = 1;
     ctx.strokeStyle = R.ghost.ok ? '#9dffb8' : '#ff6b6b';
     ctx.lineWidth = 2.5;
-    ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
+    ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, gw * z - 2, gh * z - 2);
   }
   if (typeof drawBlueprint === 'function') drawBlueprint(ctx, ox, oy, z); // (blueprints being picked or placed: js/blueprint.js)
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
@@ -6568,8 +6570,8 @@ function render(dtReal) {
     ctx.lineWidth = 2;
     ctx.setLineDash([z * 0.15, z * 0.1]);
     ctx.lineDashOffset = -R.time * z * 0.5;
-    const r = sel.type === 'lander' ? z * 0.95 : z * 0.6;
-    ctx.beginPath(); ctx.arc(ox + (sel.x + 0.5) * z, oy + (sel.y + 0.5) * z, r, 0, Math.PI * 2); ctx.stroke();
+    const r = sel.type === 'lander' ? z * 0.95 : BDEFS[sel.type] && BDEFS[sel.type].long ? z * 1.1 : z * 0.6, sc = BDEFS[sel.type] && BDEFS[sel.type].long ? bCentre(sel) : { x: sel.x + 0.5, y: sel.y + 0.5 };
+    ctx.beginPath(); ctx.arc(ox + sc.x * z, oy + sc.y * z, r, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
   }
   const sb = typeof UI !== 'undefined' && UI.selBot ? getE(UI.selBot) : null;
@@ -9575,32 +9577,30 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
 /* ------------------------------------------------------------------ the Mass Driver */
 
 /*
- * The Mass Driver's art (renderer/b/massdriver.js, look A "Coil Ramp") points eight ways; MD_ART holds, for each, where
- * its breech (b), muzzle (m) and seven coils (c) are, in tiles from its tile's centre on screen (the renders' marks, by
+ * The Mass Driver's art (renderer/b/massdriver.js, look A "Coil Ramp", two tiles long) points four ways; MD_ART holds, for
+ * each, where its breech (b), muzzle (m) and eleven coils (c) are, in tiles from the middle of its two tiles on screen (the renders' marks, by
  * tools/install_massdriver.py), and where the Catcher's cradle is. Everything drawn here is render-only: the coils
  * lighting in sequence as it charges with arcs of light crackling along the rail, the muzzle flash, a faint guidance
  * beam toward the Catcher while a canister flies, the canister with its short glowing streak, and the aiming preview.
  */
-const MD_DIRS = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'];
 const MD_ART = {
-  e: { b: [-0.359, -0.091], m: [0.562, -0.346], c: [[-0.263, -0.118], [-0.149, -0.149], [-0.032, -0.182], [0.087, -0.215], [0.209, -0.248], [0.334, -0.283], [0.462, -0.318]] },
-  se: { b: [-0.246, -0.3], m: [0.417, -0.004], c: [[-0.182, -0.272], [-0.104, -0.237], [-0.023, -0.201], [0.062, -0.163], [0.151, -0.123], [0.243, -0.082], [0.34, -0.039]] },
-  s: { b: [0, -0.383], m: [0, 0.147], c: [[0, -0.334], [0, -0.272], [0, -0.208], [0, -0.141], [0, -0.07], [0, 0.005], [0, 0.084]] },
-  sw: { b: [0.246, -0.3], m: [-0.417, -0.004], c: [[0.182, -0.272], [0.104, -0.237], [0.023, -0.201], [-0.062, -0.163], [-0.151, -0.123], [-0.243, -0.082], [-0.34, -0.039]] },
-  w: { b: [0.359, -0.091], m: [-0.562, -0.346], c: [[0.263, -0.118], [0.149, -0.149], [0.032, -0.182], [-0.087, -0.215], [-0.209, -0.248], [-0.334, -0.283], [-0.462, -0.318]] },
-  nw: { b: [0.261, 0.131], m: [-0.379, -0.656], c: [[0.19, 0.043], [0.107, -0.06], [0.023, -0.163], [-0.061, -0.266], [-0.145, -0.369], [-0.23, -0.473], [-0.314, -0.577]] },
-  n: { b: [0, 0.227], m: [0, -0.777], c: [[0, 0.112], [0, -0.022], [0, -0.155], [0, -0.287], [0, -0.418], [0, -0.549], [0, -0.678]] },
-  ne: { b: [-0.261, 0.131], m: [0.379, -0.656], c: [[-0.19, 0.043], [-0.107, -0.06], [-0.023, -0.163], [0.061, -0.266], [0.145, -0.369], [0.23, -0.473], [0.314, -0.577]] },
+  e: { b: [-0.754, -0.084], m: [1.005, -0.442], c: [[-0.664, -0.102], [-0.516, -0.132], [-0.366, -0.163], [-0.214, -0.194], [-0.059, -0.225], [0.097, -0.257], [0.256, -0.289], [0.416, -0.322], [0.579, -0.355], [0.745, -0.389], [0.912, -0.423]] },
+  w: { b: [0.754, -0.084], m: [-1.005, -0.442], c: [[0.664, -0.102], [0.516, -0.132], [0.366, -0.163], [0.214, -0.194], [0.059, -0.225], [-0.097, -0.257], [-0.256, -0.289], [-0.416, -0.322], [-0.579, -0.355], [-0.745, -0.389], [-0.912, -0.423]] },
+  n: { b: [0.0, 0.593], m: [0.0, -1.205], c: [[0.0, 0.49], [0.0, 0.321], [0.0, 0.154], [0.0, -0.012], [0.0, -0.175], [0.0, -0.337], [0.0, -0.497], [0.0, -0.655], [0.0, -0.812], [0.0, -0.968], [0.0, -1.121]] },
+  s: { b: [0.0, -0.686], m: [0.0, 0.45], c: [[0.0, -0.635], [0.0, -0.55], [0.0, -0.461], [0.0, -0.37], [0.0, -0.274], [0.0, -0.176], [0.0, -0.073], [0.0, 0.034], [0.0, 0.145], [0.0, 0.261], [0.0, 0.382]] },
   cradle: [0, -0.069],
   lift: 0.5, // (a canister's arc drawn this much of its height up the screen)
 };
 
-/** Which of its eight ways Mass Driver b's ramp points: toward its Catcher (east with none). */
+/**
+ * Which way Mass Driver b's ramp points: along its two tiles (b.mdAxis), toward the end nearer its Catcher, so an
+ * east-west Driver fires east or west and a north-south one north or south (east, or north, with none yet).
+ */
 function mdDir(b) {
-  const c = b && b.mdTo ? getE(b.mdTo) : null;
-  if (!c) return b && b.mdFace ? b.mdFace : 'e';
-  const a = Math.atan2(c.y - b.y, c.x - b.x), k = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
-  b.mdFace = MD_DIRS[k]; // (it keeps pointing that way if its Catcher goes)
+  const ns = b && b.mdAxis === 'ns', c = b && b.mdTo ? getE(b.mdTo) : null;
+  if (!c || b.x === undefined) return (b && b.mdFace) || (ns ? 'n' : 'e');
+  const o = bCentre(b);
+  b.mdFace = ns ? (c.y + 0.5 >= o.y ? 's' : 'n') : (c.x + 0.5 >= o.x ? 'e' : 'w'); // (it keeps pointing that way if its Catcher goes)
   return b.mdFace;
 }
 
@@ -9644,7 +9644,7 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
   const aimB = R.mode === 'mdaim' ? getE(ui.mdAim) : null, selB = getE(R.selected);
   const showLine = (b) => b && !b.dead && BDEFS[b.type] && BDEFS[b.type].mdriver;
   if (showLine(aimB)) {
-    const b = aimB, cx = ox + (b.x + 0.5) * z, cy = oy + (b.y + 0.5) * z, col = PLAYER_COLORS[b.owner] || '#fff';
+    const b = aimB, bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, col = PLAYER_COLORS[b.owner] || '#fff';
     ctx.fillStyle = 'rgba(191,227,255,0.07)';
     ctx.beginPath(); ctx.arc(cx, cy, MASSDRIVER.max * z, 0, Math.PI * 2); ctx.arc(cx, cy, MASSDRIVER.min * z, 0, Math.PI * 2, true); ctx.fill();
     ctx.strokeStyle = 'rgba(191,227,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.3]);
@@ -9666,12 +9666,12 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
   const dark = typeof TOD !== 'undefined' && TOD.active && TOD.state ? TOD.state.lights || 0 : 0;
   for (const b of S.buildings) {
     if (b.dead || !b.built || !BDEFS[b.type].mdriver || !inView(b.x, b.y, 3)) continue;
-    const A = MD_ART[mdDir(b)], cx = ox + (b.x + 0.5) * z, cy = oy + (b.y + 0.5) * z, P = (q) => [cx + q[0] * z, cy + q[1] * z];
+    const A = MD_ART[mdDir(b)], bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, P = (q) => [cx + q[0] * z, cy + q[1] * z];
     const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
     if (charging) {
       // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
-      const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), lit = Math.min(7, Math.floor(p * 9)), run = (R.time * (4 + 10 * p)) % 7;
-      for (let k = 0; k < 7; k++) {
+      const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
+      for (let k = 0; k < NC; k++) {
         const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
         mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
       }
@@ -9687,13 +9687,13 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     if (since < 0.5) {
       // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
       const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
-      for (let k = 0; k < 7; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
+      for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
       mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
       ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
       ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
     } else if (!charging && dark > 0.3) {
       // after dark the coils glow faintly between shots
-      for (let k = 0; k < 7; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
+      for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
     }
   }
   // canisters in flight: the guidance beam from the muzzle toward the Catcher, the canister and its glowing streak
@@ -9701,7 +9701,7 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     const from = getE(m.from), p = canScreen(m, ox, oy, z, m.t);
     if (!inView(m.x0 + (m.x1 - m.x0) * p.k, m.y0 + (m.y1 - m.y0) * p.k, 6) && !inView(m.x1, m.y1, 2)) continue;
     if (from && !from.dead && from.built) {
-      const A = MD_ART[mdDir(from)], mx = ox + (from.x + 0.5 + A.m[0]) * z, my = oy + (from.y + 0.5 + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
+      const A = MD_ART[mdDir(from)], fc = bCentre(from), mx = ox + (fc.x + A.m[0]) * z, my = oy + (fc.y + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
       const fade = Math.min(1, p.k * 6, (1 - p.k) * 6) * 0.3, g = ctx.createLinearGradient(mx, my, tx, ty);
       g.addColorStop(0, `rgba(191,227,255,${fade})`); g.addColorStop(0.5, `rgba(191,227,255,${fade * 0.35})`); g.addColorStop(1, `rgba(191,227,255,${fade * 0.8})`);
       ctx.strokeStyle = g; ctx.lineCap = 'round';
@@ -9727,14 +9727,22 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     // its shadow on the ground, smaller and fainter the higher it flies
     const hk = clamp((p.gy - p.y) / (z * 3), 0, 1);
     ctx.fillStyle = `rgba(0,0,0,${0.3 - 0.18 * hk})`;
-    ctx.beginPath(); ctx.ellipse(p.gx + z * 0.25 * hk, p.gy + z * 0.15 * hk, z * (0.2 - 0.06 * hk), z * (0.09 - 0.03 * hk), 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(p.gx + z * 0.25 * hk, p.gy + z * 0.15 * hk); ctx.rotate(Math.atan2(m.y1 - m.y0, m.x1 - m.x0)); ctx.fillRect(-z * (0.23 - 0.06 * hk), -z * (0.1 - 0.03 * hk), z * (0.46 - 0.12 * hk), z * (0.2 - 0.06 * hk)); ctx.restore(); // (its box's shadow)
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a);
-    const L = z * 0.42, W = z * 0.16;
-    ctx.fillStyle = '#e4e0d6'; ctx.strokeStyle = 'rgba(20,24,28,0.8)'; ctx.lineWidth = Math.max(1, z * 0.015);
-    ctx.beginPath(); ctx.ellipse(0, 0, L / 2, W / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = PLAYER_COLORS[m.owner] || '#fff';
-    for (const s of [-1, 1]) ctx.fillRect(s * L * 0.22 - z * 0.012, -W / 2 + 1, z * 0.024, W - 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(-L * 0.3, -W * 0.32, L * 0.6, W * 0.16);
+    // A stubby cargo container holding its heading along the arc: gunmetal, ribbed sides, dark corner castings, a band
+    // in its team's colour and an amber running light blinking at its nose.
+    const L = z * 0.46, W = z * 0.24, lw = Math.max(1, z * 0.014);
+    ctx.fillStyle = '#2c3137'; ctx.strokeStyle = 'rgba(6,8,10,0.85)'; ctx.lineWidth = lw;
+    ctx.fillRect(-L / 2, -W / 2, L, W); ctx.strokeRect(-L / 2, -W / 2, L, W);
+    ctx.fillStyle = '#434b53'; ctx.fillRect(-L / 2 + lw, -W / 2 + lw, L - 2 * lw, W * 0.38); // (its lit top)
+    ctx.strokeStyle = 'rgba(12,14,17,0.75)'; ctx.lineWidth = Math.max(0.6, z * 0.008);
+    for (let k = 1; k < 8; k++) { const x = -L / 2 + (L * k) / 8; ctx.beginPath(); ctx.moveTo(x, -W / 2 + lw); ctx.lineTo(x, W / 2 - lw); ctx.stroke(); } // ribs
+    ctx.fillStyle = PLAYER_COLORS[m.owner] || '#fff'; ctx.fillRect(-L * 0.18, -W / 2 + lw, L * 0.09, W - 2 * lw);
+    const cc = Math.max(1.5, z * 0.05);
+    ctx.fillStyle = '#121518'; for (const sx of [-1, 1]) for (const sy of [-1, 1]) ctx.fillRect(sx * L / 2 - (sx > 0 ? cc : 0), sy * W / 2 - (sy > 0 ? cc : 0), cc, cc); // corner castings
+    const blink = 0.55 + 0.45 * Math.sin(R.time * 9 + m.id);
+    ctx.globalCompositeOperation = 'lighter'; mdGlow(ctx, L / 2 - cc * 0.9, 0, z * 0.12, 'rgba(255,170,60,A)', 0.7 * blink); ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(255,190,90,${0.6 + 0.4 * blink})`; ctx.beginPath(); ctx.arc(L / 2 - cc * 0.9, 0, Math.max(1, z * 0.022), 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
   ctx.restore();
@@ -9742,7 +9750,7 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
 
 /** The arc a canister would fly from Mass Driver b to ground point (x, y), dashed, in colour col. */
 function mdArc(ctx, b, x, y, ox, oy, z, col) {
-  const A = MD_ART[mdDir(b)], x0 = b.x + 0.5, y0 = b.y + 0.5, d = Math.hypot(x - x0, y - y0), h = MASSDRIVER.arc * (0.5 + 0.5 * clamp((d - MASSDRIVER.min) / (MASSDRIVER.max - MASSDRIVER.min), 0, 1)) * MD_ART.lift;
+  const A = MD_ART[mdDir(b)], bc = bCentre(b), x0 = bc.x, y0 = bc.y, d = Math.hypot(x - x0, y - y0), h = MASSDRIVER.arc * (0.5 + 0.5 * clamp((d - MASSDRIVER.min) / (MASSDRIVER.max - MASSDRIVER.min), 0, 1)) * MD_ART.lift;
   ctx.save();
   ctx.lineCap = 'round';
   const path = () => { ctx.beginPath(); for (let k = 0; k <= 32; k++) { const t = k / 32, px = x0 + (x - x0) * t + A.m[0] * (1 - t) + MD_ART.cradle[0] * t, py = y0 + (y - y0) * t + A.m[1] * (1 - t) + MD_ART.cradle[1] * t - 4 * h * t * (1 - t); if (k) ctx.lineTo(ox + px * z, oy + py * z); else ctx.moveTo(ox + px * z, oy + py * z); } };

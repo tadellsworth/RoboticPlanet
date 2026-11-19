@@ -869,7 +869,7 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'built', type: 'mdriver', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mass Driver</b> (<kbd>V</kbd>), by your base, by a road.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mass Driver</b> (<kbd>V</kbd>) by a road; <kbd>R</kbd> turns it.',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='mdriver']" },
       { kind: 'built', type: 'catcher', n: 1,
         hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>) by the survey camp\'s Outpost, far to the north.',

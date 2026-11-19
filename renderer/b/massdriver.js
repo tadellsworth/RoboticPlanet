@@ -1,10 +1,13 @@
 // The Mass Driver and its Catcher (IDEAS.md "High-speed transit", the owner's look A, "Coil Ramp", Nov 2026).
-//   c=driver (default)  the Mass Driver: a concrete ramp carrying a coil-gun rail of copper coil rings up to a flared
-//                       muzzle, a breech house with a canister hopper at its foot, capacitor banks along its flanks
-//                       cabled up to the coils' yokes, a rack of sealed canisters waiting. dir=e|se|s|sw|w|nw|n|ne: the
-//                       way the rail points (on the map: e is east, s is down the screen); the game picks the one
-//                       nearest its Catcher. Marks: 'breech', 'muzzle' and 'c0'..'c6' (each coil's centre), for the
-//                       coils lighting in sequence, the arcs along the rail and the canister leaving it.
+//   c=driver (default)  the Mass Driver, two tiles long on a 2 x 1 pad (20 x 10 world units): a concrete ramp carrying a
+//                       coil-gun rail of eleven copper coil rings up to a flared muzzle, a breech house with a canister
+//                       hopper at its foot, capacitor banks along its flanks cabled up to the coils' yokes, a rack of
+//                       sealed canisters waiting. dir=e|w|n|s: the way the rail points (on the map: e is east, s is
+//                       down the screen): an east-west Driver fires e or w, a north-south one n or s, toward its
+//                       Catcher. Framed wide (frameCompound: the pad's 20 units across 0.85 of the frame, about 2.48
+//                       tiles), the world origin (the middle of the two tiles) on the frame's anchor. Marks: 'breech',
+//                       'muzzle' and 'c0'..'c10' (each coil's centre), for the coils lighting in sequence, the arcs
+//                       along the rail and the canister leaving it.
 //   c=catcher           the Catcher: a wide steel funnel cradle on a concrete plinth with copper braking rings in its
 //                       throat and four magnetic arms on legs round it. arms=open (waiting: swung up and out) or
 //                       arms=closed (swung in over the funnel, their magnet heads lit, as a canister lands). Mark 'cradle'.
@@ -14,14 +17,15 @@ import { power } from './powerkit.js';
 const Q = new URLSearchParams(location.search);
 const C = Q.get('c') || 'driver', DIR = Q.get('dir') || 'e', ARMS = Q.get('arms') || 'open';
 const PI = Math.PI;
-export const DIRS = { e: 0, se: PI / 4, s: PI / 2, sw: 3 * PI / 4, w: PI, nw: -3 * PI / 4, n: -PI / 2, ne: -PI / 4 };
-export const config = {};
+export const DIRS = { e: 0, s: PI / 2, w: PI, n: -PI / 2 };
+export const config = C === 'catcher' ? {} : { pad: false };
+export const FRAME = { half: 10.12, width: 0.85, cy: 0.57 };
 
 export default function (L) {
   L.seed(7300 + (C === 'driver' ? Object.keys(DIRS).indexOf(DIR) : 40));
   const P = power(L), T = mats(L, P);
   if (C === 'catcher') catcher(L, P, T, ARMS === 'closed');
-  else driver(L, P, T, DIRS[DIR] ?? 0);
+  else { const ns = DIR === 'n' || DIR === 's'; L.longPad(ns ? 10 : 20, ns ? 20 : 10); L.frameCompoundOpts(FRAME); driver(L, P, T, DIRS[DIR] ?? 0); }
 }
 
 function mats(L, P) {
@@ -58,10 +62,10 @@ function driver(L, P, T, th) {
   const { box, cyl, beam, pipe, sphere, ao, mesh, group, pointLight, THREE, M } = L;
   const G = group(0, 0, 0, -th);
   const O = (e = {}) => ({ parent: G, ...e });
-  ao(0, 0, 8.5, 8.5, 0.35);
+  ao(0, 0, 18.5, 8.5, 0.35);
 
   // ---- the ramp: a concrete wedge rising from the breech to the muzzle, with buttresses down its flanks
-  const X0 = -4.3, X1 = 4.0, BX = -3.0, BY = 1.35, MX = 4.2, MY = 5.0, A = Math.atan2(MY - BY, MX - BX), HW = 1.3;
+  const X0 = -9.3, X1 = 8.9, BX = -7.6, BY = 1.4, MX = 9.2, MY = 7.6, A = Math.atan2(MY - BY, MX - BX), HW = 1.45;
   const lineY = (x) => BY + (x - BX) * Math.tan(A) - 0.55; // the top of the concrete under the deck
   {
     const s = new THREE.Shape();
@@ -71,10 +75,10 @@ function driver(L, P, T, th) {
     const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 2, uv.getY(i) / 2);
     mesh(g, T.concL, 0, 0, 0, O({ dirt: 0.35, dirtH: 1.6 }));
     // pour lines down its flanks, and a recessed panel
-    for (let x = -2.4 + 0.67; x < X1 - 0.6; x += 1.35) for (const sz of [-1, 1]) box(0.05, Math.max(0.2, lineY(x) - 0.5), 0.02, T.concD, x, 0.25, sz * (HW + 0.07), O(T.nc));
+    for (let x = -6.6 + 0.67; x < X1 - 0.6; x += 1.35) for (const sz of [-1, 1]) box(0.05, Math.max(0.2, lineY(x) - 0.5), 0.02, T.concD, x, 0.25, sz * (HW + 0.07), O(T.nc));
     for (const sz of [-1, 1]) box(X1 - X0 - 0.6, 0.06, 0.03, T.concD, (X0 + X1) / 2, 0.75, sz * (HW + 0.07), O(T.nc));
     // formwork lines and the buttresses
-    for (let x = -2.4; x < X1 - 0.3; x += 1.35) {
+    for (let x = -6.6; x < X1 - 0.3; x += 1.35) {
       const h = lineY(x) - 0.15;
       for (const sz of [-1, 1]) {
         const b = new THREE.Shape(); b.moveTo(-0.2, 0); b.lineTo(0.2, 0); b.lineTo(0.2, h); b.lineTo(-0.2, h * 0.9); b.closePath();
@@ -99,7 +103,7 @@ function driver(L, P, T, th) {
   }
   box(LEN + 0.6, 0.05, 0.36, T.dark, LEN / 2, -0.33, 0, RO(T.nc));                                             // the stator slot
   // the coils: copper windings round the rail on steel yokes, an inner band that glows at night
-  const NC = 7, coilX = (k) => 0.95 + k * (LEN - 1.4) / (NC - 1), CY = 0.22, CR = 0.6;
+  const NC = 11, coilX = (k) => 1.0 + k * (LEN - 1.5) / (NC - 1), CY = 0.24, CR = 0.66;
   for (let k = 0; k < NC; k++) {
     const x = coilX(k);
     for (const dx of [-0.17, -0.06, 0.06, 0.17]) { const g = new THREE.TorusGeometry(CR, 0.075, 10, 40); g.rotateY(PI / 2); mesh(g, dx * dx > 0.01 ? T.copperD : T.copper, x + dx, CY, 0, RO({ dirt: 0 })); }
@@ -138,10 +142,10 @@ function driver(L, P, T, th) {
   R.updateMatrixWorld(true); G.updateMatrixWorld(true);
   const toW = (o, x, y, z) => { const v = new THREE.Vector3(x, y, z); o.localToWorld(v); return [v.x, v.y, v.z]; };
   for (const s of [-1, 1]) {
-    const z = s * 2.55;
-    box(3.6, 0.3, 1.0, T.concD, -2.0, 0, z, O({ dirt: 0.6, dirtH: 0.3 }));
-    for (let k = 0; k < 3; k++) {
-      const x = -3.3 + k * 1.15;
+    const z = s * 2.85;
+    box(7.6, 0.3, 1.0, T.concD, -4.4, 0, z, O({ dirt: 0.6, dirtH: 0.3 }));
+    for (let k = 0; k < 6; k++) {
+      const x = -7.6 + k * 1.3;
       cyl(0.36, 1.05, M.ribbed('#7b8288'), x, 0.3, z, O({ seg: 20 }));
       cyl(0.38, 0.08, T.gunD, x, 1.35, z, O({ seg: 20, dirt: 0 }));
       cyl(0.1, 0.22, M.plain('#d9d2c2', 0.4, 0), x, 1.43, z, O({ seg: 10, dirt: 0 }));     // insulator
@@ -149,18 +153,18 @@ function driver(L, P, T, th) {
     }
     // cables: from each bank up to every other coil's yoke
     for (let k = 1; k < NC; k += 2) {
-      const a = toW(G, -1.5 + 0.3 * k, 0.32, z * 0.82), b = toW(R, coilX(k), -0.5, s * 0.78), m = [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) + 0.05, (a[2] + b[2]) / 2];
+      const a = toW(G, -7.0 + 1.05 * Math.min(k, 6), 0.32, z * 0.85), b = toW(R, coilX(k), -0.5, s * 0.78), m = [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) + 0.05, (a[2] + b[2]) / 2];
       pipe([a, [a[0], a[1] + 0.05, a[2]], m, b], 0.045, T.dark);
     }
   }
   // the canister rack at the breech end: three sealed canisters waiting to be loaded
   {
-    const rx = -3.8, rz = 0;
+    const rx = -9.0, rz = 0;
     box(0.9, 0.18, 1.9, T.gunD, rx + 0.1, 0.22, rz, O({ dirt: 0.2 }));
     for (let k = 0; k < 3; k++) canister(L, P, T, G, rx + 0.1, 0.62, rz - 0.6 + k * 0.6, 0.95, 0.22, PI / 2);
   }
   // lights: a floodlight on the breech house, a lamp at the muzzle's foot
-  const fl = toW(G, -1.0, 2.6, -1.4);
+  const fl = toW(G, -6.0, 2.6, -1.6);
   pointLight('#fff1d6', L.TOD === 'night' ? 6 : 2, fl[0], fl[1], fl[2], 6);
   const mz = toW(R, LEN, 0.8, 0);
   pointLight('#bfe3ff', L.TOD === 'night' ? 5 : L.TOD === 'evening' ? 2.5 : 0, mz[0], mz[1], mz[2], 4);
