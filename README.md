@@ -2245,6 +2245,9 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
   column lights, the turret's charge-up, the walls' sparks) are never graded.
 
+On Active outside missions, working industry near Murmur exits can feed up to two additional Scuttlers per pack
+from the second night onward. Existing raid population limits still apply.
+
 ### Wildlife
 
 Animals on the map, for looks only (`js/wildlife.js`): the Pathfinder's garden (LORE.md), Earth's animals in the green
@@ -2252,19 +2255,14 @@ regions and, the hardiest, at their edges; small native creatures where the land
 the game reads them: they live in `FAUNA` (never in `S`, a save or an order), move by the frame's clock with
 `Math.random`, and two players needn't see the same ones. They can't be selected or tapped and carry no team colours.
 
-- **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): Greenreach, songbird flocks in the trees (feeding at the forest edge) and deer by
-  the lakes (or the forest edges), owls and fireflies at night; Emberwood, foxes and geese on the lakes, a V of geese
-  crossing over now and then (`faunaMigrants`), bats at night; the Long Grass, wildebeest herds drifting over the open
-  grass and vultures circling, eyes in the grass at night; Blackwater, herons in the shallows and frogs at the water's
-  edge, fireflies every night; The Polar Caps, white hares and snow buntings, snowy owls and an arctic fox leaving tracks in
-  the snow at night; the Rust, lizards on the rocks and a hawk, bats at dusk; the Cinderlands, ash beetles and a crow on
-  a dead tree, ember moths at night; the Bloom, floaters drifting like jellyfish, glowing after dark and under an aurora;
-  the Hollow, blind crawlers and glow-worms on the cavern walls.
-- **Where** (`faunaHab`, `faunaRoster`): the map is read in cells of `FAUNA_CELL` (8) tiles: trees (each biome's tree
-  plants in `S.decor`), open ground, lake shores and shallows, rock faces. A cell's roster comes from the planet's seed
-  (`hash2`), so panning back finds the same animals; only the cells round the view are kept, moved and drawn, and each
-  kind only from its own zoom up (`z`). Nothing rests on a road, building, deposit, plan, rail, pipe or water it can't
-  stand in; walkers cross a road but never stop on one, and don't climb cliffs but by a ramp (`faunaPath`).
+- **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): deer and foxes in Greenreach and Emberwood, wildebeest and hares on the Long
+  Grass, alligators and turtles in Blackwater, hares and arctic foxes in the Polar Caps, lizards and hares in the Rust,
+  lizards and ash beetles in Cinderlands, and lizards and turtles at Boiling Springs and on Tropical maps. Shorebirds,
+  songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
+  sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
+- **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
+  usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
+  stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.
 - **When**: by the light on screen (`TOD.state.lights`, so the Time of day setting and photo mode's slider): the day
   animals bed down a few at a time through the evening (each roster entry has its own threshold: `faunaActive`) and the
   night ones come out. Storms keep the birds down; rain puts the fireflies out.
@@ -2272,7 +2270,7 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   off the view (with a soft flutter near the camera, `faunaFlutter`), herds bolt, small things hide. The cells round
   the noise stay empty until it has been quiet `FAUNA_QUIET` (40) game seconds; then the animals come back in from off
   the view. They step aside from robots and convoys, and a warbot on the move puts a herd to flight. A burning wreck
-  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures; over the Bloom, floaters) to circle
+  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures) to circle
   over it for a minute or two (`faunaCarrion`).
 - **The Murmur** (read only: `murmurNight`, `dayClock` and `NIGHT_FROM`, the nests, mounds and tunnel exits, the
   packs; `faunaMurmur`): `FAUNA_DREAD` (75) seconds before a Murmur night the day animals within 18 tiles of a nest or

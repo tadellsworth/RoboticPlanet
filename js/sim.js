@@ -10437,6 +10437,20 @@ function murmurGoals(b, want) {
   return out;
 }
 
+/** Industry near an exit gives Active Murmur packs extra Scuttlers, within the usual population cap. */
+function murmurIndustry(e, night) {
+  if (night < 2 || S.mission) return 0;
+  let charge = 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.cut || b.paused || !b.working || b.owner < 0 || isWild(b.owner) || murmurCutOn(b)) continue;
+    if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
+    if (b.type === 'generator' || b.type === 'reactor') charge += 2;
+    else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
+    if (charge >= 7) return 2;
+  }
+  return charge >= 4 ? 1 : 0;
+}
+
 /** How much charge building e holds for the Murmur (they feed on it): 3 a power plant or charger, 2 storage full of Crystal or Fuel, else 1. */
 function chargeWorth(e) {
   const def = BDEFS[e.type];
@@ -10841,7 +10855,7 @@ function murmurCraftWave(n, C, wave) {
   let up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length;
   const room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
   const size = murmurBy(C.pack, n), brutes = n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0, until = S.time + 600;
-  const told = {};
+  const told = {}, packs = [];
   // (Each plan draws the packs of its `joinMost` exits nearest its rally point; the others in its reach stay down.)
   const draws = new Map();
   for (const q of plans) {
@@ -10852,13 +10866,14 @@ function murmurCraftWave(n, C, wave) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead || up + size > room) continue;
-    // (Only where something of a colony's is within reach, as on Quiet: as many packs as ever, only craftier.)
+    // Only surface if there's prey near this exit.
     const g = murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
     if (!g) continue;
     const dr = draws.get(e.id), pl = dr && dr.k < K.joinMost && dr.pl.p === g.owner ? dr.pl : null;
     if (dr && !pl && dr.pl.p === g.owner) continue;
+    const task = pl ? { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 } : { type: 'raid', x: g.x, y: g.y, until, night: 1 };
     for (let k = 0; k < size; k++) {
-      const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', pl ? { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 } : { type: 'raid', x: g.x, y: g.y, until, night: 1 });
+      const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
       u.nest = nest.id; u.exit = e.id;
       if (pl) u.plan = pl.id;
       up++;
@@ -10866,6 +10881,7 @@ function murmurCraftWave(n, C, wave) {
     addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
     const owner = pl ? pl.p : g.owner;
     if (owner >= 0) { const T = told[owner] || (told[owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
+    packs.push({ e, nest, pl, task, owner });
     if (pl && !pl.phase) { pl.phase = 1; pl.at = S.time; }
   }
   // The other forms (Active, from their nights: murmurFormsFor), from the exit nearest each plan's rally point.
@@ -10890,9 +10906,25 @@ function murmurCraftWave(n, C, wave) {
     pl.feintAt = S.time;
     addFx('dust', ex.x + 0.5, ex.y + 0.5, { r: 0.8 });
   }
+  // Feed the packs using only the capacity left after the scheduled raids, forms and feints.
+  for (const { e, nest, pl, task, owner } of packs) {
+    if (up >= room) break;
+    const extra = Math.min(murmurIndustry(e, n), room - up);
+    for (let k = 0; k < extra; k++) {
+      const u = spawnCritter(e, 'scuttler', { ...task });
+      u.nest = nest.id; u.exit = e.id;
+      if (pl) u.plan = pl.id;
+      up++;
+    }
+    if (extra && owner >= 0) { told[owner].n += extra; told[owner].fed = e; }
+  }
   for (const p in told) {
     const T = told[p];
     const among = (brutes ? ['Brutes'] : []).concat((T.forms || []).map((f) => `a ${f}`));
+    if (T.fed && !S.players[p].industryMurmur) {
+      S.players[p].industryMurmur = true;
+      postMsg(+p, 'Survey log: larger packs surfaced near active machinery. The ground is drawing down our surplus charge.', T.fed.x, T.fed.y, 'narr');
+    }
     postMsg(+p, `The Murmur are up: ${T.n} of them came out of their tunnels near you${among.length ? `, ${among.join(', ')} among them` : ''}!`, T.x, T.y, 'bad');
     if (isMe(+p)) sfx('alert');
   }

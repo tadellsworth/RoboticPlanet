@@ -1719,3 +1719,11 @@ under thin moving highlights and rising steam.
 
 Generate Tropical's WebP assets with
 `python renderer/terrain/terrain_tropical.py art/biomes/tropical`.
+
+
+### Wildlife silhouettes
+
+Deer have a high, slender neck, articulated legs, pale rump and occasional branching antlers. Wildebeest have
+a heavy shoulder, lower rump, mane, hooked horns and dark hooves. The game draws these shapes and their gait
+from `js/wildlife.js`. Blackwater adds plated alligator backs and domed turtle shells. The Bloom uses folding
+shell plates, vane-headed runners and triangular sailwings in place of the drifting bells.
