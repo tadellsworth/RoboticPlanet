@@ -2018,11 +2018,13 @@ function dispatch(p) {
   }
   const tankerReach = (src, dst) => fleetReaches(tankNets, src, dst);
 
-  // Dismantled buildings' crates get first call on the colony's idle haulers.
+  // Dismantled buildings' crates get first call on the colony's idle haulers. (Not a rival's: it dismantles every
+  // gatherer that runs dry and every stuck site, and its haulers then fetched those crates before the Fiber and Alloy
+  // its new sites were waiting for: a colony on Crossroads stalled from minute 4 and fell at 13.)
   function collectCrates(priority) {
     for (const l of S.loot || []) {
       if (!idle.length) return;
-      if ((l.dismantled === p) !== priority) continue;
+      if ((l.dismantled === p && !P.ai) !== priority) continue;
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
@@ -6470,8 +6472,11 @@ function warbotAct(u, dt) {
   if (u.march && (!t || S.time > u.march || (rally && dist2(u.x, u.y, rally.x, rally.y) <= 6.25) || t.type === 'attack')) u.march = 0;
   // (On a Trade Post's ground nothing fights: see calmAt.)
   if (u.retreat && t?.type !== 'repair') { u.retreat = false; u.resume = null; }
+  // A player's robot on its way to resupply (Ammo, a charge) takes on no fights. A rival's fights what it meets on the
+  // way, as it always has: taking none, its army wore away, and a 2-against-2 on Crossroads ran past 40 minutes with the
+  // last two colonies still at it.
   const resupplying = t && (t.type === 'refill' || t.type === 'topup' || (t.type === 'attack' && t.reload) ||
-    (t.type === 'hold' && t.phase === 'recharge'));
+    (t.type === 'hold' && t.phase === 'recharge')) && !S.players[u.owner]?.ai;
   const calm = !!u.retreat || u.march > S.time || resupplying || calmAt(u.x, u.y);
   const escort = !!t && t.type === 'escort';
   const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1; // emergency mode hits half as hard
@@ -6490,9 +6495,13 @@ function warbotAct(u, dt) {
   // Badly hurt on an attack, a rally flag or a sortie: pull out to the nearest Repair Station that can
   // fix it (when there is one; otherwise fight on), taking no new fights on the way, and go back to the
   // attack or the flag once it's mended (resumeAfterRepair).
+  // A player's robot still in a close fight (hit in the last 1.5 seconds, or an armed foe beside it) fights on rather
+  // than turn its back. A rival's pulls out all the same: its army lives on being mended, and fighting on to the end,
+  // its hurt warbots died at the front and the Murmur's raiders bit them down at home, so on the Hollow both armies
+  // stayed at two or three for twenty minutes and the game never ended.
   if (!calm && t && !t.reload && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT &&
       S.tick % 10 === u.id % 10 && !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y))) &&
-      (!armed || (S.time - (u.hurtT ?? -99) >= 1.5 && !nearestEnemyBot(u.owner, u.x, u.y, 2.8, true, false, true, armedThreat)))) {
+      (!armed || S.players[u.owner]?.ai || (S.time - (u.hurtT ?? -99) >= 1.5 && !nearestEnemyBot(u.owner, u.x, u.y, 2.8, true, false, true, armedThreat)))) {
     const station = findRepair(u);
     const fight = u.fight;
     u.fight = 0; // Plan the withdrawal with the danger avoidance used by a march.

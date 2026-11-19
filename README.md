@@ -933,6 +933,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   target, and a long chase is rejected before moving. Torches advance into flame range before firing. Warbots
   and Torches take nearby Bulwark cover when there is a firing position under the active shield. Auto-repair
   waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
+  (A rival's warbots keep the older rules: badly hurt, they pull out for repairs even mid-fight, and on the way to
+  resupply they fight what they meet. Its army lives on being mended.)
 - **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
   `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
   one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
@@ -1411,7 +1413,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   period, attack threshold, army growth and raid rate (the attack threshold stays between 3 and `AI_THRESHOLD_MAX`, 9:
   an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
-  (`aiTurtleWalls`) and a turret more every four minutes (up to six). It marches only in one big push (`aiPush`,
+  (`aiTurtleWalls`) and a turret more every four minutes (up to six), its first at two and a half minutes, ahead of the
+  rest of its plan (the other doctrines' first waits for five, `AI_DEFENCE_AT`). It marches only in one big push (`aiPush`,
   `push`): before 22 minutes (`AI_PUSH_AT`) only with twice its attack threshold and half as many again as its rival's
   army and two more; from then on with its threshold and two more than its rival's (after a push, as many as that push
   took less two). For four minutes (`P.pushOn`) its home guard is two, its Keeps hold two and its Outposts none, and the
