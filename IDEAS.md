@@ -96,6 +96,44 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026: saved for later).
+  The owner's observation: many games are won by huge bundles of warbots behind Bulwarks that are hard to stop; the game
+  has grown lots of supply-chain buildings and vehicles but a thin military side. Do this before the megastructure
+  weapons, which would add power to a thin roster. First step: a measured arena test, not guesses (30 warbots and 6
+  Bulwarks marching at Mortar Pits, Torches, Missiles and bombers in the headless harness, to see what beats them today).
+  - **Why a blob wins (from the rules, not yet measured):** a warbot has 12 HP, a Bulwark 30 HP plus a 50-point shield
+    that regenerates 4 a second after 2.5 s without a hit (`BULWARK`); the cap is 90 robots a player in Versus
+    (`MAX_BOTS`). The counters are each weak: a Missile does 24 (9 against robots, splash 2.2) but a Silo holds 2 and now
+    reloads in 60 s (raised from 25: it made blobs a little stronger); the Mortar Pit (range 10), Disruptor Tower (4.5)
+    and Pulse Turret are stationary or single-target and the shield blocks them; the Torch (flame cone) has 18 HP and
+    needs Fuel; bombers need an Airfield (two a field, none in the Hollow); the Howitzer, the mobile area-damage unit, is
+    switched off (`BOTS_OFF`); only the Flak Gun shoots aircraft; there are no warships (ships only carry cargo).
+    Open questions: do the blobs the owner met belong to the player, the computer, or both? Why was the Howitzer switched
+    off?
+  - **Missing:** a mobile unit that hurts groups from range, a shield-breaker, fast flankers, mines and area denial,
+    mobile anti-air, naval combat, and any real cost for keeping a huge army supplied.
+  - **A formula that works:** every unit gets a role, a counter and a weakness; soft counters (about 1.5 to 2 times
+    damage, not 5); about three damage types against three armour types (for example bullets, blast, energy against
+    light, shielded, structure); equal cost means about equal power, a specialist trading generality for its niche; keep
+    the roster to about 8 combat robots (each needs art, rival AI, UI, tests). Loops: Bulwark beats Warbot, Skirmisher
+    beats Bulwark (round its shield arc), Warbot beats Skirmisher (mass fire); artillery beats clumps and static defences,
+    Skirmishers dive artillery, blobs beat Skirmishers; bombers beat ground clumps, Flak beats bombers, ground rushes
+    beat Flak.
+  - **Units to add:** *Skirmisher* (fast cheap flanker; beats Bulwarks, artillery, Workers; weak to mass fire and Minigun
+    Nests); *Rail Lancer* (long range, slow, heavy shot; beats Bulwarks and armour; weak to flankers); *Arc Caster*
+    (chain lightning that breaks shields; beats clumps; weak to anything that dives it); *Howitzer* back, rebalanced
+    (minimum range, slow, fragile, needs Ammo); *Mine Layer* (area denial on roads and chokepoints; not "Sapper": that
+    is a Murmur form); *Interceptor* (mobile anti-air, once there are more aircraft: bombers, Airships, the Orbital
+    Lift); *Gunboat* (water combat, since Islands and Four Isles have none); *Repair Drone* (heals robots; careful, it
+    strengthens blobs, and gives flankers a target).
+  - **Other levers:** supply pressure (armies far from an Outpost or garrison lose Ammo and charge faster); Bulwark limits
+    (dearer, a tighter shield arc, a longer break-down time, a smaller shield); a lower warbot cap such as 60 as a last
+    resort; the rival AI must learn to answer blobs (Mortar Pits, Torches) or it loses to them whatever is added. Fits
+    the doctrines: Salvager with Skirmishers, Warden with Mortars and Lancers, Herald with Warbot masses, Architect with
+    Howitzers and megastructures, Steward a mix.
+  - **Suggested order:** first wave Skirmisher, Howitzer (rebalanced), Arc Caster (they close the main loops); then Rail
+    Lancer and Mine Layer; later Interceptor and Gunboat. Design sheets for the new units could go through Gemini, as the
+    megastructures did (handoff/ in the repo).
 - **Neutral sites to find and use, as in Warcraft 3** (the owner, Nov 2026: saved for later). Neutral buildings, caches and
   oddities spread over the maps: they reward exploring, give objectives away from home, and add personality. We have a
   few already (Trade Posts, Uplinks, the Murmur's nests with their hoards, the *Wren*). The tone (LORE.md): dry and a
