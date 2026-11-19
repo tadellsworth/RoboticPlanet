@@ -96,6 +96,34 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Cutscenes: recorded game scenes with speech, and a glimmer of hope at the end** (the owner, Nov 2026: saved for
+  later; the campaign itself is on hold until the new buildings, units, megastructures, biomes and maps are settled in
+  the other chat, then it is rethought from the full roster: see CAMPAIGN.md).
+  - **Recorded scenes (machinima).** The simulation is deterministic, so a scene is a script: a seed and setup, units
+    given orders at set moments, camera keyframes (pans, slow zooms), a forced time of day and weather. A headless
+    browser (Playwright, and `ffmpeg`, both available in the cloud environment) steps the game at a fixed rate, saves
+    each frame at full quality on Ultra graphics, and encodes a video; retakes are exact. Sound: machine-voice clips
+    (a TTS tool, perhaps Gemini's, to be checked) with a robotic filter, the game's own music and effects mixed in with
+    `ffmpeg`, captions and a letterbox on top. Machines only, never faces (LORE.md). Limits: the camera is top-down
+    (pans and zooms, no low angles); about 3 to 8 MB a minute, so videos load on demand from separate hosting (the single
+    file is near its 16 MB cap), with a skip option on phones; this machine renders slowly (an estimated 30 to 60
+    minutes a minute of footage, unattended); not interactive.
+  - **The same script can play live in-engine** (no download, the player's own settings, as Warcraft 3 did most of its
+    cutscenes): a cutscene system with camera script, captions with a portrait box, letterbox bars, a skip button, music
+    ducking and a Voice volume beside Music, Effects and Ambience. Record to video only the big moments (the opening,
+    the act endings, the finale) and a trailer for terrafall.app. Also motion-comic scenes (art with slow parallax) for
+    flashbacks and orbital shots; art perhaps from Gemini.
+  - **First step:** the scene-script and recording tool, then one 30-second test (the empty town at dusk with the beacon
+    coming on) to see the real look and render time. Independent of the campaign: usable on today's tutorial missions.
+  - **The ending's glimmer of hope** (to be chosen; hope without proof, so the sequel keeps the question of humans
+    arriving or not open; the machines never say it, the world shows it: LORE.md tone). Options: (1) the Arrival clock,
+    which has counted up for 31 years, stops and reads "Recalculating"; (2) one signal that matches no robot protocol,
+    logged "Unclassified. Retain.", the channel left open as the credits play; (3) the Pathfinder's seed-vault manifest
+    (mission 15): the planet really is prepared, and a deer grazes the lawn of the empty town; (4) the ark never
+    accounted for, with a hypothetical arrival window computed and never confirmed; (5) a seed for the colonists
+    themselves in the vault (a big lore choice: humans might begin here instead of arriving). Suggested: 1 and 2 for the
+    ending with 3 as the image before it, and breadcrumbs earlier (mission 2's shelter, mission 10's archive noting one
+    ark as "unaccounted"); the signal's origin left unknown for the sequel.
 - **Electricity as a requirement** (the owner, Nov 17 2026: a design note, for later; builds on "Power for the
   megastructures" under Megastructures). The owner's question: should factories and production buildings, maybe
   turrets too, need power, made by Generators or power plants burning Fuel or Crystal, or a nuclear plant: more
