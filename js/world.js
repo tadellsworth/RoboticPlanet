@@ -2573,7 +2573,7 @@ function newGame(opts) {
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], loot: [],
+    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], cans: [], loot: [],
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -2673,6 +2673,7 @@ function worldBan(type) {
   if (!hollowOn()) return '';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
+  if (BDEFS[type] && (BDEFS[type].mdriver || BDEFS[type].catcher)) return 'No Mass Driver in the Hollow: nothing flies under the cavern roof.';
   // (Nor missiles: nothing flies under the cavern roof. No Missile Factory or Silo, and no Nuclear race: see nukeOn.)
   if (type === 'munitions' || (BDEFS[type] && (BDEFS[type].missile || BDEFS[type].nukeSilo))) return 'No missiles fly in the Hollow: there is no sky down here, only the cavern roof.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
@@ -5039,6 +5040,10 @@ function checkSave(o) {
       b.magMissing.y < 0 || b.magMissing.y >= o.H || typeof b.magMissing.near !== 'boolean')) bad();
     if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
       !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
+    // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves
+    if (b.mdTo != null && !(Number.isSafeInteger(b.mdTo) && b.mdTo >= 0)) bad();
+    if (b.mdSend != null && !(obj(b.mdSend) && Object.keys(b.mdSend).length <= MASSDRIVER.goods && Object.keys(b.mdSend).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdSend[g])))) bad();
+    for (const k of ['mdFire', 'mdCd', 'mdLast', 'mdShot', 'mdSent', 'mdGot', 'mdCaught']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -5068,6 +5073,10 @@ function checkSave(o) {
   if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
+  // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
+  if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
+    Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
+    [m.x0, m.x1].every((x) => Number.isFinite(x) && x >= 0 && x <= o.W) && [m.y0, m.y1].every((y) => Number.isFinite(y) && y >= 0 && y <= o.H)))) bad();
   if (o.event) {
     const E = o.event;
     if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
@@ -5166,6 +5175,7 @@ function deserializeGame(json) {
   o.rallies = o.rallies || [];
   o.loot = o.loot || [];
   o.missiles = o.missiles || [];
+  o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   // The rest works on S. A save that fails part-way leaves the game that was running as it was.

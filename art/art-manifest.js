@@ -226,6 +226,12 @@ const ART_MANIFEST = {
   'magpylon-cut@0': B3D('buildings/magpylon-cut@0.webp'), 'magpylon-cut@1': B3D('buildings/magpylon-cut@1.webp'),
   'magpod@0': 'bots/magpod@0.webp', 'magpod@1': 'bots/magpod@1.webp', 'magpod-empty@0': 'bots/magpod-empty@0.webp', 'magpod-empty@1': 'bots/magpod-empty@1.webp',
   'magdeck@0': 'tiles/magdeck@0.webp', 'magdeck@1': 'tiles/magdeck@1.webp',
+  // The Mass Driver (renderer/b/massdriver.js, look A "Coil Ramp", installed by tools/install_massdriver.py): its ramp
+  // pointing each of eight ways (drawBuilding shows the one nearest its Catcher; 'mdriver' alone, for the menu, points
+  // east), and the Catcher with its arms open and swung in (as a canister lands).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`mdriver@${t}`, B3D(`buildings/mdriver-e@${t}.webp`, 1.6)],
+    ...['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'].map((d) => [`mdriver-${d}@${t}`, B3D(`buildings/mdriver-${d}@${t}.webp`, 1.6)]),
+    [`catcher@${t}`, B3D(`buildings/catcher@${t}.webp`)], [`catcher-closed@${t}`, B3D(`buildings/catcher-closed@${t}.webp`)]])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

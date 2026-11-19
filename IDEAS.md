@@ -296,10 +296,14 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
     a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
     (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
-  - **Mass driver.** A long electromagnetic rail that fires sealed cargo canisters in an arc to a Catcher building far
-    across the map (up to about 30 tiles), one every 10 seconds or so. A big build, and power for every shot. Canisters
-    fly over everything, but a rival's Flak can shoot them down, and a missed catch spills the cargo as crates. The
-    Missile Silo's peaceful twin; none in the Hollow (nothing flies under the cavern roof).
+  - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
+    shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
+    aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
+    the air, from a goods list of up to 3 goods (each with a reserve the colony keeps at home); enemy Flak bursts
+    canisters (crates where they fall), a canister with no Catcher lands as crates; none in the Hollow; the mission The
+    Schedule teaches it. Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each
+    end works today); whether Flak is too sure a counter (in the test a Flak Gun right under the arc burst every
+    canister that crossed its reach: a line has to go round rival Flak); a Catcher full of goods nobody fetches (no cap today).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
