@@ -74,7 +74,7 @@ Volcano, Fault line, Canyon maze or The Hollow, and for three or four players on
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Boiling Springs, the
+Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Boiling Springs, Tropical, the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -2290,6 +2290,14 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   ambience.
 - **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
   (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
+
+### Tropical coasts and lava effects
+
+Choose a naval map to enable **Tropical** in the biome picker. It uses coral sand, palms,
+reef water, pale shallows and seagulls along the shore. Small waves drift across open water. On naval maps, fish and dolphins leap in open
+water and whales sometimes surface to blow. Frozen water and lava have their own scenery.
+The Volcano map type and Cinderlands have drifting highlights on exposed lava and steam vents
+along the banks. These effects are drawn in the browser without changing terrain or movement.
 
 ### Boiling Springs
 

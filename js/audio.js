@@ -1165,7 +1165,7 @@ function updateBeds(live, dt) {
   B.lp.frequency.setTargetAtTime(160 + Math.min(240, (WORLD.moving || 0) * 6 + (WORLD.jam || 0) * 10), t, 0.5);
   const b = typeof biome === 'function' && S ? biome() : 'desert';
   const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [70, 0.4, 0.0025],
-    autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01], springs: [380, 0.65, 0.017], hollow: [110, 0.3, 0.006] }[b] || [480, 0.7, 0.03]; // (the Hollow: a faint draught through the caverns)
+    autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01], springs: [380, 0.65, 0.017], tropical: [360, 0.64, 0.019], hollow: [110, 0.3, 0.006] }[b] || [480, 0.7, 0.03]; // (the Hollow: a faint draught through the caverns)
   const wx = live ? weatherSound() : null, wk = wx ? wx.k : 0, storm = wx ? STORM_WIND[wx.kind] || 0 : 0;
   B.gust -= dt;
   if (B.gust <= 0) {
@@ -1318,6 +1318,7 @@ const NATURE = {
   swamp: { drone: [2100, 3, 11, 0.02, 0.06], lap: 0.005 },
   alien: { glow: [0.006, 0.012] },
   volcanic: { rumble: 0.018, hiss: 0.002 },
+  tropical: { leaves: [2700, 0.012], lap: 0.006 },
   springs: { rumble: 0.007, hiss: 0.009, lap: 0.004 },
   polar: { hiss: 0.0065 },
   lunar: {},
@@ -1475,7 +1476,7 @@ function groundMurmur(v) {
  * the owner turned them down to in Nov 2026, about 5 dB under where they were with the effects.
  */
 const NATURE_LEVEL = 0.9;
-const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
+const BIOME_CALLS = { tropical: 1, jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
 
 /**
  * Something heard somewhere out in the biome (w: how wild the view is, night: 0 to 1): birds by day and a night
@@ -1493,6 +1494,13 @@ function biomeCall(b, w, night) {
   if (b === 'jungle' || b === 'autumn') {
     if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird
     else jungleCall(g, dark);
+  } else if (b === 'tropical' && !dark) {
+    const f = 960 + r * 420;
+    for (let k = 0; k < 3; k++) {
+      const pitch = f * (1 - k * 0.14), delay = k * 0.22;
+      _tone(pitch, 0.21 - k * 0.025, 'triangle', 0.012 - k * 0.002, pitch * 0.7, delay, g);
+      _tone(pitch * 1.76, 0.11, 'sine', 0.004, pitch * 1.2, delay + 0.04, g);
+    }
   } else if (b === 'savanna') {
     // Cicadas buzzing in the heat, or a far-off bird's two-note call; by night the grass hissing in a breath of wind.
     if (dark) _noise(0.9, 0.012, { type: 'bandpass', freq: 2600, q: 0.8, attack: 0.35, dest: g });

@@ -70,14 +70,15 @@ function watchSetup() {
   if (!w || typeof w !== 'object') w = {};
   const ok = (k) => k === 'random' || isDoctrine(k), idx = (v, n, d) => (Number.isInteger(v) && v >= 0 && v < n ? v : d);
   const docs = Array.isArray(w.docs) ? w.docs : [];
+  const shape = idx(w.shape, SHAPE_PRESETS.length, 0), biome = idx(w.biome, BIOME_ORDER.length, 0);
   return {
-    shape: idx(w.shape, SHAPE_PRESETS.length, 0), shapeRnd: w.shapeRnd ? 1 : 0, n: Number.isInteger(w.n) ? clamp(w.n, 2, 4) : 2, teams: w.teams ? 1 : 0,
+    shape, shapeRnd: w.shapeRnd ? 1 : 0, n: Number.isInteger(w.n) ? clamp(w.n, 2, 4) : 2, teams: w.teams ? 1 : 0,
     murmur: murmurLevelOk(w.murmur) ? w.murmur : 'active', // (Active, as in a new game, unless picked otherwise)
     docs: [0, 1, 2, 3].map((p) => (ok(docs[p]) ? docs[p] : ['turtle', 'rusher', 'raider', 'tycoon'][p])),
     diff: Object.prototype.hasOwnProperty.call(DIFFICULTY, w.diff) ? w.diff : 'normal',
     victory: Object.prototype.hasOwnProperty.call(VICTORY, w.victory) ? w.victory : 'capture',
     size: idx(w.size, SIZE_PRESETS.length, DEFAULT_SIZE.versus), rough: idx(w.rough, TERRAIN_PRESETS.length, DEFAULT_ROUGH), rich: idx(w.rich, RESOURCE_PRESETS.length, DEFAULT_RICH),
-    biome: idx(w.biome, BIOME_ORDER.length, 0), biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
+    biome: biomeAllowed(BIOME_ORDER[biome], w.shapeRnd ? -1 : shape) ? biome : 0, biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
     nuke: w.nuke === undefined || w.nuke ? 1 : 0, events: w.events ? 1 : 0,
     mods: modList(w.mods).filter((k) => WATCH_MODS.includes(k)),
     seed: Number.isInteger(w.seed) && w.seed >= 0 ? w.seed : null,
@@ -133,6 +134,7 @@ function watchPickCtx() {
       if (murmurLevelOk(SH.murmur)) w.murmur = SH.murmur; // (a map type with its own Murmur: the Hollow)
       w.n = clamp(w.n, minPlayers(w.shape), maxPlayers(w.shape));
     }
+    if (!biomeAllowed(BIOME_ORDER[w.biome], w.shapeRnd ? -1 : w.shape)) w.biome = 0;
     watchMapChanged(w); watchKeepSetup(); syncWatch();
   } };
 }
@@ -272,11 +274,6 @@ function syncWatchInfo() {
 /* ------------------------------------------------------------------ starting and leaving */
 
 /** A biome at random for a game to observe: with the Murmur on, one they live on (not Argos, the silent moon). */
-function watchBiome(setup) {
-  const list = setup.murmur && setup.murmur !== 'off' ? BIOME_ORDER.filter(murmurGround) : BIOME_ORDER;
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 /** Start a game to observe (from the setup screen, or Observe another at the end of one). */
 function watchStart(setup) {
   const again = UI.watch;
@@ -305,7 +302,7 @@ function watchStart(setup) {
     rough: setup.rough ?? DEFAULT_ROUGH, rich: setup.rich ?? DEFAULT_RICH, shape, players: n, humans: [], styles: docs, style: 'balanced',
     nuke: setup.nuke !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
     murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
-    biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : watchBiome(setup),
+    biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : randomBiomeFor(shape, !!setup.murmur && setup.murmur !== 'off'),
   });
   // (newGame gives the first colony the plain Steward when nobody plays it: it gets its doctrine here, before the
   // game's first step, as newGame would have given it; and the game plays on to the last colony standing.)

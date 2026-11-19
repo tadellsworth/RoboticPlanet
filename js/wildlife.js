@@ -41,6 +41,8 @@ const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
  * it soars (tiles); bold: it doesn't flee the fighting (the scavengers, the geese passing high over).
  */
 const FAUNA_KINDS = {
+  gull: { mode: 'flock', draw: 'gull', act: 'day', hab: 'shore', min: 3, p: 0.84, n: [3, 6], z: 13, size: 0.33,
+    col: ['#f1f0e8', '#bcc5c7', '#343d42'], ground: true },
   songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
   snowbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'perch', min: 1, p: 0.55, n: [6, 10], z: 22, size: 0.18, col: ['#ece8e0', '#a07a52', '#3e3630'], ground: true, forage: 'open' },
   deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 12, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
@@ -80,6 +82,7 @@ const FAUNA_LIFE = {
   polar: { kinds: ['hare', 'snowbird', 'snowyowl', 'arcticfox'], light: 'moth', carrion: 'raven', trees: [3], perch: [1, 3, 5] },
   desert: { kinds: ['lizard', 'hawk', 'duskbat'], light: 'moth', carrion: 'vulture', trees: [] },
   volcanic: { kinds: ['beetle', 'crow1', 'embermoth'], light: 'embermoth', carrion: 'crow', trees: [], dead: [1] },
+  tropical: { kinds: ['gull', 'songbird', 'bat'], light: 'moth', trees: [1, 2, 3] },
   alien: { kinds: ['floater'], light: 'mote', carrion: 'floater', trees: [] },
   hollow: { kinds: ['crawler'], glows: ['glowworm'], trees: [] },
 };
@@ -1336,6 +1339,15 @@ function faunaWings(ctx, x, y, s, f, flap, cols, part, o) {
   faunaEll(ctx, x, y, s * 0.22, s * 0.07, f);
   if (s < 10) faunaEll(ctx, hb[0], hb[1], s * 0.06, s * 0.05, f); // (small: all in one shape)
   ctx.fill();
+  if (!shadow && o && o.tips) {
+    ctx.fillStyle = faunaCol(cols[2]); ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const tip = P(-back, side * half), inner = P(-back * 0.63, side * half * 0.78), outer = P(-back - chord * 0.11, side * half * 0.88);
+      ctx.moveTo(inner[0], inner[1]); ctx.quadraticCurveTo(tip[0] + c * s * 0.04, tip[1] + sn * s * 0.04, tip[0], tip[1]);
+      ctx.lineTo(outer[0], outer[1]); ctx.closePath();
+    }
+    ctx.fill();
+  }
   if (shadow || s < 10) return;
   // (the head: a goose's black neck stretched out ahead)
   ctx.fillStyle = faunaCol(o && o.neck ? cols[2] : cols[0], o && o.lift);
@@ -1371,6 +1383,21 @@ const FAUNA_DRAW = {
       if (!K.ground) faunaEll(ctx, s * 0.22, -s * (peck ? 0.27 : 0.41), s * 0.11, s * 0.06, 0);
       ctx.fill();
     }
+    ctx.restore();
+  },
+
+  gull(ctx, x, y, s, m, a, air) {
+    if (air) { faunaWings(ctx, x, y, s * 2.05, m.f, m.ph * 0.72, a.K.col, air, { broad: true, tips: true }); return; }
+    faunaShadow(ctx, x, y, s * 0.35, s * 0.13);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m), 1);
+    ctx.fillStyle = faunaCol(a.K.col[0]); ctx.beginPath();
+    faunaEll(ctx, -s * 0.045, -s * 0.22, s * 0.32, s * 0.16, -0.24);
+    faunaEll(ctx, s * 0.22, -s * 0.37, s * 0.13, s * 0.11, 0.05);
+    ctx.fill();
+    ctx.fillStyle = faunaCol(a.K.col[1]); ctx.beginPath();
+    faunaEll(ctx, -s * 0.14, -s * 0.23, s * 0.22, s * 0.10, -0.22); ctx.fill();
+    ctx.fillStyle = faunaCol('#ca9d4c'); ctx.beginPath();
+    ctx.moveTo(s * 0.32, -s * 0.41); ctx.lineTo(s * 0.50, -s * 0.34); ctx.lineTo(s * 0.33, -s * 0.32); ctx.fill();
     ctx.restore();
   },
 
@@ -1623,3 +1650,125 @@ const FAUNA_DRAW = {
     faunaWings(ctx, x, y, s, m.f, beat ? m.ph * 7 : 0, a.K.col, part === 'shadow' ? 'shadow' : true, { glide: !beat, broad: true, band: a.kind === 'vulture' || a.kind === 'hawk' });
   },
 };
+
+/* ------------------------------------------------------------------ marine wildlife */
+
+/** Open liquid water, including on a tidal map after the tide has changed. */
+function marineWater(x, y) {
+  const i = Math.floor(x), j = Math.floor(y);
+  if (!faunaWet(i, j)) return false;
+  const t = tIdx(i, j);
+  return !(S.road[t] || S.rail[t] || S.ford?.[t] || S.tidal?.[t]);
+}
+
+/** Stable, short appearances in open water that neither ships nor the simulation have to track. */
+function drawSeaLife(ctx, ox, oy, z, v0, v1) {
+  if (!navalMap() || z < 12 || (LESS_MOTION && LESS_MOTION.matches) || biome() === 'lunar' || biome() === 'volcanic') return;
+  const cell = 7, now = R.time, seed = S.seed | 0, night = TOD.active ? TOD.state.lights : 0;
+  let budget = gfxStep() === 'saver' ? 3 : 9;
+  ctx.save();
+  for (let j = Math.max(0, Math.floor(v0.y / cell) - 1); j <= Math.min(S.H / cell, v1.y / cell + 1) && budget > 0; j++) {
+    for (let i = Math.max(0, Math.floor(v0.x / cell) - 1); i <= Math.min(S.W / cell, v1.x / cell + 1) && budget > 0; i++) {
+      const period = 13 + 12 * hash2(i, j, seed + 371);
+      const clock = now + period * hash2(j, i, seed + 372), cycle = Math.floor(clock / period), age = clock - cycle * period;
+      const toss = hash2(i * 11 + cycle, j * 5, seed + 373);
+      const kind = toss < 0.61 ? 'fish' : toss < 0.94 ? 'dolphin' : 'whale';
+      const duration = kind === 'whale' ? 4.6 : kind === 'dolphin' ? 3.7 : 2.4;
+      if (age >= duration) continue;
+      const x = i * cell + 1.1 + (cell - 2.2) * hash2(i, j + cycle * 7, seed + 374);
+      const y = j * cell + 1.1 + (cell - 2.2) * hash2(i - cycle * 11, j, seed + 375);
+      const angle = hash2(i + cycle, j, seed + 376) * Math.PI * 2, dx = Math.cos(angle), dy = Math.sin(angle);
+      const width = kind === 'whale' ? 2.6 : kind === 'dolphin' ? 1.55 : 0.7;
+      if (!marineWater(x, y) || !marineWater(x - dx * width, y - dy * width) || !marineWater(x + dx * width, y + dy * width) ||
+        !marineWater(x - dy * width * 0.55, y + dx * width * 0.55) || !marineWater(x + dy * width * 0.55, y - dx * width * 0.55)) continue;
+      if (kind === 'whale' && (!marineWater(x - 2.6, y - 2.6) || !marineWater(x + 2.6, y + 2.6))) continue;
+      ctx.globalAlpha = (1 - 0.62 * night) * Math.min(1, age * 5, (duration - age) * 2.5);
+      if (kind === 'whale') drawWhaleBlow(ctx, ox + x * z, oy + y * z, z, angle, age);
+      else {
+        const dolphin = kind === 'dolphin', spacing = dolphin ? 0.12 : 0.18;
+        for (let k = 0; k < (dolphin ? 2 : 3); k++) {
+          const local = age - k * (dolphin ? 0.48 : 0.23);
+          if (local <= 0 || local >= duration - 0.65) continue;
+          const run = (local / (duration - 0.65) - 0.5) * width * 1.8 - k * spacing;
+          const side = (k % 2 ? -1 : 1) * k * spacing;
+          const sx = x + dx * run - dy * side, sy = y + dy * run + dx * side;
+          if (marineWater(sx, sy)) drawSeaLeap(ctx, ox + sx * z, oy + sy * z, z, angle, local, dolphin);
+        }
+      }
+      budget--;
+    }
+  }
+  ctx.restore();
+}
+
+function marineRipple(ctx, x, y, z, p, strength) {
+  ctx.save();
+  ctx.globalAlpha *= strength * (1 - p);
+  ctx.strokeStyle = '#c8eadf'; ctx.lineWidth = Math.max(0.55, z * 0.016);
+  const size = (0.07 + p * 0.36) * z;
+  ctx.beginPath(); ctx.ellipse(x, y, size, size * 0.48, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSeaLeap(ctx, x, y, z, angle, time, dolphin) {
+  const cycle = dolphin ? 1.48 : 0.83, flight = dolphin ? 0.72 : 0.40;
+  const t = time % cycle, p = t / flight;
+  if (p >= 1) { marineRipple(ctx, x, y, z, Math.min(1, (t - flight) * 2.7), dolphin ? 0.85 : 0.6); return; }
+  const rise = Math.sin(p * Math.PI) * z * (dolphin ? 0.48 : 0.24), size = z * (dolphin ? 0.47 : 0.21);
+  if (p < 0.2 || p > 0.8) marineRipple(ctx, x, y, z, p < 0.2 ? p * 2 : (p - 0.8) * 2, 0.84);
+  ctx.save();
+  ctx.translate(x, y - rise);
+  const left = Math.cos(angle) < 0;
+  if (left) ctx.scale(-1, 1);
+  ctx.rotate(Math.sin(angle) * (left ? -0.43 : 0.43) + (p - 0.5) * 0.99);
+  ctx.scale(size, size);
+  const g = ctx.createLinearGradient(0, -0.26, 0, 0.25);
+  g.addColorStop(0, dolphin ? '#244858' : '#427585');
+  g.addColorStop(0.52, dolphin ? '#789fa7' : '#a4cbbe');
+  g.addColorStop(1, '#d6e4d4');
+  ctx.fillStyle = g;
+  if (!dolphin) {
+    ctx.beginPath(); ctx.moveTo(-0.24, 0);
+    ctx.quadraticCurveTo(0.04, -0.36, 0.43, -0.04);
+    ctx.quadraticCurveTo(0.2, 0.27, -0.24, 0.09);
+    ctx.lineTo(-0.61, 0.24); ctx.lineTo(-0.48, 0.04); ctx.lineTo(-0.64, -0.17);
+    ctx.closePath(); ctx.fill(); ctx.restore(); return;
+  }
+  ctx.beginPath(); ctx.moveTo(-0.42, 0.02);
+  ctx.bezierCurveTo(-0.20, -0.13, 0.10, -0.35, 0.37, -0.21);
+  ctx.quadraticCurveTo(0.45, -0.18, 0.44, -0.07);
+  ctx.quadraticCurveTo(0.64, -0.03, 0.54, 0.045);
+  ctx.quadraticCurveTo(0.18, 0.08, -0.43, 0.09);
+  ctx.lineTo(-0.66, 0.21); ctx.lineTo(-0.57, 0.045); ctx.lineTo(-0.72, -0.12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#365d6d';
+  ctx.beginPath(); ctx.moveTo(-0.18, -0.18);
+  ctx.quadraticCurveTo(-0.28, -0.40, -0.06, -0.39); ctx.lineTo(0.12, -0.23); ctx.fill();
+  ctx.restore();
+}
+
+function drawWhaleBlow(ctx, x, y, z, angle, age) {
+  const fade = Math.sin(Math.PI * Math.min(1, age / 4.5));
+  marineRipple(ctx, x, y + z * 0.1, z * 2.5, (age * 0.6) % 1, fade * 0.55);
+  ctx.save();
+  ctx.globalAlpha *= 0.55 * fade;
+  ctx.translate(x, y); ctx.rotate(angle);
+  ctx.fillStyle = '#1e485a'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.77, z * 0.19, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#70969f'; ctx.lineWidth = Math.max(0.6, z * 0.021);
+  ctx.beginPath(); ctx.ellipse(0, 0, z * 0.67, z * 0.135, 0, Math.PI * 1.08, Math.PI * 1.85); ctx.stroke();
+  ctx.restore();
+  const mist = wxCloud('225,240,236'), t = age - 0.45;
+  if (t <= 0 || t > 2.4) return;
+  ctx.save();
+  const alpha = ctx.globalAlpha;
+  for (let k = 0; k < 7; k++) {
+    const p = t - k * 0.1;
+    if (p < 0 || p > 1.65) continue;
+    const up = Math.min(1, p * 1.8), width = z * (0.17 + p * 0.24);
+    ctx.globalAlpha = alpha * 0.8 * (1 - p / 1.65);
+    for (const side of [-1, 1]) {
+      const xx = x + (side * up * up * (0.16 + p * 0.12) + p * 0.09) * z, yy = y - z * (0.08 + up * 1.12);
+      ctx.drawImage(mist, xx - width / 2, yy - width / 2, width, width);
+    }
+  }
+  ctx.restore();
+}

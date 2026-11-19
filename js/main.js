@@ -20,7 +20,8 @@ const STAGE_GAP = 3000;     // ...counting failures no more than this many ms ap
 
 function startDemo() {
   const seed = randomSeed();
-  newGame({ seed, difficulty: 'normal', autoplay: true, biome: BIOME_ORDER[seed % BIOME_ORDER.length] });
+  const biomes = BIOME_ORDER.filter((key) => biomeAllowed(key, 0));
+  newGame({ seed, difficulty: 'normal', autoplay: true, biome: biomes[seed % biomes.length] });
   if (!_bakeHold) bakeMap();
   // Zoomed in enough that the planet fills the whole screen behind the menu, even on widescreens.
   R.cam.z = Math.min(maxZoom(), Math.max(minZoom() * 1.6, R.w / (S.W - 6), R.h / (S.H - 6)));

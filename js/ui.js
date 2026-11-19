@@ -384,7 +384,7 @@ function pauseSwitch(id, on) {
 function checkMenuSettings() {
   const m = UI.menu, ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
   if (!ok(m.shape, SHAPE_PRESETS.length)) m.shape = 0;
-  if (!ok(m.biome || 0, BIOME_ORDER.length)) m.biome = 0;
+  if (!ok(m.biome || 0, BIOME_ORDER.length) || !biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
   if (!ok(m.rough, TERRAIN_PRESETS.length)) m.rough = DEFAULT_ROUGH;
   if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
@@ -964,7 +964,7 @@ function openPicker(kind, ctx = menuPickCtx()) {
   } else {
     const inner = (name, desc) => `<canvas class="pc-swatch" aria-hidden="true"></canvas><span class="pc-name">${name}</span><span class="pc-blurb">${desc}</span>`;
     h += '<div class="pgrid">' + card('rnd', m.biomeRnd, inner('Random', 'Any biome, picked when you land.'), 'rnd')
-      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, `<b>${BIOMES[k].kind}.</b> ${BIOMES[k].desc || ''}`), '', `${BIOMES[k].kind}: ${BIOMES[k].desc}`)).join('') + '</div>';
+      + BIOME_ORDER.map((k, i) => biomeAllowed(k, m.shapeRnd ? -1 : m.shape) ? card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, `<b>${BIOMES[k].kind}.</b> ${BIOMES[k].desc || ''}`), '', `${BIOMES[k].kind}: ${BIOMES[k].desc}`) : '').join('') + '</div>';
   }
   body.innerHTML = h;
   for (const b of body.querySelectorAll('.pcard')) {
@@ -997,6 +997,7 @@ function menuPickCtx() {
 function choosePicked(kind, v) {
   const m = UI.menu, rnd = v === 'rnd';
   if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
+  if (!biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
   if (kind === 'shape' && !rnd && SHAPE_PRESETS[m.shape].teamDefault) { m.teams = 1; m.players = 4; } // (a map made for 2 vs 2: four players, Teams on, which you can still turn off)
   if (kind === 'shape' && !rnd && murmurLevelOk(SHAPE_PRESETS[m.shape].murmur)) m.murmur = SHAPE_PRESETS[m.shape].murmur; // (a map type with its own Murmur: the Hollow)
   syncMenu();
@@ -1048,11 +1049,17 @@ function randomShape(want) {
   const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
 }
+function randomBiomeFor(shape, needsMurmur = false) {
+  const list = BIOME_ORDER.filter((k) => biomeAllowed(k, shape) && (!needsMurmur || murmurGround(k)));
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 /** Random map type and biome: a concrete pick for the game about to start (3 players: map types with room for three). */
 function resolveRandom() {
   const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
   if (m.shapeRnd) out.shape = randomShape(m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2);
-  if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
+  if (m.biomeRnd) out.biome = BIOME_ORDER.indexOf(randomBiomeFor(out.shape));
+  else if (!biomeAllowed(BIOME_ORDER[out.biome], out.shape)) out.biome = 0;
   return out;
 }
 

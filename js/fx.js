@@ -476,7 +476,41 @@ function drawFlakSearchlights(ctx, ox, oy, z, inView, pass) {
   }
 }
 
+/** Low crests drift across open water under the ships. The tips stay within liquid water. */
+function drawWaterRipples(ctx, ox, oy, z, v0, v1) {
+  if (z < 13 || biome() === 'lunar' || biome() === 'volcanic' || (LESS_MOTION && LESS_MOTION.matches)) return;
+  const step = 2, now = R.time, seed = S.seed | 0, dark = fxNight();
+  const wind = ambWind(Math.floor(S.time / WEATHER.slot)).x < 0 ? -1 : 1;
+  const low = gfxStep() === 'saver';
+  ctx.save();
+  ctx.strokeStyle = dark > 0.5 ? '#9cbec3' : '#d4eee2';
+  ctx.lineCap = 'round'; ctx.lineWidth = Math.max(0.65, z * 0.019);
+  for (let j = Math.max(0, Math.floor(v0.y / step)); j < Math.min(S.H / step, v1.y / step + 1); j++) {
+    for (let i = Math.max(0, Math.floor(v0.x / step)); i < Math.min(S.W / step, v1.x / step + 1); i++) {
+      const t = tIdx(i * step, j * step);
+      if (S.terrain[t] !== T_WATER && S.terrain[t + 1] !== T_WATER && S.terrain[t + S.W] !== T_WATER && S.terrain[t + S.W + 1] !== T_WATER) continue;
+      const tone = hash2(i, j, seed + 817);
+      if (tone > (low ? 0.42 : 0.75)) continue;
+      const age = (now * (0.16 + tone * 0.05) + hash2(j, i, seed + 818)) % 1;
+      const x = i * step + 0.5 + 1.15 * hash2(i, j, seed + 819) + wind * age * 0.46;
+      const y = j * step + 0.39 + 1.22 * hash2(j, i, seed + 820) + age * 0.14;
+      const width = 0.18 + 0.42 * tone + age * 0.10;
+      if (!marineWater(x - width, y) || !marineWater(x + width, y)) continue;
+      const px = ox + x * z, py = oy + y * z, w = width * z;
+      ctx.globalAlpha = Math.sin(age * Math.PI) * (0.14 + tone * 0.17) * (1 - 0.58 * dark);
+      ctx.beginPath(); ctx.moveTo(px - w, py);
+      ctx.quadraticCurveTo(px - w * 0.08, py - z * (0.055 + tone * 0.06), px + w, py + wind * z * 0.027);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /* ------------------------------------------------------------------ lava */
+
+function lavaSurface(t) {
+  return S.terrain[t] === T_WATER && (S.lava?.[t] || R.biome === 'volcanic');
+}
 
 /**
  * Lava gives off its own light: a warm glow over every lava tile (and a halo round it), faint by day and
@@ -485,18 +519,30 @@ function drawFlakSearchlights(ctx, ox, oy, z, inView, pass) {
  */
 function drawLavaGlow(ctx, ox, oy, z) {
   if (!S.lava && R.biome !== 'volcanic') return;
-  const key = (S.roadVer || 0) + ':' + S.W;
+  const key = [S.roadVer, S.railVer, S.tide?.high, R.biome].join(':');
   if (!R.lavaGlow || R.lavaGlow.S !== S || R.lavaGlow.key !== key) {
     const c = document.createElement('canvas');
     c.width = S.W; c.height = S.H;
     const g = c.getContext('2d'), img = g.createImageData(S.W, S.H);
+    const surface = new Path2D(), vents = [];
     let any = false;
-    for (let t = 0; t < S.W * S.H; t++) {
-      if (S.terrain[t] !== T_WATER || !((S.lava && S.lava[t]) || R.biome === 'volcanic')) continue;
-      img.data[t * 4] = 255; img.data[t * 4 + 1] = 120; img.data[t * 4 + 2] = 30; img.data[t * 4 + 3] = 255; any = true;
+    for (let j = 0; j < S.H; j++) {
+      let run = -1;
+      for (let i = 0; i <= S.W; i++) {
+        const t = tIdx(i, j), lava = i < S.W && lavaSurface(t), clear = lava && !S.road[t] && !S.rail[t];
+        if (lava) {
+          img.data[t * 4] = 255; img.data[t * 4 + 1] = 120; img.data[t * 4 + 2] = 30; img.data[t * 4 + 3] = 255; any = true;
+        }
+        if (clear && run < 0) run = i;
+        if (!clear && run >= 0) { surface.rect(run, j, i - run, 1); run = -1; }
+        if (clear && hash2(i, j, S.seed + 444) < 0.17 &&
+          [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([x, y]) => terrAt(i + x, j + y) === T_GROUND)) {
+          vents.push({ x: i + 0.28 + 0.44 * hash2(j, i, 445), y: j + 0.28 + 0.44 * hash2(i, j, 446), seed: hash2(i, j, 447) });
+        }
+      }
     }
     g.putImageData(img, 0, 0);
-    R.lavaGlow = { S, key, c: any ? c : null };
+    R.lavaGlow = { S, key, c: any ? c : null, surface, vents };
   }
   if (!R.lavaGlow.c) return;
   const night = fxNight(), V = S.volcano, erupt = V && V.erupting ? 1 : 0;
@@ -517,6 +563,70 @@ function drawLavaGlow(ctx, ox, oy, z) {
     gr.addColorStop(1, 'rgba(255,80,20,0)');
     ctx.globalAlpha = 1; ctx.fillStyle = gr;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+
+/** A seamless pattern of slowly drifting thin highlights over the already-baked lava texture. */
+function lavaCurrentTexture() {
+  if (R.lavaCurrent) return R.lavaCurrent;
+  const c = document.createElement('canvas'), n = 160;
+  c.width = c.height = n;
+  const ctx = c.getContext('2d');
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 46; k++) {
+    const cx = hash2(k, 8, 21) * n, cy = hash2(k, 5, 22) * n;
+    const w = 8 + 54 * hash2(k, 6, 23), h = 2 + 8 * hash2(k, 7, 24);
+    for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) {
+      const x = cx + dx, y = cy + dy;
+      const g = ctx.createLinearGradient(x, y, x + w, y + h);
+      g.addColorStop(0, 'rgba(255,114,38,0)');
+      g.addColorStop(0.42, `rgba(255,168,66,${0.12 + 0.43 * hash2(k, 8, 25)})`);
+      g.addColorStop(1, 'rgba(255,126,40,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = 0.75 + 1.9 * hash2(k, 9, 25);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + w * 0.28, y - h * 0.6, x + w * 0.68, y + h, x + w, y + h); ctx.stroke();
+    }
+  }
+  R.lavaCurrent = c;
+  return c;
+}
+
+function drawLavaCurrents(ctx, ox, oy, z, v0, v1) {
+  const lava = R.lavaGlow;
+  if (!lava?.c || z < 9 || (LESS_MOTION && LESS_MOTION.matches)) return;
+  const art = lavaCurrentTexture(), now = R.time;
+  ctx.save();
+  ctx.translate(ox, oy); ctx.scale(z, z); ctx.clip(lava.surface);
+  ctx.globalCompositeOperation = 'lighter';
+  const p = ctx.createPattern(art, 'repeat');
+  if (p?.setTransform && typeof DOMMatrix !== 'undefined') {
+    p.setTransform(new DOMMatrix().translate(now * 0.12 % 5, now * 0.035 % 5).scale(1 / 32));
+    ctx.globalAlpha = 0.58 + 0.19 * Math.sin(now * 0.42);
+    ctx.fillStyle = p; ctx.fillRect(v0.x - 1, v0.y - 1, v1.x - v0.x + 2, v1.y - v0.y + 2);
+  }
+  ctx.restore();
+}
+
+function drawLavaVents(ctx, ox, oy, z, v0, v1) {
+  if (!R.lavaGlow?.vents.length || z < 11 || (LESS_MOTION && LESS_MOTION.matches)) return;
+  const cloud = wxCloud(fxNight() > 0.5 ? '172,148,138' : '221,204,181');
+  const saver = gfxStep() === 'saver', n = saver ? 3 : 6, now = R.time;
+  const wind = ambWind(Math.floor(S.time / WEATHER.slot)).x;
+  let budget = saver ? 7 : 18;
+  ctx.save();
+  for (const v of R.lavaGlow.vents) {
+    if (v.x < v0.x - 1 || v.x > v1.x + 1 || v.y < v0.y - 1 || v.y > v1.y + 2) continue;
+    const x = ox + v.x * z, y = oy + v.y * z, burst = 0.58 + 0.42 * Math.sin(now * 0.9 + v.seed * 21) ** 2;
+    fxGlow(ctx, x, y, z * 0.21, '#ffc984', 0.22 * burst);
+    for (let k = 0; k < n; k++) {
+      const a = (now * (0.27 + v.seed * 0.07) + v.seed + k / n) % 1;
+      const px = x + z * (wind * a + 0.10 * Math.sin(a * 9 + v.seed * 7));
+      const py = y - a * z * (0.67 + burst * 0.88), w = z * (0.23 + a * 0.76);
+      ctx.globalAlpha = Math.sin(a * Math.PI) * burst * 0.68;
+      ctx.drawImage(cloud, px - w / 2, py - w * 0.35, w, w * 0.7);
+    }
+    ctx.globalAlpha = 1;
+    if (--budget <= 0) break;
   }
   ctx.restore();
 }

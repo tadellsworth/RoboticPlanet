@@ -46,6 +46,8 @@ const BIOMES = {
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
   springs: { name: 'Boiling Springs', kind: 'Geothermal basin', region: 'Boiling Springs', plants: 0.13, weights: [1, 0.85, 0.63, 0.34, 1.15, 0.46],
     desc: 'Turquoise and amber hot springs on sulfur-stained limestone terraces. Steam drifts off the vents, and geysers break the surface.' },
+  tropical: { name: 'Tropical', kind: 'Tropical islands', region: 'the Tropical islands', plants: 0.30, groves: true, navalOnly: true,
+    desc: 'White coral sand, coconut palms, and clear turquoise water over the reefs. Available on naval maps.' },
   // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
   // (it isn't in BIOME_ORDER). Its own art (art/biomes/hollow) loads only when it is played (LAZY_BIOMES in render.js).
   hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
@@ -58,7 +60,10 @@ const BIOME_ART = {};
 /** The biome whose art draws biome b. */
 function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
-const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs'];
+const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'tropical'];
+function biomeAllowed(key, shape) {
+  return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval));
+}
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers

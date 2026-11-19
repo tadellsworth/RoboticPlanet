@@ -2458,7 +2458,7 @@ function newGame(opts) {
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
-  settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
+  settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   const { W, H } = mapDims(settings);

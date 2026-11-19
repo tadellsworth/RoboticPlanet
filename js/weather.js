@@ -12,7 +12,7 @@
 const WEATHER = {
   slot: 420,     // seconds: at most one spell of weather in each stretch this long (none in the first)
   chance: 0.5,   // of a spell in a stretch
-  kinds: { desert: 'sand', jungle: 'rain', polar: 'snow', volcanic: 'ash', lunar: 'meteors', autumn: 'leaves', savanna: 'dust', alien: 'aurora', swamp: 'fog', springs: 'fog' },
+  kinds: { desert: 'sand', jungle: 'rain', polar: 'snow', volcanic: 'ash', lunar: 'meteors', autumn: 'leaves', savanna: 'dust', alien: 'aurora', swamp: 'fog', springs: 'fog', tropical: 'rain' },
   names: { sand: 'A sandstorm', rain: 'A rainstorm', snow: 'A blizzard', ash: 'An ashfall', meteors: 'Ring dust', leaves: 'A gale', dust: 'Dust devils', aurora: 'An aurora', fog: 'A thick fog' },
 };
 let WX_ON = true;

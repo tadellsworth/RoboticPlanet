@@ -55,6 +55,7 @@ const AMB_GROW = {
   volcanic: { kind: 'ash', fill: '#8b8d8e', shade: '#363839', hi: '#a9abac' },
   alien: { kind: 'bloom', ground: '#5d4389', vein: '#a066ee', node: '#cfa3ff', crystal: '#efe2ff', glow: '#b070ff' },
   hollow: { kind: 'bloom', ground: '#463463', vein: '#8a52d6', node: '#c093ff', crystal: '#e2d4ff', glow: '#a464ff', dust: '#6e6678' },
+  tropical: { kind: 'green', moss: '#729053', dark: '#3b6341', grass: '#94a75a', vine: '#34653e', n: 0.9 },
   springs: { kind: 'sand', fill: '#c3b397', shade: '#9f875e', hi: '#e1d2ab' },
   lunar: { kind: 'dust', fill: '#a2a4a9', shade: '#6c6e73', slow: 1.6 },
 };

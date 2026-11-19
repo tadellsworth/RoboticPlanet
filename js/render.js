@@ -144,6 +144,16 @@ const BIOME_LOOK = {
     mm: { ground: [178, 158, 123], water: [40, 140, 135], rock: [109, 98, 85], ramp: [195, 170, 124] },
     plantScale: [1.31, 1.22, 1.38, 0.95, 1.02, 1.07],
   },
+  tropical: {
+    level: [['#a08b69', '#bcaa82'], ['#c3ad83', '#d7c39b'], ['#caaf81', '#dcc89e'], ['#d3c098', '#e7d5ac'], ['#e4d0ad', '#f0dfbf']],
+    theme: { cliffTop: '#a28e71', cliffBottom: '#5d5445', slope: '#cbb585', water: '#1a8896', waterEdge: '#82d5bc',
+      rock: '#716d5f', rockTop: '#a59d81', rockHi: '#cac2a0', rockShadow: '#4d4740' },
+    tex: { ground: ['#8f805c', '#cbb586', '#eddcaa'], water: ['#08677d', '#27aaa3', '#83d5b6'], rock: ['#4f4b3e', '#827c65', '#bcb28d'] },
+    hi: '255,247,209', lo: 'rgba(60,55,33,0.22)',
+    grain: ['rgba(96,68,41,0.2)', 'rgba(248,230,180,0.2)', 'rgba(197,157,78,0.54)', 'rgba(65,52,42,0.3)'],
+    mm: { ground: [193, 178, 139], water: [33, 133, 151], rock: [121, 119, 101], ramp: [203, 181, 133] },
+    plantScale: [1.42, 1.4, 1.26, 1.08, 1.03, 1.1],
+  },
   // The Hollow (always night): grey-violet silt and stone under the Bloom's moss; black lakes; black rock walls.
   hollow: {
     level: [['#3a3644', '#433e4e'], ['#46404f', '#4f485a'], ['#524a5c', '#5b5266'], ['#5c5466', '#655c70'], ['#665d70', '#70667a']],
@@ -273,7 +283,7 @@ function bakedArt(key) {
  * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js), which keeps the page under
  * its 16 MB (the Forest's and the Polar Caps' joined the newer biomes there, Nov 2026: about 1 MB of the page).
  */
-const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'hollow'];
+const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'tropical', 'hollow'];
 function lazyBiomeOf(key) {
   for (const b of LAZY_BIOMES) if (key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) return b;
   return null;
@@ -1082,7 +1092,10 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
-      if (R.biome === 'springs' && thermalShore(t)) drawMineralBanks(ctx, i, j, x, y);
+      if (plainShore(t)) {
+        if (R.biome === 'springs') drawMineralBanks(ctx, i, j, x, y);
+        if (R.biome === 'tropical') drawReefShallows(ctx, i, j, x, y);
+      }
       ctx.fillStyle = 'rgba(159,217,208,0.5)';
       if (terrAt(i, j - 1) !== T_WATER) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_WATER) ctx.fillRect(x, y, 2, TP);
@@ -1299,7 +1312,7 @@ function drawLava(ctx, i, j, x, y) {
       ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
     }
   }
-  const lava = (a, b) => S.lava && inMap(a, b) && S.lava[tIdx(a, b)] && S.terrain[tIdx(a, b)] === T_WATER;
+  const lava = (a, b) => inMap(a, b) && lavaSurface(tIdx(a, b));
   ctx.fillStyle = 'rgba(28,12,8,0.75)';
   if (!lava(i, j - 1)) ctx.fillRect(x, y, TP, 3);
   if (!lava(i - 1, j)) ctx.fillRect(x, y, 3, TP);
@@ -1428,15 +1441,39 @@ function shoreCorners(ctx, i, j, x, y) {
     const { cx, cy, rr, a1, a2, ccw } = shoreCornerPath(ctx, x, y, dx, dy);
     ctx.clip();
     if (fill === 'land') groundPatch(ctx, i, j, x, y, Math.max(S.elev[tIdx(i + dx, j)], S.elev[tIdx(i, j + dy)]));
-    else drawTexture(ctx, tex.water, i, j, x, y);
+    else {
+      drawTexture(ctx, tex.water, i, j, x, y);
+      if (R.biome === 'tropical') {
+        const g = ctx.createRadialGradient(cx, cy, rr, cx, cy, rr * 1.62);
+        g.addColorStop(0, 'rgba(215,220,169,0.72)');
+        g.addColorStop(0.67, 'rgba(127,219,181,0.47)');
+        g.addColorStop(1, 'rgba(65,199,181,0.20)');
+        ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+      }
+    }
     ctx.restore();
     ctx.beginPath(); ctx.arc(cx, cy, rr, a1, a2, ccw);
     if (R.biome === 'springs' && fill === 'land') strokeMineralBank(ctx, mineralBankShade(i, j));
     ctx.strokeStyle = dy < 0 ? 'rgba(159,217,208,0.5)' : 'rgba(10,30,40,0.35)'; ctx.lineWidth = 2; ctx.stroke();
   }
 }
-function thermalShore(t) {
+function plainShore(t) {
   return !(S.lava?.[t] || S.ford?.[t] || S.tidal?.[t]);
+}
+
+/** Pale coral sand under the first few feet of water. */
+function drawReefShallows(ctx, i, j, x, y) {
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    if (terrAt(i + dx, j + dy) !== T_GROUND) continue;
+    const depth = TP * (0.58 + fbm(i / 4, j / 4, 851, 2) * 0.28);
+    const sx = x + (0.5 + dx * 0.5) * TP, sy = y + (0.5 + dy * 0.5) * TP;
+    const g = ctx.createLinearGradient(sx, sy, sx - dx * depth, sy - dy * depth);
+    g.addColorStop(0, 'rgba(220,220,167,0.78)');
+    g.addColorStop(0.17, 'rgba(161,215,180,0.65)');
+    g.addColorStop(0.52, 'rgba(60,201,184,0.37)');
+    g.addColorStop(1, 'rgba(65,199,181,0)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+  }
 }
 
 /** Mineral bands on the wet side of the bank. Leave space for the rounded corners. */
@@ -6029,10 +6066,13 @@ function render(dtReal) {
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
+  drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
+  drawWaterRipples(ctx, ox, oy, z, v0, v1);
+  drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -6322,6 +6362,7 @@ function render(dtReal) {
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
+  drawLavaVents(ctx, ox, oy, z, v0, v1);
   if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawAirLayer(ctx, ox, oy, z, inView);
