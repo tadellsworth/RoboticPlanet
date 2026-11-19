@@ -123,9 +123,17 @@ function netSend(msg) {
   const text = JSON.stringify(msg);
   if (text.length > NET_PIECE) {
     const id = NET.seat + '.' + ++NET.partId, n = Math.ceil(text.length / NET_PIECE);
-    for (let k = 0; k < n; k++) netSend({ t: 'part', id, k, n, s: text.slice(k * NET_PIECE, (k + 1) * NET_PIECE) });
+    for (let k = 0; k < n; k++) {
+      const part = { t: 'part', id, k, n, s: text.slice(k * NET_PIECE, (k + 1) * NET_PIECE) };
+      netSendFrame(JSON.stringify(part));
+    }
     return;
   }
+  netSendFrame(text);
+}
+
+// Send an already framed message. A part's JSON framing can exceed the split threshold.
+function netSendFrame(text) {
   if (NET.state === 'game') { if (NET.outbox.length || !netRaw(text)) NET.outbox.push(text); } else netRaw(text);
 }
 

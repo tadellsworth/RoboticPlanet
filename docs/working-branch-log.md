@@ -86,3 +86,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Exercised factory diagnostics, freight dispatch, worker assignment, Fuel guidance, and map commands in local Chromium. Reproduced misleading delivery predictions for isolated Haulers, contradictory road and delivery messages, missing or incorrect staffing guidance, and a success message for an unreachable Warbot move.
 - Recorded the positive controls, reproduction steps, and proposed fixes in the [stalled jobs and failed orders audit](stalled-jobs-audit.md).
+
+### Huge-map reconnect fix
+
+- The sender now splits a large snapshot once and passes each framed piece directly to the existing socket queue. Added a regression check for the size boundary, escaped characters, queued frames, and reassembly.
+- A guest reloaded and rejoined a Huge match on the local relay. Both clients agreed on inventory, cargo, a pending order, and Uplink progress after the two-piece snapshot.
