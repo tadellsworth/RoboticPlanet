@@ -2000,7 +2000,7 @@ function dispatch(p) {
       for (const v of S.bots) {
         if (v.dead || v.owner !== p || v.type !== 'hauler' || !v.task || v.task.type !== 'haul' || v.task.phase !== 'toDst') continue;
         const d = getE(v.task.dst);
-        if (d && v.path && !v.ferryWait && dist2(v.x, v.y, d.x + 0.5, d.y + 0.5) <= HAUL_NEAR * HAUL_NEAR) finishing.push(d);
+        if (d && !v.ferryWait) finishing.push(d);
       }
     }
     const k = finishing.findIndex((d) => dist2(d.x, d.y, src.x, src.y) <= HAUL_NEAR * HAUL_NEAR && (d === src || roadLinked(d, src)));
@@ -3185,7 +3185,8 @@ function updateWorker(u, dt) {
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   if (BOTS[u.type].rail) { if (u.armorOrder) fitTrainArmor(u, dt); if (u.armored) trainGuns(u, dt); }
   // A Freight Train left at a Foundry by an older save rolls out at the nearest Rail Station (new ones come from rail yards).
-  if (BOTS[u.type].rail && !u.task && !onTrack(u) && getE(u.inside)?.type === 'foundry' && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
+  // (Any train found off the track with no job, not only one in a Foundry: one knocked off would otherwise sit there.)
+  if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
   // So does a ship left at a Foundry, at the nearest Port (new ones are launched from shipyards).
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
   if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
@@ -3337,8 +3338,16 @@ function stashCarry(u) {
     stores.push(b);
   }
   stores.sort((a, b) => dist2(u.x, u.y, a.x + 0.5, a.y + 0.5) - dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) || a.id - b.id);
-  const store = stores.find((b) => goTo(u, b.x, b.y));
-  if (!store) { u.stashAt = S.time + 3; return; } // hold the load until a route opens
+  // Route checks only to the nearest few stores (a route search each is costly, and this runs every 3 seconds).
+  const store = stores.slice(0, 4).find((b) => goTo(u, b.x, b.y));
+  // No way to any just now (enemy warbots in the way, a road torn up): it keeps the load and tries again in a few
+  // seconds; after half a minute of that, with no enemy about, it puts the load down in a crate so it isn't stuck forever.
+  if (!store) {
+    u.stashAt = S.time + 3; u.stashTry = (u.stashTry || 0) + 1;
+    if (u.stashTry >= 10 && !foesNear(u.owner, u.x, u.y, 8)) { dropCarried(u); u.stashTry = 0; }
+    return;
+  }
+  u.stashTry = 0;
   u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst', n: u.carryN, mix: u.mix && { ...u.mix } };
   for (const [g, n] of goods) bump(store.inc, g, n);
 }
