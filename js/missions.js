@@ -1431,7 +1431,7 @@ const MISSIONS = [
     brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through, and burn its farmland, with Torches; shield the push with a Bulwark and send in missiles.',
     intro: [
       'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
-      '<b>Torches</b> burn through Walls fast, and <b>Scorch the earth</b> burns farmland for good; a <b>Bulwark</b>\'s shield covers the robots behind it.',
+      '<b>Torches</b> burn through Walls and can <b>Scorch the earth</b>. Send them with a <b>Bulwark</b> and they can fire from behind its shield if the Wall is in reach.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
       'Their base can wait: this is about breaking in.',

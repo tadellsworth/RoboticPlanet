@@ -1106,8 +1106,8 @@ function playerGoods(p) {
   return tot;
 }
 
-/** Nearest enemy bot within range (warbots first with preferWar). With ownLand, civilian bots only count inside owner's land. */
-function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
+/** Nearest eligible enemy bot. With ownLand, civilian bots only count inside the owner's land. */
+function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land, accepts) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
     if (u.dead || !foes(u.owner, owner) || u.inside || u.dropping || u.under || BOTS[u.type].air) continue; // nothing shoots aircraft yet (nor a Sapper underground)
@@ -1115,7 +1115,7 @@ function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
     if (ownLand && !isArmy(u) && foes(S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))], owner)) continue;
     const d = dist2(u.x, u.y, x, y);
     if (d > bd && !(preferWar && d <= bwd)) continue;
-    if (calmAt(u.x, u.y)) continue; // nothing shoots on a Trade Post's ground
+    if ((accepts && !accepts(u)) || calmAt(u.x, u.y)) continue; // nothing shoots on a Trade Post's ground
     if (d <= bd) { bd = d; best = u; }
     if (preferWar && (isArmy(u) || BOTS[u.type].wild) && d <= bwd) { bwd = d; bestWar = u; }
   }
@@ -1821,8 +1821,8 @@ function moveDirect(u, x, y, dt, cap) {
   if (deck) { x = (deck[0] % S.W) + 0.5; y = ((deck[0] / S.W) | 0) + 0.5; }
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
-  u.face = datan2(dy, dx);
-  const s = Math.min(WARBOT_SPEED * batFactor(u) * speedMul(u) * dt, cap !== undefined ? cap * dt : Infinity, d);
+  const bt = BOTS[u.type], speed = bt.army ? bt.speed : WARBOT_SPEED;
+  const s = Math.min(speed * batFactor(u) * speedMul(u) * dt, cap !== undefined ? cap * dt : Infinity, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return false;
@@ -1838,6 +1838,7 @@ function moveDirect(u, x, y, dt, cap) {
       : (canStep(c, tIdx(ti, cj)) && canStep(tIdx(ti, cj), t)) || (canStep(c, tIdx(ci, tj)) && canStep(tIdx(ci, tj), t));
     if (!ok) return false;
   }
+  u.face = datan2(dy, dx);
   u.moved = 1;
   u.x = nx; u.y = ny;
   return true;
@@ -4813,6 +4814,20 @@ function botArmed(u) {
 /** The Bulwarks out on the map this step (see simStep), for shieldBlock. */
 const SHIELDS = [];
 
+/** Does w's active shield intercept a shot toward u or its proposed firing position? */
+function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
+  if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
+  const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
+  if (ad < BULWARK.r + 0.15) return false;
+  const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
+  if ((ax * fx + ay * fy) / ad < dcos(BULWARK.arc)) return false;
+  if (u === w) return true;
+  const bx = x - w.x, by = y - w.y;
+  if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) return false;
+  const tx = x - sx, ty = y - sy, td = dhypot(tx, ty) || 1;
+  return Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td <= BULWARK.r * 2.35;
+}
+
 /**
  * A shot (or a flame) from (sx, sy) at robot u. If a Bulwark of u's owner faces it, its shield up, and u is that
  * Bulwark or sheltering behind its shield line (within BULWARK.cover, near the shot's line), the shield takes the
@@ -4820,18 +4835,8 @@ const SHIELDS = [];
  */
 function shieldBlock(u, sx, sy, dmg) {
   for (const w of SHIELDS) {
-    if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) continue;
-    const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
-    if (ad < BULWARK.r + 0.15) continue; // (fired from inside its shield line)
-    const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
-    if ((ax * fx + ay * fy) / ad < dcos(BULWARK.arc)) continue; // from the side or behind: past the shield
-    if (u !== w) {
-      const bx = u.x - w.x, by = u.y - w.y;
-      if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) continue; // not behind it
-      const tx = u.x - sx, ty = u.y - sy, td = dhypot(tx, ty) || 1;
-      if (Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td > BULWARK.r * 2.35) continue; // the shot's line misses the shield
-    }
-    const ang = datan2(ay, ax), took = Math.min(w.sh, dmg);
+    if (!shieldProtects(w, u, sx, sy)) continue;
+    const ang = datan2(sy - w.y, sx - w.x), took = Math.min(w.sh, dmg);
     w.sh -= took; w.shHit = S.time; w.shAbs = (w.shAbs || 0) + took;
     shieldFx(w, w.x + dcos(ang) * BULWARK.r, w.y + dsin(ang) * BULWARK.r, ang, dmg, u);
     if (w.sh <= 0.01) shieldFail(w);
@@ -5128,11 +5133,12 @@ function fuelPoint(u) {
  * True while it's in formation (it has moved for this step); false to carry on with its job as usual.
  */
 const FORM = { row: 3, gap: 0.6, back: 1.05, rowBack: 0.6, torch: 0.6, stuck: 4, near: 12, far: 2.2 };
+const FIRING_COVER_SPOTS = [[0.35, 0], [0.35, -0.62], [0.35, 0.62], [0.85, 0], [0.85, -0.62], [0.85, 0.62]];
 function escortMove(u, gx, gy, key, dt) {
   if (BOTS[u.type].shield) return false;
   let lead = null, ld = Infinity;
   for (const w of SHIELDS) {
-    if (w.owner !== u.owner || !w.task || w.retreat) continue;
+    if (w.owner !== u.owner || !w.task || w.retreat || w.dead || w.inside || !(w.sh > 0)) continue;
     if ((key.attack && !(w.task.type === 'attack' && w.task.target === key.attack)) || (key.rally && !(w.task.type === 'hold' && w.task.rally === key.rally))) continue;
     const d = dist2(w.x, w.y, u.x, u.y);
     if (d < ld && d < FORM.near * FORM.near) { ld = d; lead = w; }
@@ -5147,6 +5153,7 @@ function escortMove(u, gx, gy, key, dt) {
   const bt = BOTS[u.type], reach = bt.flame ? 2.05 : WARBOT_HIT.reach;
   if (key.attack && dist(u.x, u.y, gx, gy) <= reach) return false; // already in reach of the target: shoot
   const at = formPlace(u, lead, gx, gy, dl, key);
+  if (S.time - (u.hurtT ?? -99) < 1.5 && dist2(at.x, at.y, gx, gy) > dist2(u.x, u.y, gx, gy) + 1) return false;
   const ds = dist(u.x, u.y, at.x, at.y);
   if (ds > FORM.far) { // well off its place: walk there (the way round, if need be)
     if (travel(u, Math.floor(at.x), Math.floor(at.y), dt) === null) return false;
@@ -5158,6 +5165,28 @@ function escortMove(u, gx, gy, key, dt) {
   // parks in its place: standing still till the Bulwark had drawn ahead, then catching up, was a stutter of its own.)
   if (ds > 1e-3 && !moveDirect(u, at.x, at.y, dt, (lead.vel || 0) + 0.25 + ds * 0.6)) spreadOut(u, dt);
   return true;
+}
+
+/** Keep an in-range shot while shifting a short distance into a Bulwark's protection. */
+function firingCover(u, x, y, range, dt) {
+  if (!SHIELDS.length || BOTS[u.type].shield || u.deck || u.ride >= 0) return false;
+  let best = null, bd = 1.7 * 1.7;
+  for (const w of SHIELDS) {
+    if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0) || dist2(u.x, u.y, w.x, w.y) > 9) continue;
+    if (shieldProtects(w, u, x, y) && dist2(u.x, u.y, x, y) <= range * range) return true;
+    const d = dist(w.x, w.y, x, y);
+    if (d < BULWARK.r + 0.15 || d > range + BULWARK.r) continue;
+    const dx = (x - w.x) / d, dy = (y - w.y) / d;
+    for (const [back, side] of FIRING_COVER_SPOTS) {
+      const tx = w.x - dx * back - dy * side, ty = w.y - dy * back + dx * side;
+      const dd = dist2(u.x, u.y, tx, ty), i = Math.floor(tx), j = Math.floor(ty);
+      if (dd >= bd || dist2(tx, ty, x, y) > range * range || !inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.bAt[t] || !walkable(t) || !shieldProtects(w, u, x, y, tx, ty) || !clearLine(u.x, u.y, tx, ty)) continue;
+      best = { x: tx, y: ty }; bd = dd;
+    }
+  }
+  return !!best && moveDirect(u, best.x, best.y, dt, 0.7 * WARBOT_SPEED);
 }
 
 /**
@@ -6334,6 +6363,36 @@ function startReload(u, t) {
   return true;
 }
 
+/** Can this unit use its weapon from here? Torches need to close to flame range. */
+function armyInRange(u, foe) {
+  const bt = BOTS[u.type], d = dist2(u.x, u.y, foe.x, foe.y);
+  if (d <= sq(bt.range || WARBOT_RANGE)) return true;
+  return !bt.flame && ((d <= sq(WARBOT_RANGE_BLOCKED) && !clearLine(u.x, u.y, foe.x, foe.y)) ||
+    (d <= sq(WARBOT_RANGE_GAP) && overGap(u, foe)));
+}
+
+function armedThreat(v) { return isArmy(v) ? botArmed(v) : !!(BOTS[v.type].wild || BOTS[v.type].siege); }
+
+/** Commit to the same detour while it is useful. Reject a long chase before taking a step. */
+function advanceOnBot(u, foe, dt) {
+  const fi = Math.floor(foe.x), fj = Math.floor(foe.y), g = u.goal;
+  const same = u.viaFoe === foe.id && u.path && Math.max(Math.abs((g % S.W) - fi), Math.abs(((g / S.W) | 0) - fj)) <= 1;
+  if (!(same && u.viaT > S.time) && clearLine(u.x, u.y, foe.x, foe.y) && moveDirect(u, foe.x, foe.y, dt)) {
+    u.path = null; u.viaFoe = 0;
+    return;
+  }
+  if (!same) {
+    u.path = null;
+    if (!goTo(u, fi, fj) || u.path.length > Math.max(8, 3 * dist(u.x, u.y, foe.x, foe.y))) {
+      u.path = null; u.fight = 0; u.viaFoe = 0;
+      u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 12;
+      return;
+    }
+    u.viaFoe = foe.id; u.viaT = S.time + 1.5;
+  }
+  if (moveAlong(u, dt)) u.viaFoe = 0;
+}
+
 function warbotAct(u, dt) {
   u.cd -= dt;
   const t = u.task;
@@ -6345,7 +6404,10 @@ function warbotAct(u, dt) {
   // arrives (or MARCH_MAX runs out).
   if (u.march && (!t || S.time > u.march || (rally && dist2(u.x, u.y, rally.x, rally.y) <= 6.25) || t.type === 'attack')) u.march = 0;
   // (On a Trade Post's ground nothing fights: see calmAt.)
-  const calm = !!u.retreat || u.march > S.time || calmAt(u.x, u.y);
+  if (u.retreat && t?.type !== 'repair') { u.retreat = false; u.resume = null; }
+  const resupplying = t && (t.type === 'refill' || t.type === 'topup' || (t.type === 'attack' && t.reload) ||
+    (t.type === 'hold' && t.phase === 'recharge'));
+  const calm = !!u.retreat || u.march > S.time || resupplying || calmAt(u.x, u.y);
   const escort = !!t && t.type === 'escort';
   const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1; // emergency mode hits half as hard
   // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
@@ -6356,20 +6418,23 @@ function warbotAct(u, dt) {
   // (On an attack it first goes to reload and comes back, when that's worth it: see startReload.)
   if (!armed && t && (t.type === 'attack' || t.type === 'defend') && !(t.type === 'attack' && (t.reload || startReload(u, t)))) { cancelTask(u); u.path = null; u.fight = 0; return; }
   // Battery all but flat out in enemy land with nothing to shoot at: give up the attack and go home to recharge.
-  if ((u.bat ?? 100) < BATTERY.critical && t && t.type === 'attack' && !u.fight) {
+  if ((u.bat ?? 100) < BATTERY.critical && t && t.type === 'attack' && !t.reload && !u.fight) {
     const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
     if (o >= 0 && foes(o, u.owner)) { cancelTask(u); u.path = null; return; }
   }
   // Badly hurt on an attack, a rally flag or a sortie: pull out to the nearest Repair Station that can
   // fix it (when there is one; otherwise fight on), taking no new fights on the way, and go back to the
   // attack or the flag once it's mended (resumeAfterRepair).
-  if (u.retreat && !(t && t.type === 'repair')) { u.retreat = false; u.resume = null; } // (its Repair Station went: no going back hurt)
-  // Not while it stands where an enemy gun reaches (gunCovers): walking out through the guns hurt killed more than it saved.
-  if (t && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT && S.tick % 10 === u.id % 10 && !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y))) && findRepair(u)) {
-    const back = t.type === 'attack' ? { type: 'attack', target: t.target } : t.type === 'hold' ? { type: 'hold', rally: t.rally, slot: t.slot } : null;
-    cancelTask(u); u.task = null; u.fight = 0; u.path = null;
-    if (goRepair(u)) {
-      u.retreat = true; u.resume = back;
+  if (!calm && t && !t.reload && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT &&
+      S.tick % 10 === u.id % 10 && !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y))) &&
+      (!armed || (S.time - (u.hurtT ?? -99) >= 1.5 && !nearestEnemyBot(u.owner, u.x, u.y, 2.8, true, false, true, armedThreat)))) {
+    const station = findRepair(u);
+    const fight = u.fight;
+    u.fight = 0; // Plan the withdrawal with the danger avoidance used by a march.
+    if (station && goTo(u, station.x, station.y)) {
+      u.task = { type: 'repair', bld: station.id };
+      u.fight = 0; u.viaFoe = 0; u.retreat = true;
+      u.resume = t.type === 'attack' ? { type: 'attack', target: t.target } : t.type === 'hold' ? { type: 'hold', rally: t.rally, slot: t.slot } : null;
       const P = S.players[u.owner];
       if (S.time - (P.lastRetreatMsg || -99) > 45) {
         P.lastRetreatMsg = S.time;
@@ -6377,7 +6442,7 @@ function warbotAct(u, dt) {
       }
       return;
     }
-    if (back) u.task = back; // couldn't set off after all: carry on
+    u.fight = fight;
   }
   let foe = armed && u.fight && !calm ? getE(u.fight) : null;
   // Hunting a robot (a flag that follows it): that's the one to shoot, once it's close enough.
@@ -6389,7 +6454,8 @@ function warbotAct(u, dt) {
   const flagO = rally ? S.owner[tIdx(Math.floor(rally.x), Math.floor(rally.y))] : -1;
   const guardFlag = !!rally && !(flagO >= 0 && flagO !== u.owner);
   const leash = defending || guardFlag ? 9 : rally || escort ? 6 : 4;
-  if (foe && (foe.dead || foe.inside || foe.under || dist2(foe.x, foe.y, u.x, u.y) > leash * leash || calmAt(foe.x, foe.y) ||
+  if (foe && (foe.dead || !foes(foe.owner, u.owner) || foe.inside || foe.dropping || foe.under || BOTS[foe.type].air || BOTS[foe.type].sea ||
+      dist2(foe.x, foe.y, u.x, u.y) > leash * leash || calmAt(foe.x, foe.y) ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
   // A guard's leash is measured from its fort as well: a foe that walks away is let go (and left alone a while)
   // once it's SORTIE_LEASH from there, unless it's still close enough to shoot. It used to lead the guards off for good.
@@ -6401,58 +6467,42 @@ function warbotAct(u, dt) {
       u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 12; foe = null;
     }
   }
-  if (!foe) {
-    u.fight = 0;
+  if (!foe) u.fight = 0;
+  if (armed && !calm && (!foe || !armyInRange(u, foe) || (rally?.follow !== foe.id && !armedThreat(foe)))) {
     u.scanT -= dt;
-    if (armed && u.scanT <= 0 && !calm) {
+    if (u.scanT <= 0) {
       u.scanT = 0.3;
+      const immediate = nearestEnemyBot(u.owner, u.x, u.y, WARBOT_RANGE_GAP, true, defending, true,
+        (v) => armedThreat(v) && armyInRange(u, v));
+      if (immediate) foe = immediate;
+      const accepts = (v) => v.id !== u.ignoreFoe || S.time >= u.ignoreUntil || armyInRange(u, v);
       // Guards (defending their garrison) only chase civilians inside their own land.
-      foe = nearestEnemyBot(u.owner, u.x, u.y, rally || escort ? 3.5 : 2.8, true, defending, true);
+      if (!foe) foe = nearestEnemyBot(u.owner, u.x, u.y, rally || escort ? 3.5 : 2.8, true, defending, true, accepts);
       // (An escort fights what comes at its convoy, not every hauler it passes: it would hold the convoy up for nothing.)
       if (foe && escort && !isArmy(foe) && !BOTS[foe.type].wild && !BOTS[foe.type].siege) foe = null;
       if (!foe && defending) {
         const h = getE(t.home);
-        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true);
-        if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true);
+        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true, accepts);
+        if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true, accepts);
       }
-      if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true);
+      if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true, accepts);
       // (On a flag: an enemy trade convoy passing within TERMINAL.hunt tiles of it, wherever it is: what raids are for.)
       if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
-      if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
+      if (foe && !accepts(foe)) foe = null;
       if (foe) u.fight = foe.id;
     }
   }
   if (foe) {
-    // Warbots shoot from just over a tile away; across an obstacle they can reach a bit further.
-    // If something blocks the way and the foe is further off, walk round to it, or give up on it.
-    const d = dist(u.x, u.y, foe.x, foe.y);
-    let inReach = d <= (BOTS[u.type].range || WARBOT_RANGE), pathing = false;
-    // Closing in: straight at it while the way is clear. Once something blocks the straight line it
-    // follows a route round for a moment (u.viaT) instead of flicking back to the straight line at the
-    // first step that looks clear, which had it rocking on the spot; and the route is only planned
-    // again when the foe has moved off its end, not every time it crosses into another tile.
-    // It goes straight only when the whole line to the foe is walkable (not just the next step, which
-    // had it walking up to a cliff edge, turning back for the way round, then trying the edge again).
-    const routed = u.viaT > S.time && !!u.path;
-    if (!inReach && (routed || !clearLine(u.x, u.y, foe.x, foe.y) || !moveDirect(u, foe.x, foe.y, dt))) {
-      if (d <= WARBOT_RANGE_BLOCKED || (d <= WARBOT_RANGE_GAP && overGap(u, foe))) inReach = true;
-      else {
-        pathing = true;
-        const fi = Math.floor(foe.x), fj = Math.floor(foe.y), g = u.goal;
-        const still = routed && g !== undefined && Math.max(Math.abs((g % S.W) - fi), Math.abs(((g / S.W) | 0) - fj)) <= 1;
-        let r = still ? moveAlong(u, dt) : travel(u, fi, fj, dt);
-        // A long way round (a ramp far off): not worth leaving its post for.
-        if (!still && r === false && u.path && u.path.length - u.pi > Math.max(8, 3 * d)) { u.path = null; r = null; }
-        // Can't get at it (across water or a cliff with no way round): leave it alone for a good while.
-        if (r === null) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 12; u.viaT = 0; }
-        else if (r) u.viaT = 0;
-        else if (!routed) u.viaT = S.time + 1.5;
-      }
-    }
-    if (inReach) spreadOut(u, dt);
+    const bt = BOTS[u.type], range = bt.range || WARBOT_RANGE;
+    const covered = firingCover(u, foe.x, foe.y, range, dt);
+    const inReach = armyInRange(u, foe);
+    if (!inReach && !covered) { advanceOnBot(u, foe, dt); return; }
+    u.path = null; u.viaFoe = 0;
+    if (inReach && !covered && dist2(u.x, u.y, foe.x, foe.y) < sq(range - 0.04)) spreadOut(u, dt);
+    if (!bt.shield) u.face = datan2(foe.y - u.y, foe.x - u.x);
     if (inReach && u.cd <= 0) {
-      const bt = BOTS[u.type], pin = u.pinT > S.time ? MINIGUN_PIN.reload : 1; // (pinned by a minigun: slower to fire back)
+      const pin = u.pinT > S.time ? MINIGUN_PIN.reload : 1; // (pinned by a minigun: slower to fire back)
       if (bt.flame) { if (botArmed(u)) torchFire(u, foe.x, foe.y, power); else u.cd = 0.5; }
       else if (bt.shield) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
@@ -6472,7 +6522,6 @@ function warbotAct(u, dt) {
         u.fought = 1;
       }
     }
-    if (!pathing) u.path = null;
     return;
   }
   // Waiting to set off with its squad (paceSquad): it stands where it is until its time, unless it's shot at, or what it
@@ -6666,9 +6715,10 @@ function overGap(a, b) {
 function strikeBuilding(u, b, dt, power) {
   if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
   const bt = BOTS[u.type], reach = bt.shield ? 1.7 : bt.flame ? 2.05 : WARBOT_HIT.reach; // (a Bulwark goes in closest, in front of its group)
+  const covered = firingCover(u, b.x + 0.5, b.y + 0.5, reach, dt);
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
-    spreadOut(u, dt);
+    if (!covered && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) < sq(reach - 0.04)) spreadOut(u, dt);
     if (!bt.shield) u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (bt.flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, power, b); return true; }
     if (bt.shield) {
@@ -6687,6 +6737,7 @@ function strikeBuilding(u, b, dt, power) {
     }
     return true;
   }
+  if (covered) { u.path = null; return false; }
   return travel(u, b.x, b.y, dt);
 }
 
@@ -7648,6 +7699,8 @@ function readyForOrder(u) {
   cancelTask(u);
   u.recycleTo = 0;
   u.fight = 0;
+  u.viaFoe = 0;
+  u.retreat = false; u.resume = null;
   u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
   u.path = null;
@@ -15633,6 +15686,7 @@ function hashState() {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
+    if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {

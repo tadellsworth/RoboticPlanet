@@ -905,6 +905,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`spreadOut`) instead of stacking on a single point. On the march (not in a fight) warbots, Bulwarks and Torches
   plan round enemy guns: a tile an enemy gun reaches (`dangerMap` bit 1, the map civilians keep clear of) costs
   `COVER_COST` (4) more (`routeOpts` sets `opts.cover`, see `findPath`), so a short detour beats walking through it.
+  A nearby armed foe that can be hit takes priority over a quarry out of reach. Detours belong to the current
+  target, and a long chase is rejected before moving. Torches advance into flame range before firing. Warbots
+  and Torches take nearby Bulwark cover when there is a firing position under the active shield. Auto-repair
+  waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
 - **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
   `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
   one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
