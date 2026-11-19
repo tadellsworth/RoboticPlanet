@@ -121,3 +121,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Map fairness and difficulty audit
 
 - Scanned 250 seeded maps across every preset and paired 12 Easy and Hard openings. All tested starts had the four basic deposits on connected terrain, and all naval starts had a potential reachable shore. Some Small maps had no Trade Posts, and four three-colony Four Isles cases placed only one Uplink. [Map fairness audit](map-fairness-audit.md)
+
+### Late-game performance audit
+
+- Profiled 14 browser samples with 297 live units, road and rail freight, combat, and a checkpoint write per sample. In the phone-sized stress run, Auto had 19 frame gaps over 50 ms across two repeats. Saver had none, and both kept the intended simulation pace. [Performance audit](late-game-performance-audit.md)
