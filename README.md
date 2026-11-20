@@ -31,7 +31,7 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
@@ -79,8 +79,8 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
-and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane and the Shield
-Dome; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Shield
+Dome and Arrival City; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -184,6 +184,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s and fires a beam across the whole map that destroys everything on its line; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
+| Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 | Viaduct | Placed in Paths: a level bridge straight across a valley between two clifftops; every bot crosses it |
@@ -1990,8 +1991,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
-- **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for both, built
-  Nov 2026). Late-game, one per colony (`megaBlocked`), on the Defend tab, both bigger than a tile: `def.foot` (3 or 2)
+- **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
+  Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
+  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City), all bigger than a tile: `def.foot` (3, 2 or 4)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -2017,6 +2019,39 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     it instead: `domeHit` takes `DOME.cost[kind]` off its 100 strength; unhit for `quiet` (10) s it regains `regen` (1) a
     second; at 0 it drops for `down` (60) s and comes back at `back` (40). Drawn in code (`drawDomes`): a hex lattice on
     the dome's surface, shimmering, flashing where hit, breaking up as it drops.
+  - **Arrival City** (`BDEFS.city`, `CITY`; key C; 60 Cement, 30 Alloy, 15 Chips, 24 Fiber; 300 s; 4 × 4; the owner's
+    look A, the Terraced Arcology, Nov 2026). It opens `CITY.at` (15 min) into a free-play game (`cityOpen`; a mission
+    with `mega`: at once) and is banned on Argos, the Lunar biome (`worldBan`). **Arrival drive** (`cityBoost(owner, x,
+    y)`): its owner's work within `reach` (8) tiles of its middle goes `boost` (20%) faster: `produce` (factories, the
+    Oil Pump, the Bot Foundry), the gather/farm/plant timer in `doStaff` and `doBuild`'s site progress; half that while
+    it's dark at night for want of Fuel (`dark`), none while it's down. `cityList` caches the finished Cities per tick and
+    land change. **Land**: a military-rank claim of `land` (6) tiles round its middle in `computeTerritory` (`cityRing`,
+    `cityRingD`), so it is never cut off; in `updateDomination` every tile of every City's ring held by its owner counts
+    once more (`cityLand`). **Lights** (`updateCity`): at night (`cityNight`: `murmurNight`, or always on an
+    always-night map) a Fuel every `fuel` (60) s (`fuelCap` 6, Tankers bring it, `b.cFuel`); without it `b.cDry` (dark,
+    the boost halved); lit it is `working`, so the Murmur see it like a Generator (`murmurPower`, `chargeWorth` 3).
+    **Never destroyed**: `captureOnly` takes it in with a `missileFloor` of 0, and every way a building is wrecked holds
+    it at 0 instead and calls `cityDown` (`hitBuilding`, `missileImpact` and its splash, `rocketHit`, `bombHit`,
+    `nukeImpact`, `lanceFire`; `destroyBuilding` by force as a backstop; `demolish` and the order refuse it; not on a
+    fault line that will open, `footPlace`). **Down** (`b.cDown`): no boost, dark, the damaged art; repaired to `back`
+    (25%) of its armor it's up again. **Taken** (`cityCapture`): while down, armed warbots of one side within `capReach`
+    (2.5) tiles of its walls (`footDist`), none of its owner's side there, count `b.cCap` up to `cap` (20) s for `b.cBy`
+    (contested or empty, it runs back), then `cityTaken`: owner, land, boost and Domination count change sides
+    (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, count, taker,
+    Fuel and dark. Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): `city@T`,
+    `city-down@T` (every time of day) and four light layers `city-lit-0..3` that `drawCity`/`cityLights` add at dusk
+    tier by tier on a timer (`cityLightLevel`: lamps, then the terraces, the atrium and clock last), a warm pool and
+    a wide glow (`drawCityGlow`), its reach and land when placing or selected (`drawRanges`), a ring filling in the
+    taker's colour (`drawCityTaking`). Sound: `cityHum` (an empty-city drone on the Ambience volume, near one on screen),
+    `cityclock` (its clock striking now and then) and `citychime` (the station chime when it's taken or lit again).
+  - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
+    one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
+    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect,
+    Warden and Steward; none for the Salvager and Herald; Arrival City for all in Domination: `aiMegaMain`). `aiCity`
+    places it from `AI_MEGA.cityAt` (15 min) once it has a Bot Foundry and half the City's Cement and Fiber
+    (`aiCityFunds`: its Alloy and Chips never pile up), where its reach covers the most of its factories and gatherers
+    near its Command Base (`aiCitySpot`), its site first for goods (`prio` 'high'), never given up. `aiMarch` treats a
+    foe's City as a march target like a fort (scored 2 better, 6 in Domination: the prize), its flag going for the City.
   - **Uranium for the late game** (`aiUranium`, `AI_MEGA.reactorAt`, `uReach`): from 13 minutes in a Nuclear race, a
     rival with no Ore Mine on a Uranium deposit and less than 2 Uranium in hand puts a Mine on the deposit nearest its
     Command Base that its land reaches (or an Outpost by the nearest unclaimed one first), every 20 s while it finds
@@ -2282,7 +2317,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
-  **B** build, then **1–5** a tab (Gather, Make, Move, Defend, All; **Tab** steps; a new game opens on Gather, then on the last one used) and the
+  **B** build, then **1–6** a tab (Gather, Make, Move, Defend, All, Mega; **Tab** steps; a new game opens on Gather, then on the last one used) and the
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D or B;
   R is Ore Mine on Gather and Refinery on Make; on All a card shows "2 C"; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges

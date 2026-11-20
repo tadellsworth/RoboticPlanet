@@ -1573,12 +1573,13 @@ const MISSIONS = [
   },
   {
     id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
-    brief: 'The archive\'s last pages hold an orbital defence. Build it here, shield your base, and fire it along the line of their depots.',
+    brief: 'The archive\'s last pages hold an orbital defence and a city for the colonists. Build both, shield your base, and fire along their depots.',
     intro: [
       'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
       'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
       'The <b>Lance of Corvane</b> fires a beam across the whole map. It needs 2 Generators with Fuel by its pit.',
       'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',
+      '<b>Arrival City</b>, built for colonists who never came: your work within 8 tiles of it goes 20% faster.',
       'Their supply depots stand in a row. In free play, Custom Game → Rules switches Megastructures on or off.',
     ],
     mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true,
@@ -1586,21 +1587,38 @@ const MISSIONS = [
     setup(S) {
       kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander), P = S.players[0];
-      L.stock.cement += 120; L.stock.alloy += 80; L.stock.chip += 40; L.stock.crystal += 50; L.stock.fuel += 30;
+      L.stock.cement += 180; L.stock.alloy += 110; L.stock.chip += 55; L.stock.crystal += 50; L.stock.fuel += 36; L.stock.fiber = (L.stock.fiber || 0) + 30; // (with Arrival City's)
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
       // Their depots, strung out in a row from their base toward ours: one line of fire from by our base takes most of them.
       const dx = L.x - E.x, dy = L.y - E.y, d = Math.hypot(dx, dy) || 1;
       for (let k = 0; k < 7; k++) preBuild(1, 'depot', Math.round(E.x + dx / d * (3 + k * 2.2)), Math.round(E.y + dy / d * (3 + k * 2.2)), { reach: 1 });
       computeTerritory();
+      // Room for Arrival City: an Outpost by the nearest open ground big enough for it (4 by 4 with a tile clear round it).
+      const open = (i, j) => { for (let b = j - 1; b <= j + 4; b++) for (let a = i - 1; a <= i + 4; a++) { if (!inMap(a, b)) return false; const t = tIdx(a, b); if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.ramp[t] || S.elev[t] !== S.elev[tIdx(i, j)]) return false; } return true; };
+      let sq = null, sd = Infinity;
+      for (let j = L.y - 16; j <= L.y + 16; j++) for (let i = L.x - 16; i <= L.x + 16; i++) { const dd = dist(i + 2, j + 2, L.x + 0.5, L.y + 0.5); if (dd >= 6 && dd < sd && open(i, j)) { sd = dd; sq = [i, j]; } }
+      if (sq && !canPlace(0, 'city', sq[0], sq[1]).ok) {
+        const ring = [];
+        for (let j = sq[1] - 3; j <= sq[1] + 6; j++) for (let i = sq[0] - 3; i <= sq[0] + 6; i++) if (inMap(i, j) && (i < sq[0] - 1 || i > sq[0] + 4 || j < sq[1] - 1 || j > sq[1] + 4)) ring.push([dist(i, j, L.x, L.y), i, j]);
+        ring.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
+        for (const [, i, j] of ring) if (canPlace(0, 'outpost', i, j).ok) { const o = addBuilding(0, 'outpost', i, j, true); for (const t of roadRouteTo(0, o) || []) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); break; }
+      }
       P.stats.startBots = P.stats.bots;
     },
     goals: [
       { kind: 'built', type: 'dome', n: 1,
-        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by your base, then <b>Defend</b> (<kbd>4</kbd>) → <b>Shield Dome</b> (<kbd>H</kbd>) beside it.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='dome'], .bcard[data-t='generator']" },
+        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by your base, then <b>Mega</b> (<kbd>6</kbd>) → <b>Shield Dome</b> (<kbd>H</kbd>) beside it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='dome'], .bcard[data-t='generator']" },
+      { kind: 'built', type: 'city', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Arrival City</b> (<kbd>C</kbd>) by your factories: within 8 tiles they work 20% faster.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='city']" },
+      { kind: 'cityDrive', n: 3, text: 'Have {n} buildings working faster by Arrival City', at: 'city',
+        count: (P, S) => cityDriven(S, 0),
+        hint: 'Tap Arrival City to see its reach, then <b>Smelter</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>M</kbd>) or more inside it.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='smelter'], .bcard[data-t='fab']" },
       { kind: 'built', type: 'lance', n: 1,
-        hint: '<b>Defend</b> → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
       { kind: 'lanceFired', n: 1, text: 'Fire the Lance of Corvane', at: 'lance',
         count: (P) => P.stats.lance || 0,
         hint: 'Tap the Lance → <b>Aim the Lance</b> (<kbd>F</kbd>), tap a spot past their depots, then <b>Charge</b>.',

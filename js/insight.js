@@ -410,6 +410,8 @@ function reportMoments() {
       out.push({ t: e.t, kind: 'bad', w: 2 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `You lost ${e.n === 1 ? 'a building' : e.n + ' buildings'}${e.q >= 0 ? ` to ${insWho(e.q, true)}` : e.q === -2 ? ' to several rivals' : ''}${span}: ${insTypes(e.ty)}.` });
     } else if (e.k === 'lost' && e.q === ME) out.push({ t: e.t, kind: 'good', w: 1 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `Your robots wrecked or took ${e.n === 1 ? 'one' : e.n} of ${insWho(e.p, true)}'s buildings: ${insTypes(e.ty)}.` });
     else if (e.k === 'lost' && e.n >= 4) out.push({ t: e.t, kind: 'info', w: e.n, n: e.n, p: e.p, t1: e.t1, text: `${insWho(e.p)} lost ${e.n} buildings${e.q >= 0 ? ` to ${insWho(e.q, true)}` : ''}.` });
+    else if (e.k === 'city' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'good' : e.q === ME ? 'bad' : 'info', w: 20, text: e.p === ME ? `You took Arrival City${e.q >= 0 ? ` from ${insWho(e.q)}` : ''}.` : `${insWho(e.p)} took Arrival City${e.q === ME ? ' from you' : e.q >= 0 ? ` from ${insWho(e.q)}` : ''}.` });
+    else if (e.k === 'cityDown' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'bad' : 'good', w: 12, text: e.p === ME ? 'Your Arrival City was knocked down: dark, and open to capture.' : `${insWho(e.p)}'s Arrival City was knocked down.` });
     else if (e.k === 'lanceFire' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'good' : 'bad', w: 22, text: e.p === ME ? 'Your Lance of Corvane fired across the map.' : `${insWho(e.p)}'s Lance of Corvane fired across the map.` });
     else if (e.k === 'dry' && e.p === ME && GOOD[e.g] && e.d >= 60) out.push({ t: e.t, kind: 'warn', w: 2 + e.d / 40, text: `Out of ${goodN(e.g, 2)} for ${insDur(e.d)}.`, g: e.g, d: e.d });
     else if (e.k === 'out') {

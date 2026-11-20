@@ -2449,17 +2449,21 @@ function mapDims(st) {
 }
 
 /**
- * Are the megastructures in this game (the Lance of Corvane, the Shield Dome)? The Megastructures setting (on unless the
+ * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City)? The Megastructures setting (on unless the
  * game setup turned it off; a save from before it: off), and in a mission only one that teaches them (S.mission.mega).
  */
 function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission || !!S.mission.mega); }
 
-/** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, the Hollow (the Lance). */
+/** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, Arrival City's hour (cityOpen). */
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
+  if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
 }
+
+/** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
+function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
 
 /** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? Not in a mission, unless it teaches it. */
 function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke) && !S.hollow; } // (no missiles under the Hollow's roof)
@@ -2686,6 +2690,7 @@ function hollowOn() { return !!(S && S.hollow); }
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type) {
+  if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (!hollowOn()) return '';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
@@ -3235,6 +3240,7 @@ function computeTerritory() {
     if (b.dead || !b.built) continue;
     // A Bunker claims no wide ring; a Port founded from a Ferry (b.claim) claims a little round it.
     if ((BDEFS[b.type].mil && !BDEFS[b.type].bunker) || b.claim > 0) stamp(d, b, b.claim || BDEFS[b.type].terr);
+    else if (BDEFS[b.type].city) for (const t of cityRing(b)) { const dd = cityRingD(b, t); if (dd < d[b.owner][t]) d[b.owner][t] = dd; } // (Arrival City: a military claim round its middle)
     else if (civClaims(b)) stamp(c, b, CIV_CLAIM);
   }
   const nearest = (arr, t) => {
@@ -3320,7 +3326,7 @@ function computeTerritory() {
   // (it stops working and crumbles, see cutOff) until its owner takes the land back. On no-one's ground,
   // or its owner's, it's fine.
   for (const b of S.buildings.slice()) {
-    if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild) continue;
+    if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild || (BDEFS[b.type].city && b.built)) continue; // (Arrival City holds its own ground)
     const o = S.owner[tIdx(b.x, b.y)];
     let rival = o >= 0 && o !== b.owner;
     // A Viaduct can land in a rival's land (a bridgehead for an attack): it's only cut off once neither
@@ -3343,6 +3349,19 @@ function computeTerritory() {
     if (!b.cut) cutOff(b);
   }
 }
+
+/**
+ * The tiles Arrival City b holds (CITY.land round the middle of its square, as an Outpost holds its ring), in order;
+ * cityRingD: how far one is from its middle (squared, in tiles, as computeTerritory compares claims).
+ */
+function cityRing(b) {
+  const F = BDEFS[b.type].foot, cx = b.x + F / 2 - 0.5, cy = b.y + F / 2 - 0.5, r = CITY.land, r2 = r * r + 0.3, out = [];
+  for (let j = Math.max(0, Math.floor(cy - r)); j <= Math.min(S.H - 1, Math.ceil(cy + r)); j++) {
+    for (let i = Math.max(0, Math.floor(cx - r)); i <= Math.min(S.W - 1, Math.ceil(cx + r)); i++) if (dist2(i, j, cx, cy) <= r2) out.push(j * S.W + i);
+  }
+  return out;
+}
+function cityRingD(b, t) { const F = BDEFS[b.type].foot; return dist2(t % S.W, (t / S.W) | 0, b.x + F / 2 - 0.5, b.y + F / 2 - 0.5); }
 
 /**
  * Finished building b now stands on a rival's ground: cut off. It stops working (its worker walks away,
@@ -3641,6 +3660,8 @@ function footPlace(owner, type, i, j, skipBlockCheck) {
   for (const [a, c] of tiles) if (!inMap(a, c)) return { ok: false, reason: 'Outside the map.' };
   const r = canPlace(owner, type, i, j, true, '_');
   if (!r.ok) return r;
+  // (Arrival City can never be destroyed: not on a fault line that will open into a chasm under it.)
+  if (BDEFS[type].city && S.fault && S.quake && !S.quake.done && tiles.some(([a, c]) => S.fault[tIdx(a, c)])) return { ok: false, reason: 'Arrival City can\'t stand on the fault line: the ground there will give way.' };
   const lv = S.elev[tIdx(i, j)], set = new Set(tiles.map(([a, c]) => tIdx(a, c)));
   for (const [a, c] of tiles) {
     const t = tIdx(a, c);
@@ -4893,6 +4914,9 @@ function offDeck(a, c) {
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
 function destroyBuilding(b, burn, quiet) {
   if (b.dead) return;
+  // Arrival City can never be destroyed: anything that would knock it down knocks it to 0 (see cityDown). Only a colony
+  // leaving the game, or its own Workers' site being dropped, removes one.
+  if (BDEFS[b.type].city && b.built && !b.gone && typeof cityDown === 'function') { b.armor = 0; cityDown(b, -1); return; }
   // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
   if (b.moving && typeof cancelMove === 'function') cancelMove(b);
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; }

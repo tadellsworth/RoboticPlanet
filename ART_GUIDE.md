@@ -1675,6 +1675,21 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 26: Arrival City (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Terraced Arcology". Rendered with `renderer/b/city.js`
+at every time of day for both teams, whole and battle-damaged, by `renderer/tools/render_city.sh`;
+`renderer/tools/install_city.py` writes the WebP files and prints its frame (RENDERER.md, "Arrival City"). It is the
+widest building: its frame puts the middle of its 4 × 4 square on the frame's anchor (`CITY_FRAME`). All its own lights
+are off in these images (windows dark glass, lamps unlit): the game adds them.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `city@0`, `city@1` (+ morning, evening, night) | Three terraces of homes, each with rows of windows and a team-colour band along its parapet and team banners down its face, stepping back to the north so their roofs face the player as gardens: on the first a school (a little block with a bell turret, a red running track, a playground) and a park with a pond and a footbridge; on the second allotments, an orchard, a pergola and two deer grazing; on the third a fountain square before a tall glass atrium (a garden inside) whose south gable holds the Arrival clock, "ARRIVAL T+31 YEARS". Round it a ring road with kerbs, dashes and tram rails, the Arrival Station's glass canopy over an empty two-car tram and a departure board ("ON TIME"), bus shelters, street lamps and a "WELCOME HOME" sign | `drawCity` over the middle of its square |
+| `city-down@0`, `city-down@1` (+ times of day) | Knocked down to 0: windows dark and many broken, scorch over its faces, terraces and plaza, the first terrace's south-west corner blown out into rubble and twisted rebar, most trees burnt to sticks, the atrium's glass shattered and half its roof gone, the clock face cracked and dark, the station canopy's glass broken, lamps knocked askew, the deer gone | `drawCity` while `b.cDown` |
+| `city-lit-0`…`city-lit-3` (one set for every team and time) | Its lights as light to add: 0 the street lamps, bus shelters, station canopy, departure board, tram and welcome sign; 1 the first terrace's windows and the school's; 2 the second terrace's; 3 the third's, the atrium's lamps and floor and the clock face (each the glow pass of `part=lit&tier=k`, bloomed; colour ÷ alpha) | `cityLights`: added (`lighter`) tier by tier as dusk falls, on a timer (`cityLightLevel`), all on by night and in the Hollow; none while it's down or out of Fuel. Its warm light pool and a wide glow round it (`drawCityGlow`) come on with them |
+| (code) | Being taken | `drawCityTaking`: a ring round it filling in the taker's colour over 20 s, with a small flag |
+
 ### Batch 25: the Skirmisher, the Arc Caster and the Railgunner (installed)
 
 Three army robots in the Warbot's "Lancer" family (the shared `renderer/b/robkit.js`: seen straight down, facing east,

@@ -1994,7 +1994,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 
 /**
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
- * 4 Defend, 5 All; Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
  * map and B closes the menu, so no building uses those. R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
@@ -2004,9 +2004,10 @@ const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
-  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n', lance: 'l', dome: 'h' },
+  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
+  mega: { lance: 'l', dome: 'h', city: 'c' },
 };
-const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
@@ -2118,7 +2119,7 @@ function initKeyboard() {
     // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
     // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
-    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All).
+    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All, 6 Mega).
     if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       const g = Object.keys(BUILD_TAB_KEYS).find((t) => BUILD_TAB_KEYS[t] === digit[1]);
       const tab = g && $('build-tabs') && $('build-tabs').querySelector(`[data-g="${g}"]`);
@@ -2194,7 +2195,7 @@ function initKeyboard() {
       if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
       if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
         e.preventDefault();
-        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend.`, 'info');
+        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega.`, 'info');
         return;
       }
     }
@@ -6483,7 +6484,7 @@ function costInline(cost, have) {
 }
 
 /**
- * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All), the
+ * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All, then Mega), the
  * last one used remembered, each with its number key. Every card is in the page whichever tab is showing
  * (the others are just hidden); a letter picks a building on the tab that's showing (BUILD_KEYS).
  */
@@ -6496,7 +6497,9 @@ function openBuildMenu() {
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
   if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
-  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map((g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button></div>`;
+  // (A tab marked `late`, Mega, comes after All, in the order of the number keys.)
+  const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}</div>`;
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
@@ -6686,6 +6689,8 @@ function garrisonMix(b) {
 }
 
 function ownedText(type) {
+  if (BDEFS[type].city && worldBan(type)) return 'Not on the moon';
+  if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -6847,7 +6852,7 @@ function openBuildingSheet(b) {
     if (b.owner === ME && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
     if (b.owner === ME && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
-    else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
+    else if (b.type !== 'lander' && !(def.city && b.built)) html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`; // (Arrival City can't be taken down: only captured)
     html += '</div>';
   } else if ((S.mode !== 'colony' || def.wild) && foes(b.owner, ME)) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
@@ -7267,6 +7272,18 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Power</span><span>${domePowered(b) ? 'A Generator with Fuel in reach' : `<b>None</b>: it needs a Generator with Fuel within ${DOME.reach} tiles`}</span></div>`);
         parts.push(`<div class="kv"><span>Covers · hits</span><span>${DOME.radius} tiles round it · Missile ${DOME.cost.missile}, bomb ${DOME.cost.bomb}, shell ${DOME.cost.shell}</span></div>`);
       }
+    }
+    if (def.city && b.built) {
+      const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;
+      const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
+      parts.push(`<div class="kv"><span>Arrival drive</span><span>${b.cDown ? '<b>Off</b>: it is down' : `+${pct}% work`} within ${CITY.reach} tiles: ${mineNear} building${mineNear === 1 ? '' : 's'} of ${b.owner === ME ? 'yours' : 'theirs'}, and Workers building there</span></div>`);
+      parts.push(`<div class="kv"><span>Land</span><span>${CITY.land} tiles round its middle; it counts twice for Domination</span></div>`);
+      if (b.cDown) {
+        parts.push(`<div class="kv"><span>Down</span><span>Repair it to ${Math.round(CITY.back * 100)}% (${Math.ceil(BDEFS.city.armor * CITY.back)} armor) to bring it back</span></div>`);
+        if (b.cCap > 0 && b.cBy >= 0) parts.push(`<div class="kv"><span>Being taken</span><span>by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left</span></div><div class="bar"><div style="width:${Math.round((b.cCap / CITY.cap) * 100)}%;background:${PLAYER_COLORS[b.cBy]}"></div></div>`);
+        else parts.push(`<div class="kv"><span>Capture</span><span>Armed warbots of another colony at its walls for ${CITY.cap} s, with none of its owner's there, take it</span></div>`);
+      }
+      if (mine) parts.push(`<div class="kv"><span>Lights</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))} (a Fuel a minute at night)${b.cDry ? ': <b>dark</b>, its bonus halved' : ''}</span></div>`);
     }
     if (def.nukeSilo && mine) {
       parts.push(`<div class="section-label">Nuclear missile parts</div><div class="goodlist">${Object.keys(NUKE.parts).map((g) =>

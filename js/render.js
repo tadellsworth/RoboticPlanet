@@ -3001,6 +3001,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     drawSite(ctx, type, cx, cy, s, owner, b); return;
   }
   if (type === 'magpylon' && b && b.id) return;
+  if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6571,6 +6572,7 @@ function render(dtReal) {
       let dim = S.wildlife ? drunkLight(pc.x, pc.y) : 1;
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
+      if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
@@ -6592,6 +6594,7 @@ function render(dtReal) {
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
       if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
+      if (e.type === 'city' && e.cCap > 0 && e.cBy >= 0 && R.clean < 2) drawCityTaking(ctx, e, cx, cy, z);
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
@@ -7860,6 +7863,14 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
+  if (def.city) { // (Arrival City: its bonus's reach round its middle, and the land it holds)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
+    ctx.fillStyle = 'rgba(255,214,140,0.08)'; ctx.strokeStyle = 'rgba(255,214,140,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]);
+    ctx.beginPath(); ctx.arc(cx, cy, CITY.reach * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = PLAYER_COLORS[owner || 0] || '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha *= 0.7;
+    ctx.beginPath(); ctx.arc(cx, cy, (CITY.land + 0.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= 0.7;
+    return;
+  }
   if (def.dome || def.lance) {
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
     if (def.dome) { ctx.fillStyle = 'rgba(120,200,255,0.07)'; ctx.strokeStyle = 'rgba(150,215,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]); ctx.beginPath(); ctx.arc(cx, cy, DOME.radius * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); }
@@ -10261,13 +10272,59 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   ctx.restore();
 }
 
+/**
+ * Arrival City: its art (city@T), or battle-damaged while it's down (city-down@T: dark, scorched, broken), and at dusk its
+ * lights coming on tier by tier, on a timer (cityLights). A stub (the build menu, a site's ghost) is drawn whole.
+ */
+function drawCity(ctx, cx, cy, s, owner, b) {
+  const down = !!(b && b.built && b.cDown);
+  const art = (down && artFor('city-down', owner)) || artFor('city', owner);
+  if (!art) { drawMegaPlain(ctx, 'city', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+  if (b && b.id && b.built && !down && !b.cDry) cityLights(ctx, cx, cy, s);
+}
+/**
+ * How far each of Arrival City's four tiers of lights is on (0..1) at the light now (TOD.state.lights): the street lamps
+ * first as dusk falls, then the terraces floor by floor, the atrium and its clock last, all on together by night.
+ */
+function cityLightLevel(k) { const on = TOD.active ? TOD.state.lights || 0 : 0; return Math.max(0, Math.min(1, (on - 0.08 - k * 0.16) / 0.16)); }
+function cityLights(ctx, cx, cy, s) {
+  if (!TOD.active || R.inMap) return;
+  const ga = ctx.globalAlpha;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 4; k++) {
+    const a = cityLightLevel(k), art = ART['city-lit-' + k];
+    if (a <= 0.01 || !art) continue;
+    ctx.globalAlpha = ga * a;
+    drawArtRaw(ctx, art, cx, cy, s);
+  }
+  ctx.restore();
+}
+
+/** Arrival City being taken (b.cCap of CITY.cap s by b.cBy): a ring round it filling in the taker's colour, and its flag. */
+function drawCityTaking(ctx, b, cx, cy, z) {
+  const k = Math.min(1, b.cCap / CITY.cap), r = z * 2.6, col = PLAYER_COLORS[b.cBy] || '#fff';
+  ctx.save();
+  ctx.lineWidth = Math.max(3, z * 0.14); ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = col; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(R.time * 6);
+  ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
+  ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
+  ctx.restore();
+}
+
 /** A Lance or a Shield Dome before its art has loaded (or with none): a plain pit and barrel, a plain emitter. */
 function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   const F = BDEFS[type].foot, w = F * s * 0.92, color = PLAYER_COLORS[owner];
   ctx.fillStyle = 'rgba(20,14,10,0.3)'; roundRect(ctx, cx - w / 2 + s * 0.08, cy - w / 2 + s * 0.12, w, w, s * 0.2); ctx.fill();
   ctx.fillStyle = THEME.hull; roundRect(ctx, cx - w / 2, cy - w / 2, w, w, s * 0.2); ctx.fill();
   ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.stroke();
-  if (type === 'lance') {
+  if (type === 'city') { // (three stepped terraces, a lit atrium)
+    for (let k = 1; k <= 3; k++) { const ww = w * (1 - k * 0.22); ctx.fillStyle = k % 2 ? THEME.hullHi : THEME.hull; roundRect(ctx, cx - ww / 2, cy - ww / 2 - k * s * 0.15, ww, ww, s * 0.12); ctx.fill(); }
+    ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'lance') {
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); ctx.arc(cx, cy, s * 0.95, 0, Math.PI * 2); ctx.fill();
     const a = b ? b.aim || 0 : 0;
     ctx.strokeStyle = '#3c4146'; ctx.lineCap = 'round'; ctx.lineWidth = s * 0.32;

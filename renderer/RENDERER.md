@@ -604,3 +604,21 @@ python3 tools/install_lance.py     # writes the WebP files into ../art, prints L
 Both compose like buildings (`compose.py`). The game draws them by `LANCE_FRAME` and `DOME_FRAME` (art-manifest.js) over
 the middle of their square, the head by the Lance's aim (`turretHead`); the charge rings, the beam, the trench and the
 dome are drawn in code (`js/render.js`, the megastructures) from `LANCE_ART`.
+
+## Arrival City
+
+The owner's look A, the Terraced Arcology (Nov 2026; IDEAS.md, "Megastructures"). `b/city.js` is a 4 x 4 building on its
+own 40 x 40 plaza (framed wide with `frameCompoundOpts`: the plaza's 40 units across 0.64 of the frame; the sun's
+shadow camera widened to the whole square). Its window rows are textures on each terrace's faces (one canvas for the
+wall, one for its windows' light). `state=down` is the battle-damaged City. `part=lit&tier=k` (k 0..3) renders only
+tier k's lights as glowing (in the glow pass): 0 the street, 1-3 the terraces from the bottom, the atrium and clock
+with the third. Every other render has those lights off. Marks `clock`, `atrium` and `station`. Run from this folder:
+
+```
+sh tools/render_city.sh [out]     # the City and the damaged City for both teams at every time of day, the 4 light tiers (~10 min)
+python3 tools/install_city.py     # writes the WebP files into ../art, prints CITY_FRAME
+```
+
+The City composes like a building (`compose.py`); `install_city.py` blooms each tier's glow pass itself and writes it as
+light to add (colour divided by alpha). The game draws them by `CITY_FRAME` (art-manifest.js) over the middle of the
+square, and adds the lights tier by tier at dusk (`cityLights` in `js/render.js`).

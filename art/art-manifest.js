@@ -64,6 +64,7 @@
  */
 const MD_FRAME = { scale: 2.4789, anchor: [0.5, 0.57] }; // (the Mass Driver's wide frame: see tools/install_massdriver.py)
 const LANCE_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }, DOME_FRAME = { scale: 2.9904, anchor: [0.5, 0.6] }; // (the megastructures' wide frames: see tools/install_lance.py)
+const CITY_FRAME = { scale: 6.5789, anchor: [0.5, 0.6] }; // (Arrival City's wide frame: see tools/install_city.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
@@ -243,6 +244,11 @@ const ART_MANIFEST = {
   // the charge rings' glow and the cut are drawn in code (js/render.js, the megastructures).
   ...Object.fromEntries([0, 1].flatMap((t) => [[`lance@${t}`, { src: `buildings/lance@${t}.webp`, ...LANCE_FRAME }], [`dome@${t}`, { src: `buildings/dome@${t}.webp`, ...DOME_FRAME }]])),
   ...Object.fromEntries(Array.from({ length: 16 }, (_, k) => [`lance-head-${k}`, { src: `buildings/lance-head-${k}.webp`, ...LANCE_FRAME }])),
+  // Arrival City (renderer/b/city.js, the owner's look A, the Terraced Arcology, installed by tools/install_city.py): the
+  // 4 x 4 City and the City knocked down (battle-damaged, dark), framed wide (CITY_FRAME), and its four tiers of lights
+  // (light to add, one set for every team and time of day: drawCity lights them tier by tier at dusk, on a timer).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`city@${t}`, { src: `buildings/city@${t}.webp`, ...CITY_FRAME }], [`city-down@${t}`, { src: `buildings/city-down@${t}.webp`, ...CITY_FRAME }]])),
+  ...Object.fromEntries([0, 1, 2, 3].map((k) => [`city-lit-${k}`, { src: `buildings/city-lit-${k}.webp`, ...CITY_FRAME }])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
