@@ -49,6 +49,7 @@ function simStep(dt) {
   if (S.ash && S.tick % (SCARS.step * 30) === 19) scarFade();
   if (S.scrap && S.tick % 30 === 13 && (S.scrap.length || (S.bones && S.bones.length))) scrapTidy();
   if (S.events) updateEvents();
+  if (drizzleOn()) updateDrizzle(); // (the Ring drizzle: every game, events or not)
   if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
@@ -9504,9 +9505,11 @@ function startEvent(E) {
   E.started = true;
   if (E.type === 'trader') {
     E.offers = {};
+    // (about one visit in four, for each colony: the older offer, a raw good its land is running out of)
+    const rng = makeRng(((S.seed ^ 0x5f3a91) + E.n * 6151) >>> 0), raw = S.players.map(() => rng() < WREN_RAW_CHANCE);
     for (const P of S.players) {
       if (P.absent || P.out) continue;
-      const o = traderOffer(P.id);
+      const o = traderOffer(P.id, raw[P.id]);
       if (!o) continue;
       E.offers[P.id] = o;
       // A rival takes the deal when its land is running short of what's on offer.
@@ -9514,7 +9517,7 @@ function startEvent(E) {
     }
     const o = E.offers[ME];
     for (const P of S.players) narrate(P.id, 'wren', undefined, undefined, 1); // (each visit; not in missions)
-    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${goodN(o.get, o.m)} (your land is running lowest on it) for ${o.n} of your ${goodN(o.give, o.n)}. Tap Trade to take it.`
+    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${goodN(o.get, o.m)} (${o.raw ? 'your land is running lowest on it' : 'you are shortest of it'}) for ${o.n} of your ${goodN(o.give, o.n)}. Tap Trade to take it.`
       : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
   } else if (E.type === 'dust') postMsg(ME, E.endless ? 'The dust storm is here, for good: bots crawl and Missiles are grounded.' : 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
@@ -9539,20 +9542,41 @@ function endEvent(E) {
 }
 
 /**
- * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
- * of them near its landing site), each copied to the same spot on every other colony's share
+ * Each colony's share of the planet, for what falls on every colony alike (Ringfall, the Ring drizzle): `mine(i, j)`
+ * is tile (i, j) on player 0's share (half the planet with two players, a third with three, a quarter on Crossroads and
+ * the four-colony maps; all of it in Colony), and `copies(x, y)`, the same spot on every colony's share, (x, y) first
  * (mirrored with two players, turned with three, a quarter at a time on Crossroads for three or four, mirrored both
- * ways on Long Haul 2v2),
- * so the shower is fair.
+ * ways on Long Haul 2v2). Copies can fall off the map (a turn on a map that isn't square): callers check.
  */
-function meteorPlan(rng, t0, dur) {
-  if (S.hollow) return hollowRingfall(rng, t0, dur);
+function fairShare() {
   const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
   const h4 = !alone && haul4Map(S.settings); // (Long Haul 2v2: each spot mirrored onto the other three)
   const mine = (i, j) => alone || (quad || h4 ? i < W / 2 && j >= H / 2 : np === 2 ? j >= H / 2 : sector(i, j) === 0);
+  const copies = (x, y) => {
+    const spots = [[x, y]];
+    if (h4) spots.push([W - 1 - x, y], [W - 1 - x, H - 1 - y], [x, H - 1 - y]);
+    else if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
+    else if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
+    else if (!alone && np === 3) for (let r = 1; r < 3; r++) {
+      const a = r * SEC, c = dcos(a), s = dsin(a), dx = x - ccx, dy = y - ccy;
+      spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
+    }
+    return spots;
+  };
+  return { mine, copies };
+}
+
+/**
+ * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
+ * of them near its landing site), each copied to the same spot on every other colony's share (fairShare),
+ * so the shower is fair.
+ */
+function meteorPlan(rng, t0, dur) {
+  if (S.hollow) return hollowRingfall(rng, t0, dur);
+  const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
   const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
   for (let k = 0; k < n; k++) {
     let x = -1, y = -1;
@@ -9563,15 +9587,7 @@ function meteorPlan(rng, t0, dur) {
     }
     if (x < 0) continue;
     const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
-    const spots = [[x, y]];
-    if (h4) spots.push([W - 1 - x, y], [W - 1 - x, H - 1 - y], [x, H - 1 - y]);
-    else if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
-    else if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
-    else if (!alone && np === 3) for (let r = 1; r < 3; r++) {
-      const a = r * SEC, c = dcos(a), s = dsin(a), dx = x - ccx, dy = y - ccy;
-      spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
-    }
-    for (const [i, j] of spots) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
+    for (const [i, j] of copies(x, y)) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
   }
   return hits;
 }
@@ -9651,13 +9667,118 @@ function meteorImpact(E, h) {
   }
 }
 
+/* ------------------------------------------------------------------ the Ring drizzle */
+
+/** Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it. */
+function drizzleOn() { return !S.mission || !!S.mission.drizzle; }
+
+/** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
+function drizzleOk(t) {
+  if (!(t >= 0 && t < S.W * S.H) || S.terrain[t] !== T_GROUND || S.owner[t] >= 0) return false;
+  if (S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) return false;
+  for (const L of [S.rail, S.railPlan, S.pipe, S.pipePlan, S.lava, S.ford, S.tidal, S.fault]) if (L && L[t]) return false;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (calmAt(i + 0.5, j + 0.5)) return false; // (a Trade Post's ground)
+  if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
+  if (S.wrecks && S.wrecks.some((w) => w.tiles.includes(t))) return false;
+  return true;
+}
+
 /**
- * The trader's offer to player p: it takes raw goods only (WREN_TAKES: the one p has most over what it likes to keep,
- * at least half again) and brings finished goods only (WREN_BRINGS: the one p has least of against what it likes to
- * keep), at TRADE_BONUS times the worth. null if p has no raw good much to spare. (It used to bring the raw good p's
- * land ran shortest of, for any good; the owner turned it round, Nov 2026.)
+ * The Ring drizzle (see DRIZZLE_GAP): its clock, and a lone piece of the Ring on every colony's share when it's due,
+ * unless DRIZZLE_CAP of its deposits already lie unclaimed. S.drizzle: { next (when the next one is due), n (how many
+ * have been due), spots (its deposits not yet mined out: { t, u (the second tile, or -1), r, at }), fall (the pieces in
+ * the sky now, landing at `at`: see drizzleLand) }. A game without one (a save from before it) starts its clock now.
  */
-function traderOffer(p) {
+function updateDrizzle() {
+  let D = S.drizzle;
+  if (!D) {
+    const rng = makeRng(((S.seed ^ 0x2d1a77) + 31) >>> 0);
+    const next = S.time < DRIZZLE_FIRST[0] ? DRIZZLE_FIRST[0] + rng() * (DRIZZLE_FIRST[1] - DRIZZLE_FIRST[0]) : S.time + DRIZZLE_GAP[0] + rng() * (DRIZZLE_GAP[1] - DRIZZLE_GAP[0]);
+    D = S.drizzle = { next, n: 0, spots: [], fall: null };
+  }
+  if (D.fall && S.time >= D.fall.at) drizzleLand(D);
+  if (S.time < D.next) return;
+  D.n++;
+  const rng = makeRng(((S.seed ^ 0x6b3d29) + D.n * 7873) >>> 0);
+  D.next = S.time + DRIZZLE_GAP[0] + rng() * (DRIZZLE_GAP[1] - DRIZZLE_GAP[0]);
+  // (its deposits: gone once mined out; claimed once inside a colony's land)
+  D.spots = D.spots.filter((s) => [s.t, s.u].some((t) => t >= 0 && S.res[t] === s.r && S.amt[t] > 0));
+  const unclaimed = D.spots.filter((s) => [s.t, s.u].some((t) => t >= 0 && S.res[t] === s.r && S.owner[t] < 0)).length;
+  if (D.fall || unclaimed >= DRIZZLE_CAP) return;
+  D.fall = drizzlePlan(rng);
+}
+
+/**
+ * Where the next drizzle falls: a spot (and, unless it's Uranium, a second tile beside it) on player 0's share, DRIZZLE_NEAR
+ * tiles from its Command Base (further out the more tries it takes), with the same spot on every other colony's share
+ * (fairShare), every one of them open ground no one holds (drizzleOk); in the Hollow, through a breach (each with its
+ * twin on the other side). null if no such spot turns up. The pieces show streaking down at once (addFx 'drizzle').
+ */
+function drizzlePlan(rng) {
+  const W = S.W, H = S.H, alone = S.mode === 'colony';
+  const r = nukeOn() && rng() < DRIZZLE_URANIUM ? R_URANIUM : rng() < 0.5 ? R_ORE : R_CRYSTAL;
+  const two = r !== R_URANIUM && DRIZZLE_TILES > 1, dir = rng() < 0.5 ? -1 : 1;
+  const SIDES = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  let mine, copies;
+  if (S.hollow) { mine = () => true; copies = (x, y) => (alone ? [[x, y]] : [[x, y], [W - 1 - x, H - 1 - y]]); } else ({ mine, copies } = fairShare());
+  const B = S.hollow ? (alone ? S.hollow.breaches : S.hollow.breaches.filter((b, k) => k % 2 === 0)) : null; // (player 0's side; each one's twin follows)
+  const L = getE(S.players[0].lander);
+  const ok = (list) => list.every(([i, j]) => inMap(i, j) && drizzleOk(tIdx(i, j)));
+  for (let tries = 0; tries < DRIZZLE_TRIES; tries++) {
+    let i, j;
+    if (B) {
+      if (!B.length) return null;
+      const b = B[Math.floor(rng() * B.length)], a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * (b.r - 0.4);
+      i = Math.round(b.x + dcos(a) * d); j = Math.round(b.y + dsin(a) * d);
+    } else if (L) {
+      const a = rng() * Math.PI * 2, d = DRIZZLE_NEAR[0] + rng() * (DRIZZLE_NEAR[1] - DRIZZLE_NEAR[0] + tries);
+      i = Math.round(L.x + dcos(a) * d); j = Math.round(L.y + dsin(a) * d);
+    } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
+    const side = SIDES[Math.floor(rng() * 4)];
+    if (!inMap(i, j) || !mine(i, j)) continue;
+    const a = copies(i, j);
+    if (!ok(a)) continue;
+    const b = two ? copies(i + side[0], j + side[1]) : null, second = b && b.length === a.length && ok(b);
+    const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+    const amt = clamp(Math.round(RES[r].amount * DRIZZLE_RICH * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH * (S.hollow ? HOLLOW.ringfall.rich : 1))), 1, 255);
+    const tiles = a.map(([x, y], k) => [tIdx(x, y), second ? tIdx(b[k][0], b[k][1]) : -1]);
+    const lunar = !!(S.settings && S.settings.biome === 'lunar');
+    for (const [x, y] of a) {
+      addFx('drizzle', x + 0.5, y + 0.5, { life: DRIZZLE_FALL + 1.6, land: DRIZZLE_FALL, dir, bright: lunar, r });
+      sfx('drizzle', x + 0.5, y + 0.5);
+    }
+    return { at: S.time + DRIZZLE_FALL, r, amt, tiles };
+  }
+  return null;
+}
+
+/** The drizzle's pieces land: a small deposit at each spot that's still open ground (see drizzlePlan). No harm done. */
+function drizzleLand(D) {
+  const F = D.fall;
+  D.fall = null;
+  for (const pair of F.tiles) {
+    const got = pair.map((t) => {
+      if (t < 0 || !drizzleOk(t)) return -1;
+      S.res[t] = F.r; S.amt[t] = F.amt;
+      if (S.grow) S.grow[t] = 1;
+      clearDecor(t);
+      S.dirtyTiles.push(t);
+      return t;
+    });
+    if (got[0] >= 0 || got[1] >= 0) D.spots.push({ t: got[0] >= 0 ? got[0] : got[1], u: got[0] >= 0 ? got[1] : -1, r: F.r, at: S.time });
+  }
+}
+
+/**
+ * The trader's offer to player p. As a rule it takes raw goods only (WREN_TAKES: the one p has most over what it likes
+ * to keep, at least half again) and brings finished goods only (WREN_BRINGS: the one p has least of against what it
+ * likes to keep), at TRADE_BONUS times the worth. With `raw` (about one visit in four: WREN_RAW_CHANCE, see startEvent)
+ * it makes its older offer instead (wrenRawOffer), if p has anything to spare for it. null if p has nothing much to
+ * spare. `raw` on the offer marks the older kind; `short`: p is short of what it brings (a rival takes the deal then).
+ */
+function traderOffer(p, raw) {
+  if (raw) { const o = wrenRawOffer(p); if (o) return o; }
   const have = spendable(p);
   let get = null, lv = Infinity;
   for (const g of WREN_BRINGS) {
@@ -9674,6 +9795,37 @@ function traderOffer(p) {
   const n = clamp(Math.round((have[give] - TRADE_KEEP[give]) * 0.6), 6, 40);
   const m = Math.max(2, Math.round((n * TRADE_VALUE[give] * TRADE_BONUS) / TRADE_VALUE[get]));
   return { give, n, get, m, short: lv < 1, done: false };
+}
+
+/**
+ * The Wren's older offer (now and then: see traderOffer): the raw good p's land is closest to running out of (TRADE_GET:
+ * what's in stock and in the ground on p's land, against TRADE_LEFT; Crude only once p has an Oil Pump), for some of a
+ * good p has well over what it likes to keep (TRADE_GIVE, never a made good for its own ingredients: no Cement for
+ * Stone). null if p has nothing much to spare.
+ */
+function wrenRawOffer(p) {
+  const have = spendable(p), left = {};
+  for (const g in TRADE_GET) left[g] = have[g] || 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (S.owner[t] !== p || !S.res[t]) continue;
+    for (const g in TRADE_GET) if (S.res[t] === TRADE_GET[g]) left[g] += S.amt[t];
+  }
+  let get = null, lv = Infinity;
+  for (const g in TRADE_GET) {
+    if (g === 'crude' && !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'pump')) continue; // no use for it yet
+    const v = left[g] / TRADE_LEFT[g];
+    if (v < lv) { lv = v; get = g; }
+  }
+  let give = null, gv = 1.5;
+  for (const g of TRADE_GIVE) {
+    if (g === get || (TRADE_MADE_FROM[g] || []).includes(get)) continue;
+    const v = (have[g] || 0) / TRADE_KEEP[g];
+    if ((have[g] || 0) >= 8 && v > gv) { gv = v; give = g; }
+  }
+  if (!give || !get) return null;
+  const n = clamp(Math.round((have[give] - TRADE_KEEP[give]) * 0.6), 6, 40);
+  const m = Math.max(3, Math.round((n * TRADE_VALUE[give] * TRADE_BONUS) / TRADE_VALUE[get]));
+  return { give, n, get, m, short: lv < 1, raw: 1, done: false };
 }
 
 /** Take the trader's offer: '' if done, or why not. */
@@ -15874,6 +16026,12 @@ function hashState() {
   }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
+  if (S.drizzle) { // (the Ring drizzle: its clock, its deposits, the pieces in the sky)
+    const D = S.drizzle;
+    num(D.next); int(D.n);
+    for (const z of D.spots) { int(z.t); int(z.u); int(z.r); num(z.at); }
+    if (D.fall) { num(D.fall.at); int(D.fall.r); int(D.fall.amt); for (const [a, b] of D.fall.tiles) { int(a); int(b); } }
+  }
   if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
