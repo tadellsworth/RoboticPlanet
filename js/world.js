@@ -2667,6 +2667,7 @@ function newGame(opts) {
   if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
+  clearCalmGround(); // (no deposits on a Trade Post's ground: moved just off it)
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
@@ -4768,7 +4769,11 @@ function cancelTask(bot, keepLoad = false) {
     case 'staff': {
       const b = getE(t.bld);
       if (b) {
-        if (b.staff === bot.id) b.staff = 0;
+        if (b.staff === bot.id) {
+          b.staff = 0;
+          // (A Roadworks has two Pavers: the other one, at work, is its staff now.)
+          if (BDEFS[b.type].crews > 1) for (const v of S.bots) if (v !== bot && !v.dead && v.task && v.task.type === 'staff' && v.task.bld === b.id && v.task.phase !== 'go') { b.staff = v.id; break; }
+        }
         if (b.staffInc === bot.id) b.staffInc = 0;
       }
       if (t.node >= 0) S.resRes[t.node] = 0;
@@ -5382,6 +5387,7 @@ function deserializeGame(json) {
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   // Each computer player keeps its own doctrine (saved as `style`); one the game doesn't know (a damaged file) plays as a Steward.
   for (const P of o.players) if (P.style !== undefined && !isDoctrine(P.style)) P.style = 'balanced';
+  for (const P of o.players) if (P.roadCrew !== undefined && !ROAD_CREWS.includes(P.roadCrew)) delete P.roadCrew; // (older saves: ROAD_CREW)
   // A save from before the narrator (no S.lore): what it would already have said, so a game loaded an hour in doesn't
   // announce its "first" road or Uplink, or the first nightfall, all over again. (Text only: see loreDue.)
   if (!o.lore || typeof o.lore !== 'object') {
@@ -5420,6 +5426,7 @@ function deserializeGame(json) {
     if (oldWays) wayOwnersFromLand();
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
+    clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
     scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }

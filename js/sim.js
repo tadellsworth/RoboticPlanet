@@ -1979,6 +1979,7 @@ function dispatch(p) {
     }
   }
 
+  roadToSites(p, blds); // (building beats roads: a Worker laying road near a site waiting for a builder goes to it)
   const idle = [];
   for (const u of S.bots) if (u.owner === p && isIdleWorker(u)) idle.push(u);
   if (!idle.length) return;
@@ -2108,13 +2109,14 @@ function dispatch(p) {
   }
   collectCrates(true);
 
-  // 0) Specialist buildings get a bot of their crew.
+  // 0) Specialist buildings get a bot of their crew (a Roadworks two: BDEFS[].crews).
   for (const b of blds) {
-    const crew = BDEFS[b.type].crew;
-    if (!crew || !b.built || b.paused || b.cut || b.staff || b.staffInc || b.depleted) continue;
-    const u = take(b.x, b.y, crew);
-    if (u) assignStaff(u, b);
-    else if (!S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
+    const crew = BDEFS[b.type].crew, want = BDEFS[b.type].crews || 1;
+    if (!crew || !b.built || b.paused || b.cut || b.depleted) continue;
+    let have = want > 1 ? crewCount(b) : b.staff || b.staffInc ? 1 : 0, u = null;
+    while (have < want && (u = take(b.x, b.y, crew))) { assignStaff(u, b); have++; }
+    if (have >= want || u) continue;
+    if (!have && !S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
       const P = S.players[p];
       P.crewMsg = P.crewMsg || {};
       if (S.time - (P.crewMsg[crew] || -999) > 120) {
@@ -2493,11 +2495,14 @@ function dispatch(p) {
   }
   // 6) Free workers pave planned roads (see nextPaveTile). The tile one picks goes to the free worker on its ground
   //    nearest to it: the one at home takes the tile at the home end, not one standing out at the far end.
+  //    No more than the colony's road crew limit of them at once (roadCrew): a Roadworks' Pavers lay road too, and
+  //    don't count (see doStaff).
   if (planList(p).length) {
     const none = []; // areas with nothing (left) to pave
     const crew = idle.filter((u) => BOTS[u.type].build && !(u.failUntil > S.time)); // (one that just found no way somewhere sits this round out)
-    let k = crew.length - 1;
-    while (k >= 0) {
+    const lim = roadCrew(p);
+    let k = crew.length - 1, on = lim && crew.length ? roadCrewOn(p) : 0;
+    while (k >= 0 && (!lim || on < lim)) {
       const u = crew[k], z = botZone(u);
       if (none.indexOf(z) >= 0) { k--; continue; }
       const t = nextPaveTile(u, p, -1);
@@ -2511,6 +2516,7 @@ function dispatch(p) {
       const v = crew.splice(w, 1)[0];
       idle.splice(idle.indexOf(v), 1);
       assignPave(v, t);
+      if (v.task && v.task.type === 'pave') on++;
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
@@ -2716,10 +2722,13 @@ function landerSalvage(p, dt) {
  * network is home's (the roads joined to a Command Base on its ground) or, for one posted on a foothold (ground no
  * road, ramp or bridge joins to home yet: a Drop Outpost's island, say), the roads joined to that foothold's stores
  * and garrisons. A planned tile joins (paveMap's `join`) where it is beside road on that network (or on a road
- * leaving a finished building on it), or beside such a building: a site at the far end, or a building cut off from
- * home, doesn't count. A bridge or tunnel is built from the road beside it on that network (its `stand`): the home
- * side. A tile being paved counts as down already, so a second Worker takes the next tile just past it (still
- * growing outward) or another road, and a crew paves one road side by side. A stretch of plan that joins nothing
+ * leaving a finished building on it), or beside such a building: a site at the far end doesn't count. A bridge or
+ * tunnel is built from the road beside it on that network (its `stand`): the home side. A stretch whose far end touches
+ * road of the player's or a finished building of its (its `tail`: one cut off from home too) grows from that end as
+ * well, so a crew works a long road from both ends, each end usable as it grows. A tile being paved counts as down
+ * already, so a second Worker takes the next tile just past it (still growing outward), or another end or another road
+ * no more than PAVE_QUEUE tiles further, and a crew paves one road side by side. (A colony's Workers lay no more than
+ * its road crew limit at once, ROAD_CREW, and a Roadworks' Pavers lay road too: see doStaff.) A stretch of plan that joins nothing
  * (laid down on its own, out in the open; or the rival's bridge out from its bare shore) is still built: from its end
  * nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile as near
  * (a bridge or tunnel as soon as one: from the shore nearest home).
@@ -2728,6 +2737,7 @@ const PAVE_ALONE = 12;  // tiles: how much further off a joined tile can be and 
 const PAVE_SPARE = 2;   // charge kept in hand on top of BATTERY.critical when a Worker reckons up a trip (see paveShort)
 const PAVE_FULL = 95;   // a Worker charged this far goes whatever the trip (charging can't give it more)
 const PAVE_TAKE = 8;    // a Worker this many tiles nearer a tile than the one still walking out to it takes it over
+const PAVE_QUEUE = 8;   // tiles: how much further off another end of a road (or another road) can be and still come before the tile just past one being paved
 const _paveM = { S: null, key: '', zone: null, maps: new Map() };
 
 /**
@@ -2763,7 +2773,8 @@ function paveMap(p, zone) {
   const homeD = (t) => { let hd = 0; if (far.length) { hd = Infinity; for (const b of far) hd = Math.min(hd, Math.abs(b.x - (t % W)) + Math.abs(b.y - ((t / W) | 0))); } return hd; };
   const tiles = planList(p), n = tiles.length, idx = new Map();
   for (let k = 0; k < n; k++) idx.set(tiles[k], k);
-  const join = new Uint8Array(n), stand = new Int32Array(n), grow = new Uint8Array(n), comp = new Int32Array(n).fill(-1), home = new Float64Array(n);
+  const join = new Uint8Array(n), tail = new Uint8Array(n), stand = new Int32Array(n), grow = new Uint8Array(n), comp = new Int32Array(n).fill(-1), home = new Float64Array(n);
+  const ownBuilt = (v) => { const b = S.bAt[v] && getE(S.bAt[v]); return !!b && !b.dead && b.owner === p && b.built; };
   const nb = (t) => { const i = t % W; return [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]; };
   for (let k = 0; k < n; k++) {
     const t = tiles[k], cross = crossTile(t);
@@ -2780,6 +2791,7 @@ function paveMap(p, zone) {
         const sc = (S.road[v] ? 0 : 1e4) + homeD(v);
         if (sc < altS) { altS = sc; alt = v; }
       } else if ((S.road[v] && onNet(v)) || anchB(v)) join[k] = 1;
+      else if ((S.road[v] && wayOwner(v) === p) || ownBuilt(v)) tail[k] = 1; // (a far end: see above)
     }
     stand[k] = cross ? (st >= 0 ? st : alt) : S.zone[t] === zone ? t : -1;
     grow[k] = links <= 1 || near ? 1 : 0;
@@ -2805,13 +2817,13 @@ function paveMap(p, zone) {
     if (!grows) for (const b of members) grow[b] = 1; // (a ring with nothing beside it: anywhere, nearest home first)
     compJoin.push(joins);
   }
-  M = { tiles, idx, join, stand, grow, comp, compJoin, home, on, rn };
+  M = { tiles, idx, join, tail, stand, grow, comp, compJoin, home, on, rn };
   _paveM.maps.set(mk, M);
   return M;
 }
 
 /** Is planned tile t being paved now (a Worker still about is on its way to it, or at work on it)? */
-function paveBusy(t) { const by = S.paveRes[t], v = by && getE(by); return !!v && !v.dead && !!v.task && v.task.type === 'pave' && v.task.tile === t; }
+function paveBusy(t) { const by = S.paveRes[t], v = by && getE(by); return !!v && !v.dead && !!v.task && (v.task.type === 'pave' ? v.task.tile === t : v.task.type === 'staff' && v.task.lay === t); }
 
 /**
  * The planned road tile worker u should pave next (see paveMap): the nearest one nobody else is paving that joins
@@ -2849,7 +2861,7 @@ function nextPaveTile(u, p, maxD) {
   // A stretch with a joined tile some Worker can still get to is paved from there. One with none (and nobody on it yet)
   // starts from its end nearest home: of the tiles it may start from that can be got at, the nearest home.
   const joined = new Set(), start = new Map();
-  for (let k = 0; k < n; k++) if (M.join[k] && M.stand[k] >= 0 && !(skip[M.tiles[k]] > S.time)) joined.add(M.comp[k]);
+  for (let k = 0; k < n; k++) if ((M.join[k] || M.tail[k]) && M.stand[k] >= 0 && !(skip[M.tiles[k]] > S.time)) joined.add(M.comp[k]);
   for (let k = 0; k < n; k++) {
     const c = M.comp[k];
     if (!M.grow[k] || joined.has(c) || going.has(c) || M.stand[k] < 0 || skip[M.tiles[k]] > S.time) continue;
@@ -2865,9 +2877,11 @@ function nextPaveTile(u, p, maxD) {
     const d = Math.abs(i + 0.5 - ux) + Math.abs(j + 0.5 - uy);
     if (maxD >= 0 && d > maxD) continue;
     // Someone else's already, unless it's still walking out from far off and this one is right here (see assignPave).
-    if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
+    // (A Paver's, never: see doStaff.)
+    if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.type !== 'pave' || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
     let s;
-    if (M.join[k] || next[k]) s = d;
+    if (M.join[k] || M.tail[k]) s = d;
+    else if (next[k]) s = d + PAVE_QUEUE; // (rather another end, if one is about as near: the crew spreads out)
     else if (M.grow[k] && M.home[k] <= start.get(M.comp[k])) s = d + (crossTile(t) ? 0 : PAVE_ALONE); // (a bridge out from a bare shore as soon as any)
     else continue;
     if (s < bs) { bs = s; best = t; }
@@ -2927,6 +2941,7 @@ function paveShort(u, t, stand) {
 function assignPave(u, t) {
   cancelTask(u);
   const was = paveBusy(t) ? getE(S.paveRes[t]) : null; // (taking it over from one still on its way from far off)
+  if (was && was.task.type !== 'pave') return; // (never a Paver's)
   const stand = paveSpot(u, t);
   const stuck = u.failUntil > S.time - 18; // (it found no way somewhere else a moment ago too)
   u.task = { type: 'pave', tile: t, phase: 'go', prog: 0 };
@@ -3179,6 +3194,52 @@ function rampStand(u, b) {
     if (p && p.length < bl) { bl = p.length; best = c; }
   }
   return best;
+}
+
+/** How many bots of its crew building b has: on their way, inside, or out working (a Roadworks takes two: BDEFS[].crews). */
+function crewCount(b) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'staff' && u.task.bld === b.id) n++;
+  return n;
+}
+
+/** Player p's road crew limit: at most this many Workers lay planned road at once (0: no limit). See ROAD_CREW. */
+function roadCrew(p) { const v = S.players[p] && S.players[p].roadCrew; return ROAD_CREWS.includes(v) ? v : ROAD_CREW; }
+
+/** How many of player p's Workers are laying planned road now (on their way to a tile, or at work on one). */
+function roadCrewOn(p) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build) n++;
+  return n;
+}
+
+/**
+ * Building beats roads: a construction site waiting for a builder (its materials in) takes a Worker laying road within
+ * PAVE_LEAVE tiles of it, the nearest, unless a free Worker is as near (dispatch's step 1 sends that one). The road
+ * waits for it, or for the next free Worker.
+ */
+function roadToSites(p, blds) {
+  const P = S.players[p];
+  let crew = null, stands = null;
+  for (const b of blds) {
+    if (b.built || b.builder || !(siteFrac(b) > b.progress + 0.01) || (P.danger && dangerAt(p, b.x, b.y))) continue;
+    if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
+    if (!crew) {
+      crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build && !u.carry);
+      if (!crew.length) return;
+    }
+    const at = siteWorkAt(b), cx = at.x + 0.5, cy = at.y + 0.5, z = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
+    let best = null, bd = PAVE_LEAVE * PAVE_LEAVE;
+    for (const u of crew) {
+      const d = dist2(u.x, u.y, cx, cy);
+      if (d > bd || (!ramp && botZone(u) !== z) || ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u))) continue;
+      bd = d; best = u;
+    }
+    if (!best) continue;
+    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && dist2(v.x, v.y, cx, cy) <= bd && (ramp || botZone(v) === z))) continue;
+    crew.splice(crew.indexOf(best), 1);
+    assignBuild(best, b, stands);
+  }
 }
 
 function assignStaff(u, b) {
@@ -3638,6 +3699,7 @@ function findPlantSpot(b, radius) {
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
+      if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -3662,7 +3724,7 @@ function findCropSpot(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue;
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -3778,6 +3840,56 @@ function pumpSeep(b) {
   return best;
 }
 
+/** Seconds a Worker takes to lay planned road tile t (a Paver PAVER_LAY times as fast): a bridge or tunnel takes longer, and so does clearing resources. */
+function layTime(t) { const c = CROSS[S.terrain[t]]; return c ? c.time : roadClears(t) ? PAVE_CLEAR_TIME : PAVE_TIME; }
+
+/**
+ * Paver u of Roadworks b (its staff task t) sets off to lay planned road tile `tile` (see nextPaveTile), from where a
+ * Worker would stand (paveSpot). Taking it over from a Worker still walking out to it, that one finds other work.
+ * False if it can't get there (nobody tries the tile for a while, as for a Worker: see assignPave).
+ */
+function paverGo(u, b, t, tile) {
+  const stand = paveSpot(u, tile);
+  if (stand >= 0 && goTo(u, stand % S.W, (stand / S.W) | 0)) {
+    const was = paveBusy(tile) ? getE(S.paveRes[tile]) : null;
+    if (was && was !== u && was.task.type === 'pave') cancelTask(was);
+    t.trip = true; // (out working: no off-road slowdown)
+    t.lay = tile; t.node = -1; t.phase = 'toNode';
+    S.paveRes[tile] = u.id;
+    return true;
+  }
+  const P = S.players[u.owner];
+  (P.paveSkip = P.paveSkip || {})[tile] = S.time + 15;
+  return false;
+}
+
+/** Paver u (staff task t of Roadworks b) has laid its tile, or it was called off: on to the next planned tile close by while its charge lasts, else home. */
+function paverNext(u, b, t) {
+  t.lay = -1;
+  if ((u.bat ?? 100) >= BATTERY.low + 5) {
+    const next = nextPaveTile(u, u.owner, 12);
+    if (next >= 0 && paverGo(u, b, t, next)) return;
+  }
+  t.trip = false;
+  t.phase = 'back';
+  if (!goTo(u, b.x, b.y)) { u.x = b.x + 0.5; u.y = b.y + 0.5; u.path = null; }
+}
+
+/** Paver u at work on planned road tile t.lay: PAVER_LAY times a Worker's rate (see doPave). */
+function paverLay(u, b, t, dt) {
+  const tile = t.lay;
+  if (S.plan[tile] !== u.owner + 1) { paverNext(u, b, t); return; }
+  u.busy = 1;
+  b.working = true;
+  if (CROSS[S.terrain[tile]]) u.face = datan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
+  t.timer -= dt * S.players[u.owner].mult * batFactor(u) * (tech(u.owner, 'paving') ? 1 / 0.6 : 1);
+  if (t.timer > 0) return;
+  layRoad(tile);
+  const P = S.players[u.owner];
+  P.paverLaid = (P.paverLaid || 0) + 1;
+  paverNext(u, b, t);
+}
+
 function doStaff(u, t, dt) {
   const b = getE(t.bld);
   if (!b || b.owner !== u.owner || !b.built) { cancelTask(u); return; }
@@ -3844,6 +3956,9 @@ function doStaff(u, t, dt) {
         }
         b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
       } else if (def.roadworks) {
+        // New road first: planned tiles (paid for already, and no use to anyone until they're down), then asphalt.
+        const lay = nextPaveTile(u, b.owner, -1);
+        if (lay >= 0 && paverGo(u, b, t, lay)) { b.status = 'Laying new road'; return; }
         node = findPaveSpot(b, b.x, b.y);
         if (node < 0) {
           b.status = paveMode(b) === 'all' ? 'Every joined road is asphalt, in good repair'
@@ -3894,12 +4009,15 @@ function doStaff(u, t, dt) {
     }
     case 'toNode':
       b.working = true;
+      if (t.lay >= 0 && S.plan[t.lay] !== u.owner + 1) { paverNext(u, b, t); return; } // (called off, or laid by someone else)
       if (moveAlong(u, dt)) {
+        if (t.lay >= 0) { t.phase = 'work'; t.timer = layTime(t.lay) / PAVER_LAY; return; }
         t.phase = 'work';
         t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
+      if (t.lay >= 0) { paverLay(u, b, t, dt); return; }
       u.busy = 1;
       b.working = true;
       t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5); // (faster by Arrival City)
@@ -3937,7 +4055,7 @@ function doStaff(u, t, dt) {
           u.carry = RES[R_CROP].good;
           u.carryN = 1;
           madeGood(u.owner, u.carry, 1);
-        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
@@ -3962,7 +4080,7 @@ function doStaff(u, t, dt) {
         // Keep going along the paths while there's asphalt left in the hopper (or Express tiles the stock can pay for).
         const next = findPaveSpot(b, ni, nj);
         if (next >= 0 && (paveWant(next) === 3 ? !expressShort(b, next) : b.charges > 0) && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
-      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
         S.res[node] = def.plant;
         S.amt[node] = RES[def.plant].amount;
         S.grow[node] = 0;
@@ -4088,7 +4206,7 @@ function updateBuilding(b, dt) {
     const op = getE(b.staff);
     const who = def.crew ? BOTS[def.crew].name : 'Worker';
     if (!op) {
-      b.status = b.staffInc ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
+      b.status = b.staffInc || (def.crews > 1 && crewCount(b)) ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
       if (!b.staffInc && def.crew && !S.bots.some((v) => !v.dead && v.owner === b.owner && v.type === def.crew)) b.status += ': order one at the Bot Foundry';
     }
   }
@@ -6049,7 +6167,7 @@ function dangerSweep() {
     const hot = underGuns(b);
     if (hot && !b.underFire) {
       b.underFire = S.time;
-      if (b.staff || b.staffInc) unstaff(b);
+      if (b.staff || b.staffInc || BDEFS[b.type].crews > 1) unstaff(b);
       const gun = gunOver(b.owner, b.x, b.y), P = S.players[b.owner];
       if (isMe(b.owner) && gun && !BDEFS[b.type].war && S.time - (P.gunMsgAt || -999) > 45) {
         P.gunMsgAt = S.time;
@@ -9581,7 +9699,7 @@ function rockfall(r) {
   if (hit.has(ME) || S.owner[tIdx(r.x, r.y)] === ME) sfx('boom', cx, cy);
   // What came down lies there: a boulder (Stone for a Quarry), where the ground is clear.
   const t = tIdx(r.x, r.y);
-  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !postAt(t) && !uplinkAt(t)) {
+  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !calmAt(r.x + 0.5, r.y + 0.5) && !uplinkAt(t)) {
     const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
     S.res[t] = R_BOULDER; S.amt[t] = clamp(Math.round(RES[R_BOULDER].amount * pr.amount), 1, 255); S.grow[t] = 1;
     clearDecor(t);
@@ -9984,9 +10102,12 @@ function meteorImpact(E, h) {
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
   let placed = 0;
-  for (const [, i, j] of spots) {
-    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i, j)) continue;
-    const t = tIdx(i, j);
+  for (const [, i0, j0] of spots) {
+    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
+    // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
+    let t = tIdx(i0, j0);
+    if (calmAt(i0 + 0.5, j0 + 0.5)) { if (S.terrain[t] !== T_GROUND || (t = calmSpill(t)) < 0) continue; }
+    const i = t % S.W, j = (t / S.W) | 0;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
     if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
     S.res[t] = r; S.amt[t] = amt;
@@ -13132,6 +13253,100 @@ function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
  * warbots used to fire at one for ever). Bombs, shells and Missiles still spare everything there.
  */
 function calmShield(b) { return b.built && calmB(b); }
+
+/**
+ * No deposits lie on a Trade Post's ground: only a Trade Terminal or a Ramp goes there (canPlace), so nothing could
+ * ever mine them (the owner's call, Nov 2026). Can a deposit moved off it from tile `from` lie on tile t? Open, bare
+ * ground off every post's ground, with nothing on it or planned for it (on the same land as `from`, with `sameZone`).
+ */
+function calmSpillOk(t, from, sameZone) {
+  if (!(t >= 0 && t < S.W * S.H) || S.terrain[t] !== T_GROUND) return false;
+  if (S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) return false;
+  for (const L of [S.rail, S.railPlan, S.pipe, S.pipePlan, S.lava, S.ford, S.tidal, S.fault]) if (L && L[t]) return false;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (calmAt(i + 0.5, j + 0.5)) return false;
+  if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
+  if (S.wrecks && S.wrecks.some((w) => w.tiles && w.tiles.includes(t))) return false;
+  if (sameZone && S.zone && S.zone[t] !== S.zone[from]) return false;
+  return true;
+}
+
+/**
+ * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk),
+ * on the same land if there is one near, else anywhere near (a tie goes to the tile further out from the posts' ground);
+ * -1 if there's nowhere. The same answer on every device.
+ */
+function calmSpill(from) {
+  const fi = from % S.W, fj = (from / S.W) | 0;
+  for (const same of [true, false]) {
+    for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) {
+      let best = -1, bd = Infinity, bo = -1;
+      for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
+        const t = j * S.W + i, d = dist2(i, j, fi, fj);
+        if (d > bd || !calmSpillOk(t, from, same)) continue;
+        let out = Infinity;
+        for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
+        if (d < bd || out > bo) { best = t; bd = d; bo = out; }
+      }
+      if (best >= 0) return best;
+    }
+  }
+  return -1;
+}
+
+/** Move the deposit on tile `from` to tile `to` (the same kind and amount). */
+function moveDeposit(from, to) {
+  S.res[to] = S.res[from]; S.amt[to] = S.amt[from];
+  if (S.grow) S.grow[to] = S.grow[from];
+  S.res[from] = R_NONE; S.amt[from] = 0;
+  if (S.grow) S.grow[from] = 1;
+  if (S.resRes) S.resRes[from] = 0;
+  clearDecor(to);
+  S.dirtyTiles.push(from, to);
+}
+
+/**
+ * Clear the Trade Posts' ground of deposits (see calmSpillOk): each moves, the same kind and amount, to the nearest open
+ * tile just off it (calmSpill), the ones at the edge of the ground first; an Energy crop is a planting, and just goes.
+ * At the start of a game (once the posts, the Uplinks and a mission's own setup are in) and as a save loads (one from
+ * before this rule). A post's half-turn twin (Teams and Long Haul 2v2 pair them) has its deposits moved to the twins of
+ * the first one's tiles, so both sides stay alike. No dice: every device does the same. Returns how many moved.
+ */
+function clearCalmGround() {
+  if (!S.posts || !S.posts.length) return 0;
+  const R = TRADE_POST.calm, N = S.W * S.H, half = (t) => N - 1 - t;
+  const done = new Map(); // post -> its moves [{ f, t, r, a }]
+  let moved = 0;
+  for (const p of S.posts) {
+    const src = [];
+    for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+      const i = p.x + di, j = p.y + dj;
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!S.res[t]) continue;
+      if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.dirtyTiles.push(t); continue; }
+      src.push([Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
+    }
+    // The twin's moves, turned half round, if they all still fit.
+    const twin = S.posts.find((q) => q !== p && done.has(q) && q.x === S.W - 1 - p.x && q.y === S.H - 1 - p.y);
+    if (twin && src.length) {
+      const plan = done.get(twin).map((m) => ({ f: half(m.f), t: half(m.t), r: m.r, a: m.a }));
+      const same = plan.length === src.length && plan.every((m, k) => S.res[m.f] === m.r && S.amt[m.f] === m.a && src.some((s) => s[2] === m.f) && plan.findIndex((x) => x.t === m.t) === k && calmSpillOk(m.t, m.f, false));
+      if (same) { for (const m of plan) { moveDeposit(m.f, m.t); moved++; } done.set(p, plan); continue; }
+    }
+    src.sort((a, b) => b[0] - a[0] || b[1] - a[1] || a[2] - b[2]);
+    const moves = [];
+    for (const [, , f] of src) {
+      const t = calmSpill(f);
+      if (t < 0) continue;
+      moves.push({ f, t, r: S.res[f], a: S.amt[f] });
+      moveDeposit(f, t);
+      moved++;
+    }
+    done.set(p, moves);
+  }
+  return moved;
+}
 
 /* ------------------------------------------------------------------ crawlers */
 
@@ -16353,7 +16568,7 @@ function hashState() {
     obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
-  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);

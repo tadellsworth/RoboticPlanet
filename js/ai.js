@@ -3355,11 +3355,22 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
 }
 
 /**
+ * The rival's road crew limit (roadCrew), chosen as a player could on the Roads tool: No limit. It builds no Roadworks,
+ * so its Workers lay all its roads, and every road it plans is to a site or building waiting on it: a site goes up
+ * only once its road brings the goods. Only free Workers lay road, and a site still takes a Worker off the road first
+ * (roadToSites), which keeps its builders. (Measured: held to 3, or to 5 while it had Workers to spare, a long road's
+ * plan stood two to five times as long on Long haul, and both Hollow games of the batch ran to 75 minutes; with no
+ * limit they ended. See README, Road crew.)
+ */
+function aiRoadCrew(p) { S.players[p].roadCrew = 0; }
+
+/**
  * Lay roads from storage to buildings that have none, construction sites first, as far as the
  * Cement allows. A site that no road can reach is given up after a while.
  */
 function aiRoads(p, me) {
   const P = S.players[p];
+  aiRoadCrew(p);
   let budget = roadTilesAffordable(p), done = 0;
   const todo = me.filter((b) => needsRoad(b) && !onHomeNet(b))
     .sort((a, b) => (a.built - b.built) || a.born - b.born);
