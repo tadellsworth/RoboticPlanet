@@ -45,6 +45,9 @@ function simStep(dt) {
   if (S.tick % 10 === 4 && S.rallies.length) followRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.tick % 10 === 6 && S.wrecks && S.wrecks.length) clearWrecks(); // (aircraft wrecks built over: see crashLand)
+  // War scars: light scorches grow back over; scrap and bones built over go (see scarFade, scrapTidy).
+  if (S.ash && S.tick % (SCARS.step * 30) === 19) scarFade();
+  if (S.scrap && S.tick % 30 === 13 && (S.scrap.length || (S.bones && S.bones.length))) scrapTidy();
   if (S.events) updateEvents();
   if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
@@ -2477,6 +2480,8 @@ function dispatch(p) {
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
+  // 7) Haulers with nothing else to do salvage scrap near a road on the colony's land (War scars: see salvageRun).
+  salvageRun(p, idle);
 }
 
 /* ------------------------------------------------------------------ repairs */
@@ -3256,6 +3261,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'arty') doArtySupply(u, t, dt);
   else if (t.type === 'board') doBoard(u, t, dt);
   else if (t.type === 'crate') doCrate(u, t, dt);
+  else if (t.type === 'salvage') doSalvage(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
@@ -3923,6 +3929,7 @@ function doStaff(u, t, dt) {
         S.amt[node] = RES[def.plant].amount;
         S.grow[node] = 0;
         markDirty(ni, nj);
+        if (S.ash) scarHeal(ni, nj); // (a Grove Planter greens scarred ground again: see War scars)
       }
       t.phase = 'back';
       if (!goTo(u, b.x, b.y)) { u.x = b.x + 0.5; u.y = b.y + 0.5; u.path = null; }
@@ -4746,6 +4753,7 @@ function updateMortar(b, def, dt) {
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
   blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
+  scarBlast(m.x1, m.y1, 0.45); // (a shell hole: see War scars)
   sfx('shellhit', m.x1, m.y1);
   const hit = [];
   for (const u of S.bots) {
@@ -5005,6 +5013,7 @@ function torchFire(u, tx, ty, power, bld) {
     if (hash2(u.id, S.tick, 11) < 0.12) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
+  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars)
   if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
   if (u.gel <= 0 && isMe(u.owner)) {
     const P = S.players[ME];
@@ -5435,6 +5444,7 @@ function fuelBlast(x, y, kind, full, owner) {
     addFx('smoke', x, y - 0.2, { r: r * 0.9, life: 5, dark: true });
   }
   sfx('fireball', x, y);
+  scarBlast(x, y, Math.max(0.7, r * 0.6));
   const later = (k) => S.time + BLAST.chain[0] + (BLAST.chain[1] - BLAST.chain[0]) * hash2(Math.floor(x * 13) + k, Math.floor(y * 7), S.tick);
   for (const u of S.bots) {
     if (u.dead || u.inside || u.blowAt > 0) continue;
@@ -7326,6 +7336,7 @@ function rocketFort(b) { return DEFENCE_TYPES.has(b.type) || BDEFS[b.type].mil; 
 /** A Howitzer's shell lands: it knocks ROCKET.damage off its target (×fortMul off a defence; forts no lower than MISSILE_FLOOR), and hurts what's round it. */
 function rocketImpact(m) {
   blastFx(m.x1, m.y1, 0.85);
+  scarBlast(m.x1, m.y1, 0.85);
   sfx('howitzerhit', m.x1, m.y1);
   const b = getE(m.target);
   if (b && !b.dead && b.owner >= 0 && foes(b.owner, m.owner)) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
@@ -8155,6 +8166,7 @@ function hitByNow(p, by) {
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   blastFx(m.x1, m.y1, 2.2);
+  scarBlast(m.x1, m.y1, 1.4);
   sfx('missilehit', m.x1, m.y1);
   const b = getE(m.target);
   if (b && !b.dead && foes(b.owner, m.owner) && !calmB(b)) {
@@ -8388,6 +8400,7 @@ function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
+  scarNuke(cx, cy, NUKE.radius); // (a glassed crater field: see War scars)
   sfx('nuke', cx, cy);
   const lost = S.players.map(() => 0), direct = [];
   const ci = Math.floor(cx), cj = Math.floor(cy), R0 = NUKE.radius;
@@ -10696,6 +10709,11 @@ function murmurGoals(b, want) {
     const w = chargeWorth(e) + (veinLure(e) ? 2 : 0); // (a Harvester on the Bloom veins draws the tunnels too)
     list.push({ t: tIdx(e.x, e.y), x: e.x, y: e.y, s: (d <= MURMUR.reach ? 4 : 0) + w * 3 - d * 0.12 + hash2(e.id, b.id, Math.floor(S.time / TOD_LEN)) * 1.5 });
   }
+  // War scars: big heaps of scrap draw them too (they drain the charge left in wreckage), though less than a power plant.
+  if (scarLevel()) for (const h of scrapHeaps()) {
+    const x = Math.floor(h.x), y = Math.floor(h.y), d = dist(x, y, b.x, b.y);
+    list.push({ t: tIdx(x, y), x, y, s: (d <= MURMUR.reach ? 4 : 0) + Math.min(2.5, h.n / 8) * 3 - d * 0.12 + hash2(h.key, b.id, Math.floor(S.time / TOD_LEN)) * 1.5 });
+  }
   list.sort((a, c) => c.s - a.s || a.t - c.t);
   const out = [];
   for (const g of list) {
@@ -10706,9 +10724,16 @@ function murmurGoals(b, want) {
   return out;
 }
 
-/** Industry near an exit gives Active Murmur packs extra Scuttlers, within the usual population cap. */
+/**
+ * Industry near an exit gives Active Murmur packs extra Scuttlers, within the usual population cap; so does a battlefield's
+ * scrap (War scars: 10 Alloy's worth within 12 tiles, one more), as they drain what charge is left in the wreckage.
+ */
 function murmurIndustry(e, night) {
   if (night < 2 || S.mission) return 0;
+  const fed = scarLevel() && scrapNear(e.x + 0.5, e.y + 0.5, 12) >= 10 ? 1 : 0;
+  return Math.min(2, fed + murmurPower(e));
+}
+function murmurPower(e) {
   let charge = 0;
   for (const b of S.buildings) {
     if (b.dead || !b.built || b.cut || b.paused || !b.working || b.owner < 0 || isWild(b.owner) || murmurCutOn(b)) continue;
@@ -14397,6 +14422,7 @@ function napalmImpact(m) {
   if (typeof ART !== 'undefined' && ART['fx-fuel-blast']) addFx('fuelblast', m.x1, m.y1, { r: NAPALM.radius, life: 1.15 });
   else { blastFx(m.x1, m.y1, 0.9); blastFx(m.x1 + 0.3, m.y1 - 0.2, 0.6, { small: true, delay: 0.15 }); }
   addFx('smoke', m.x1, m.y1 - 0.3, { r: 1.1, life: NAPALM.burn + 2, dark: true });
+  scarNapalm(ci, cj);
   sfx('fireball', m.x1, m.y1);
   const lost = new Map(); // farm owner → patches of their soil burned
   let n = 0;
@@ -14444,6 +14470,7 @@ function napalmBurn(f) {
 function bombImpact(m) {
   if (m.napalm) { napalmImpact(m); return; }
   blastFx(m.x1, m.y1, 1.0);
+  scarBlast(m.x1, m.y1, 1.1);
   sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
   const s2 = BOMBER.splash * BOMBER.splash;
@@ -15753,6 +15780,9 @@ function crashLand(d) {
   S.wrecks = S.wrecks || [];
   S.wrecks.push({ id: d.id, type: d.type, owner: d.owner, x, y, a, t: S.time, tiles });
   if (S.wrecks.length > WRECK_MAX) S.wrecks.splice(0, S.wrecks.length - WRECK_MAX);
+  // War scars: a crater where it hit, and its wreck is scrap for salvage (drawn as the wreck it is: S.wrecks).
+  scarBlast(end.x, end.y, C.blast);
+  scrapAdd(x, y, Math.max(1.5, (BOTS[d.type].parts || 4) / 2), 2, d.owner, d.id);
 }
 
 /** Is wreck w still there? Not once anything is built over a tile it lies on, or the ground there changes. */
@@ -15792,6 +15822,8 @@ function hashState() {
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
+  // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
+  if (S.crater) { int(S.scarN || 0); for (const s of S.scrap) { int(s.id); num(s.x); num(s.y); num(s.n); int(s.k); } int(S.bones.length); }
   // The Murmur's tunnels, their nests' branches and the exits shut for now (see murmurTick).
   if (S.tun) for (let t = 0; t < S.tun.length; t++) if (S.tun[t]) { int(t); int(S.tun[t]); }
   if (S.mur) { int(S.mur.night || 0); int(S.mur.wave || 0); int(S.mur.warned || 0); for (const e of S.mur.shut || []) { int(e.x); int(e.y); num(e.until); } }
@@ -16069,4 +16101,367 @@ function updateCans(dt) {
     } else canDown(m, { x: m.x1, y: m.y1 });
   }
   S.cans = S.cans.filter((m) => !m.gone);
+}
+
+/* ------------------------------------------------------------------ war scars */
+
+/*
+ * War scars (the owner's design, Nov 19 2026: see SCARS in js/defs.js). Over a long war the land between the colonies
+ * turns into a battlefield: every real explosion leaves its crater (S.crater: the low four bits of a tile count its shell
+ * holes, the high four the size of a big crater in it, size/8 the blast's reach), fire and blasts burn the grass (S.ash:
+ * 1..SCARS.light a light scorch the grass takes back, SCARS.good ash for good, SCARS.glass a nuclear blast's glass) and
+ * leave the trees on ash charred stumps (drawn so: see drawPlants), destroyed robots and buildings leave scrap (S.scrap:
+ * piles that stay where they fell, joining up where robots fall on each other) and the animals a blast catches leave
+ * their bones (S.bones). All of it is made by the simulation, from the game's own blasts and the planet's hash, so every
+ * device and every save agrees; craters, ash and bones only decide looks (and where the wildlife lives, js/wildlife.js),
+ * while scrap plays: Haulers salvage it for Alloy (salvageRun) and the Murmur's tunnels lean toward big heaps of it
+ * (murmurGoals, murmurIndustry). Nothing here slows a robot.
+ */
+
+/** This game's War scars: 0 Off, 1 Light, 2 Full (S.settings.scars, fixed when the game starts; a game from before the setting: Full). */
+function scarLevel() {
+  if (!S || !S.settings) return 0;
+  const k = S.settings.scars;
+  return k === 'off' ? 0 : k === 'light' ? 1 : 2;
+}
+/** Is k a War scars setting ('off', 'light' or 'full')? */
+function scarsOk(k) { return SCARS.levels.includes(k); }
+
+/** The scar layers and lists, made for a game that has scars and doesn't have them yet (a new game, a save from before). */
+function scarSetup() {
+  if (!scarLevel()) { S.crater = null; S.ash = null; return; }
+  const N = S.W * S.H;
+  if (!S.crater || S.crater.length !== N) S.crater = new Uint8Array(N);
+  if (!S.ash || S.ash.length !== N) S.ash = new Uint8Array(N);
+  S.scrap = Array.isArray(S.scrap) ? S.scrap : [];
+  S.bones = Array.isArray(S.bones) ? S.bones : [];
+  S.scarN = S.scarN || 0;
+}
+
+/** Can tile t be scarred (open ground: not water, lava, rock, a chasm or the tide's flats)? */
+function scarGround(t) { return S.terrain[t] === T_GROUND && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t]); }
+/** Is tile t heavily scarred (cratered, or burned to ash or glass for good)? The animals keep off it. */
+function scarDead(t) { return !!S.ash && (S.ash[t] >= SCARS.good || S.crater[t] >= 2); }
+/** A scar changed at (i, j): its ground is baked again (and with a big crater, the tiles round it it spills onto). */
+function scarDirty(i, j, wide) {
+  if (!wide) { markDirty(i, j); return; }
+  for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) markDirty(a, b);
+}
+
+/**
+ * A blast of reach r at (x, y) scars the land (see War scars). Within its reach the grass is scorched (a light scorch);
+ * on Full the heart of it (r × 0.55) is burned to ash for good. It leaves a crater where it struck: a big one from a big
+ * blast (r ≥ SCARS.big; on Light only those), a shell hole from a small one, overlapping into churned ground. The animals
+ * in its reach die, their bones left there (scarFauna). o.crater false: no crater (a robot or a building burning out);
+ * o.fauna false: no animals hurt (a robot going up).
+ */
+function scarBlast(x, y, r, o) {
+  const lv = scarLevel();
+  if (!lv || !S.crater) return;
+  o = o || {};
+  const ci = Math.floor(x), cj = Math.floor(y);
+  if (!inMap(ci, cj)) return;
+  S.scarN++;
+  const reach = r * 1.2 + 0.25, keep = lv === 2 ? r * 0.55 : -1, R0 = Math.ceil(reach);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j)) continue;
+    const t = j * S.W + i;
+    if (!scarGround(t)) continue;
+    const d = dist(i + 0.5, j + 0.5, x, y);
+    if (d > reach) continue;
+    if (o.fauna !== false) scarFauna(t, i, j, d < keep + 0.6 ? 2 : 1);
+    const v = S.ash[t];
+    if (d <= keep && v < SCARS.good) { S.ash[t] = SCARS.good; markDirty(i, j); }
+    else if (v < SCARS.light) { S.ash[t] = SCARS.light; if (v < SCARS.light - 20) markDirty(i, j); }
+  }
+  const t0 = cj * S.W + ci;
+  if (o.crater === false || !scarGround(t0)) return;
+  const c = S.crater[t0], hi = c >> 4, lo = c & 15, big = r >= SCARS.big;
+  if (big) {
+    const size = Math.min(15, Math.round(r * 8));
+    S.crater[t0] = size > hi ? (size << 4) | lo : (hi << 4) | Math.min(15, lo + 2); // (another into a crater already there: churned)
+    scarDirty(ci, cj, true);
+  } else if (lv === 2) {
+    S.crater[t0] = (hi << 4) | Math.min(15, lo + 1);
+    if (lo < 8) markDirty(ci, cj);
+  }
+}
+
+/**
+ * Did an animal live on tile t, and die in the blast? Open, untouched ground (no scar on it, no road, building or
+ * deposit) in a biome with animals: a chance of SCARS.fauna (more under trees; `k` times it near the middle). Its bones
+ * stay where it fell (S.bones: { x, y, k: 0 small, 1 a deer's size, 2 a bison's, a: which way it lies }), the oldest
+ * going past SCARS.bonesMax.
+ */
+function scarFauna(t, i, j, k) {
+  const B = BIOMES[biome()];
+  if (!B || B.silent || S.ash[t] || S.crater[t] || S.road[t] || S.bAt[t] || S.res[t] || (S.rail && S.rail[t])) return;
+  const h = hash2(t, S.scarN, 977);
+  if (h >= SCARS.fauna * k * (S.decor && S.decor[t] ? 1.6 : 1)) return;
+  const g = hash2(t, S.scarN, 979), large = biome() === 'savanna' || biome() === 'springs';
+  const size = g < 0.55 ? 0 : g < 0.9 || !large ? 1 : 2;
+  S.bones = S.bones || [];
+  S.bones.push({ x: Math.round((i + 0.2 + 0.6 * hash2(t, S.scarN, 981)) * 100) / 100, y: Math.round((j + 0.25 + 0.5 * hash2(t, S.scarN, 983)) * 100) / 100, k: size, a: Math.floor(hash2(t, S.scarN, 985) * 64) });
+  if (S.bones.length > SCARS.bonesMax) { const b = S.bones.shift(); markDirty(Math.floor(b.x), Math.floor(b.y)); }
+  markDirty(i, j);
+}
+
+/** A Torch's flame licks the ground at (x, y): a light scorch (the grass grows back). */
+function scarBurn(x, y) {
+  if (!scarLevel() || !S.ash) return;
+  const i = Math.floor(x), j = Math.floor(y);
+  if (!inMap(i, j)) return;
+  const t = j * S.W + i, v = S.ash[t];
+  if (!scarGround(t) || v >= SCARS.light) return;
+  S.ash[t] = SCARS.light;
+  if (v < SCARS.light - 20) markDirty(i, j);
+}
+
+/** Napalm over tile (ci, cj) and the eight round it: burned to ash for good on Full (a light scorch on Light), the trees with it. */
+function scarNapalm(ci, cj) {
+  const lv = scarLevel();
+  if (!lv || !S.ash) return;
+  scarBlast(ci + 0.5, cj + 0.5, 0.9, { crater: false });
+  for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
+    if (!inMap(i, j)) continue;
+    const t = j * S.W + i;
+    if (!scarGround(t)) continue;
+    const want = lv === 2 ? SCARS.good : SCARS.light;
+    if (S.ash[t] < want) { S.ash[t] = want; markDirty(i, j); }
+  }
+}
+
+/**
+ * A nuclear blast of reach R at (cx, cy): on Full the ground glassed black for good out to 0.7 of it and burned to ash
+ * beyond, a field of big craters across it; on Light scorched, with a few craters. Every animal in it dies.
+ */
+function scarNuke(cx, cy, R) {
+  const lv = scarLevel();
+  if (!lv || !S.ash) return;
+  S.scarN++;
+  const ci = Math.floor(cx), cj = Math.floor(cy), R0 = Math.ceil(R);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j)) continue;
+    const t = j * S.W + i, d = dist(i + 0.5, j + 0.5, cx, cy);
+    if (d > R || !scarGround(t)) continue;
+    scarFauna(t, i, j, 6);
+    S.ash[t] = lv === 2 ? (d < R * 0.7 ? SCARS.glass : Math.max(S.ash[t], SCARS.good)) : Math.max(S.ash[t] >= SCARS.good ? S.ash[t] : 0, SCARS.light);
+    const h = hash2(t, S.scarN, 991);
+    if (h < (lv === 2 ? 0.3 : 0.1)) S.crater[t] = ((8 + Math.floor(hash2(t, S.scarN, 993) * 7)) << 4) | (lv === 2 ? 2 + Math.floor(h * 20) : 0);
+    else if (lv === 2) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + 3);
+    markDirty(i, j);
+  }
+}
+
+/** Light scorches fade: every SCARS.step s each takes a step back toward grass (redrawn as it passes a third of the way). */
+function scarFade() {
+  const A = S.ash;
+  for (let t = 0; t < A.length; t++) {
+    const v = A[t];
+    if (!v || v > SCARS.light) continue;
+    A[t] = v - 1;
+    if ((v - 1) % 20 === 0) markDirty(t % S.W, (t / S.W) | 0);
+  }
+}
+
+/** A Grove Planter planting at (i, j) greens the ground again: the craters, ash and scorch on it and the tiles round it are gone. */
+function scarHeal(i, j) {
+  if (!S.ash) return;
+  for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) {
+    if (!inMap(a, b)) continue;
+    const t = b * S.W + a;
+    if (!S.ash[t] && !S.crater[t]) continue;
+    S.ash[t] = 0; S.crater[t] = 0;
+    scarDirty(a, b, true);
+  }
+}
+
+/* ---- scrap */
+
+/**
+ * Robot u has been destroyed (killBot, not shut down quietly): what's left of it stays (scrapAdd), and the blast it went up
+ * in scars the ground (scarBlast: a scorch, on Full a shell hole) and kills any animal it catches. Small bits from a Worker or a Hauler, a broken hull from a warbot (a Torch's worth more), a
+ * big burnt wreck from a Bulwark, a vehicle, a train, a Crawler or a Howitzer. Not the Murmur (they take their dead), a ship (it
+ * sinks) or an aircraft (its wreck is its own: crashLand).
+ */
+function scarBotDown(u) {
+  const bt = BOTS[u.type];
+  if (!scarLevel() || !bt || bt.wild || bt.sea || bt.air) return;
+  const heavy = !!(bt.truck || bt.rail || bt.crawler || bt.siege || bt.magpod || bt.shield);
+  const k = heavy ? 2 : bt.army ? 1 : 0;
+  const v = heavy ? Math.max(1.5, (bt.parts || 3) / 2) : (bt.parts || 1) > 1 ? 1 : 0.5;
+  scrapAdd(u.x, u.y, v, k, u.owner);
+  scarBlast(u.x, u.y, heavy ? 0.55 : 0.3); // (on Full, a hole where it went up)
+}
+
+/** Building b burned down (destroyed by force): its rubble stays, Alloy in it by what it cost, and the ground under it is ash. */
+function scarBuildingDown(b) {
+  const d = BDEFS[b.type];
+  if (!scarLevel() || !d || d.wild || d.burrow || d.viaduct || d.barrier || d.pylon) return;
+  const c = d.cost || {}, big = b.type === 'lander' ? 4 : 0;
+  scrapAdd(b.x + 0.5, b.y + 0.55, Math.min(6, 1 + (c.alloy || 0) / 2 + big), 3, b.owner);
+  scarBlast(b.x + 0.5, b.y + 0.5, 1.1, { crater: false });
+}
+
+/** Can scrap lie on tile t? Open ground, as an aircraft wreck's (wreckGround). */
+function scrapGround(t) { return wreckGround(t); }
+
+/**
+ * Scrap at (x, y) worth v Alloy (fractions: a small pile pays once it holds a whole one), of kind k (0 bits, 1 a hull,
+ * 2 a heavy wreck, 3 a building's rubble), from player `owner`'s robot or building; `w`: an aircraft wreck's id (its
+ * salvage; S.wrecks draws it). On a road, track or anything built, it lands on open ground beside it (pushed off the
+ * road), or nowhere. Within 0.6 of a tile of another pile it joins it (a graveyard grows), up to SCARS.pileMax. Returns the pile.
+ */
+function scrapAdd(x, y, v, k, owner, w) {
+  if (!scarLevel()) return null;
+  let i = Math.floor(x), j = Math.floor(y);
+  if (!inMap(i, j)) return null;
+  if (!scrapGround(j * S.W + i)) {
+    let found = false;
+    for (const [di, dj] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      if (!inMap(i + di, j + dj) || !scrapGround((j + dj) * S.W + i + di)) continue;
+      i += di; j += dj; found = true;
+      x = i + 0.3 + 0.4 * hash2(i, j, S.tick); y = j + 0.3 + 0.4 * hash2(j, i, S.tick + 1);
+      break;
+    }
+    if (!found) return null;
+  }
+  S.scrap = S.scrap || [];
+  if (!w) for (const s of S.scrap) {
+    if (s.w || dist2(s.x, s.y, x, y) > 0.36) continue;
+    s.n = Math.min(SCARS.pileMax, Math.round((s.n + v) * 100) / 100); s.k = Math.max(s.k, k); s.c = Math.min(12, s.c + 1);
+    scrapDirty(s);
+    return s;
+  }
+  const s = { id: S.nextId++, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, n: v, k, c: 1, o: owner, a: Math.floor(hash2(i * 3 + k, j, S.tick) * 64) };
+  if (w) s.w = w;
+  S.scrap.push(s);
+  if (S.scrap.length > SCARS.scrapMax) scrapSqueeze();
+  scrapDirty(s);
+  return s;
+}
+
+function scrapDirty(s) { scarDirty(Math.floor(s.x), Math.floor(s.y), s.k >= 2 || s.c > 3); S.scrapVer = (S.scrapVer || 0) + 1; }
+
+/** Too many piles: of the oldest forty, the smallest joins its nearest neighbour within 3 tiles (or goes, with none). */
+function scrapSqueeze() {
+  const L = S.scrap;
+  let k = -1;
+  for (let q = 0; q < Math.min(40, L.length); q++) if (!L[q].w && (k < 0 || L[q].n < L[k].n)) k = q;
+  if (k < 0) k = 0;
+  const s = L[k];
+  let best = null, bd = 9;
+  for (const o of L) { if (o === s || o.w) continue; const d = dist2(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = o; } }
+  L.splice(k, 1);
+  scrapDirty(s);
+  if (best && !s.w) { best.n = Math.min(SCARS.pileMax, Math.round((best.n + s.n) * 100) / 100); best.k = Math.max(best.k, s.k); best.c = Math.min(12, best.c + s.c); scrapDirty(best); }
+}
+
+/** Scrap and bones built over (a building or site, a road, track or pipe) are gone; so is an aircraft wreck's salvage once its wreck is. */
+function scrapTidy() {
+  const n = S.scrap.length, nb = S.bones.length;
+  S.scrap = S.scrap.filter((s) => scrapGround(tIdx(Math.floor(s.x), Math.floor(s.y))) && (!s.w || (S.wrecks || []).some((w) => w.id === s.w)));
+  S.bones = S.bones.filter((b) => scrapGround(tIdx(Math.floor(b.x), Math.floor(b.y))));
+  if (S.scrap.length !== n || S.bones.length !== nb) S.scrapVer = (S.scrapVer || 0) + 1;
+}
+
+function scrapById(id) { for (const s of S.scrap || []) if (s.id === id) return s; return null; }
+
+/** Alloy in scrap within r tiles of (x, y). */
+function scrapNear(x, y, r) {
+  let n = 0;
+  for (const s of S.scrap || []) if (dist2(s.x, s.y, x, y) <= r * r) n += s.n;
+  return n;
+}
+
+/**
+ * The big heaps of scrap (battlefields), for the Murmur: the piles gathered in 10-tile cells, each cell holding 6 Alloy
+ * or more of it, as { x, y (its middle, by weight), n, key }, in the cells' order.
+ */
+function scrapHeaps() {
+  const cells = new Map();
+  for (const s of S.scrap || []) {
+    const key = Math.floor(s.x / 10) + Math.floor(s.y / 10) * 1024;
+    const c = cells.get(key) || { x: 0, y: 0, n: 0, key };
+    c.x += s.x * s.n; c.y += s.y * s.n; c.n += s.n;
+    cells.set(key, c);
+  }
+  const out = [];
+  for (const c of [...cells.values()].sort((a, b) => a.key - b.key)) if (c.n >= 6) out.push({ x: c.x / c.n, y: c.y / c.n, n: c.n, key: c.key });
+  return out;
+}
+
+/* ---- salvage */
+
+/**
+ * Salvage (SALVAGE): player p's idle Haulers (`idle`: dispatch's, last of all its jobs) go for scrap on their colony's land
+ * with a whole unit of Alloy in it, no enemy near (CRATE_SAFE), and a road on their network within SALVAGE.reach of it:
+ * each pulls up on that road, cuts the scrap up (doSalvage) and carries the Alloy to storage. Every colony alike, the
+ * rivals too. Once every few rounds.
+ */
+function salvageRun(p, idle) {
+  if (!scarLevel() || !S.scrap || !S.scrap.length || !idle.length || S.tick % 32 >= 8) return;
+  let haulers = idle.filter((u) => u.type === 'hauler' && !(u.failUntil > S.time));
+  if (!haulers.length) return;
+  const taken = new Map();
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'salvage') taken.set(u.task.pile, (taken.get(u.task.pile) || 0) + botCarry(u));
+  const net = roadNet(p), R = Math.ceil(SALVAGE.reach), nets = haulers.map((u) => botNets(u));
+  for (const s of S.scrap) {
+    if (!haulers.length) return;
+    if (s.n - (taken.get(s.id) || 0) < 1) continue;
+    const si = Math.floor(s.x), sj = Math.floor(s.y);
+    if (S.owner[sj * S.W + si] !== p || foesNear(p, s.x, s.y, CRATE_SAFE)) continue;
+    let best = -1, stand = -1, bd = Infinity;
+    for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+      const i = si + di, j = sj + dj;
+      if (!inMap(i, j)) continue;
+      const t = j * S.W + i;
+      if (!S.road[t] || dist2(i + 0.5, j + 0.5, s.x, s.y) > SALVAGE.reach * SALVAGE.reach) continue;
+      const comps = tileNets(net, t, false);
+      for (let q = 0; q < haulers.length; q++) {
+        const u = haulers[q];
+        if (!comps.some((c) => c >= 0 && nets[q].includes(c))) continue;
+        const d = dist2(u.x, u.y, i + 0.5, j + 0.5) + dist2(i + 0.5, j + 0.5, s.x, s.y) * 4;
+        if (d < bd) { bd = d; best = q; stand = t; }
+      }
+    }
+    if (best < 0) continue;
+    const u = haulers[best];
+    cancelTask(u);
+    u.task = { type: 'salvage', pile: s.id, tile: stand, phase: 'go', left: SALVAGE.time };
+    if (!goTo(u, stand % S.W, (stand / S.W) | 0)) { u.task = null; continue; }
+    taken.set(s.id, (taken.get(s.id) || 0) + botCarry(u));
+    haulers.splice(best, 1); nets.splice(best, 1);
+    idle.splice(idle.indexOf(u), 1);
+  }
+}
+
+/** A Hauler's salvage run: to the road beside the scrap, cutting it up (SALVAGE.time s), then on to storage with the Alloy (as a crate run). */
+function doSalvage(u, t, dt) {
+  const s = scrapById(t.pile);
+  if (!s || s.n < 1 || (S.tick % 15 === u.id % 15 && foesNear(u.owner, s.x, s.y, CRATE_SAFE))) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') {
+    const r = travel(u, t.tile % S.W, (t.tile / S.W) | 0, dt);
+    if (r === null) { u.task = null; u.failGoal = t.tile; u.failUntil = S.time + 20; return; }
+    if (r) { t.phase = 'cut'; u.vel = 0; }
+    return;
+  }
+  t.left -= dt;
+  u.face = datan2(s.y - u.y, s.x - u.x);
+  if (hash2(u.id, S.tick, 57) < 0.06) addFx('spark', s.x + (hash2(S.tick, u.id, 58) - 0.5) * 0.4, s.y + (hash2(u.id, 59, S.tick) - 0.5) * 0.3, { color: '#ffd27a', life: 0.35, hit: true });
+  if (t.left > 0) return;
+  const got = Math.min(Math.floor(s.n), botCarry(u)), l = { x: t.tile % S.W, y: (t.tile / S.W) | 0 };
+  const dst = got > 0 && crateStore(u, 'alloy', l, got);
+  if (!dst) { u.task = null; return; }
+  s.n = Math.round((s.n - got) * 100) / 100; s.cut = 1;
+  if (s.n < 1 && s.w) { S.wrecks = (S.wrecks || []).filter((w) => w.id !== s.w); S.scrap.splice(S.scrap.indexOf(s), 1); } // (an aircraft's wreck, cut up and carried off)
+  scrapDirty(s);
+  const P = S.players[u.owner];
+  P.stats.salvaged = (P.stats.salvaged || 0) + got;
+  u.carry = 'alloy'; u.carryN = got;
+  u.task = { type: 'crate', pile: 0, good: 'alloy', n: got, phase: 'toDst', dst: dst.id };
+  bump(dst.inc, 'alloy', got);
+  if (!goTo(u, dst.x, dst.y)) cancelTask(u, true);
 }

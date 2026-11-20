@@ -1419,7 +1419,7 @@ function natureBeds(live, dt, zl, b, sway, wx) {
   const D = N.drone;
   if (D) { M.drone.f.frequency.setTargetAtTime(D[0], t, 1); M.drone.f.Q.value = D[1]; M.drone.lfo.frequency.setTargetAtTime(D[2], t, 1); }
   const hush = typeof faunaHush === 'function' ? faunaHush() : 0; // (the day's insects and birds fall silent before a Murmur night: js/wildlife.js)
-  set(M.drone, D ? (D[3] * (1 - night) * (1 - 0.8 * hush) + D[4] * night) * W * zq * (kind === 'rain' ? 1 - 0.7 * wk : 1) : 0);
+  set(M.drone, D ? (D[3] * (1 - night) * (1 - 0.8 * hush) + D[4] * night) * W * zq * (1 - 0.7 * (typeof faunaScarred === 'function' ? faunaScarred() : 0)) * (kind === 'rain' ? 1 - 0.7 * wk : 1) : 0);
   // The Bloom's shimmer, brighter by night and under an aurora.
   const G = N.glow;
   if (on && G) M.glowOsc.forEach((v, k) => v.o.frequency.setTargetAtTime(v.f * (1 + 0.02 * Math.sin(t * (0.05 + 0.02 * k) + k)), t, 2));
@@ -1533,6 +1533,7 @@ function biomeCall(b, w, night) {
   w = w === undefined ? 1 : w;
   const dark = Math.random() < (night || 0);
   if (!dark && typeof faunaHush === 'function' && Math.random() < faunaHush()) return; // (the birds fall silent before the Murmur come: js/wildlife.js)
+  if (typeof faunaScarred === 'function' && Math.random() < faunaScarred()) return; // (none sing over a battlefield: War scars)
   const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w), AUDIO.natureBus), r = Math.random();
   if (b === 'jungle' || b === 'autumn') {
     if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird

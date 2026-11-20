@@ -199,6 +199,7 @@ function ambScan(A) {
     const f = fx[n];
     if (f.tick < from) break;
     if ((f.type !== 'collapse' && f.type !== 'fire') || A.seen.has(f)) continue;
+    if (typeof scarLevel === 'function' && scarLevel()) { A.seen.add(f); continue; } // (War scars: the game's own scrap stays instead, baked into the ground)
     A.seen.add(f);
     if (f.type === 'collapse') ambFromBuilding(A, f, fx, n);
     else ambFromFire(A, f);

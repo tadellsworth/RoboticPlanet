@@ -192,6 +192,7 @@ function mpMenuSettings(final, people) {
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
     players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
+    scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
     teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, 'versus'),
     sum: mpSummary(),
   };
@@ -418,6 +419,7 @@ function mpGameOpts(s, humans) {
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
     // (The Murmur: as the host set them; a host from before the setting sent none, and had none.)
     events: !!s.events, murmur: murmurLevelOk(s.murmur) ? s.murmur : 'off', victory: s.victory, humans, teams: !!s.teams, mods: s.mods,
+    scars: scarsOk(s.scars) ? s.scars : 'off', // (a host from before War scars sent none, and had none)
   };
 }
 

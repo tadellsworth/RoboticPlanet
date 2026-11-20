@@ -584,6 +584,22 @@ const AIR_CRASH = {
   plane: { fall: 7, glide: 6.5, turn: 2.4, skid: 0.5, slew: 0.25, len: 1.4, fire: 40, blast: 1.1 },
 };
 const WRECK_MAX = 32, CRASH_STEPS = 24; // (crashPath works the fall out in this many even steps)
+/*
+ * War scars (the owner's design, Nov 19 2026; see the War scars section of js/sim.js): a long war slowly turns the green
+ * land between the colonies into a battlefield of craters, ash, charred stumps, scrap and bones. The setting is the
+ * device's own (Settings: Off, Light or Full; Full by default) and is fixed into a game's settings when it starts
+ * (S.settings.scars), so every device in a multiplayer game runs the same one; changed during a game, it applies from the
+ * next. Looks, mostly: craters and ash never slow anyone. What plays: Haulers salvage scrap for Alloy (SALVAGE), and the
+ * Murmur's tunnels lean toward big heaps of it (they drain the charge left in wreckage).
+ *  light    a light scorch (S.ash 1..light): grass grows back over it one step every `step` s (about ten minutes)
+ *  good     S.ash: burned to ash for good (Full: the heart of a blast, napalm); glass: a nuclear blast's black glass
+ *  big      a blast this big or bigger leaves a big crater (a bomb, a Missile, a Howitzer's shell, a fuel blast, a crash)
+ *  scrapMax piles of scrap kept at once (past it the oldest small pile joins its nearest neighbour); pileMax: Alloy in one
+ *  fauna    the chance that an untouched open tile in a blast's reach had an animal on it (it dies: bones); bonesMax kept
+ */
+const SCARS = { levels: ['off', 'light', 'full'], light: 60, step: 10, good: 250, glass: 252, big: 0.7, scrapMax: 700, pileMax: 40, fauna: 0.1, bonesMax: 320 };
+/** Salvage: an idle Hauler pulls up on a road within `reach` tiles of a heap of scrap on its colony's land, cuts it up for `time` s and carries the Alloy (a whole unit, up to its load) to storage. */
+const SALVAGE = { reach: 2.5, time: 5 };
 /** How aircraft `type` falls and crashes (AIR_CRASH, or a plane's way for a type with no entry). */
 function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH, type) ? AIR_CRASH[type] : AIR_CRASH.plane; }
 /*
