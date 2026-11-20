@@ -4686,7 +4686,7 @@ function showAimBanner(problem) {
   if (problem) html = `<span class="err">${problem}</span> `;
   if (BDEFS[silo.type].lance) {
     html += R.aim
-      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
+      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything in the red core (2 tiles wide) is destroyed, yours too; the fainter edge either side is scorched to half armor.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
     return;
@@ -7303,7 +7303,7 @@ function refreshBuildingSheet(b) {
     const why = b.lOn ? '' : lanceBlocked(b);
     $('sh-aim').disabled = !!why;
     $('sh-aim').textContent = b.lOn ? 'Change the aim' : 'Aim the Lance';
-    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
+    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, yours too; the edge either side is scorched to half armor.`);
     if ($('sh-lstop')) $('sh-lstop').hidden = !b.lOn;
     if ($('sh-luser')) {
       $('sh-luser').textContent = `Use Reactor: ${b.lUseR ? 'On' : 'Off'}`; $('sh-luser').setAttribute('aria-pressed', b.lUseR ? 'true' : 'false'); $('sh-luser').classList.toggle('on', !!b.lUseR);

@@ -9859,19 +9859,25 @@ function drawCuts(ctx, ox, oy, z) {
     const grow = Math.min(1, age / 0.25); // (the cut runs out along the beam as it fires)
     const reach = L.len * grow;
     const seg = (fn) => { for (const r of L.runs) { const d0 = (r[0] - c.x0) * L.ux + (r[1] - c.y0) * L.uy; if (d0 > reach) continue; const d1 = Math.min(reach, (r[2] - c.x0) * L.ux + (r[3] - c.y0) * L.uy); fn(ox + r[0] * z, oy + r[1] * z, ox + (c.x0 + L.ux * d1) * z, oy + (c.y0 + L.uy * d1) * z); } };
-    // the scorched band, the charred furrow, and the furrow's lips
-    ctx.strokeStyle = 'rgba(28,20,14,0.42)'; ctx.lineWidth = z * 1.25;
+    // the scorched edge either side (a cut from an older save, c.w unset, had none), the scorched band as wide as the
+    // core, the charred furrow, and the furrow's lips
+    const cw = c.w || 0.8, k = cw / 0.8;
+    if (c.w) {
+      ctx.strokeStyle = 'rgba(40,30,20,0.2)'; ctx.lineWidth = z * (cw + 2 * LANCE.edge);
+      ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(28,20,14,0.42)'; ctx.lineWidth = z * (cw + 0.45);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-    ctx.strokeStyle = 'rgba(14,10,8,0.7)'; ctx.lineWidth = z * 0.62;
+    ctx.strokeStyle = 'rgba(14,10,8,0.7)'; ctx.lineWidth = z * 0.62 * Math.sqrt(k);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-    ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineWidth = z * 0.26;
+    ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineWidth = z * 0.26 * Math.sqrt(k);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
     if (z >= 10) {
       // glassy fused flecks along the furrow and clods thrown out of it
       const nx = -L.uy, ny = L.ux;
       ctx.fillStyle = 'rgba(70,60,52,0.55)';
       for (let d = 2; d < reach; d += 0.55) {
-        const h = hash2(Math.floor(d * 7), Math.floor(c.t), 611), side = h < 0.5 ? -1 : 1, off = (0.38 + 0.25 * hash2(Math.floor(d * 5), 3, 613)) * side;
+        const h = hash2(Math.floor(d * 7), Math.floor(c.t), 611), side = h < 0.5 ? -1 : 1, off = (0.38 + 0.25 * hash2(Math.floor(d * 5), 3, 613)) * k * side;
         const x = c.x0 + L.ux * d + nx * off, y = c.y0 + L.uy * d + ny * off, i = Math.floor(x), j = Math.floor(y);
         if (!inMap(i, j) || S.terrain[tIdx(i, j)] === T_WATER) continue;
         ctx.fillRect(ox + x * z - z * 0.05, oy + y * z - z * 0.04, z * (0.08 + 0.08 * h), z * 0.07);
@@ -9883,9 +9889,9 @@ function drawCuts(ctx, ox, oy, z) {
       const fl = 0.85 + 0.15 * Math.sin(R.time * 11 + c.t);
       ctx.globalCompositeOperation = 'lighter';
       const col = heat > 0.85 ? [255, 236, 190] : heat > 0.55 ? [255, 150, 60] : [220, 50, 20];
-      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, heat * 1.3) * 0.35 * fl})`; ctx.lineWidth = z * (0.5 + 0.7 * heat);
+      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, heat * 1.3) * 0.35 * fl})`; ctx.lineWidth = z * (0.5 + 0.7 * heat) * k;
       ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col[0]},${Math.min(255, col[1] + 40)},${col[2] + 30},${Math.min(1, heat * 1.5) * 0.8 * fl})`; ctx.lineWidth = z * (0.12 + 0.12 * heat);
+      ctx.strokeStyle = `rgba(${col[0]},${Math.min(255, col[1] + 40)},${col[2] + 30},${Math.min(1, heat * 1.5) * 0.8 * fl})`; ctx.lineWidth = z * (0.12 + 0.12 * heat) * Math.sqrt(k);
       ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
     }
@@ -9920,7 +9926,7 @@ function drawLanceBeams(ctx, ox, oy, z) {
     const mx = M ? ox + c.x0 * z + M.m[0] * z : ox + (c.x0 + ux * 2.4) * z, my = M ? oy + c.y0 * z + M.m[1] * z : oy + (c.y0 + uy * 2.4) * z - LANCE_BEAM_UP * z;
     const reach = Math.min(1, age / 0.25);
     const ex = ox + (c.x0 + (c.x1 - c.x0) * reach) * z, ey = oy + (c.y0 + (c.y1 - c.y0) * reach) * z - LANCE_BEAM_UP * z;
-    const w = 1 + 0.12 * Math.sin(R.time * 40) + 0.08 * Math.sin(R.time * 67);
+    const w = (1 + 0.12 * Math.sin(R.time * 40) + 0.08 * Math.sin(R.time * 67)) * (0.6 + 0.4 * (c.w || 0.8) / 0.8); // (as wide as its core)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
@@ -9929,7 +9935,7 @@ function drawLanceBeams(ctx, ox, oy, z) {
       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
     }
     // the light it throws on the ground under it, and the muzzle's flare
-    ctx.strokeStyle = `rgba(255,120,60,${0.2 * fade})`; ctx.lineWidth = z * 3;
+    ctx.strokeStyle = `rgba(255,120,60,${0.2 * fade})`; ctx.lineWidth = z * (c.w ? c.w + 2 * LANCE.edge : 3);
     ctx.beginPath(); ctx.moveTo(mx, my + LANCE_BEAM_UP * z); ctx.lineTo(ex, ey + LANCE_BEAM_UP * z); ctx.stroke();
     const fr = z * (1.4 + (age < 0.3 ? 2.5 * (1 - age / 0.3) : 0)) * w;
     ctx.globalAlpha = fade; ctx.drawImage(glowDisc('#fff1d0'), mx - fr, my - fr, fr * 2, fr * 2);
@@ -10066,10 +10072,21 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   const L = lanceLine(b, i + 0.5, j + 0.5);
   ctx.save();
   const x0 = ox + L.x0 * z, y0 = oy + L.y0 * z, x1 = ox + L.x1 * z, y1 = oy + L.y1 * z;
-  // the corridor it burns (a translucent red band as wide as the beam), a dark edge for contrast, the dashed line on top
+  // the danger zone: the scorched edge (a faint band, LANCE.edge either side), the core it burns (a stronger red band as
+  // wide as LANCE.width) with its rims, a dark edge for contrast, the dashed line on top
   ctx.lineCap = 'butt';
-  ctx.strokeStyle = bright ? 'rgba(255,50,30,0.2)' : 'rgba(255,60,40,0.1)'; ctx.lineWidth = Math.max(4, z * (LANCE.width + 0.7));
+  const nx = -L.uy, ny = L.ux, he = LANCE.width / 2 + LANCE.edge;
+  ctx.strokeStyle = bright ? 'rgba(255,140,40,0.13)' : 'rgba(255,140,40,0.06)'; ctx.lineWidth = Math.max(6, z * 2 * he);
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = bright ? 'rgba(255,50,30,0.24)' : 'rgba(255,60,40,0.12)'; ctx.lineWidth = Math.max(4, z * LANCE.width);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  if (z >= 6) {
+    ctx.lineWidth = Math.max(1, z * 0.05);
+    for (const [h, col] of [[LANCE.width / 2, bright ? 'rgba(255,70,50,0.7)' : 'rgba(255,80,60,0.35)'], [he, bright ? 'rgba(255,170,70,0.45)' : 'rgba(255,170,70,0.2)']]) {
+      ctx.strokeStyle = col;
+      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x0 + nx * h * sd * z, y0 + ny * h * sd * z); ctx.lineTo(x1 + nx * h * sd * z, y1 + ny * h * sd * z); ctx.stroke(); }
+    }
+  }
   ctx.strokeStyle = 'rgba(30,8,4,0.55)'; ctx.lineWidth = Math.max(4, z * (bright ? 0.2 : 0.12)) + 2;
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.strokeStyle = bright ? 'rgba(255,80,60,1)' : 'rgba(255,100,80,0.75)';
@@ -10078,17 +10095,16 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.setLineDash([]);
   if (bright) {
-    // what it would hit: every building on the line ringed red (yours amber)
-    const seen = new Set();
-    for (const t of lanceTiles(b, L)) {
-      const e = getE(S.bAt[t]);
-      if (!e || e.dead || seen.has(e) || calmB(e)) continue;
-      seen.add(e);
-      const p = bCentre(e), F = BDEFS[e.type].foot || 1;
-      ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : '#ff4b4b';
-      ctx.lineWidth = Math.max(2.5, z * 0.1);
+    // what it would hit: every building in its core ringed red (yours amber); those only in its edge, dashed
+    const tg = lanceTargets(b, L);
+    for (const [n, e] of tg.core.concat(tg.edge).entries()) {
+      const p = bCentre(e), F = BDEFS[e.type].foot || 1, edge = n >= tg.core.length;
+      ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : edge ? '#ff9a4b' : '#ff4b4b';
+      ctx.lineWidth = Math.max(edge ? 1.5 : 2.5, z * (edge ? 0.06 : 0.1));
+      ctx.setLineDash(edge ? [Math.max(4, z * 0.2), Math.max(3, z * 0.12)] : []);
       ctx.strokeRect(ox + (p.x - F / 2) * z + 2, oy + (p.y - F / 2) * z + 2, F * z - 4, F * z - 4);
     }
+    ctx.setLineDash([]);
     if (L.dome) { const c = bCentre(L.dome); ctx.strokeStyle = '#9fd8ff'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, DOME.radius * z, 0, Math.PI * 2); ctx.stroke(); }
   }
   ctx.restore();

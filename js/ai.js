@@ -2133,7 +2133,7 @@ const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2
 /**
  * The Lance or the nukes, for rival p (decided once, deterministically: P.megaPick, with the reasons in P.megaWhy):
  * its doctrine's lean (AI_MEGA_LEAN), plus a point for the Lance when its enemy's buildings lie strung out (the best line
- * through them hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
+ * through them, as wide as the Lance's core, hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
  * other way round), a point for the Lance when the enemy has a Shield Dome (it swallows a nuke whole; a Lance line can
  * pass beside it, or knock it down and come again), and a point for the Lance when Uranium is scarce (a nuke takes 12, a
  * Lance shot 2). More than 0: the Lance; otherwise the nukes.
@@ -2152,7 +2152,7 @@ function aiMegaPick(p) {
     if (!L) continue;
     const dx = c.x - L.x, dy = c.y - L.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
     let m = 0;
-    for (const b of theirs) { const fx = b.x - L.x, fy = b.y - L.y; if (fx * ux + fy * uy > 0 && Math.abs(fx * uy - fy * ux) <= 0.9) m++; }
+    for (const b of theirs) { const fx = b.x - L.x, fy = b.y - L.y; if (fx * ux + fy * uy > 0 && Math.abs(fx * uy - fy * ux) < LANCE.width / 2 + 0.5) m++; } // (its core: what it wrecks)
     line = Math.max(line, m);
   }
   if (line >= blast + 2) { score++; why.push('strung out +1'); } else if (blast >= line + 2) { score--; why.push('bunched -1'); }
@@ -2285,23 +2285,24 @@ function aiMegaSpot(p, type, near, reach, lander, front) {
   return best;
 }
 
-/** What Lance b's shot along line L would be worth to p: the foes' buildings and army on it, less its own side's (heavily). */
+/**
+ * What Lance b's shot along line L would be worth to p: the foes' buildings and army in its core, and a part for those
+ * only scorched by its edge (half their armor), less its own side's (heavily).
+ */
 function aiLanceWorth(p, b, L) {
   let s = 0;
-  const seen = new Set();
-  for (const t of lanceTiles(b, L)) {
-    const e = getE(S.bAt[t]);
-    if (!e || e.dead || seen.has(e) || calmB(e) || isWild(e.owner)) continue;
-    seen.add(e);
-    const d = BDEFS[e.type];
+  const tg = lanceTargets(b, L);
+  for (const [n, e] of tg.core.concat(tg.edge).entries()) {
+    if (isWild(e.owner)) continue;
+    const d = BDEFS[e.type], k = n < tg.core.length ? 1 : 0.3;
     const w = e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
-    s += foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w;
+    s += k * (foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w);
   }
   for (const u of S.bots) {
     if (u.dead || u.inside || isWild(u.owner)) continue;
-    const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
-    if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > LANCE.width / 2 + 0.2) continue;
-    s += foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1;
+    const band = lanceBand(L, u);
+    if (!band) continue;
+    s += (band === 2 ? 1 : 0.3) * (foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1);
   }
   if (L.dome) s += 5; // (it drops their Dome for a minute: their base open to the next bombardment, and to a ground assault)
   return s;

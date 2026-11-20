@@ -5280,7 +5280,7 @@ function checkSave(o) {
     ['n', 'k', 'c', 'a'].every((k) => Number.isFinite(s[k])) && (s.o == null || owner(s.o)) && (s.w == null || Number.isSafeInteger(s.w))))) bad();
   if (o.bones != null && !(Array.isArray(o.bones) && o.bones.length <= 2 * SCARS.bonesMax && o.bones.every((b) => onMap(b) && Number.isFinite(b.k) && Number.isFinite(b.a)))) bad();
   // The Lance of Corvane's cuts across the map (S.cuts, see lanceFire): numbers on the map.
-  if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) &&
+  if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) && (c.w == null || (Number.isFinite(c.w) && c.w > 0 && c.w <= 8)) &&
     [c.x0, c.x1].every((x) => x >= -1 && x <= o.W + 1) && [c.y0, c.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
