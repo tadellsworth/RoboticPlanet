@@ -1130,8 +1130,8 @@ function generateMap(seed, W, H, cfg) {
       }
     }
   };
-  // Long Haul 2v2: a plaza of open, level ground at the very centre (where the first Trade Post lands, as near every
-  // colony), the ground round it kept within a level of it, and a way to it from the base.
+  // Long Haul 2v2: a plaza of open, level ground at the very centre, the ground round it kept within a level of it,
+  // and a way to it from the base.
   const haul4Shape = () => {
     for (let j = half; j < H; j++) for (let i = 0; i < hw; i++) {
       const d2 = dist2(i, j, ccx, ccy), t = id(i, j);
@@ -2481,6 +2481,21 @@ function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; re
  */
 function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && st.players >= 3 && !!sh.haul4; }
 
+/** Exact tile twins for the starting layout. A 120° turn only approximates the square grid. */
+function mapTileOrbit(st, W, H) {
+  const sh = SHAPE_PRESETS[st.shape || 0], N = W * H;
+  if (haul4Map(st)) return (t) => {
+    const x = t % W, y = (t / W) | 0;
+    return [t, y * W + W - 1 - x, N - 1 - t, (H - 1 - y) * W + x];
+  };
+  if (st.players === 2 || sh.twin || (sh.isles4 && st.teams)) return (t) => [t, N - 1 - t];
+  if (quadMap(st)) return (t) => {
+    const turn = (u) => (u % W) * W + W - 1 - ((u / W) | 0);
+    return [t, turn(t), N - 1 - t, turn(N - 1 - t)];
+  };
+  return null;
+}
+
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
   const size = mapSizeForPlayers(st.size, st.players);
@@ -2722,16 +2737,19 @@ function newGame(opts) {
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
-  // Reserve the canyon's scarce landing pads before the Murmur claim the river flats.
-  const grandCanyon = SHAPE_PRESETS[settings.shape].grandCanyon;
-  if (grandCanyon) placePosts(seed);
+  // Reserve these maps' limited sets of landing pads before the Murmur pick their sites.
+  // The nest planner already keeps clear of any posts that are down.
+  const shape = SHAPE_PRESETS[settings.shape];
+  const orbit = !hand && mode === 'versus' ? mapTileOrbit({ ...settings, teams: !!S.teams }, W, H) : null;
+  const postsFirst = shape.grandCanyon || (orbit && (shape.cross || shape.haul4));
+  if (postsFirst) placePosts(seed, orbit);
   if (murmur !== 'off') murmurStart(murmur);
   // The Hollow's side chambers: robot parts laid out in rows, crates for warbots to carry home (they never rot).
   if (m.hollow) for (const r of m.hollow.relics) if (!S.bAt[tIdx(r.x, r.y)]) addLoot(r.x, r.y, r.goods, true);
-  if (!grandCanyon) placePosts(seed);
-  if (S.victory === 'uplinks') placeUplinks(seed);
+  if (!postsFirst) placePosts(seed, orbit);
+  if (S.victory === 'uplinks') placeUplinks(seed, orbit);
   if (opts.setup) opts.setup(S);
-  clearCalmGround(); // (no deposits on a Trade Post's ground: moved just off it)
+  clearCalmGround(orbit, !hand); // (no deposits on a Trade Post's ground: moved just off it)
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;

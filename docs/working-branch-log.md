@@ -242,3 +242,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Added the in-game shortcut sheet on `/` and **Keys** in the pause menu. Kept `?` on **How to play**. The sheet draws its map, Build, Paths and panel entries from the live bindings and pauses only single-player games.
 - Updated the first mission briefing, in-game help, README and Field Manual, and marked the polish item complete in IDEAS.
 - Verified binding coverage and exercised the live keyboard dispatcher in Chromium. Checked 1366×768 and ultrawide layouts, the touch pause menu, solo pause and resume, and that a loopback multiplayer session kept advancing without sending a pause order. Help coverage, mission data, lint and the single-file build passed.
+
+### Map symmetry
+
+- Fixed neutral site placement and Trade Post deposit relocation on Long Haul 2v2, Crossroads and the other exact-symmetry Versus layouts. Placement now works in complete sets of corresponding tiles. A cramped layout can still have one shared neutral site, such as the central relay on Four Isles.
+- Added a map regression test for every supported size and player count. It checks deterministic rebuilds, mixed biomes and Ring drizzle on the target maps, and accounts for the deliberately richer spare corner on three-player quarter maps.

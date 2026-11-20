@@ -1315,3 +1315,10 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   the upstream comparison and every Standard doctrine matchup.
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
+
+
+### Map symmetry regression
+
+- Fixed neutral site placement on Crossroads and Long Haul 2v2. Trade Posts and Uplinks are scheduled as complete tile sets, and deposits in a Trade Post zone are relocated with their twins. This also applies to other exact-symmetry Versus layouts, including Standard, the water maps and the half-turn layouts of Twin Valleys and Four Isles Teams.
+- Three-player quarter maps still leave a deliberately richer unoccupied corner. Three-way round maps still round 120° turns to the grid. Four Isles can share its central relay, and cramped layouts can share one central Trade Post.
+- The map symmetry test checks starting tiles and repeat generation through Planetary where supported, including mixed biomes and Ring drizzle landings on the affected maps.

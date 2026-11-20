@@ -10593,10 +10593,9 @@ function placeHollowNests(rng) {
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
- * to dock, the colonies' own land (reachable on foot) first. In Teams they come in half-turn pairs.
- * Long Haul 2v2 keeps its shared central post and pairs the others.
+ * to dock, the colonies' own land (reachable on foot) first. Exact layouts choose complete sets of mirror sites.
  */
-function placePosts(seed) {
+function placePosts(seed, orbit) {
   S.posts = [];
   if (S.hollow) return; // (none in the Hollow: the Pathfinder, which built them, never mapped it)
   const Ls = S.players.filter((P) => !P.absent && !isWild(P.id)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
@@ -10619,6 +10618,42 @@ function placePosts(seed) {
   }
   const longHaulPairs = haul4Map(S.settings) && Ls.length === 4, teamPairs = !!S.teams && Ls.length === 4 && !longHaulPairs;
   const at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
+  if (orbit) {
+    const groups = cands.map((c) => {
+      const t = tIdx(c.i, c.j), twins = orbit(t);
+      if (t !== Math.min(...twins)) return null;
+      const group = twins.map((u) => at.get(u));
+      return group.every(Boolean) ? group : null;
+    }).filter(Boolean);
+    const add = (g) => { for (const c of g) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j }); };
+    const groupSize = orbit(0).length;
+    while (S.posts.length + groupSize <= want) {
+      let best = null, bs = -Infinity;
+      for (const group of groups) {
+        if (group.some((c, k) => group.slice(k + 1).some((d) => dist(c.i, c.j, d.i, d.j) < 2 * TRADE_POST.calm + 1))) continue;
+        let near = Infinity, score = 0;
+        for (const c of group) {
+          for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
+          score += -(c.d[1] - c.d[0]) * 2 - c.d[0] * 0.15 + c.home * 6 + c.h * 0.5;
+        }
+        if (near < TRADE_POST.apart) continue;
+        score = score / group.length + Math.min(near, 40) * 0.25;
+        if (score > bs) { best = group; bs = score; }
+      }
+      if (!best) break;
+      add(best);
+    }
+    if (S.posts.length) return;
+    // Some small maps only have room for one shared landing pad. Crossroads and Long Haul 2v2
+    // always use complete sets, even when no set has enough room on a particular seed.
+    const shape = SHAPE_PRESETS[S.settings.shape];
+    if (shape.cross || shape.haul4) return;
+    const central = cands.filter((c) => dist(c.i, c.j, (S.W - 1) / 2, (S.H - 1) / 2) <= Math.max(5, Math.min(S.W, S.H) * 0.23));
+    central.sort((a, b) => (a.d.at(-1) - a.d[0]) - (b.d.at(-1) - b.d[0]) || a.d[0] - b.d[0] || b.h - a.h);
+    if (central.length) add([central[0]]);
+    return;
+  }
+
   const twinOf = (c) => at.get(tIdx(S.W - 1 - c.i, S.H - 1 - c.j));
   // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
   // only way to have two posts at all. The first is about as near every colony; where nowhere is (the middle of
@@ -10738,12 +10773,10 @@ function uplinkOrbit(t) {
 /**
  * The Uplinks, placed fairly on any map by its own symmetry (each one with its twins, so every colony has the
  * same), on open, level ground with room round it, clear of the Trade Posts, lava, the fault, the tide and the
- * Command Bases. Two colonies: one in the middle if there's ground there, and a pair out on the flanks (two
- * pairs if the middle is a rift or the sea); three: one between each pair of colonies; four (Crossroads and the
- * other four-quarter maps): the middle and one between each pair of neighbouring quarters (Twin Valleys, whose
- * middle is a mountain: two pairs).
+ * Command Bases. Exact layouts place complete mirrored sets. Four Isles can also place a shared relay on
+ * its central island. A 120° layout aims for one between each pair of colonies.
  */
-function placeUplinks(seed) {
+function placeUplinks(seed, orbit) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && nColonies() >= 3) || haul4Map(S.settings);
@@ -10775,13 +10808,12 @@ function placeUplinks(seed) {
   let apart = Math.max(9, span * 0.16);
   const used = (t) => ups.some((u) => dist(u.x, u.y, t % W, (t / W) | 0) < apart);
   const add = (orb) => { for (const t of orb) ups.push({ x: t % W, y: (t / W) | 0, d: costs.map((c) => Math.round(c[t])) }); };
-  const orbitOk = (t) => { const o = uplinkOrbit(t); if (!o || !o.every((u) => ok[u] >= ok[t] && roomAt[u] >= Math.min(16, roomAt[t]))) return null; const xs = o.map((u) => [u % W, (u / W) | 0]); for (let a = 0; a < xs.length; a++) for (let b = a + 1; b < xs.length; b++) if (dist(xs[a][0], xs[a][1], xs[b][0], xs[b][1]) < apart) return null; return o; };
+  const orbitOk = (t) => { const o = (orbit || uplinkOrbit)(t); if (!o || !o.every((u) => ok[u] >= ok[t] && roomAt[u] >= Math.min(16, roomAt[t]))) return null; const xs = o.map((u) => [u % W, (u / W) | 0]); for (let a = 0; a < xs.length; a++) for (let b = a + 1; b < xs.length; b++) if (dist(xs[a][0], xs[a][1], xs[b][0], xs[b][1]) < apart) return null; return o; };
   const cx = (W - 1) / 2, cy = (H - 1) / 2;
-  // 1) The middle (two colonies, or Crossroads): open ground right at the centre (so it is its own twin), as near
-  //    every colony as the others. Not there (a rift, the sea): two pairs out on the flanks instead.
-  // (Here a field of stone or ore doesn't rule a spot out: the Uplink's own tile is cleared, with its twins.)
+  // 1) A shared central relay on Four Isles (and the original placement for hand-built maps).
+  // A deposit can be cleared for the relay if the site is otherwise suitable.
   let mid = null;
-  if (n === 2 || quad) {
+  if ((n === 2 || quad) && (!orbit || SH.isles4)) {
     let bs = -Infinity;
     for (let j = Math.floor(cy - 5); j <= Math.ceil(cy + 5); j++) for (let i = Math.floor(cx - 5); i <= Math.ceil(cx + 5); i++) {
       if (!inMap(i, j)) continue;
@@ -10833,7 +10865,10 @@ function placeUplinks(seed) {
   }
   // Each Uplink's own tile is cleared of anything growing or lying there (with its twins, so the map stays fair).
   S.uplinks = ups.map((u, k) => ({ id: k + 1, x: u.x, y: u.y, owner: -1, jam: 0 }));
-  for (const u of S.uplinks) { const t = tIdx(u.x, u.y); S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
+  for (const u of S.uplinks) {
+    const t = tIdx(u.x, u.y);
+    for (const v of orbit ? orbit(t) : [t]) { S.res[v] = R_NONE; S.amt[v] = 0; S.fert[v] = 0; }
+  }
   return S.uplinks;
 }
 
@@ -13299,22 +13334,27 @@ function calmSpillOk(t, from, sameZone) {
  * on the same land if there is one near, else anywhere near (a tie goes to the tile further out from the posts' ground);
  * -1 if there's nowhere. The same answer on every device.
  */
-function calmSpill(from) {
+function calmSpill(from, matches, wholeMap = false) {
   const fi = from % S.W, fj = (from / S.W) | 0;
+  const nearest = (R, same) => {
+    let best = -1, bd = Infinity, bo = -1;
+    for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
+      const t = j * S.W + i, d = dist2(i, j, fi, fj);
+      if (d > bd || !calmSpillOk(t, from, same) || (matches && !matches(t, same))) continue;
+      let out = Infinity;
+      for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
+      if (d < bd || out > bo) { best = t; bd = d; bo = out; }
+    }
+    return best;
+  };
   for (const same of [true, false]) {
     for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) {
-      let best = -1, bd = Infinity, bo = -1;
-      for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
-        const t = j * S.W + i, d = dist2(i, j, fi, fj);
-        if (d > bd || !calmSpillOk(t, from, same)) continue;
-        let out = Infinity;
-        for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
-        if (d < bd || out > bo) { best = t; bd = d; bo = out; }
-      }
+      const best = nearest(R, same);
       if (best >= 0) return best;
     }
   }
-  return -1;
+  // A post can take up an entire islet. During map setup, search the other shores if needed.
+  return wholeMap ? nearest(Math.max(S.W, S.H), false) : -1;
 }
 
 /** Move the deposit on tile `from` to tile `to` (the same kind and amount). */
@@ -13332,11 +13372,47 @@ function moveDeposit(from, to) {
  * Clear the Trade Posts' ground of deposits (see calmSpillOk): each moves, the same kind and amount, to the nearest open
  * tile just off it (calmSpill), the ones at the edge of the ground first; an Energy crop is a planting, and just goes.
  * At the start of a game (once the posts, the Uplinks and a mission's own setup are in) and as a save loads (one from
- * before this rule). A post's half-turn twin (Teams and Long Haul 2v2 pair them) has its deposits moved to the twins of
- * the first one's tiles, so both sides stay alike. No dice: every device does the same. Returns how many moved.
+ * before this rule). Fresh symmetric maps move a whole set together. Loaded or hand-built maps move by post
+ * and preserve half-turn twins where they fit. Returns how many deposits moved.
  */
-function clearCalmGround() {
+function clearCalmGround(orbit, fresh = false) {
   if (!S.posts || !S.posts.length) return 0;
+  if (orbit) {
+    const sources = new Map(), R = TRADE_POST.calm, W = S.W;
+    for (const p of S.posts) for (let y = p.y - R; y <= p.y + R; y++) for (let x = p.x - R; x <= p.x + R; x++) {
+      if (!inMap(x, y) || !S.res[y * W + x]) continue;
+      const group = orbit(y * W + x), key = Math.min(...group);
+      const edge = Math.max(Math.abs(p.x - x), Math.abs(p.y - y));
+      sources.set(key, Math.max(sources.get(key) ?? 0, edge));
+    }
+    // Move tiles at the edge of the zone first. A single shared central pad can cover only
+    // part of a set, so move its uncovered twins alongside it to keep deposits fair.
+    const spare = (u) => !!S.spare && u % W < W / 2 && ((u / W) | 0) < S.H / 2;
+    const quarter = (u) => (u % W < W / 2 ? 0 : 1) + (((u / W) | 0) < S.H / 2 ? 0 : 2);
+    let moved = 0;
+    for (const [t] of [...sources].sort(([a, ae], [b, be]) => be - ae || a - b)) {
+      const start = orbit(t).find((u) => !spare(u)), from = orbit(start);
+      const indices = from.map((_, k) => k).filter((k) => S.res[from[k]] === S.res[start] && S.amt[from[k]] === S.amt[start]);
+      if (S.res[start]) {
+        const to = calmSpill(start, (v, same) => {
+          if (S.spare && quarter(v) !== quarter(start)) return false;
+          const twins = orbit(v);
+          return indices.every((k) => calmSpillOk(twins[k], from[k], same));
+        }, true);
+        if (to >= 0) {
+          const twins = orbit(to);
+          for (const k of indices) { moveDeposit(from[k], twins[k]); moved++; }
+        }
+      }
+      // The unoccupied corner on three-player quarter maps has its own bonus deposits.
+      for (const f of from) {
+        if (!spare(f) || !S.res[f] || !calmAt(f % W + 0.5, ((f / W) | 0) + 0.5)) continue;
+        const to = calmSpill(f, spare, true);
+        if (to >= 0) { moveDeposit(f, to); moved++; }
+      }
+    }
+    return moved;
+  }
   const R = TRADE_POST.calm, N = S.W * S.H, half = (t) => N - 1 - t;
   const done = new Map(); // post -> its moves [{ f, t, r, a }]
   let moved = 0;
@@ -13360,7 +13436,7 @@ function clearCalmGround() {
     src.sort((a, b) => b[0] - a[0] || b[1] - a[1] || a[2] - b[2]);
     const moves = [];
     for (const [, , f] of src) {
-      const t = calmSpill(f);
+      const t = calmSpill(f, null, fresh);
       if (t < 0) continue;
       moves.push({ f, t, r: S.res[f], a: S.amt[f] });
       moveDeposit(f, t);
