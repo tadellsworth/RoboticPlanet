@@ -2667,6 +2667,7 @@ function newGame(opts) {
   if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
+  clearCalmGround(); // (no deposits on a Trade Post's ground: moved just off it)
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
@@ -5419,6 +5420,7 @@ function deserializeGame(json) {
     if (oldWays) wayOwnersFromLand();
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
+    clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
     scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }

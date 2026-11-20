@@ -793,8 +793,15 @@ Kept as built (the owner, Nov 17):
 - **An escorted convoy holds** while its escort fights instead of turning back; an unescorted one still turns back,
   like any hauler. In nine computer-only games (Nov 17) convoys were hit in five and one or two lost in four; the games
   ran about two minutes longer on average and all ended.
+- **No deposits on a post's ground** (the owner, Nov 2026): only a Terminal or a Ramp can be built there, so a deposit
+  there could never be mined. The map's are moved just off the ground (the same kind and amount, a mirrored pair's alike),
+  as are an older save's as it loads; Ringfall's pieces land just off it, and Grove Planters and Bio Farms plant nothing
+  there.
 
 Still open:
+
+- **Fertile soil on a post's ground** stays (it isn't a deposit, and no Bio Farm plants there now): should it be moved
+  off too, or is it fine as it is?
 
 - **One market or one each?** Each colony's prices ease only with what it sells; the Post's ledger could keep one
   board for everyone, so rivals selling the same good push its price down for each other. Buying never raises a price.
