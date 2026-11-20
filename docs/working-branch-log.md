@@ -141,3 +141,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Restricted the smaller finishing storm to bases with light gun cover. Reproduced the undersized storms on the earlier revision. The current Hollow Small seed 25 retained its Colony 2 win at 24:04. [Tests and rationale](ai-stalemate-fixes.md#2-hollow-small-seed-25)
 - Restored isolated Ore mining and prioritized the first naval crossing for Ore-poor island colonies. Islands Medium seed 21 finished in 20:53 after four landings. Seeds 2, 5 and 17 kept their finish times and winners. [Tests and rationale](ai-stalemate-fixes.md#3-islands-crossings)
 - Removed attacks aimed at allies, added AI defense for allied territory, rotated 2v2 turn priority, and balanced neutral Trade Post access across 60 starts. In 12 paired games Team 1 wins moved from 9 to 6. [Tests and rationale](ai-stalemate-fixes.md#4-2v2-fairness)
+
+### Mission text and curriculum
+
+- Shortened six goal hints, preserved Harbour and Airlift's step-by-step highlights, and moved King of the Hill into War before Final Descent. The mission data check covers the 110-character limit, building targets, affected controls, and saved mission IDs.
