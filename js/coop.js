@@ -40,7 +40,7 @@ function coopRole() { let r = 'both'; try { r = localStorage.getItem('terrafall.
 function coopSetRole(r) { try { localStorage.setItem('terrafall.role', COOP_ROLES[r] ? r : 'both'); } catch (e) { /* storage blocked */ } }
 
 /** A message about the war (an attack, warbots, a raid...), as opposed to the colony's work. */
-const COOP_WAR_RE = /\b(attack\w*|under fire|raid\w*|warbots?|army|enem\w+|rivals?|turrets?|garrison\w*|missiles?|bomb\w*|napalm|siege|howitzers?|flak|nuk\w+|captur\w+|surrender\w*|walls?|gates?|keeps?|bulwarks?|torch\w*|strikes?|airfield|bombers?|outposts?|defen[cs]\w*|war)\b/i;
+const COOP_WAR_RE = /\b(attack\w*|under fire|raid\w*|warbots?|army|enem\w+|rivals?|turrets?|garrison\w*|missiles?|bomb\w*|napalm|siege|howitzers?|flak|nuk\w+|captur\w+|surrender\w*|walls?|gates?|keeps?|bulwarks?|torch\w*|skirmishers?|arc casters?|railgunners?|strikes?|airfield|bombers?|outposts?|defen[cs]\w*|war)\b/i;
 /**
  * Should this alert stay in the message log without popping up, for my role? Economy: the war's news, Military: the
  * colony's chatter. Losses, the Command Base, the story and anything not about either always pop up.

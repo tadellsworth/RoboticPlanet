@@ -69,7 +69,7 @@ const controls = [
   ['airlift', 1, ['Order bots', 'Crawlers +1', 'Drive somewhere (G)', 'Deploy here (E)'], ["#sh-orders .order-row[data-k='crawler'] [data-d='1']", '#sh-crawl', '#sh-deploy']],
   ['airlift', 4, ['Supply by air', 'On', 'Supply orders', 'Cement +5'], ["#sh-airsup [data-v='1']", "#sh-keep .keep-cell[data-g='cement'] [data-d='5']"]],
   ['holdline', 2, ['Walls (X)', 'Build'], ["#banner-seg [data-v='wall']", '#build-walls', '#banner-ok']],
-  ['siege', 4, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
+  ['siege', 5, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],
   ['hill', 3, ['Army (Q)', 'Hold ground (G)'], ['#btn-attack', '#ar-hold', '#win-card']],
 ];

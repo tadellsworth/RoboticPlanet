@@ -1630,8 +1630,17 @@ one; RENDERER.md, "The Maglev line").
 
 The band, the pylons and the pods go on after the buildings and robots (so what stands under a line is under it) and
 before the air (`drawMaglevs`); nothing of it is baked, because lines come and go. The placement preview is the same
-band at 75% with every pylon spot ringed (green standing, dashed grey spanned, the first bad one red) and a ghost of
-the far Terminal.
+band at 75% (red and dashed past the first blocked spot) with every pylon spot ringed (`MAG_SPOT`: green standing, blue
+over a road or track, yellow shifted a tile with a dotted tick back to its spot, dashed white spanned, red with a cross
+blocked, the reason in a small dark label beside the first) and a ghost of the far Terminal (and of the hub, labelled,
+on a Route via a hub).
+
+Drawn in code since the hubs (Nov 2026), no new images: a **pylon over a road or track** is a portal frame instead of
+the pylon sprite (`drawMagPortal`): two slim pale legs on the kerb either side of the deck, outlined in the cap's
+gunmetal, a crossbeam just under the deck in hazard yellow with dark chevrons (the pylon cap's), and the legs' small
+shadows on the road, so the road reads as open under it. A **suspended line** (a Terminal lost) keeps its band, without
+the night glow, with an amber dashed stripe down the deck; the lost Terminal is its sprite at 28% on its old tile under a
+pulsing dashed amber ring.
 
 ### Batch 22: Express highways (installed; drawn in code)
 
@@ -1674,6 +1683,74 @@ their square on the frame's anchor.
 | `dome@0`, `dome@1` (+ times of day) | The Shield Dome's 2 × 2 emitter: a six-sided steel plinth with the team band round its rim, a tapered tower wound with three copper field coils and halo rings, a gallery, four claws holding a faceted blue Ring Crystal projector in a halo; six field pylons on a hexagon round it with ceramic insulators and crystal tips, cabled in; a Crystal hopper, a transformer, floodlights. 512 px, framed wide (its 20 units across 0.7 of the frame) | `DOME_FRAME` in the manifest |
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
+
+### Batch 28: the Great Uplink (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Dish Array". Rendered with `renderer/b/gup.js` at every
+time of day for both teams, whole and below 30% of its armor, by `renderer/tools/render_gup.sh`;
+`renderer/tools/install_gup.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Great Uplink").
+Framed like the Lance and the Lift (`GUP_FRAME`). The transmission is drawn in code, in its owner's colour, so it reads
+at any zoom: the dish's glow, the beam, the ping and the jammed flicker. Flavor: "Landing beacon for the arks.
+Transmitting on all channels. Listening on all channels."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `gup@0`, `gup@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad with a painted ring; a round concrete plinth and a turntable with a team-colour band, a yoke holding the elevation bearings and a counterweight; one huge white dish, its bowl seamed in rings and spokes with a team-colour band near the rim, ribbed truss at the back, tilted a little north to the sky; ten red lights round its rim (lit at dusk and night); a feed tripod of three struts to a feed horn with a team cap; three small dishes on posts at the north-west, north-east and south-west corners, each looking at a different part of the sky; a control hut at the south-east with an amber window band and a team stripe, a mast on its roof; a power cabinet, cable trays and a red Fuel line on the west; four floodlights at the dish's foot aimed up at it (white at dusk and night) | `drawGup` over the middle of its square |
+| `gup-down@0`, `gup-down@1` (+ times of day) | Below 30%: the bowl holed and scorched, one feed strut snapped and the horn fallen to the pad, the north-east small dish toppled, scorch, rubble and torn white panels strewn over the pad, floods and windows dark | `drawGup` while `b.armor < 30%` |
+| (code) | Rim lights | `drawGupSignals`: red glows blinking in turn at the rim's four marks (`GUP_MARKS`) at night |
+| (code) | Transmitting | a glow in its owner's colour swelling in the bowl with each pulse (`GUP.pulse` 2.4 s, `gupPhase`); a pale beam rising straight up the screen from the feed horn, its white core fading out, a bright band climbing it each pulse; a ring spreading over the ground from the dish (the ping) |
+| (code) | Jammed | the glow and the beam turned red, flickering a dozen times a second, the beam jittering and its pulse broken into pieces; no ring |
+| (code) | No power | the glow down to a slow red blink, no beam |
+| (code) | Minimap | rings in its owner's colour pulsing out from it while it transmits, red while it stalls |
+
+### Batch 27: the Orbital Lift (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Beacon Cable". The anchor pad is rendered with
+`renderer/b/lift.js` at every time of day for both teams, whole and below 30% of its armor, by
+`renderer/tools/render_lift.sh`; `renderer/tools/install_lift.py` writes the WebP files and prints its frame and marks
+(RENDERER.md, "The Orbital Lift"). Framed like the Lance (`LIFT_FRAME`). Everything that moves or reads at a distance is
+drawn in code, so it stays sharp at any zoom and takes its owner's colour: the cable rising up the screen, its climbers
+and warning lights, its shadow along the fall line, and the fall.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `lift@0`, `lift@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad with a painted ring; an eight-sided stepped concrete collar in the middle with a team-colour band round its crest; eight clamp housings round a steel clamp ring; the cable's foot, a bright braided stub with four guide rails and the climber dock's yellow buffer ring, two red warning lights on it; two tension winches with fat cable drums led in to the collar; a control house with an amber window band and a team stripe; a power cabinet, a red Fuel feed pipe; four floodlight masts at the corners aimed in, each with a red beacon (white floods lit at dusk and night) | `drawLift` over the middle of its square |
+| `lift-down@0`, `lift-down@1` (+ times of day) | Below 30%: scorch over the pad, rubble and torn plates strewn over it, one clamp housing torn open and charred, a crack down the collar, the south-east floodlight mast knocked down across the pad, the floods and window band dark | `drawLift` while `b.armor < 30%` |
+| (code) | The cable | `drawLiftBeam` from the cable's foot (`liftFoot`): a soft column of light in its owner's colour, brighter at night, fading out up the screen; a white core line; six red warning lights stepping up it, blinking in turn (bright by night); two climber pods riding it, the higher the smaller; swaying when weak |
+| (code) | The climber | `drawLiftPod`: a white capsule with a band of windows (amber at night) and its owner's stripe when it carries a drop, coming down (growing) or going up (shrinking) over its 45 s; waiting at the top or bottom without power |
+| (code) | The shadow | `drawLiftShadow`: a soft dark line along the ground the way it would fall, flashing red while it's weak for whoever has land or robots on it; on the minimap a faint line, flashing red |
+| (code) | The fall | `drawLiftFalling`: for 5 s the cable stands over the gone anchor, swaying harder, its line flashing red; then it comes down from the anchor out, the part still falling hanging from where it struck to its top, dust and smoke where it lands (`addFx`) |
+| (code) | The wreckage | `drawCableWreck`, baked into the ground: the braided cable lying along its line through each tile, torn plates of its climber track beside it in its owner's colour; sparks along it for a minute after it falls, the Murmur's violet glimmer over it at night |
+| (code) | Its lights | the floodlights' four white pools at the pad's corners and its owner's glow under the cable (the light pass) |
+
+### Batch 26: Arrival City (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Terraced Arcology". Rendered with `renderer/b/city.js`
+at every time of day for both teams, whole and battle-damaged, by `renderer/tools/render_city.sh`;
+`renderer/tools/install_city.py` writes the WebP files and prints its frame (RENDERER.md, "Arrival City"). It is the
+widest building: its frame puts the middle of its 4 × 4 square on the frame's anchor (`CITY_FRAME`). All its own lights
+are off in these images (windows dark glass, lamps unlit): the game adds them.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `city@0`, `city@1` (+ morning, evening, night) | Three terraces of homes, each with rows of windows and a team-colour band along its parapet and team banners down its face, stepping back to the north so their roofs face the player as gardens: on the first a school (a little block with a bell turret, a red running track, a playground) and a park with a pond and a footbridge; on the second allotments, an orchard, a pergola and two deer grazing; on the third a fountain square before a tall glass atrium (a garden inside) whose south gable holds the Arrival clock, "ARRIVAL T+31 YEARS". Round it a ring road with kerbs, dashes and tram rails, the Arrival Station's glass canopy over an empty two-car tram and a departure board ("ON TIME"), bus shelters, street lamps and a "WELCOME HOME" sign | `drawCity` over the middle of its square |
+| `city-down@0`, `city-down@1` (+ times of day) | Knocked down to 0: windows dark and many broken, scorch over its faces, terraces and plaza, the first terrace's south-west corner blown out into rubble and twisted rebar, most trees burnt to sticks, the atrium's glass shattered and half its roof gone, the clock face cracked and dark, the station canopy's glass broken, lamps knocked askew, the deer gone | `drawCity` while `b.cDown` |
+| `city-lit-0`…`city-lit-3` (one set for every team and time) | Its lights as light to add: 0 the street lamps, bus shelters, station canopy, departure board, tram and welcome sign; 1 the first terrace's windows and the school's; 2 the second terrace's; 3 the third's, the atrium's lamps and floor and the clock face (each the glow pass of `part=lit&tier=k`, bloomed; colour ÷ alpha) | `cityLights`: added (`lighter`) tier by tier as dusk falls, on a timer (`cityLightLevel`), all on by night and in the Hollow; none while it's down or out of Fuel. Its warm light pool and a wide glow round it (`drawCityGlow`) come on with them |
+| (code) | Being taken | `drawCityTaking`: a ring round it filling in the taker's colour over 20 s, with a small flag |
+
+### Batch 25: the Skirmisher, the Arc Caster and the Railgunner (installed)
+
+Three army robots in the Warbot's "Lancer" family (the shared `renderer/b/robkit.js`: seen straight down, facing east,
+the same armour paint, grime, team light strips, sensor slit, rear lights and brake lenses), modelled in
+`renderer/b/rob_skirmisher.js`, `rob_arccaster.js` and `rob_railgunner.js`, rendered at every time of day for both teams
+by `renderer/tools/render_units.sh` and written as WebP by `renderer/tools/install_units.py` (102 files, about 670 KB).
+Drawn like the Warbot (its size on the map, the warbots' headlights at night, the brake and dust overlays).
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `skirmisher@0-f0`…`@1-f3` (+ morning, evening, night), `-brake`, `-boost` | A lean arrowhead body slung low between four big all-terrain tyres on swing arms (the tread rolls a quarter block a frame), team strips along its flanks, swept tail fins, a swivel with twin short autoguns, two dash thrusters in the tail glowing team colour. Smaller than the Warbot in the same frame | `drawArmyLights`: its thrusters flare (a glow and two streaks of team light) while it dashes; `'dash'`: a kick of dust and twin light streaks where it sets off |
+| `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
+| `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
 ### War scars (drawn in code; no images)
 

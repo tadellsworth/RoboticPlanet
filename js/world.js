@@ -2449,17 +2449,28 @@ function mapDims(st) {
 }
 
 /**
- * Are the megastructures in this game (the Lance of Corvane, the Shield Dome)? The Megastructures setting (on unless the
+ * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City, the Orbital Lift)? The Megastructures setting (on unless the
  * game setup turned it off; a save from before it: off), and in a mission only one that teaches them (S.mission.mega).
  */
 function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission || !!S.mission.mega); }
 
-/** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, the Hollow (the Lance). */
+/** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, Arrival City's hour (cityOpen). */
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
+  if (BDEFS[type].gup && !gupWinOn()) return S && S.mission ? 'No Great Uplink in this mission.' : S && S.settings && S.settings.upWin ? 'No Great Uplink here: no sky to transmit to.' : 'The Great Uplink win is off in this game (game setup, beside Victory).';
+  if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
 }
+
+/**
+ * Is the Great Uplink win in this game (GUP)? The game-setup switch (off unless it was turned on; a save from before it:
+ * off), with Megastructures on, in a Versus game (never Colony), and never in the Hollow, which has no sky.
+ */
+function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow; }
+
+/** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
+function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
 
 /** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? Not in a mission, unless it teaches it. */
 function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke) && !S.hollow; } // (no missiles under the Hollow's roof)
@@ -2554,6 +2565,8 @@ function newGame(opts) {
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
+  // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
+  if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow) settings.upWin = true;
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
@@ -2588,7 +2601,7 @@ function newGame(opts) {
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], cans: [], loot: [],
+    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], cans: [], liftFalls: [], loot: [],
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -2663,6 +2676,7 @@ function newGame(opts) {
   if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
+  clearCalmGround(); // (no deposits on a Trade Post's ground: moved just off it)
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
@@ -2686,7 +2700,10 @@ function hollowOn() { return !!(S && S.hollow); }
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type) {
+  if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].gup) return 'No Great Uplink in the Hollow: there is no sky down here to transmit to.';
+  if (BDEFS[type] && BDEFS[type].lift) return 'No Orbital Lift in the Hollow: the cavern roof stands between the anchor and the sky.';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
   if (BDEFS[type] && (BDEFS[type].mdriver || BDEFS[type].catcher)) return 'No Mass Driver in the Hollow: nothing flies under the cavern roof.';
@@ -3160,8 +3177,8 @@ function addBot(owner, type, x, y) {
     task: null, carry: null, carryN: 0, hp: maxHp, maxHp,
     inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0, bat: 100,
   };
-  if (type === 'warbot') bot.ammo = WARBOT_AMMO;
-  if (BOTS[type].flame) bot.gel = TORCH.tank;
+  if (type === 'warbot' || BOTS[type].flank || BOTS[type].railgun) bot.ammo = botMag(type);
+  if (botTank(type)) bot.gel = botTank(type).cap;
   if (BOTS[type].shield) { bot.sh = BULWARK.shield; bot.shAim = 0; }
   S.bots.push(bot);
   S.byId.set(bot.id, bot);
@@ -3235,6 +3252,7 @@ function computeTerritory() {
     if (b.dead || !b.built) continue;
     // A Bunker claims no wide ring; a Port founded from a Ferry (b.claim) claims a little round it.
     if ((BDEFS[b.type].mil && !BDEFS[b.type].bunker) || b.claim > 0) stamp(d, b, b.claim || BDEFS[b.type].terr);
+    else if (BDEFS[b.type].city) for (const t of cityRing(b)) { const dd = cityRingD(b, t); if (dd < d[b.owner][t]) d[b.owner][t] = dd; } // (Arrival City: a military claim round its middle)
     else if (civClaims(b)) stamp(c, b, CIV_CLAIM);
   }
   const nearest = (arr, t) => {
@@ -3320,7 +3338,7 @@ function computeTerritory() {
   // (it stops working and crumbles, see cutOff) until its owner takes the land back. On no-one's ground,
   // or its owner's, it's fine.
   for (const b of S.buildings.slice()) {
-    if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild) continue;
+    if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild || (BDEFS[b.type].city && b.built)) continue; // (Arrival City holds its own ground)
     const o = S.owner[tIdx(b.x, b.y)];
     let rival = o >= 0 && o !== b.owner;
     // A Viaduct can land in a rival's land (a bridgehead for an attack): it's only cut off once neither
@@ -3343,6 +3361,19 @@ function computeTerritory() {
     if (!b.cut) cutOff(b);
   }
 }
+
+/**
+ * The tiles Arrival City b holds (CITY.land round the middle of its square, as an Outpost holds its ring), in order;
+ * cityRingD: how far one is from its middle (squared, in tiles, as computeTerritory compares claims).
+ */
+function cityRing(b) {
+  const F = BDEFS[b.type].foot, cx = b.x + F / 2 - 0.5, cy = b.y + F / 2 - 0.5, r = CITY.land, r2 = r * r + 0.3, out = [];
+  for (let j = Math.max(0, Math.floor(cy - r)); j <= Math.min(S.H - 1, Math.ceil(cy + r)); j++) {
+    for (let i = Math.max(0, Math.floor(cx - r)); i <= Math.min(S.W - 1, Math.ceil(cx + r)); i++) if (dist2(i, j, cx, cy) <= r2) out.push(j * S.W + i);
+  }
+  return out;
+}
+function cityRingD(b, t) { const F = BDEFS[b.type].foot; return dist2(t % S.W, (t / S.W) | 0, b.x + F / 2 - 0.5, b.y + F / 2 - 0.5); }
 
 /**
  * Finished building b now stands on a rival's ground: cut off. It stops working (its worker walks away,
@@ -3514,7 +3545,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
   if (def.mega) { const why = megaBlocked(owner, type); if (why) return { ok: false, reason: why }; }
   // A megastructure: its own tile's checks, then every tile of its square has to be open, level ground of yours.
-  if (def.foot && axis !== '_') return footPlace(owner, type, i, j, skipBlockCheck);
+  if (def.foot && axis !== '_') return footPlace(owner, type, i, j, skipBlockCheck, axis);
   // A two-tile building (the Mass Driver): both its tiles must do, on one level. (axis '_': one tile's own checks.)
   if (def.long && axis !== '_') {
     const r = canPlace(owner, type, i, j, skipBlockCheck, '_');
@@ -3537,6 +3568,9 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
   if (S.tidal && S.tidal[t]) return { ok: false, reason: 'Tidal flats: the sea covers this at high tide.' };
   if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
+  if (liftWreckAt(t)) return { ok: false, reason: LIFT_WRECK_WHY };
+  // (A rival keeps its buildings off its own Orbital Lift's fall line: aiOnLiftLine.)
+  if (!def.lift && S.players[owner] && S.players[owner].ai && typeof aiOnLiftLine === 'function' && aiOnLiftLine(owner, t)) return { ok: false, reason: 'That is on its Orbital Lift\'s fall line.' };
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
   const ban = worldBan(type);
   if (ban) return { ok: false, reason: ban };
@@ -3636,11 +3670,13 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
  * the others must be open, level ground of yours with nothing on them; the buildings round it keep a side open; and it
  * mustn't close the only way through.
  */
-function footPlace(owner, type, i, j, skipBlockCheck) {
+function footPlace(owner, type, i, j, skipBlockCheck, dir) {
   const tiles = footTiles(type, i, j), F = BDEFS[type].foot, name = BDEFS[type].name;
   for (const [a, c] of tiles) if (!inMap(a, c)) return { ok: false, reason: 'Outside the map.' };
   const r = canPlace(owner, type, i, j, true, '_');
   if (!r.ok) return r;
+  // (Arrival City can never be destroyed: not on a fault line that will open into a chasm under it.)
+  if (BDEFS[type].city && S.fault && S.quake && !S.quake.done && tiles.some(([a, c]) => S.fault[tIdx(a, c)])) return { ok: false, reason: 'Arrival City can\'t stand on the fault line: the ground there will give way.' };
   const lv = S.elev[tIdx(i, j)], set = new Set(tiles.map(([a, c]) => tIdx(a, c)));
   for (const [a, c] of tiles) {
     const t = tIdx(a, c);
@@ -3649,7 +3685,7 @@ function footPlace(owner, type, i, j, skipBlockCheck) {
       : scorched(t) ? 'part of it is still scorched' : S.owner[t] !== owner ? 'all of it must stand on your own land' : S.bAt[t] ? 'there is a building in the way'
       : S.res[t] ? 'there are resources in the way' : (S.road[t] || S.plan[t]) ? 'there is a road in the way' : (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) ? 'there is track in the way'
       : S.ramp[t] ? 'part of it is on a slope' : S.elev[t] !== lv ? 'it needs level ground' : runwayAt(t) ? 'an Airfield\'s runway is in the way'
-      : calmAt(a + 0.5, c + 0.5) || postAt(t) || uplinkAt(t) ? 'neutral ground is in the way' : (S.pipe && S.pipe[t]) ? 'a pipeline is in the way' : '';
+      : calmAt(a + 0.5, c + 0.5) || postAt(t) || uplinkAt(t) ? 'neutral ground is in the way' : (S.pipe && S.pipe[t]) ? 'a pipeline is in the way' : liftWreckAt(t) ? 'fallen cable lies across it (Haulers cut it up first)' : '';
     if (why) return { ok: false, reason: `The ${name} is ${F} by ${F} tiles, and ${why}.` };
   }
   // Every building beside it keeps a side bots can walk in from.
@@ -3667,8 +3703,61 @@ function footPlace(owner, type, i, j, skipBlockCheck) {
     if (!open) return { ok: false, reason: `That would wall in the ${BDEFS[nb.type].name} next to it.` };
   }
   if (!skipBlockCheck && footBlocks(set, i, j, F)) return { ok: false, reason: 'That would block the only way through here.' };
+  // The Orbital Lift: its fall line (dir, turned with R) must fit on the map and cross no one else's land (liftLineWhy).
+  if (BDEFS[type].lift) { const why = liftLineWhy(owner, i, j, liftDirOf(dir)); if (why) return { ok: false, reason: why }; }
   return { ok: true, reason: '' };
 }
+
+/*
+ * The Orbital Lift's fall line (LIFT): from the middle of its 3 x 3 pad, liftLen tiles straight out in direction d (one
+ * of LIFT_DIRS), starting from the tile beside the pad. liftLineTiles gives them in order out from the anchor (off the
+ * map as -1), liftLineWhy why a line won't do ('' if it will).
+ */
+/** A fall direction from an order's argument: 0..7 (anything else: 0, east). */
+function liftDirOf(d) { const k = Number.isInteger(+d) ? +d : 0; return k >= 0 && k < 8 ? k : 0; }
+/** How long a Lift's fall line is here: half the map's width for its size (Small 15 tiles, Medium 20, Large 25, Huge 30). */
+function liftLen() { const sz = SIZE_PRESETS[(S.settings && S.settings.size) ?? 1] || SIZE_PRESETS[1]; return Math.round(sz.w / 2); }
+/** The tiles of the fall line of a Lift with its corner at (i, j), falling d: tile indices out from the pad (-1 off the map). */
+function liftLineTiles(i, j, d) {
+  const [dx, dy] = LIFT_DIRS[liftDirOf(d)], cx = i + 1, cy = j + 1, out = [], n = liftLen(), diag = dx && dy;
+  // (straight: n tiles; on a diagonal as many as cover the same length)
+  const m = diag ? Math.round(n / Math.SQRT2) : n;
+  for (let k = 2; k < m + 2; k++) { const x = cx + dx * k, y = cy + dy * k; out.push(inMap(x, y) ? tIdx(x, y) : -1); }
+  return out;
+}
+/** Why a Lift with its corner at (i, j) can't fall d: off the map, or across another colony's land, a Trade Post or an Uplink. */
+function liftLineWhy(owner, i, j, d) {
+  const L = liftLineTiles(i, j, d), name = LIFT_DIR_NAMES[liftDirOf(d)];
+  if (L.some((t) => t < 0)) return `Its fall line (${L.length} tiles ${name}) runs off the map: press R to turn it.`;
+  for (const t of L) {
+    if (S.owner[t] >= 0 && S.owner[t] !== owner && !isWild(S.owner[t])) return `Its fall line (${name}) crosses ${playerName(S.owner[t], true)}'s land: press R to turn it.`;
+    if (postAt(t) || calmAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5)) return `Its fall line (${name}) crosses a Trade Post: press R to turn it.`;
+    if (uplinkAt(t)) return `Its fall line (${name}) crosses a neutral Uplink: press R to turn it.`;
+  }
+  return '';
+}
+
+/*
+ * Cable wreckage (a fallen Orbital Lift: liftFall): scrap piles of kind 4 (s.cb) on the tiles it came down on, kept for
+ * good like War scars' craters until Haulers cut them up (salvageRun). Nothing is built or laid on such a tile, and
+ * robots cross it at LIFT.slow. liftWreckAt reads a map of them made again whenever the scrap changes.
+ */
+const LIFT_WRECK_WHY = 'Fallen cable lies here: Haulers cut it up first (it needs a road within reach).';
+let _lwS = null, _lwV = -1, _lwM = null;
+function liftWreckMap() {
+  if (!S || !S.scrap || !S.scrap.length) return null;
+  if (_lwS !== S || _lwV !== (S.scrapVer || 0) || !_lwM || _lwM.length !== S.W * S.H) {
+    _lwS = S; _lwV = S.scrapVer || 0;
+    let any = false;
+    for (const s of S.scrap) if (s.cb) { any = true; break; }
+    if (!any) { _lwM = new Uint8Array(0); return null; }
+    _lwM = new Uint8Array(S.W * S.H);
+    for (const s of S.scrap) if (s.cb) { const i = Math.floor(s.x), j = Math.floor(s.y); if (inMap(i, j)) _lwM[tIdx(i, j)] = 1; }
+  }
+  return _lwM.length ? _lwM : null;
+}
+/** Does fallen cable lie on tile t? */
+function liftWreckAt(t) { const m = liftWreckMap(); return !!(m && m[t]); }
 
 /** Would building on the tiles in `set` (a square of F from (i, j)) cut the open ground round it in two, near by? */
 function footBlocks(set, i, j, F) {
@@ -3770,6 +3859,7 @@ function placeSite(owner, type, i, j, cost, fromStore, axis) {
   if (def.foot) for (const [a, c] of footTiles(type, i, j)) markDirty(a, c);
   const b = addBuilding(owner, type, i, j, false);
   if (def.long) setLongAxis(b, axis);
+  if (def.lift) b.lfDir = liftDirOf(axis); // (the Orbital Lift: its fall line, set as it was placed)
   if (held) b.road = true;
   if (chk.rwy) { b.rwy = chk.rwy; _rwy.S = null; } // an Airfield's runway is kept clear from now on (see runwayMap)
   // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
@@ -3799,7 +3889,7 @@ function pylonAt(t) { return !!(S.bAt[t] && getE(S.bAt[t])?.type === 'magpylon')
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
+  if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -4750,7 +4840,11 @@ function cancelTask(bot, keepLoad = false) {
     case 'staff': {
       const b = getE(t.bld);
       if (b) {
-        if (b.staff === bot.id) b.staff = 0;
+        if (b.staff === bot.id) {
+          b.staff = 0;
+          // (A Roadworks has two Pavers: the other one, at work, is its staff now.)
+          if (BDEFS[b.type].crews > 1) for (const v of S.bots) if (v !== bot && !v.dead && v.task && v.task.type === 'staff' && v.task.bld === b.id && v.task.phase !== 'go') { b.staff = v.id; break; }
+        }
         if (b.staffInc === bot.id) b.staffInc = 0;
       }
       if (t.node >= 0) S.resRes[t.node] = 0;
@@ -4896,6 +4990,11 @@ function offDeck(a, c) {
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
 function destroyBuilding(b, burn, quiet) {
   if (b.dead) return;
+  // Arrival City can never be destroyed: anything that would knock it down knocks it to 0 (see cityDown). Only a colony
+  // leaving the game, or its own Workers' site being dropped, removes one.
+  if (BDEFS[b.type].city && b.built && !b.gone && typeof cityDown === 'function') { b.armor = 0; cityDown(b, -1); return; }
+  // An Orbital Lift destroyed by force: a foe's doing, its cable falls along its line (liftDown); a climber on it is lost.
+  if (BDEFS[b.type].lift && b.built && typeof liftDown === 'function') liftDown(b, !!burn);
   // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
   if (b.moving && typeof cancelMove === 'function') cancelMove(b);
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; }
@@ -5193,17 +5292,26 @@ function checkSave(o) {
   // badges (b.by) that point at them.
   if (o.crew != null && !(Array.isArray(o.crew) && o.crew.length <= 8 && o.crew.every((c) => c === null || (obj(c) && typeof c.n === 'string' && c.n.length <= 16 && owner(c.c) && c.c >= 0)))) bad();
   const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
+  // a Maglev line's pylon layout (every spot of a bent line and its bends) and its bends' tiles
+  const layoutOk = (l) => Array.isArray(l) && l.length <= Math.ceil(MAGLEV.maxBent / MAGLEV.spacing) + MAGLEV.bends + 1 && l.every((t) => t === -1 || tileOk(t));
+  const bendsOk = (l) => Array.isArray(l) && l.length <= MAGLEV.bends && l.every((q) => Array.isArray(q) && q.length === 2 && Number.isInteger(q[0]) && Number.isInteger(q[1]) && q[0] >= 0 && q[0] < o.W && q[1] >= 0 && q[1] < o.H);
   for (const b of o.buildings) {
     if (b.by != null && !(Number.isInteger(b.by) && o.crew && o.crew[b.by])) bad();
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
-    if (b.magMissing != null && (b.type !== 'magterm' || !obj(b.magMissing) || !Number.isInteger(b.magMissing.x) ||
-      !Number.isInteger(b.magMissing.y) || b.magMissing.x < 0 || b.magMissing.x >= o.W ||
-      b.magMissing.y < 0 || b.magMissing.y >= o.H || typeof b.magMissing.near !== 'boolean')) bad();
-    if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
-      !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
+    // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)
+    const missOk = (m) => obj(m) && Number.isInteger(m.x) && Number.isInteger(m.y) && m.x >= 0 && m.x < o.W && m.y >= 0 && m.y < o.H && typeof m.near === 'boolean' &&
+      (m.key == null || (Number.isSafeInteger(m.key) && m.key > 0)) && (m.layout == null || layoutOk(m.layout)) && (m.bends == null || bendsOk(m.bends));
+    if (b.magMissing != null && (b.type !== 'magterm' || !missOk(b.magMissing))) bad();
+    if (b.magMissMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMissMore) || b.magMissMore.length >= MAGLEV.hub || !b.magMissMore.every(missOk))) bad();
+    // a hub's other lines (Terminal ids), a line site's key end, and the next line a hub's site carries on to
+    if (b.magMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMore) || b.magMore.length >= MAGLEV.hub || !b.magMore.every((id) => Number.isSafeInteger(id) && id > 0))) bad();
+    if (b.magKey != null && !(Number.isSafeInteger(b.magKey) && b.magKey > 0)) bad();
+    if (b.magNext != null && !(b.type === 'magterm' && Array.isArray(b.magNext) && b.magNext.length === 2 && Number.isInteger(b.magNext[0]) && Number.isInteger(b.magNext[1]) && b.magNext[0] >= 0 && b.magNext[0] < o.W && b.magNext[1] >= 0 && b.magNext[1] < o.H)) bad();
+    if (b.magLayout != null && !layoutOk(b.magLayout)) bad();
+    if (b.magBends != null && !(BDEFS[b.type] && (BDEFS[b.type].magterm || BDEFS[b.type].pylon) && bendsOk(b.magBends))) bad(); // (a line's bends: on its key Terminal, or its site)
     // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves
     if (b.mdTo != null && !(Number.isSafeInteger(b.mdTo) && b.mdTo >= 0)) bad();
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();
@@ -5212,7 +5320,16 @@ function checkSave(o) {
     // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
-    for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // the Orbital Lift (see updateLift): its fall line, the Carrier's reserve, the climber and the goods it sends up
+    // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
+    if (b.gSrc != null && !['', 'gen', 'reactor'].includes(b.gSrc)) bad();
+    for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest', 'gU']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
+    if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
+    if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
+    for (const k of ['lfRes', 'lfBoost', 'lfCd', 'lfT', 'lfMul', 'lfPaid', 'lfUps', 'lfDrops', 'lfWarn', 'lfFeed', 'lfWait']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.lfSend != null && !(obj(b.lfSend) && Object.keys(b.lfSend).length <= LIFT.goods && Object.keys(b.lfSend).every((g) => LIFT_GOODS.includes(g) && Number.isFinite(b.lfSend[g])))) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -5224,6 +5341,7 @@ function checkSave(o) {
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();
     if (st.mega != null && typeof st.mega !== 'boolean') bad();
+    if (st.upWin != null && typeof st.upWin !== 'boolean') bad();
   }
   if (o.mission) {
     const M = o.mission;
@@ -5252,8 +5370,11 @@ function checkSave(o) {
     ['n', 'k', 'c', 'a'].every((k) => Number.isFinite(s[k])) && (s.o == null || owner(s.o)) && (s.w == null || Number.isSafeInteger(s.w))))) bad();
   if (o.bones != null && !(Array.isArray(o.bones) && o.bones.length <= 2 * SCARS.bonesMax && o.bones.every((b) => onMap(b) && Number.isFinite(b.k) && Number.isFinite(b.a)))) bad();
   // The Lance of Corvane's cuts across the map (S.cuts, see lanceFire): numbers on the map.
-  if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) &&
+  if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) && (c.w == null || (Number.isFinite(c.w) && c.w > 0 && c.w <= 8)) &&
     [c.x0, c.x1].every((x) => x >= -1 && x <= o.W + 1) && [c.y0, c.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
+  // Orbital Lift cables coming down (S.liftFalls, see liftFall): numbers, a direction, owners, the anchor on the map.
+  if (o.liftFalls != null && !(Array.isArray(o.liftFalls) && o.liftFalls.length <= 64 && o.liftFalls.every((f) => obj(f) && ['id', 't', 'k', 'sp', 'n', 'ax', 'ay'].every((k) => Number.isFinite(f[k])) &&
+    Number.isInteger(f.d) && f.d >= 0 && f.d < 8 && owner(f.o) && Number.isFinite(f.by) && f.ax >= 0 && f.ay >= 0 && f.ax < o.W && f.ay < o.H && f.n >= 0 && f.n <= o.W + o.H))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
     Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
@@ -5352,6 +5473,7 @@ function deserializeGame(json) {
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   // Each computer player keeps its own doctrine (saved as `style`); one the game doesn't know (a damaged file) plays as a Steward.
   for (const P of o.players) if (P.style !== undefined && !isDoctrine(P.style)) P.style = 'balanced';
+  for (const P of o.players) if (P.roadCrew !== undefined && !ROAD_CREWS.includes(P.roadCrew)) delete P.roadCrew; // (older saves: ROAD_CREW)
   // A save from before the narrator (no S.lore): what it would already have said, so a game loaded an hour in doesn't
   // announce its "first" road or Uplink, or the first nightfall, all over again. (Text only: see loreDue.)
   if (!o.lore || typeof o.lore !== 'object') {
@@ -5367,6 +5489,7 @@ function deserializeGame(json) {
   o.missiles = o.missiles || [];
   o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
   o.cuts = o.cuts || []; // (saves from before the Lance of Corvane: no cuts; their settings have no Megastructures: off, see megaOn)
+  o.liftFalls = o.liftFalls || []; // (saves from before the Orbital Lift: no cable coming down)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   // The rest works on S. A save that fails part-way leaves the game that was running as it was.
@@ -5383,12 +5506,14 @@ function deserializeGame(json) {
     for (const u of S.bots) {
       S.byId.set(u.id, u);
       if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
+      if (BOTS[u.type] && (BOTS[u.type].flank || BOTS[u.type].railgun) && u.ammo === undefined) u.ammo = botMag(u.type);
       u.carryN = u.carry ? u.carryN || 1 : 0;
     }
     computeZones();
     if (oldWays) wayOwnersFromLand();
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
+    clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
     scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }

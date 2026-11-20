@@ -178,7 +178,7 @@ const BOTS = {
   agribot: { name: 'Agribot', plural: 'Agribots', speed: WORKER_SPEED, hp: 5, crew: 'agribot', offroad: true,
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
-    desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
+    desc: 'A road crew bot. A Roadworks takes two: they lay your planned roads, twice as fast as a Worker, and surface roads with asphalt.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
@@ -216,6 +216,13 @@ const BOTS = {
     desc: 'A heavy shield robot. A purple energy shield stands across its front and stops fire coming from ahead, for it and for the robots sheltering behind it, until the shield is worn down (it comes back after a rest). Shells, bombs and missiles come down over it, and fire from the side or behind gets round it. Its own twin blasters are weak: it leads warbots in, it doesn\'t fight alone.' },
   torch:   { name: 'Torch', plural: 'Torches', speed: WARBOT_SPEED * 0.9, hp: 18, war: true, army: true, flame: true, parts: 2, range: 1.9,
     desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
+  // The three answers to a Bulwark blob (see SKIRM, ARC and RAIL): they garrison, rally, attack, reload and get repaired like warbots.
+  skirmisher: { name: 'Skirmisher', plural: 'Skirmishers', speed: WARBOT_SPEED * 1.55, hp: 10, war: true, army: true, flank: true, parts: 1, range: 1.3,
+    desc: 'A fast, light raider on four big tyres. It runs round a Bulwark\'s shield and shoots it in the side or the back (double damage), and hunts Railgunners, Arc Casters and Howitzers (half again) and Workers before warbots. Every few seconds it dashes. It shoots Ammo like a warbot but has little armour: massed warbots and Minigun Nests cut it down.' },
+  arccaster: { name: 'Arc Caster', plural: 'Arc Casters', speed: WARBOT_SPEED * 0.85, hp: 12, war: true, army: true, arc: true, parts: 2, range: 2.0,
+    desc: 'Throws chain lightning: each bolt hits one enemy robot and jumps on to up to three more close by, weaker each jump, so it punishes robots packed together. Lightning eats a Bulwark\'s shield three times as fast as gunfire. Its capacitors hold 10 bolts and recharge with Crystal (5 bolts each) at your Command Base or a Depot. Short reach and thin armour: Skirmishers that get in close tear it apart.' },
+  railgunner: { name: 'Railgunner', plural: 'Railgunners', speed: WARBOT_SPEED * 0.7, hp: 16, war: true, army: true, railgun: true, parts: 3, range: 5, mag: 4, ammoShots: 2,
+    desc: 'A slow, long-barrelled gun robot. It charges its rail (a glint at the muzzle), then fires one heavy slug up to 5 tiles at where its target was: it goes straight through every enemy robot in that line, and through a Bulwark\'s shield into the Bulwark. Then a long reload. A quick robot can dodge it. Each Ammo is two slugs; it holds four. Up close it has only a weak sidearm: Skirmishers that reach it win.' },
   // The Murmur (Colony, see WILD): creatures from nests (type 'nest'). Not built, never ordered.
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
@@ -229,7 +236,7 @@ const BOTS = {
   sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
     desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -319,24 +326,32 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /**
  * The Maglev line (BDEFS.magterm, BDEFS.magpylon, BOTS.magpod): an elevated guideway on pylons, straight across
- * anything, between two Maglev Terminals `min` to `max` tiles apart (b.line on both, as a Mooring Mast's; a Terminal is
- * on one line at most). Planned in Paths (Maglev) with two taps: a built Terminal of yours (the near end), then the far
- * end (a clear spot where the far Terminal goes up, a Terminal site, or a built Terminal). A pylon stands every
- * `spacing` tiles from the near Terminal (magSpots), on open ground, a cliff top or shallow water, never on a building,
- * a road or track; a spot in a chasm or deep water or rock is left out as long as the pylons either side of it stand,
- * so a line crosses a gap of up to `gap` tiles (two spans). The line costs `cost` a tile (and the far Terminal its
- * own cost when it's new), paid from storage as the goods come in like a Viaduct, and a Worker standing at the near
- * Terminal builds it out, `time` seconds a tile, the pylons going up one by one and the far Terminal last. Pods
- * (`perLine` to a line, built at either Terminal's pod bay) carry BOTS.magpod.carry goods both ways, planned as a
- * Freight Train's loads are (railPlan: the far Terminal stocks what the buildings round it need, the home one keeps that
- * for the line, spare goods come home): a pod sets out once `fill` of its hold is worth it, sooner when the far side
- * runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a Generator with Fuel in it
- * within its own radius of each Terminal (magPowered); without one at either end, or in a solar flare, the pods crawl at
- * WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short and go back, one on the spans that
- * rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it in `repair` s at `spacing` tiles'
- * cost. The rival builds none (IDEAS.md).
+ * anything, between two Maglev Terminals `min` to `max` tiles apart. A Terminal is on up to `hub` lines (a hub: b.line,
+ * then b.magMore), so lines join into a network the pods run through, line by line. Planned in Paths (Maglev) with two
+ * taps: a built Terminal of yours (the near end), then the far end (a clear spot where the far Terminal goes up, a
+ * Terminal site, or a built Terminal); a line the straight way can't go (a blocked stretch, or longer than `max`) may
+ * be routed via a new hub Terminal on the way (magRouteVia). A pylon stands every `spacing` tiles from the line's key
+ * end (magSpots: the near Terminal, or the far one when the near one keys a line already), on open ground, a cliff top,
+ * shallow water or over a road or track (its feet at the side: the way stays open), never on a building; a blocked spot
+ * shifts to a shoulder tile; a spot in a chasm or rock is left out as long as the pylons either side of it stand, so a
+ * line crosses a gap of up to `gap` tiles (two spans). The line costs `cost` a tile (and the far Terminal its own cost
+ * when it's new), paid from storage as the goods come in like a Viaduct, and a Worker standing at the near Terminal
+ * builds it out, `time` seconds a tile, the pylons going up one by one and the far Terminal last. Pods (`perLine` for
+ * each line of a network, built at any of its Terminals' pod bays) carry BOTS.magpod.carry goods both ways, planned as
+ * a Freight Train's loads are (railPlan: the far Terminals stock what the buildings round them need, each Terminal
+ * keeps what the ones beyond it want, spare goods come home): a pod sets out once `fill` of its hold is worth it,
+ * sooner when the far side runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a
+ * Generator with Fuel in it within its own radius of each Terminal (magPowered); without one at either end, or in a
+ * solar flare, the pods crawl at WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short
+ * and go back, one on the spans that rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it
+ * in `repair` s at `spacing` tiles' cost. A Terminal lost suspends its lines (the guideway and pylons stand) until one
+ * is built on its tile again (half a Terminal's cost, rounded up, from the panel: magRebuildCost). A line may bend at up
+ * to `bends` pylons (each straight stretch `seg` to `max` tiles, `maxBent` in all, turning at most `turn` degrees at a
+ * bend); a pod slows to `corner` of its top speed round a sharp bend, and through a hub, where it keeps the goods for the
+ * Terminals beyond aboard and carries on (podThrough). The Architect builds a line to a far cluster of its own when the
+ * haul is long and it has the Alloy and Chips (aiMaglev).
  */
-const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
+const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, bends: 4, maxBent: 60, seg: 3, turn: 120, corner: 0.35, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
  * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods
@@ -439,6 +454,17 @@ const ROAD_CLEAR = 3;
  */
 const PAVE_TIME = 1.5;
 const PAVE_CLEAR_TIME = 3;
+/**
+ * Road crews. At most a colony's road crew limit of Workers (P.roadCrew: one of ROAD_CREWS, set on the Roads tool in
+ * Paths; ROAD_CREW unless set, 0 = no limit) lay planned road at once, so a long highway doesn't take every Worker
+ * off building. A Roadworks' Pavers lay planned road too, PAVER_LAY times as fast as a Worker, and don't count toward
+ * it. A Worker laying road goes to a construction site within PAVE_LEAVE tiles that is waiting for a builder (when no
+ * free Worker is as near): building comes first.
+ */
+const ROAD_CREWS = [2, 3, 5, 0];
+const ROAD_CREW = 3;
+const PAVER_LAY = 2;
+const PAVE_LEAVE = 10;
 /**
  * Safety net: a colony with less than SALVAGE_BELOW of Stone or Fiber and nothing able to make it
  * gets 1 every SALVAGE_EVERY seconds, salvaged from the Command Base, so it can always rebuild.
@@ -894,13 +920,18 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  *
  * The Lance of Corvane (BDEFS.lance): a 3 x 3 gun pit, a long barrel on a slow turntable. Aim it (its panel, then a
  * spot anywhere) and it charges for `charge` s, then fires a beam in a straight line from the gun through that spot to
- * the map's edge, `width` tiles wide: every building on the line is wrecked (a Command Base or Keep drops to its
- * Missile floor), every robot on it dies, whosever it is, Walls are breached, water boils to steam, and a scorched
+ * the map's edge. Its core is `width` tiles wide: every building whose footprint touches it is wrecked (a Command Base or
+ * Keep drops to its Missile floor), every robot in it dies, whosever it is, Walls are breached. Either side of the core
+ * runs a scorched edge `edge` tiles wide: buildings touching it (and none of the core) lose `edgeDmg` of their full
+ * armor, robots in it `edgeDmg` of their full health, but the edge alone never destroys anything (it leaves at least 1,
+ * and a Command Base or Keep no lower than its Missile floor); water boils to steam, and a scorched
  * trench is carved for good (S.cuts; on War scars the ground under it burns to ash and the animals there die). It fires
  * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
  * each while it charges, or a Nuclear Reactor there with `uranium` Uranium (or an Enriched Uranium) in it, taken as the charge starts. While it
  * charges its colony's lights dim and its factories work `slow` slower; wreck its power and the charge is lost. A dust
- * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. A
+ * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. On
+ * Reactor power a charge takes `reactorCharge` s and the reload `reactorReload` s (Generators: `charge` and `reload`).
+ * With both in reach it uses the Generators unless its owner has switched on Use Reactor (b.lUseR, an order). A
  * Shield Dome on the line takes the whole shot and drops. Charging draws the Murmur (chargeWorth). Not in the Hollow
  * (no line of fire under the cavern roof); allowed on Argos.
  *
@@ -912,7 +943,74 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * burns a Crystal every `crystal` s (Haulers bring them, `cap` at most) and needs a Generator with Fuel within `reach`
  * tiles: without either it's down.
  */
-const LANCE = { charge: 90, reload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
+/*
+ * Arrival City (BDEFS.city): a 4 x 4 terraced arcology of homes, parks, a school and a station, built for colonists who
+ * never came (the owner's look A, Nov 2026). It opens `at` s into a free-play game (a mission that teaches it: at once).
+ * Every factory, gatherer, Oil Pump and Bot Foundry of its owner's within `reach` tiles of its middle works `boost`
+ * faster, and Workers build that much faster there (cityBoost). It holds `land` tiles of land round its middle as an
+ * Outpost does (a military claim), and in Domination every tile of that ring counts twice (cityLand). Its lights burn a
+ * Fuel every `fuel` s at night only (Tankers bring it, `fuelCap` at most); out of Fuel at night it goes dark and its
+ * boost falls to `dark` of itself. It can never be destroyed: whatever hits it (warbots, Missiles, bombs, shells, a nuke,
+ * a Lance shot) knocks it down to 0 at most, and then it is down (b.cDown): its bonus stops, its windows go dark, and
+ * armed warbots of another colony within `capReach` tiles of its walls, with none of its owner's side there, take it
+ * after `cap` s (b.cCap; it changes hands, land, bonus and all). Repaired to `back` of its armor it is up again.
+ * Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
+ */
+const CITY = { at: 900, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
+/*
+ * The Orbital Lift (BDEFS.lift; the owner's look A, the Beacon Cable, Nov 2026): a 3 x 3 anchor pad with a cable up to
+ * its colony's Carrier in orbit. As it is placed, R turns its fall line (b.lfDir, one of 8 directions: LIFT_DIRS): a
+ * straight line from the anchor, half the map's width long (liftLen: Small 15 tiles .. Huge 30), that must fit on the map
+ * and cross no other colony's land, Trade Post or neutral Uplink (liftLineWhy). Its panel calls a climber down with one
+ * of four loads (LIFT.drops): it takes `climb` s and unloads at the anchor (robots step out; goods wait there for
+ * Haulers), and every colony hears it start down. Then `cooldown` s from that landing to the next call; the first is
+ * ready when it's finished. The Carrier holds `reserve` drops (b.lfRes): each call uses one. Restock the Carrier: the
+ * goods ticked on its panel (b.lfSend {good: the reserve kept home}, up to `goods` of them: made goods or Crystal) come
+ * by Hauler (and Tanker), and by conveyor from buildings touching the pad; at `load` goods a climber goes up (`climb` s;
+ * never while one is coming down; it doesn't touch the cooldown). Each full climb up puts a drop back (up to `reserve`)
+ * and makes the next drop `boost` bigger again (b.lfBoost, up to `boostMax` restocks: double). Every climb burns `fuel`
+ * Fuel from a Generator within `reach` tiles; without it the climber waits; a solar flare stops it where it is. A climb
+ * draws the Murmur at night like a working Generator. Below `weak` of its armor the cable sways and its line flashes red
+ * for whoever has land or robots on it. Destroyed by a foe (not dismantled, not by its own side) it falls (liftFall):
+ * `creak` s of creaking, then the cable comes down along its line from the anchor out at `sweep` tiles a second (on Argos
+ * `lunar` of that): every building on it takes `crush` (a Keep is left at half, a Command Base at its Missile floor,
+ * another megastructure badly hurt but standing), robots on it are destroyed and those beside it take `side`; Walls,
+ * roads, track and pylons on it are broken; aircraft aren't hit. The line stays as cable wreckage (scrap of kind 4, b.cb:
+ * liftWreckAt) for good: robots cross it at `slow` speed and nothing is built on it until Haulers cut it up, `cut`
+ * Alloy a tile. One per colony. Not in the Hollow (the roof); on Argos the fall is slow.
+ */
+const LIFT = { climb: 45, cooldown: 360, reserve: 6, load: 30, goods: 3, sendReserve: 20, sendStep: 10, sendMax: 200, boost: 0.5, boostMax: 2,
+  reach: 4, fuel: 2, weak: 0.3, creak: 5, sweep: 4, lunar: 0.5, crush: 30, side: 3, slow: 0.5, cut: 1, sparks: 60, feed: 1,
+  drops: {
+    security: { name: 'Security detail', bots: { warbot: 6, bulwark: 2 } },
+    crew: { name: 'Work crew', bots: { worker: 6, truck: 2 } },
+    alloy: { name: 'Alloy', goods: { alloy: 30 } },
+    chips: { name: 'Chips', goods: { chip: 18 } },
+  } };
+/** The 8 directions a Lift's fall line can take (b.lfDir 0..7: east, then clockwise on the map: south-east, south, ...). */
+const LIFT_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+const LIFT_DIR_NAMES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+/** What a Lift can send up: the made goods and Crystal. */
+const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'fissile'];
+/*
+ * The Great Uplink (BDEFS.gup; the owner's look A, the Dish Array, Nov 2026): a 3 x 3 dish array built to talk to home,
+ * and a second way to win. Only in a game with the Great Uplink win on (a game-setup switch beside Victory, off by
+ * default; it works alongside whichever Victory was picked) and Megastructures on; never in Colony games or the Hollow
+ * (no sky): gupWinOn. Its panel's Begin transmission opens `at` s into a game (at once in a mission that teaches it) and
+ * needs `gens` Generators with Fuel within `reach` tiles of its square, each burning a Fuel every `genFuel` s while it
+ * transmits; or a Nuclear Reactor and `rGens` Generator there, the Reactor burning a Uranium every `uEvery` s of
+ * transmission (two for a whole one; an Enriched Uranium counts as two), taken as each stretch begins. With both, the
+ * Generators (the Uranium is kept). Its panel's Stand down ends a transmission: its progress is lost. `hold` s of transmission make contact, and that colony (and its team) wins (S.endHow 'contact'). An armed
+ * warbot of another colony within `jam` tiles of its square jams it; jammed or unpowered, the clock stops and runs back
+ * at `back` speed (down to 0). Destroyed, the transmission is lost: a rebuilt one starts from 0. While it transmits every
+ * colony sees a banner in the sender's colour and a ping on the map; alerts when it starts, at half, at 2 minutes and at
+ * 30 s left (`alerts`). Its signal pulses every `pulse` s (looks and sound only). In the last `echo` s the Murmur repeat the pulse back (the sound). It draws the Murmur like a
+ * working Generator while it transmits. One per colony; two colonies may transmit at once, and the first to finish wins.
+ */
+const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, rGens: 1, uEvery: 240, jam: 3, back: 0.5, alerts: [240, 120, 30], echo: 20, pulse: 2.4 };
+/** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
+const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
+const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 
@@ -932,7 +1030,7 @@ const BOOST = {
  * The unit types the hidden menu can stop every rival making for the rest of a game (S.ban): their Bot
  * Foundry, shipyard and hangar skip them, and the computer stops planning round them. Ones they have carry on.
  */
-const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
+const BANNABLE = ['warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket', 'bomber', 'ferry'];
 
 /**
  * The Accord's callsigns for the four colours (LORE.md): a colony is named by its callsign, with its colour beside it
@@ -979,7 +1077,8 @@ function playerName(p, the) {
  *   farm      plants energy crops on fertile soil within `radius` and harvests them into Fuel
  *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
  *   crew      only bots of this crew (see BOTS) can run it
- *   roadworks its Paver lays asphalt on any road joined to it, nearest first
+ *   roadworks its Pavers lay planned road (see ROAD_CREW), then asphalt on any road joined to it, nearest first
+ *   crews     how many bots of its crew it takes (1 if not given)
  *   ammoStock (Command Base, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
@@ -1089,8 +1188,8 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles. It also lays Express lanes (Paths, Express): 1 Asphalt and a quarter Alloy a tile.',
-    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, armor: 8, buildTime: 10,
+    name: 'Roadworks', desc: 'Takes two Pavers. They lay your planned roads, twice as fast as a Worker, then upgrade your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles. They also lay Express lanes (Paths, Express): 1 Asphalt and a quarter Alloy a tile.',
+    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', crews: 2, roadworks: true, armor: 8, buildTime: 10,
   },
   armory: {
     name: 'Ammo Plant', desc: 'Packs Alloy and Cement into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',
@@ -1198,12 +1297,12 @@ const BDEFS = {
   },
   magterm: {
     name: 'Maglev Terminal', short: 'Maglev',
-    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four to a line): they carry 16 goods a trip at three times a Freight Train\'s speed. The two Terminals work like a railway\'s stations (the far one stocks what the buildings round it need and sends their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl.',
+    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four for each line): they carry 16 goods a trip at three times a Freight Train\'s speed. A Terminal joins up to three lines (a hub): pods carry goods on through it, line by line. The Terminals work like a railway\'s stations (the far ones stock what the buildings round them need and send their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl. Lost, its lines stand broken until a Terminal is built on its tile again.',
     cost: { cement: 8, alloy: 6, chip: 3 }, store: true, magterm: true, armor: 14, buildTime: 14, yard: ['magpod'],
   },
   magpylon: {
     name: 'Maglev Pylon', short: 'Pylon',
-    desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
+    desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line; over a road or track its feet stand at the side and the way stays open. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
     cost: { cement: 3, alloy: 3, chip: 1 }, pylon: true, armor: 24, buildTime: 20,
   },
   mdriver: {
@@ -1219,13 +1318,28 @@ const BDEFS = {
   // square of foot x foot tiles from its own tile, east and south: footTiles).
   lance: {
     name: 'Lance of Corvane', short: 'Lance',
-    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything on the line is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
+    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; a tile either side is scorched (half armor or health, nothing destroyed); water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
     cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 240, war: true,
   },
   dome: {
     name: 'Shield Dome', short: 'Dome',
     desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. One per colony.',
     cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 180, war: true,
+  },
+  city: {
+    name: 'Arrival City', short: 'City',
+    desc: 'A 4 by 4 terraced arcology built for the colonists: homes, gardens, a school and a station, all finished and all empty, with the Arrival clock in its glass atrium. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
+    cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 300,
+  },
+  lift: {
+    name: 'Orbital Lift', short: 'Lift',
+    desc: 'A space elevator: a 3 by 3 anchor pad and a lit cable up to your Carrier in orbit. As you place it, press R to turn its fall line (half the map\'s width, shown on the map), which must not cross another colony\'s land. On its panel, Call down a climber with one of four loads: a Security detail (6 Warbots, 2 Bulwarks), a Work crew (6 Workers, 2 Freight Trucks), 30 Alloy or 18 Chips. It takes 45 seconds and every colony hears it coming; then 6 minutes before the next. The Carrier holds 6 drops. Restock the Carrier: tick goods to send up (Haulers bring what you hold beyond the reserve you set); every 30 that go up put a drop back and make the next drop half again bigger (up to double). Each climb burns 2 Fuel from a Generator within 4 tiles. If an enemy destroys it, the cable comes down along its fall line, crushing what lies there and leaving wreckage Haulers cut up for Alloy. One per colony. Not in the Hollow; on Argos it falls slowly.',
+    cost: { cement: 60, alloy: 44, chip: 26, crystal: 20 }, lift: true, mega: true, foot: 3, armor: 90, buildTime: 330,
+  },
+  gup: {
+    name: 'Great Uplink',
+    desc: 'A 3 by 3 dish array built to talk to home, and a second way to win. Only in a game with the Great Uplink win switched on (game setup, beside Victory) and Megastructures on. Its panel\'s Begin transmission opens 25 minutes into a game and needs 3 Generators with Fuel within 4 tiles, each burning a Fuel every 30 seconds while it transmits. Hold the transmission for 8 minutes and you make contact: your colony (and your team) wins. Any armed warbot of another colony within 3 tiles jams it; jammed or without power its clock stops and runs back at half speed. Destroyed, the transmission is lost and a rebuilt one starts from zero. Every colony sees the countdown and where it is. One per colony. Not in the Hollow.',
+    cost: { cement: 50, alloy: 40, chip: 30, crystal: 24 }, gup: true, mega: true, foot: 3, armor: 120, buildTime: 300,
   },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
@@ -1258,13 +1372,15 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'gup', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo', 'lance', 'dome'], walls: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
+  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'gup'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1303,17 +1419,19 @@ const YARD = { work: 8, hopper: 2 };
 const KEEP = { fire: 4, aura: 7, wallMul: 1.5, mend: 0.33, quiet: 8, range: 1, rate: 0.8, spacing: 16 };
 /**
  * The Bulwark (BOTS.bulwark): a purple shield across its front, `r` tiles out, spanning `arc` radians either side of
- * where it faces. A shot (or flame) from in front, at the Bulwark or at a robot of its owner's within `cover` tiles
- * behind the shield line, hits the shield instead: it soaks up to `shield` damage, comes back `regen` a second once
+ * where it faces. A shot from in front, at the Bulwark or at one of the `coverMax` robots of its owner's nearest it
+ * within `cover` tiles behind the shield line (shieldCovers), hits the shield instead (a Torch's flame half gets round
+ * it: TORCH.shieldPass): it soaks up to `shield` damage, comes back `regen` a second once
  * it's had `wait` s without a hit, and worn right down it fails for `down` s, coming back at `reboot` of full.
  * Blasts from above (shells, bombs, missiles, fuel blasts) and fire from the side or behind get past it; a
  * Disruptor Tower's pulse drains `drain` off it. It turns (`turn` rad/s) to face the nearest threat. Its twin
  * blasters: `dmg` a shot every `reload` s.
  */
-const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, turn: 2.6, dmg: 1, reload: 0.9, drain: 14, look: 6 };
+const BULWARK = { shield: 40, regen: 4, wait: 2.5, down: 8, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, coverMax: 6, turn: 1.8, dmg: 1, reload: 0.9, drain: 14, look: 6 };
 /**
  * The Torch (BOTS.torch): every `tick` s while it has a target in reach (BOTS.torch.range) it sprays a cone `cone`
- * radians either side of its aim: `bot` damage to each enemy robot in it and `bld` to the building it's burning
+ * radians either side of its aim: `bot` damage to each enemy robot in it (a Bulwark's shield in the way stops only
+ * 1 − `shieldPass` of it, and that burns the shield `shieldMul` times as fast) and `bld` to the building it's burning
  * (`fort` times that to defences and Walls/Gates). Its tank holds `tank` seconds of fire; a Fuel refills `perFuel`
  * seconds, from its owner's Command Base, a Depot or a Fuel Station.
  * Scorch the earth (its panel): a Torch whose tank is at least `scorchMin` full (nearly full: 90%, 10.8 of its 12 s)
@@ -1321,7 +1439,48 @@ const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1
  * `scorch` s, scorching it for good (scorchSoil, as napalm does); then it goes to refill. A group given the order
  * takes a patch each, the tapped one and the nearest round it within `scorchSpread` tiles.
  */
-const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
+const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, shieldPass: 0.5, shieldMul: 2, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
+/**
+ * The Skirmisher (BOTS.skirmisher): `dmg` a shot every `reload` s (Ammo, as a warbot), `bonus` times that against the
+ * kinds it hunts (twice against a Bulwark, half again against a Railgunner, an Arc Caster or a Howitzer) and `soft`
+ * times against robots that aren't army (Workers, haulers). A foe behind an enemy
+ * Bulwark's shield it runs round: to a spot `spot` of its reach off the foe, `round` radians past the edge of the
+ * shield's arc, the side it's nearer. It hunts the `hunt` kinds within `huntR` tiles before anything else. Off its
+ * cooldown (`dashEvery` s) it dashes at `dashMul` its speed for `dash` s, when it starts a run round a shield or
+ * closes on a foe more than `dashFar` tiles off.
+ */
+const SKIRM = { dmg: 2, reload: 0.75, bonus: { bulwark: 2, railgunner: 1.5, arccaster: 1.5, rocket: 1.5 }, soft: 1.5, spot: 0.8, round: 0.6, huntR: 4.5, hunt: ['bulwark', 'railgunner', 'arccaster', 'rocket', 'worker'],
+  dash: 0.9, dashMul: 2.2, dashEvery: 6, dashFar: 2.5 };
+/**
+ * The Arc Caster (BOTS.arccaster): every `reload` s a bolt: `dmg` to the robot it aims at, then it jumps to the nearest
+ * enemy robot within `jump` tiles of the last one hit (not one already hit), up to `jumps` times, `fall` times weaker
+ * each jump. A Bulwark's shield in the way takes `shieldMul` times the bolt (what's left of the bolt once it fails gets
+ * through). `bld` to a building (`fort` times that to defences and Walls). Its capacitors hold `cells` bolts; a Crystal
+ * refills `perCrystal`, from its owner's Command Base or a Depot (refillPoint).
+ */
+const ARC = { reload: 1.7, dmg: 2.6, jump: 1.7, jumps: 3, fall: 0.75, shieldMul: 3, bld: 1.5, fort: 1.2, cells: 10, perCrystal: 5 };
+/**
+ * The Railgunner (BOTS.railgunner): in reach (BOTS.railgunner.range) it charges `charge` s, then fires a slug at
+ * where its target was when it began (a quick robot can be out of the line by then: a Skirmisher, dashing) straight
+ * through: `dmg` to the first enemy robot within `width` of the line and `fall` times less to each one after it (up to
+ * `pierce` of them), out to its reach. A Bulwark's shield in the way takes the slug's damage (up to what it has left)
+ * and lets `through` of it on; a Bulwark itself takes `armor` times as much. `reload` s between shots. Closer than `min`
+ * tiles it can't bring the rail to bear and fires its sidearm (`side` every `sideReload` s). On a building: `bld`
+ * (`fort` times that to a defence or Wall) from `bldReach` tiles. Ammo: BOTS.railgunner.mag slugs, ammoShots an Ammo.
+ */
+const RAIL = { charge: 0.8, dmg: 10, width: 0.4, fall: 0.6, pierce: 4, through: 0.8, armor: 1.7, reload: 5, min: 1.6, side: 1, sideReload: 1.1,
+  bld: 4, fort: 1.5, bldReach: 4.5 };
+/** Shots a gun robot of kind k holds (a Railgunner's slugs: BOTS[k].mag; else a warbot's WARBOT_AMMO), and shots an Ammo gives it. */
+function botMag(k) { return (BOTS[k] && BOTS[k].mag) || WARBOT_AMMO; }
+function botAmmoShots(k) { return (BOTS[k] && BOTS[k].ammoShots) || AMMO_SHOTS; }
+/**
+ * The tank of a robot of kind k, kept in u.gel: a Torch's seconds of fire (Fuel), an Arc Caster's bolts (Crystal).
+ * { good, cap, per (filled by one of the good), min (what it takes to fire) }, or null for one that has none.
+ */
+function botTank(k) {
+  const bt = BOTS[k];
+  return !bt ? null : bt.flame ? { good: 'fuel', cap: TORCH.tank, per: TORCH.perFuel, min: 0.05 } : bt.arc ? { good: 'crystal', cap: ARC.cells, per: ARC.perCrystal, min: 0.99 } : null;
+}
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
@@ -1376,8 +1535,8 @@ const PERSONALITIES = {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
     tag: 'walls in, then comes late in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
-    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles.',
+    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
+    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
@@ -1389,8 +1548,8 @@ const PERSONALITIES = {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
     tag: 'raids your roads, again and again',
     quote: 'Nothing\'s coming from home. Everything on the road is supply.',
-    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home.',
-    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags; while its bands are out, its base is open.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
+    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags (massed warbots beat Skirmishers); while its bands are out, its base is open.',
     voice: {
       attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',
         'Don\'t mind us. Just taking inventory.', 'Your roads, our supply lines.'],
@@ -1417,7 +1576,7 @@ const PERSONALITIES = {
     name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
     tag: 'a big economy, then Missiles',
     quote: 'When the colonists come, they\'ll find a city. Mine.',
-    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base, and its army mixes Skirmishers, Arc Casters and Railgunners.',
     weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
     voice: {
       attack: ['I\'ve paved more road this year than your Sponsor did in a century.', 'When the colonists come, they\'ll find a city. Mine.',
@@ -1821,6 +1980,9 @@ const FLAVOR = {
   mdriver: 'Survey kit to supply settlements before the roads. The settlements never came. It still fires.',
   lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
+  city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
+  lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
+  gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
@@ -1851,6 +2013,9 @@ const FLAVOR = {
   warbot: 'Designed to protect colonists. Reassigned by the contingency orders.',
   bulwark: 'Rated for dust storms. Rifles turned out to be easier.',
   torch: 'Built to clear the Bloom. The Bloom grows back. So do enemies.',
+  skirmisher: 'Survey runner, rated for crossing the Rust in a day. It still makes good time.',
+  arccaster: 'Grid-fault tester. Every fault it finds now is on purpose.',
+  railgunner: 'Mass-driver test rig, cut down to carry. The range card still lists ore.',
   scuttler: 'No robot has ever logged one alone.',
   brute: 'Drawn to charge. Batteries, power lines and Crystal all read as food.',
   leech: 'The lights dim as it drinks. Logged as a fault, three times, before anyone looked.',

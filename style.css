@@ -129,6 +129,16 @@ body::before {
 #objective .win-mini { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-variant-numeric: tabular-nums; }
 #objective .win-mini i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85) inset; }
 #objective .win-mini i.free { box-shadow: 0 0 0 1.5px rgba(223, 239, 255, 0.8) inset; }
+/* The Great Uplink: a transmission's countdown, in the sender's colour (--c), for every colony. */
+.event-card.gup-card { background: linear-gradient(90deg, color-mix(in srgb, var(--c, #7fc8ff) 34%, #0e141c), #0e141c 85%); border-color: var(--c, #7fc8ff); color: #fff; min-width: min(100%, 300px); cursor: pointer; box-shadow: 0 0 14px color-mix(in srgb, var(--c, #7fc8ff) 45%, transparent); }
+.gup-card .gup-row { display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+.gup-card .gup-row b { letter-spacing: 0.04em; }
+.gup-card .gup-row .ev-time { margin-left: auto; font-weight: 800; }
+.gup-card .gup-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; padding: 1px 6px; border-radius: 4px; background: #ff4030; color: #fff; animation: gupjam 0.6s steps(2) infinite; }
+.gup-card .gup-bar { position: relative; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.gup-card .gup-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--c, #7fc8ff); box-shadow: 0 0 8px var(--c, #7fc8ff); }
+@keyframes gupjam { from { opacity: 1; } to { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .gup-card .gup-tag { animation: none; } }
 .event-card.win-card { background: #14202e; border-color: rgba(127, 200, 255, 0.4); color: #e2f1ff; min-width: min(100%, 260px); cursor: pointer; }
 .event-card.win-card.mine { border-color: rgba(91, 224, 108, 0.65); }
 .event-card.win-card.theirs { border-color: rgba(255, 90, 110, 0.75); }
@@ -698,6 +708,13 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 
 /* Depot supply orders */
 .keep-list { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 6px; }
+/* The Orbital Lift's panel: the Carrier's six lamps, and its four loads to call down. */
+.lift-lamps { display: inline-flex; align-items: center; gap: 4px; }
+.lift-lamps i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+.lift-lamps i.on { background: #ffc35a; box-shadow: 0 0 6px #ffb02e; }
+.lift-loads { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0; }
+.lift-loads .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 7px 9px; }
+.lift-loads .btn small { color: var(--muted); font-size: 11.5px; }
 .keep-cell { display: grid; grid-template-columns: 1fr 64px 52px 52px; align-items: center; gap: 6px; padding: 3px 4px 3px 10px;
   border: 1px solid var(--line); border-radius: 10px; font-size: 14px; font-weight: 600; }
 .keep-cell .kname { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }

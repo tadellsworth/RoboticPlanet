@@ -410,6 +410,12 @@ function reportMoments() {
       out.push({ t: e.t, kind: 'bad', w: 2 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `You lost ${e.n === 1 ? 'a building' : e.n + ' buildings'}${e.q >= 0 ? ` to ${insWho(e.q, true)}` : e.q === -2 ? ' to several rivals' : ''}${span}: ${insTypes(e.ty)}.` });
     } else if (e.k === 'lost' && e.q === ME) out.push({ t: e.t, kind: 'good', w: 1 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `Your robots wrecked or took ${e.n === 1 ? 'one' : e.n} of ${insWho(e.p, true)}'s buildings: ${insTypes(e.ty)}.` });
     else if (e.k === 'lost' && e.n >= 4) out.push({ t: e.t, kind: 'info', w: e.n, n: e.n, p: e.p, t1: e.t1, text: `${insWho(e.p)} lost ${e.n} buildings${e.q >= 0 ? ` to ${insWho(e.q, true)}` : ''}.` });
+    else if (e.k === 'city' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'good' : e.q === ME ? 'bad' : 'info', w: 20, text: e.p === ME ? `You took Arrival City${e.q >= 0 ? ` from ${insWho(e.q)}` : ''}.` : `${insWho(e.p)} took Arrival City${e.q === ME ? ' from you' : e.q >= 0 ? ` from ${insWho(e.q)}` : ''}.` });
+    else if (e.k === 'cityDown' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'bad' : 'good', w: 12, text: e.p === ME ? 'Your Arrival City was knocked down: dark, and open to capture.' : `${insWho(e.p)}'s Arrival City was knocked down.` });
+    else if (e.k === 'liftFall' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'bad' : e.q === ME ? 'good' : 'info', w: 18, text: e.p === ME ? `Your Orbital Lift was destroyed${e.q >= 0 ? ` by ${insWho(e.q, true)}` : ''}, and its cable came down across your land.` : e.q === ME ? `You brought down ${insWho(e.p, true)}'s Orbital Lift: its cable fell across its land.` : `${insWho(e.p)}'s Orbital Lift came down.` });
+    else if (e.k === 'liftDrop' && e.p === ME) out.push({ t: e.t, kind: 'good', w: 6, text: `A climber came down your Orbital Lift with ${LIFT.drops[e.g] ? LIFT.drops[e.g].name.toLowerCase() : 'a drop'} from the Carrier.` });
+    else if (e.k === 'gupStop' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME || allies(e.p, ME) ? 'warn' : 'good', w: 8, text: e.p === ME ? 'Your Great Uplink stood down.' : `${insWho(e.p)}'s Great Uplink stood down.` });
+    else if (e.k === 'gup' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME || allies(e.p, ME) ? 'good' : 'bad', w: 16, text: e.p === ME ? 'Your Great Uplink began transmitting.' : `${insWho(e.p)}'s Great Uplink began transmitting.` });
     else if (e.k === 'lanceFire' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME ? 'good' : 'bad', w: 22, text: e.p === ME ? 'Your Lance of Corvane fired across the map.' : `${insWho(e.p)}'s Lance of Corvane fired across the map.` });
     else if (e.k === 'dry' && e.p === ME && GOOD[e.g] && e.d >= 60) out.push({ t: e.t, kind: 'warn', w: 2 + e.d / 40, text: `Out of ${goodN(e.g, 2)} for ${insDur(e.d)}.`, g: e.g, d: e.d });
     else if (e.k === 'out') {
@@ -426,6 +432,10 @@ function reportMoments() {
   }
   // How it was decided (Domination and the Uplinks leave no "out": the clock ran down).
   const how = S.endHow, win = S.winner;
+  if (win >= 0 && how === 'contact') {
+    out.push({ t: Math.max(0, S.time - GUP.hold), kind: win === ME || allies(win, ME) ? 'good' : 'bad', w: 60, key: true,
+      text: `${insWho(win)} ${win === ME ? 'hold' : 'holds'} the Great Uplink's transmission from here on, ${insDur(GUP.hold)} of it in all: the deciding moment.` });
+  }
   if (win >= 0 && (how === 'domination' || how === 'uplinks')) {
     const hold = how === 'domination' ? DOM.hold : UPLINK.hold;
     out.push({ t: Math.max(0, S.time - hold), kind: win === ME || allies(win, ME) ? 'good' : 'bad', w: 60, key: true,

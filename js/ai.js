@@ -95,6 +95,54 @@ const AI_FARM_TILES = 5, AI_FARM_MIN = 3;
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
 /** Player q's army: its warbots, Bulwarks and Torches (none for no player). */
+/** The whole army in a count of robots by kind (warbots and every specialist). */
+function aiArmyKinds(kinds) { let n = 0; for (const k in kinds) if (BOTS[k] && BOTS[k].army) n += kinds[k]; return n; }
+
+/**
+ * How many of the three answers to a Bulwark blob (Skirmishers, Arc Casters, Railgunners) rival p wants with `wb`
+ * warbots and `army` in all, and how many Bulwarks at most (bulwarkMax). Its doctrine's own mix first (AI_ANSWERS:
+ * for each, one for every `per` warbots, `max` at most): the Salvager runs Skirmishers, the Warden Railgunners, the
+ * Herald masses warbots, the Architect and the Steward a mix. Then what the rival fields: Bulwarks or a big army call
+ * for Arc Casters and Railgunners, the rival's Railgunners and Arc Casters for Skirmishers, its Skirmishers for warbots
+ * (no more of them). The answers are half the army at most.
+ */
+const AI_ANSWERS = {
+  balanced: { skirmisher: [6, 2], arccaster: [8, 1], railgunner: [8, 1] },
+  turtle: { skirmisher: [12, 1], arccaster: [8, 1], railgunner: [4, 3] },
+  raider: { skirmisher: [2, 7], arccaster: [12, 1], railgunner: [0, 0] },
+  rusher: { skirmisher: [8, 2], arccaster: [12, 1], railgunner: [0, 0] },
+  tycoon: { skirmisher: [6, 2], arccaster: [5, 2], railgunner: [5, 2] },
+};
+function aiAnswers(p, wb, army) {
+  const mix = AI_ANSWERS[S.players[p].style] || AI_ANSWERS.balanced, want = {};
+  for (const k in mix) want[k] = mix[k][0] ? Math.min(mix[k][1], Math.floor(wb / mix[k][0])) : 0;
+  const foe = rivalOf(p), them = {};
+  for (const u of S.bots) if (!u.dead && u.owner === foe && isArmy(u)) them[u.type] = (them[u.type] || 0) + 1;
+  const theirArmy = aiArmyKinds(them);
+  if ((them.bulwark || 0) >= 2 || theirArmy >= 18) {
+    want.arccaster += Math.min(3, Math.ceil(((them.bulwark || 0) + theirArmy / 8) / 2));
+    want.railgunner += Math.min(2, them.bulwark || 0);
+  }
+  if ((them.railgunner || 0) + (them.arccaster || 0) >= 2) want.skirmisher += Math.min(4, (them.railgunner || 0) + (them.arccaster || 0));
+  if ((them.skirmisher || 0) >= 4) want.skirmisher = Math.min(want.skirmisher, 1);
+  let room = Math.floor(army / 2);
+  for (const k of ['arccaster', 'railgunner', 'skirmisher']) { want[k] = Math.max(0, Math.min(want[k], room)); room -= want[k]; }
+  want.bulwarkMax = them.skirmisher >= 4 ? 1 : 3; // (Skirmishers about: a Bulwark only leads them to it)
+  return want;
+}
+
+/**
+ * Is player q fielding a blob: at least AI_BLOB.bulwarks Bulwarks and AI_BLOB.army robots in its army? (A rival that sees
+ * one builds Mortar Pits toward it, a Howitzer more when it can, and Arc Casters and Railgunners: aiAnswers.)
+ */
+const AI_BLOB = { bulwarks: 2, army: 12, mortars: 2, wait: 360 };
+function aiBlob(q) {
+  if (q === undefined || q < 0 || !S.players[q]) return false;
+  let b = 0, n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) { n++; if (BOTS[u.type].shield) b++; }
+  return b >= AI_BLOB.bulwarks && n >= AI_BLOB.army;
+}
+
 function aiArmyOf(q) { let n = 0; if (q >= 0) for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) n++; return n; }
 
 /**
@@ -346,6 +394,7 @@ function aiThink(p) {
     aiFortWalls(p);
     aiBridge(p, maxSites);
     aiRopeway(p, maxSites);
+    aiMaglev(p, me, lander);
   }
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -500,6 +549,20 @@ function aiThink(p) {
       let f = null, fd = Infinity;
       for (const b of me) { if (!b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue; const d = dist2(b.x, b.y, sx, sy); if (d < fd) { fd = d; f = b; } }
       if (f) { P.defWant = { type: 'mortar', n: (counts.mortar || 0) + 1, until: S.time + 120, x: f.x, y: f.y, ax: Math.round(sx), ay: Math.round(sy) }; P.defAt = P.parkAt = S.time; }
+    }
+  }
+  // A rival fielding a blob behind Bulwarks (aiBlob): Mortar Pits, whose shells come down over any shield, by its fort
+  // nearest that rival's Command Base, aimed out along the way the blob would come (7 to 10 tiles off, see
+  // aiSearchSpot): one every three minutes, up to AI_BLOB.mortars from this (and three Mortar Pits in all).
+  if (S.mode !== 'colony' && warOn() && S.time > AI_DEFENCE_AT && !few && !(P.defWant && S.time < P.defWant.until) &&
+      S.time - (P.blobMortAt ?? -999) > 180 && (counts.mortar || 0) < 3 && (P.blobMortN || 0) < AI_BLOB.mortars && aiBlob(rivalOf(p))) {
+    const R0 = S.players[rivalOf(p)], foeL = R0 && getE(R0.lander);
+    const front = foeL && me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker).sort((a, c) => dist2(a.x, a.y, foeL.x, foeL.y) - dist2(c.x, c.y, foeL.x, foeL.y) || a.id - c.id)[0];
+    if (front) {
+      const d = dist(front.x, front.y, foeL.x, foeL.y) || 1, k = Math.min(8, d / 2);
+      P.defWant = { type: 'mortar', n: (counts.mortar || 0) + 1, until: S.time + AI_BLOB.wait, x: front.x, y: front.y,
+        ax: Math.round(front.x + ((foeL.x - front.x) / d) * k), ay: Math.round(front.y + ((foeL.y - front.y) / d) * k), blob: true };
+      P.blobMortAt = S.time; P.blobMortN = (P.blobMortN || 0) + 1; // (its site waits up to AI_BLOB.wait s for its Alloy: the Foundry takes every bar)
     }
   }
   // Front defences without waiting to be hit there: a Minigun Nest or a Bunker (whichever it has fewer of) by its
@@ -658,6 +721,16 @@ function aiThink(p) {
   // Uplinks: the Bunker for an Uplink it holds goes first, past the usual limit on sites, once they're nearly online.
   const upFirst = !!(P.defWant && P.defWant.up && S.time < P.defWant.until && S.time >= UPLINK.online - 60 && (counts.bunker || 0) < P.defWant.n);
   if (upFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['bunker', P.defWant.n]].concat(plan); }
+  // A Mortar Pit against a rival's blob (P.defWant.blob, see aiBlob) doesn't wait for a free site either, and goes up as
+  // soon as the Cement is there (its Alloy delivered to the site): waiting, it waited behind the Mines and Outposts.
+  const blobFirst = !!(P.defWant && P.defWant.blob && S.time < P.defWant.until && (counts.mortar || 0) < P.defWant.n);
+  if (blobFirst) siteCap = Math.max(siteCap, capBefore, sites + 1);
+  // The late game of a Nuclear race (AI_MEGA.reactorAt on): with Uranium in hand or a Mine on a deposit and no Reactor,
+  // the Reactor goes first, past the usual limit on sites (see aiUranium). Tenth in the plan it waited behind every
+  // Outpost, Mine and Harvester the colony wanted, with its price in hand, and in most games never went up.
+  const reactorFirst = nukeOn() && S.mode !== 'colony' && S.time >= AI_MEGA.reactorAt && !counts.reactor &&
+    (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0));
+  if (reactorFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['reactor', 1]].concat(plan); }
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0) || (type === 'tap' && tapsFirst);
@@ -700,6 +773,8 @@ function aiThink(p) {
       if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
+      if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
+      if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -731,7 +806,8 @@ function aiThink(p) {
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
         (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
-        (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])); // (the Hollow's first Refinery: see oilFirst)
+        (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])) || // (the Hollow's first Refinery: see oilFirst)
+        (type === 'mortar' && blobFirst && aiAffordable(p, type, ['alloy'])); // (against a blob: see blobFirst)
       if (!aiAffordable(p, type) && !defenceNow) {
         if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost' || type === 'tap')) {
@@ -864,7 +940,7 @@ function aiThink(p) {
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
   // A forward Depot with supply orders gets a Freight Truck to keep it stocked (and one more for every 35 buildings).
   const wantTrucks = me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) ? 1 + Math.floor(me.length / 35) : 0;
-  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
+  const army = aiArmyKinds(kinds); // (the whole army, specialists too)
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
   const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
@@ -952,7 +1028,8 @@ function aiThink(p) {
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if ((kinds.truck || 0) < wantTrucks && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
-    const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
+    // (one more against a rival's blob behind Bulwarks: a Howitzer's shells come down over the shields; see aiBlob)
+    const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0) + (aiBlob(rivalOf(p)) ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && !botBanned(p, 'rocket') && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
     // The army's specialists, a third of it at most once it's up: a Bulwark to lead its attacks for every five
     // warbots (two at most) and a Torch to burn down defences and Walls for every four (three at most, and only
@@ -961,8 +1038,15 @@ function aiThink(p) {
       const foe = rivalOf(p), wb = kinds.warbot || 0;
       const dug = !!P.gunTarget || S.buildings.some((e) => !e.dead && e.built && e.owner === foe && (BDEFS[e.type].barrier || e.type === 'turret' || e.type === 'bunker' || e.type === 'minigun'));
       const wantB = Math.min(dug ? 3 : 2, Math.floor(wb / 5)), wantT = Math.min(dug ? 4 : 3, Math.floor(wb / 4) + (dug && wb >= 3 ? 1 : 0));
-      if ((kinds.bulwark || 0) < wantB && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
-      else if ((kinds.torch || 0) < wantT && !(b.orders.torch > 0) && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
+      // The three answers to a Bulwark blob (aiAnswers): by doctrine, and more of each against what the rival fields.
+      const want = aiAnswers(p, wb, army);
+      const ordered = (k) => b.orders[k] > 0;
+      const can = { skirmisher: () => true, arccaster: () => goodTotal(p, 'crystal') >= 3, railgunner: () => goodTotal(p, 'ammo') >= 4 };
+      const next = ['arccaster', 'railgunner', 'skirmisher'].filter((k) => (kinds[k] || 0) < want[k] && !ordered(k) && !botBanned(p, k) && can[k]())
+        .sort((a, c) => (kinds[a] || 0) / Math.max(1, want[a]) - (kinds[c] || 0) / Math.max(1, want[c]))[0];
+      if ((kinds.bulwark || 0) < Math.min(wantB, want.bulwarkMax) && !ordered('bulwark') && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
+      else if (next && !['skirmisher', 'arccaster', 'railgunner'].some(ordered)) b.orders[next] = 1;
+      else if ((kinds.torch || 0) < wantT && !ordered('torch') && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
     }
     // An attack held back by enemy guns (P.shieldWant, in the last minute): a Bulwark to lead the next one, if it has
     // none, whatever the size of its army.
@@ -1069,6 +1153,7 @@ function aiThink(p) {
         const s = (rain ? aiMissileWorth(p, e, lvl) : e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
           (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0) + // (Uplinks: knock out the forts that hold them)
+          (e.gOn && BDEFS[e.type].gup ? 40 : 0) + // (a Great Uplink transmitting: the first target there is)
           (soft && aiDefReach(e) && dist2(e.x, e.y, soft.x, soft.y) <= 64 ? 6 : 0); // (the guns holding back an attack: see step 5)
         if (aiDomed(p, e.x + 0.5, e.y + 0.5)) continue; // (under a Shield Dome: the Missile would only wear it down)
         if (s > bs && !(rain && s < 1)) { bs = s; best = e; } // (an Architect's: nothing worth less, such as a Wall)
@@ -1082,6 +1167,7 @@ function aiThink(p) {
   if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
   // 4b) Megastructures: the Lance of Corvane (or the nukes), and a Shield Dome when threatened (late in the game).
+  aiUranium(p, me, lander, !few && sites < maxSites + 1);
   aiMega(p, me, lander, !few && sites < maxSites + 1);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
@@ -1111,6 +1197,10 @@ function aiThink(p) {
     (S.uplinks || []).some((u) => u.owner >= 0 && u.owner !== p);
   if ((domFoe >= 0 || upFoe >= 0 || upWant) && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
   if (upFoe >= 0 && S.time >= lvl.grace) aiJamUplink(p, upFoe);
+  // The Great Uplink win: a foe transmitting is everyone's first target (rivalOf): warbots go to jam it now, and the
+  // marches, Missiles, bombers and the Lance go for it (see aiMarch, aiBomber, aiLanceWorth).
+  const gupFoe = gupFoeLive(p);
+  if (gupFoe) { P.nextAttack = Math.min(P.nextAttack, S.time); aiJamGup(p, gupFoe); }
   // Medium, Normal and Hard rivals (`smart`) remember where their attacks were beaten (aiBattles), choose their marches
   // by what it takes to win there, mass before they march and storm the base with a decisive lead (aiMarch, aiStorm).
   if (P.stormOn) aiStorm(p);
@@ -1409,7 +1499,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
     if (canBuild && aiAffordable(p, 'port')) { const spot = aiFindSpot(p, 'port', lander); if (spot) placeSite(p, 'port', spot.x, spot.y); }
     return;
   }
-  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
+  const army = aiArmyKinds(kinds); // (the whole army, specialists too)
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferries = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].ferry), ferry = ferries[0];
@@ -1766,6 +1856,89 @@ function aiRopeway(p, maxSites) {
   placeRopeway(p, best.i, best.j, best.ei, best.ej);
 }
 
+/**
+ * The Architect's Maglev line (AI_MAGLEV): from its twelfth minute (Normal and up), one line from a Terminal by its
+ * Command Base to its far working cluster (a Depot or Outpost `far` tiles out or more with `works` working buildings
+ * round it and no Rail Station of its own there), when the haul is long and it has the line's goods with `spare` Alloy
+ * and Chips besides: the home Terminal's site first, then the line (straight, else with bends round what's in the way),
+ * a Generator by each end (the far one touching its Terminal, so the pods bring its Fuel) and `pods` pods. Once a line
+ * runs it builds no other. Checked every `every` s. Measured in AI-vs-AI games (IDEAS.md).
+ */
+const AI_MAGLEV = { from: 720, every: 20, far: 24, works: 3, spare: { alloy: 30, chip: 15 }, pods: 2 };
+function aiMaglev(p, me, lander) {
+  const P = S.players[p], M = AI_MAGLEV;
+  if (P.style !== 'tycoon' || S.difficulty === 'easy' || S.time < M.from || worldBan('magterm') || S.time - (P.lastMag || -999) < M.every) return;
+  P.lastMag = S.time;
+  const terms = me.filter((b) => b.type === 'magterm');
+  // A line up: Generators by its ends and its pods.
+  for (const [A, B] of magLines(p)) {
+    for (const [T, r] of [[A, 3], [B, 1.5]]) {
+      if (me.some((g) => g.type === 'generator' && dist(g.x, g.y, T.x, T.y) <= (g.built ? BDEFS.generator.burner.radius : r))) continue;
+      let best = null, bd = Infinity;
+      for (let j = T.y - 3; j <= T.y + 3; j++) for (let i = T.x - 3; i <= T.x + 3; i++) { const d = dist(i, j, T.x, T.y); if (d > r || d >= bd || !inMap(i, j) || !canPlace(p, 'generator', i, j, true).ok || wouldBlock(tIdx(i, j))) continue; bd = d; best = [i, j]; }
+      if (best) placeSite(p, 'generator', best[0], best[1]);
+    }
+    const H = dist(A.x, A.y, lander.x, lander.y) <= dist(B.x, B.y, lander.x, lander.y) ? A : B; // (the pod bay at home)
+    if (linePods(H).length + ((H.yard && H.yard.magpod) || 0) < M.pods) orderAtYard(H, 'magpod', M.pods - linePods(H).length);
+  }
+  if (magLines(p).length) return;
+  const plan = P.magPlan, have = playerGoods(p);
+  // The home Terminal stands: plan the line.
+  if (plan) {
+    const A = getE(plan.home);
+    if (!A || A.dead || A.owner !== p) { P.magPlan = null; return; }
+    if (!A.built || magPending(A) || A.magFrom) return;
+    P.magPlan = null;
+    if (placeMagLine(p, A, plan.far[0], plan.far[1], plan.bends || []).ok) return;
+    // (something's in the way now: look again from this Terminal, below)
+  }
+  // A Terminal of its own with no line (its line couldn't go where it was planned): a line from it, if one will do.
+  const idle = terms.find((t) => t.built && !magPartners(t).length && !magPending(t) && !t.magFrom && !t.magMissing);
+  if (terms.length && !idle) return; // (one line: a Terminal of its own already stands or goes up)
+  // The far cluster, and whether the haul pays: far enough, busy enough, no rail there, and the goods in hand.
+  let best = null, bs = -Infinity;
+  for (const d of me) {
+    if (!d.built || (d.type !== 'depot' && d.type !== 'outpost')) continue;
+    const dl = dist(d.x, d.y, lander.x, lander.y);
+    if (dl < M.far || dl > MAGLEV.maxBent - 2) continue;
+    const works = me.filter((c) => c.built && BDEFS[c.type].out && !BDEFS[c.type].store && dist(c.x, c.y, d.x, d.y) <= 8).length;
+    if (works < M.works || me.some((s) => s.built && BDEFS[s.type].station && dist(s.x, s.y, d.x, d.y) <= 8)) continue;
+    const sc = works * 4 + dl;
+    if (sc > bs) { bs = sc; best = d; }
+  }
+  if (!best) return;
+  const n = Math.ceil(dist(best.x, best.y, lander.x, lander.y)) + 4, need = magLineCost(n), T = BDEFS.magterm.cost;
+  if (have.alloy < need.alloy + 2 * T.alloy + 2 * 4 + M.spare.alloy || have.chip < need.chip + 2 * T.chip + 2 * 2 + M.spare.chip || have.cement < need.cement + 2 * T.cement) return;
+  // The home Terminal's spot (3 to 7 tiles from the Command Base, toward the cluster) and the far end's (by the cluster).
+  const fars = [];
+  for (let j = best.y - 4; j <= best.y + 4; j++) for (let i = best.x - 4; i <= best.x + 4; i++) if (inMap(i, j) && !magFarBlocked(p, i, j) && canPlace(p, 'magterm', i, j, true).ok && !wouldBlock(tIdx(i, j))) fars.push([i, j]);
+  fars.sort((a, b) => dist(a[0], a[1], best.x, best.y) - dist(b[0], b[1], best.x, best.y) || a[1] - b[1] || a[0] - b[0]);
+  const homes = [];
+  for (let j = lander.y - 7; j <= lander.y + 7; j++) for (let i = lander.x - 7; i <= lander.x + 7; i++) {
+    const dl = dist(i, j, lander.x, lander.y);
+    if (dl < 3 || dl > 7 || !inMap(i, j) || !canPlace(p, 'magterm', i, j, true).ok || wouldBlock(tIdx(i, j))) continue;
+    homes.push([i, j, dist(i, j, best.x, best.y)]);
+  }
+  homes.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
+  if (idle) {
+    for (const [fi, fj] of fars.slice(0, 10)) {
+      const bends = !magLineCheck(p, idle, fi, fj).why ? [] : magRouteBend(p, idle, fi, fj);
+      if (bends && placeMagLine(p, idle, fi, fj, bends).ok) return;
+    }
+    return;
+  }
+  for (const [hi, hj] of homes.slice(0, 6)) {
+    const G = magGhost(p, hi, hj);
+    for (const [fi, fj] of fars.slice(0, 8)) {
+      const bends = !magLineCheck(p, G, fi, fj).why ? [] : magRouteBend(p, G, fi, fj);
+      if (!bends) continue;
+      const r = placeSite(p, 'magterm', hi, hj);
+      if (r && r.ok !== false) P.magPlan = { home: S.bAt[tIdx(hi, hj)], far: [fi, fj], bends };
+      return;
+    }
+  }
+}
+
 /** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */
 function aiCrossTarget(p, home) {
   const L = getE(S.players[p].lander);
@@ -1975,14 +2148,89 @@ function aiFlood(p, from, seen, bottom, early) {
  * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20 };
+const AI_MEGA = { lanceAt: 1080, domeAt: 1200, cityAt: 900, liftAt: 1080, heraldLift: 1320, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3,
+  liftSpare: 60, liftKeep: 40, liftShort: { alloy: 15, chip: 8 }, liftWorth: 4, ambush: 6,
+  gupAt: 1320, gupGuard: 6, gupJam: 45 };
+
+/*
+ * How many megastructures a rival builds (the owner's rule, Nov 2026): at most AI_MEGA_CAP.weapons weapon and
+ * AI_MEGA_CAP.total in all. Each kind of megastructure is a 'weapon' (the Lance; the nukes count as one too: the choice
+ * between them, P.megaPick), a 'main' project (Arrival City, the Orbital Lift) or a 'shield' (the Shield Dome, put up in
+ * answer to a threat: it never counts). A doctrine's main project is AI_MEGA_MAIN: Arrival City for the Architect and
+ * the Steward, the Orbital Lift for the Warden (relief from above) and for the Herald once a game runs past
+ * AI_MEGA.heraldLift s (robots on demand), none for the Salvager (it waits at other colonies' Lifts instead:
+ * aiLiftAmbush); in Domination every doctrine's is Arrival City. A megastructure added later takes a kind here and fits
+ * under the cap.
+ */
+const AI_MEGA_CAP = { weapons: 1, total: 2 };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
+const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'lift', balanced: 'city', raider: null, rusher: 'lift' };
+
+/** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
+function aiMegaProjects(p) {
+  const P = S.players[p], types = new Set();
+  if (P.megaPick) types.add(P.megaPick === 'nuke' ? 'nukesilo' : P.megaPick);
+  for (const b of S.buildings) if (!b.dead && b.owner === p && AI_MEGA_KIND[b.type] && AI_MEGA_KIND[b.type] !== 'shield' && (BDEFS[b.type].mega || P.megaPick)) types.add(b.type);
+  let weapons = 0, total = 0;
+  for (const t of types) { if (AI_MEGA_KIND[t] === 'weapon') weapons++; total++; }
+  // (the Lance or the nukes is one choice: one weapon, however it's built)
+  if (weapons > 1) { total -= weapons - 1; weapons = 1; }
+  return { weapons, total, has: types };
+}
+/** May rival p start a megastructure project of `kind` ('weapon', 'main' or 'shield') under AI_MEGA_CAP? */
+function aiMegaRoom(p, kind) {
+  if (kind === 'shield') return true;
+  const n = aiMegaProjects(p);
+  return n.total < AI_MEGA_CAP.total && (kind !== 'weapon' || n.weapons < AI_MEGA_CAP.weapons);
+}
+/**
+ * Rival p's main megastructure project ('city', 'lift', 'gup' or null): its doctrine's, or Arrival City for anyone in
+ * Domination; with the Great Uplink win on (gupWinOn) the Steward's is the Great Uplink (it believes the arks are only late).
+ */
+function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[st] || null; }
+
+/**
+ * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
+ * deposit and none in hand puts one on the deposit nearest its Command Base that it can build by (its own land, or
+ * within AI_MEGA.uReach tiles of it: an Outpost goes up first to claim it), every AI_MEGA.look s while it finds none.
+ * The Mine digs the Uranium first; the Reactor then comes in its plan (in a Nuclear race a key building), and with it
+ * the late choice of the Lance or the nukes (aiMegaPick). Before, a rival only got a Reactor when an early Mine
+ * happened to reach a deposit, and in most games none did: the choice almost never came up.
+ */
+function aiUranium(p, me, lander, canBuild) {
+  if (!nukeOn() || S.mode === 'colony' || S.time < AI_MEGA.reactorAt || !lander) return;
+  const P = S.players[p];
+  if (me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0) || goodTotal(p, 'uranium') + goodTotal(p, 'fissile') >= 2) return;
+  if (!canBuild || S.time - (P.uLook ?? -999) < AI_MEGA.look) return;
+  P.uLook = S.time;
+  const zone = S.zone[tIdx(lander.x, lander.y)], R = BDEFS.mine.radius;
+  let best = null, bd = Infinity, claim = null, cd = Infinity;
+  for (let t = 0, N = S.W * S.H; t < N; t++) {
+    if (S.res[t] !== R_URANIUM || !(S.amt[t] > 0)) continue;
+    const ui = t % S.W, uj = (t / S.W) | 0;
+    for (let j = uj - R; j <= uj + R; j++) for (let i = ui - R; i <= ui + R; i++) {
+      if (!inMap(i, j) || S.zone[tIdx(i, j)] !== zone) continue;
+      const d = dist2(i, j, lander.x, lander.y);
+      if (S.owner[tIdx(i, j)] === p) { if (d < bd && canPlace(p, 'mine', i, j).ok && reachableRes(i, j, R, R_URANIUM) > 0) { bd = d; best = [i, j]; } }
+      else if (S.owner[tIdx(i, j)] < 0 && d < cd) { cd = d; claim = [i, j]; }
+    }
+  }
+  if (best) { if (aiAffordable(p, 'mine')) placeSite(p, 'mine', best[0], best[1]); return; }
+  // None on its land: an Outpost by the nearest deposit no one holds, when its land comes close (a short walk).
+  if (!claim || !aiAffordable(p, 'outpost') || me.some((b) => !b.built && b.type === 'outpost')) return;
+  for (let r = 1; r <= AI_MEGA.uReach + 3; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+    const i = claim[0] + di, j = claim[1] + dj;
+    if (inMap(i, j) && canPlace(p, 'outpost', i, j).ok) { placeSite(p, 'outpost', i, j); return; }
+  }
+}
 /** How each doctrine leans between the Lance (more) and the nukes (less): the Architect builds, the Herald strikes. */
 const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2 };
 
 /**
  * The Lance or the nukes, for rival p (decided once, deterministically: P.megaPick, with the reasons in P.megaWhy):
  * its doctrine's lean (AI_MEGA_LEAN), plus a point for the Lance when its enemy's buildings lie strung out (the best line
- * through them hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
+ * through them, as wide as the Lance's core, hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
  * other way round), a point for the Lance when the enemy has a Shield Dome (it swallows a nuke whole; a Lance line can
  * pass beside it, or knock it down and come again), and a point for the Lance when Uranium is scarce (a nuke takes 12, a
  * Lance shot 2). More than 0: the Lance; otherwise the nukes.
@@ -2001,7 +2249,7 @@ function aiMegaPick(p) {
     if (!L) continue;
     const dx = c.x - L.x, dy = c.y - L.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
     let m = 0;
-    for (const b of theirs) { const fx = b.x - L.x, fy = b.y - L.y; if (fx * ux + fy * uy > 0 && Math.abs(fx * uy - fy * ux) <= 0.9) m++; }
+    for (const b of theirs) { const fx = b.x - L.x, fy = b.y - L.y; if (fx * ux + fy * uy > 0 && Math.abs(fx * uy - fy * ux) < LANCE.width / 2 + 0.5) m++; } // (its core: what it wrecks)
     line = Math.max(line, m);
   }
   if (line >= blast + 2) { score++; why.push('strung out +1'); } else if (blast >= line + 2) { score--; why.push('bunched -1'); }
@@ -2022,7 +2270,11 @@ function aiMega(p, me, lander, canBuild) {
   if (!megaOn() || S.mode === 'colony') return;
   const P = S.players[p];
   // The choice, once it has a Reactor fed with Uranium, late in the game.
-  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance')) P.megaPick = aiMegaPick(p);
+  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon')) P.megaPick = aiMegaPick(p);
+  aiCity(p, me, lander, canBuild);
+  aiLift(p, me, lander, canBuild);
+  aiLiftAmbush(p);
+  aiGup(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2032,6 +2284,9 @@ function aiMega(p, me, lander, canBuild) {
     const spot = aiMegaSpot(p, 'lance', Rs, LANCE.reach, lander, 1) || aiMegaSpot(p, 'lance', [lander], 12, lander, 1);
     if (spot) placeSite(p, 'lance', spot[0], spot[1]);
   }
+  // Having chosen the Lance over the nukes, it charges on its Reactor when one is in reach (Use Reactor: faster, and the
+  // Uranium has no nuke to go to).
+  if (lance && lance.built) lance.lUseR = P.megaPick === 'lance';
   if (lance && lance.built && P.megaPick === 'lance' && !lanceReactor(lance) && megaGens(lance, LANCE.reach).length < LANCE.gens && canBuild && nukeOn() &&
     !me.some((b) => !b.built && b.type === 'reactor') && aiAffordable(p, 'reactor') && S.time - (P.lanceLook ?? -999) >= AI_MEGA.look) {
     P.lanceLook = S.time;
@@ -2059,10 +2314,171 @@ function aiMega(p, me, lander, canBuild) {
   }
 }
 
-/** Has p half of everything a `type` costs in hand (a megastructure's site then fills as the rest comes in)? */
-function aiHalfway(p, type) {
+/**
+ * Arrival City, rival p's main project (aiMegaMain), from AI_MEGA.cityAt s once its economy runs (a Bot Foundry, and
+ * aiCityFunds; its site then has its goods first, prio 'high', and fills as they come in), on its own land where the most of its factories and gatherers will be within
+ * CITY.reach of its middle (aiCitySpot), a search every AI_MEGA.look s while it finds none. Never past the cap.
+ */
+function aiCity(p, me, lander, canBuild) {
+  const P = S.players[p], site = me.find((b) => !b.built && BDEFS[b.type].city);
+  if (site) { if (!site.prio) { site.prio = 'high'; site.sitePrio = 1; } return; } // (its goods come first: it fills as they come in)
+  if (aiMegaMain(p) !== 'city' || !canBuild || !lander || S.time < AI_MEGA.cityAt || me.some((b) => BDEFS[b.type].city)) return;
+  if (worldBan('city') || megaBlocked(p, 'city') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiCityFunds(p)) return;
+  if (S.time - (P.cityLook ?? -999) < AI_MEGA.look) return;
+  P.cityLook = S.time;
+  const spot = aiCitySpot(p, lander);
+  const r = spot && placeSite(p, 'city', spot[0], spot[1]);
+  if (r && r.ok) { P.cityAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+
+/**
+ * Has rival p the bulk goods for Arrival City in hand (half its Cement and Fiber)? Its Alloy and Chips never pile up
+ * (they go into warbots as fast as they're made), so the site waits for those, and gets them first.
+ */
+function aiCityFunds(p) { const have = playerGoods(p), c = BDEFS.city.cost; return have.cement >= c.cement / 2 && have.fiber >= c.fiber / 2 && have.alloy >= 2; }
+
+/** Where rival p's Arrival City goes: its corner on p's land, where its bonus reaches the most work, near its Command Base. */
+function aiCitySpot(p, lander) {
+  const F = BDEFS.city.foot, R = 16, work = [], cands = [];
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && (BDEFS[b.type].staff || BDEFS[b.type].inp)) work.push(b);
+  for (let j = lander.y - R; j <= lander.y + R; j++) for (let i = lander.x - R; i <= lander.x + R; i++) {
+    if (!inMap(i, j) || !inMap(i + F - 1, j + F - 1)) continue;
+    let open = true;
+    for (let dj = 0; dj < F && open; dj++) for (let di = 0; di < F; di++) { const t = tIdx(i + di, j + dj); if (S.owner[t] !== p || S.bAt[t] || S.terrain[t] !== T_GROUND || S.res[t] || S.road[t]) { open = false; break; } }
+    if (!open) continue;
+    const cx = i + F / 2, cy = j + F / 2;
+    let n = 0;
+    for (const b of work) if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= CITY.reach * CITY.reach) n++;
+    cands.push([n * 3 - dist(cx, cy, lander.x + 0.5, lander.y + 0.5) * 0.25, i, j]);
+  }
+  cands.sort((a, b) => b[0] - a[0] || a[2] - b[2] || a[1] - b[1]);
+  for (let k = 0; k < Math.min(14, cands.length); k++) if (canPlace(p, 'city', cands[k][1], cands[k][2]).ok) return [cands[k][1], cands[k][2]];
+  return null;
+}
+
+/*
+ * The Orbital Lift, rival p's main project (aiMegaMain: the Warden's, and the Herald's in a game past AI_MEGA.heraldLift
+ * s), from AI_MEGA.liftAt s once its economy runs (a Bot Foundry, and aiLiftFunds; its site then has its goods first). Its
+ * fall line points at empty ground or the map's edge, never through its Command Base (aiLiftSpot), and it keeps its
+ * other buildings off that line (aiOnLiftLine, see canPlace). Built, it is used (aiLiftUse): a Security detail when its
+ * colony is attacked or before a push, Alloy or Chips when it's short of them, and it sends up what it holds more than
+ * AI_MEGA.liftSpare of.
+ */
+function aiLift(p, me, lander, canBuild) {
+  const P = S.players[p], lift = me.find((b) => BDEFS[b.type].lift);
+  if (lift) { if (!lift.built && !lift.prio) { lift.prio = 'high'; lift.sitePrio = 1; } if (lift.built) aiLiftUse(p, lift); return; }
+  if (aiMegaMain(p) !== 'lift' || !canBuild || !lander || S.time < (P.style === 'rusher' ? AI_MEGA.heraldLift : AI_MEGA.liftAt)) return;
+  if (worldBan('lift') || megaBlocked(p, 'lift') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiLiftFunds(p)) return;
+  if (S.time - (P.liftLook ?? -999) < AI_MEGA.look) return;
+  P.liftLook = S.time;
+  const spot = aiLiftSpot(p, lander);
+  const r = spot && placeSite(p, 'lift', spot[0], spot[1], undefined, undefined, spot[2]);
+  if (r && r.ok) { P.liftAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+
+/** Has rival p the bulk goods for the Orbital Lift in hand (half its Cement and Crystal; its Alloy and Chips come as made, first)? */
+function aiLiftFunds(p) { const have = playerGoods(p), c = BDEFS.lift.cost; return have.cement >= c.cement / 2 && have.crystal >= c.crystal / 2 && have.alloy >= 2; }
+
+/**
+ * Where rival p's Orbital Lift goes, and which way it falls: [i, j, dir] on its own land near its Command Base, its line
+ * over the fewest of its own buildings (never its Command Base) and toward open ground or the map's edge, or null.
+ */
+function aiLiftSpot(p, lander) {
+  const F = BDEFS.lift.foot, R = 14, cands = [];
+  for (let j = lander.y - R; j <= lander.y + R; j++) for (let i = lander.x - R; i <= lander.x + R; i++) {
+    if (!inMap(i, j) || !inMap(i + F - 1, j + F - 1)) continue;
+    let open = true;
+    for (let dj = 0; dj < F && open; dj++) for (let di = 0; di < F; di++) { const t = tIdx(i + di, j + dj); if (S.owner[t] !== p || S.bAt[t] || S.terrain[t] !== T_GROUND || S.res[t] || S.road[t]) { open = false; break; } }
+    if (!open) continue;
+    const dd = dist(i + 1.5, j + 1.5, lander.x + 0.5, lander.y + 0.5);
+    if (dd < 5) continue;
+    for (let d = 0; d < 8; d++) {
+      const L = liftLineTiles(i, j, d);
+      if (L.some((t) => t < 0)) continue;
+      let own = 0, wild = 0, base = false;
+      for (const t of L) {
+        const e = S.bAt[t] ? getE(S.bAt[t]) : null;
+        if (e && e.owner === p) { if (e.type === 'lander') base = true; own += BDEFS[e.type].mil ? 3 : 2; }
+        if (S.road[t]) own += 0.5;
+        if (S.owner[t] < 0) wild++;
+      }
+      if (base) continue;
+      cands.push([own * 4 - wild * 0.3 + dd * 0.3, i, j, d]);
+    }
+  }
+  cands.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1] || a[3] - b[3]);
+  for (let k = 0; k < Math.min(16, cands.length); k++) if (canPlace(p, 'lift', cands[k][1], cands[k][2], false, cands[k][3]).ok) return [cands[k][1], cands[k][2], cands[k][3]];
+  return null;
+}
+
+/** Does tile t lie on the fall line of rival p's own Orbital Lift (site or built)? Its other buildings keep off it. */
+let _aiLL = { S: null, tick: -1, id: -1, p: -1, set: null };
+function aiOnLiftLine(p, t) {
+  // (worked out again each tick, and whenever anything new is added: a Lift placed this tick counts at once)
+  if (_aiLL.S !== S || _aiLL.tick !== S.tick || _aiLL.id !== S.nextId || _aiLL.p !== p) {
+    _aiLL = { S, tick: S.tick, id: S.nextId, p, set: null };
+    for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].lift) { _aiLL.set = _aiLL.set || new Set(); for (const u of liftLineTiles(b.x, b.y, b.lfDir || 0)) if (u >= 0) _aiLL.set.add(u); }
+  }
+  return !!(_aiLL.set && _aiLL.set.has(t));
+}
+
+/** Rival p uses its Orbital Lift: what to call down, and what to send up (see aiLift). */
+function aiLiftUse(p, b) {
+  const P = S.players[p];
+  if (S.time - (P.liftT ?? -99) < AI_MEGA.think) return;
+  P.liftT = S.time;
+  const have = playerGoods(p);
+  // Send up what it holds a lot of (up to LIFT.goods kinds), keeping AI_MEGA.liftKeep of each at home.
+  const spare = LIFT_GOODS.filter((g) => !isLiquid(g) && (have[g] || 0) > AI_MEGA.liftSpare && (warOn() || !WAR_GOODS.includes(g))).sort((a, c) => (have[c] || 0) - (have[a] || 0) || LIFT_GOODS.indexOf(a) - LIFT_GOODS.indexOf(c)).slice(0, LIFT.goods);
+  for (const g in b.lfSend || {}) if (!spare.includes(g) && (have[g] || 0) < AI_MEGA.liftKeep) setLiftSend(b, g, false);
+  for (const g of spare) if (!b.lfSend || b.lfSend[g] === undefined) { if (setLiftSend(b, g, true)) break; b.lfSend[g] = AI_MEGA.liftKeep; }
+  if (liftCallWhy(b, 'alloy')) return;
+  const attacked = P.raided && S.time - (P.raided.t ?? -999) < 30, push = (P.massFor && S.time <= P.massFor.until) || P.pushOn > S.time;
+  const load = attacked || push ? 'security' : (have.alloy || 0) < AI_MEGA.liftShort.alloy ? 'alloy' : (have.chip || 0) < AI_MEGA.liftShort.chip ? 'chips' : '';
+  // (with the Carrier's reserve low, it keeps the last drop for when it's attacked)
+  if (load && (attacked || b.lfRes > 1)) liftCall(b, load);
+}
+
+/**
+ * The Salvager at other colonies' Lifts: a foe's climber coming down (heard by everyone), it sends AI_MEGA.ambush
+ * warbots to wait at the anchor, to take the drop's robots as they step out. Once a climb.
+ */
+function aiLiftAmbush(p) {
+  const P = S.players[p];
+  if (P.style !== 'raider') return;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].lift || b.lfMove !== 1 || !b.lfPaid || !foes(b.owner, p) || isWild(b.owner)) continue;
+    const key = b.id * 1000 + (b.lfDrops || 0);
+    if (P.ambushFor === key) continue;
+    P.ambushFor = key;
+    const t = liftSpots(b)[0];
+    if (t === undefined) continue;
+    const i = t % S.W, j = (t / S.W) | 0, n = Math.min(AI_MEGA.ambush + 2, rallyAvailable(p, i, j));
+    if (n >= 3) { const r = sendToRally(p, i, j, n); if (r && r.sent) P.ambushes = (P.ambushes || 0) + 1; }
+  }
+}
+
+/**
+ * What bringing down a foe's Orbital Lift b would be worth to rival p: the foes' buildings its cable would crush along
+ * its line (as aiLanceWorth weighs a shot), less p's own side's (heavily). Marches go for one worth AI_MEGA.liftWorth.
+ */
+function aiLiftWorth(p, b) {
+  let s = 0;
+  const seen = new Set();
+  for (const t of liftLineTiles(b.x, b.y, b.lfDir || 0)) {
+    const e = t >= 0 && S.bAt[t] ? getE(S.bAt[t]) : null;
+    if (!e || e.dead || seen.has(e) || isWild(e.owner)) continue;
+    seen.add(e);
+    const d = BDEFS[e.type], w = d.mega ? 3 : d.keep || e.type === 'lander' ? 1 : d.mil || d.staff || d.store ? 2 : 1;
+    s += foes(e.owner, p) ? w : -6 * w;
+  }
+  return s;
+}
+
+/** Has p half (or `share`) of everything a `type` costs in hand (a megastructure's site then fills as the rest comes in)? */
+function aiHalfway(p, type, share = 0.5) {
   const have = playerGoods(p), cost = BDEFS[type].cost;
-  for (const g in cost) if ((have[g] || 0) < cost[g] / 2) return false;
+  for (const g in cost) if ((have[g] || 0) < cost[g] * share) return false;
   return true;
 }
 
@@ -2088,23 +2504,24 @@ function aiMegaSpot(p, type, near, reach, lander, front) {
   return best;
 }
 
-/** What Lance b's shot along line L would be worth to p: the foes' buildings and army on it, less its own side's (heavily). */
+/**
+ * What Lance b's shot along line L would be worth to p: the foes' buildings and army in its core, and a part for those
+ * only scorched by its edge (half their armor), less its own side's (heavily).
+ */
 function aiLanceWorth(p, b, L) {
   let s = 0;
-  const seen = new Set();
-  for (const t of lanceTiles(b, L)) {
-    const e = getE(S.bAt[t]);
-    if (!e || e.dead || seen.has(e) || calmB(e) || isWild(e.owner)) continue;
-    seen.add(e);
-    const d = BDEFS[e.type];
-    const w = e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
-    s += foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w;
+  const tg = lanceTargets(b, L);
+  for (const [n, e] of tg.core.concat(tg.edge).entries()) {
+    if (isWild(e.owner)) continue;
+    const d = BDEFS[e.type], k = n < tg.core.length ? 1 : 0.3;
+    const w = d.gup && e.gOn ? 14 : d.gup ? 5 : e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
+    s += k * (foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w);
   }
   for (const u of S.bots) {
     if (u.dead || u.inside || isWild(u.owner)) continue;
-    const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
-    if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > LANCE.width / 2 + 0.2) continue;
-    s += foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1;
+    const band = lanceBand(L, u);
+    if (!band) continue;
+    s += (band === 2 ? 1 : 0.3) * (foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1);
   }
   if (L.dome) s += 5; // (it drops their Dome for a minute: their base open to the next bombardment, and to a ground assault)
   return s;
@@ -2123,7 +2540,7 @@ function aiLanceAim(p, b) {
     const s = aiLanceWorth(p, b, lanceLine(b, e.x + 0.5, e.y + 0.5));
     if (s > bs) { bs = s; best = e; }
   }
-  if (!best) { if (b.lOn && b.lCharge > LANCE.charge - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
+  if (!best) { if (b.lOn && b.lCharge > lanceTime(b) - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
   if (b.lOn) b.lAim = [best.x, best.y];
   else setLanceAim(b, best.x, best.y);
 }
@@ -2607,6 +3024,7 @@ function aiBomber(p, me) {
   for (const b of S.buildings) {
     let v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
     if (soft && aiDefReach(b) && dist2(b.x, b.y, soft.x, soft.y) <= 64) v = Math.max(v || 0, 9);
+    if (b.gOn && BDEFS[b.type].gup) v = 30; // (a Great Uplink transmitting: the first target there is)
     if (!v || b.dead || !b.built || !foes(b.owner, p) || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
     const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = b; }
@@ -2799,13 +3217,14 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   }
   if (!storm || tgt) P.stormT = 0;
   if (!storm) for (const b of S.buildings) {
-    if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue;
+    // (Its forts, and the enemy's Arrival City: knocked down and held, it's theirs, land, bonus and all: see cityCapture.)
+    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth)) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
     const at = !aiBeaten(P, b, 22) && spotBy(b);
     if (!at) continue;
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0);
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -2817,7 +3236,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
-      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j); // (at the gun covering the flag first: see holdRally)
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
@@ -3136,11 +3555,22 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
 }
 
 /**
+ * The rival's road crew limit (roadCrew), chosen as a player could on the Roads tool: No limit. It builds no Roadworks,
+ * so its Workers lay all its roads, and every road it plans is to a site or building waiting on it: a site goes up
+ * only once its road brings the goods. Only free Workers lay road, and a site still takes a Worker off the road first
+ * (roadToSites), which keeps its builders. (Measured: held to 3, or to 5 while it had Workers to spare, a long road's
+ * plan stood two to five times as long on Long haul, and both Hollow games of the batch ran to 75 minutes; with no
+ * limit they ended. See README, Road crew.)
+ */
+function aiRoadCrew(p) { S.players[p].roadCrew = 0; }
+
+/**
  * Lay roads from storage to buildings that have none, construction sites first, as far as the
  * Cement allows. A site that no road can reach is given up after a while.
  */
 function aiRoads(p, me) {
   const P = S.players[p];
+  aiRoadCrew(p);
   let budget = roadTilesAffordable(p), done = 0;
   const todo = me.filter((b) => needsRoad(b) && !onHomeNet(b))
     .sort((a, b) => (a.built - b.built) || a.born - b.born);
@@ -3742,4 +4172,70 @@ function aiArmorTrains(p) {
   const have = playerGoods(p), spare = trains.some((u) => u.hp < u.maxHp) ? 1 : 3;
   for (const g in TRAIN_ARMOR.cost) if ((have[g] || 0) < TRAIN_ARMOR.cost[g] * spare + (g === 'alloy' ? 10 : 4)) return;
   orderTrainArmor(p, t);
+}
+
+/*
+ * The Great Uplink (GUP), with its win on: the Steward's main project (aiMegaMain), from AI_MEGA.gupAt s once its economy
+ * runs (a Bot Foundry, and aiGupFunds; its site then has its goods first), near its Command Base on the side away from its
+ * rival (the safe choice), its GUP.gens Generators going down beside its site at once. It begins the transmission once it may
+ * (gupBlocked: 25 minutes in, all three Generators fed) with an army of AI_MEGA.gupGuard at home to guard it.
+ */
+function aiGup(p, me, lander, canBuild) {
+  if (!gupWinOn() || !lander) return;
+  const P = S.players[p], g = me.find((b) => BDEFS[b.type].gup);
+  if (g) {
+    if (!g.built && !g.prio) { g.prio = 'high'; g.sitePrio = 1; }
+    // Its Generators go down with it, all three at once, their goods first (a Generator is cheap: it waits only for those),
+    // and again as any is lost.
+    const gens = me.filter((b) => b.type === 'generator' && footDist(g, b.x + 0.5, b.y + 0.5) <= GUP.reach + 0.5), have = playerGoods(p), c = BDEFS.generator.cost;
+    if (gens.length < GUP.gens && canBuild && have.cement >= c.cement && have.alloy >= c.alloy && S.time - (P.gupLook ?? -999) >= AI_MEGA.look / 4) {
+      P.gupLook = S.time;
+      const spot = aiMegaSpot(p, 'generator', [g], GUP.reach, lander, 0);
+      const r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    if (g.built && !g.gOn && !gupBlocked(g) && aiArmyNear(p, g, 14) >= AI_MEGA.gupGuard) gupBegin(g);
+    return;
+  }
+  if (aiMegaMain(p) !== 'gup' || !canBuild || S.time < AI_MEGA.gupAt) return;
+  if (megaBlocked(p, 'gup') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiGupFunds(p)) return;
+  if (S.time - (P.gupLook ?? -999) < AI_MEGA.look) return;
+  P.gupLook = S.time;
+  const spot = aiMegaSpot(p, 'gup', [lander], 10, lander, -1);
+  const r = spot && placeSite(p, 'gup', spot[0], spot[1]);
+  if (r && r.ok) { P.gupAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+
+/** Has rival p the bulk goods for the Great Uplink in hand (half its Cement and Crystal; its Alloy and Chips come as made, first)? */
+function aiGupFunds(p) { const have = playerGoods(p), c = BDEFS.gup.cost; return have.cement >= c.cement / 2 && have.crystal >= c.crystal / 2 && have.alloy >= 2; }
+
+/** How many of p's armed warbots stand (or are garrisoned) within r tiles of building b. */
+function aiArmyNear(p, b, r) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && footDist(b, u.x, u.y) <= r) n++;
+  return n;
+}
+
+/**
+ * A foe's Great Uplink b is transmitting: rival p sends everything it can spare, its garrisons too (as for a storm), up
+ * to 30, to a flag within GUP.jam tiles of its square (on the side toward p's base) to jam it, every AI_MEGA.gupJam s
+ * while none of its bands is there or on the way.
+ */
+function aiJamGup(p, b) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!L || S.time - (P.gupJamT || -999) < AI_MEGA.gupJam || (P.gupRally && rallyById(P.gupRally))) return;
+  let spot = null, bd = Infinity;
+  const F = BDEFS[b.type].foot || 1;
+  for (let j = b.y - 2; j < b.y + F + 2; j++) for (let i = b.x - 2; i < b.x + F + 2; i++) {
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || footDist(b, i + 0.5, j + 0.5) > GUP.jam - 0.6) continue;
+    const d = dist2(i, j, L.x, L.y);
+    if (d < bd) { bd = d; spot = { i, j }; }
+  }
+  if (!spot) return;
+  // (All in: a transmission ends the game, so every garrison sends what it can, as for a storm; a band at a time
+  // only fed the guard round it.)
+  const sp = aiSpare(p, { x: spot.i, y: spot.j }, 'storm'), avail = sp.n;
+  if (avail < 4) return;
+  const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(30, avail), 'all', false, true);
+  if (sent) { rally.first = aiFirstGun(b.owner, spot.i, spot.j) || b.id; P.gupRally = rally.id; P.gupJamT = S.time; }
 }

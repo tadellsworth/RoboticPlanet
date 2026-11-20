@@ -77,8 +77,19 @@ const ORDERS = {
   /** The reserve of good g Mass Driver `id` leaves at home, d more (or less). */
   mdReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].mdriver) setMdReserve(b, String(g), +d || 0); },
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
-  /** Plan a Maglev line from Maglev Terminal `id` (built, on no line) to tile (bi, bj): the far Terminal (or a Terminal there). { ok, reason, id }. */
-  magLine(p, id, bi, bj) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That Maglev Terminal is gone.' }; return placeMagLine(p, b, bi | 0, bj | 0); },
+  /**
+   * Plan a Maglev line from Maglev Terminal `id` (built, with a line to spare) to tile (bi, bj): the far Terminal (or a
+   * Terminal there); at the end of a suspended line, the lost Terminal rebuilt (half price). With (hx, hy): Route via a
+   * hub, two lines through a new hub Terminal there. `bends`: the tiles it bends at, in order from the Terminal (a list
+   * of [i, j], up to MAGLEV.bends). { ok, reason, id }.
+   */
+  magLine(p, id, bi, bj, hx, hy, bends) {
+    const b = ownB(p, id);
+    if (!b) return { ok: false, reason: 'That Maglev Terminal is gone.' };
+    if (hx != null && hy != null) return placeMagRoute(p, b, bi | 0, bj | 0, hx | 0, hy | 0);
+    if (bends != null && !(Array.isArray(bends) && bends.length <= MAGLEV.bends && bends.every((q) => Array.isArray(q) && q.length === 2))) return { ok: false, reason: 'Those bends can\'t be had.' };
+    return placeMagLine(p, b, bi | 0, bj | 0, (bends || []).map((q) => [q[0] | 0, q[1] | 0]));
+  },
   /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
   mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
   airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
@@ -161,7 +172,8 @@ const ORDERS = {
   place(p, type, i, j, axis) {
     if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' };
     if (modNoBuild(type)) return { ok: false, reason: modNoBuild(type) }; // (No turrets, a challenge modifier)
-    const r = placeSite(p, type, i, j, undefined, undefined, axis === 'ns' ? 'ns' : 'ew'); // (axis: a Mass Driver's two tiles, east-west or north-south)
+    // (axis: a Mass Driver's two tiles, east-west or north-south; an Orbital Lift's fall line, 0..7: LIFT_DIRS)
+    const r = placeSite(p, type, i, j, undefined, undefined, BDEFS[type].lift ? liftDirOf(axis) : axis === 'ns' ? 'ns' : 'ew');
     if (r.ok) r.building.placedAt = S.time; // (when: it can be taken back for SITE_UNDO s, see undoSite)
     return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 };
   },
@@ -219,6 +231,8 @@ const ORDERS = {
     settlePlans(); // pay for what we can now, oldest plans first; the rest waits for the goods
     return out;
   },
+  /** The road crew limit: at most v Workers lay planned road at once (one of ROAD_CREWS; 0: no limit). */
+  roadCrew(p, v) { if (ROAD_CREWS.includes(v)) S.players[p].roadCrew = v; },
   paveMark(p, i, j, on) { if (inMap(i, j)) setPaveMark(p, i, j, !!on); },
   /** Turn a road's arrow: v 1 two-way, 2-5 one-way (east, south, west, north). */
   roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); }, // (an Express lane stays one-way: setRoadDir)
@@ -336,6 +350,20 @@ const ORDERS = {
   missileAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].missile ? fireMissileAt(s, i, j) : false; },
   /** Aim Lance of Corvane `id` through tile (i, j): it starts charging (or, charging, turns to the new aim). '' or why not. */
   lanceAim(p, id, i, j) { const b = ownB(p, id); return b && BDEFS[b.type].lance ? setLanceAim(b, i | 0, j | 0) : 'That Lance is gone.'; },
+  /** Call Orbital Lift `id`'s climber down with `load` (a key of LIFT.drops). '' or why not. */
+  liftCall(p, id, load) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? liftCall(b, String(load)) : 'That Orbital Lift is gone.'; },
+  /** Send good g up from Orbital Lift `id` (on), or stop sending it. '' or why not. */
+  liftSend(p, id, g, on) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? setLiftSend(b, String(g), !!on) : 'That Orbital Lift is gone.'; },
+  /** The reserve of good g Orbital Lift `id` leaves at home, d more (or less). */
+  liftReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].lift) setLiftReserve(b, String(g), +d || 0); },
+  /** Turn Orbital Lift site `id`'s fall line to direction d (0..7), while it's still a site. '' or why not. */
+  liftDir(p, id, d) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? setLiftDir(b, liftDirOf(d)) : 'That Orbital Lift is gone.'; },
+  /** Lance `id`'s Use Reactor switch: with a Reactor and Generators both in reach, charge on the Reactor (faster, Uranium a shot). */
+  lanceReactor(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].lance) b.lUseR = !!on; },
+  /** Begin Great Uplink `id`'s transmission (the Great Uplink win: 8 minutes held makes contact). '' or why not. */
+  gupBegin(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupBegin(b) : 'That Great Uplink is gone.'; },
+  /** Stand down Great Uplink `id`'s transmission: its progress is lost. '' or why not. */
+  gupStop(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupStop(b) : 'That Great Uplink is gone.'; },
   /** Call off Lance `id`'s charge (the charge is lost). */
   lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },

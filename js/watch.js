@@ -60,7 +60,7 @@ const WATCH_DIFF_INFO = {
 /**
  * The last setup, kept on this device (WATCH_KEY): { shape, shapeRnd, n (colonies), teams, docs (four doctrine keys or
  * 'random'), murmur ('off', 'quiet' or 'active'), diff (DIFFICULTY, every colony's), victory (VICTORY), size, rough,
- * rich, biome (BIOME_ORDER index), biomeRnd, nuke, mega (Megastructures), events, mods (WATCH_MODS), seed (a saved planet's, or null: a new
+ * rich, biome (BIOME_ORDER index), biomeRnd, nuke, mega (Megastructures), upwin (the Great Uplink win), events, mods (WATCH_MODS), seed (a saved planet's, or null: a new
  * planet each game) }. What a setup from an earlier build lacks is as Observer mode always had it: Normal, the usual
  * size, terrain and resources, the Nuclear race on, no planetary events, Capture, a random biome, the Murmur active.
  */
@@ -79,7 +79,7 @@ function watchSetup() {
     victory: Object.prototype.hasOwnProperty.call(VICTORY, w.victory) ? w.victory : 'capture',
     size: idx(w.size, SIZE_PRESETS.length, DEFAULT_SIZE.versus), rough: idx(w.rough, TERRAIN_PRESETS.length, DEFAULT_ROUGH), rich: idx(w.rich, RESOURCE_PRESETS.length, DEFAULT_RICH),
     biome: biomeAllowed(BIOME_ORDER[biome], w.shapeRnd ? -1 : shape) ? biome : 0, biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
-    nuke: w.nuke === undefined || w.nuke ? 1 : 0, mega: w.mega === undefined || w.mega ? 1 : 0, events: w.events ? 1 : 0,
+    nuke: w.nuke === undefined || w.nuke ? 1 : 0, mega: w.mega === undefined || w.mega ? 1 : 0, upwin: w.upwin ? 1 : 0, events: w.events ? 1 : 0,
     mods: modList(w.mods).filter((k) => WATCH_MODS.includes(k)),
     seed: Number.isInteger(w.seed) && w.seed >= 0 ? w.seed : null,
   };
@@ -99,6 +99,8 @@ const watchHollow = (w) => !w.shapeRnd && !!SHAPE_PRESETS[w.shape].hollow;
 const watchMurmurOk = (w) => (w.shapeRnd || murmurShape(w.shape)) && (w.biomeRnd || murmurGround(BIOME_ORDER[w.biome]));
 /** The Murmur as the setup has them ('off' where they can't be). */
 const watchMurmur = (w) => (watchMurmurOk(w) && murmurLevelOk(w.murmur) ? w.murmur : 'off');
+/** The Great Uplink win: on, with Megastructures, and not in the Hollow (no sky). */
+const watchUpWin = (w) => !!w.upwin && !!w.mega && !watchHollow(w);
 /** How the game is won: Capture with teams, and in the Hollow instead of Uplinks. */
 const watchVictory = (w) => (watchTeams(w) || (w.victory === 'uplinks' && watchHollow(w)) ? 'capture' : w.victory);
 /** The planet the setup makes, as Custom Game's saved planets keep one (seed: the saved planet's, when one is picked). */
@@ -110,6 +112,7 @@ function watchMapChanged(w) { w.seed = null; }
 function watchSummary(w) {
   const n = watchCount(w), vic = watchVictory(w), main = [watchTeams(w) ? 'Teams · 2 vs 2' : `${n} colonies`, `${DIFFICULTY[w.diff].label}`];
   if (vic !== 'capture') main.push(VICTORY[vic].name);
+  if (watchUpWin(w)) main.push('Great Uplink win');
   main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[w.size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
@@ -157,7 +160,7 @@ function buildWatch() {
     if (!watchMurmurOk(w())) { WATCH.hover['w-sec-rules'] = $('w-murmur-row'); syncWatchInfo(); sfx('error'); return; }
     w().murmur = b.dataset.v; WATCH.hover['w-sec-rules'] = b; watchKeepSetup(); syncWatch(); sfx('click');
   };
-  for (const k of ['nuke', 'mega', 'events']) $('w-' + k).onchange = set(() => { w()[k] = $('w-' + k).checked ? 1 : 0; });
+  for (const k of ['nuke', 'mega', 'upwin', 'events']) $('w-' + k).onchange = set(() => { w()[k] = $('w-' + k).checked ? 1 : 0; });
   $('w-mods').innerHTML = WATCH_MODS.map((k) => `<label class="tchip" id="w-mod-${k}-row" data-info="${esc(MODS[k].desc)}"><input type="checkbox" id="w-mod-${k}" role="switch"><span>${MODS[k].name}</span></label>`).join('');
   for (const k of WATCH_MODS) $('w-mod-' + k).onchange = set(() => { const l = w().mods.filter((x) => x !== k); w().mods = modList($('w-mod-' + k).checked ? l.concat(k) : l); });
   $('w-shape').onclick = () => { sfx('click'); openPicker('shape', watchPickCtx()); };
@@ -239,7 +242,8 @@ function syncWatch() {
   $('w-planet').innerHTML = '<option value="">A new planet each game</option>' + saved.map((q, i) => `<option value="${i}">${planetLabel(q).replace(/<[^>]+>/g, '')}</option>`).join('');
   $('w-planet').value = cur >= 0 ? String(cur) : '';
   // Rules: the Nuclear race, planetary events and the Murmur (none on Argos, or where the map has no room for nests).
-  for (const k of ['nuke', 'mega', 'events']) { $('w-' + k).checked = !!w[k]; $('w-' + k + '-row').classList.toggle('on', !!w[k]); }
+  for (const k of ['nuke', 'mega', 'upwin', 'events']) { $('w-' + k).checked = !!w[k]; $('w-' + k + '-row').classList.toggle('on', !!w[k]); }
+  $('w-upwin-row').classList.toggle('na', !w.mega || watchHollow(w));
   const silent = !watchMurmurOk(w), mur = watchMurmur(w);
   $('w-murmur-row').classList.toggle('na', silent);
   $('w-murmur-row').dataset.info = silent ? (!w.shapeRnd && !murmurShape(w.shape) ? `The Murmur: none on ${SHAPE_PRESETS[w.shape].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : MURMUR_INFO[mur];
@@ -301,7 +305,7 @@ function watchStart(setup) {
   newGame({
     seed: setup.seed ?? randomSeed(), difficulty: DIFFICULTY[setup.diff] ? setup.diff : 'normal', mode: 'versus', size: setup.size ?? DEFAULT_SIZE.versus,
     rough: setup.rough ?? DEFAULT_ROUGH, rich: setup.rich ?? DEFAULT_RICH, shape, players: n, humans: [], styles: docs, style: 'balanced',
-    nuke: setup.nuke !== 0, mega: setup.mega !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
+    nuke: setup.nuke !== 0, mega: setup.mega !== 0, upWin: watchUpWin(setup), events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
     murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
     scars: scarsPref(), // (War scars: the Settings menu's)
     biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : randomBiomeFor(shape, !!setup.murmur && setup.murmur !== 'off'),
@@ -344,13 +348,15 @@ function watchOver() {
   const w = UI.watch, win = S.winner, how = S.endHow || 'capture';
   UI.overNew = () => watchStart(w.setup);
   UI.overMenu = null;
-  $('o-code').hidden = true; $('o-keep').hidden = true; $('o-log').hidden = true;
+  $('o-code').hidden = true; $('o-keep').hidden = true; $('o-log').hidden = how !== 'contact';
+  if (how === 'contact') $('o-log').textContent = GUP_ANSWER; // (what answered: GUP_ANSWER)
+  if (how === 'contact' && typeof gupSilence === 'function') gupSilence();
   $('o-new').textContent = 'Observe another'; $('o-menu').textContent = 'Main menu';
   // (Teams: the winner and its ally, who won together, the ally even if its own base fell on the way.)
   const side = S.players.filter((P) => !P.absent && (P.id === win || allies(P.id, win))).map((P) => P.id);
   const who = side.length > 1 ? `${watchThe(side[0], true)} and ${watchThe(side[1])}` : watchThe(win, true);
   $('o-title').textContent = `${who} win${side.length > 1 ? '' : 's'}`;
-  $('o-text').textContent = side.length > 1
+  $('o-text').textContent = how === 'contact' ? `${side.length > 1 ? 'Their team' : `${callsign(win)}, the ${(RIVAL_NAMES[win] || '').toLowerCase()} ${watchDoc(win)},`} made contact after ${fmtTime(S.time)}: ${callsign(win)}'s Great Uplink held its transmission for ${GUP.hold / 60} minutes.` : side.length > 1
     ? `Their team took the planet after ${fmtTime(S.time)}: ` + (how === 'surrender' ? 'the last colony against them surrendered.' : how === 'nuke' ? 'a nuclear missile destroyed the last Command Base against them.' : 'both Command Bases against them are theirs.')
     : `${callsign(win)}, the ${(RIVAL_NAMES[win] || '').toLowerCase()} ${watchDoc(win)}, took the planet after ${fmtTime(S.time)}: ` + (how === 'surrender' ? 'the last colony against it surrendered.'
       : how === 'nuke' ? 'its nuclear missile destroyed the last Command Base against it.'
@@ -358,7 +364,7 @@ function watchOver() {
           : how === 'uplinks' ? `it led on the Uplinks for ${UPLINK.hold / 60} minutes in all.` : 'the last Command Base against it is its own.');
   $('o-stats').innerHTML = [['Time', fmtTime(S.time)]].concat(S.players.filter((P) => !P.absent).map((P) => [
     `<i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i> ${watchDoc(P.id)}`,
-    side.includes(P.id) ? (w.out[P.id] !== undefined ? `Won (fell at ${fmtTime(w.out[P.id])})` : 'Won') : w.out[P.id] !== undefined ? `Fell at ${fmtTime(w.out[P.id])}` : how === 'domination' || how === 'uplinks' ? 'Standing' : 'Fell',
+    side.includes(P.id) ? (w.out[P.id] !== undefined ? `Won (fell at ${fmtTime(w.out[P.id])})` : 'Won') : w.out[P.id] !== undefined ? `Fell at ${fmtTime(w.out[P.id])}` : how === 'domination' || how === 'uplinks' || how === 'contact' ? 'Standing' : 'Fell',
   ])).map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   $('screen-over').hidden = false;
 }

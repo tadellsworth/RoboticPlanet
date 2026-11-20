@@ -237,8 +237,10 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
-  flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
-  lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1,
+  flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
+  lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
+  liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
+  gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -252,10 +254,13 @@ const BLAST_SIZE = {
   flak: 0.4, shellhit: 0.55, botboom: 0.6, collapse: 0.9, boom: 1, howitzerhit: 1.1, fireball: 1.3, bombhit: 1.35, missilehit: 1.8, nuke: 3.2,
   bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
-  flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
+  flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, arc: 0.5, rail: 0.6, railcharge: 0.4, // (heard only on screen)
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
   drizzle: 0.4, // (the Ring drizzle: a soft whoosh, heard only on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
+  citychime: 1.6, cityclock: 0.5, // (Arrival City's station chime, taken or repaired, heard off screen; its clock's chime only on it)
+  liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
+  gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
 /**
@@ -748,6 +753,22 @@ function sfx(name, dest, y, dur) {
       _noise(0.45, 0.08, { type: 'bandpass', freq: 3200, to: 700, q: 0.9, attack: 0.003, dest: D });
       for (let k = 0; k < 8; k++) _tone(2400 + Math.random() * 2600, 0.06, 'sine', 0.018, null, Math.random() * 0.3, D);
       break;
+    // An Arc Caster's bolt: a hard electric snap, a buzzing crackle as it jumps, and a thin high zap falling away.
+    case 'arc':
+      _noise(0.03, 0.09, { type: 'highpass', freq: 2600, attack: 0.001, dest: D });
+      for (let k = 0; k < 4; k++) _noise(0.035, 0.05, { type: 'bandpass', freq: 1800 + k * 700, q: 2, attack: 0.002, delay: 0.03 + k * 0.045, dest: D });
+      _tone(3200, 0.2, 'sawtooth', 0.016, 700, 0.01, D);
+      _tone(120, 0.16, 'square', 0.02, 80, 0, D);
+      break;
+    // A Railgunner's rail charging: a rising whine.
+    case 'railcharge': _tone(400, 0.9, 'sine', 0.022, 3400, 0, D); _tone(800, 0.9, 'triangle', 0.008, 5200, 0.1, D); break;
+    // ...and firing: a sharp supersonic crack with a ringing metal tail.
+    case 'rail':
+      _noise(0.05, 0.16, { type: 'highpass', freq: 1500, attack: 0.001, dest: D });
+      _tone(1250, 0.5, 'sine', 0.03, 1180, 0.01, D);
+      _tone(170, 0.25, 'triangle', 0.06, 60, 0, D);
+      _noise(0.4, 0.03, { type: 'bandpass', freq: 4200, to: 2000, q: 1.4, attack: 0.01, delay: 0.03, dest: D });
+      break;
     // Parachutes opening: a cloth crack and the rush of air.
     case 'chute':
       _noise(0.09, 0.12, { type: 'bandpass', freq: 900, q: 1.2, attack: 0.003, dest: D });
@@ -870,6 +891,68 @@ function sfx(name, dest, y, dur) {
       for (let k = 0; k < 10; k++) _tone(1800 + Math.random() * 2600, 0.05, 'square', 0.012, null, 0.05 + Math.random() * 1.2, D);
       _noise(1.6, 0.08, { type: 'lowpass', freq: 300, to: 60, delay: 0.1, dest: D });
       break;
+    // Arrival City changing hands, or lit again: the recorded station chime, four soft bell notes rising, for no one.
+    case 'citychime':
+      for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
+      break;
+    // An Orbital Lift's climber setting off: a rising electric whine, and the clack of its clamps passing the first joints.
+    case 'liftclimb':
+      _tone(180, 2.2, 'sawtooth', 0.018, 900, 0, D);
+      _tone(360, 2.2, 'sine', 0.02, 1500, 0.05, D);
+      for (let k = 0; k < 5; k++) _noise(0.04, 0.05, { type: 'bandpass', freq: 2400, delay: 0.25 + k * 0.32, dest: D });
+      break;
+    // A climber landing: a heavy clunk as it seats on the collar, then the pneumatic hiss of its doors opening.
+    case 'liftland':
+      _tone(70, 0.5, 'sine', 0.14, 40, 0, D);
+      _noise(0.18, 0.12, { type: 'lowpass', freq: 500, dest: D });
+      _noise(1.1, 0.05, { type: 'highpass', freq: 3000, delay: 0.45, dest: D });
+      break;
+    // The cable groaning under load: a long low creak bending in pitch, like a held string about to go.
+    case 'liftgroan':
+      _tone(62, 2.6, 'sawtooth', 0.03, 48, 0, D);
+      _tone(94, 2.2, 'triangle', 0.02, 120, 0.3, D);
+      _noise(2.4, 0.03, { type: 'bandpass', freq: 220, delay: 0.1, dest: D });
+      break;
+    // The cable snapping free: a sharp crack like a snapped string, and the first of the rumble.
+    case 'liftsnap':
+      _noise(0.08, 0.3, { type: 'highpass', freq: 1800, dest: D });
+      _tone(880, 0.35, 'sawtooth', 0.05, 110, 0.01, D);
+      _noise(2.2, 0.12, { type: 'lowpass', freq: 260, to: 50, delay: 0.1, dest: D });
+      break;
+    // Its cable striking the ground, tile after tile: a rolling thud, running away from the anchor.
+    case 'liftimpact':
+      _tone(55 + Math.random() * 20, 0.6, 'sine', 0.08, 30, 0, D);
+      _noise(0.5, 0.07, { type: 'lowpass', freq: 380, to: 80, dest: D });
+      break;
+    // A Great Uplink begins transmitting: relays closing, the carrier sweeping up from nothing to its note, the first pulse.
+    case 'gupbegin':
+      _noise(0.1, 0.1, { type: 'lowpass', freq: 600, dest: D }); _tone(64, 0.3, 'square', 0.02, 44, 0, D);
+      _tone(110, 2.4, 'sine', 0.05, 440, 0.2, D); _tone(220, 2.4, 'triangle', 0.012, 880, 0.2, D);
+      _noise(1.8, 0.03, { type: 'bandpass', freq: 2400, to: 900, q: 4, delay: 0.3, dest: D });
+      _tone(880, 1.2, 'sine', 0.05, null, 2.6, D);
+      break;
+    // Its signal's slow pulse (one every GUP.pulse s while it transmits): a soft deep throb and a clear high ping fading,
+    // with a breath of static under it.
+    case 'guppulse':
+      _tone(110, 0.9, 'sine', 0.07, 98, 0, D); _tone(880, 1.4, 'sine', 0.035, null, 0.02, D); _tone(1320, 0.7, 'sine', 0.008, null, 0.02, D);
+      _noise(0.6, 0.012, { type: 'bandpass', freq: 3000, q: 1.5, dest: D });
+      break;
+    // In the last seconds, the Murmur repeating the pulse back from the ground: the same shape, low, muffled and a little
+    // off, as if through rock.
+    case 'gupecho': {
+      const lp = AUDIO.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.connect(D);
+      _tone(55, 1.1, 'sine', 0.09, 50, 0, lp); _tone(437, 1.3, 'triangle', 0.04, 431, 0.03, lp);
+      _noise(0.9, 0.04, { type: 'lowpass', freq: 240, to: 120, dest: lp });
+      break;
+    }
+    // Contact: after the silence, one answering tone, pure and long, from nowhere in particular.
+    case 'gupanswer':
+      _tone(587.3, 5.5, 'sine', 0.06, null, 0, D); _tone(880, 4.2, 'sine', 0.012, null, 0.6, D); _tone(293.7, 5, 'sine', 0.02, null, 0.2, D);
+      break;
+    // The Arrival clock striking: two slow, low bell notes from the atrium, the second a little lower, fading long.
+    case 'cityclock':
+      for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
+      break;
     // A nuclear missile coming for you: an air-raid siren, rising and falling.
     case 'siren': {
       const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
@@ -923,6 +1006,68 @@ function lanceHum(k, near) {
   h.l.frequency.setTargetAtTime(4 + 14 * k, t, 0.3);
   h.lp.frequency.setTargetAtTime(220 + 2400 * k * k, t, 0.3);
   h.g.gain.setTargetAtTime((0.02 + 0.06 * k) * (0.45 + 0.55 * near), t, 0.3);
+}
+
+/*
+ * Arrival City on screen, lit: the hum of an empty city (the low drone of its services running, a soft wind through
+ * the terraces), as loud as it is near the middle of the screen (k 0..1; 0 stops it). On the Ambience volume.
+ */
+const CITYHUM = { o: null };
+function cityHum(k) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (CITYHUM.o) { const t = ac.currentTime, h = CITYHUM.o; CITYHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.b.stop(); h.n.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!CITYHUM.o) {
+    const a = ac.createOscillator(), b = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    a.type = 'sine'; b.type = 'sine'; a.frequency.value = 55; b.frequency.value = 110.6; // (a mains hum, beating slowly)
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    let v = 0; for (let i = 0; i < len; i++) { v = v * 0.985 + (Math.random() * 2 - 1) * 0.015; d[i] = v * 6; } // (brown-ish: wind)
+    n.buffer = buf; n.loop = true;
+    lp.type = 'lowpass'; lp.frequency.value = 420;
+    const ga = ac.createGain(), gb = ac.createGain(), gn = ac.createGain(); ga.gain.value = 0.5; gb.gain.value = 0.22; gn.gain.value = 0.9;
+    a.connect(ga).connect(lp); b.connect(gb).connect(lp); n.connect(gn).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); b.start(); n.start();
+    CITYHUM.o = { a, b, n, g };
+  }
+  CITYHUM.o.g.gain.setTargetAtTime(0.035 * k, ac.currentTime, 0.8);
+}
+
+/*
+ * An Orbital Lift on screen: the low steady note of its tensioned cable, like a held string, louder the nearer the middle
+ * of the screen (k 0..1; 0 stops it), and a whine over it while a climber is on the move (w 0..1). On the Ambience volume.
+ */
+const LIFTHUM = { o: null };
+function liftHum(k, w) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (LIFTHUM.o) { const t = ac.currentTime, h = LIFTHUM.o; LIFTHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.b.stop(); h.c.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!LIFTHUM.o) {
+    const a = ac.createOscillator(), b = ac.createOscillator(), c = ac.createOscillator(), g = ac.createGain(), gw = ac.createGain(), lp = ac.createBiquadFilter();
+    a.type = 'sine'; b.type = 'triangle'; c.type = 'sawtooth'; a.frequency.value = 73.4; b.frequency.value = 146.9 * 1.003; c.frequency.value = 520;
+    lp.type = 'lowpass'; lp.frequency.value = 900;
+    const ga = ac.createGain(), gb = ac.createGain(); ga.gain.value = 0.6; gb.gain.value = 0.18; gw.gain.value = 0;
+    a.connect(ga).connect(lp); b.connect(gb).connect(lp); c.connect(gw).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); b.start(); c.start();
+    LIFTHUM.o = { a, b, c, g, gw };
+  }
+  const t = ac.currentTime;
+  LIFTHUM.o.g.gain.setTargetAtTime(0.03 * k, t, 0.8);
+  LIFTHUM.o.gw.gain.setTargetAtTime(0.05 * (w || 0), t, 0.4);
+  LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
+}
+
+/** Contact (the Great Uplink win): the music falls away to silence, and after it one answering tone (sfx 'gupanswer'). */
+function gupSilence() {
+  duckMusic(0.0001, 14);
+  setTimeout(() => sfx('gupanswer'), 2200);
 }
 
 /** Duck the music for `secs`, down to `to` of its level. */
@@ -1072,8 +1217,43 @@ function audioTick(dt) {
     sirenTick(live);
     // The Lance of Corvane charging anywhere: its hum, by the fullest charge (louder with one on screen).
     let hk = 0, near = 0;
-    if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / LANCE.charge); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
+    if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / lanceTime(b)); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
     lanceHum(live ? Math.max(hk, 0.02 * (hk > 0)) : 0, near);
+    // Arrival City on screen, lit: its hum, and now and then its clock striking.
+    let ck = 0, cb = null;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !BDEFS[b.type].city || b.cDown) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -80 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > ck) { ck = k; cb = m; }
+    }
+    cityHum(ck);
+    // An Orbital Lift on screen: its cable's note, and a climber's whine while one is on the move.
+    let lk = 0, lw = 0;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -200 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
+    }
+    liftHum(lk, lw);
+    // A Great Uplink transmitting on screen: its slow pulse, in time with the beam (gupPhase); in the last GUP.echo s, with
+    // the Murmur in the game, the ground repeating it back. Jammed or without power, silence.
+    if (live) {
+      const ph = gupPhase(), wrap = ph < (WORLD.gupPh ?? 1);
+      WORLD.gupPh = ph;
+      if (wrap) for (const b of S.buildings) {
+        if (b.dead || !b.built || !b.gOn || !BDEFS[b.type].gup || b.gJam || !b.gPow) continue;
+        const m = bCentre(b);
+        sfx('guppulse', m.x, m.y);
+        if (S.wildlife && GUP.hold - (b.gT || 0) <= GUP.echo) setTimeout(() => sfx('gupecho', m.x, m.y + 2), 700);
+        break;
+      }
+    }
+    WORLD.cityT = (WORLD.cityT ?? 20) - 0.25;
+    if (cb && WORLD.cityT <= 0) { WORLD.cityT = 50 + Math.random() * 20; sfx('cityclock', cb.x, cb.y); }
     WORLD.bt = 0.25;
   }
   if (!inGame || UI.paused || S.winner >= 0 || WORLD.t > 0) return;

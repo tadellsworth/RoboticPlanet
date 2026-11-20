@@ -18,6 +18,16 @@ Roadmap order the owner set: finish the new transit items, **add all the new meg
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
 
+- **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
+- **Road crews (built Nov 20; open questions).** At most 3 Workers lay planned road at once (Road crew 2, 3, 5 or No
+  limit on the Roads tool), a Roadworks takes two Pavers that lay new road at twice a Worker's rate before any asphalt,
+  long roads grow from both ends where the far end touches road or a finished building, and a Worker on the road leaves
+  it for a site nearby. Still open: should the limit count per foothold (a Drop Outpost's island has its own Workers,
+  and today shares the colony's crew of 3)? Should the Roadworks build its own Pavers rather than the Foundry? Should
+  Pavers walk out to a far stretch on their own, or keep to the nearest work (today: nearest, by the paving order)?
+  Should rivals build a Roadworks for its Pavers (today they build none, and choose No limit: held to 3 or 5 their
+  roads fell behind and Hollow games stalled; see README)?
+
 **Quick fixes (small, cheap; do these first when usage is short)**
 - **Maglev pods are made only at a Maglev Terminal,** not in the Bot Foundry or any other yard (check the Foundry's order list
   and the Air/Army menus: `BOTS.magpod` must not appear there).
@@ -39,16 +49,32 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   of recent restore points (say the last 5, one a minute) on the pause menu to undo a mistake and try again. Check
   what exists first (`autosave` in js/main.js or js/ui.js) and extend it to keep several slots.
 
-**Maglev follow-ups (medium)**
-- **Losing a Terminal doesn't lose the whole line:** today a destroyed Terminal takes the line, its pylons and its pods
-  with it (a lot of money in one blow). Instead the line, pylons and pods stay (the pods wait stopped; rebuild the
-  Terminal on the same tile and the line resumes), or at least the pylons stay and refund part.
-- **Maglev lines can be strung together** (a route of stops): a Terminal may join two lines (a hub), or a line may bend at
-  a relay pylon/Terminal, so a route can go round places a straight line can't reach (the owner: pylons can't always go
-  where they want). Pods carry on through a hub or change there. See "lines of more than two Terminals" in the Maglev notes.
-- **Easier line placement, and pylons over roads:** pylons may stand ON roads (and track), drawn at the side of the road
-  so no road has to be taken up and rebuilt; a clearer preview, and nudging a bad pylon spot a tile instead of failing
-  the whole line. (Currently a pylon never stands on a road or track: relax that rule; the road stays open.)
+**Maglev follow-ups (medium)** (BUILT, Nov 20 2026, in two rounds; README "Maglev lines" has the detail)
+- **Losing a Terminal doesn't lose the whole line** (built): its lines stand broken (guideway and pylons kept, drawn
+  with an amber stripe and the lost Terminal's outline), pods heading for it turn back with their loads, pods docked in
+  it go to a Terminal it was joined to; **Rebuild the missing Terminal** joins every line that ended there again. The
+  owner's call: a rebuild on the old foundation costs **half** a Terminal (rounded up: 4 Cement, 3 Alloy, 2 Chips); one
+  built there by hand costs the whole price.
+- **Maglev lines strung together** (built as hubs, up to three lines a Terminal, the owner's call to keep three): pods
+  serve the whole network (four a line) and **carry on through a hub without stopping**: what the Terminals beyond it
+  want stays aboard, the rest is unloaded there, and they top up as they pass (decided 4 tiles out, so a pod never waits
+  at a hub for a line). *Open:* more than one hub in a single pass is fine (each is decided as it comes); a route planner
+  for goods across networks that touch only by conveyor.
+- **Bends** (built): a line bends at up to 4 pylons (Bend here while placing; each stretch 3 to 40 tiles, 60 in all,
+  120° at most a bend), Route with a bend (or a jog of two) round a blocked stretch or past 40 tiles, before Route via a
+  hub; pods follow the bends at 0.6 of top speed round 30° and 0.35 round 75° or more. *Open:* dragging a bend by hand
+  after it's placed; bends on a line that is already built (today: rebuild it).
+- **Easier line placement, and pylons over roads** (built): pylons over roads and track as a portal frame with the way
+  open, the preview's colours and reasons, a far end snapping a tile over.
+- **The rival and the Maglev** (built, Nov 20 2026, the owner's call: the Architect first, others only if it pays).
+  The Architect builds one line, from its twelfth minute on Normal and up, to a far working cluster of its own (24+
+  tiles out, three working buildings round it, no Rail Station there) once it holds the line's goods and 30 Alloy and
+  15 Chips besides. Measured: eight 40-minute Architect-vs-Balanced games (2 players, size 2, seeds 3 7 11 17 23 29
+  31 41), before and after, came out identical (Balanced won six, two undecided both times): the Architect never held
+  the goods to spare with a busy cluster 24+ tiles out, so it built no line. It does build and run one when it has them
+  (a scripted test: lh/maglev-ai-test.js). So it doesn't pay in today's games and stays rare on purpose; undecided games
+  did not go up. The other doctrines build none. *For the owner:* loosen the spare-goods rule (it would then compete with
+  the Architect's army and Missiles) or leave it as a late-game flourish?
 
 **Murmur: a bigger rework (after the megastructures and the audit, before the campaign)**
 - **Smarter Murmur:** they sometimes walk straight past robots that then shoot them; fix their threat and target choice
@@ -60,7 +86,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 **Game setup and structure**
 - **Megastructures are an enable-able checkbox on game setup,** like Nuclear race (BUILT, Nov 20 2026, with the Lance of
-  Corvane and the Shield Dome: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
+  Corvane and the Shield Dome, and Arrival City since: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
   settings; missions keep their own; a save from before it loads with them off), so games without them stay as
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
 - **A truly global map, a size above Huge,** for those who want an enormous battle, maybe with TWO biomes in it that slowly
@@ -121,7 +147,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     unit acknowledgement sounds, income rates and warnings, multiple save slots.
   - **A UX audit by Gemini:** the owner sends it screenshots of the main screens, and it lists confusing or unpolished
     spots against studio standards: a cheap, prioritised list (see handoff/ for how the export and import work).
-- **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026: saved for later).
+- **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026; the Skirmisher, Arc Caster and Railgunner built Nov 20 2026, see below).
   The owner's observation: many games are won by huge bundles of warbots behind Bulwarks that are hard to stop; the game
   has grown lots of supply-chain buildings and vehicles but a thin military side. Do this before the megastructure
   weapons, which would add power to a thin roster. First step: a measured arena test, not guesses (30 warbots and 6
@@ -161,6 +187,62 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     balanced in with the three ground units there now (Warbot, Bulwark, Torch). The owner's view: the Bulwark is too
     strong; two Bulwarks and a big blob of warbots win almost any game, which is too easy. So the pass includes
     toning the Bulwark down and a measured blob arena test before and after (with the Lance and the Dome in the game).
+  - **Built (Nov 20 2026): the Skirmisher, the Arc Caster and the Railgunner, and a Bulwark nerf.** (The Rail Lancer is
+    the *Railgunner*: the Warbot's art set is already the "Lancer".) Numbers in README (Skirmisher, Arc Caster, Railgunner
+    rows; `SKIRM`, `ARC`, `RAIL`). The Bulwark: shield 50 → 40, down 6 → 8 s, turning 2.6 → 1.8 rad/s (two attackers
+    from different sides get round it); cost unchanged (3 rounds). Rivals build the three by doctrine (`AI_ANSWERS`) and
+    answer what they face (`aiAnswers`). Measured in the headless arena (`lh/arena.js`; cost in Foundry rounds):
+    - *A blob marching on a fort* (two Pulse Turrets and a Minigun Nest; the answer is P1's, at a third of the blob's
+      cost): blob losses before → after. 30 warbots + 2 Bulwarks (36 rounds): nothing more 0 → 3; +16 warbots 8 → 14;
+      +8 Torches 16 → 18; +16 Skirmishers 17; +8 Arc Casters 17; +5 Railgunners 15. 30 + 6 Bulwarks (48): nothing more
+      0 → 0; +16 warbots 0 → 0 (the six shields still stop a defence a third its size); +8 Torches 6 → 9; +16
+      Skirmishers 16 (5 of the 6 Bulwarks killed); +8 Arc Casters 8; +5 Railgunners 22 (all 6 Bulwarks). Mortar Pits (4:
+      21 and 14) and Missiles (17 and 18) bleed a blob much as before; bombers barely touch it.
+    - *Equal cost in the open* (score: share of the enemy's cost destroyed less your own, averaged over 3 planets and
+      both sides; vs the blob at its cost): 30w+2B: warbots ±0, Torches +0.42, Skirmishers +0.15, Arc Casters +0.36,
+      Railgunners −0.07; 30w+6B: warbots −0.01, Torches +0.22, Skirmishers +0.37, Arc Casters +0.41, Railgunners +0.74
+      (before the pass: warbots −0.09, Torches +0.14, nothing else).
+    - *Who beats whom* (24 rounds a side): Skirmishers beat Arc Casters +0.46 and Railgunners +0.47, are even with
+      warbots and the blob, lose to Torches −0.42; Arc Casters beat Torches +0.78 and big blobs (above), lose to
+      Skirmishers and Railgunners; Railgunners beat Torches and Arc Casters, lose to warbots −0.32 and Skirmishers −0.47.
+      Averages: Railgunners +0.32 (the strongest pure army), the blob +0.13, warbots +0.05, Skirmishers +0.04, Arc Casters
+      0.00, Torches −0.20, a mix of all −0.23. (The Railgunner was then the strongest pure army; see the
+      tuning below.)
+    - *Railgunner toned down* (the owner, Nov 2026; branch rail-tune): slugs lose 40% each robot they pass (was 30%),
+      reload 5 s (was 4), a Bulwark's shield lets 80% through (was 60%) and the Bulwark takes ×1.7 (was ×1.3): four
+      numbers; cost, health, reach and pierce count unchanged. Arena, before → after: a pure Railgunner army's average
+      +0.32 → +0.01 (no longer the strongest pure army: the blob +0.21, warbots +0.11, Skirmishers +0.08 lead now); a mix
+      of all six kinds (8 warbots, a Bulwark, a Torch, 4 Skirmishers, 2 Arc Casters, a Railgunner) against Railgunners
+      −0.64 → −0.01 (a match); Railgunners still beat Arc Casters (+0.97 → +0.89) and Torches (+0.95); against a blob
+      of 30 warbots and 6 Bulwarks at its cost +0.74 → +0.25 (still a win), 30 and 2 −0.07 → −0.35; holding a fort
+      against 30 + 6 they still kill all six Bulwarks (blob losses 22 → 23 of 48). The mix of all six against the
+      pure armies: Arc Casters +0.35, Torches +0.38, Railgunners −0.01, warbots and Torches +0.05, Skirmishers −0.14,
+      warbots −0.26, the blob −0.47: it matches or beats the specialists but not massed warbots (fewer bodies for the
+      price) or the blob. AI against AI (20 games, the same doctrine pairs, before → after): undecided 0 → 0, wins by
+      doctrine unchanged (Steward 5, Warden 1, Salvager 6, Herald 5, Architect 3 of 8).
+    - *Blob counters* (the owner, Nov 2026; branch blob-counter): a Torch's flame half wraps round a Bulwark's shield
+      (`TORCH.shieldPass` 0.5) and what the shield takes burns it twice as fast (`shieldMul` 2); one Bulwark shelters
+      at most 6 robots behind it, the nearest, ties by id (`BULWARK.coverMax`, `shieldCovers`; selected, it rings them);
+      a rival facing a blob (2 Bulwarks, 12 in the army: `aiBlob`) puts Mortar Pits toward it (up to 2) and wants a
+      Howitzer more (they're switched off). Mortar and Howitzer shells and napalm already came down over shields.
+      Arena, before → after: blob of 30 + 6 at a fort with 8 Torches defending: blob losses 9 → 22 of 48 (Bulwarks left
+      4 → 2); 30 + 2: Torches 18 → 24 of 36, 4 Mortar Pits 19 → 22; Torches against a Bulwark squad at its cost: 6w+2B
+      −0.37 → +0.42, 18w+2B +0.21 → +0.48, 30w+6B +0.22 → +0.30; Torches vs the blob in the brawl table +0.21 → +0.48;
+      the blob's average +0.21 → +0.18 (in open fights a Bulwark's lee seldom holds more than six anyway, so the cap
+      bites mostly at forts and on the march); small escorts unchanged (6w+1B against warbots of its cost +0.54 → +0.54,
+      6w+2B +0.35 → +0.38, 4w+2B +0.48 → +0.48). AI against AI (20 games): undecided 0 → 0, a win in 19.5 → 22.4 min,
+      Salvager 6 → 5 and Herald 5 → 6 wins of 8, the rest unchanged.
+    - *AI against AI* (40 two-player games, every pair of doctrines, Normal, Nuclear race on, 60 min at most; before →
+      after): undecided 0 → 0, a win in 20.0 → 20.0 min on average; wins by doctrine Steward 9 → 9, Warden 2 → 2,
+      Salvager 12 → 12, Herald 12 → 11, Architect 5 → 6 (of 16 each): none became dominant (the Salvager and Herald led
+      before, as now). The rivals' armies: 917 warbots, 125 Bulwarks, 139 Torches → 789, 125, 109 and 80 Skirmishers,
+      44 Arc Casters, 25 Railgunners. Reactors built 5 → 14, the Lance-or-nukes choice made 2 → 10 times (the Reactor
+      now goes first in a Nuclear race's late game, the choice from 18 minutes). Open: in these games the choice comes
+      but neither a Lance nor a nuke was finished before the game ended; on the Hollow (Small, 8 seeds) games stall
+      undecided when both colonies' ore runs out: 3 in 8 before, 4 in 8 after (different ones; seed 21, the old
+      "game that never ended" test, is among the new ones; without the Bulwark nerf, or without the rivals' answers, it
+      ends again). Worth a look at the Hollow's late economy.
+    - *Mission:* Siege Breakers has a Bulwark picket and a goal to break its shields (Arc Casters, Skirmishers).
   - **Suggested order:** first wave Skirmisher, Howitzer (rebalanced), Arc Caster (they close the main loops); then Rail
     Lancer and Mine Layer; later Interceptor and Gunboat. Design sheets for the new units could go through Gemini, as the
     megastructures did (handoff/ in the repo).
@@ -348,13 +430,27 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the land is running out of on about one visit in four. Still open: whether long games on Huge maps need more.
   - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
     faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
+    The owner, Nov 20 2026: circle back to this later (a Research Lab for Versus; today it is Colony only). It came up
+    as one of the Orbital Lift's possible rewards for sending goods up (Research in Colony mode), not the one chosen.
   - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
     of a Worker: Workers saved in a big late colony.
+- **Approved for later (the owner, Nov 20 2026).** On record, none started:
+  - **Commands for an AI teammate** in team games: attack here, defend this area, help me, hold back, ask for goods.
+    Design it with the owner first.
+  - **A Research Lab for Versus** (Colony only today).
+  - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
+    dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
+    the blob.
+  - **Map edges, looks only:** faded, unplayable terrain carrying on past the map's edge; a haze in the biome's colour
+    thickening outward; perhaps a slight curve at far zoom.
+  - **Road crews:** the rivals and the Roadworks; a shorter phone label ("All" instead of "No limit").
+  - **Orbital Lift:** an 18-minute opening time; rivals rarely reach it; the Warden in the Hollow gets no main project.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
   everyone, so rivals can race or raid them. The owner's order (Nov 18), after the high-speed transit items: the Ring
   Breaker, the Sunlance, the Great Uplink, Arrival City, the Lance of Corvane and the Shield Dome; the Seismic Lance,
-  the Orbital Lift, the Atmosphere Engine and the power plant perhaps later.
-  - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
+  the Orbital Lift (built, in the Ring Breaker's place), the Atmosphere Engine and the power plant perhaps later.
+  - **Ring Breaker** (weapon; dropped from the line-up on the Orbital Lift's sheet, Nov 20 2026: the Lift took its
+    place, and the rivals' weapon pick stays the Lance or the nukes). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
     you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
     so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
     the Sponsors did to Earth.
@@ -364,13 +460,90 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
     tunnel networks map-wide and shakes nests; aimed at a rival it cracks roads and foundations in a radius. The Murmur
     hear it, and come for it.
-  - **Great Uplink.** A giant dish array to talk to home, and a new way to win: power it and hold it through a long
-    transmission window to "make contact", while rivals try to wreck or jam it. Ties into the campaign's last mission
-    ("No further instructions"); in free play a last-stage victory, with a lore twist on what answers.
-  - **Arrival City.** An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
+  - **Great Uplink: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures and Rivals, teams and
+    victory; the War mission *Aimed the Other Way*). The owner's look A (the Dish Array: one huge white dish, ribbed and
+    tilted to the sky on a turning mount, a feed tripod, three small dishes at the corners, a control hut, floodlights
+    from below and red rim lights at night) and the sheet's numbers: 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 300 s,
+    armor 120; Begin transmission from 25 minutes in, on 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each);
+    8 minutes make contact; an enemy warbot within 3 tiles jams it, and jammed or unpowered the clock runs back at half
+    speed; destroyed, the transmission is lost. The owner's answers: an on/off **Great Uplink win** beside Victory (off by
+    default) that works alongside any Victory; buildable only with it on and Megastructures on; not in the Hollow (nor
+    Colony, as the sheet has it); a banner in the sender's colour and a ping for everyone; contact wins for that colony
+    and its team; the end screen shows answer (c), "Signal acknowledged. Source unidentified. Further instructions to
+    follow."; the sound: a slow pulse, the Murmur repeating it back in the last seconds (with the Murmur on), then
+    silence and one answering tone. Rivals: the Steward builds it as its main project when the win is on (else Arrival
+    City); every rival makes a foe's transmission its first target (warbots to jam it, Missiles, bombers and the Lance).
+    Still open, for the owner:
+    - Power, answered: a Nuclear Reactor and 1 Generator also power it, the Reactor burning a Uranium every 4 minutes of
+      transmission (2 a whole one: a Uranium-rich map holds about 24, a nuke takes 12, a Lance shot 2); with both in
+      reach, the Generators. Built Nov 20 2026.
+    - Stand down, answered: built. Its progress is lost (decaying would let a colony pause through a raid or a Fuel
+      shortage and pick up where it left off); everyone is told. A rival never stands down: losing the Uplink costs it
+      no more than standing down would.
+    - Stewards building it at home and winning 2 of 6 late games: the owner's answer, fine, leave it.
+    - The dish doesn't turn to follow the sky (the sprite is one still frame); the sheet's "the colony's street lights
+      flicker in time" isn't in. Both are looks only.
+    - "Alerts at half, 2 minutes and 30 s" come once each: a clock pushed back past them doesn't repeat them.
+    - The Steward builds no Arrival City in a game with the win on, Domination included (the Uplink is its main project).
+    - Measured (Nov 20 2026): 16 AI-vs-AI games with Megastructures on (Normal, 60 minutes; Steward against each doctrine
+      on 12 maps, two 2 vs 2), the win on against off: on, all 16 decided by Capture, none by contact (most end before
+      minute 25; four Stewards had a site up); off, 15 decided and 1 undecided. In six late-start games (both colonies
+      stocked, 20 minutes of peace) a Steward made contact in 2 (against the Architect and the Salvager, its Uplink behind
+      its base: their bands were cut down on the way), was jammed and lost in 1, lost power at 6:18 of 8:00 in 1. Too
+      strong for a Steward building it at home, or the counterplay working as the sheet meant?
+    - The campaign's last mission ("No further instructions") and whether its ending should answer differently from free
+      play: not done; the mission that teaches it only asks to begin a transmission.
+    The notes as filed: A giant dish array to talk to home, and a new way to win: power it and hold it through a long
+    transmission window to "make contact", while rivals try to wreck or jam it.
+  - **Arrival City: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
+    *Aimed the Other Way*). The owner's look A from the design sheet (the Terraced Arcology, 4 × 4: three terraces of
+    homes stepping back to the north, a school and running track, a park and pond, allotments and two grazing deer, a
+    glass atrium with the Arrival clock at T+31, a ring road, a station with an empty tram, bus shelters, a welcome
+    sign; its windows lit on a timer at dusk, tier by tier, nobody home), the sheet's numbers (60 Cement, 30 Alloy, 15
+    Chips, 24 Fiber, 5 min; +20% work within 8 tiles for factories, gatherers and builders; 6 tiles of land counting
+    twice in Domination; a Fuel a minute at night or dark at half bonus; opens 15 minutes in). The owner's answers: it
+    can never be destroyed, only captured (knocked to 0 it's down: no bonus, battle damage, dark windows, capturable;
+    repairs bring it back; warbots at its walls 20 s take it); it stores nothing; not on Argos; a new Mega tab (key 6,
+    with the Lance and the Dome moved there). Rivals: one weapon and two megastructures at most (a Dome in answer to a
+    threat doesn't count); the Architect, Warden and Steward build it as their main project, the Salvager and Herald
+    don't (in Domination, all do); they march on a foe's City to take it. (Since the Orbital Lift, the Warden builds the
+    Lift instead.) Still open, for the owner:
+    - Fuel for its lights was the sheet's recommendation and is in; the owner's answers didn't mention it. Keep it?
+    - "Repaired to a quarter of its armor, it's up again" and "taken from within 2.5 tiles of its walls" (its square is
+      solid, so warbots can't stand on it) are this build's readings of the answers.
+    - The sheet's "deer graze its terraces" is in the art only; real wildlife on its terraces would be a wildlife.js job.
+    - The sheet's school bell at dawn and the lights' click at dusk aren't in; its hum, the clock's chime and the station
+      chime (taken, or lit again) are.
+    The notes as filed: An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
     it goes up (the robots work harder for Arrival), and its land counts double for Domination. At night, a whole lit
     city for no one.
-  - **Orbital Lift.** A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
+  - **Orbital Lift: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
+    *Aimed the Other Way*). It takes the Ring Breaker's place as the third non-weapon megastructure. The owner's look A
+    (the Beacon Cable: a 3 × 3 anchor pad and collar, the cable a bright beam rising up the screen with climber pods
+    riding it, the higher the smaller, red warning lights, floodlights; its shadow along the fall line), and the sheet's
+    recommendations for the rest: 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 330 s, armor 90; the fall line turned with
+    R as it is placed (8 ways, half the map's width, on the map, over no other colony's land, Trade Post or Uplink); four
+    loads (a Security detail, a Work crew, 30 Alloy, 18 Chips), 45 s down, everyone told, 6 minutes from a landing to the
+    next call; the Carrier holds 6 drops, refilled by sending 30 goods up, each load a drop back and the next drop half
+    again bigger, up to double; 2 Fuel a climb from a Generator within 4 tiles, a solar flare holds it; below 30% its line
+    flashes red ("Lift cable unstable"); destroyed by an enemy, 5 s of creaking, then the cable falls along its line at 4
+    tiles a second (2 on Argos), 30 damage to each building (a Keep at half, a Command Base at its floor, another
+    megastructure badly hurt), robots on it destroyed and beside it hurt, Walls, roads and track broken, aircraft not hit,
+    and its wreckage stays (War scars' scrap: half speed, nothing built on it until Haulers cut it up, an Alloy a tile);
+    not in the Hollow. Rivals: the Warden builds it as its main project (no longer Arrival City), the Herald past 22
+    minutes, both calling Security when attacked or before a push; the Salvager waits at a foe's anchor when a climber
+    comes down; marches go for a Lift whose fall would crush enough. Still open, for the owner:
+    - The reserve Command Base through the Lift (restock the Carrier fully, say three times, for a second Command Base if
+      the first falls): not approved yet; ask again later.
+    - The player can build it from the start (Arrival City opens at 15 minutes; the Lift has no hour of its own, only its
+      price). Should it open at 18 minutes, as the rivals build it?
+    - "Only a Lift destroyed by an enemy falls" reads here as: a foe hit its colony in the last 2 seconds (`liftKiller`).
+      Its own side's Lance, or the ground, reels it in. The Murmur count as an enemy.
+    - The sheet's "the Murmur drain the charge left in the wreckage at night" is in the art only (a violet glimmer); their
+      tunnels lean toward it as toward any scrap heap.
+    - The Warden builds no Arrival City now, even where the Lift is banned (the Hollow): it builds no main project there.
+    - The robots a drop brings come whatever the bot limit (they are the Carrier's, not the Foundry's).
+    The notes as filed: A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
     Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
   - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
@@ -378,7 +551,14 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
     *Aimed the Other Way*). The owner's look A (a 3 × 3 gun pit, a long barrel on a turntable), the beam across the whole
     map, killing robots of every side too, 2 Generators or a Reactor, 90 s charge, 4 min reload, allowed on Argos; the
-    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). Still open: power lines
+    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). On Reactor power
+    (the owner, Nov 20): a 45 s charge and a 3 min reload (Generators 90 s and 4 min), 2 Uranium or an Enriched Uranium a
+    shot; with both in reach, the Generators unless Use Reactor is switched on in its panel (the rival switches it on
+    once it has chosen the Lance). Widened (the owner, Nov 20: a full-map shot often took only 2 buildings, no more
+    than a Missile): a 2-tile core that destroys every building it touches and a 1-tile scorched edge either side that
+    takes half the armor of buildings and half the health of robots without destroying anything; the trench, its War
+    scars and the aim line widened to match, and the rival's aim scores the wider line. Open: whether the core should
+    grow to 3, or the edge burn crops and groves too. Still open: power lines
     to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim
@@ -422,8 +602,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     running line draws the Murmur as a Generator does. Decided on the build: pylons clear a boulder or grove under
     their foot (the sheet's "open ground" would have blocked most lines on a rich map); the far end may also be a
     Terminal site or a finished Terminal (then the line's site is its first pylon); all water counts as shallow (a
-    pier), only chasms and rock are spanned. Open: the rival (below), riders (a Worker crew only, if ever), a line of
-    more than two Terminals, Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
+    pier), only chasms and rock are spanned. Open: the rival (below), riders (a Worker crew only, if ever), Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
     whether 4× a train's acceleration is brisk enough on a short line (a 20-tile line takes about 5 s, not the sheet's 3).
     Lit up at night, it looks the part.
   - **Express highways** (built, Nov 19 2026: direction A, the Expressway, on B's mechanics, from the design sheet,
@@ -494,8 +673,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   warbots, Howitzers and bombers hit pylons and Terminals like any building. The sheet's answer stands: a Maglev joins
   the rival's list when its late game gets a transit tier, and then only the Architect and the Steward, with a line from
   their base to a far Depot cluster, once they have Chips to spare; and a rival should then learn to cut a line (guns
-  under a pylon). Also open from the build: riders (a Worker crew at most, never warbots), lines of more than two
-  Terminals, and a hand-driven pod.
+  under a pylon). Also open from the build: riders (a Worker crew at most, never warbots) and a hand-driven pod
+  (lines of more than two Terminals: built as hubs, Nov 20 2026). The Architect builds a line since Nov 20 2026 (see
+  the Maglev follow-ups above); a rival cutting a line on purpose (guns under a pylon) is still open.
 
 - **Room to grow in the single-file game** (owner's to-do, Nov 17; done Nov 18: every picture now lives in a bundle beside the page,
   `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,
@@ -729,8 +909,15 @@ Kept as built (the owner, Nov 17):
 - **An escorted convoy holds** while its escort fights instead of turning back; an unescorted one still turns back,
   like any hauler. In nine computer-only games (Nov 17) convoys were hit in five and one or two lost in four; the games
   ran about two minutes longer on average and all ended.
+- **No deposits on a post's ground** (the owner, Nov 2026): only a Terminal or a Ramp can be built there, so a deposit
+  there could never be mined. The map's are moved just off the ground (the same kind and amount, a mirrored pair's alike),
+  as are an older save's as it loads; Ringfall's pieces land just off it, and Grove Planters and Bio Farms plant nothing
+  there.
 
 Still open:
+
+- **Fertile soil on a post's ground** stays (it isn't a deposit, and no Bio Farm plants there now): should it be moved
+  off too, or is it fine as it is?
 
 - **One market or one each?** Each colony's prices ease only with what it sells; the Post's ledger could keep one
   board for everyone, so rivals selling the same good push its price down for each other. Buying never raises a price.
@@ -1108,5 +1295,9 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - **AI stalemate: the Hollow, Medium, seed 11** (fixed Nov 19): fully planned roads kept disconnected sites from
   expiring, tying up build slots needed to replace depleted pumps. The AI now retires idle sites in that case.
   Seed 11 finished at 35:29 in the [retest](docs/ai-stalemate-fixes.md).
+  With the ground army (Skirmishers, Arc Casters, Railgunners) the same rule flips it the other way: Medium seed 11,
+  both Balanced, ends at 32.7 without the rule and runs to 75 minutes with it; giving a site waiting on a planned
+  road 8 minutes instead of 4 ends it (27.0) but leaves Medium seed 12 open on main. Medium 12 and Small 21 stay open
+  on the ground-army branch either way (to decide with the ground army).
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.

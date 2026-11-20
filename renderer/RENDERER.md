@@ -33,7 +33,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Ropeway | ropeway (the station), gondola |
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Aircraft wrecks | wreck: the crash site an aircraft shot down leaves (`c=cargoplane\|bomber\|airship`), built from that aircraft's own scene (plane, bomber, and airship `v=c`, which is on branch `airship-art` until it's merged), broken, crushed, charred and laid on the ground |
-| Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
+| Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot, rob_bulwark, rob_torch, rob_skirmisher, rob_arccaster, rob_railgunner (the shared `robkit.js`; the last three: `tools/render_units.sh`, then `tools/install_units.py`) |
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
 | Resources (Reedcane and the survey stake installed) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
@@ -604,3 +604,56 @@ python3 tools/install_lance.py     # writes the WebP files into ../art, prints L
 Both compose like buildings (`compose.py`). The game draws them by `LANCE_FRAME` and `DOME_FRAME` (art-manifest.js) over
 the middle of their square, the head by the Lance's aim (`turretHead`); the charge rings, the beam, the trench and the
 dome are drawn in code (`js/render.js`, the megastructures) from `LANCE_ART`.
+
+## Arrival City
+
+The owner's look A, the Terraced Arcology (Nov 2026; IDEAS.md, "Megastructures"). `b/city.js` is a 4 x 4 building on its
+own 40 x 40 plaza (framed wide with `frameCompoundOpts`: the plaza's 40 units across 0.64 of the frame; the sun's
+shadow camera widened to the whole square). Its window rows are textures on each terrace's faces (one canvas for the
+wall, one for its windows' light). `state=down` is the battle-damaged City. `part=lit&tier=k` (k 0..3) renders only
+tier k's lights as glowing (in the glow pass): 0 the street, 1-3 the terraces from the bottom, the atrium and clock
+with the third. Every other render has those lights off. Marks `clock`, `atrium` and `station`. Run from this folder:
+
+```
+sh tools/render_city.sh [out]     # the City and the damaged City for both teams at every time of day, the 4 light tiers (~10 min)
+python3 tools/install_city.py     # writes the WebP files into ../art, prints CITY_FRAME
+```
+
+The City composes like a building (`compose.py`); `install_city.py` blooms each tier's glow pass itself and writes it as
+light to add (colour divided by alpha). The game draws them by `CITY_FRAME` (art-manifest.js) over the middle of the
+square, and adds the lights tier by tier at dusk (`cityLights` in `js/render.js`).
+
+## The Orbital Lift
+
+The owner's look A, the Beacon Cable (Nov 2026; IDEAS.md, "Megastructures"). `b/lift.js` is the 3 x 3 anchor pad on its
+own 30 x 30 pad, framed like the Lance (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12, width: 0.62, cy: 0.56 })`).
+Only the pad is a sprite: the collar, its clamps, the cable's foot (a braided stub with its guide rails and the climber
+dock), the winches, the control house and the floodlight masts. The rest of the cable rising up the screen, its climbers,
+warning lights, shadow and fall are drawn in code (`js/render.js`, the Orbital Lift), from the cable's foot. `state=down`
+is the Lift below 30% of its armor. Marks `foot` (where the game's beam starts) and `dock`. Run from this folder:
+
+```
+bash tools/render_lift.sh [out]   # the pad and the damaged pad for both teams at every time of day (~10 min)
+python3 tools/install_lift.py     # writes the WebP files into ../art, prints LIFT_FRAME and LIFT_MARKS
+```
+
+The Lift composes like a building (`compose.py`). The game draws it by `LIFT_FRAME` (art-manifest.js) over the middle of
+its square, and its cable from `LIFT_MARKS.foot` (`liftFoot` in `js/render.js`).
+
+## The Great Uplink
+
+The owner's look A, the Dish Array (Nov 2026; IDEAS.md, "Megastructures"). `b/gup.js` is the 3 x 3 dish array on its
+own 30 x 30 pad, framed like the Lift (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12, width: 0.62, cy: 0.6 })`):
+the dish (a lathed paraboloid with a seam texture, ribs at the back, tilted a little north on an alt-az mount), its feed
+tripod and horn, three small dishes, the control hut and the floodlights. `state=down` is the Uplink below 30% of its
+armor. Marks `feed` (the horn, where the game's beam starts), `dish` (the bowl's middle) and `rim`, `rimL`, `rimR`,
+`rimS` (its rim lights). The transmission (the glow, the beam, the ping and the jammed flicker) is drawn in code
+(`drawGupSignals` in `js/render.js`). Run from this folder:
+
+```
+bash tools/render_gup.sh [out]    # the dish array and the damaged one for both teams at every time of day (~3 min)
+python3 tools/install_gup.py      # writes the WebP files into ../art, prints GUP_FRAME and GUP_MARKS
+```
+
+The Uplink composes like a building (`compose.py`). The game draws it by `GUP_FRAME` (art-manifest.js) over the middle
+of its square, and its signal from `GUP_MARKS` (`gupAt` in `js/render.js`).

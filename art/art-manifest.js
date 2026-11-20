@@ -64,6 +64,9 @@
  */
 const MD_FRAME = { scale: 2.4789, anchor: [0.5, 0.57] }; // (the Mass Driver's wide frame: see tools/install_massdriver.py)
 const LANCE_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }, DOME_FRAME = { scale: 2.9904, anchor: [0.5, 0.6] }; // (the megastructures' wide frames: see tools/install_lance.py)
+const CITY_FRAME = { scale: 6.5789, anchor: [0.5, 0.6] }; // (Arrival City's wide frame: see tools/install_city.py)
+const LIFT_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Orbital Lift's wide frame, as the Lance's: see tools/install_lift.py)
+const GUP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (the Great Uplink's wide frame, as the Lift's: see tools/install_gup.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
@@ -126,7 +129,7 @@ const ART_MANIFEST = {
   // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
-  ...driveSet('bulwark'), ...driveSet('torch'),
+  ...driveSet('bulwark'), ...driveSet('torch'), ...driveSet('skirmisher'), ...driveSet('arccaster'), ...driveSet('railgunner'),
   ground: 'tiles/ground.webp',
   // Fiber's Stalks (Reedcane, renderer/b/resources.js): full grown, then a quarter, half and three-quarters grown as
   // it comes back; the plumes' light at night. (Oil has no art: a seep is a puddle of crude made in code from its tiles,
@@ -243,6 +246,18 @@ const ART_MANIFEST = {
   // the charge rings' glow and the cut are drawn in code (js/render.js, the megastructures).
   ...Object.fromEntries([0, 1].flatMap((t) => [[`lance@${t}`, { src: `buildings/lance@${t}.webp`, ...LANCE_FRAME }], [`dome@${t}`, { src: `buildings/dome@${t}.webp`, ...DOME_FRAME }]])),
   ...Object.fromEntries(Array.from({ length: 16 }, (_, k) => [`lance-head-${k}`, { src: `buildings/lance-head-${k}.webp`, ...LANCE_FRAME }])),
+  // Arrival City (renderer/b/city.js, the owner's look A, the Terraced Arcology, installed by tools/install_city.py): the
+  // 4 x 4 City and the City knocked down (battle-damaged, dark), framed wide (CITY_FRAME), and its four tiers of lights
+  // (light to add, one set for every team and time of day: drawCity lights them tier by tier at dusk, on a timer).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`city@${t}`, { src: `buildings/city@${t}.webp`, ...CITY_FRAME }], [`city-down@${t}`, { src: `buildings/city-down@${t}.webp`, ...CITY_FRAME }]])),
+  ...Object.fromEntries([0, 1, 2, 3].map((k) => [`city-lit-${k}`, { src: `buildings/city-lit-${k}.webp`, ...CITY_FRAME }])),
+  // The Orbital Lift (renderer/b/lift.js, the owner's look A, the Beacon Cable, installed by tools/install_lift.py): the
+  // 3 x 3 anchor pad, and the pad below 30% of its armor (battle-damaged), framed wide (LIFT_FRAME). The cable above its
+  // foot, its climbers and lights, its shadow and its fall are drawn in code (js/render.js, the Orbital Lift).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`lift@${t}`, { src: `buildings/lift@${t}.webp`, ...LIFT_FRAME }], [`lift-down@${t}`, { src: `buildings/lift-down@${t}.webp`, ...LIFT_FRAME }]])),
+  // The Great Uplink (renderer/b/gup.js, the owner's look A, the Dish Array, installed by tools/install_gup.py): the
+  // dish array, whole and below 30% of its armor; its transmission is drawn in code (drawGupSignals).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`gup@${t}`, { src: `buildings/gup@${t}.webp`, ...GUP_FRAME }], [`gup-down@${t}`, { src: `buildings/gup-down@${t}.webp`, ...GUP_FRAME }]])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

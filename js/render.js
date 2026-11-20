@@ -2996,6 +2996,9 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     drawSite(ctx, type, cx, cy, s, owner, b); return;
   }
   if (type === 'magpylon' && b && b.id) return;
+  if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -5251,9 +5254,19 @@ function drawBot(ctx, u, sx, sy, s) {
     drawArt(ctx, art, sx, sy + bob, size, u.face);
     if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
     // (a Bulwark's shield and a Torch's pilot flame light their way at night instead of headlights)
+    // Sheltered by a Bulwark you have selected (one of the BULWARK.coverMax it covers: shieldCovers): a faint violet ring.
+    if (u.owner === ME && !R.clean && UI.sel.length && UI.sel.length <= 40 && UI.sel.some((id) => { const w = getE(id); return w && w !== u && w.covIds && w.covIds.has(u.id); })) {
+      ctx.save(); ctx.strokeStyle = '#c89bff'; ctx.globalAlpha = 0.55; ctx.lineWidth = Math.max(1, s * 0.03); ctx.setLineDash([s * 0.06, s * 0.05]);
+      ctx.beginPath(); ctx.ellipse(sx, sy + bob + s * 0.05, size * 0.5, size * 0.36, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
     if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
     else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
-    else drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
+    else {
+      // (the Skirmisher, Arc Caster and Railgunner light their way with the warbots' headlights, and have lights of their own)
+      const lamps = BOTS[u.type].flank || BOTS[u.type].arc || BOTS[u.type].railgun;
+      drawHeadlights(ctx, lamps ? 'warbot' : art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
+      if (lamps) drawArmyLights(ctx, u, sx, sy + bob, s, size);
+    }
   } else if (!isArmy(u)) {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
@@ -5299,13 +5312,14 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#ff8a2a';
     ctx.fillRect(x, y, (w * Math.max(0, u.gel ?? 0)) / TORCH.tank, h);
   }
-  if (u.owner === ME && !R.clean && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
-    // Low on ammo: a short brass bar under the bot (empty = grey outline only).
+  const gun = u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].railgun, mag = botMag(u.type);
+  if (u.owner === ME && !R.clean && ((gun && (u.ammo ?? mag) < mag * 0.3) || (BOTS[u.type].arc && (u.gel ?? ARC.cells) < ARC.cells * 0.3))) {
+    // Low on ammo: a short brass bar under the bot (empty = grey outline only). An Arc Caster's bolts: a blue one.
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = '#e8c39e';
-    ctx.fillRect(x, y, (w * (u.ammo || 0)) / WARBOT_AMMO, h);
+    ctx.fillStyle = gun ? '#e8c39e' : '#8fd8ff';
+    ctx.fillRect(x, y, gun ? (w * (u.ammo || 0)) / mag : (w * Math.max(0, u.gel || 0)) / ARC.cells, h);
   }
   if (u.owner === ME && !R.clean && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
@@ -6200,9 +6214,9 @@ function refreshOverlay(type) {
     R.overlay = { type, valid, at: R.time };
     return;
   }
-  // The Maglev tool: your finished Terminals on no line (the near end to tap first).
+  // The Maglev tool: your finished Terminals with a line to spare (a hub joins MAGLEV.hub) or a lost end to rebuild (the near end to tap first).
   if (type === 'maglev') {
-    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].magterm && b.built && !b.line && !magPending(b) && !b.magFrom) valid[tIdx(b.x, b.y)] = 1;
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].magterm && b.built && (magSlots(b) < MAGLEV.hub || b.magMissing) && !magPending(b) && !b.magFrom) valid[tIdx(b.x, b.y)] = 1;
     R.overlay = { type, valid, at: R.time };
     return;
   }
@@ -6357,6 +6371,7 @@ function render(dtReal) {
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
   drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
+  drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
@@ -6467,6 +6482,8 @@ function render(dtReal) {
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
       const pc = F ? bCentre(e) : { x: e.x + 0.5, y: e.y + 0.5 };
+      if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
+      if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
@@ -6486,6 +6503,7 @@ function render(dtReal) {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
+      if (e.type === 'city' && e.cCap > 0 && e.cBy >= 0 && R.clean < 2) drawCityTaking(ctx, e, cx, cy, z);
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
@@ -6559,6 +6577,8 @@ function render(dtReal) {
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
+  drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
+  drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
@@ -6572,8 +6592,8 @@ function render(dtReal) {
     ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
     ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
   } else
-  // Placing a Ropeway: the cable from the near station to the far end picked so far.
-  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd) {
+  // Placing a Ropeway: the cable from the near station to the far end picked so far. (Not a Maglev line: drawMaglevs.)
+  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType !== 'maglev') {
     const A = UI.ropeA, E = R.ropeEnd, ax = ox + (A.i + 0.5) * z, ay = oy + (A.j + 0.5) * z, bx = ox + (E.i + 0.5) * z, by = oy + (E.j + 0.5) * z;
     const c = ropeCurve(ax, ay, bx, by, z);
     ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = Math.max(2, z * 0.05);
@@ -7754,6 +7774,22 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
+  if (def.lift) { // (the Orbital Lift: the Generators' reach round its pad, and its fall line: the site's, or the one being placed)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]);
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (LIFT.reach + 1.5) * z, 0, Math.PI * 2); ctx.stroke();
+    const placed = b && !b.dead && BDEFS[b.type].lift && b.x === x && b.y === y;
+    const d = placed ? b.lfDir || 0 : typeof UI !== 'undefined' ? liftDirOf(UI.liftDir) : 0;
+    drawLiftLine(ctx, ox, oy, z, x, y, d, placed || !R.ghost || !!R.ghost.ok);
+    return;
+  }
+  if (def.city) { // (Arrival City: its bonus's reach round its middle, and the land it holds)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
+    ctx.fillStyle = 'rgba(255,214,140,0.08)'; ctx.strokeStyle = 'rgba(255,214,140,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]);
+    ctx.beginPath(); ctx.arc(cx, cy, CITY.reach * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = PLAYER_COLORS[owner || 0] || '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha *= 0.7;
+    ctx.beginPath(); ctx.arc(cx, cy, (CITY.land + 0.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= 0.7;
+    return;
+  }
   if (def.dome || def.lance) {
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
     if (def.dome) { ctx.fillStyle = 'rgba(120,200,255,0.07)'; ctx.strokeStyle = 'rgba(150,215,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]); ctx.beginPath(); ctx.arc(cx, cy, DOME.radius * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); }
@@ -8296,6 +8332,11 @@ function drawEffects(ctx, ox, oy, z) {
       case 'tracer': drawTracerFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
       case 'fire': drawFireFx(ctx, f, x, y, z, k); break;
       case 'flame': drawFlameFx(ctx, f, x, y, z, k); break;
+      case 'chain': drawChainFx(ctx, f, ox, oy, z, k); break;
+      case 'railshot': drawRailFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
+      case 'railhit': drawRailHitFx(ctx, f, x, y, z, k); break;
+      case 'railglint': drawRailGlintFx(ctx, f, x, y, z, k); break;
+      case 'dash': drawDashFx(ctx, f, x, y, z, k); break;
       case 'shieldhit': drawShieldHitFx(ctx, f, x, y, z, k, ox + f.cx * z, oy + f.cy * z); break;
       case 'shieldbreak': drawShieldBreakFx(ctx, f, x, y, z, k); break;
       case 'heat': drawHeatFx(ctx, f, x, y, z, k); break;
@@ -8693,6 +8734,26 @@ function renderMinimap() {
     ctx.fillStyle = hit ? '#ff5a6e' : '#ffcf4a'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(u.x * sx, u.y * sy, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
+  // An Orbital Lift's fall line: its owner's colour, faint; flashing red while the cable is weak or coming down.
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+    const weak = b.armor < BDEFS.lift.armor * LIFT.weak, [dx, dy] = LIFT_DIRS[b.lfDir || 0], n = liftLineTiles(b.x, b.y, b.lfDir || 0).length + 1.5;
+    ctx.strokeStyle = weak && (R.time * 3) % 2 < 1 ? '#ff4a4a' : PLAYER_COLORS[b.owner] || '#fff'; ctx.globalAlpha = weak ? 0.95 : 0.4; ctx.lineWidth = weak ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo((b.x + 1.5 + dx * 1.5) * sx, (b.y + 1.5 + dy * 1.5) * sy); ctx.lineTo((b.x + 1.5 + dx * n) * sx, (b.y + 1.5 + dy * n) * sy); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  for (const f of S.liftFalls || []) {
+    const [dx, dy] = LIFT_DIRS[f.d], n = f.n + 1.5;
+    ctx.strokeStyle = (R.time * 4) % 2 < 1 ? '#ff4a4a' : '#ffd0a0'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo((f.ax + 1.5 + dx * 1.5) * sx, (f.ay + 1.5 + dy * 1.5) * sy); ctx.lineTo((f.ax + 1.5 + dx * n) * sx, (f.ay + 1.5 + dy * n) * sy); ctx.stroke();
+  }
+  // A Great Uplink transmitting: rings pulsing out from it in its owner's colour (red while jammed or without power).
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.gOn || !BDEFS[b.type].gup) continue;
+    const c = bCentre(b), x = c.x * sx, y = c.y * sy, ph = gupPhase(), bad = b.gJam || !b.gPow;
+    ctx.strokeStyle = bad && (R.time * 4) % 2 < 1 ? '#ff4030' : PLAYER_COLORS[b.owner] || '#fff'; ctx.lineWidth = 1.6;
+    for (const k of [0, 0.5]) { const f = (ph + k) % 1; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, 3 + f * 12, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
   // Murmur tunnel exits: violet rings round a dark hole.
   for (const b of S.buildings) {
     if (b.dead || b.type !== 'burrow') continue;
@@ -8978,11 +9039,31 @@ function magDock(b, ox, oy, z) { return [ox + (b.x + 0.5) * z, oy + (b.y + 0.5 -
 
 /** The spans of the line A–B (A the near end) in tiles from A: [[d0, d1]], split at every cut. */
 function magSpans(A, B) {
-  const L = dist(A.x, A.y, B.x, B.y), cuts = magCut(A, B).map((c) => c.d).sort((p, q) => p - q), out = [];
+  const L = magPathLen(magPathOf(A, B)), cuts = magCut(A, B).map((c) => c.d).sort((p, q) => p - q), out = [];
   let d0 = MAG_END;
   for (const d of cuts) { out.push([d0, d - MAGLEV.spacing * 0.55]); d0 = d + MAGLEV.spacing * 0.55; }
   out.push([d0, L - MAG_END]);
   return out.filter(([a, b]) => b - a > 0.2);
+}
+
+/**
+ * The straight pieces of path pts (tile coordinates) from d0 to d1 tiles along it: [[x0, y0, x1, y1]], each piece
+ * running on a little past a bend (`ext` tiles) so the band's corners meet.
+ */
+function magPieces(pts, d0, d1, ext = 0.14) {
+  const out = [];
+  let base = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by);
+    const a = Math.max(d0, base), b = Math.min(d1, base + L);
+    if (b - a > 0.01) {
+      const ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1);
+      const s0 = a - base - (k > 1 && a <= base + 1e-6 ? ext : 0), s1 = b - base + (k < pts.length - 1 && b >= base + L - 1e-6 ? ext : 0);
+      out.push([ax + ux * s0, ay + uy * s0, ax + ux * s1, ay + uy * s1]);
+    }
+    base += L;
+  }
+  return out;
 }
 
 /** The guideway tile repeated along a straight band on screen from (x0, y0) to (x1, y1), tile size z, for team `owner` (art, or a plain band). */
@@ -9017,23 +9098,27 @@ function magGlow(ctx, owner, x0, y0, x1, y1, z, k) {
   ctx.restore();
 }
 
-/** Every line on the map (built, and going up as far as it's got): { A, B, fx, fy, spans, L, owner, building }. */
+/**
+ * Every line on the map (built, suspended with an end lost, and going up as far as it's got): { A, B, fx, fy, spans, L,
+ * owner, building, suspended } (A the key end; a lost end is its old tile).
+ */
 function magLinesToDraw() {
   const out = [];
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].magterm) continue;
-    const o = magPartner(b);
-    if (o && magNearEnd(b) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
-    if (b.magMissing) {
-      // Use the missing dock's old coordinates for spans. Pylons still belong to the survivor.
-      const end = { ...b.magMissing, id: 0 }, missingNear = b.magMissing.near;
-      const A = missingNear ? { ...end, id: b.id, owner: b.owner, magLayout: b.magLayout } : b, B = missingNear ? { ...b, id: 0 } : end;
-      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y),
-        spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
-      continue;
+    for (const o of magPartners(b)) if (magKey(b, o) === b) { const pts = magPathOf(b, o); out.push({ A: b, B: o, pts, fx: o.x + 0.5, fy: o.y + 0.5, L: magPathLen(pts), spans: magSpans(b, o), owner: b.owner, building: false }); }
+    for (const m of magMiss(b)) {
+      // The lost end's old tile for the spans; the pylons carry the key end's id (the lost Terminal's, if it was the key).
+      const end = { x: m.x, y: m.y, id: 0 };
+      const A = m.near ? { x: m.x, y: m.y, id: m.key ?? b.id, owner: b.owner, magLayout: m.layout || b.magLayout, magBends: m.bends || (m.key == null ? b.magBends : null) } : b, B = m.near ? { x: b.x, y: b.y, id: 0 } : end;
+      const pts = magPathOf(A, B);
+      out.push({ A, B, pts, fx: B.x + 0.5, fy: B.y + 0.5, L: magPathLen(pts), spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
     }
     const s = magPending(b);
-    if (s) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
+    if (s && !magRebuildSite(b, s)) {
+      const kp = magSitePath(s, b), pts = s.magKey && s.magKey !== b.id ? kp.reverse() : kp, [fx, fy] = magSiteFar(s), L = magPathLen(pts), got = Math.min(L - MAG_END, Math.max(0, s.progress * L));
+      out.push({ A: b, B: null, pts, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s });
+    }
   }
   return out;
 }
@@ -9045,10 +9130,7 @@ function drawMaglevShadows(ctx, ox, oy, z) {
   const H = MAGLEV.head, sx = MAG_SHADOW[0] * H * z, sy = MAG_SHADOW[1] * H * z;
   ctx.save();
   ctx.globalAlpha *= 0.26 * (TOD.active ? 1 - 0.55 * (TOD.state.pools || 0) : 1);
-  for (const ln of lines) {
-    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
-    for (const [d0, d1] of ln.spans) magBand(ctx, ln.owner, ax + ux * d0 * z + sx, ay + uy * d0 * z + sy, ax + ux * d1 * z + sx, ay + uy * d1 * z + sy, z, true);
-  }
+  for (const ln of lines) for (const [d0, d1] of ln.spans) for (const [x0, y0, x1, y1] of magPieces(ln.pts, d0, d1)) magBand(ctx, ln.owner, ox + x0 * z + sx, oy + y0 * z + sy, ox + x1 * z + sx, oy + y1 * z + sy, z, true);
   ctx.restore();
 }
 
@@ -9071,26 +9153,22 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
   cx += dx * z; cy += dy * z;
   const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
   let hs = 1;
-  if (!cut && b.line) {
-    const A = getE(b.line), B = A ? magPartner(A) : null;
-    if (A && B) {
-      const L = dist(A.x, A.y, B.x, B.y) || 1, f = clamp(((b.k || 1) * MAGLEV.spacing) / L, 0, 1);
-      const ref = S.elev[tIdx(A.x, A.y)] * (1 - f) + S.elev[tIdx(B.x, B.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
-      hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
-    }
-  }
-  if (!cut && b.line && b.k) {
-    const A = getE(b.line), B = magPartner(A) || A?.magMissing;
-    if (A && B) {
-      const [first, last] = A.magMissing?.near ? [B, A] : [A, B];
-      const f = (b.k * MAGLEV.spacing) / (dist(first.x, first.y, last.x, last.y) || 1);
-      const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
-      const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
-      ctx.save();
-      ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
-      ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.restore();
-    }
+  const pts = !cut && b.line && b.k ? magPylonPath(b) : null;
+  if (pts) {
+    // squashed or stretched so its head sits under the band (the ends' ground level along the line)
+    const sp = magSpotsPath(pts).find((q) => q.k === b.k), L = magPathLen(pts) || 1, d = sp ? sp.d : b.k * MAGLEV.spacing, f = clamp(d / L, 0, 1);
+    const [lx, ly, ux, uy] = magPathAt(pts, d), first = pts[0], last = pts[pts.length - 1];
+    const el = (q) => S.elev[tIdx(Math.floor(q[0]), Math.floor(q[1]))];
+    const ref = el(first) * (1 - f) + el(last) * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
+    hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
+    if (dx || dy) { drawMagPortal(ctx, cx - dx * z, cy - dy * z, z, lx - b.x - 0.5, ly - b.y - 0.5, ux, uy, dx, dy); return; } // (over a road or track: a portal over the way)
+    // the arm from the head to the band (a pylon shifted to a shoulder, or standing at a road's side)
+    const tx = cx + (lx - b.x - 0.5 - dx) * z;
+    const ty = cy + (ly - b.y - 0.5 - dy - MAGLEV.head) * z;
+    ctx.save();
+    ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
+    ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.restore();
   }
   if (!art) {
     ctx.fillStyle = '#cbc6bb'; ctx.fillRect(cx - z * 0.05, cy - MAGLEV.deck * hs * z, z * 0.1, MAGLEV.deck * hs * z);
@@ -9099,6 +9177,34 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
   }
   const s = z * (art.scale || 1.4), W = s, Hh = s * hs, an = Array.isArray(art.anchor) ? art.anchor : [0.5, 0.6145];
   withTod(ctx, art, (v) => ctx.drawImage(artMip(v, s * (R.drawScale || 1)), cx - an[0] * W, cy - an[1] * Hh, W, Hh));
+}
+
+/**
+ * A pylon over a road or track (its tile centre at (cx, cy) on screen): a portal frame, two legs on the kerb (dx, dy:
+ * magPylonOffset) either side of the guideway and a crossbeam under the deck with hazard stripes, so the road reads as
+ * open under it.
+ */
+function drawMagPortal(ctx, cx, cy, z, ox, oy, ux, uy, dx, dy) {
+  const px = cx + ox * z, py = cy + oy * z; // (the line's ground point, (ox, oy) tiles from the tile centre; (ux, uy) its way)
+  const w = Math.max(1.5, z * 0.085), half = 0.34, up = (MAGLEV.head - 0.1) * z; // (the beam just under the deck)
+  const feet = [-1, 1].map((sg) => [px - uy * half * sg * z + dx * z, py + ux * half * sg * z + dy * z]);
+  const tops = feet.map(([x, y]) => [x, y - up]);
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,10,16,0.22)'; // (the legs' shadows on the road)
+  for (const [x, y] of feet) { ctx.beginPath(); ctx.ellipse(x + z * 0.06, y + z * 0.02, w * 1.1, w * 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
+  for (const [x, y] of feet) { // the legs, from the kerb up to the beam
+    ctx.fillStyle = '#3f4449'; ctx.fillRect(x - w / 2 - 1, y - up, w + 2, up);
+    ctx.fillStyle = '#cbc6bb'; ctx.fillRect(x - w / 2, y - up, w, up);
+  }
+  // the crossbeam from one leg's top to the other's, with hazard stripes
+  const [[x0, y0], [x1, y1]] = tops, len = Math.hypot(x1 - x0, y1 - y0) + w, bh = Math.max(2, z * 0.075);
+  ctx.translate(x0, y0); ctx.rotate(Math.atan2(y1 - y0, x1 - x0));
+  ctx.fillStyle = '#3f4449'; ctx.fillRect(-w / 2 - 1, -bh / 2 - 1, len + 2, bh + 2);
+  ctx.beginPath(); ctx.rect(-w / 2, -bh / 2, len, bh); ctx.clip();
+  ctx.fillStyle = '#f2c230'; ctx.fillRect(-w / 2, -bh / 2, len, bh);
+  ctx.fillStyle = '#2b2d2f';
+  for (let x = -w / 2; x < len; x += bh * 2) { ctx.beginPath(); ctx.moveTo(x, bh / 2); ctx.lineTo(x + bh, -bh / 2); ctx.lineTo(x + bh * 1.6, -bh / 2); ctx.lineTo(x + bh * 0.6, bh / 2); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
 }
 
 /** A pod at ground point (gx, gy) on screen, drawn at deck height, turned to `ang`; loaded or empty; its shadow down-sun. */
@@ -9137,80 +9243,140 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
   // pylons standing (built), y-sorted so lower ones overlap upper ones
   const pyl = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].pylon && inView(b.x, b.y, 2)).sort((a, b) => a.y - b.y);
   for (const b of pyl) drawMagPylon(ctx, b, ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z, false);
+  const docked = new Map(); // (each Terminal's docked pod, drawn once, turned along its first line)
   for (const ln of lines) {
-    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
-    const H = MAGLEV.head * z, ang = Math.atan2(uy, ux);
-    if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
+    const H = MAGLEV.head * z, P = ln.pts, n = P.length;
+    const ang = Math.atan2(P[1][1] - P[0][1], P[1][0] - P[0][0]), angB = Math.atan2(P[n - 2][1] - P[n - 1][1], P[n - 2][0] - P[n - 1][0]);
+    let x0v = Infinity, y0v = Infinity, x1v = -Infinity, y1v = -Infinity;
+    for (const [x, y] of P) { x0v = Math.min(x0v, x); y0v = Math.min(y0v, y); x1v = Math.max(x1v, x); y1v = Math.max(y1v, y); }
+    if (!inView((x0v + x1v) / 2, (y0v + y1v) / 2, Math.max(x1v - x0v, y1v - y0v) / 2 + 2)) continue;
     // a fallen pylon in every cut
     if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
-    const powered = !ln.suspended && ln.B ? magLinePowered(ln.A) : false;
-    for (const [d0, d1] of ln.spans) {
-      const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
+    const powered = !ln.suspended && ln.B ? magPairPowered(ln.A, ln.B) : false;
+    for (const [d0, d1] of ln.spans) for (const [px0, py0, px1, py1] of magPieces(P, d0, d1)) {
+      const x0 = ox + px0 * z, y0 = oy + py0 * z - H, x1 = ox + px1 * z, y1 = oy + py1 * z - H;
       magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
       if (ln.B && !ln.suspended && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
+      if (ln.suspended) {
+        // out of service: a dashed amber line down the deck
+        ctx.save();
+        ctx.strokeStyle = 'rgba(242,174,99,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.06); ctx.setLineDash([z * 0.22, z * 0.16]);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.restore();
+      }
     }
     if (ln.building) {
       // the rest of the line marked out, dashed, to the far end
       const got = ln.spans.length ? ln.spans[0][1] : MAG_END;
       ctx.save();
       ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.setLineDash([z * 0.15, z * 0.12]);
-      ctx.beginPath(); ctx.moveTo(ax + ux * got * z, ay + uy * got * z - H); ctx.lineTo(ax + ux * (ln.L - MAG_END) * z, ay + uy * (ln.L - MAG_END) * z - H); ctx.stroke();
+      ctx.beginPath(); for (const [px0, py0, px1, py1] of magPieces(P, got, ln.L - MAG_END, 0)) { ctx.moveTo(ox + px0 * z, oy + py0 * z - H); ctx.lineTo(ox + px1 * z, oy + py1 * z - H); } ctx.stroke();
       ctx.restore();
       continue;
     }
-    // pods: running (at their place along the line), one docked at each end, the repair pod on its way out
-    const docks = ln.suspended ? [ln.survivor] : [ln.A, ln.B];
-    for (const u of S.bots) {
-      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !docks.some((d) => u.magTo === d.id)) continue;
-      drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
-    }
-    for (const T of docks) {
-      const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
-      if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
-    }
+    for (const T of ln.suspended ? [ln.survivor] : [ln.A, ln.B]) if (!docked.has(T.id)) docked.set(T.id, [T, T === ln.A ? ang : angB]);
     if (ln.suspended) {
+      // the lost Terminal: its outline where it stood, dashed and pulsing, until one is built there again
+      const mx = ox + (ln.missing.x + 0.5) * z, my = oy + (ln.missing.y + 0.5) * z, pulse = 0.65 + 0.35 * Math.sin(R.time * 3);
+      const site = S.bAt[tIdx(ln.missing.x, ln.missing.y)];
       ctx.save();
+      if (!site) { ctx.globalAlpha *= 0.28; drawBuilding(ctx, 'magterm', mx, my, z, ln.owner, { built: true, garrison: [], stock: {} }); }
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha *= pulse;
       ctx.strokeStyle = '#f2ae63'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.15, z * 0.1]);
-      ctx.beginPath(); ctx.arc(ox + (ln.missing.x + 0.5) * z, oy + (ln.missing.y + 0.5) * z, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(mx, my, z * 0.5, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
       continue;
     }
     const F = ln.A.magFix;
     if (F && F.u && F.since > 0) {
-      const E = magFixEnd(ln.A), f = clamp((S.time - F.since) / (MAGLEV.repair * 0.3), 0, 1), d = F.k * MAGLEV.spacing;
-      const ex = E.x + 0.5, ey = E.y + 0.5, tx = ln.A.x + 0.5 + ux * d, ty = ln.A.y + 0.5 + uy * d;
-      drawMagPod(ctx, ln.owner, ox + (ex + (tx - ex) * f) * z, oy + (ey + (ty - ey) * f) * z, z, ang, false);
+      // the repair pod rides out along the guideway from the end nearer the break
+      const E = magFixEnd(ln.A), f = clamp((S.time - F.since) / (MAGLEV.repair * 0.3), 0, 1), d = magSpotD(ln.A, ln.B, F.k);
+      const at = E === ln.A ? d * f : ln.L - (ln.L - d) * f, [rx, ry, rux, ruy] = magPathAt(P, at);
+      drawMagPod(ctx, ln.owner, ox + rx * z, oy + ry * z, z, Math.atan2(ruy, rux), false);
     }
   }
-  // the preview while a line is placed: from the near Terminal picked to the far end under the pointer or tapped
-  if (preview) {
-    const A = getE(UI.ropeA.id);
-    if (A && !A.dead) {
-      const E = preview, ax = ox + (A.x + 0.5) * z, ay = oy + (A.y + 0.5) * z, fx = E.i + 0.5, fy = E.j + 0.5, L = dist(A.x + 0.5, A.y + 0.5, fx, fy) || 1;
-      const ux = (fx - A.x - 0.5) / L, uy = (fy - A.y - 0.5) / L, H = MAGLEV.head * z;
-      ctx.save();
-      ctx.globalAlpha *= E.ok ? 0.75 : 0.4;
-      magBand(ctx, ME, ax + ux * MAG_END * z, ay + uy * MAG_END * z - H, ax + ux * (L - MAG_END) * z, ay + uy * (L - MAG_END) * z - H, z, false);
-      ctx.restore();
-      if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.8)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); ctx.moveTo(ax, ay - H); ctx.lineTo(ox + fx * z, oy + fy * z - H); ctx.stroke(); ctx.restore(); }
-      ctx.lineWidth = Math.max(1.5, z * 0.06);
-      let badSeen = false;
-      for (const sp of E.spots || []) {
-        const cx = ox + (sp.i + 0.5) * z, cy = oy + (sp.j + 0.5) * z, bad = sp.kind === 'bad' && !badSeen;
-        if (bad) badSeen = true;
-        ctx.save();
-        ctx.strokeStyle = bad ? '#ff6b6b' : sp.kind === 'skip' ? 'rgba(255,255,255,0.55)' : '#9dffb8';
-        if (sp.kind === 'skip') ctx.setLineDash([z * 0.12, z * 0.1]);
-        ctx.beginPath(); ctx.arc(cx, cy, z * 0.38, 0, Math.PI * 2); ctx.stroke();
-        if (sp.kind === 'ok') { ctx.globalAlpha *= 0.55; drawMagPylon(ctx, { owner: ME, x: sp.i, y: sp.j, k: sp.k, line: 0 }, cx, cy, z, false); }
-        ctx.restore();
-      }
-      const t = tIdx(E.i, E.j), far = S.bAt[t] ? getE(S.bAt[t]) : null;
-      if (!far) { ctx.globalAlpha = 0.6; drawBuilding(ctx, 'magterm', ox + fx * z, oy + fy * z, z, ME, { built: true, garrison: [], stock: {} }); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
-      ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
-    }
+  // pods: running (at their place along their line, turned along it), and one docked at each Terminal
+  for (const u of S.bots) {
+    if (u.dead || !BOTS[u.type].magpod || !u.magTo || !inView(u.x, u.y, 2)) continue;
+    const ang = u.face ?? 0; // (along its stretch of the line: movePod)
+    drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
   }
+  for (const [T, ang] of docked.values()) {
+    const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
+    if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+  }
+  if (preview) drawMaglevPreview(ctx, ox, oy, z, preview);
+}
+
+/** A small label on the map: `text` in a dark box above (x, y), in `color`. */
+function magLabel(ctx, x, y, text, color, z) {
+  const fs = Math.round(clamp(z * 0.3, 11, 15));
+  ctx.save();
+  ctx.font = `600 ${fs}px system-ui, sans-serif`;
+  const w = Math.min(ctx.measureText(text).width, fs * 26) + fs, h = fs * 1.6;
+  ctx.fillStyle = 'rgba(12,16,22,0.82)';
+  ctx.fillRect(x - w / 2, y - h, w, h);
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y - h / 2, fs * 26);
+  ctx.restore();
+}
+
+/**
+ * The preview while a line is placed, from the near Terminal picked to the far end under the pointer or tapped (or,
+ * routed via a hub, through it): the band (red past the first blocked spot), every pylon spot ringed in its colour
+ * (MAG_SPOT: a pylon, one over a road, one shifted a tile with a tick back to its spot, a gap spanned, blocked with a
+ * cross), the reason by the first blocked one, and the Terminals that go up.
+ */
+const MAG_SPOT = { ok: '#9dffb8', road: '#7fd3ff', moved: '#ffd36b', skip: 'rgba(255,255,255,0.6)', bad: '#ff6b6b' };
+function drawMaglevPreview(ctx, ox, oy, z, E) {
+  const A = getE(UI.ropeA.id);
+  if (!A || A.dead) return;
+  const H = MAGLEV.head * z;
+  const c = (i, j) => [i + 0.5, j + 0.5], bends = E.bends || [];
+  const paths = E.via ? [[c(A.x, A.y), c(E.via.i, E.via.j)], [c(E.via.i, E.via.j), c(E.i, E.j)]] : [[c(A.x, A.y), ...bends.map(([i, j]) => c(i, j)), c(E.i, E.j)]];
+  const firstBad = (E.spots || []).filter((s) => s.kind === 'bad').sort((p, q) => (p.dA ?? p.d) - (q.dA ?? q.d))[0];
+  for (const pts of paths) {
+    const L = magPathLen(pts) || 1;
+    // the band, up to the first blocked spot (red and dashed beyond it)
+    const stop = !E.ok && firstBad && !E.via ? clamp((firstBad.dA ?? firstBad.d) - 0.8, MAG_END, L - MAG_END) : !E.ok && !E.via ? MAG_END : L - MAG_END;
+    ctx.save();
+    ctx.globalAlpha *= E.ok ? 0.75 : 0.5;
+    if (stop > MAG_END + 0.2) for (const [x0, y0, x1, y1] of magPieces(pts, MAG_END, stop)) magBand(ctx, ME, ox + x0 * z, oy + y0 * z - H, ox + x1 * z, oy + y1 * z - H, z, false);
+    ctx.restore();
+    if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.85)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); for (const [x0, y0, x1, y1] of magPieces(pts, stop, L, 0)) { ctx.moveTo(ox + x0 * z, oy + y0 * z - H); ctx.lineTo(ox + x1 * z, oy + y1 * z - H); } ctx.stroke(); ctx.restore(); }
+  }
+  // the bends: a diamond at deck height over each
+  for (const [i, j] of bends) {
+    const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z - H, r = z * 0.22;
+    ctx.save(); ctx.strokeStyle = E.ok ? MAG_SPOT.ok : MAG_SPOT.moved; ctx.lineWidth = Math.max(1.5, z * 0.07);
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke(); ctx.restore();
+  }
+  ctx.lineWidth = Math.max(1.5, z * 0.06);
+  for (const sp of E.spots || []) {
+    const cx = ox + (sp.i + 0.5) * z, cy = oy + (sp.j + 0.5) * z, kind = sp.kind === 'ok' ? (sp.moved != null ? 'moved' : sp.road ? 'road' : 'ok') : sp.kind;
+    ctx.save();
+    ctx.strokeStyle = MAG_SPOT[kind];
+    ctx.lineWidth = Math.max(1.5, z * (sp === firstBad ? 0.1 : 0.06));
+    if (kind === 'skip') ctx.setLineDash([z * 0.12, z * 0.1]);
+    ctx.beginPath(); ctx.arc(cx, cy, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+    if (kind === 'bad') { const r = z * 0.2; ctx.beginPath(); ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); ctx.stroke(); }
+    if (kind === 'moved') { const mi = sp.moved % S.W, mj = (sp.moved / S.W) | 0; ctx.setLineDash([z * 0.08, z * 0.08]); ctx.beginPath(); ctx.moveTo(ox + (mi + 0.5) * z, oy + (mj + 0.5) * z); ctx.lineTo(cx, cy); ctx.stroke(); }
+    if (sp.kind === 'ok') { ctx.globalAlpha *= 0.55; drawMagPylon(ctx, { owner: ME, x: sp.i, y: sp.j, k: sp.k, line: 0 }, cx, cy, z, false); }
+    ctx.restore();
+  }
+  if (firstBad && !E.ok) magLabel(ctx, ox + (firstBad.i + 0.5) * z, oy + (firstBad.j - 0.2) * z, firstBad.why, MAG_SPOT.bad, z);
+  // the Terminals that go up: the far one (and the hub)
+  const ends = E.via ? [[E.via.i, E.via.j], [E.i, E.j]] : [[E.i, E.j]];
+  for (const [i, j] of ends) {
+    const fx = i + 0.5, fy = j + 0.5, far = S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
+    if (!far) { ctx.save(); ctx.globalAlpha = 0.6; drawBuilding(ctx, 'magterm', ox + fx * z, oy + fy * z, z, ME, { built: true, garrison: [], stock: {} }); ctx.restore(); }
+    ctx.save(); ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox + i * z + 1, oy + j * z + 1, z - 2, z - 2); ctx.restore();
+  }
+  if (E.via) magLabel(ctx, ox + (E.via.i + 0.5) * z, oy + (E.via.j - 0.3) * z, 'hub', MAG_SPOT.ok, z);
+  else if (!E.ok && !firstBad && E.why) magLabel(ctx, ox + (E.i + 0.5) * z, oy + (E.j - 0.2) * z, E.why.replace(/<[^>]+>/g, ''), MAG_SPOT.bad, z);
 }
 
 /** A parachute canopy at (x, y) (its bottom edge), size s, with its lines down to (x, ly). */
@@ -9771,7 +9937,7 @@ function lanceMarks(b) {
 /** Lance b's charge as it shows: rings lit one by one with the charge, white-hot at full; cooling after a shot. */
 function drawLanceCharge(ctx, b, cx, cy, s) {
   const since = b.lShot ? S.time - b.lShot : 99;
-  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / LANCE.charge) : 0, cool = since < 8 ? 1 - since / 8 : 0;
+  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = since < 8 ? 1 - since / 8 : 0;
   if (!k && !cool) return;
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
   if (b.lOn && TOD.active) { const m = M.r[4]; ctx.save(); ctx.globalAlpha = 0.4 + 0.6 * k; drawLightPool(ctx, cx + m[0] * s, cy + m[1] * s + s * 0.5, s * (0.8 + k), '#ff8a3a'); ctx.restore(); } // (the barrel's glow on the pit at night)
@@ -9832,19 +9998,25 @@ function drawCuts(ctx, ox, oy, z) {
     const grow = Math.min(1, age / 0.25); // (the cut runs out along the beam as it fires)
     const reach = L.len * grow;
     const seg = (fn) => { for (const r of L.runs) { const d0 = (r[0] - c.x0) * L.ux + (r[1] - c.y0) * L.uy; if (d0 > reach) continue; const d1 = Math.min(reach, (r[2] - c.x0) * L.ux + (r[3] - c.y0) * L.uy); fn(ox + r[0] * z, oy + r[1] * z, ox + (c.x0 + L.ux * d1) * z, oy + (c.y0 + L.uy * d1) * z); } };
-    // the scorched band, the charred furrow, and the furrow's lips
-    ctx.strokeStyle = 'rgba(28,20,14,0.42)'; ctx.lineWidth = z * 1.25;
+    // the scorched edge either side (a cut from an older save, c.w unset, had none), the scorched band as wide as the
+    // core, the charred furrow, and the furrow's lips
+    const cw = c.w || 0.8, k = cw / 0.8;
+    if (c.w) {
+      ctx.strokeStyle = 'rgba(40,30,20,0.2)'; ctx.lineWidth = z * (cw + 2 * LANCE.edge);
+      ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(28,20,14,0.42)'; ctx.lineWidth = z * (cw + 0.45);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-    ctx.strokeStyle = 'rgba(14,10,8,0.7)'; ctx.lineWidth = z * 0.62;
+    ctx.strokeStyle = 'rgba(14,10,8,0.7)'; ctx.lineWidth = z * 0.62 * Math.sqrt(k);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-    ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineWidth = z * 0.26;
+    ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineWidth = z * 0.26 * Math.sqrt(k);
     ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
     if (z >= 10) {
       // glassy fused flecks along the furrow and clods thrown out of it
       const nx = -L.uy, ny = L.ux;
       ctx.fillStyle = 'rgba(70,60,52,0.55)';
       for (let d = 2; d < reach; d += 0.55) {
-        const h = hash2(Math.floor(d * 7), Math.floor(c.t), 611), side = h < 0.5 ? -1 : 1, off = (0.38 + 0.25 * hash2(Math.floor(d * 5), 3, 613)) * side;
+        const h = hash2(Math.floor(d * 7), Math.floor(c.t), 611), side = h < 0.5 ? -1 : 1, off = (0.38 + 0.25 * hash2(Math.floor(d * 5), 3, 613)) * k * side;
         const x = c.x0 + L.ux * d + nx * off, y = c.y0 + L.uy * d + ny * off, i = Math.floor(x), j = Math.floor(y);
         if (!inMap(i, j) || S.terrain[tIdx(i, j)] === T_WATER) continue;
         ctx.fillRect(ox + x * z - z * 0.05, oy + y * z - z * 0.04, z * (0.08 + 0.08 * h), z * 0.07);
@@ -9856,9 +10028,9 @@ function drawCuts(ctx, ox, oy, z) {
       const fl = 0.85 + 0.15 * Math.sin(R.time * 11 + c.t);
       ctx.globalCompositeOperation = 'lighter';
       const col = heat > 0.85 ? [255, 236, 190] : heat > 0.55 ? [255, 150, 60] : [220, 50, 20];
-      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, heat * 1.3) * 0.35 * fl})`; ctx.lineWidth = z * (0.5 + 0.7 * heat);
+      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, heat * 1.3) * 0.35 * fl})`; ctx.lineWidth = z * (0.5 + 0.7 * heat) * k;
       ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col[0]},${Math.min(255, col[1] + 40)},${col[2] + 30},${Math.min(1, heat * 1.5) * 0.8 * fl})`; ctx.lineWidth = z * (0.12 + 0.12 * heat);
+      ctx.strokeStyle = `rgba(${col[0]},${Math.min(255, col[1] + 40)},${col[2] + 30},${Math.min(1, heat * 1.5) * 0.8 * fl})`; ctx.lineWidth = z * (0.12 + 0.12 * heat) * Math.sqrt(k);
       ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
     }
@@ -9893,7 +10065,7 @@ function drawLanceBeams(ctx, ox, oy, z) {
     const mx = M ? ox + c.x0 * z + M.m[0] * z : ox + (c.x0 + ux * 2.4) * z, my = M ? oy + c.y0 * z + M.m[1] * z : oy + (c.y0 + uy * 2.4) * z - LANCE_BEAM_UP * z;
     const reach = Math.min(1, age / 0.25);
     const ex = ox + (c.x0 + (c.x1 - c.x0) * reach) * z, ey = oy + (c.y0 + (c.y1 - c.y0) * reach) * z - LANCE_BEAM_UP * z;
-    const w = 1 + 0.12 * Math.sin(R.time * 40) + 0.08 * Math.sin(R.time * 67);
+    const w = (1 + 0.12 * Math.sin(R.time * 40) + 0.08 * Math.sin(R.time * 67)) * (0.6 + 0.4 * (c.w || 0.8) / 0.8); // (as wide as its core)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
@@ -9902,7 +10074,7 @@ function drawLanceBeams(ctx, ox, oy, z) {
       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
     }
     // the light it throws on the ground under it, and the muzzle's flare
-    ctx.strokeStyle = `rgba(255,120,60,${0.2 * fade})`; ctx.lineWidth = z * 3;
+    ctx.strokeStyle = `rgba(255,120,60,${0.2 * fade})`; ctx.lineWidth = z * (c.w ? c.w + 2 * LANCE.edge : 3);
     ctx.beginPath(); ctx.moveTo(mx, my + LANCE_BEAM_UP * z); ctx.lineTo(ex, ey + LANCE_BEAM_UP * z); ctx.stroke();
     const fr = z * (1.4 + (age < 0.3 ? 2.5 * (1 - age / 0.3) : 0)) * w;
     ctx.globalAlpha = fade; ctx.drawImage(glowDisc('#fff1d0'), mx - fr, my - fr, fr * 2, fr * 2);
@@ -10039,10 +10211,21 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   const L = lanceLine(b, i + 0.5, j + 0.5);
   ctx.save();
   const x0 = ox + L.x0 * z, y0 = oy + L.y0 * z, x1 = ox + L.x1 * z, y1 = oy + L.y1 * z;
-  // the corridor it burns (a translucent red band as wide as the beam), a dark edge for contrast, the dashed line on top
+  // the danger zone: the scorched edge (a faint band, LANCE.edge either side), the core it burns (a stronger red band as
+  // wide as LANCE.width) with its rims, a dark edge for contrast, the dashed line on top
   ctx.lineCap = 'butt';
-  ctx.strokeStyle = bright ? 'rgba(255,50,30,0.2)' : 'rgba(255,60,40,0.1)'; ctx.lineWidth = Math.max(4, z * (LANCE.width + 0.7));
+  const nx = -L.uy, ny = L.ux, he = LANCE.width / 2 + LANCE.edge;
+  ctx.strokeStyle = bright ? 'rgba(255,140,40,0.13)' : 'rgba(255,140,40,0.06)'; ctx.lineWidth = Math.max(6, z * 2 * he);
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = bright ? 'rgba(255,50,30,0.24)' : 'rgba(255,60,40,0.12)'; ctx.lineWidth = Math.max(4, z * LANCE.width);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  if (z >= 6) {
+    ctx.lineWidth = Math.max(1, z * 0.05);
+    for (const [h, col] of [[LANCE.width / 2, bright ? 'rgba(255,70,50,0.7)' : 'rgba(255,80,60,0.35)'], [he, bright ? 'rgba(255,170,70,0.45)' : 'rgba(255,170,70,0.2)']]) {
+      ctx.strokeStyle = col;
+      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x0 + nx * h * sd * z, y0 + ny * h * sd * z); ctx.lineTo(x1 + nx * h * sd * z, y1 + ny * h * sd * z); ctx.stroke(); }
+    }
+  }
   ctx.strokeStyle = 'rgba(30,8,4,0.55)'; ctx.lineWidth = Math.max(4, z * (bright ? 0.2 : 0.12)) + 2;
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.strokeStyle = bright ? 'rgba(255,80,60,1)' : 'rgba(255,100,80,0.75)';
@@ -10051,18 +10234,368 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.setLineDash([]);
   if (bright) {
-    // what it would hit: every building on the line ringed red (yours amber)
-    const seen = new Set();
-    for (const t of lanceTiles(b, L)) {
-      const e = getE(S.bAt[t]);
-      if (!e || e.dead || seen.has(e) || calmB(e)) continue;
-      seen.add(e);
-      const p = bCentre(e), F = BDEFS[e.type].foot || 1;
-      ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : '#ff4b4b';
-      ctx.lineWidth = Math.max(2.5, z * 0.1);
+    // what it would hit: every building in its core ringed red (yours amber); those only in its edge, dashed
+    const tg = lanceTargets(b, L);
+    for (const [n, e] of tg.core.concat(tg.edge).entries()) {
+      const p = bCentre(e), F = BDEFS[e.type].foot || 1, edge = n >= tg.core.length;
+      ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : edge ? '#ff9a4b' : '#ff4b4b';
+      ctx.lineWidth = Math.max(edge ? 1.5 : 2.5, z * (edge ? 0.06 : 0.1));
+      ctx.setLineDash(edge ? [Math.max(4, z * 0.2), Math.max(3, z * 0.12)] : []);
       ctx.strokeRect(ox + (p.x - F / 2) * z + 2, oy + (p.y - F / 2) * z + 2, F * z - 4, F * z - 4);
     }
+    ctx.setLineDash([]);
     if (L.dome) { const c = bCentre(L.dome); ctx.strokeStyle = '#9fd8ff'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, DOME.radius * z, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
+/**
+ * Arrival City: its art (city@T), or battle-damaged while it's down (city-down@T: dark, scorched, broken), and at dusk its
+ * lights coming on tier by tier, on a timer (cityLights). A stub (the build menu, a site's ghost) is drawn whole.
+ */
+function drawCity(ctx, cx, cy, s, owner, b) {
+  const down = !!(b && b.built && b.cDown);
+  const art = (down && artFor('city-down', owner)) || artFor('city', owner);
+  if (!art) { drawMegaPlain(ctx, 'city', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+  if (b && b.id && b.built && !down && !b.cDry) cityLights(ctx, cx, cy, s);
+}
+/**
+ * How far each of Arrival City's four tiers of lights is on (0..1) at the light now (TOD.state.lights): the street lamps
+ * first as dusk falls, then the terraces floor by floor, the atrium and its clock last, all on together by night.
+ */
+function cityLightLevel(k) { const on = TOD.active ? TOD.state.lights || 0 : 0; return Math.max(0, Math.min(1, (on - 0.08 - k * 0.16) / 0.16)); }
+function cityLights(ctx, cx, cy, s) {
+  if (!TOD.active || R.inMap) return;
+  const ga = ctx.globalAlpha;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 4; k++) {
+    const a = cityLightLevel(k), art = ART['city-lit-' + k];
+    if (a <= 0.01 || !art) continue;
+    ctx.globalAlpha = ga * a;
+    drawArtRaw(ctx, art, cx, cy, s);
+  }
+  ctx.restore();
+}
+
+/** Arrival City being taken (b.cCap of CITY.cap s by b.cBy): a ring round it filling in the taker's colour, and its flag. */
+function drawCityTaking(ctx, b, cx, cy, z) {
+  const k = Math.min(1, b.cCap / CITY.cap), r = z * 2.6, col = PLAYER_COLORS[b.cBy] || '#fff';
+  ctx.save();
+  ctx.lineWidth = Math.max(3, z * 0.14); ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = col; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(R.time * 6);
+  ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
+  ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
+  ctx.restore();
+}
+
+/*
+ * The Orbital Lift (the owner's look A, the Beacon Cable): its pad (lift@T, battle-damaged below LIFT.weak: lift-down@T),
+ * and in code the cable: a bright line rising up the screen from the anchor and fading out inside a soft column of light
+ * tinted its owner's colour, red warning lights stepping up it, climber pods riding it (the higher, the smaller; amber
+ * windows at night), and the real climber coming down or going up. Its shadow lies along the ground the way it would fall
+ * (drawLiftLines), flashing red while it's weak for whoever has land or robots on it. A cable coming down (S.liftFalls)
+ * sways and creaks, then lands from the anchor out; its wreckage is baked into the ground (drawCableWreck), sparking a
+ * minute after it falls.
+ */
+function drawLift(ctx, cx, cy, s, owner, b) {
+  const weak = !!(b && b.built && b.armor < BDEFS.lift.armor * LIFT.weak);
+  const art = (weak && artFor('lift-down', owner)) || artFor('lift', owner);
+  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  drawMegaPlain(ctx, 'lift', cx, cy, s, owner, b);
+}
+
+/*
+ * The Great Uplink (the owner's look A, the Dish Array): its pad (gup@T, battle-damaged below 30%: gup-down@T), and in
+ * code (drawGupSignals) its signal: red lights blinking round the dish's rim at night; while it transmits, a glow in its
+ * owner's colour swelling in the bowl with each pulse (GUP.pulse s), a pale beam rising straight up the screen from the
+ * feed horn with a bright band climbing it each pulse, and a ring spreading over the ground (the ping every colony sees,
+ * the minimap's too: renderMinimap). Jammed, the beam and the glow flicker and break up, tinged red; without power they
+ * die down to a slow red blink.
+ */
+/** Where the dish's parts are on screen, in tiles from its square's middle (tools/install_gup.py prints them). */
+const GUP_MARKS = { feed: [0, -0.664], dish: [0, -0.458], rim: [0, -1.268], rimL: [-0.989, -0.66], rimR: [0.989, -0.66], rimS: [0, 0.016] };
+function drawGup(ctx, cx, cy, s, owner, b) {
+  const weak = !!(b && b.built && b.armor < BDEFS.gup.armor * 0.3);
+  const art = (weak && artFor('gup-down', owner)) || artFor('gup', owner);
+  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  drawMegaPlain(ctx, 'gup', cx, cy, s, owner, b);
+}
+
+/** Where mark k (GUP_MARKS) of Great Uplink b is on the screen. */
+function gupAt(b, k, ox, oy, z) { const c = bCentre(b), m = GUP_MARKS[k]; return { x: ox + (c.x + m[0]) * z, y: oy + (c.y + m[1]) * z }; }
+
+/** How far into its pulse a transmission is (0..1), on the game's clock, as the sound has it (see js/audio.js). */
+function gupPhase() { return ((S.time % GUP.pulse) + GUP.pulse) % GUP.pulse / GUP.pulse; }
+
+/** Every Great Uplink's signal on the screen (see drawGup). */
+function drawGupSignals(ctx, ox, oy, z) {
+  const night = TOD.active ? TOD.state.lights || 0 : 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].gup) continue;
+    const c = bCentre(b), X = ox + c.x * z, Y = oy + c.y * z;
+    if (X < -z * 8 || X > R.w + z * 8 || Y < -z * 4 || Y - z * 20 > R.h + z * 4) continue;
+    const col = PLAYER_COLORS[b.owner] || '#ffffff', weak = b.armor < BDEFS.gup.armor * 0.3;
+    ctx.save();
+    // Red lights round the rim, blinking in turn (bright by night).
+    if (night > 0.15 && !weak) {
+      ctx.globalCompositeOperation = 'lighter';
+      const pts = ['rim', 'rimR', 'rimS', 'rimL'];
+      for (let k = 0; k < 4; k++) {
+        if ((Math.floor(R.time * 1.4) + k) % 2) continue;
+        const p = gupAt(b, pts[k], ox, oy, z);
+        ctx.fillStyle = `rgba(255,60,40,${0.5 * night})`; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, z * 0.18), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (b.gOn) {
+      const ph = gupPhase(), env = Math.pow(1 - ph, 3), feed = gupAt(b, 'feed', ox, oy, z), dish = gupAt(b, 'dish', ox, oy, z);
+      const jam = !!b.gJam, dead = !jam && !b.gPow;
+      // (jammed: an uneven flicker, stepped a dozen times a second; no power: a slow red blink)
+      const fl = jam ? (hash2(b.id, Math.floor(R.time * 12), 641) < 0.45 ? 0.15 : 0.6 + 0.4 * hash2(b.id, Math.floor(R.time * 12), 643)) : dead ? 0.25 * ((R.time % 1.6) < 0.4 ? 1 : 0) : 1;
+      const tint = jam || dead ? '#ff4030' : col;
+      ctx.globalCompositeOperation = 'lighter';
+      // The bowl's glow, swelling with each pulse.
+      const gr = z * 1.7, gg = ctx.createRadialGradient(dish.x, dish.y, 0, dish.x, dish.y, gr);
+      gg.addColorStop(0, hexA(tint, (0.25 + 0.45 * env) * fl)); gg.addColorStop(0.6, hexA(tint, (0.1 + 0.2 * env) * fl)); gg.addColorStop(1, hexA(tint, 0));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(dish.x, dish.y, gr, gr * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      if (!dead) {
+        // The beam: a pale column rising up the screen from the feed horn, a bright band climbing it each pulse.
+        const H = Math.max(z * 10, Math.min(z * 18, (R.h || 900) * 0.7)), w0 = z * 0.38;
+        const g = ctx.createLinearGradient(0, feed.y, 0, feed.y - H);
+        g.addColorStop(0, hexA(tint, (0.35 + 0.25 * night) * fl)); g.addColorStop(0.6, hexA(tint, (0.12 + 0.1 * night) * fl)); g.addColorStop(1, hexA(tint, 0));
+        ctx.fillStyle = g;
+        const jx = jam ? (hash2(b.id, Math.floor(R.time * 12), 647) - 0.5) * z * 0.3 : 0;
+        ctx.beginPath(); ctx.moveTo(feed.x - w0, feed.y); ctx.lineTo(feed.x - w0 * 0.4 + jx, feed.y - H); ctx.lineTo(feed.x + w0 * 0.4 + jx, feed.y - H); ctx.lineTo(feed.x + w0, feed.y); ctx.closePath(); ctx.fill();
+        const gc = ctx.createLinearGradient(0, feed.y, 0, feed.y - H);
+        gc.addColorStop(0, `rgba(255,255,255,${0.8 * fl})`); gc.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = gc; ctx.lineWidth = Math.max(1.2, z * 0.06);
+        ctx.beginPath(); ctx.moveTo(feed.x, feed.y); ctx.lineTo(feed.x + jx, feed.y - H); ctx.stroke();
+        // the pulse climbing it (jammed: broken into pieces)
+        for (let q = 0; q < (jam ? 3 : 1); q++) {
+          const h = jam ? hash2(b.id + q, Math.floor(R.time * 8), 653) : ph, y = feed.y - H * h, a = (jam ? 0.6 : 0.9) * (1 - h) * fl;
+          const bg = ctx.createRadialGradient(feed.x, y, 0, feed.x, y, z * 0.9);
+          bg.addColorStop(0, `rgba(255,255,255,${a})`); bg.addColorStop(0.4, hexA(tint, a * 0.6)); bg.addColorStop(1, hexA(tint, 0));
+          ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(feed.x, y, z * 0.9, z * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        // The ping: a ring spreading over the ground from the dish with each pulse.
+        if (!jam) {
+          const r = z * (1.6 + ph * 6);
+          ctx.strokeStyle = hexA(col, 0.55 * (1 - ph)); ctx.lineWidth = Math.max(1.5, z * 0.1);
+          ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+}
+
+/** How tall a Lift's cable is drawn (px up the screen from its collar), at zoom z. */
+function liftBeamH(z) { return Math.max(z * 9, Math.min(z * 16, (R.h || 900) * 0.6)); }
+/** Where Lift b's cable's foot is on the screen (LIFT_MARKS.foot: tools/install_lift.py prints it). */
+const LIFT_MARKS = { foot: [0, -0.642], dock: [0, -0.266] };
+function liftFoot(b, ox, oy, z) { const c = bCentre(b); return { x: ox + (c.x + LIFT_MARKS.foot[0]) * z, y: oy + (c.y + LIFT_MARKS.foot[1]) * z }; }
+
+/** Every Lift's cable on the screen, over the buildings and robots (see drawLift), and the cables coming down. */
+function drawLiftCables(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+    const f = liftFoot(b, ox, oy, z), H = liftBeamH(z);
+    if (f.x < -z * 2 || f.x > R.w + z * 2 || f.y < -z || f.y - H > R.h + z) continue;
+    const weak = b.armor < BDEFS.lift.armor * LIFT.weak;
+    drawLiftBeam(ctx, f.x, f.y, H, z, b.owner, weak ? 0.12 + 0.1 * Math.sin(R.time * 1.7) : 0, b);
+  }
+  for (const f of S.liftFalls || []) drawLiftFalling(ctx, ox, oy, z, f);
+}
+
+/**
+ * A Lift's cable from (x, y) up H px: its column of light and core line, the warning lights and climbers. `sway` bends it
+ * (a weak or falling cable: the fraction of a tile its top swings). `b`: the Lift (its climber); null for a falling one.
+ */
+function drawLiftBeam(ctx, x, y, H, z, owner, sway, b) {
+  const night = TOD.active ? TOD.state.lights || 0 : 0, col = PLAYER_COLORS[owner] || '#ffffff';
+  const top = (h) => x + Math.sin(R.time * 1.3) * sway * z * 3 * h * h; // (the cable's x at height fraction h)
+  ctx.save();
+  // The soft column of light round it: its owner's colour, brighter at night, fading out up the screen.
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(0, y, 0, y - H);
+  g.addColorStop(0, hexA(col, 0.22 + 0.25 * night)); g.addColorStop(0.5, hexA(col, 0.08 + 0.12 * night)); g.addColorStop(1, hexA(col, 0));
+  ctx.fillStyle = g;
+  const w0 = z * 0.42;
+  ctx.beginPath(); ctx.moveTo(x - w0, y); ctx.lineTo(top(1) - w0 * 0.35, y - H); ctx.lineTo(top(1) + w0 * 0.35, y - H); ctx.lineTo(x + w0, y); ctx.closePath(); ctx.fill();
+  // The cable: a bright core, white, going faint as it goes up.
+  const gc = ctx.createLinearGradient(0, y, 0, y - H);
+  gc.addColorStop(0, `rgba(255,255,255,${0.85 + 0.15 * night})`); gc.addColorStop(0.7, `rgba(235,245,255,${0.35 + 0.3 * night})`); gc.addColorStop(1, 'rgba(235,245,255,0)');
+  ctx.strokeStyle = gc; ctx.lineWidth = Math.max(1.5, z * 0.07); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y);
+  for (let k = 1; k <= 8; k++) ctx.lineTo(top(k / 8), y - H * k / 8);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+  // Red warning lights stepping up it, blinking in turn (bright by night).
+  for (let k = 1; k <= 6; k++) {
+    const h = k / 7, on = (Math.floor(R.time * 1.5) + k) % 3 === 0 ? 1 : 0.35;
+    const a = (0.35 + 0.65 * night) * on * (1 - h * 0.6), r = Math.max(1.4, z * 0.07 * (1 - h * 0.5));
+    ctx.fillStyle = `rgba(255,60,50,${a})`; ctx.beginPath(); ctx.arc(top(h), y - H * h, r, 0, Math.PI * 2); ctx.fill();
+    if (night > 0.2 && on > 0.5) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,70,50,${0.25 * night})`; ctx.beginPath(); ctx.arc(top(h), y - H * h, r * 3, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+  }
+  // Climber pods riding it (the higher, the smaller): two going about their business, and the climber with a drop or a load.
+  if (b) {
+    for (let k = 0; k < 2; k++) { const h = 0.25 + ((R.time * 0.018 + k * 0.5 + (b.id % 7) * 0.13) % 1) * 0.7; drawLiftPod(ctx, top(h), y - H * h, z * 0.3 * (1 - h * 0.75), night, 0.55 * (1 - h)); }
+    if (b.lfMove && b.lfPaid) {
+      const f = Math.min(1, (b.lfT || 0) / LIFT.climb), h = b.lfMove === 1 ? 1 - f : f;
+      drawLiftPod(ctx, top(h), y - H * h * 0.95, z * 0.55 * (1 - h * 0.8), night, 1, b.lfMove === 1 ? col : null);
+    } else if (b.lfMove) drawLiftPod(ctx, top(b.lfMove === 1 ? 0.95 : 0), y - H * (b.lfMove === 1 ? 0.9 : 0), z * 0.5 * (b.lfMove === 1 ? 0.25 : 1), night, 0.8);
+  }
+  ctx.restore();
+}
+
+/** A climber pod at (x, y), s px tall: a capsule with a band of windows (amber at night), `tint` its owner's stripe when it carries a drop. */
+function drawLiftPod(ctx, x, y, s, night, a, tint) {
+  if (s < 1.2 || a <= 0.02) return;
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx, x - s * 0.42 + 1, y - s * 0.5 + 1, s * 0.84, s, s * 0.22); ctx.fill();
+  ctx.fillStyle = '#d9dde2'; roundRect(ctx, x - s * 0.42, y - s * 0.5, s * 0.84, s, s * 0.22); ctx.fill();
+  ctx.fillStyle = '#7d858e'; ctx.fillRect(x - s * 0.42, y + s * 0.18, s * 0.84, s * 0.12);
+  if (tint) { ctx.fillStyle = tint; ctx.fillRect(x - s * 0.42, y - s * 0.38, s * 0.84, s * 0.08); }
+  ctx.fillStyle = night > 0.2 ? `rgba(255,190,90,${0.6 + 0.4 * night})` : '#3c4a58';
+  ctx.fillRect(x - s * 0.3, y - s * 0.22, s * 0.6, s * 0.22);
+  if (night > 0.3) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,180,80,${0.3 * night})`; ctx.beginPath(); ctx.arc(x, y - s * 0.1, s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+  ctx.globalAlpha /= a;
+}
+
+/** A colour from '#rrggbb' at alpha a. */
+function hexA(hex, a) { const n = parseInt(String(hex).slice(1, 7), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+
+/** The screen points of the fall line of a Lift with its corner at (i, j), falling d: its start (beside the pad) and its end. */
+function liftLineEnds(i, j, d, ox, oy, z) {
+  const L = liftLineTiles(i, j, d), [dx, dy] = LIFT_DIRS[liftDirOf(d)], cx = i + 1.5, cy = j + 1.5, n = L.length + 1.5;
+  const k0 = 1.5;
+  return { x0: ox + (cx + dx * k0) * z, y0: oy + (cy + dy * k0) * z, x1: ox + (cx + dx * n) * z, y1: oy + (cy + dy * n) * z, tiles: L };
+}
+
+/**
+ * Every Lift's shadow on the ground, along its fall line (a site's too); flashing red while it's weak for whoever has land
+ * or robots on it; a falling cable's line flashing red while it creaks; and the sparks on a cable just fallen.
+ */
+function drawLiftLines(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].lift) continue;
+    const weak = b.built && b.armor < BDEFS.lift.armor * LIFT.weak;
+    const E = liftLineEnds(b.x, b.y, b.lfDir || 0, ox, oy, z);
+    const mine = weak && (b.owner === ME || E.tiles.some((t) => t >= 0 && S.owner[t] === ME) || S.bots.some((u) => !u.dead && u.owner === ME && E.tiles.includes(tIdx(Math.floor(u.x), Math.floor(u.y)))));
+    drawLiftShadow(ctx, E, z, b.built ? 0.2 : 0.12, mine ? 0.45 + 0.4 * Math.sin(R.time * 7) : 0);
+  }
+  for (const f of S.liftFalls || []) {
+    if (f.t >= LIFT.creak) continue;
+    const E = liftLineEnds(f.ax, f.ay, f.d, ox, oy, z);
+    drawLiftShadow(ctx, E, z, 0.2, 0.5 + 0.45 * Math.sin(R.time * 10));
+  }
+  // A cable just fallen: sparks scattered along it for a minute (the Murmur's violet glimmer where they feed on it by night).
+  const night = TOD.active ? TOD.state.lights || 0 : 0;
+  for (const s of S.scrap || []) {
+    if (!s.cb) continue;
+    const age = S.time - (s.ft || 0), x = ox + s.x * z, y = oy + s.y * z;
+    if (x < -z || y < -z || x > R.w + z || y > R.h + z) continue;
+    if (age < LIFT.sparks) {
+      const k = 1 - age / LIFT.sparks;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let q = 0; q < 2; q++) {
+        const h = hash2(s.id, Math.floor(R.time * 6) + q * 13, 557);
+        if (h > 0.55 * k + 0.2) continue;
+        const px = x + (hash2(s.id, q, Math.floor(R.time * 6)) - 0.5) * z * 0.8, py = y + (hash2(q, s.id, Math.floor(R.time * 6)) - 0.5) * z * 0.5;
+        ctx.fillStyle = `rgba(255,${190 + 60 * h | 0},120,${0.6 * k + 0.3 * night})`; ctx.beginPath(); ctx.arc(px, py, Math.max(1.2, z * 0.05), 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    } else if (night > 0.3 && S.wildlife && hash2(s.id, Math.floor(R.time * 0.5), 559) < 0.12) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(164,108,255,${0.35 * night})`;
+      ctx.beginPath(); ctx.arc(x, y, z * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+  }
+}
+
+/** A fall line's shadow on the ground (E: liftLineEnds): dark, soft, `a` strong; `red` > 0 flashing red over it. */
+function drawLiftShadow(ctx, E, z, a, red) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(10,12,18,${a})`; ctx.lineWidth = z * 0.34;
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke();
+  ctx.strokeStyle = `rgba(10,12,18,${a * 1.4})`; ctx.lineWidth = Math.max(1, z * 0.08);
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke();
+  if (red > 0) {
+    ctx.strokeStyle = `rgba(255,60,60,${Math.max(0, red)})`; ctx.lineWidth = z * 0.28; ctx.setLineDash([z * 0.5, z * 0.3]); ctx.lineDashOffset = -R.time * z * 2;
+    ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+/** A Lift's fall line picked out (selected, or the ghost while placing: `ok` green, else red): the line, its tiles and its end. */
+function drawLiftLine(ctx, ox, oy, z, i, j, d, ok) {
+  const E = liftLineEnds(i, j, d, ox, oy, z), col = ok ? '157,255,184' : '255,107,107';
+  ctx.save();
+  ctx.fillStyle = `rgba(${col},0.10)`;
+  for (const t of E.tiles) if (t >= 0) ctx.fillRect(ox + (t % S.W) * z + 1, oy + ((t / S.W) | 0) * z + 1, z - 2, z - 2);
+  ctx.strokeStyle = `rgba(${col},0.85)`; ctx.lineWidth = 2; ctx.setLineDash([z * 0.35, z * 0.2]); ctx.lineDashOffset = -R.time * z * 0.8;
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke(); ctx.setLineDash([]);
+  // its end: a small cross where the cable's top would land
+  ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(E.x1 - z * 0.25, E.y1 - z * 0.25); ctx.lineTo(E.x1 + z * 0.25, E.y1 + z * 0.25); ctx.moveTo(E.x1 + z * 0.25, E.y1 - z * 0.25); ctx.lineTo(E.x1 - z * 0.25, E.y1 + z * 0.25); ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * A Lift's cable coming down (fall f): while it creaks (LIFT.creak s) the cable stands over the gone anchor, swaying
+ * harder and harder; then it comes down from the anchor out: the part still falling hangs from where it has landed up to
+ * its top, which drops as the line fills, dust where it strikes.
+ */
+function drawLiftFalling(ctx, ox, oy, z, f) {
+  const cx = ox + (f.ax + 1.5) * z, cy = oy + (f.ay + 1.5 + LIFT_MARKS.foot[1]) * z, H = liftBeamH(z);
+  if (f.t < LIFT.creak) { drawLiftBeam(ctx, cx, cy, H, z, f.o, 0.15 + 0.35 * (f.t / LIFT.creak), null); return; }
+  const [dx, dy] = LIFT_DIRS[f.d], n = f.n + 1.5, done = Math.min(1, (f.t - LIFT.creak) * f.sp / f.n);
+  const fx = ox + (f.ax + 1.5 + dx * (1.5 + (n - 1.5) * done)) * z, fy = oy + (f.ay + 1.5 + dy * (1.5 + (n - 1.5) * done)) * z;
+  // (the part still in the air: from where it strikes, bowed up and over toward where its top will land, lower and
+  // shorter as it comes down; its shadow on the ground under it)
+  const rest = (n - 1.5) * (1 - done), h = Math.min(H * 0.35, rest * z * 0.4), tx = fx + dx * rest * z * 0.5, ty = fy + dy * rest * z * 0.5;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(10,12,18,0.25)'; ctx.lineWidth = Math.max(3, z * 0.22);
+  ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
+  for (const [col, w] of [['rgba(30,34,40,0.9)', Math.max(3, z * 0.16)], ['rgba(232,238,245,0.95)', Math.max(1.5, z * 0.07)]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.quadraticCurveTo(fx + (tx - fx) * 0.25, fy + (ty - fy) * 0.25 - h * 0.9, tx, ty - h); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(255,220,160,0.5)'; ctx.beginPath(); ctx.arc(fx, fy, z * 0.45, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * A tile of fallen cable (scrap s, s.cb; baked into the ground, clipped to the tile it's painted in): the braided cable
+ * lying along its line through the tile and on into the next, its climber track's plates torn off beside it.
+ */
+function drawCableWreck(ctx, s) {
+  const [dx, dy] = LIFT_DIRS[liftDirOf(s.d)], l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l, x = s.x * TP, y = s.y * TP, L = TP * 0.85;
+  const h = (k) => hash2(s.id % 4096, k, 913), cut = s.cut && s.n < 1;
+  ctx.save();
+  if (cut) ctx.globalAlpha = 0.45;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(20,14,10,0.45)'; ctx.lineWidth = TP * 0.36;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L); ctx.lineTo(x + ux * L, y + uy * L); ctx.stroke();
+  ctx.strokeStyle = '#2b2f35'; ctx.lineWidth = TP * 0.17;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L + TP * 0.02); ctx.lineTo(x + ux * L, y + uy * L + TP * 0.02); ctx.stroke();
+  ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = TP * 0.05;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L - TP * 0.03); ctx.lineTo(x + ux * L, y + uy * L - TP * 0.03); ctx.stroke();
+  // the braid: short bright strokes across it
+  ctx.strokeStyle = 'rgba(200,210,220,0.55)'; ctx.lineWidth = Math.max(1, TP * 0.02);
+  for (let k = -4; k <= 4; k++) { const px = x + ux * k * TP * 0.2, py = y + uy * k * TP * 0.2; ctx.beginPath(); ctx.moveTo(px - uy * TP * 0.07 - ux * TP * 0.04, py + ux * TP * 0.07 - uy * TP * 0.04); ctx.lineTo(px + uy * TP * 0.07 + ux * TP * 0.04, py - ux * TP * 0.07 + uy * TP * 0.04); ctx.stroke(); }
+  // a torn plate of the climber track off to one side
+  if (h(1) < 0.6) {
+    const side = h(2) < 0.5 ? -1 : 1, px = x - uy * side * TP * 0.28 + ux * (h(3) - 0.5) * TP * 0.4, py = y + ux * side * TP * 0.28 + uy * (h(3) - 0.5) * TP * 0.4;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(h(4) * Math.PI);
+    ctx.fillStyle = '#4b5057'; ctx.fillRect(-TP * 0.1, -TP * 0.05, TP * 0.2, TP * 0.1);
+    ctx.fillStyle = PLAYER_COLORS[s.o] || '#9aa2ab'; ctx.fillRect(-TP * 0.1, -TP * 0.05, TP * 0.2, TP * 0.025);
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -10073,7 +10606,17 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   ctx.fillStyle = 'rgba(20,14,10,0.3)'; roundRect(ctx, cx - w / 2 + s * 0.08, cy - w / 2 + s * 0.12, w, w, s * 0.2); ctx.fill();
   ctx.fillStyle = THEME.hull; roundRect(ctx, cx - w / 2, cy - w / 2, w, w, s * 0.2); ctx.fill();
   ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.stroke();
-  if (type === 'lance') {
+  if (type === 'city') { // (three stepped terraces, a lit atrium)
+    for (let k = 1; k <= 3; k++) { const ww = w * (1 - k * 0.22); ctx.fillStyle = k % 2 ? THEME.hullHi : THEME.hull; roundRect(ctx, cx - ww / 2, cy - ww / 2 - k * s * 0.15, ww, ww, s * 0.12); ctx.fill(); }
+    ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'gup') { // (a big white dish, tilted to the sky)
+    ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#41464c'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.35, s * 0.15, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'lift') { // (an eight-sided collar where the cable is clamped)
+    ctx.fillStyle = THEME.hullHi; ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2; ctx.lineTo(cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.7); } ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e8eef5'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'lance') {
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); ctx.arc(cx, cy, s * 0.95, 0, Math.PI * 2); ctx.fill();
     const a = b ? b.aim || 0 : 0;
     ctx.strokeStyle = '#3c4146'; ctx.lineCap = 'round'; ctx.lineWidth = s * 0.32;
@@ -10573,7 +11116,7 @@ function paintScrapTile(ctx, i, j) {
     const list = I.get(tIdx(i + di, j + dj));
     if (!list) continue;
     if (!clip) { ctx.save(); ctx.beginPath(); ctx.rect(i * TP, j * TP, TP, TP); ctx.clip(); clip = true; }
-    for (const e of list) { if (e.n !== undefined) drawScrap(ctx, e); else drawBones(ctx, e); }
+    for (const e of list) { if (e.cb) drawCableWreck(ctx, e); else if (e.n !== undefined) drawScrap(ctx, e); else drawBones(ctx, e); }
   }
   if (clip) ctx.restore();
 }

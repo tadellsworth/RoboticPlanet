@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, upwin: 0, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -422,7 +422,7 @@ function checkMenuSettings() {
   // is how an earlier build kept them, for players 1 to 3.)
   const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
   m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
-  for (const k of ['nuke', 'events', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  for (const k of ['nuke', 'upwin', 'events', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
   if (!murmurLevelOk(m.murmur)) m.murmur = 'active';
   m.mods = modList(m.mods); // the challenge modifiers picked (MODS), Rival head start kept for Versus in Colony too
   // (Teams isn't remembered: on a map made for 2 vs 2 it starts on.)
@@ -433,11 +433,15 @@ function checkMenuSettings() {
 function saveSettings() {
   const m = UI.menu;
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, biome: m.biome, players: m.players,
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, players: m.players,
       diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
 
+/** Can the Great Uplink win be on with the menu as it is (Megastructures on, not the Hollow)? */
+function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && (SHAPE_PRESETS[m.shape || 0] || {}).hollow); }
+/** Is the Great Uplink win on for the game the menu would start (Versus)? */
+function menuUpWin() { return UI.menu.mode !== 'colony' && !!UI.menu.upwin && menuUpWinOk(); }
 const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 /**
@@ -551,6 +555,7 @@ function menuSummary() {
   const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
+  if (menuUpWin()) main.push('Great Uplink win');
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony) {
@@ -676,6 +681,12 @@ function initMenu() {
   for (const btn of $('m-murmur').children) btn.onclick = () => {
     if (!menuMurmur()) { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
     UI.menu.murmur = btn.dataset.v; UI.menuHover['m-sec-rules'] = btn; syncMenu(); saveSettings(); sfx('click');
+  };
+  // The Great Uplink win (beside Victory): it needs Megastructures, and there is no sky in the Hollow; a tap then says why.
+  $('m-upwin-row').dataset.base = $('m-upwin-row').dataset.info;
+  $('m-upwin').onchange = () => {
+    if (!menuUpWinOk()) { $('m-upwin').checked = !!UI.menu.upwin; UI.menuHover['m-sec-match'] = $('m-upwin-row'); syncInfo(); sfx('error'); return; }
+    UI.menu.upwin = $('m-upwin').checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click');
   };
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-mega', 'mega'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
@@ -835,6 +846,15 @@ function syncMenu() {
   for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
   $('m-victory-field').hidden = colony || teams;
   $('m-victory-note').hidden = colony || teams;
+  // The Great Uplink win: Versus only, any Victory (teams too); greyed out without Megastructures or in the Hollow.
+  const upOk = menuUpWinOk();
+  $('m-upwin-field').hidden = colony;
+  $('m-upwin').checked = !!m.upwin && upOk;
+  $('m-upwin-row').classList.toggle('on', !!m.upwin && upOk);
+  $('m-upwin-row').classList.toggle('na', !upOk);
+  $('m-upwin').setAttribute('aria-disabled', upOk ? 'false' : 'true');
+  $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
+    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow, which has no sky to transmit to.';
   $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? 'No Uplinks in the Hollow (the Pathfinder never mapped it): this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
@@ -1962,7 +1982,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 
 /**
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
- * 4 Defend, 5 All; Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
  * map and B closes the menu, so no building uses those. R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
@@ -1972,9 +1992,10 @@ const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
-  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n', lance: 'l', dome: 'h' },
+  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
+  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', gup: 'u' },
 };
-const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
@@ -2002,6 +2023,10 @@ const SHEET_KEYS = {
   'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
   // A Mooring Mast's Link (or Unlink); a Maglev Terminal's Plan a line from here.
   'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l', 'sh-magrebuild': 'l',
+  // An Orbital Lift's four loads to call down.
+  'sh-lf-security': 'z', 'sh-lf-crew': 'x', 'sh-lf-alloy': 'c', 'sh-lf-chips': 'v',
+  // A Great Uplink's Begin transmission.
+  'sh-gup-begin': 't', 'sh-gup-stop': 'c',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -2086,7 +2111,7 @@ function initKeyboard() {
     // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
     // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
-    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All).
+    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All, 6 Mega).
     if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       const g = Object.keys(BUILD_TAB_KEYS).find((t) => BUILD_TAB_KEYS[t] === digit[1]);
       const tab = g && $('build-tabs') && $('build-tabs').querySelector(`[data-g="${g}"]`);
@@ -2162,7 +2187,7 @@ function initKeyboard() {
       if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
       if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
         e.preventDefault();
-        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend.`, 'info');
+        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega.`, 'info');
         return;
       }
     }
@@ -2170,6 +2195,7 @@ function initKeyboard() {
     if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
     // Placing a Mass Driver: R turns its two tiles (east-west or north-south).
     if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].long && k === 'r') { e.preventDefault(); mdTurn(); return; }
+    if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].lift && k === 'r') { e.preventDefault(); liftTurn(e.shiftKey ? -1 : 1); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
@@ -2988,7 +3014,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
+    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });
@@ -3356,20 +3382,26 @@ function showGameOver() {
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
   // (lost while the colony stands: on the Uplinks another colony speaks for the planet; else, settlement priority)
-  $('o-log').textContent = won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
+  // (Contact, the Great Uplink win: what answered, the same for every colony; see GUP_ANSWER.)
+  $('o-log').textContent = how === 'contact' ? GUP_ANSWER : won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
   $('o-log').hidden = false;
-  sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
+  // (Contact: silence, then one answering tone, the same for everyone: see gupSilence.)
+  if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
+  $('o-title').textContent = won ? (how === 'contact' ? 'Contact!' : how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
-    ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
+    ? (how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
+      : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
       : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
         : many ? `${nColonies() > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
+    : how === 'contact' ? `${The} held its Great Uplink's transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
-  if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
+  if (S.teams && how === 'contact') $('o-text').textContent = won ? `${S.winner === ME ? 'Your' : `${playerName(S.winner)}'s`} Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact: your team wins.`
+    : `The rival team's Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`;
+  else if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
     : `The rival team ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
@@ -4239,8 +4271,9 @@ function podStatus(u) {
   const here = u.inside ? getE(u.inside) : null, goods = u.cargo ? sumValues(u.cargo) : 0;
   if (u.magTo) { const to = getE(u.magTo); return `${u.crawl ? 'crawling (no power)' : 'running'} to ${to && !to.dead ? magWhere(to) : 'a Terminal'}${goods ? ` with ${goods} goods` : ', empty'}`; }
   if (here && BDEFS[here.type].magterm) {
-    if (!magPartner(here)) return `docked at ${magWhere(here)}, waiting for a line`;
-    if (magLineCut(here)) return `docked at ${magWhere(here)}: the line is cut`;
+    const ps = magPartners(here);
+    if (!ps.length) return `docked at ${magWhere(here)}, waiting for a line`;
+    if (ps.every((o) => magPairCut(here, o))) return `docked at ${magWhere(here)}: the line is cut`;
     return `docked at ${magWhere(here)}, loading when there's a trip worth making`;
   }
   return 'off its guideway';
@@ -4250,39 +4283,53 @@ function podStatus(u) {
 function magSection() {
   return `<div class="section-label">Maglev line</div><div id="sh-mag"></div>
     <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
-    <p class="hint">Auto supply: the far Terminal (the one further from your Command Base) stocks what the buildings round it need, the Terminal nearer home keeps that ready for the line, and the far Terminal's spare goods come home: ${BOTS.magpod.carry} goods a pod, several kinds at once. Buildings touching a Terminal are joined to it by conveyor; Haulers bring the rest. Supply orders you set below come on top.</p>`;
+    <p class="hint">Auto supply: the far Terminals (further from your Command Base) stock what the buildings round them need, each Terminal nearer home keeps what the ones beyond it want, ready for the next pod, and the far Terminals' spare goods come home: ${BOTS.magpod.carry} goods a pod, several kinds at once, line by line through a hub. Buildings touching a Terminal are joined to it by conveyor; Haulers bring the rest. Supply orders you set below come on top.</p>`;
 }
 
-/** Terminal b's line: its other end, its power, its pods, a line going up (rebuilt only when something changes). */
+/** Terminal b's lines: their other ends, power and cuts, its network's pods, a lost end to rebuild, a line going up (rebuilt only when something changes). */
 function renderMagSection(b) {
   const el = $('sh-mag');
   if (!el) return;
-  const o = magPartner(b), pods = o ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id), site = magPending(b);
-  const cut = o && magLineCut(b), powered = o && magLinePowered(b), near = o && magNearEnd(b);
-  const sig = JSON.stringify([o && o.id, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, b.magMissing, b.magRelay, cut, powered, magPowered(b), o && magPowered(o), flareOn(), b.auto, b.autoOff, near && near.magFix && near.magFix.paid, sumValues(b.inc)]);
+  const ps = magPartners(b), net = ps.length ? magNet(b) : [b], site = magPending(b), miss = magMiss(b);
+  const pods = ps.length ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id);
+  const lines = ps.map((o) => { const K = magKey(b, o); return { o, cut: magPairCut(b, o), powered: magPairPowered(b, o), fix: K.magFix }; });
+  const sig = JSON.stringify([lines.map((l) => [l.o.id, l.cut, l.powered, l.fix && l.fix.u, l.fix && l.fix.paid, magPowered(l.o)]), net.length, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, miss, b.magRelay, magPowered(b), flareOn(), b.auto, b.autoOff, sumValues(b.inc), magSlots(b), b.magThrough || 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let h = '';
-  if (o) {
-    h += `<div class="status">On a line to ${magWhere(o)} (${dirText(b, o)} from here, ${Math.round(dist(b.x, b.y, o.x, o.y))} tiles).</div>`;
-    h += `<div class="kv"><span>Line</span><span>${cut ? '<span class="err">Cut: a pylon is down</span>' : powered ? 'Powered: pods run at speed' : '<span class="err">Unpowered: pods crawl</span>'}</span></div>`;
-    if (cut) h += `<p class="hint">${near.magFix && near.magFix.u ? 'A Worker is riding out to rebuild the pylon.' : near.magFix && !near.magFix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods wait at the Terminals until then.</p>`;
-    else if (!powered) h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : 'The other end'} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends need power.`}</p>`;
-    h += `<p class="hint">${farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
-    h += pods.length ? `<div class="kv"><span>Pods on the line</span><span>${pods.length} of ${MAGLEV.perLine}</span></div>` + pods.map((u) => `<div class="kv army-row"><span>${podStatus(u)}</span><span><button class="btn small ghost" data-pod="${u.id}">Pod ›</button></span></div>`).join('')
+  const others = net.length > ps.length + 1 ? `, in a network of ${net.length} Terminals` : '';
+  if (ps.length) {
+    if (ps.length === 1) h += `<div class="status">On a line to ${magWhere(ps[0])} (${dirText(b, ps[0])} from here, ${Math.round(dist(b.x, b.y, ps[0].x, ps[0].y))} tiles)${others}.</div>`;
+    else h += `<div class="status">A hub: ${ps.length} lines meet here${others}.</div>`;
+    for (const l of lines) {
+      const state = l.cut ? '<span class="err">Cut: a pylon is down</span>' : l.powered ? 'Powered: pods run at speed' : '<span class="err">Unpowered: pods crawl</span>';
+      h += `<div class="kv"><span>${ps.length === 1 ? 'Line' : `Line ${dirText(b, l.o)}`}</span><span>${state}</span></div>`;
+    }
+    const cut = lines.find((l) => l.cut);
+    if (cut) h += `<p class="hint">${cut.fix && cut.fix.u ? 'A Worker is riding out to rebuild the pylon.' : cut.fix && !cut.fix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods keep off that line until then.</p>`;
+    else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends of a line need power.`}</p>`; }
+    const bent = ps.map((o) => { const K = magKey(b, o); return (K.magBends || []).length; }).reduce((a, n) => a + n, 0);
+    if (bent) h += `<div class="kv"><span>Bends</span><span>${bent} (pods slow round the sharp ones)</span></div>`;
+    if (ps.length > 1) h += `<div class="kv"><span>Pods through without stopping</span><span>${b.magThrough || 0}</span></div>`;
+    h += `<p class="hint">${ps.length > 1 ? 'Pods carry goods on through this hub without stopping: what the Terminals beyond it want stays aboard, the rest is unloaded here, and they top up as they pass.' : farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
+    h += pods.length ? `<div class="kv"><span>${net.length > 2 ? 'Pods on the network' : 'Pods on the line'}</span><span>${pods.length} of ${magPodCap(b)}</span></div>` + pods.map((u) => `<div class="kv army-row"><span>${podStatus(u)}</span><span><button class="btn small ghost" data-pod="${u.id}">Pod ›</button></span></div>`).join('')
       : '<p class="hint"><b>No pods yet:</b> order them in the pod bay below (4 Alloy, 2 Chips each).</p>';
-  } else if (b.magMissing) {
-    const end = b.magMissing, check = magLineCheck(ME, b, end.x, end.y);
-    h += '<div class="status">Service suspended: a Terminal is down.</div><p class="hint">The guideway and surviving pods can be used again when that Terminal is rebuilt.</p>';
-    if (site) h += `<p class="hint">Replacement Terminal: ${Math.round(site.progress * 100)}% complete.</p>`;
+  }
+  miss.forEach((m, k) => {
+    const check = magLineCheck(ME, b, m.x, m.y);
+    h += `<div class="status err">Service suspended: the Terminal ${dirText(b, m)} is down.</div><p class="hint">Its guideway and pylons still stand, the line broken until a Terminal goes up on that tile again: on its old foundation it costs half (${costText(magRebuildCost())}), and the guideway is free. The pods wait at this end.</p>`;
+    if (site && site.x === m.x && site.y === m.y) h += `<p class="hint">Replacement Terminal: ${Math.round(site.progress * 100)}% complete.</p>`;
     else if (check.why) h += `<p class="hint">${check.why}</p>`;
-    else h += `<button class="btn primary" id="sh-magrebuild">Rebuild the missing Terminal</button>`;
-  } else if (site) {
-    h += `<div class="status">A line is going up from here: ${Math.round(site.progress * 100)}%.</div><p class="hint">A Worker standing here builds it out, pylon by pylon; the far Terminal goes up last. It is paid from storage as the goods come in (${costText(stillOwed(site))} still owed).</p>`;
+    else h += `<button class="btn primary" id="sh-magrebuild${k ? k : ''}" data-miss="${k}">Rebuild the missing Terminal (${costText(magRebuildCost())})</button>`;
+  });
+  if (site && !magRebuildSite(b, site)) {
+    h += `<div class="status">A line is going up from here: ${Math.round(site.progress * 100)}%.</div><p class="hint">A Worker standing here builds it out, pylon by pylon; the far Terminal goes up last. It is paid from storage as the goods come in (${costText(stillOwed(site))} still owed).${site.magNext ? ' Once that Terminal is up, the line goes on from it (a hub) to the far end.' : ''}</p>`;
   } else if (b.magFrom) {
     h += '<div class="status">A line is coming to it from another Terminal.</div>';
-  } else {
+  } else if (!ps.length && !miss.length && !site) {
     h += `<div class="status">Not on a line.</div><p class="hint">Plan one in Paths (<b>Maglev</b>, <kbd>Shift</kbd>+<kbd>M</kbd>): tap this Terminal, then the far end ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, straight across water, cliffs and chasms. ${costText(magLineCost(1))} a tile, paid from storage.</p><button class="btn primary" id="sh-magline">Plan a line from here</button>`;
+  } else if (!site && magSlots(b) < MAGLEV.hub) {
+    h += `<p class="hint">A Terminal joins up to ${MAGLEV.hub} lines: add one from here and it's a <b>hub</b>, the pods carrying goods on through it.</p><button class="btn" id="sh-magline">Add a line from here (hub)</button>`;
   }
   const relay = getE(b.magRelay);
   if (relay) h += `<p class="hint">This Terminal exchanges freight by conveyor with the Terminal ${dirText(b, relay)}.</p>`;
@@ -4293,8 +4340,10 @@ function renderMagSection(b) {
   const coming = Object.keys(b.inc).filter((g) => b.inc[g] > 0 && S.bots.some((u) => !u.dead && u.cargoTo === b.id && u.cargo && u.cargo[g] && BOTS[u.type].magpod));
   if (coming.length) h += `<p class="hint">On their way by pod: ${coming.map((g) => `${b.inc[g]} ${GOOD[g].name}`).join(', ')}.</p>`;
   el.innerHTML = h;
-  if ($('sh-magrebuild')) $('sh-magrebuild').onclick = () => {
-    const { x, y } = b.magMissing;
+  for (const btn of el.querySelectorAll('button[data-miss]')) btn.onclick = () => {
+    const m = magMiss(b)[+btn.dataset.miss];
+    if (!m) return;
+    const { x, y } = m;
     sfx('click');
     act('magLine', [b.id, x, y], (result) => {
       if (!result?.ok) { toast(result?.reason || 'The Terminal could not be rebuilt.', 'warn'); return; }
@@ -4310,55 +4359,121 @@ function renderMagSection(b) {
 function openMaglevFrom(b) {
   closeSheet();
   enterPlaceMode('maglev');
-  UI.ropeA = { i: b.x, j: b.y, id: b.id };
+  UI.ropeA = { i: b.x, j: b.y, id: b.id }; UI.ropeBends = [];
   R.overlay = null;
   showBanner(maglevFarText(b), null, 'Cancel');
-  crossingTools();
 }
 
 function maglevFarText(b) {
-  if (b.magMissing) return 'Tap the original end of the guideway to reconnect the line. You only pay for a replacement Terminal.';
-  return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours. The preview shows the pylons' spots; the first bad one is red. ${costText(magLineCost(1))} a tile, from storage.`;
+  if (b.magMissing && magSlots(b) >= MAGLEV.hub) return 'Tap the original end of the guideway to reconnect the line. You only pay for a replacement Terminal.';
+  return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours${magPartners(b).length ? ' (this one becomes a hub)' : ''}; or tap a spot on the way and <b>Bend here</b> (up to ${MAGLEV.bends} bends).${b.magMissing ? ' Tap the lost Terminal\'s tile to rebuild it instead.' : ''} The preview rings each pylon spot: <span style="color:${MAG_SPOT.ok}">a pylon</span>, <span style="color:${MAG_SPOT.road}">over a road (it stays open)</span>, <span style="color:${MAG_SPOT.moved}">shifted a tile</span>, <span style="color:${MAG_SPOT.bad}">blocked</span>. ${costText(magLineCost(1))} a tile, from storage.`;
 }
 
-/** The preview of a line from the near Terminal picked to (i, j): R.ropeEnd (drawMaglevs draws it). */
-function maglevPreview(i, j, tapped) {
+/**
+ * The preview of a line from the near Terminal picked to (i, j): R.ropeEnd (drawMaglevs draws it); `via`: a route
+ * through a hub there; `bends`: the tiles it bends at (the bends placed so far, UI.ropeBends, by default).
+ */
+function maglevPreview(i, j, tapped, via, bends) {
   const A = getE(UI.ropeA && UI.ropeA.id);
   if (!A || !inMap(i, j)) { R.ropeEnd = null; return null; }
-  const chk = magLineCheck(ME, A, i, j);
-  R.ropeEnd = { i, j, ok: !chk.why, why: chk.why, spots: chk.spots, far: chk.far ? chk.far.id : 0, tapped: !!tapped };
+  if (via) {
+    const one = magLineCheck(ME, A, via.i, via.j), two = magLineCheck(ME, magGhost(ME, via.i, via.j, one.key === -1), i, j);
+    R.ropeEnd = { i, j, ok: true, why: '', spots: [...one.spots, ...two.spots], far: two.far ? two.far.id : 0, tapped: !!tapped, via, bends: [], L: one.L + two.L };
+    return R.ropeEnd;
+  }
+  bends = bends || UI.ropeBends || [];
+  const chk = magLineCheck(ME, A, i, j, bends);
+  R.ropeEnd = { i, j, ok: !chk.why, why: chk.why, spots: chk.spots, far: chk.far ? chk.far.id : 0, tapped: !!tapped, rebuild: !!chk.miss, bends: chk.miss ? [] : bends, L: chk.L };
   return R.ropeEnd;
 }
 
-/** Placing a Maglev line: the first tap picks the near Terminal, the second the far end (tap it again to build). */
+/** The bend buttons for the Maglev banner: Bend here (at tile (i, j), when a bend can go there) and Undo bend. */
+function maglevBendButtons(A, i, j) {
+  const why = magBendTry(ME, A, UI.ropeBends || [], i, j), n = (UI.ropeBends || []).length;
+  return ` <span class="mag-bends">${!why ? '<button class="btn small" id="mag-bend">Bend here</button>' : ''}${n ? ` <button class="btn small ghost" id="mag-unbend">Undo bend (${n})</button>` : ''}</span>`;
+}
+function maglevBendWire(A, i, j) {
+  if ($('mag-bend')) $('mag-bend').onclick = () => {
+    sfx('click');
+    (UI.ropeBends = UI.ropeBends || []).push([i, j]);
+    R.ropeEnd = null;
+    showBanner(`Bend ${UI.ropeBends.length} at that pylon: now tap the next bend or the <b>far end</b>. Each stretch runs ${MAGLEV.seg} to ${MAGLEV.max} tiles, ${MAGLEV.maxBent} in all, turning ${MAGLEV.turn}° at most.${maglevBendButtons(A, -1, -1)}`, null, 'Cancel');
+    maglevBendWire(A, -1, -1);
+  };
+  if ($('mag-unbend')) $('mag-unbend').onclick = () => {
+    sfx('click');
+    (UI.ropeBends || []).pop();
+    R.ropeEnd = null;
+    showBanner(`${UI.ropeBends.length ? `${UI.ropeBends.length} bend${UI.ropeBends.length > 1 ? 's' : ''} so far: tap` : 'Tap'} the next bend or the <b>far end</b>.${maglevBendButtons(A, -1, -1)}`, null, 'Cancel');
+    maglevBendWire(A, -1, -1);
+  };
+}
+
+/**
+ * Placing a Maglev line: the first tap picks the near Terminal, the second the far end (tap it again to build), or a
+ * bend on the way (Bend here; Undo bend). A far end that can't be had snaps to a good tile beside it; a line that can't
+ * go straight there (a blocked stretch, or too far) is offered with a bend or two round it, or else via a hub Terminal.
+ */
 function maglevTap(i, j) {
   if (!UI.ropeA) {
     const b = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
     const why = !b || b.owner !== ME || !BDEFS[b.type].magterm ? 'Tap one of your Maglev Terminals (highlighted) for the near end.' : !b.built ? 'That Terminal is still going up: the line starts from a finished one.'
-      : b.line ? 'That Terminal is on a line already: a Terminal is on one line at most.' : magPending(b) ? 'That Terminal\'s line is still going up.' : b.magFrom ? 'A line is coming to that Terminal already.' : '';
-    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); crossingTools(); return; }
-    UI.ropeA = { i, j, id: b.id };
+      : magPending(b) ? 'That Terminal\'s line is still going up.' : b.magFrom ? 'A line is coming to that Terminal already.' : magSlots(b) >= MAGLEV.hub && !b.magMissing ? `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.` : '';
+    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
+    UI.ropeA = { i, j, id: b.id }; UI.ropeBends = [];
     R.overlay = null; R.ghost = null;
     sfx('click');
     showBanner(maglevFarText(b), null, 'Cancel');
-    crossingTools();
     return;
   }
   const A = getE(UI.ropeA.id);
   if (!A || A.dead) { setMode('normal'); return; }
-  if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
-  const E = maglevPreview(i, j, true);
-  if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end.`, null, 'Cancel'); crossingTools(); return; }
-  const n = Math.round(dist(A.x, A.y, i, j)), far = E.far ? getE(E.far) : null, cost = A.magMissing ? {} : magLineCost(n);
-  if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
-  if (A.magMissing) {
-    showBanner(far?.built ? 'Reconnect the surviving guideway to this Terminal?' : `Rebuild the missing Terminal? ${far ? 'Continue its construction.' : costInline(cost, playerGoods(ME))}`, far?.built ? 'Reconnect' : 'Build', 'Cancel');
-    crossingTools();
+  UI.ropeBends = UI.ropeBends || [];
+  if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.ok && ((R.ropeEnd.i === i && R.ropeEnd.j === j) || (R.ropeEnd.via && R.ropeEnd.via.i === i && R.ropeEnd.via.j === j) || (R.ropeEnd.snapFrom === tIdx(i, j)))) { confirmBanner(); return; }
+  let E = maglevPreview(i, j, true), note = '';
+  const tapped = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null, bendBtns = maglevBendButtons(A, i, j);
+  if (E && !E.ok && !E.rebuild && !(E.spots && E.spots.length) && !(tapped && BDEFS[tapped.type].magterm) && !/Too far|Too close|bend/i.test(E.why)) {
+    // the far end itself is bad (a road, a building, rough ground): snap to the nearest good tile beside it
+    const near = FEED_NB.map(([di, dj]) => [i + di, j + dj]).filter(([x, y]) => inMap(x, y)).sort(([a, b], [c, d]) => dist2(a, b, A.x, A.y) - dist2(c, d, A.x, A.y))
+      .find(([x, y]) => !magLineCheck(ME, A, x, y, UI.ropeBends).why);
+    if (near) { const why = E.why; E = maglevPreview(near[0], near[1], true); E.snapFrom = tIdx(i, j); note = `<span class="hint">${why} The far end moved a tile, to a spot that works.</span> `; }
+  }
+  if (E && !E.ok && !E.rebuild && !UI.ropeBends.length) {
+    // no straight line there: offer one with a bend or two round what's in the way, else a route via a hub
+    const why = E.why, bends = magRouteBend(ME, A, E.i, E.j);
+    if (bends) {
+      E = maglevPreview(E.i, E.j, true, null, bends);
+      const n = Math.round(E.L), far = E.far ? getE(E.far) : null, cost = magLineCost(n);
+      if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+      sfx('click');
+      showBanner(`<span class="err">${why}</span> <b>Route with ${bends.length === 1 ? 'a bend' : `${bends.length} bends`}</b>: a line ${n} tiles long round it, bending at ${bends.length === 1 ? 'a pylon' : `${bends.length} pylons`} (no Terminal on the way)? ${costInline(cost, playerGoods(ME))}${bendBtns}`, 'Build', 'Cancel');
+      maglevBendWire(A, i, j);
+      return;
+    }
+    const via = magRouteVia(ME, A, E.i, E.j);
+    if (via) {
+      E = maglevPreview(E.i, E.j, true, via);
+      const n = via.n1 + via.n2, cost = magLineCost(via.n1);
+      const c2 = magLineCost(via.n2);
+      for (const g in c2) cost[g] = (cost[g] || 0) + c2[g];
+      for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g] * (E.far ? 1 : 2);
+      sfx('click');
+      showBanner(`<span class="err">${why}</span> <b>Route via a hub</b>: two lines, ${via.n1} and ${via.n2} tiles (${n} in all), through a new hub Terminal on the way? ${costInline(cost, playerGoods(ME))} (the second line is planned once the hub is up)${bendBtns}`, 'Build', 'Cancel');
+      maglevBendWire(A, i, j);
+      return;
+    }
+  }
+  if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end${UI.ropeBends.length ? ', or undo a bend' : ''}.${bendBtns}`, null, 'Cancel'); maglevBendWire(A, i, j); return; }
+  const fi = E.i, fj = E.j, n = Math.round(E.L || dist(A.x, A.y, fi, fj)), far = E.far ? getE(E.far) : null, cost = E.rebuild ? magRebuildCost() : magLineCost(n);
+  if (!far && !E.rebuild) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+  if (E.rebuild) {
+    showBanner(far?.built ? 'Reconnect the surviving guideway to this Terminal?' : `Rebuild the missing Terminal? ${far ? 'Continue its construction.' : `${costInline(cost, playerGoods(ME))} (half a Terminal's cost, on its old foundation: the guideway stands)`}`, far?.built ? 'Reconnect' : 'Build', 'Cancel');
     return;
   }
-  const pyl = E.spots.filter((s) => s.kind === 'ok').length, gaps = E.spots.filter((s) => s.kind === 'skip').length;
-  showBanner(`A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${gaps ? ` (${gaps} gap${gaps > 1 ? 's' : ''} spanned)` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
-  crossingTools();
+  const pyl = E.spots.filter((s) => s.kind === 'ok').length, gaps = E.spots.filter((s) => s.kind === 'skip').length, roads = E.spots.filter((s) => s.kind === 'ok' && s.road).length, moved = E.spots.filter((s) => s.kind === 'ok' && s.moved != null).length;
+  const nb = E.bends.length, extra = [nb ? `bending ${nb === 1 ? 'once' : `${nb} times`}` : '', gaps ? `${gaps} gap${gaps > 1 ? 's' : ''} spanned` : '', roads ? `${roads} over a road or track` : '', moved ? `${moved} shifted a tile` : ''].filter(Boolean).join(', ');
+  showBanner(`${note}A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}${magPartners(A).length || (far && magPartners(far).length) ? ': a hub, pods carry on through it' : ''}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})${bendBtns}`, 'Build', 'Cancel');
+  maglevBendWire(A, i, j);
 }
 
 /* ------------------------------------------------------------------ Mooring Masts and Airships */
@@ -4476,6 +4591,82 @@ function renderMdSection(b) {
     if (btn.dataset.x) act('mdSend', [b.id, g, false], done); else act('mdReserve', [b.id, g, +btn.dataset.d], done);
   };
   if ($('sh-mdadd')) for (const btn of $('sh-mdadd').querySelectorAll('button')) btn.onclick = () => act('mdSend', [b.id, btn.dataset.g, true], done);
+}
+
+/**
+ * An Orbital Lift's panel (its owner's): the Carrier's six lamps, the climber, the four loads to call down (Z X C V), and
+ * Restock the Carrier, the goods it sends up with what stays home (rebuilt only when something changes).
+ */
+function renderLiftSection(b) {
+  const el = $('sh-lift');
+  if (!el) return;
+  const list = b.lfSend || {}, res = b.lfRes ?? LIFT.reserve, why = liftCallWhy(b, 'alloy'), mul = liftMul(b);
+  const sig = JSON.stringify([res, b.lfBoost || 0, b.lfMove || 0, Math.ceil(b.lfCd || 0), Math.ceil(b.lfT || 0), b.lfPaid || 0, list, liftLoaded(b), liftFuel(b) >= LIFT.fuel, b.lfUps || 0, b.lfDrops || 0]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  let h = `<div class="kv"><span>The Carrier's reserve</span><span class="lift-lamps" title="${res} of ${LIFT.reserve} drops">${Array.from({ length: LIFT.reserve }, (_, k) => `<i class="${k < res ? 'on' : ''}"></i>`).join('')} ${res} of ${LIFT.reserve}</span></div>`;
+  if (b.lfMove) h += `<div class="kv"><span>Climber</span><span>${b.lfMove === 1 ? `coming down with ${LIFT.drops[b.lfLoad] ? LIFT.drops[b.lfLoad].name.toLowerCase() : 'its load'}` : `going up with ${LIFT.load} goods`}: ${b.lfPaid ? `${fmtSecs(Math.max(0, LIFT.climb - (b.lfT || 0)))} to go` : '<span class="err">waiting for power</span>'}</span></div><div class="bar"><div style="width:${Math.round(Math.min(1, (b.lfT || 0) / LIFT.climb) * 100)}%"></div></div>`;
+  else if ((b.lfCd || 0) > 0) h += `<div class="kv"><span>Next call</span><span>in ${fmtSecs(b.lfCd)}</span></div><div class="bar"><div style="width:${Math.round((1 - b.lfCd / LIFT.cooldown) * 100)}%"></div></div>`;
+  h += `<div class="section-label">Call down <span class="label-note">${mul > 1 ? `the next drop is ${Math.round((mul - 1) * 100)}% bigger` : `${LIFT.climb} s down; every colony hears it`}</span></div><div class="lift-loads">`;
+  for (const k in LIFT.drops) {
+    const d = liftDropOf(k, mul), what = Object.keys(d.bots).map((t) => `${d.bots[t]} ${BOTS[t].plural}`).concat(Object.keys(d.goods).map((g) => `${d.goods[g]} ${goodN(g, d.goods[g])}`)).join(', ');
+    h += `<button class="btn" id="sh-lf-${k}" data-load="${k}"${why ? ' disabled' : ''}><b>${LIFT.drops[k].name}</b><small>${what}</small></button>`;
+  }
+  h += '</div>';
+  h += `<p class="hint">${why || `Calls a climber down from the Carrier: it lands at the anchor in ${LIFT.climb} s, then ${Math.round(LIFT.cooldown / 60)} minutes to the next call.`} Each climb burns ${LIFT.fuel} Fuel from a Generator within ${LIFT.reach} tiles${liftFuel(b) >= LIFT.fuel ? '.' : ': <span class="err">none in reach now</span>.'}</p>`;
+  const gs = Object.keys(list);
+  h += `<div class="section-label">Restock the Carrier <span class="label-note">${liftLoaded(b)} of ${LIFT.load} loaded; the number is what stays home</span></div>`;
+  h += gs.length ? `<div class="keep-list" id="sh-lflist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name}</span><b class="n">${list[g]}</b>
+      <button class="btn" data-d="-${LIFT.sendStep}" aria-label="Keep less ${GOOD[g].name} at home">−${LIFT.sendStep}</button><button class="btn" data-d="${LIFT.sendStep}" aria-label="Keep more ${GOOD[g].name} at home">+${LIFT.sendStep}</button><button class="btn ghost" data-x="1" aria-label="Stop sending ${GOOD[g].name}">✕</button></div>`).join('')}</div>`
+    : '<p class="hint"><b>Nothing to send up yet:</b> tick a good below.</p>';
+  if (gs.length < LIFT.goods) {
+    const opts = LIFT_GOODS.filter((g) => !list[g] && (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
+    h += `<div class="goodlist" id="sh-lfadd">${opts.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span></button>`).join('')}</div>`;
+  }
+  h += `<p class="hint">Haulers (Tankers for Fuel) bring it what you hold of these beyond the number kept home, and buildings touching the pad feed it by conveyor. At ${LIFT.load} goods the climber goes up (${LIFT.climb} s; never while one is coming down): each load puts a drop back in the Carrier and makes the next drop half again bigger, up to double. Sent up so far: ${b.lfUps || 0}; called down: ${b.lfDrops || 0}.</p>`;
+  el.innerHTML = h;
+  markSheetKeys();
+  const done = (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); };
+  for (const btn of el.querySelectorAll('[data-load]')) btn.onclick = () => act('liftCall', [b.id, btn.dataset.load], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else { sfx('order'); toast(`Climber called: ${LIFT.drops[btn.dataset.load].name.toLowerCase()} lands at the anchor in ${LIFT.climb} seconds. Every colony hears it coming.`, 'good'); } el.dataset.sig = ''; refreshSheet(); });
+  if ($('sh-lflist')) for (const btn of $('sh-lflist').querySelectorAll('button')) btn.onclick = () => {
+    const g = btn.parentElement.dataset.g;
+    if (btn.dataset.x) act('liftSend', [b.id, g, false], done); else act('liftReserve', [b.id, g, +btn.dataset.d], done);
+  };
+  if ($('sh-lfadd')) for (const btn of $('sh-lfadd').querySelectorAll('button')) btn.onclick = () => act('liftSend', [b.id, btn.dataset.g, true], done);
+}
+
+/**
+ * A Great Uplink's Transmission section (GUP): its clock, its power and jamming, and (its owner's) Begin transmission.
+ * Anyone tapping it sees how its transmission stands.
+ */
+function renderGupSection(b) {
+  const el = $('sh-gup');
+  if (!el) return;
+  const mine = b.owner === ME, why = gupBlocked(b), gens = megaGens(b, GUP.reach).length, T = b.gT || 0;
+  const src = b.gOn ? b.gSrc || '' : gupPower(b), rx = gupReactor(b);
+  const sig = JSON.stringify([b.gOn || 0, Math.floor(T), b.gJam || 0, b.gPow || 0, gens, why, mine, src, Math.ceil(b.gU || 0), rx ? (rx.stock.uranium || 0) + '/' + (rx.stock.fissile || 0) : '']);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  const col = PLAYER_COLORS[b.owner] || '#ffffff';
+  let h = '';
+  if (b.gOn) {
+    const st = b.gJam ? `<b class="err">Jammed</b> by ${playerName(b.gJam - 1, true)}: its clock runs back at half speed` : !b.gPow ? '<b class="err">No power</b>: its clock runs back at half speed' : 'Transmitting';
+    h += `<div class="kv"><span>Contact in</span><span>${fmtClock(GUP.hold - T)} of ${fmtClock(GUP.hold)}</span></div><div class="bar"><div style="width:${Math.round((T / GUP.hold) * 100)}%;background:${col}"></div></div>`;
+    h += `<div class="kv"><span>Signal</span><span>${st}</span></div>`;
+  } else h += `<div class="kv"><span>Signal</span><span>${gupWinOn() ? 'Silent' : 'Silent: the Great Uplink win is off in this game'}</span></div>`;
+  if (mine) {
+    const ru = rx ? `${rx.stock.uranium || 0} Uranium${rx.stock.fissile ? `, ${rx.stock.fissile} Enriched` : ''} in its Reactor` : '';
+    h += `<div class="kv"><span>Power</span><span>${src === 'gen' ? `${gens} Generators with Fuel: each burns a Fuel every ${GUP.genFuel} s while it transmits`
+      : src === 'reactor' ? `Reactor and ${gens} Generator${gens === 1 ? '' : 's'}: a Uranium every ${GUP.uEvery / 60} minutes of transmission (an Enriched Uranium lasts ${GUP.uEvery / 30}), ${ru}${b.gU > 0 ? `, ${fmtSecs(b.gU)} paid for` : ''}; the Generator a Fuel every ${GUP.genFuel} s`
+      : `<b>None</b>: ${gens} of ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Nuclear Reactor with Uranium and ${GUP.rGens} Generator there${rx ? '' : ' (no Reactor with Uranium in reach)'}`}</span></div>`;
+    if (!b.gOn) h += `<button class="btn primary big danger-glow" id="sh-gup-begin"${why ? ' disabled' : ''}>Begin transmission</button>`;
+    else h += `<button class="btn" id="sh-gup-stop">Stand down (the transmission is lost)</button>`;
+    h += `<p class="hint">${!b.gOn && why ? why + ' ' : ''}Hold the transmission for ${GUP.hold / 60} minutes and you make contact: your colony${S.teams ? ' and your team' : ''} win${S.teams ? '' : 's'}. Every colony sees the countdown and where it is. An enemy warbot within ${GUP.jam} tiles jams it; jammed or without power its clock runs back at half speed. Destroyed, the transmission is lost.</p>`;
+  } else if (b.gOn) h += `<p class="hint">${allies(b.owner, ME) ? 'Your team wins when it makes contact: guard it.' : `Warbots within ${GUP.jam} tiles of it jam it and wind its clock back; destroy it and the transmission is lost.`}</p>`;
+  el.innerHTML = h;
+  markSheetKeys();
+  if ($('sh-gup-begin')) $('sh-gup-begin').onclick = () => act('gupBegin', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('order'); el.dataset.sig = ''; refreshSheet(); });
+  if ($('sh-gup-stop')) $('sh-gup-stop').onclick = () => act('gupStop', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); });
 }
 
 /** Aim at a Catcher: pick it on the map (a tap on it aims the Driver). */
@@ -4685,7 +4876,7 @@ function showAimBanner(problem) {
   if (problem) html = `<span class="err">${problem}</span> `;
   if (BDEFS[silo.type].lance) {
     html += R.aim
-      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(LANCE.charge - silo.lCharge)}.` : `It charges for ${LANCE.charge} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
+      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything in the red core (2 tiles wide) is destroyed, yours too; the fainter edge either side is scorched to half armor.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
     return;
@@ -4730,7 +4921,7 @@ function fireAimed() {
   if (BDEFS[silo.type].lance) {
     const was = silo.lOn;
     act('lanceAim', [sid, i, j], (why) => {
-      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${LANCE.charge} seconds.`, 'info'); return; }
+      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${lanceTime(silo)} seconds.`, 'info'); return; }
       sfx('error'); showAimBanner(why);
     });
     return;
@@ -4809,8 +5000,8 @@ const CROSSING_HOW = {
     `It's an ordinary site (${costText(BDEFS.ropeway.cost)}): Haulers bring the goods to the near station, so lay a road to it. Once it's built the cable goes across and the far station goes up. ` +
     'Haulers, Workers and warbots ride it as part of your road network; Freight Trucks, Road Trains and Crawlers are too heavy and keep to the roads.',
   maglev: () => `A Maglev line is an elevated guideway on pylons between two Maglev Terminals (Build → Move → Maglev Terminal, ${costText(BDEFS.magterm.cost)}), ${MAGLEV.min} to ${MAGLEV.max} tiles apart in any direction, straight across water, cliffs and chasms. Tap a finished Terminal of yours, then the far end: a clear spot where the far Terminal goes up, or another Terminal of yours. ` +
-    `A pylon stands every ${MAGLEV.spacing} tiles from the near Terminal, on open ground or in shallow water, with roadside supports over roads and track. A blocked support can shift to a nearby tile. A chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles), the preview rings each spot and the first bad one is red. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
-    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it. Put the Terminals of two lines next to each other to transfer freight by conveyor. If a Terminal falls, rebuild it to reuse the guideway.`,
+    `A pylon stands every ${MAGLEV.spacing} tiles, on open ground or in shallow water, or over a road or track with its feet at the side (the way stays open). A blocked spot shifts to a tile beside it. A chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles). The preview rings each spot: green a pylon, blue over a road, yellow shifted a tile, red blocked (the reason beside it); a far end on a road or building snaps to a good tile beside it, a line can bend at up to ${MAGLEV.bends} pylons (tap a spot on the way, then <b>Bend here</b>; each stretch ${MAGLEV.seg} to ${MAGLEV.max} tiles, ${MAGLEV.maxBent} in all, turning ${MAGLEV.turn}° at most), and where no straight line can go (or it's over ${MAGLEV.max} tiles) the tool offers <b>Route with a bend</b>, else a <b>Route via a hub</b>: two lines through a new Terminal on the way. Pods slow round sharp bends. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
+    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it. A Terminal joins up to ${MAGLEV.hub} lines (a <b>hub</b>): tap one already on a line and the new line meets it there, and pods carry goods on through it without stopping (${MAGLEV.perLine} pods for each line of the network). Terminals of two lines side by side also pass freight by conveyor. If a Terminal falls, its lines stand broken until you rebuild it on the same tile (half a Terminal's cost from its panel; the guideway is free).`,
 };
 
 /**
@@ -4836,6 +5027,7 @@ function enterPlaceMode(type, moveFrom) {
   UI.placeType = type;
   UI.moveFrom = moveFrom || 0;
   if (BDEFS[type] && BDEFS[type].long) { const f = moveFrom ? getE(moveFrom) : null; UI.mdAxis = (f && f.mdAxis) || UI.mdAxis || 'ew'; }
+  if (BDEFS[type] && BDEFS[type].lift) UI.liftDir = liftDirOf(UI.liftDir);
   document.body.classList.toggle('mode-road', crossing);
   $('btn-road').classList.toggle('on', crossing);
   refreshOverlay(type);
@@ -4846,7 +5038,8 @@ function enterPlaceMode(type, moveFrom) {
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (BDEFS[type] && BDEFS[type].long) mdTurnBanner();
-  if (type === 'maglev' && !R.overlay.valid.some((v) => v)) { showBanner(`<span class="err">No Maglev Terminal to start a line from: build one first (Build → Move → <b>Maglev Terminal</b>, <kbd>G</kbd>; ${costText(BDEFS.magterm.cost)}), finished and on no line.</span>`, null, 'Close'); crossingTools(); return; }
+  if (BDEFS[type] && BDEFS[type].lift) liftTurnBanner();
+  if (type === 'maglev' && !R.overlay.valid.some((v) => v)) { showBanner(`<span class="err">No Maglev Terminal to start a line from: build one first (Build → Move → <b>Maglev Terminal</b>, <kbd>G</kbd>; ${costText(BDEFS.magterm.cost)}), finished, with a line to spare (a hub joins ${MAGLEV.hub}).</span>`, null, 'Close'); return; }
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
     const how = DEFENCE_TYPES.has(type) ? `inside your border${near}. Defences only go on your own land: an Outpost or Keep extends it.` : `within ${BUILD_REACH} tiles of your buildings, roads or track${near}. Lay a road out toward where you want it.`;
@@ -4870,6 +5063,26 @@ function mdTurn() {
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long) R.ghost.ok = !!R.overlay.valid[tIdx(R.ghost.x, R.ghost.y)];
   const s = document.querySelector('#banner-text .md-turn'); if (s) s.remove();
   mdTurnBanner();
+}
+
+/**
+ * Placing an Orbital Lift: its fall line (drawn on the map from the ghost) points one of 8 ways; the banner says which and
+ * offers Turn (R; Shift+R the other way). The spots where it fits follow the line.
+ */
+function liftTurnBanner() {
+  const t = $('banner-text');
+  if (!t || t.querySelector('#lift-turn')) return;
+  t.insertAdjacentHTML('beforeend', ` <span class="lift-turn">If it is destroyed by an enemy its cable falls <b>${LIFT_DIR_NAMES[liftDirOf(UI.liftDir)]}</b>, ${liftLen()} tiles: <button class="btn small" id="lift-turn">Turn <kbd>R</kbd></button></span>`);
+  $('lift-turn').onclick = (e) => { e.stopPropagation(); liftTurn(1); };
+}
+/** Turn the fall line of the Lift being placed an eighth round (k 1 clockwise, -1 back). */
+function liftTurn(k) {
+  UI.liftDir = (liftDirOf(UI.liftDir) + (k < 0 ? 7 : 1)) % 8;
+  sfx('click');
+  refreshOverlay(UI.placeType);
+  if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].lift) R.ghost.ok = !!R.overlay.valid[tIdx(R.ghost.x, R.ghost.y)];
+  const s = document.querySelector('#banner-text .lift-turn'); if (s) s.remove();
+  liftTurnBanner();
 }
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
@@ -4940,11 +5153,11 @@ function confirmBanner() {
   if (R.mode === 'place' && UI.placeType === 'maglev') {
     const A = UI.ropeA, E = R.ropeEnd;
     if (!A || !E || !E.ok) return;
-    act('magLine', [A.id, E.i, E.j], (res) => {
-      if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); crossingTools(); return; }
+    act('magLine', E.via ? [A.id, E.i, E.j, E.via.i, E.via.j] : E.bends && E.bends.length ? [A.id, E.i, E.j, null, null, E.bends] : [A.id, E.i, E.j], (res) => {
+      if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
       sfx('place'); haptic('order');
       addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
-      toast('Maglev line planned: a Worker builds it out from the near Terminal, paid from storage as the goods come in.', 'good');
+      toast(E.via ? 'Maglev route planned via a hub: the first line goes up from the near Terminal, the second from the hub once it stands.' : E.rebuild ? 'The lost Terminal will be rebuilt: the guideway joins it again when it stands.' : 'Maglev line planned: a Worker builds it out from the near Terminal, paid from storage as the goods come in.', 'good');
       if (UI.planKept) { setMode('road'); showRoadBanner('Maglev line placed. Your plan is still here: tap Build for it.', true); } else setMode('normal');
     });
     return;
@@ -4964,7 +5177,7 @@ function confirmBanner() {
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const from = UI.moveFrom ? getE(UI.moveFrom) : null;
-  const ax = BDEFS[type].long ? [UI.mdAxis || 'ew'] : []; // (a Mass Driver: which way its two tiles lie)
+  const ax = BDEFS[type].long ? [UI.mdAxis || 'ew'] : BDEFS[type].lift ? [liftDirOf(UI.liftDir)] : []; // (a Mass Driver: which way its two tiles lie; an Orbital Lift: its fall line)
   act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y, ...ax] : [type, x, y, ...ax], (res) => {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
@@ -5130,7 +5343,7 @@ function onMapTap(i, j, wx, wy) {
     if (type === 'viaduct') { viaductTap(i, j); return; }
     if (type === 'maglev') { maglevTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
-    const chk = canPlace(ME, type, i, j, false, type === 'mdriver' ? UI.mdAxis : undefined);
+    const chk = canPlace(ME, type, i, j, false, type === 'mdriver' ? UI.mdAxis : BDEFS[type] && BDEFS[type].lift ? liftDirOf(UI.liftDir) : undefined);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
     if (chk.ok) {
       let extra = '';
@@ -6120,11 +6333,12 @@ function showRoadBanner(problem, info) {
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track (build them first if you like, and drag from one to the other); Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
-      ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
+      ` After you tap Build, free Workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}: no more than your <b>Road crew</b> at once (${roadCrew(ME) || 'no limit'}), so the rest stay free for building, and a Worker on the road leaves it for a construction site nearby that needs a builder. A Roadworks' two <b>Pavers</b> lay road too, twice as fast, before they lay asphalt, and don't count. A long road grows from both ends where its far end touches your roads or a finished building. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
   // (The line is cut to three lines where the banner is docked across the bottom of a phone: what went wrong, or
   // what a tap just did, leads. How it works opens over the map there, and stays open while you read it.)
   const text = `<span class="rb-line">${problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : ''}${line}</span>` +
+    (mode === 'road' || mode === 'bridge' ? roadCrewRow() : '') +
     `<details class="how"${UI.howOpen === mode ? ' open' : ''}><summary>How it works</summary><div class="how-text">${how}</div></details>`;
   showBanner(text, null, 'Done');
   const det = $('banner-text').querySelector('details.how');
@@ -6150,6 +6364,7 @@ function showRoadBanner(problem, info) {
   }
   $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
   if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
+  for (const btn of $('banner-text').querySelectorAll('#road-crew [data-v]')) btn.onclick = (e) => { e.stopPropagation(); setRoadCrew(+btn.dataset.v); };
   if ($('x-single')) $('x-single').onclick = (e) => { e.stopPropagation(); UI.xSingle = !UI.xSingle; sfx('click'); showRoadBanner(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
@@ -6169,6 +6384,24 @@ function showRoadBanner(problem, info) {
   if (R.goodsMap) { UI.flowKey = goodsFlowKey(); $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key flow-key">${UI.flowKey}</span>`); }
   bannerMissionHint();
   toolFit();
+}
+
+/**
+ * The Roads and Bridges tools' road crew row: at most this many Workers lay planned road at once (ROAD_CREWS: 2, 3, 5 or
+ * no limit; ORDERS.roadCrew), and the Pavers a Roadworks adds, who don't count.
+ */
+function roadCrewRow() {
+  const v = roadCrew(ME), pavers = S.bots.filter((u) => !u.dead && u.owner === ME && u.type === 'paver' && u.task && u.task.type === 'staff').length;
+  return `<span class="keep-all road-crew" id="road-crew">Road crew <span class="seg">${ROAD_CREWS.map((n) => `<button data-v="${n}" class="${n === v ? 'on' : ''}">${n || 'No limit'}</button>`).join('')}</span>` +
+    `Workers at once${pavers ? `, plus ${pavers} Paver${pavers === 1 ? '' : 's'}` : ''}</span>`;
+}
+/** Set the road crew limit (see roadCrewRow). */
+function setRoadCrew(v) {
+  act('roadCrew', [v]);
+  sfx('click');
+  toast(v ? `At most ${v} Workers lay planned road at once now; the rest stay free for building. A Roadworks' Pavers lay road too.`
+    : 'No limit: every free Worker lays planned road.', 'info');
+  showRoadBanner();
 }
 
 /** How Express lanes work: the Express tool's How it works. */
@@ -6451,20 +6684,22 @@ function costInline(cost, have) {
 }
 
 /**
- * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All), the
+ * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All, then Mega), the
  * last one used remembered, each with its number key. Every card is in the page whichever tab is showing
  * (the others are just hidden); a letter picks a building on the tab that's showing (BUILD_KEYS).
  */
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
   if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
-  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map((g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button></div>`;
+  // (A tab marked `late`, Mega, comes after All, in the order of the number keys.)
+  const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}</div>`;
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
@@ -6654,6 +6889,9 @@ function garrisonMix(b) {
 }
 
 function ownedText(type) {
+  if (BDEFS[type].city && worldBan(type)) return 'Not on the moon';
+  if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
+  if (BDEFS[type].lift && worldBan(type)) return 'No sky down here';
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -6694,6 +6932,8 @@ function openBuildingSheet(b) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.magterm && b.built && mine) html += magSection();
     if ((def.mdriver || def.catcher) && b.built && mine) html += mdSection(b);
+    if (def.lift && b.built && mine) html += '<div class="section-label">Orbital Lift</div><div id="sh-lift"></div>';
+    if (def.gup && b.built) html += '<div class="section-label">Transmission</div><div id="sh-gup"></div>';
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
@@ -6770,13 +7010,13 @@ function openBuildingSheet(b) {
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
         <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
-        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks (two each): they lay planned roads and asphalt.</p>`;
     }
     if (def.roadworks && b.built) {
       html += `<div class="section-label">Paves and maintains</div>
         <div class="seg" id="sh-pmode"><button data-v="marked">Marked roads</button><button data-v="all">Every joined road</button></div>
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
-        <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
+        <p class="hint">Its two Pavers lay your planned roads first, twice as fast as a Worker (they don't count toward the road crew in Paths). Then they surface: mark roads in Paths (Pave) and they keep just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
     if (def.pump && b.built && b.owner === ME && !feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'))) {
       const pr = pipeToRefinery(ME, b);
@@ -6794,7 +7034,8 @@ function openBuildingSheet(b) {
     }
     if (def.lance && b.built && b.owner === ME) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim the Lance</button>
-        <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>`;
+        <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>
+        <button class="btn" id="sh-luser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-luser-hint"></p>`;
     }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
@@ -6816,7 +7057,7 @@ function openBuildingSheet(b) {
     if (b.owner === ME && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
     if (b.owner === ME && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
-    else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
+    else if (b.type !== 'lander' && !(def.city && b.built)) html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`; // (Arrival City can't be taken down: only captured)
     html += '</div>';
   } else if ((S.mode !== 'colony' || def.wild) && foes(b.owner, ME)) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
@@ -6860,6 +7101,7 @@ function openBuildingSheet(b) {
     });
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-lstop')) $('sh-lstop').onclick = () => { sfx('click'); act('lanceStop', [b.id], () => { toast('The Lance stands down: its charge is lost.', 'info'); refreshSheet(); }); };
+    if ($('sh-luser')) $('sh-luser').onclick = () => { sfx('click'); const on = !b.lUseR; act('lanceReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Lance charges on it (${LANCE.reactorCharge} s, ${LANCE.uranium} Uranium or an Enriched Uranium a shot).` : 'Use Reactor off: with Generators in reach the Lance charges on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
     for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
       const to = +btn.dataset.to;
       act('ferryLine', [b.id, to], (why) => {
@@ -7071,7 +7313,12 @@ function refreshBuildingSheet(b) {
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
     if (mine && def.staff) {
       const op = getE(b.staff);
-      parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
+      if (def.crews > 1) {
+        // (A Roadworks takes two Pavers: how many it has, and how many are out working.)
+        const crew = S.bots.filter((u) => !u.dead && u.task && u.task.type === 'staff' && u.task.bld === b.id);
+        const out = crew.filter((u) => u.task.phase !== 'go' && u.inside !== b.id).length, coming = crew.filter((u) => u.task.phase === 'go').length;
+        parts.push(`<div class="kv"><span>${BOTS[def.crew].plural}</span><span>${b.paused ? 'Paused' : `${crew.length - coming} of ${def.crews}${out ? `, ${out} out working` : ''}${coming ? `, ${coming} on the way` : ''}`}</span></div>`);
+      } else parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
     }
     if (def.roadworks) {
       // Everything on the road network joined to the Roadworks is in reach (or just the marked roads).
@@ -7209,11 +7456,15 @@ function refreshBuildingSheet(b) {
     }
     if (def.lance) {
       const pw = lancePower(b), gens = megaGens(b, LANCE.reach).length, rx = lanceReactor(b);
-      if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / LANCE.charge) * 100)}%${b.lCharge >= LANCE.charge ? ' (ready to fire)' : `, fires in ${fmtSecs(LANCE.charge - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / LANCE.charge) * 100)}%;background:#ff6a3a"></div></div>`);
+      const T = lanceTime(b);
+      if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / T) * 100)}%${b.lCharge >= T ? ' (ready to fire)' : `, fires in ${fmtSecs(T - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / T) * 100)}%;background:#ff6a3a"></div></div>`);
       if (mine) {
-        parts.push(`<div class="kv"><span>Power</span><span>${b.lOn ? (b.lSrc === 'reactor' ? 'Nuclear Reactor' : `${gens} Generator${gens === 1 ? '' : 's'}, burning Fuel fast`) : pw === 'gen' ? `${gens} Generators with Fuel in reach` : pw === 'reactor' ? 'Nuclear Reactor in reach' : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium and no Enriched Uranium` : ''}`}</span></div>`);
+        // Which power the next (or this) charge uses and what a shot costs: "Reactor, 2 Uranium a shot, 45 s charge".
+        const src = b.lOn ? b.lSrc : pw, cost = rx && (rx.stock.uranium || 0) >= LANCE.uranium ? `${LANCE.uranium} Uranium` : 'an Enriched Uranium';
+        parts.push(`<div class="kv"><span>Power</span><span>${src === 'reactor' ? `Reactor, ${b.lOn ? 'its Uranium in' : `${cost} a shot`}, ${LANCE.reactorCharge} s charge, ${Math.round(LANCE.reactorReload / 60)} min reload`
+          : src === 'gen' ? `${gens} Generator${gens === 1 ? '' : 's'}, extra Fuel while charging, ${LANCE.charge} s charge, ${Math.round(LANCE.reload / 60)} min reload`
+          : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium and no Enriched Uranium` : ''}`}</span></div>`);
         parts.push(`<div class="kv"><span>Reload</span><span>${b.lReload > 0 ? fmtSecs(b.lReload) : 'Ready'}</span></div>`);
-        parts.push(`<div class="kv"><span>Charge · reload</span><span>${LANCE.charge} s · ${Math.round(LANCE.reload / 60)} min</span></div>`);
       }
     }
     if (def.dome) {
@@ -7224,6 +7475,23 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Power</span><span>${domePowered(b) ? 'A Generator with Fuel in reach' : `<b>None</b>: it needs a Generator with Fuel within ${DOME.reach} tiles`}</span></div>`);
         parts.push(`<div class="kv"><span>Covers · hits</span><span>${DOME.radius} tiles round it · Missile ${DOME.cost.missile}, bomb ${DOME.cost.bomb}, shell ${DOME.cost.shell}</span></div>`);
       }
+    }
+    if (def.lift && b.built) {
+      const c = b.lfMove === 1 ? 'coming down' : b.lfMove === 2 ? 'going up' : 'at the anchor';
+      parts.push(`<div class="kv"><span>Fall line</span><span>${liftLen()} tiles ${LIFT_DIR_NAMES[b.lfDir || 0]} (drawn on the map): if an enemy destroys it, the cable comes down there${b.armor < def.armor * LIFT.weak ? ': <b class="err">cable unstable</b>' : ''}</span></div>`);
+      if (b.owner !== ME) parts.push(`<div class="kv"><span>Climber</span><span>${c}${b.lfMove === 1 && b.lfPaid ? `: lands in ${fmtSecs(Math.max(0, LIFT.climb - (b.lfT || 0)))}` : ''}</span></div>`);
+    }
+    if (def.city && b.built) {
+      const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;
+      const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
+      parts.push(`<div class="kv"><span>Arrival drive</span><span>${b.cDown ? '<b>Off</b>: it is down' : `+${pct}% work`} within ${CITY.reach} tiles: ${mineNear} building${mineNear === 1 ? '' : 's'} of ${b.owner === ME ? 'yours' : 'theirs'}, and Workers building there</span></div>`);
+      parts.push(`<div class="kv"><span>Land</span><span>${CITY.land} tiles round its middle; it counts twice for Domination</span></div>`);
+      if (b.cDown) {
+        parts.push(`<div class="kv"><span>Down</span><span>Repair it to ${Math.round(CITY.back * 100)}% (${Math.ceil(BDEFS.city.armor * CITY.back)} armor) to bring it back</span></div>`);
+        if (b.cCap > 0 && b.cBy >= 0) parts.push(`<div class="kv"><span>Being taken</span><span>by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left</span></div><div class="bar"><div style="width:${Math.round((b.cCap / CITY.cap) * 100)}%;background:${PLAYER_COLORS[b.cBy]}"></div></div>`);
+        else parts.push(`<div class="kv"><span>Capture</span><span>Armed warbots of another colony at its walls for ${CITY.cap} s, with none of its owner's there, take it</span></div>`);
+      }
+      if (mine) parts.push(`<div class="kv"><span>Lights</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))} (a Fuel a minute at night)${b.cDry ? ': <b>dark</b>, its bonus halved' : ''}</span></div>`);
     }
     if (def.nukeSilo && mine) {
       parts.push(`<div class="section-label">Nuclear missile parts</div><div class="goodlist">${Object.keys(NUKE.parts).map((g) =>
@@ -7255,8 +7523,12 @@ function refreshBuildingSheet(b) {
     const why = b.lOn ? '' : lanceBlocked(b);
     $('sh-aim').disabled = !!why;
     $('sh-aim').textContent = b.lOn ? 'Change the aim' : 'Aim the Lance';
-    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${LANCE.charge} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
+    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, yours too; the edge either side is scorched to half armor.`);
     if ($('sh-lstop')) $('sh-lstop').hidden = !b.lOn;
+    if ($('sh-luser')) {
+      $('sh-luser').textContent = `Use Reactor: ${b.lUseR ? 'On' : 'Off'}`; $('sh-luser').setAttribute('aria-pressed', b.lUseR ? 'true' : 'false'); $('sh-luser').classList.toggle('on', !!b.lUseR);
+      $('sh-luser-hint').textContent = `With Generators and a Reactor both in reach: On charges on the Reactor (${LANCE.reactorCharge} s, reload ${Math.round(LANCE.reactorReload / 60)} min, ${LANCE.uranium} Uranium or an Enriched Uranium a shot); Off uses the Generators (${LANCE.charge} s, reload ${Math.round(LANCE.reload / 60)} min) and saves the Uranium for a nuke. A Reactor alone is always used.`;
+    }
   } else if ($('sh-aim') && def.nukeSilo) {
     $('sh-aim').disabled = !b.armed;
     $('sh-aim-hint').textContent = b.armed ? `Shows its ${NUKE.range}-tile range: tap a spot inside it to see the ${NUKE.radius}-tile blast, then launch.` : 'Builds a nuclear missile once its parts are in.';
@@ -7367,6 +7639,8 @@ function refreshBuildingSheet(b) {
     renderMastSection(b);
   }
   if ($('sh-md')) renderMdSection(b);
+  if ($('sh-lift')) renderLiftSection(b);
+  if ($('sh-gup')) renderGupSection(b);
   if ($('sh-mag')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     renderMagSection(b);
@@ -7549,6 +7823,7 @@ function botActivity(u) {
     if (def.farm && (t.phase === 'toNode' || t.phase === 'work')) {
       return t.act === 'harvest' ? (t.phase === 'work' ? 'Harvesting an energy crop' : 'Heading out to harvest a crop') : (t.phase === 'work' ? 'Planting an energy crop' : 'Heading out to plant a crop');
     }
+    if (def.roadworks && t.lay >= 0 && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying new road' : 'Heading out to lay new road';
     if (def.roadworks && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying asphalt' : 'Heading to a path to surface';
     if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[t.gtype || def.gather].good].name : ''}`;
     if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[t.gtype || def.gather].name.toLowerCase() : ''}`;
@@ -7997,7 +8272,7 @@ function refreshArmySheet() {
 function refreshArmyTab() {
   const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === ME);
   const wb = mine.filter(isArmy), noAmmo = wb.filter((u) => !botArmed(u)).length;
-  const nB = wb.filter((u) => u.type === 'bulwark').length, nT = wb.filter((u) => u.type === 'torch').length;
+  const spec = BOT_ORDER.filter((k) => BOTS[k].army && k !== 'warbot').map((k) => [k, wb.filter((u) => u.type === k).length]).filter(([, n]) => n), nT = wb.filter((u) => botTank(u.type)).length;
   const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
   const rockets = mine.filter((u) => BOTS[u.type].siege);
   // The groups out in the field: each rally flag, and each building under attack.
@@ -8009,7 +8284,7 @@ function refreshArmyTab() {
   UI.armySig = sig;
   const L = getE(S.players[ME].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
   const k = S.players[ME].keepW ?? 0;
-  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${nB || nT ? ` (${[nB ? `${nB} ${nB > 1 ? 'Bulwarks' : 'Bulwark'}` : '', nT ? `${nT} ${nT > 1 ? 'Torches' : 'Torch'}` : ''].filter(Boolean).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ' or Fuel' : ''}</span>` : ''}</span></div>`;
+  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${spec.length ? ` (${spec.map(([k, n]) => `${n} ${n > 1 ? BOTS[k].plural : BOTS[k].name}`).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ', Fuel or bolts' : ''}</span>` : ''}</span></div>`;
   if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
   h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
     <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
@@ -8019,7 +8294,7 @@ function refreshArmyTab() {
       <button class="btn" id="ar-station" data-act="cmd" data-c="station">Station</button>
       <button class="btn${field && recallArmed() ? ' danger' : ''}" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>${field && recallArmed() ? `Tap again: ${field} come home` : 'Recall all'}</button>
       <button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>
-    </div>
+    </div>${spec.length ? `<div class="army-cmds" id="ar-kinds"><span class="label-note">Select only</span>${['warbot', ...spec.map(([k]) => k)].filter((k) => wb.some((u) => u.type === k)).map((k) => `<button class="btn small ghost" id="ar-sel-${k}" data-act="selectkind" data-k="${k}">${BOTS[k].plural}</button>`).join('')}</div>` : ''}
     <p class="hint"><b>Attack</b>: tap a rival building and a group of ${armyNText()} goes for it. <b>Hold ground</b>: tap open ground and they plant a rally flag and hold it. <b>Station</b>: tap an Outpost, Keep or Bunker of yours and they move in for good. Each tap sends another group, until you tap Done. Warbots come from your garrisons in reach (each keeps its own).</p>`;
   if (flags.length || atk.size) {
     h += '<div class="section-label">In the field</div>';
@@ -8082,6 +8357,7 @@ function armyButton(btn) {
     case 'cmd': armyCmd(btn.dataset.c); return;
     case 'recall': recallAllTap(); return;
     case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return;
+    case 'selectkind': { const k = btn.dataset.k, ids = armyIds(ME).filter((i) => { const u = getE(i); return u && u.type === k; }); selectBots(ids, false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} ${UI.sel.length > 1 ? BOTS[k].plural : BOTS[k].name} selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return; }
     case 'keep': setKeepAll(+btn.dataset.k); UI.armySig = ''; refreshArmySheet(); return;
     case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
     case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
@@ -8229,14 +8505,14 @@ function refreshPopSheet() {
   const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = BOTS[k].army
-      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
+      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : BOTS[k].arc ? 'out of bolts' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
       : [part(o, 'running', 'running buildings'), part(o, 'carrying', 'carrying goods'), part(o, 'building', 'building or paving'),
         part(o, 'charging', 'recharging'), part(o, 'repairing', 'being repaired'), part(o, 'recycling', 'going to be recycled'), part(o, 'free', 'free')];
     return `<div class="kv pop-row"><span><b>${o.total}</b> ${o.total === 1 ? BOTS[k].name : BOTS[k].plural}</span><span>${bits.filter(Boolean).join(' · ') || '–'}</span></div>`;
   });
   const cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
   let wb = '';
-  if (warOn() && (n.warbot || n.bulwark || n.torch)) {
+  if (warOn() && BOT_ORDER.some((k) => BOTS[k].army && n[k])) {
     const g = warbotGroups();
     wb = '<div class="section-label">Where your warbots are</div>' + WARBOT_PLACES.filter(([k]) => g[k].length).map(([k, label]) =>
       `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
@@ -8340,7 +8616,10 @@ function refreshSheet() {
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
-      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].arc ? `<div class="kv"><span>Capacitors</span><span>${Math.floor(u.gel ?? ARC.cells)} / ${ARC.cells} bolts${(u.gel ?? ARC.cells) < 1 ? ' (empty: going to recharge with Crystal)' : ''}</span></div>` +
+        `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? ARC.cells) / ARC.cells)}%;background:#8fd8ff"></div></div>` : '') +
+      (u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].railgun ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? botMag(u.type)} / ${botMag(u.type)} ${BOTS[u.type].railgun ? 'slugs' : 'shots'}${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].railgun && u.rc > S.time ? '<div class="kv"><span>Rail</span><span>charging</span></div>' : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
@@ -8513,6 +8792,7 @@ function updateHUD() {
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
+  updateGupCard(); // (the Great Uplink win: a transmission's countdown, for every colony)
   goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
@@ -8611,6 +8891,28 @@ function updateWinCard() {
   // Folded under the Goal chip (tap it): the card hides, and the chip shows your share (and the count, if one runs).
   UI.winMini = ` <span class="win-mini"><i style="background:${PLAYER_COLORS[ME]}"></i>${Math.round(pct(ME) * 100)}%${D.lead >= 0 ? ` <i style="background:${col}"></i>${clock}` : ''}</span>`;
   el.hidden = !!UI.objCollapsed;
+}
+
+/**
+ * The Great Uplink win: while any colony transmits, a banner under the top bar in the sender's colour, for every colony
+ * (and in Observer mode): "VERMILION transmitting · contact in 6:12", a bar filling, and JAMMED or NO POWER while it
+ * stalls; a second line for a second colony transmitting at once. Tap it to look at the one furthest along.
+ */
+function updateGupCard() {
+  const el = $('gup-card'), live = S.winner < 0 && typeof gupLive === 'function' ? gupLive() : [];
+  if (!live.length) { el.hidden = true; el.dataset.key = ''; return; }
+  const g = live[0], col = PLAYER_COLORS[g.owner] || '#7fc8ff';
+  el.style.setProperty('--c', col);
+  const who = (b) => (b.owner === ME && !S.watch ? 'You are' : `${esc(callsign(b.owner))}${S.players[b.owner] && S.players[b.owner].name ? ` (${esc(S.players[b.owner].name)})` : ''}`);
+  const html = live.slice(0, 2).map((b) => {
+    const left = fmtClock(GUP.hold - (b.gT || 0)), tag = b.gJam ? '<span class="gup-tag">JAMMED</span>' : !b.gPow ? '<span class="gup-tag">NO POWER</span>' : '';
+    return `<div class="gup-row" style="--c:${PLAYER_COLORS[b.owner]}"><span class="ev-dot" style="background:${PLAYER_COLORS[b.owner]};color:${PLAYER_COLORS[b.owner]}"></span><span><b>${who(b)}</b> transmitting · contact in</span><span class="ev-time">${left}</span>${tag}</div>` +
+      `<div class="gup-bar" style="--c:${PLAYER_COLORS[b.owner]}"><i style="width:${Math.min(100, ((b.gT || 0) / GUP.hold) * 100).toFixed(1)}%"></i></div>`;
+  }).join('');
+  if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; }
+  el.setAttribute('aria-label', `${callsign(g.owner)} transmitting from its Great Uplink: contact in ${fmtClock(GUP.hold - (g.gT || 0))}${g.gJam ? ', jammed' : !g.gPow ? ', no power' : ''}`);
+  el.onclick = () => { const c = bCentre(g); centerOn(c.x, c.y); };
+  el.hidden = false;
 }
 
 /**

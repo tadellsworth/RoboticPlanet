@@ -32,6 +32,7 @@ function simStep(dt) {
   countTraffic();
   SHIELDS.length = 0;
   for (const u of S.bots) if (!u.dead && !u.inside && BOTS[u.type].shield) SHIELDS.push(u);
+  for (const w of SHIELDS) shieldCovers(w);
   for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
@@ -43,6 +44,7 @@ function simStep(dt) {
   if (S.flak && S.flak.length) updateFlakShells();
   if (S.missiles.length) updateMissiles(dt);
   if (S.cans && S.cans.length) updateCans(dt);
+  if (S.liftFalls && S.liftFalls.length) updateLiftFalls(dt); // (an Orbital Lift's cable coming down)
   if (S.fires && S.fires.length) updateFires();
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
@@ -231,6 +233,9 @@ function needsOf(b) {
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
     if (expressMarked(b.owner)) out.push(['alloy', 2 - (b.stock.alloy || 0) - (b.inc.alloy || 0)]); // (an Express lane's barrier and lamps: a quarter a tile)
+  } else if (def.lift && b.lfSend) {
+    // An Orbital Lift's goods to send up: what the colony holds beyond each reserve, up to a climber's load (see liftWant).
+    for (const g in b.lfSend) out.push([g, liftWant(b, g), true]);
   } else if (def.mdriver && b.mdSend) {
     // A Mass Driver's goods list: what the colony holds beyond each reserve, up to its hopper (see mdWant).
     for (const g in b.mdSend) out.push([g, mdWant(b, g), true]);
@@ -726,26 +731,22 @@ function railPlan(p) {
   }
 }
 
-/** Join touching Maglev lines with conveyors. Assign each served line one way back toward the Base. */
+/**
+ * Each Maglev network with pods, as a tree from its Terminal nearest the Command Base: every other Terminal's home is
+ * the one before it, joined by a line (pods carry goods along it) or touching it (a conveyor between two lines'
+ * Terminals, b.magRelay). Returns the Terminals in that order, so demand can roll up from the far ends.
+ */
 function magRelayPlan(stations, distanceFromBase) {
   const active = stations.filter((b) => BDEFS[b.type].magterm && magRunning(b));
   active.sort((a, b) => distanceFromBase(a) - distanceFromBase(b) || a.id - b.id);
   const left = new Set(active), route = [];
-  const addLine = (entry, parent) => {
-    const end = magPartner(entry);
-    left.delete(entry); left.delete(end);
-    entry.home = parent ? parent.id : entry.id;
-    if (parent) entry.magRelay = parent.id;
-    end.home = entry.id;
-    route.push(entry, end);
-  };
   for (const root of active) {
     if (!left.has(root)) continue;
-    let at = route.length;
-    addLine(root, null);
-    while (at < route.length) {
-      const parent = route[at++];
-      for (const entry of touching(parent)) if (left.has(entry)) addLine(entry, parent);
+    left.delete(root); root.home = root.id; route.push(root);
+    for (let at = route.length - 1; at < route.length; at++) {
+      const X = route[at];
+      for (const o of magPartners(X)) if (left.has(o)) { left.delete(o); o.home = X.id; route.push(o); }
+      for (const T of touching(X)) if (left.has(T)) { left.delete(T); T.home = X.id; T.magRelay = X.id; route.push(T); }
     }
   }
   return route;
@@ -771,7 +772,7 @@ function farStation(b) { return !!(b.home && b.home !== b.id); }
 /** Are a and b stations of one bulk line: Rail Stations on the same track, or the two Mooring Masts of an Airship line? */
 function bulkLinked(a, b) {
   const ma = !!BDEFS[a.type].mast, mb = !!BDEFS[b.type].mast, ga = !!BDEFS[a.type].magterm, gb = !!BDEFS[b.type].magterm;
-  if (ga || gb) return ga && gb && magPartner(a) === b; // (the two Terminals of a Maglev line)
+  if (ga || gb) return ga && gb && magLinked(a, b); // (two Terminals joined by a Maglev line)
   if (ma || mb) return ma && mb && mastPartner(a) === b;
   return railLinked(a, b);
 }
@@ -1189,6 +1190,8 @@ function breachHit(u, b) {
   u.vel = 0;
   u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
   if (BOTS[u.type].flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; } // (a Torch burns it)
+  if (BOTS[u.type].arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
+  if (BOTS[u.type].railgun) { if (u.rc || u.cd <= 0) railAct(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
   if (u.cd > 0 || !useAmmo(u)) return;
   u.cd = 1.0;
   u.fought = 1;
@@ -1691,6 +1694,7 @@ function moveAlong(u, dt) {
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+    if (liftWreckAt(here)) speed *= LIFT.slow; // (climbing over a fallen Lift's cable)
     if (S.ford && S.ford[here] && S.terrain[here] === T_WATER) speed *= FORD_SLOW; // wading a ford
     if (!S.bAt[here]) {
       const fleeing = u.task && u.task.type === 'flee'; // running from a nuclear blast: no time to keep to the roads
@@ -1957,6 +1961,7 @@ function dispatch(p) {
     }
   }
 
+  roadToSites(p, blds); // (building beats roads: a Worker laying road near a site waiting for a builder goes to it)
   const idle = [];
   for (const u of S.bots) if (u.owner === p && isIdleWorker(u)) idle.push(u);
   if (!idle.length) return;
@@ -2083,13 +2088,14 @@ function dispatch(p) {
   }
   collectCrates(true);
 
-  // 0) Specialist buildings get a bot of their crew.
+  // 0) Specialist buildings get a bot of their crew (a Roadworks two: BDEFS[].crews).
   for (const b of blds) {
-    const crew = BDEFS[b.type].crew;
-    if (!crew || !b.built || b.paused || b.cut || b.staff || b.staffInc || b.depleted) continue;
-    const u = take(b.x, b.y, crew);
-    if (u) assignStaff(u, b);
-    else if (!S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
+    const crew = BDEFS[b.type].crew, want = BDEFS[b.type].crews || 1;
+    if (!crew || !b.built || b.paused || b.cut || b.depleted) continue;
+    let have = want > 1 ? crewCount(b) : b.staff || b.staffInc ? 1 : 0, u = null;
+    while (have < want && (u = take(b.x, b.y, crew))) { assignStaff(u, b); have++; }
+    if (have >= want || u) continue;
+    if (!have && !S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
       const P = S.players[p];
       P.crewMsg = P.crewMsg || {};
       if (S.time - (P.crewMsg[crew] || -999) > 120) {
@@ -2119,7 +2125,7 @@ function dispatch(p) {
   for (const b of blds) {
     if (!idle.length) return;
     const F = b.magFix;
-    if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magPartner(b)) continue;
+    if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magKeyPartner(b)) continue;
     if (!F.paid) { const cost = magLineCost(MAGLEV.spacing); if (!canPay(p, cost)) continue; for (const g in cost) takeGood(p, g, cost[g]); F.paid = 1; }
     const E = magFixEnd(b), u = take(E.x, E.y, 'build');
     if (u) assignMagFix(u, b);
@@ -2468,11 +2474,14 @@ function dispatch(p) {
   }
   // 6) Free workers pave planned roads (see nextPaveTile). The tile one picks goes to the free worker on its ground
   //    nearest to it: the one at home takes the tile at the home end, not one standing out at the far end.
+  //    No more than the colony's road crew limit of them at once (roadCrew): a Roadworks' Pavers lay road too, and
+  //    don't count (see doStaff).
   if (planList(p).length) {
     const none = []; // areas with nothing (left) to pave
     const crew = idle.filter((u) => BOTS[u.type].build && !(u.failUntil > S.time)); // (one that just found no way somewhere sits this round out)
-    let k = crew.length - 1;
-    while (k >= 0) {
+    const lim = roadCrew(p);
+    let k = crew.length - 1, on = lim && crew.length ? roadCrewOn(p) : 0;
+    while (k >= 0 && (!lim || on < lim)) {
       const u = crew[k], z = botZone(u);
       if (none.indexOf(z) >= 0) { k--; continue; }
       const t = nextPaveTile(u, p, -1);
@@ -2486,6 +2495,7 @@ function dispatch(p) {
       const v = crew.splice(w, 1)[0];
       idle.splice(idle.indexOf(v), 1);
       assignPave(v, t);
+      if (v.task && v.task.type === 'pave') on++;
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
@@ -2690,10 +2700,13 @@ function landerSalvage(p, dt) {
  * network is home's (the roads joined to a Command Base on its ground) or, for one posted on a foothold (ground no
  * road, ramp or bridge joins to home yet: a Drop Outpost's island, say), the roads joined to that foothold's stores
  * and garrisons. A planned tile joins (paveMap's `join`) where it is beside road on that network (or on a road
- * leaving a finished building on it), or beside such a building: a site at the far end, or a building cut off from
- * home, doesn't count. A bridge or tunnel is built from the road beside it on that network (its `stand`): the home
- * side. A tile being paved counts as down already, so a second Worker takes the next tile just past it (still
- * growing outward) or another road, and a crew paves one road side by side. A stretch of plan that joins nothing
+ * leaving a finished building on it), or beside such a building: a site at the far end doesn't count. A bridge or
+ * tunnel is built from the road beside it on that network (its `stand`): the home side. A stretch whose far end touches
+ * road of the player's or a finished building of its (its `tail`: one cut off from home too) grows from that end as
+ * well, so a crew works a long road from both ends, each end usable as it grows. A tile being paved counts as down
+ * already, so a second Worker takes the next tile just past it (still growing outward), or another end or another road
+ * no more than PAVE_QUEUE tiles further, and a crew paves one road side by side. (A colony's Workers lay no more than
+ * its road crew limit at once, ROAD_CREW, and a Roadworks' Pavers lay road too: see doStaff.) A stretch of plan that joins nothing
  * (laid down on its own, out in the open; or the rival's bridge out from its bare shore) is still built: from its end
  * nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile as near
  * (a bridge or tunnel as soon as one: from the shore nearest home).
@@ -2702,6 +2715,7 @@ const PAVE_ALONE = 12;  // tiles: how much further off a joined tile can be and 
 const PAVE_SPARE = 2;   // charge kept in hand on top of BATTERY.critical when a Worker reckons up a trip (see paveShort)
 const PAVE_FULL = 95;   // a Worker charged this far goes whatever the trip (charging can't give it more)
 const PAVE_TAKE = 8;    // a Worker this many tiles nearer a tile than the one still walking out to it takes it over
+const PAVE_QUEUE = 8;   // tiles: how much further off another end of a road (or another road) can be and still come before the tile just past one being paved
 const _paveM = { S: null, key: '', zone: null, maps: new Map() };
 
 /**
@@ -2737,7 +2751,8 @@ function paveMap(p, zone) {
   const homeD = (t) => { let hd = 0; if (far.length) { hd = Infinity; for (const b of far) hd = Math.min(hd, Math.abs(b.x - (t % W)) + Math.abs(b.y - ((t / W) | 0))); } return hd; };
   const tiles = planList(p), n = tiles.length, idx = new Map();
   for (let k = 0; k < n; k++) idx.set(tiles[k], k);
-  const join = new Uint8Array(n), stand = new Int32Array(n), grow = new Uint8Array(n), comp = new Int32Array(n).fill(-1), home = new Float64Array(n);
+  const join = new Uint8Array(n), tail = new Uint8Array(n), stand = new Int32Array(n), grow = new Uint8Array(n), comp = new Int32Array(n).fill(-1), home = new Float64Array(n);
+  const ownBuilt = (v) => { const b = S.bAt[v] && getE(S.bAt[v]); return !!b && !b.dead && b.owner === p && b.built; };
   const nb = (t) => { const i = t % W; return [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]; };
   for (let k = 0; k < n; k++) {
     const t = tiles[k], cross = crossTile(t);
@@ -2754,6 +2769,7 @@ function paveMap(p, zone) {
         const sc = (S.road[v] ? 0 : 1e4) + homeD(v);
         if (sc < altS) { altS = sc; alt = v; }
       } else if ((S.road[v] && onNet(v)) || anchB(v)) join[k] = 1;
+      else if ((S.road[v] && wayOwner(v) === p) || ownBuilt(v)) tail[k] = 1; // (a far end: see above)
     }
     stand[k] = cross ? (st >= 0 ? st : alt) : S.zone[t] === zone ? t : -1;
     grow[k] = links <= 1 || near ? 1 : 0;
@@ -2779,13 +2795,13 @@ function paveMap(p, zone) {
     if (!grows) for (const b of members) grow[b] = 1; // (a ring with nothing beside it: anywhere, nearest home first)
     compJoin.push(joins);
   }
-  M = { tiles, idx, join, stand, grow, comp, compJoin, home, on, rn };
+  M = { tiles, idx, join, tail, stand, grow, comp, compJoin, home, on, rn };
   _paveM.maps.set(mk, M);
   return M;
 }
 
 /** Is planned tile t being paved now (a Worker still about is on its way to it, or at work on it)? */
-function paveBusy(t) { const by = S.paveRes[t], v = by && getE(by); return !!v && !v.dead && !!v.task && v.task.type === 'pave' && v.task.tile === t; }
+function paveBusy(t) { const by = S.paveRes[t], v = by && getE(by); return !!v && !v.dead && !!v.task && (v.task.type === 'pave' ? v.task.tile === t : v.task.type === 'staff' && v.task.lay === t); }
 
 /**
  * The planned road tile worker u should pave next (see paveMap): the nearest one nobody else is paving that joins
@@ -2823,7 +2839,7 @@ function nextPaveTile(u, p, maxD) {
   // A stretch with a joined tile some Worker can still get to is paved from there. One with none (and nobody on it yet)
   // starts from its end nearest home: of the tiles it may start from that can be got at, the nearest home.
   const joined = new Set(), start = new Map();
-  for (let k = 0; k < n; k++) if (M.join[k] && M.stand[k] >= 0 && !(skip[M.tiles[k]] > S.time)) joined.add(M.comp[k]);
+  for (let k = 0; k < n; k++) if ((M.join[k] || M.tail[k]) && M.stand[k] >= 0 && !(skip[M.tiles[k]] > S.time)) joined.add(M.comp[k]);
   for (let k = 0; k < n; k++) {
     const c = M.comp[k];
     if (!M.grow[k] || joined.has(c) || going.has(c) || M.stand[k] < 0 || skip[M.tiles[k]] > S.time) continue;
@@ -2839,9 +2855,11 @@ function nextPaveTile(u, p, maxD) {
     const d = Math.abs(i + 0.5 - ux) + Math.abs(j + 0.5 - uy);
     if (maxD >= 0 && d > maxD) continue;
     // Someone else's already, unless it's still walking out from far off and this one is right here (see assignPave).
-    if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
+    // (A Paver's, never: see doStaff.)
+    if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.type !== 'pave' || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
     let s;
-    if (M.join[k] || next[k]) s = d;
+    if (M.join[k] || M.tail[k]) s = d;
+    else if (next[k]) s = d + PAVE_QUEUE; // (rather another end, if one is about as near: the crew spreads out)
     else if (M.grow[k] && M.home[k] <= start.get(M.comp[k])) s = d + (crossTile(t) ? 0 : PAVE_ALONE); // (a bridge out from a bare shore as soon as any)
     else continue;
     if (s < bs) { bs = s; best = t; }
@@ -2901,6 +2919,7 @@ function paveShort(u, t, stand) {
 function assignPave(u, t) {
   cancelTask(u);
   const was = paveBusy(t) ? getE(S.paveRes[t]) : null; // (taking it over from one still on its way from far off)
+  if (was && was.task.type !== 'pave') return; // (never a Paver's)
   const stand = paveSpot(u, t);
   const stuck = u.failUntil > S.time - 18; // (it found no way somewhere else a moment ago too)
   u.task = { type: 'pave', tile: t, phase: 'go', prog: 0 };
@@ -3153,6 +3172,52 @@ function rampStand(u, b) {
     if (p && p.length < bl) { bl = p.length; best = c; }
   }
   return best;
+}
+
+/** How many bots of its crew building b has: on their way, inside, or out working (a Roadworks takes two: BDEFS[].crews). */
+function crewCount(b) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'staff' && u.task.bld === b.id) n++;
+  return n;
+}
+
+/** Player p's road crew limit: at most this many Workers lay planned road at once (0: no limit). See ROAD_CREW. */
+function roadCrew(p) { const v = S.players[p] && S.players[p].roadCrew; return ROAD_CREWS.includes(v) ? v : ROAD_CREW; }
+
+/** How many of player p's Workers are laying planned road now (on their way to a tile, or at work on one). */
+function roadCrewOn(p) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build) n++;
+  return n;
+}
+
+/**
+ * Building beats roads: a construction site waiting for a builder (its materials in) takes a Worker laying road within
+ * PAVE_LEAVE tiles of it, the nearest, unless a free Worker is as near (dispatch's step 1 sends that one). The road
+ * waits for it, or for the next free Worker.
+ */
+function roadToSites(p, blds) {
+  const P = S.players[p];
+  let crew = null, stands = null;
+  for (const b of blds) {
+    if (b.built || b.builder || !(siteFrac(b) > b.progress + 0.01) || (P.danger && dangerAt(p, b.x, b.y))) continue;
+    if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
+    if (!crew) {
+      crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build && !u.carry);
+      if (!crew.length) return;
+    }
+    const at = siteWorkAt(b), cx = at.x + 0.5, cy = at.y + 0.5, z = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
+    let best = null, bd = PAVE_LEAVE * PAVE_LEAVE;
+    for (const u of crew) {
+      const d = dist2(u.x, u.y, cx, cy);
+      if (d > bd || (!ramp && botZone(u) !== z) || ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u))) continue;
+      bd = d; best = u;
+    }
+    if (!best) continue;
+    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && dist2(v.x, v.y, cx, cy) <= bd && (ramp || botZone(v) === z))) continue;
+    crew.splice(crew.indexOf(best), 1);
+    assignBuild(best, b, stands);
+  }
 }
 
 function assignStaff(u, b) {
@@ -3469,7 +3534,7 @@ function doBuild(u, t, dt) {
   const def = BDEFS[s.type];
   const cap = siteFrac(s);
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u)) / (s.buildTime || def.buildTime));
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5)) / (s.buildTime || def.buildTime)); // (faster by Arrival City)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
   }
@@ -3492,10 +3557,7 @@ function completeBuilding(b) {
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
   if (b.magFrom) magLineDone(b); // (a Maglev line's site: the line opens)
-  else if (def.magterm) {
-    const other = S.buildings.find((c) => !c.dead && c.owner === b.owner && c.magMissing?.x === b.x && c.magMissing.y === b.y);
-    if (other) magReconnect(other, b);
-  }
+  else if (def.magterm) magRebuilt(b); // (built where a lost Terminal stood: its suspended lines join it again)
   b.status = ''; // (a site's "Under construction" mustn't outlive it)
   b.stock = {};
   b.inc = {};
@@ -3610,6 +3672,7 @@ function findPlantSpot(b, radius) {
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
+      if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -3634,7 +3697,7 @@ function findCropSpot(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue;
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -3750,6 +3813,56 @@ function pumpSeep(b) {
   return best;
 }
 
+/** Seconds a Worker takes to lay planned road tile t (a Paver PAVER_LAY times as fast): a bridge or tunnel takes longer, and so does clearing resources. */
+function layTime(t) { const c = CROSS[S.terrain[t]]; return c ? c.time : roadClears(t) ? PAVE_CLEAR_TIME : PAVE_TIME; }
+
+/**
+ * Paver u of Roadworks b (its staff task t) sets off to lay planned road tile `tile` (see nextPaveTile), from where a
+ * Worker would stand (paveSpot). Taking it over from a Worker still walking out to it, that one finds other work.
+ * False if it can't get there (nobody tries the tile for a while, as for a Worker: see assignPave).
+ */
+function paverGo(u, b, t, tile) {
+  const stand = paveSpot(u, tile);
+  if (stand >= 0 && goTo(u, stand % S.W, (stand / S.W) | 0)) {
+    const was = paveBusy(tile) ? getE(S.paveRes[tile]) : null;
+    if (was && was !== u && was.task.type === 'pave') cancelTask(was);
+    t.trip = true; // (out working: no off-road slowdown)
+    t.lay = tile; t.node = -1; t.phase = 'toNode';
+    S.paveRes[tile] = u.id;
+    return true;
+  }
+  const P = S.players[u.owner];
+  (P.paveSkip = P.paveSkip || {})[tile] = S.time + 15;
+  return false;
+}
+
+/** Paver u (staff task t of Roadworks b) has laid its tile, or it was called off: on to the next planned tile close by while its charge lasts, else home. */
+function paverNext(u, b, t) {
+  t.lay = -1;
+  if ((u.bat ?? 100) >= BATTERY.low + 5) {
+    const next = nextPaveTile(u, u.owner, 12);
+    if (next >= 0 && paverGo(u, b, t, next)) return;
+  }
+  t.trip = false;
+  t.phase = 'back';
+  if (!goTo(u, b.x, b.y)) { u.x = b.x + 0.5; u.y = b.y + 0.5; u.path = null; }
+}
+
+/** Paver u at work on planned road tile t.lay: PAVER_LAY times a Worker's rate (see doPave). */
+function paverLay(u, b, t, dt) {
+  const tile = t.lay;
+  if (S.plan[tile] !== u.owner + 1) { paverNext(u, b, t); return; }
+  u.busy = 1;
+  b.working = true;
+  if (CROSS[S.terrain[tile]]) u.face = datan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
+  t.timer -= dt * S.players[u.owner].mult * batFactor(u) * (tech(u.owner, 'paving') ? 1 / 0.6 : 1);
+  if (t.timer > 0) return;
+  layRoad(tile);
+  const P = S.players[u.owner];
+  P.paverLaid = (P.paverLaid || 0) + 1;
+  paverNext(u, b, t);
+}
+
 function doStaff(u, t, dt) {
   const b = getE(t.bld);
   if (!b || b.owner !== u.owner || !b.built) { cancelTask(u); return; }
@@ -3815,6 +3928,9 @@ function doStaff(u, t, dt) {
         }
         b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
       } else if (def.roadworks) {
+        // New road first: planned tiles (paid for already, and no use to anyone until they're down), then asphalt.
+        const lay = nextPaveTile(u, b.owner, -1);
+        if (lay >= 0 && paverGo(u, b, t, lay)) { b.status = 'Laying new road'; return; }
         node = findPaveSpot(b, b.x, b.y);
         if (node < 0) {
           b.status = paveMode(b) === 'all' ? 'Every joined road is asphalt, in good repair'
@@ -3865,15 +3981,18 @@ function doStaff(u, t, dt) {
     }
     case 'toNode':
       b.working = true;
+      if (t.lay >= 0 && S.plan[t.lay] !== u.owner + 1) { paverNext(u, b, t); return; } // (called off, or laid by someone else)
       if (moveAlong(u, dt)) {
+        if (t.lay >= 0) { t.phase = 'work'; t.timer = layTime(t.lay) / PAVER_LAY; return; }
         t.phase = 'work';
         t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
+      if (t.lay >= 0) { paverLay(u, b, t, dt); return; }
       u.busy = 1;
       b.working = true;
-      t.timer -= dt * mult * batFactor(u);
+      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5); // (faster by Arrival City)
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
@@ -3908,7 +4027,7 @@ function doStaff(u, t, dt) {
           u.carry = RES[R_CROP].good;
           u.carryN = 1;
           madeGood(u.owner, u.carry, 1);
-        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
@@ -3933,7 +4052,7 @@ function doStaff(u, t, dt) {
         // Keep going along the paths while there's asphalt left in the hopper (or Express tiles the stock can pay for).
         const next = findPaveSpot(b, ni, nj);
         if (next >= 0 && (paveWant(next) === 3 ? !expressShort(b, next) : b.charges > 0) && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
-      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
         S.res[node] = def.plant;
         S.amt[node] = RES[def.plant].amount;
         S.grow[node] = 0;
@@ -3993,6 +4112,7 @@ function updateBuilding(b, dt) {
     return;
   }
   repairHint(b);
+  if (def.gup) updateGup(b, dt); // (first: cut off or paused, its transmission runs back as without power)
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
@@ -4011,6 +4131,8 @@ function updateBuilding(b, dt) {
   else if (def.viaduct) b.status = 'Open to traffic';
   if (def.lance) updateLance(b, dt);
   else if (def.dome) updateDome(b, dt);
+  else if (def.city) updateCity(b, dt);
+  else if (def.lift) updateLift(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -4058,7 +4180,7 @@ function updateBuilding(b, dt) {
     const op = getE(b.staff);
     const who = def.crew ? BOTS[def.crew].name : 'Worker';
     if (!op) {
-      b.status = b.staffInc ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
+      b.status = b.staffInc || (def.crews > 1 && crewCount(b)) ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
       if (!b.staffInc && def.crew && !S.bots.some((v) => !v.dead && v.owner === b.owner && v.type === def.crew)) b.status += ': order one at the Bot Foundry';
     }
   }
@@ -4103,7 +4225,7 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || BDEFS[c.type].mega)) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
@@ -4164,9 +4286,10 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
+  const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1); // (a third slower while its Lance charges)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city; // (a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
@@ -4900,12 +5023,13 @@ function wrapAngle(a) { return datan2(dsin(a), dcos(a)); }
 /** An army robot (a warbot, Bulwark or Torch): it garrisons, rallies, attacks, reloads and is repaired like a warbot. */
 function isArmy(u) { return !!(u && BOTS[u.type] && BOTS[u.type].army); }
 
-/** Can it fire now: a warbot with Ammo, a Torch with fuel in its tank (a Bulwark's blasters need neither). */
+/** Can it fire now: a warbot (Skirmisher, Railgunner) with Ammo, a Torch with fuel in its tank, an Arc Caster with a bolt in its capacitors (a Bulwark's blasters need none). */
 function botArmed(u) {
   const bt = BOTS[u.type];
   if (bt && bt.shield) return true;
-  if (bt && bt.flame) return (u.gel ?? TORCH.tank) > 0.05;
-  return (u.ammo ?? WARBOT_AMMO) > 0;
+  const tk = bt && botTank(u.type);
+  if (tk) return (u.gel ?? tk.cap) > tk.min;
+  return (u.ammo ?? botMag(u.type)) > 0;
 }
 
 /** The Bulwarks out on the map this step (see simStep), for shieldBlock. */
@@ -4914,6 +5038,7 @@ const SHIELDS = [];
 /** Does w's active shield intercept a shot toward u or its proposed firing position? */
 function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
+  if (u !== w && !(w.covIds && w.covIds.has(u.id))) return false; // (one of the BULWARK.coverMax it shelters: shieldCovers)
   const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
   if (ad < BULWARK.r + 0.15) return false;
   const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
@@ -4923,6 +5048,23 @@ function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) return false;
   const tx = x - sx, ty = y - sy, td = dhypot(tx, ty) || 1;
   return Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td <= BULWARK.r * 2.35;
+}
+
+/**
+ * The robots Bulwark w shelters this step (w.covIds, rebuilt each step with SHIELDS; not saved): of its owner's robots
+ * in its lee (within BULWARK.cover of it and behind its shield line), the BULWARK.coverMax nearest it, ties by id. Any
+ * others behind it get no cover from it: a huge blob behind one or two Bulwarks is mostly in the open.
+ */
+function shieldCovers(w) {
+  const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa), C2 = BULWARK.cover * BULWARK.cover, list = [];
+  for (const v of S.bots) {
+    if (v === w || v.dead || v.inside || v.owner !== w.owner || BOTS[v.type].air || BOTS[v.type].sea) continue;
+    const bx = v.x - w.x, by = v.y - w.y, d2 = bx * bx + by * by;
+    if (d2 > C2 || bx * fx + by * fy > BULWARK.r) continue;
+    list.push([d2, v.id]);
+  }
+  list.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  w.covIds = new Set(list.slice(0, BULWARK.coverMax).map((e) => e[1]));
 }
 
 /**
@@ -4958,6 +5100,7 @@ function shieldFx(w, x, y, ang, dmg, u) {
 /** A Bulwark's shield worn right down: it collapses in a burst and is out for BULWARK.down seconds. */
 function shieldFail(w) {
   w.sh = 0; w.shDown = S.time + BULWARK.down;
+  const Q = S.players[w.owner]; if (Q) Q.stats.shieldsDown = (Q.stats.shieldsDown || 0) + 1; // (its shields worn down: Siege Breakers counts the rival's)
   addFx('shieldbreak', w.x, w.y, { aim: w.shAim ?? w.face ?? 0, life: 0.8, seed: S.tick + w.id });
   sfx('shieldbreak', w.x, w.y);
   if (isMe(w.owner)) postMsg(ME, 'A Bulwark\'s shield has failed: it comes back in ' + BULWARK.down + ' seconds.', Math.floor(w.x), Math.floor(w.y), 'warn');
@@ -5017,7 +5160,15 @@ function torchFire(u, tx, ty, power, bld) {
     if (v.dead || v.inside || !foes(v.owner, u.owner) || v.dropping || (BOTS[v.type].air && v.flight)) continue;
     const dx = v.x - u.x, dy = v.y - u.y, d = dhypot(dx, dy);
     if (d > R || d < 0.05 || (dx * ca + dy * sa) / d < c) continue;
-    damageBot(v, TORCH.bot * power, u.x, u.y);
+    // Fire wraps round a shield: TORCH.shieldPass of it gets past, and the rest burns the shield TORCH.shieldMul as fast.
+    let dmg = TORCH.bot * power;
+    const w = SHIELDS.length && !calmAt(v.x, v.y) ? shieldAt(v, u.x, u.y) : null;
+    if (w) {
+      const blocked = dmg * (1 - TORCH.shieldPass), want = blocked * TORCH.shieldMul, took = Math.min(w.sh, want);
+      shieldTake(w, v, u.x, u.y, took, want);
+      dmg = dmg * TORCH.shieldPass + blocked * (1 - took / want);
+    }
+    damageBot(v, dmg);
   }
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
@@ -5038,15 +5189,233 @@ function torchFire(u, tx, ty, power, bld) {
  * TORCH.perFuel seconds of fire). A Bulwark needs neither. True if it got any.
  */
 function reloadArmy(u, b) {
-  const bt = BOTS[u.type];
+  const bt = BOTS[u.type], tk = botTank(u.type);
   if (bt.shield) return false;
-  if (bt.flame) {
-    if ((u.gel ?? TORCH.tank) > TORCH.tank - 1 || !((b.stock.fuel || 0) >= 1)) return false;
-    bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
-    u.gel = Math.min(TORCH.tank, (u.gel ?? 0) + TORCH.perFuel);
+  if (tk) {
+    // (an Arc Caster's Crystal only from storage: a Fuel Station keeps Fuel, a garrison Ammo)
+    if ((u.gel ?? tk.cap) > tk.cap - Math.min(1, tk.per) || !((b.stock[tk.good] || 0) >= 1) || (tk.good !== 'fuel' && !BDEFS[b.type].store)) return false;
+    bump(b.stock, tk.good, -1); usedGood(b.owner, tk.good, 1);
+    u.gel = Math.min(tk.cap, (u.gel ?? 0) + tk.per);
     return true;
   }
-  return (u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS ? reloadAmmo(u, b) : false;
+  return (u.ammo ?? botMag(u.type)) <= botMag(u.type) - botAmmoShots(u.type) ? reloadAmmo(u, b) : false;
+}
+
+/* ------------------------------------------------------------------ the Skirmisher, the Arc Caster and the Railgunner */
+
+/** The enemy Bulwark (of v's owner) whose shield would stop a shot from (sx, sy) at robot v, or null. */
+function shieldAt(v, sx, sy) {
+  for (const w of SHIELDS) if (shieldProtects(w, v, sx, sy)) return w;
+  return null;
+}
+
+/** A shield `w` takes `took` from a hit coming from (sx, sy) at robot v: its flash and ripple, and it fails worn right down. */
+function shieldTake(w, v, sx, sy, took, dmg) {
+  const ang = datan2(sy - w.y, sx - w.x);
+  w.sh -= took; w.shHit = S.time; w.shAbs = (w.shAbs || 0) + took;
+  shieldFx(w, w.x + dcos(ang) * BULWARK.r, w.y + dsin(ang) * BULWARK.r, ang, dmg, v);
+  if (w.sh <= 0.01) shieldFail(w);
+}
+
+/** How far army unit u reaches to hit a building (a Bulwark goes in closest; a Railgunner stands well off). */
+function armyBldReach(u) {
+  const bt = BOTS[u.type];
+  return bt.shield ? 1.7 : bt.flame ? 2.05 : bt.arc ? BOTS.arccaster.range - 0.1 : bt.railgun ? RAIL.bldReach : WARBOT_HIT.reach;
+}
+
+/**
+ * Which enemy robot army unit u goes for, given the one its scan found (`foe`): a Skirmisher hunts SKIRM.hunt kinds
+ * near it first, a Railgunner the toughest in its reach (Bulwarks first), an Arc Caster the one with most others packed
+ * round it (shields first among equals). Others keep `foe`.
+ */
+function armyPick(u, foe) {
+  const bt = BOTS[u.type];
+  if (!(bt.flank || bt.railgun || bt.arc)) return foe;
+  const R = bt.flank ? SKIRM.huntR : bt.range + 0.3;
+  let best = foe, bs = -Infinity;
+  for (const v of S.bots) {
+    if (v.dead || v.inside || v.dropping || v.under || BOTS[v.type].air || BOTS[v.type].sea || !foes(v.owner, u.owner) || v.owner < 0) continue;
+    const d2 = dist2(u.x, u.y, v.x, v.y);
+    if (d2 > R * R || calmAt(v.x, v.y)) continue;
+    let sc;
+    if (bt.flank) { if (!SKIRM.hunt.includes(v.type)) continue; sc = -d2; }
+    else if (bt.railgun) sc = (BOTS[v.type].shield ? 100 : 0) + v.hp - d2 * 0.05 - (d2 < RAIL.min * RAIL.min ? 200 : 0);
+    else { sc = BOTS[v.type].shield ? 0.5 : 0; for (const o of S.bots) if (o !== v && !o.dead && !o.inside && o.owner === v.owner && dist2(o.x, o.y, v.x, v.y) <= ARC.jump * ARC.jump) sc++; sc -= d2 * 0.01; }
+    if (sc > bs) { bs = sc; best = v; }
+  }
+  return best;
+}
+
+/**
+ * A Skirmisher whose foe is behind an enemy Bulwark's shield runs round it: to a spot SKIRM.spot of its reach off the
+ * foe, SKIRM.round past the edge of the shield's arc (the side it is on; a pack splits both ways by id), dashing as
+ * it sets off. On the way it shoots anything in reach that no shield covers. True while it's running round.
+ */
+function skirmFlank(u, foe, dt, power) {
+  const w = shieldAt(foe, u.x, u.y);
+  if (!w) return false;
+  const aim = w.shAim ?? w.face ?? 0, rel = wrapAngle(datan2(u.y - w.y, u.x - w.x) - aim);
+  const side0 = Math.abs(rel) > 0.15 ? (rel > 0 ? 1 : -1) : (u.id % 2 ? 1 : -1), R = BOTS[u.type].range * SKIRM.spot;
+  for (const sd of [side0, -side0]) {
+    const a = aim + sd * (BULWARK.arc + SKIRM.round), tx = foe.x + dcos(a) * R, ty = foe.y + dsin(a) * R;
+    const i = Math.floor(tx), j = Math.floor(ty);
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || (S.bAt[tIdx(i, j)] && !passTile(tIdx(i, j), u.owner))) continue;
+    if (dist2(u.x, u.y, tx, ty) < 0.09) return false; // there, and still covered (another shield): fight as usual
+    if (!(u.dashCd > S.time)) { u.dashT = S.time + SKIRM.dash; u.dashCd = S.time + SKIRM.dashEvery; addFx('dash', u.x, u.y, { a: datan2(ty - u.y, tx - u.x), owner: u.owner, life: 0.5 }); }
+    if (!(clearLine(u.x, u.y, tx, ty) && moveDirect(u, tx, ty, dt)) && travel(u, i, j, dt) === null) return false;
+    u.moved = 1;
+    // a shot on the way at whatever is open to it
+    if (u.cd <= 0) {
+      const v = nearestEnemyBot(u.owner, u.x, u.y, BOTS[u.type].range, true, false, true, (o) => !shieldAt(o, u.x, u.y));
+      if (v) skirmShoot(u, v, power);
+    }
+    return true;
+  }
+  return false;
+}
+
+/** A Skirmisher's shot at robot v: SKIRM.dmg (SKIRM.bonus times on the kinds it hunts, SKIRM.soft on a robot that isn't army). */
+function skirmShoot(u, v, power) {
+  u.cd = SKIRM.reload * (u.pinT > S.time ? MINIGUN_PIN.reload : 1);
+  u.fought = 1;
+  u.face = datan2(v.y - u.y, v.x - u.x);
+  if (isMe(u.owner) || isMe(v.owner)) sfx('hit');
+  if (!useAmmo(u)) { addFx('spark', (u.x + v.x) / 2, (u.y + v.y) / 2, { color: PLAYER_COLORS[u.owner] }); return; }
+  const mul = SKIRM.bonus[v.type] || (!isArmy(v) ? SKIRM.soft : 1);
+  damageBot(v, Math.max(1, SKIRM.dmg * mul * power), u.x, u.y);
+  shotFx(u.x, u.y, v.x, v.y, { color: PLAYER_COLORS[u.owner] });
+}
+
+/**
+ * One robot `v` hit by an Arc Caster's bolt coming from (sx, sy): a Bulwark's shield in the way takes ARC.shieldMul
+ * times the bolt, and what's left of the bolt once the shield is gone gets through.
+ */
+function arcHit(v, sx, sy, dmg) {
+  const w = SHIELDS.length ? shieldAt(v, sx, sy) : null;
+  if (w) {
+    const want = dmg * ARC.shieldMul, took = Math.min(w.sh, want);
+    shieldTake(w, v, sx, sy, took, want);
+    dmg *= 1 - took / want;
+    if (dmg <= 0.01) return;
+  }
+  damageBot(v, dmg);
+}
+
+/**
+ * An Arc Caster's bolt at robot `foe` (`bld`: at a building instead): ARC.dmg to it, then on to the nearest enemy robot
+ * within ARC.jump of the last one hit, up to ARC.jumps times, ARC.fall weaker each jump. One bolt from its capacitors.
+ * The bolt's path is drawn from 'arc' (its points, a seed for its branches).
+ */
+function arcFire(u, foe, power, bld) {
+  u.cd = ARC.reload * (u.pinT > S.time ? MINIGUN_PIN.reload : 1);
+  u.gel = Math.max(0, (u.gel ?? ARC.cells) - 1);
+  u.fought = 1; u.arcT = S.time; // (when it last fired: its coil flares, see drawArmyLights)
+  const pts = [[u.x, u.y]];
+  if (bld) {
+    const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
+    u.face = datan2(bld.y + 0.5 - u.y, bld.x + 0.5 - u.x);
+    pts.push([bld.x + 0.5, bld.y + 0.5]);
+    hitBuilding(bld, ARC.bld * power * (fort ? ARC.fort : 1), u.owner);
+  } else {
+    u.face = datan2(foe.y - u.y, foe.x - u.x);
+    const hit = new Set();
+    let cur = foe, dmg = ARC.dmg * power, sx = u.x, sy = u.y;
+    for (let k = 0; k <= ARC.jumps && cur; k++) {
+      hit.add(cur.id); pts.push([cur.x, cur.y]);
+      arcHit(cur, sx, sy, dmg);
+      sx = cur.x; sy = cur.y; dmg *= ARC.fall;
+      let next = null, nd = ARC.jump * ARC.jump;
+      for (const v of S.bots) {
+        if (v.dead || v.inside || v.dropping || v.under || hit.has(v.id) || !foes(v.owner, u.owner) || v.owner < 0 || BOTS[v.type].air || BOTS[v.type].sea || calmAt(v.x, v.y)) continue;
+        const d = dist2(v.x, v.y, sx, sy);
+        if (d < nd) { nd = d; next = v; }
+      }
+      cur = next;
+    }
+  }
+  addFx('chain', u.x, u.y, { pts, life: 0.32, seed: S.tick * 7 + u.id, owner: u.owner });
+  if (isMe(u.owner) || S.time - (u.arcSnd || 0) > 0.5) { u.arcSnd = S.time; sfx('arc', u.x, u.y); }
+  if (u.gel <= 0 && isMe(u.owner)) {
+    const P = S.players[ME];
+    if (S.time - (P.lastArcMsg || -999) > 90) { P.lastArcMsg = S.time; postMsg(ME, 'An Arc Caster has spent all its bolts: it goes back to recharge them (Crystal from your Command Base or a Depot).', Math.floor(u.x), Math.floor(u.y), 'warn'); }
+  }
+}
+
+/**
+ * A Railgunner's slug toward (tx, ty) (`bld`: a building it's shooting): along the line out to its reach, every enemy
+ * robot within RAIL.width of it in turn, nearest first (up to RAIL.pierce): RAIL.dmg to the first, RAIL.fall less to
+ * each after. A Bulwark's shield in the way takes the slug (what it has left) and lets RAIL.through of that on; a
+ * Bulwark takes RAIL.armor times as much. Drawn from 'rail' (a bright streak) and 'railhit'.
+ */
+function railFire(u, tx, ty, power, bld) {
+  u.cd = RAIL.reload; u.rc = 0; u.rcTo = 0;
+  u.fought = 1;
+  const ang = datan2(ty - u.y, tx - u.x), ca = dcos(ang), sa = dsin(ang), reach = BOTS.railgunner.range + 0.4;
+  u.face = ang;
+  if (!useAmmo(u)) return;
+  let ex = u.x + ca * reach, ey = u.y + sa * reach;
+  if (bld) {
+    const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
+    hitBuilding(bld, RAIL.bld * power * (fort ? RAIL.fort : 1), u.owner);
+    ex = bld.x + 0.5; ey = bld.y + 0.5;
+    addFx('railhit', ex, ey, { a: ang, life: 0.5, structure: true });
+  } else {
+    const line = [];
+    for (const v of S.bots) {
+      if (v.dead || v.inside || v.dropping || v.under || !foes(v.owner, u.owner) || v.owner < 0 || BOTS[v.type].air || BOTS[v.type].sea || calmAt(v.x, v.y)) continue;
+      const dx = v.x - u.x, dy = v.y - u.y, along = dx * ca + dy * sa;
+      if (along < 0.2 || along > reach) continue;
+      if (Math.abs(dx * sa - dy * ca) > RAIL.width) continue;
+      line.push({ v, along });
+    }
+    line.sort((a, b) => a.along - b.along || a.v.id - b.v.id);
+    let dmg = RAIL.dmg * power;
+    const shields = new Set();
+    for (const { v } of line.slice(0, RAIL.pierce)) {
+      const w = SHIELDS.length ? shieldAt(v, u.x, u.y) : null;
+      let got = dmg;
+      if (w && !shields.has(w.id)) {
+        shields.add(w.id);
+        const took = Math.min(w.sh, dmg);
+        shieldTake(w, v, u.x, u.y, took, dmg);
+        got = dmg - took + took * RAIL.through;
+      }
+      damageBot(v, got * (BOTS[v.type].shield ? RAIL.armor : 1));
+      addFx('railhit', v.x, v.y, { a: ang, life: 0.45 });
+      dmg *= RAIL.fall;
+    }
+  }
+  addFx('railshot', u.x + ca * 0.5, u.y + sa * 0.5, { x2: ex, y2: ey, a: ang, life: 0.55, owner: u.owner });
+  sfx('rail', u.x, u.y);
+}
+
+/**
+ * A Railgunner on a foe (a robot, or a building `bld`) in reach: it stands, charges its rail RAIL.charge s (the glint:
+ * u.rc, when it fires) and fires. A robot closer than RAIL.min gets its sidearm instead. False if it can't fire now.
+ */
+function railAct(u, foe, power, bld) {
+  const tx = bld ? bld.x + 0.5 : foe.x, ty = bld ? bld.y + 0.5 : foe.y, id = bld ? bld.id : foe.id;
+  u.face = datan2(ty - u.y, tx - u.x);
+  if (!bld && dist2(u.x, u.y, tx, ty) < RAIL.min * RAIL.min) {
+    u.rc = 0;
+    if (u.cd > 0) return true;
+    u.cd = RAIL.sideReload; u.fought = 1;
+    damageBot(foe, RAIL.side * power, u.x, u.y);
+    shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
+    if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
+    return true;
+  }
+  if (u.rc && u.rcTo !== id) u.rc = 0; // (its target changed: charge again)
+  if (!u.rc) {
+    if (u.cd > 0 || !botArmed(u)) return false;
+    u.rc = S.time + RAIL.charge; u.rcTo = id; u.rcX = tx; u.rcY = ty; // (it fires where the target was now)
+    addFx('railglint', u.x + dcos(u.face) * 0.42, u.y + dsin(u.face) * 0.42, { life: RAIL.charge + 0.1, a: u.face, owner: u.owner, id: u.id });
+    if (isMe(u.owner)) sfx('railcharge', u.x, u.y);
+    return true;
+  }
+  u.fought = 1;
+  if (S.time >= u.rc) railFire(u, u.rcX ?? tx, u.rcY ?? ty, power, bld);
+  return true;
 }
 
 /* ------------------------------------------------------------------ scorched earth */
@@ -5202,14 +5571,17 @@ function scorchDone(u) {
   u.resume = null;
 }
 
-/** Where a Torch with an empty tank can fill it: the nearest building of its owner's holding Fuel (storage or a Fuel Station) it can reach. */
+/**
+ * Where a Torch with an empty tank can fill it: the nearest building of its owner's holding Fuel (storage or a Fuel
+ * Station) it can reach. An Arc Caster's capacitors: storage holding Crystal (see botTank).
+ */
 function fuelPoint(u) {
-  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], g = (botTank(u.type) || { good: 'fuel' }).good;
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || !b.built || b.owner !== u.owner || !((b.stock.fuel || 0) >= 1)) continue;
+    if (b.dead || !b.built || b.owner !== u.owner || !((b.stock[g] || 0) >= 1)) continue;
     const def = BDEFS[b.type];
-    if (!(def.store || def.charger) || S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (!(def.store || (def.charger && g === 'fuel')) || S.zone[tIdx(b.x, b.y)] !== zone) continue;
     const d = dist2(b.x, b.y, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -5248,7 +5620,7 @@ function escortMove(u, gx, gy, key, dt) {
   const job = key.attack ? 'a' + key.attack : 'r' + key.rally;
   if (lead.formJob !== job || dl < lead.formD - 1) { lead.formJob = job; lead.formD = dl; lead.formT = S.time; }
   if (lead.fight || S.time - lead.formT > FORM.stuck) return false; // it's fighting, or held up: come round and join in
-  const bt = BOTS[u.type], reach = bt.flame ? 2.05 : WARBOT_HIT.reach;
+  const reach = armyBldReach(u);
   if (key.attack && dist(u.x, u.y, gx, gy) <= reach) return false; // already in reach of the target: shoot
   const at = formPlace(u, lead, gx, gy, dl, key);
   if (S.time - (u.hurtT ?? -99) < 1.5 && dist2(at.x, at.y, gx, gy) > dist2(u.x, u.y, gx, gy) + 1) return false;
@@ -5362,6 +5734,8 @@ function hitBuilding(b, dmg, by) {
   }
   // A computer rival has its say now and then, after the alert it goes with (see toast: a story line never hides one).
   if (by >= 0 && foes(by, b.owner)) doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240);
+  // Arrival City is never destroyed: knocked to 0 it's down, and taken by warbots at its walls (cityCapture).
+  if (BDEFS[b.type].city && b.built) { if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } return; }
   // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
   if (b.armor < 1 && S.mission && b.type === 'lander' && typeof captureLocked === 'function' && captureLocked(b, by)) b.armor = 1;
   if (b.armor <= 0) captureBuilding(b, by);
@@ -5747,7 +6121,7 @@ function dangerSweep() {
     const hot = underGuns(b);
     if (hot && !b.underFire) {
       b.underFire = S.time;
-      if (b.staff || b.staffInc) unstaff(b);
+      if (b.staff || b.staffInc || BDEFS[b.type].crews > 1) unstaff(b);
       const gun = gunOver(b.owner, b.x, b.y), P = S.players[b.owner];
       if (isMe(b.owner) && gun && !BDEFS[b.type].war && S.time - (P.gunMsgAt || -999) > 45) {
         P.gunMsgAt = S.time;
@@ -6330,6 +6704,9 @@ function updateDomination() {
     const o = S.owner[t];
     if (o >= 0 && o < land.length) land[o]++;
   }
+  // Arrival City's ring counts twice for whoever holds it (each tile once more, however many cities cover it).
+  const twice = cityLand();
+  for (const t of twice) { const o = S.owner[t]; if (o >= 0 && o < land.length) land[o]++; }
   const held = land.reduce((a, v) => a + v, 0), share = domShare();
   D.land = land; D.held = held; D.ground = ground;
   let lead = -1;
@@ -6366,6 +6743,8 @@ function rivalOf(p) {
   // Domination: a colony about to win on land is everyone's rival (Uplinks: one whose clock is running).
   if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
   if (S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p && !S.players[S.upLead].out) return S.upLead;
+  // (The Great Uplink win: a foe transmitting is everyone's rival, the furthest along first.)
+  { const g = gupFoeLive(p); if (g && !S.players[g.owner].out) return g.owner; }
   const P = S.players[p];
   const keep = P.rival >= 0 && S.players[P.rival] && !S.players[P.rival].out && S.time < (P.rivalUntil || 0);
   if (keep) return P.rival;
@@ -6409,13 +6788,14 @@ function updateWarbot(u, dt) {
     }
     if (home) reloadArmy(u, home);
     // A Torch with an empty tank in a garrison with no Fuel: off to the nearest Fuel to fill it (then back on guard).
-    if (home && BOTS[u.type].flame && !botArmed(u) && S.tick % 45 === u.id % 45) {
+    // (An Arc Caster's capacitors the same, with Crystal from storage.)
+    if (home && botTank(u.type) && !botArmed(u) && S.tick % 45 === u.id % 45) {
       const f = fuelPoint(u);
       if (f && f !== home) { exitBuilding(u); u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
     }
     // A rival's warbot out of Ammo in a garrison with none, and none on the way (an Outpost no road
     // reaches yet): it goes to reload where there is some, and stays away from here for a while.
-    if (home && !BOTS[u.type].flame && !botArmed(u) && !usesPosts(u.owner) && !(home.stock.ammo > 0) && !(home.inc.ammo > 0) &&
+    if (home && !botTank(u.type) && !botArmed(u) && !usesPosts(u.owner) && !(home.stock.ammo > 0) && !(home.inc.ammo > 0) &&
       S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8) {
       const c = rechargePoint(u, true);
       if (c && c !== home) {
@@ -6454,7 +6834,7 @@ function startReload(u, t) {
   if (t.trips || BOTS[u.type].shield) return false;
   const b = getE(t.target);
   if (!b || b.dead || !foes(b.owner, u.owner)) return false;
-  const home = BOTS[u.type].flame ? fuelPoint(u) : rechargePoint(u, true);
+  const home = botTank(u.type) ? fuelPoint(u) : rechargePoint(u, true);
   if (!home || dist2(home.x + 0.5, home.y + 0.5, u.x, u.y) > RELOAD_REACH * RELOAD_REACH) return false;
   if (!S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && v.task && v.task.type === 'attack' && v.task.target === t.target)) return false; // (not alone)
   t.reload = home.id; t.trips = 1;
@@ -6578,7 +6958,7 @@ function warbotAct(u, dt) {
     u.scanT -= dt;
     if (u.scanT <= 0) {
       u.scanT = 0.3;
-      const immediate = nearestEnemyBot(u.owner, u.x, u.y, WARBOT_RANGE_GAP, true, defending, true,
+      const immediate = nearestEnemyBot(u.owner, u.x, u.y, Math.max(WARBOT_RANGE_GAP, BOTS[u.type].range || 0), true, defending, true,
         (v) => armedThreat(v) && armyInRange(u, v));
       if (immediate) foe = immediate;
       const accepts = (v) => v.id !== u.ignoreFoe || S.time >= u.ignoreUntil || armyInRange(u, v);
@@ -6596,20 +6976,31 @@ function warbotAct(u, dt) {
       if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && !accepts(foe)) foe = null;
+      // (A Skirmisher, Arc Caster or Railgunner picks its own kind of target among those near: armyPick.)
+      if (foe && !(rally && rally.follow === foe.id)) { const pick = armyPick(u, foe); if (pick !== foe && accepts(pick) && (!defending || isArmy(pick) || armyInRange(u, pick))) foe = pick; }
       if (foe) u.fight = foe.id;
     }
   }
   if (foe) {
     const bt = BOTS[u.type], range = bt.range || WARBOT_RANGE;
+    if (bt.flank && skirmFlank(u, foe, dt, power)) return; // (round the shield first)
+    if (bt.railgun && u.rc) { u.path = null; railAct(u, foe, power); return; } // (charging: it stands and fires)
     const covered = firingCover(u, foe.x, foe.y, range, dt);
     const inReach = armyInRange(u, foe);
-    if (!inReach && !covered) { advanceOnBot(u, foe, dt); return; }
+    if (!inReach && !covered) {
+      // (a Skirmisher closing on a foe well off dashes in, off its cooldown)
+      if (bt.flank && !(u.dashCd > S.time) && dist2(u.x, u.y, foe.x, foe.y) > SKIRM.dashFar * SKIRM.dashFar) { u.dashT = S.time + SKIRM.dash; u.dashCd = S.time + SKIRM.dashEvery; addFx('dash', u.x, u.y, { a: datan2(foe.y - u.y, foe.x - u.x), owner: u.owner, life: 0.5 }); }
+      advanceOnBot(u, foe, dt); return;
+    }
     u.path = null; u.viaFoe = 0;
     if (inReach && !covered && dist2(u.x, u.y, foe.x, foe.y) < sq(range - 0.04)) spreadOut(u, dt);
     if (!bt.shield) u.face = datan2(foe.y - u.y, foe.x - u.x);
     if (inReach && u.cd <= 0) {
       const pin = u.pinT > S.time ? MINIGUN_PIN.reload : 1; // (pinned by a minigun: slower to fire back)
       if (bt.flame) { if (botArmed(u)) torchFire(u, foe.x, foe.y, power); else u.cd = 0.5; }
+      else if (bt.arc) { if (botArmed(u)) arcFire(u, foe, power); else u.cd = 0.5; }
+      else if (bt.railgun) railAct(u, foe, power);
+      else if (bt.flank) skirmShoot(u, foe, power);
       else if (bt.shield) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
         u.cd = BULWARK.reload * pin;
@@ -6649,8 +7040,8 @@ function warbotAct(u, dt) {
   if (t.type === 'escort') { doEscort(u, t, dt); return; }
   if (t.type === 'refill') {
     // A Torch going to fill its tank where Fuel is kept, then back to what it was doing (or a garrison).
-    const c = getE(t.bld);
-    if (!c || c.dead || c.owner !== u.owner || !((c.stock.fuel || 0) >= 1)) { u.task = null; return; }
+    const c = getE(t.bld), g = (botTank(u.type) || { good: 'fuel' }).good;
+    if (!c || c.dead || c.owner !== u.owner || !((c.stock[g] || 0) >= 1)) { u.task = null; return; }
     if (dist2(u.x, u.y, c.x + 0.5, c.y + 0.5) <= 2.2) {
       u.path = null;
       while (reloadArmy(u, c)) { /* fill up */ }
@@ -6820,13 +7211,15 @@ function overGap(a, b) {
 /** Walk up to an enemy building and hit it. Returns null if it can't be reached (or can't be hurt: on a Trade Post's ground). */
 function strikeBuilding(u, b, dt, power) {
   if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
-  const bt = BOTS[u.type], reach = bt.shield ? 1.7 : bt.flame ? 2.05 : WARBOT_HIT.reach; // (a Bulwark goes in closest, in front of its group)
+  const bt = BOTS[u.type], reach = armyBldReach(u); // (a Bulwark goes in closest, in front of its group)
   const covered = firingCover(u, b.x + 0.5, b.y + 0.5, reach, dt);
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
     if (!covered && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) < sq(reach - 0.04)) spreadOut(u, dt);
     if (!bt.shield) u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (bt.flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, power, b); return true; }
+    if (bt.arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, power, b); return true; }
+    if (bt.railgun) { if (u.rc || u.cd <= 0) railAct(u, null, power, b); return true; }
     if (bt.shield) {
       if (u.cd <= 0) {
         u.cd = BULWARK.reload; u.fought = 1;
@@ -6850,9 +7243,9 @@ function strikeBuilding(u, b, dt, power) {
 /** Fire one shot: true if the warbot had ammo (one is used), false if it has none left. */
 function useAmmo(u) {
   if (BOTS[u.type].shield) return true; // (a Bulwark's blasters need no Ammo)
-  if (BOTS[u.type].flame) return false; // (a Torch only has its flame: it can't shoot out of a Bunker's slit)
+  if (botTank(u.type)) return false; // (a Torch only has its flame, an Arc Caster its bolts: they can't shoot out of a Bunker's slit)
   if (botArmed(u)) {
-    u.ammo = (u.ammo ?? WARBOT_AMMO) - 1;
+    u.ammo = (u.ammo ?? botMag(u.type)) - 1;
     if (u.ammo === 0) {
       const P = S.players[u.owner];
       if (S.time - (P.lastAmmoMsg || -999) > 90) {
@@ -7035,7 +7428,7 @@ function reloadAmmo(u, b) {
   if (!b || b.owner !== u.owner || !BDEFS[b.type].mil || !((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
   bump(b.stock, 'ammo', -1);
   usedGood(b.owner, 'ammo', 1);
-  u.ammo = Math.min(WARBOT_AMMO, (u.ammo ?? 0) + AMMO_SHOTS);
+  u.ammo = Math.min(botMag(u.type), (u.ammo ?? 0) + botAmmoShots(u.type));
   return true;
 }
 
@@ -7370,7 +7763,7 @@ function rocketHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); } // (held at its floor; its owner still hears of the shelling)
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } } // (held at its floor; its owner still hears of the shelling)
   else if (b.armor <= 0) {
     postMsg(by, `Your artillery wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy artillery wrecked your ${def.name}!`, b.x, b.y, 'lost');
@@ -7464,8 +7857,8 @@ function holdRally(u, t, r, dt, power) {
     } else if (travel(u, home.x, home.y, dt) === null) t.phase = null;
     return;
   }
-  // A Torch on a flag with an empty tank: off to fill it, then back to the flag.
-  if (BOTS[u.type].flame && !botArmed(u) && S.tick % 30 === u.id % 30) {
+  // A Torch on a flag with an empty tank: off to fill it, then back to the flag. (An Arc Caster out of bolts too.)
+  if (botTank(u.type) && !botArmed(u) && S.tick % 30 === u.id % 30) {
     const f = fuelPoint(u);
     if (f) { u.resume = { type: 'hold', rally: t.rally, slot: t.slot }; u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
   }
@@ -7659,6 +8052,8 @@ function breachShots(u) {
   const bt = BOTS[u.type];
   if (bt.shield) return Infinity;
   if (bt.flame) return Math.floor(((u.gel ?? TORCH.tank) / TORCH.tick) * TORCH.bld * TORCH.fort);
+  if (bt.arc) return Math.floor((u.gel ?? ARC.cells) * ARC.bld * ARC.fort);
+  if (bt.railgun) return Math.floor((u.ammo ?? botMag(u.type)) * RAIL.bld * RAIL.fort);
   return (u.ammo ?? WARBOT_AMMO) * WARBOT_HIT.wall;
 }
 
@@ -7692,7 +8087,7 @@ function squadBreach(us, i, j, attack) {
     // (a second load for those that can fetch one near the wall: see startReload)
     const near = (b) => !b.dead && b.built && b.owner === us[0].owner && dist2(b.x, b.y, first.x, first.y) <= RELOAD_REACH * RELOAD_REACH;
     const ammo = S.buildings.some((b) => near(b) && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0), fuel = S.buildings.some((b) => near(b) && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) >= 1);
-    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
+    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && !BOTS[u.type].arc && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : BOTS[u.type].railgun ? Math.floor(botMag(u.type) * RAIL.bld * RAIL.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
   }
   return again ? { need: Math.ceil(need), shots, reload: true } : { need: Math.ceil(need), shots };
 }
@@ -8160,14 +8555,14 @@ function updateMissiles(dt) {
  * Missiles can't take a fort (Outpost, Command Base) below MISSILE_FLOOR of its armor: they soften
  * it up, and warbots still have to shoot their way in past the garrison that comes out to meet them.
  */
-function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); }
+function missileFloor(b) { return BDEFS[b.type].city ? 0 : Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); } // (Arrival City: down to 0, never gone)
 
 /**
  * A building weapons can only knock down to its missileFloor, never destroy: a Command Base or a Keep (they
  * have to be captured by warbots on the ground). Every other building, Outposts and Bunkers included, a
  * Missile, a bomb or a Howitzer's rockets can knock out.
  */
-function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep)); }
+function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep || BDEFS[b.type].city)); } // (and Arrival City, to 0: cityDown)
 
 /** Player p was hit by a Missile of `by`'s just now (a nuclear one too): remembered like a warbot's or a shell's hit (see rivalOf). */
 function hitByNow(p, by) {
@@ -8194,9 +8589,10 @@ function missileImpact(m) {
       fortTaken(b, m.owner);
       destroyBuilding(b, true);
     } else {
-      const floor = captureOnly(b) ? missileFloor(b) : 0;
-      if (floor && b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
-      postMsg(m.owner, `Missile hit the enemy ${name}${floor && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
+      const held = captureOnly(b), floor = held ? missileFloor(b) : 0;
+      if (held && b.armor <= floor) b.armor = Math.max(floor, Math.min(floor, b.armor + md.damage));
+      if (held && b.armor <= 0) cityDown(b, m.owner); // (Arrival City knocked down)
+      postMsg(m.owner, `Missile hit the enemy ${name}${held && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
     }
   }
@@ -8209,7 +8605,10 @@ function missileImpact(m) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'lost');
       fortTaken(e, m.owner);
       destroyBuilding(e, true);
-    } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
+    } else if (captureOnly(e) && e.armor <= missileFloor(e)) {
+      e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
+      if (e.armor <= 0) { e.armor = 0; cityDown(e, m.owner); } // (Arrival City knocked down)
+    }
   }
   for (const u of S.bots) {
     if (!u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
@@ -8432,6 +8831,8 @@ function nukeImpact(m) {
         b.lastHit = S.time;
         // A direct hit (aimed at the Command Base itself) destroys it: that colony is out.
         if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= NUKE.direct * NUKE.direct && m.owner >= 0 && b.owner >= 0 && foes(m.owner, b.owner) && S.players[b.owner] && !S.players[b.owner].out) { direct.push(b); lost[b.owner]++; }
+      } else if (BDEFS[b.type].city && b.built) {
+        b.armor = 0; b.lastHit = S.time; cityDown(b, m.owner); // (Arrival City stands: knocked down, never gone)
       } else {
         lost[b.owner]++;
         fortTaken(b, m.owner);
@@ -8858,7 +9259,7 @@ function releaseScore(b) {
  * Returns { cost: the materials left, crates: every crate left, inside: those that were inside it }.
  */
 function demolish(b) {
-  if (b.dead || b.type === 'lander') return null;
+  if (b.dead || b.type === 'lander' || (BDEFS[b.type].city && b.built)) return null; // (Arrival City can't be taken down: only captured)
   // A building on the move: dismantling either end calls the move off (the old one stays as it was; the new site cost nothing).
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; b.gone = 1; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
   if (b.moving) cancelMove(b);
@@ -9252,7 +9653,7 @@ function rockfall(r) {
   if (hit.has(ME) || S.owner[tIdx(r.x, r.y)] === ME) sfx('boom', cx, cy);
   // What came down lies there: a boulder (Stone for a Quarry), where the ground is clear.
   const t = tIdx(r.x, r.y);
-  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !postAt(t) && !uplinkAt(t)) {
+  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !calmAt(r.x + 0.5, r.y + 0.5) && !uplinkAt(t)) {
     const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
     S.res[t] = R_BOULDER; S.amt[t] = clamp(Math.round(RES[R_BOULDER].amount * pr.amount), 1, 255); S.grow[t] = 1;
     clearDecor(t);
@@ -9655,9 +10056,12 @@ function meteorImpact(E, h) {
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
   let placed = 0;
-  for (const [, i, j] of spots) {
-    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i, j)) continue;
-    const t = tIdx(i, j);
+  for (const [, i0, j0] of spots) {
+    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
+    // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
+    let t = tIdx(i0, j0);
+    if (calmAt(i0 + 0.5, j0 + 0.5)) { if (S.terrain[t] !== T_GROUND || (t = calmSpill(t)) < 0) continue; }
+    const i = t % S.W, j = (t / S.W) | 0;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
     if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
     S.res[t] = r; S.amt[t] = amt;
@@ -9852,7 +10256,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1); }
+function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -10926,6 +11330,9 @@ function murmurPower(e) {
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
+    else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
+    else if (BDEFS[b.type].lift && b.working) charge += 2;
+    else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
   }
@@ -10937,6 +11344,9 @@ function chargeWorth(e) {
   const def = BDEFS[e.type];
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
+  if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
+  if (def.lift && e.working) return 3;
+  if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
@@ -12378,7 +12788,7 @@ function updateYard(b, def, dt) {
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
   if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
-  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The line has its ${MAGLEV.perLine} pods already` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
   const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0), rd = BOTS[kind].round || { alloy: 1, chip: 1 }; // (a round of parts: 1 Alloy, 1 Chip; a Maglev Pod's 2 Alloy, 1 Chip)
   if (free('alloy') < rd.alloy || free('chip') < rd.chip) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${free('alloy') < rd.alloy ? (free('chip') < rd.chip ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
@@ -12790,6 +13200,100 @@ function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
  * warbots used to fire at one for ever). Bombs, shells and Missiles still spare everything there.
  */
 function calmShield(b) { return b.built && calmB(b); }
+
+/**
+ * No deposits lie on a Trade Post's ground: only a Trade Terminal or a Ramp goes there (canPlace), so nothing could
+ * ever mine them (the owner's call, Nov 2026). Can a deposit moved off it from tile `from` lie on tile t? Open, bare
+ * ground off every post's ground, with nothing on it or planned for it (on the same land as `from`, with `sameZone`).
+ */
+function calmSpillOk(t, from, sameZone) {
+  if (!(t >= 0 && t < S.W * S.H) || S.terrain[t] !== T_GROUND) return false;
+  if (S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) return false;
+  for (const L of [S.rail, S.railPlan, S.pipe, S.pipePlan, S.lava, S.ford, S.tidal, S.fault]) if (L && L[t]) return false;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (calmAt(i + 0.5, j + 0.5)) return false;
+  if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
+  if (S.wrecks && S.wrecks.some((w) => w.tiles && w.tiles.includes(t))) return false;
+  if (sameZone && S.zone && S.zone[t] !== S.zone[from]) return false;
+  return true;
+}
+
+/**
+ * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk),
+ * on the same land if there is one near, else anywhere near (a tie goes to the tile further out from the posts' ground);
+ * -1 if there's nowhere. The same answer on every device.
+ */
+function calmSpill(from) {
+  const fi = from % S.W, fj = (from / S.W) | 0;
+  for (const same of [true, false]) {
+    for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) {
+      let best = -1, bd = Infinity, bo = -1;
+      for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
+        const t = j * S.W + i, d = dist2(i, j, fi, fj);
+        if (d > bd || !calmSpillOk(t, from, same)) continue;
+        let out = Infinity;
+        for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
+        if (d < bd || out > bo) { best = t; bd = d; bo = out; }
+      }
+      if (best >= 0) return best;
+    }
+  }
+  return -1;
+}
+
+/** Move the deposit on tile `from` to tile `to` (the same kind and amount). */
+function moveDeposit(from, to) {
+  S.res[to] = S.res[from]; S.amt[to] = S.amt[from];
+  if (S.grow) S.grow[to] = S.grow[from];
+  S.res[from] = R_NONE; S.amt[from] = 0;
+  if (S.grow) S.grow[from] = 1;
+  if (S.resRes) S.resRes[from] = 0;
+  clearDecor(to);
+  S.dirtyTiles.push(from, to);
+}
+
+/**
+ * Clear the Trade Posts' ground of deposits (see calmSpillOk): each moves, the same kind and amount, to the nearest open
+ * tile just off it (calmSpill), the ones at the edge of the ground first; an Energy crop is a planting, and just goes.
+ * At the start of a game (once the posts, the Uplinks and a mission's own setup are in) and as a save loads (one from
+ * before this rule). A post's half-turn twin (Teams and Long Haul 2v2 pair them) has its deposits moved to the twins of
+ * the first one's tiles, so both sides stay alike. No dice: every device does the same. Returns how many moved.
+ */
+function clearCalmGround() {
+  if (!S.posts || !S.posts.length) return 0;
+  const R = TRADE_POST.calm, N = S.W * S.H, half = (t) => N - 1 - t;
+  const done = new Map(); // post -> its moves [{ f, t, r, a }]
+  let moved = 0;
+  for (const p of S.posts) {
+    const src = [];
+    for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+      const i = p.x + di, j = p.y + dj;
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!S.res[t]) continue;
+      if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.dirtyTiles.push(t); continue; }
+      src.push([Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
+    }
+    // The twin's moves, turned half round, if they all still fit.
+    const twin = S.posts.find((q) => q !== p && done.has(q) && q.x === S.W - 1 - p.x && q.y === S.H - 1 - p.y);
+    if (twin && src.length) {
+      const plan = done.get(twin).map((m) => ({ f: half(m.f), t: half(m.t), r: m.r, a: m.a }));
+      const same = plan.length === src.length && plan.every((m, k) => S.res[m.f] === m.r && S.amt[m.f] === m.a && src.some((s) => s[2] === m.f) && plan.findIndex((x) => x.t === m.t) === k && calmSpillOk(m.t, m.f, false));
+      if (same) { for (const m of plan) { moveDeposit(m.f, m.t); moved++; } done.set(p, plan); continue; }
+    }
+    src.sort((a, b) => b[0] - a[0] || b[1] - a[1] || a[2] - b[2]);
+    const moves = [];
+    for (const [, , f] of src) {
+      const t = calmSpill(f);
+      if (t < 0) continue;
+      moves.push({ f, t, r: S.res[f], a: S.amt[f] });
+      moveDeposit(f, t);
+      moved++;
+    }
+    done.set(p, moves);
+  }
+  return moved;
+}
 
 /* ------------------------------------------------------------------ crawlers */
 
@@ -14685,7 +15189,7 @@ function bombHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); } // (held at its floor; its owner still hears of the hit)
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } } // (held at its floor; its owner still hears of the hit)
   else if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'lost');
@@ -15133,71 +15637,207 @@ function shipLost(u) {
 
 /*
  * A Maglev line (MAGLEV): two Maglev Terminals (BDEFS.magterm) joined by an elevated guideway on pylons (BDEFS.magpylon,
- * a building on every spot magSpots gives), b.line on both Terminals (b.magNear on the one the line was built from:
- * the pylons are counted from it, and it holds the repair job). Pods (BOTS.magpod) are inside a Terminal (u.inside,
- * u.home) or running: u.magFrom / u.magTo (Terminal ids), their place u.x, u.y on the straight line between the two
- * tile centres (drawn up at deck height), their load u.cargo promised to u.cargoTo (counted in its inc, as an
- * Airship's). A line goes up as a construction site with s.magFrom (the near Terminal): the far Terminal's site, or,
- * when the far Terminal stands already, a pylon site on the first pylon spot (s.magFar: that Terminal); the Worker
- * builds it standing at the near Terminal (siteWorkAt), the pylons go up as it gets along (magBuildStep) and
- * completeBuilding joins the two (magLineDone). A cut (magCut: a standing spot with no pylon on it) stops the pods;
- * the near Terminal's b.magFix is the repair under way.
+ * a building on every spot magSpots gives). A Terminal is on up to MAGLEV.hub lines (a hub: b.line, then b.magMore),
+ * so lines join into a network (magNet). One end of each line is its key (b.magNear on it, with the line's other end
+ * in its b.line): the pylons are counted from it and carry its id (p.line), it holds the pylons' layout (b.magLayout)
+ * and the repair job (b.magFix). A Terminal is the key of one line at most (magKeyBusy), so a pylon's p.line names its
+ * line; a line built from a Terminal that keys one already is keyed at its far end. Pods (BOTS.magpod) serve the whole
+ * network: inside a Terminal (u.inside, u.home) or running: u.magFrom / u.magTo (Terminal ids, two ends of one line),
+ * their place u.x, u.y on the straight line between the two tile centres (drawn up at deck height), their load u.cargo
+ * promised to u.cargoTo (counted in its inc, as an Airship's). At a hub a pod unloads and loads again for the next
+ * line, so goods cross the network hop by hop (the rail plan rolls each Terminal's demand up toward the Command Base:
+ * magRelayPlan). A line goes up as a construction site with s.magFrom (the Terminal it is planned from): the far
+ * Terminal's site, or, when the far Terminal stands already, a pylon site on the first pylon spot (s.magFar: that
+ * Terminal), s.magKey the key end's id when that is not s.magFrom; the Worker builds it standing at s.magFrom
+ * (siteWorkAt), the pylons go up as it gets along (magBuildStep) and completeBuilding joins the two (magLineDone). A
+ * new hub site may carry the next line on (s.magNext: its far end, planned when the hub is up: Route via a hub). A cut
+ * (magCut: a standing spot with no pylon on it) stops the pods; the key Terminal's b.magFix is the repair under way. A
+ * Terminal lost leaves its lines suspended (b.magMissing, then b.magMissMore, on each surviving end: the lost one's
+ * tile, whether it was the key, its id and its layout), the pylons standing, until a Terminal goes up on that tile.
  */
 
-/** The other Terminal of Maglev Terminal b's line (b.line on both, both built, both its owner's), or null. */
-function magPartner(b) {
-  if (!b || b.dead || !b.built || !b.line || !BDEFS[b.type].magterm) return null;
-  const o = getE(b.line);
-  return o && !o.dead && o.built && o.owner === b.owner && o.line === b.id && BDEFS[o.type].magterm ? o : null;
+/** The ids of the Terminals Maglev Terminal b is joined to: b.line, then a hub's other lines (b.magMore). */
+function magLinkIds(b) {
+  if (!b) return [];
+  const out = b.line ? [b.line] : [];
+  if (b.magMore) for (const id of b.magMore) if (id && !out.includes(id)) out.push(id);
+  return out;
 }
 
-/** The near Terminal of the line b is on (the one it was built from, holding its pylons' count and its repairs), or null. */
-function magNearEnd(b) {
-  const o = magPartner(b);
-  if (!o) return null;
-  return b.magNear ? b : o.magNear ? o : b.id < o.id ? b : o;
+/** Are a and b two built Maglev Terminals of one owner joined by a line (each names the other)? */
+function magLinked(a, b) {
+  return !!(a && b && a !== b && !a.dead && !b.dead && a.built && b.built && a.owner === b.owner && BDEFS[a.type].magterm && BDEFS[b.type].magterm &&
+    magLinkIds(a).includes(b.id) && magLinkIds(b).includes(a.id));
 }
 
-/** Every Maglev line of owner's, once: [near, far]. */
+/** The Terminals at the far ends of Maglev Terminal b's lines (built, its owner's), in a fixed order. */
+function magPartners(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].magterm) return [];
+  const out = [];
+  for (const id of magLinkIds(b)) { const o = getE(id); if (magLinked(b, o)) out.push(o); }
+  return out;
+}
+
+/** The other Terminal of Maglev Terminal b's (first) line, or null. */
+function magPartner(b) { return magPartners(b)[0] || null; }
+
+/** Of two joined Terminals a and b, the key end of their line (it holds the pylons' count, their layout and repairs). */
+function magKey(a, b) { return a.magNear && a.line === b.id ? a : b.magNear && b.line === a.id ? b : a.id < b.id ? a : b; } // (a save from before b.magNear: the older)
+
+/** The other end of the line Terminal A is the key of, or null. */
+function magKeyPartner(A) { for (const o of magPartners(A)) if (magKey(A, o) === A) return o; return null; }
+
+/** The key end of Terminal b's first line, or null. */
+function magNearEnd(b) { const o = magPartner(b); return o ? magKey(b, o) : null; }
+
+/** Every Maglev line of owner's, once: [key, other]. */
 function magLines(owner) {
   const out = [];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !b.line || !BDEFS[b.type].magterm) continue;
-    const o = magPartner(b);
-    if (o && magNearEnd(b) === b) out.push([b, o]);
+    if (b.dead || b.owner !== owner || !BDEFS[b.type].magterm) continue;
+    for (const o of magPartners(b)) if (magKey(b, o) === b) out.push([b, o]);
   }
   return out;
 }
 
-/** The line's two ends from any building on it: a Terminal (its partner) or a pylon (its near Terminal's line); [near, far] or null. */
+/** The line's two ends from any building on it: a Terminal (its first line) or a pylon (its key Terminal's line); [key, other] or null. */
 function magLineOf(b) {
   if (!b || b.dead) return null;
-  const A = BDEFS[b.type].pylon ? getE(b.line) : magNearEnd(b);
-  const B = A ? magPartner(A) : null;
-  return A && B ? [A, B] : null;
+  if (BDEFS[b.type].pylon) { const A = getE(b.line), B = A && BDEFS[A.type].magterm ? magKeyPartner(A) : null; return A && B ? [A, B] : null; }
+  const o = magPartner(b);
+  return o ? (magKey(b, o) === b ? [b, o] : [o, b]) : null;
 }
 
-/** The pylon spots of a line from tile centre (ax, ay) to (bx, by): [{ k, d, i, j, t }], d tiles from the near end. */
-function magSpotsAt(ax, ay, bx, by) {
-  const L = dist(ax, ay, bx, by), ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1), out = [];
-  for (let k = 1; k * MAGLEV.spacing <= L - 2; k++) {
-    const d = k * MAGLEV.spacing, i = Math.floor(ax + ux * d), j = Math.floor(ay + uy * d);
-    if (inMap(i, j)) out.push({ k, d, i, j, t: tIdx(i, j) });
+/** Terminal b's suspended lines (their lost ends): [{ x, y, near, key, layout }]. */
+function magMiss(b) {
+  if (!b || !b.magMissing) return [];
+  return b.magMissMore ? [b.magMissing, ...b.magMissMore] : [b.magMissing];
+}
+function magMissSet(b, list) {
+  if (list.length) b.magMissing = list[0]; else delete b.magMissing;
+  if (list.length > 1) b.magMissMore = list.slice(1); else delete b.magMissMore;
+}
+
+/** How many lines Terminal b has, joined or suspended (a hub takes MAGLEV.hub). */
+function magSlots(b) { return magLinkIds(b).length + magMiss(b).length; }
+
+/**
+ * Does Terminal b key a line's pylons already: a line joined, or suspended with b the end holding them (the lost end
+ * was the other, or a save from before the lost end kept its own)? A line from it is then keyed at its far end.
+ */
+function magKeyBusy(b) {
+  if (!b) return false;
+  if (magKeyPartner(b)) return true;
+  return magMiss(b).some((m) => !m.near || m.key == null);
+}
+
+/** Join Terminals K (the key: its b.line, b.magNear) and O with a line. */
+function magJoin(K, O) {
+  if (K.line && K.line !== O.id) K.magMore = [K.line, ...(K.magMore || []).filter((id) => id !== O.id)];
+  else if (K.magMore) K.magMore = K.magMore.filter((id) => id !== O.id);
+  if (K.magMore && !K.magMore.length) delete K.magMore;
+  K.line = O.id; K.magNear = 1;
+  if (!O.line) O.line = K.id;
+  else if (O.line !== K.id && !(O.magMore || []).includes(K.id)) (O.magMore = O.magMore || []).push(K.id);
+}
+
+/** Terminal b's line to the Terminal with id `id` is gone (b.magNear goes with it if b was its key). */
+function magUnjoin(b, id) {
+  if (b.line === id) {
+    delete b.magNear;
+    const more = b.magMore || [];
+    b.line = more.shift() || 0;
+    if (!more.length) delete b.magMore;
+  } else if (b.magMore) {
+    b.magMore = b.magMore.filter((k) => k !== id);
+    if (!b.magMore.length) delete b.magMore;
+  }
+}
+
+/** The Terminals joined to b by lines, b first, in a fixed order: its network. */
+function magNet(b) {
+  const out = [b], seen = new Set([b.id]);
+  for (let k = 0; k < out.length; k++) for (const o of magPartners(out[k])) if (!seen.has(o.id)) { seen.add(o.id); out.push(o); }
+  return out;
+}
+
+/*
+ * A line's path: the tile centres of its key end, its bends (b.magBends on the key Terminal, tiles in order from it)
+ * and its other end, [[x, y], ...]; straight stretches between them. A bend is a pylon of its own.
+ */
+/** The path of the line from Terminal (or stand-in) A, its key end, to B: A's bends between. */
+function magPathOf(A, B) { return [[A.x + 0.5, A.y + 0.5], ...(A.magBends || []).map(([i, j]) => [i + 0.5, j + 0.5]), [B.x + 0.5, B.y + 0.5]]; }
+/** The length of path pts in tiles. */
+function magPathLen(pts) { let L = 0; for (let k = 1; k < pts.length; k++) L += dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); return L; }
+/** The point d tiles along path pts: [x, y, ux, uy, seg] (the stretch's direction and index). */
+function magPathAt(pts, d) {
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by) || 1e-9;
+    if (d <= L || k === pts.length - 1) { const f = clamp(d / L, 0, 1), ux = (bx - ax) / L, uy = (by - ay) / L; return [ax + (bx - ax) * f, ay + (by - ay) * f, ux, uy, k - 1]; }
+    d -= L;
+  }
+  return [pts[0][0], pts[0][1], 1, 0, 0];
+}
+/** How far along path pts the nearest point to (x, y) is, in tiles. */
+function magPathProject(pts, x, y) {
+  let best = 0, bd = Infinity, base = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by) || 1e-9;
+    const f = clamp(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (L * L), 0, 1), d2 = dist2(ax + (bx - ax) * f, ay + (by - ay) * f, x, y);
+    if (d2 < bd) { bd = d2; best = base + f * L; }
+    base += L;
+  }
+  return best;
+}
+/** The turn at each bend of path pts, in degrees: [{ d, deg }] (d: tiles along it). */
+function magPathTurns(pts) {
+  const out = [];
+  let base = 0;
+  for (let k = 1; k + 1 < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], [cx, cy] = pts[k + 1];
+    base += dist(ax, ay, bx, by);
+    const a1 = datan2(by - ay, bx - ax), a2 = datan2(cy - by, cx - bx);
+    let t = Math.abs(a2 - a1) * 180 / Math.PI; if (t > 180) t = 360 - t;
+    out.push({ d: base, deg: t });
   }
   return out;
 }
-/** The pylon spots of the line between Terminals A and B (A the near end). */
-function magSpots(A, B) { return magSpotsAt(A.x + 0.5, A.y + 0.5, B.x + 0.5, B.y + 0.5); }
+/**
+ * The pylon spots of path pts: [{ k, d, i, j, t, bend }], d tiles along it from the key end: every MAGLEV.spacing tiles
+ * along each stretch, none within 2 of its end, and one on every bend (`bend`: its index).
+ */
+function magSpotsPath(pts) {
+  const out = [];
+  let k = 0, base = 0;
+  for (let s = 1; s < pts.length; s++) {
+    const [ax, ay] = pts[s - 1], [bx, by] = pts[s], L = dist(ax, ay, bx, by), ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1);
+    for (let q = 1; q * MAGLEV.spacing <= L - 2; q++) {
+      const d = q * MAGLEV.spacing, i = Math.floor(ax + ux * d), j = Math.floor(ay + uy * d);
+      k++;
+      if (inMap(i, j)) out.push({ k, d: base + d, i, j, t: tIdx(i, j) });
+    }
+    base += L;
+    if (s < pts.length - 1) { const i = Math.floor(bx), j = Math.floor(by); k++; if (inMap(i, j)) out.push({ k, d: base, i, j, t: tIdx(i, j), bend: s }); }
+  }
+  return out;
+}
+/** The pylon spots of a straight line from tile centre (ax, ay) to (bx, by) (see magSpotsPath). */
+function magSpotsAt(ax, ay, bx, by) { return magSpotsPath([[ax, ay], [bx, by]]); }
+/** The pylon spots of the line between Terminals A and B (A the key end, its bends between). */
+function magSpots(A, B) { return magSpotsPath(magPathOf(A, B)); }
+/** The path of the line between joined Terminals `from` and `to`, from `from`. */
+function magLinePts(from, to) { const K = magKey(from, to), pts = magPathOf(K, K === from ? to : from); return K === from ? pts : pts.reverse(); }
 
 /**
  * What stands in the way of a pylon on tile t for owner ('' for nothing): a pylon of its own line may stand there
- * already (`own`: the near Terminal's id). 'skip' means no pylon can stand there (a chasm, rock) and the span goes over.
+ * already (`own`: the key Terminal's id). 'skip' means no pylon can stand there (a chasm, rock) and the span goes over.
+ * A road or track may run under it (its feet stand at the side: the way stays open).
  */
 function magSpotWhy(owner, t, own) {
   const tr = S.terrain[t];
   if (tr === T_CHASM || tr === T_ROCK) return 'skip';
   const b = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (b && !(BDEFS[b.type].pylon && b.owner === owner && b.line === own)) return `a ${BDEFS[b.type].name} stands where a pylon must go`;
+  if (b && !(BDEFS[b.type].pylon && b.owner === owner && own && b.line === own)) return BDEFS[b.type].pylon ? 'another line\'s pylon stands where a pylon must go' : `a ${BDEFS[b.type].name} stands where a pylon must go`;
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'a rival holds the ground where a pylon must go';
   if (S.ramp[t]) return 'a slope is where a pylon must go';
   if (S.res[t] === R_OIL && !b) return 'an oil seep is where a pylon must go';
@@ -15210,31 +15850,42 @@ function magSpotWhy(owner, t, own) {
   return '';
 }
 
+/** Does a road or track (or a plan for one) run on tile t (a pylon there stands at its side)? */
+function magOverWay(t) { return !!(S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))); }
+
 /**
  * The spots of a line from (ax, ay) to (bx, by) with each one's standing: `ok` (a pylon stands here), `skip` (the span
  * goes over: a chasm or rock, with a pylon either side) or `bad` with its `why`. Two skips in a row (a gap wider than
- * MAGLEV.gap) make the second bad.
+ * MAGLEV.gap) make the second bad. A blocked spot shifts to a free shoulder tile beside the guideway (`moved`: the
+ * tile it moved from) unless `layout` (a line ordered already) fixes the tiles; `road`: a road or track runs under it.
  */
-function magSpotsChecked(owner, ax, ay, bx, by, own, layout) {
-  const spots = magSpotsAt(ax, ay, bx, by), used = new Set();
+function magSpotsChecked(owner, ax, ay, bx, by, own, layout) { return magSpotsCheckedPath(owner, [[ax, ay], [bx, by]], own, layout); }
+/** magSpotsChecked along path pts (its bends' spots never shift: a bend's pylon stands on the bend or the line can't bend there). */
+function magSpotsCheckedPath(owner, pts, own, layout) {
+  const spots = magSpotsPath(pts), used = new Set();
+  const ends = new Set(pts.map(([x, y]) => tIdx(Math.floor(x), Math.floor(y))));
   let prevSkip = false;
   for (const sp of spots) {
     let t = layout?.[sp.k - 1] ?? sp.t;
     let why = t === -1 ? 'skip' : magSpotWhy(owner, t, own);
-    if (!layout && (why || used.has(t))) {
+    if (sp.bend) {
+      if (why === 'skip') why = 'a bend needs ground for its pylon, not a chasm or rock';
+      else if (why) why = `a bend can't go there: ${why}`;
+    } else if (!layout && (why || used.has(t))) {
       // Try a shoulder within one tile of the guideway. Fix that choice when the line is ordered.
-      const x = ax + (bx - ax) * sp.d / dist(ax, ay, bx, by), y = ay + (by - ay) * sp.d / dist(ax, ay, bx, by);
+      const [x, y] = magPathAt(pts, sp.d);
       const options = FEED_NB.map(([di, dj]) => [sp.i + di, sp.j + dj])
         .filter(([i, j]) => inMap(i, j) && dist2(i + 0.5, j + 0.5, x, y) <= 2.25 &&
-          tIdx(i, j) !== tIdx(Math.floor(bx), Math.floor(by)) && !used.has(tIdx(i, j)))
+          !ends.has(tIdx(i, j)) && !used.has(tIdx(i, j)))
         .sort(([i, j], [k, l]) => dist2(i + 0.5, j + 0.5, x, y) - dist2(k + 0.5, l + 0.5, x, y));
       const shoulder = options.find(([i, j]) => !magSpotWhy(owner, tIdx(i, j), own));
-      if (shoulder) { t = tIdx(...shoulder); why = ''; }
+      if (shoulder) { sp.moved = t; t = tIdx(...shoulder); why = ''; }
       else if (!why) why = 'two pylons would need the same tile';
     }
     if (t >= 0) {
       sp.t = t; sp.i = t % S.W; sp.j = (t / S.W) | 0;
       used.add(t);
+      if (!why && magOverWay(t)) sp.road = 1;
     }
     if (why === 'skip') {
       if (prevSkip) { sp.kind = 'bad'; sp.why = `the gap there is wider than ${MAGLEV.gap} tiles`; }
@@ -15260,12 +15911,15 @@ function magPending(b) {
   return s && !s.dead && !s.built && s.magFrom === b.id ? s : null;
 }
 
+/** Is site s (planned from Terminal A) a replacement for a lost Terminal at the end of one of A's suspended lines? */
+function magRebuildSite(A, s) { return !!(A && s && s.type === 'magterm' && magMiss(A).some((m) => m.x === s.x && m.y === s.y)); }
+
 /** What's wrong with (bi, bj) as the clear spot for a new far Terminal ('' if nothing). */
 function magFarBlocked(owner, bi, bj) {
   const t = tIdx(bi, bj);
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground (or a Maglev Terminal of yours).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds the ground at the far end.';
-  if (S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))) return 'A road or track runs at the far end.';
+  if (S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))) return 'A road or track runs at the far end: a Terminal stands beside the road, not on it.';
   if (S.tidal && S.tidal[t]) return 'Tidal flats at the far end: the sea covers it at high tide.';
   if ((typeof scorched === 'function' && scorched(t)) || (typeof runwayAt === 'function' && runwayAt(t)) || (typeof postAt === 'function' && postAt(t)) || (typeof uplinkAt === 'function' && uplinkAt(t))) return 'The far end is taken: scorched ground, a runway, a Trade Post or an Uplink.';
   if (typeof calmAt === 'function' && calmAt(bi + 0.5, bj + 0.5)) return 'Not on a Trade Post\'s ground.';
@@ -15277,38 +15931,76 @@ function magFarBlocked(owner, bi, bj) {
 }
 
 /**
- * Could owner's Terminal A run a Maglev line to (bi, bj)? { why, spots, far }: why '' if so (else the reason), the
- * spots checked (magSpotsChecked: the first bad one is the reason), far the Terminal (built, or a site of yours with no
- * line) standing at the far end, or null for a clear spot where one goes up.
+ * What's wrong with `bends` (tiles, in order from Terminal A) on a line from A to (bi, bj) ('' for nothing): at most
+ * MAGLEV.bends, on the map, each stretch MAGLEV.seg to MAGLEV.max tiles, turning at most MAGLEV.turn degrees.
  */
-function magLineCheck(owner, A, bi, bj) {
-  const out = { why: '', spots: [], far: null };
+function magBendsWhy(A, bi, bj, bends) {
+  if (!bends.length) return '';
+  if (!Array.isArray(bends) || bends.length > MAGLEV.bends) return `A line bends at ${MAGLEV.bends} pylons at most.`;
+  const pts = [[A.x, A.y], ...bends, [bi, bj]];
+  for (let k = 1; k < pts.length; k++) {
+    const [x, y] = pts[k];
+    if (k < pts.length - 1 && !inMap(x, y)) return 'A bend is outside the map.';
+    const d = dist(pts[k - 1][0], pts[k - 1][1], x, y);
+    if (d < MAGLEV.seg) return `Too sharp: each straight stretch of a line runs ${MAGLEV.seg} tiles at least between bends.`;
+    if (d > MAGLEV.max) return `Too long a stretch: ${MAGLEV.max} tiles at most between bends.`;
+  }
+  for (const tr of magPathTurns(pts)) if (tr.deg > MAGLEV.turn + 1e-6) return `Too sharp a bend: a line turns ${MAGLEV.turn}° at most at a bend.`;
+  return '';
+}
+
+/**
+ * Could owner's Terminal A run a Maglev line to (bi, bj)? { why, spots, far, key, miss }: why '' if so (else the
+ * reason), the spots checked (magSpotsChecked from the key end, each with dA: tiles from A; the first bad one is the
+ * reason), far the Terminal (built, or a site of yours with no line) standing at the far end, or null for a clear spot
+ * where one goes up, key the key end's id (-1: the new far Terminal), miss the suspended line this rebuilds, if any.
+ */
+function magLineCheck(owner, A, bi, bj, bends) {
+  const out = { why: '', spots: [], far: null, key: 0, miss: null, bends: [], L: 0 };
   if (!A || A.dead || A.owner !== owner || !BDEFS[A.type].magterm) { out.why = 'Tap one of your Maglev Terminals first.'; return out; }
   if (!A.built) { out.why = 'That Terminal is still going up: the line starts from a finished one.'; return out; }
-  if (magPartner(A) || A.line) { out.why = 'That Terminal is on a line already: a Terminal is on one line at most.'; return out; }
   if (magPending(A)) { out.why = 'That Terminal\'s line is still going up.'; return out; }
+  if (A.magFrom) { out.why = 'A line is still going up to that Terminal.'; return out; }
   if (!inMap(bi, bj)) { out.why = 'Outside the map.'; return out; }
-  if (bi === A.x && bj === A.y) { out.why = 'Tap the far end: another spot, 6 to 40 tiles away.'; return out; }
-  const L = dist(A.x, A.y, bi, bj);
-  if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
-  if (L > MAGLEV.max) { out.why = `Too far: a Maglev line reaches ${MAGLEV.max} tiles.`; return out; }
-  const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (A.magMissing && (A.magMissing.x !== bi || A.magMissing.y !== bj)) {
-    out.why = 'Rebuild the Terminal at the end of the surviving guideway.';
+  if (bi === A.x && bj === A.y) { out.why = `Tap the far end: another spot, ${MAGLEV.min} to ${MAGLEV.max} tiles away.`; return out; }
+  const miss = magMiss(A).find((m) => m.x === bi && m.y === bj) || null;
+  out.miss = miss;
+  if (!miss && magSlots(A) >= MAGLEV.hub) {
+    out.why = magMiss(A).length ? 'Rebuild the Terminal at the end of the surviving guideway (its panel: Rebuild the missing Terminal).' : `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.`;
     return out;
   }
+  bends = miss ? [] : (bends || []);
+  const bwhy = magBendsWhy(A, bi, bj, bends);
+  if (bwhy) { out.why = bwhy; return out; }
+  out.bends = bends.map(([i, j]) => [i, j]);
+  const pts = [[A.x + 0.5, A.y + 0.5], ...bends.map(([i, j]) => [i + 0.5, j + 0.5]), [bi + 0.5, bj + 0.5]], L = magPathLen(pts);
+  out.L = L;
+  if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
+  if (!bends.length && L > MAGLEV.max) { out.why = `Too far: a straight Maglev line reaches ${MAGLEV.max} tiles (bend it, ${MAGLEV.maxBent} in all, or go on from a hub).`; return out; }
+  if (L > MAGLEV.maxBent) { out.why = `Too far: a bent Maglev line reaches ${MAGLEV.maxBent} tiles in all (go on from a hub: a Terminal on the way).`; return out; }
+  const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (far) {
     if (far.owner !== owner || !BDEFS[far.type].magterm) { out.why = `There is ${aOrAn(BDEFS[far.type].name)} at the far end: pick a clear spot, or a Maglev Terminal of yours.`; return out; }
-    if (far.line || far.magMissing || magPending(far) || far.magFrom) { out.why = 'That Terminal is on a line already (or one is going up to it).'; return out; }
+    if (magPending(far) || far.magFrom) { out.why = 'A line is going up to or from that Terminal already.'; return out; }
+    if (magLinkIds(far).includes(A.id)) { out.why = 'Those two Terminals are joined already.'; return out; }
+    if (magSlots(far) >= MAGLEV.hub) { out.why = `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.`; return out; }
     out.far = far;
   } else {
     const why = magFarBlocked(owner, bi, bj);
     if (why) { out.why = why; return out; }
   }
-  if (A.magMissing) return out;
-  out.spots = magSpotsChecked(owner, A.x + 0.5, A.y + 0.5, bi + 0.5, bj + 0.5, 0);
-  const bad = out.spots.find((s) => s.kind === 'bad');
-  if (bad) out.why = `No line this way: ${bad.why} (${bad.d} tiles out).`;
+  if (miss) { // (the guideway stands: the far end is only the new Terminal)
+    if (miss.near && far && magKeyBusy(far)) out.why = 'That Terminal anchors another line\'s pylons: rebuild on a clear spot there.';
+    return out;
+  }
+  // The key end: A, unless A keys a line already (then the far end, if it can).
+  const keyA = !magKeyBusy(A);
+  if (!keyA && far && magKeyBusy(far)) { out.why = 'Both Terminals anchor another line\'s pylons already: join them through a new Terminal (a hub) instead.'; return out; }
+  out.key = keyA ? A.id : far ? far.id : -1;
+  out.spots = magSpotsCheckedPath(owner, keyA ? pts : pts.slice().reverse(), 0);
+  for (const sp of out.spots) sp.dA = keyA ? sp.d : +(L - sp.d).toFixed(1);
+  const bad = out.spots.filter((s) => s.kind === 'bad').sort((p, q) => p.dA - q.dA)[0];
+  if (bad) out.why = `No line this way: ${bad.why} (${Math.round(bad.dA)} tiles out).`;
   else if (!out.spots.some((s) => s.kind === 'ok')) out.why = 'No line this way: nowhere for a pylon to stand.';
   return out;
 }
@@ -15322,17 +16014,24 @@ function magLineCost(n) {
 
 /**
  * Plan a Maglev line from Terminal A to (bi, bj): its site (the far Terminal's, or a pylon's when the far Terminal
- * stands), paid from storage as the goods come in, built from A. { ok, reason, id }.
+ * stands), paid from storage as the goods come in, built from A. { ok, reason, id }. At the end of one of A's
+ * suspended lines it rebuilds the lost Terminal there instead (the guideway stands: only the Terminal is paid for).
  */
-function placeMagLine(owner, A, bi, bj) {
-  const chk = magLineCheck(owner, A, bi, bj);
+/** What rebuilding a lost Terminal on its old foundation costs (the panel's Rebuild): half a Terminal's, rounded up. */
+function magRebuildCost() { const c = {}; for (const g in BDEFS.magterm.cost) c[g] = Math.ceil(BDEFS.magterm.cost[g] / 2); return c; }
+
+function placeMagLine(owner, A, bi, bj, bends) {
+  const chk = magLineCheck(owner, A, bi, bj, bends);
   if (chk.why) return { ok: false, reason: chk.why };
-  if (A.magMissing) {
+  if (chk.miss) {
     if (chk.far?.built) {
-      magReconnect(A, chk.far);
+      magReconnect(A, chk.far, chk.miss);
+      magRebuilt(chk.far);
       return { ok: true, reason: '', id: chk.far.id };
     }
+    if (S.plan[tIdx(bi, bj)]) cancelPlan(tIdx(bi, bj));
     const site = chk.far || addBuilding(owner, 'magterm', bi, bj, false);
+    if (!chk.far) site.cost = magRebuildCost(); // (on the old foundation: half price)
     site.fromStore = true;
     site.magFrom = A.id;
     A.magSite = site.id;
@@ -15341,14 +16040,14 @@ function placeMagLine(owner, A, bi, bj) {
     markDirty(bi, bj);
     return { ok: true, reason: '', id: site.id };
   }
-  const n = Math.round(dist(A.x, A.y, bi, bj)), cost = magLineCost(n);
+  const n = Math.round(chk.L), cost = magLineCost(n);
   let s;
   if (chk.far && chk.far.built) {
-    const sp = chk.spots.find((q) => q.kind === 'ok' && !S.bAt[q.t]);
+    const sp = chk.spots.filter((q) => q.kind === 'ok' && !S.bAt[q.t]).sort((p, q) => p.dA - q.dA)[0];
     if (!sp) return { ok: false, reason: 'No line this way: nowhere for a pylon to stand.' };
     magClearSpot(sp.t);
     s = addBuilding(owner, 'magpylon', sp.i, sp.j, false);
-    s.k = sp.k; s.line = A.id; s.magFar = chk.far.id;
+    s.k = sp.k; s.line = chk.key; s.magFar = chk.far.id;
     s.buildTime = MAGLEV.time * n;
     chk.far.magFrom = A.id; // (spoken for: no other line comes to it meanwhile)
   } else if (chk.far) {
@@ -15367,6 +16066,8 @@ function placeMagLine(owner, A, bi, bj) {
   }
   if (s.type === 'magpylon') s.cost = cost;
   s.magFrom = A.id; s.magN = n; s.magLayout = magLayout(chk.spots);
+  if (chk.key !== A.id) s.magKey = chk.key === -1 ? s.id : chk.key; // (keyed at the far end: A keys a line already)
+  if (chk.bends.length) s.magBends = chk.key === A.id ? chk.bends : chk.bends.slice().reverse(); // (in order from the key end)
   A.magSite = s.id;
   if (S.players[owner].ai) { if (!payInto(s)) queuePlan('b', s.id, owner); }
   else { queuePlan('b', s.id, owner); settlePlans(); }
@@ -15374,7 +16075,119 @@ function placeMagLine(owner, A, bi, bj) {
   return { ok: true, reason: '', id: s.id };
 }
 
-/** The building a Worker stands at to build site s: the near Terminal of a Maglev line going up, else the site itself. */
+/**
+ * A two-line route from Terminal A to (bi, bj) through a new hub Terminal at (hx, hy) (Route via a hub): the first line
+ * to the hub now, the second planned from the hub once it is up (s.magNext). { ok, reason, id } (the hub's site).
+ */
+function placeMagRoute(owner, A, bi, bj, hx, hy) {
+  const why = magRouteWhy(owner, A, bi, bj, hx, hy);
+  if (why) return { ok: false, reason: why };
+  const r = placeMagLine(owner, A, hx, hy);
+  if (!r.ok) return r;
+  const H = getE(r.id);
+  if (H) H.magNext = [bi, bj];
+  return r;
+}
+
+/** A stand-in for a Terminal at (x, y) not built yet, for checking a line from it (`keyed`: it will key a line). */
+function magGhost(owner, x, y, keyed) {
+  const g = { id: -1, type: 'magterm', owner, x, y, built: true, dead: false };
+  if (keyed) g.magMissing = { x: -1, y: -1, near: false }; // (magKeyBusy: the next line from it is keyed at its far end)
+  return g;
+}
+
+/** What's wrong with a route from A to (bi, bj) through a new hub at (hx, hy) ('' for nothing). */
+function magRouteWhy(owner, A, bi, bj, hx, hy) {
+  if (!inMap(hx, hy) || !inMap(bi, bj)) return 'Outside the map.';
+  const one = magLineCheck(owner, A, hx, hy);
+  if (one.why) return one.why;
+  if (one.far || one.miss) return 'The hub goes on a clear spot.';
+  const two = magLineCheck(owner, magGhost(owner, hx, hy, one.key === -1), bi, bj);
+  if (two.why) return two.why;
+  if (two.miss) return 'The hub goes on a clear spot.';
+  // the two lines' pylons can't share a tile
+  const t1 = new Set(one.spots.filter((s) => s.kind === 'ok').map((s) => s.t));
+  if (two.spots.some((s) => s.kind === 'ok' && t1.has(s.t))) return 'The two lines would need the same pylon tile.';
+  return '';
+}
+
+/**
+ * Route via a hub: where a new hub Terminal could stand so that two lines (A to it, it to (bi, bj)) go where one
+ * straight line can't (a blocked stretch, or further than MAGLEV.max): the shortest such route among spots beside the
+ * straight line, { i, j, n1, n2 }, or null. Deterministic (fixed candidates in a fixed order).
+ */
+function magRouteVia(owner, A, bi, bj) {
+  if (!A || !inMap(bi, bj)) return null;
+  const L = dist(A.x, A.y, bi, bj);
+  if (L < MAGLEV.min * 2 || L > MAGLEV.max * 2) return null;
+  const ux = (bi - A.x) / L, uy = (bj - A.y) / L, cands = [], seen = new Set();
+  for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74]) for (let o = -12; o <= 12; o++) {
+    const i = Math.round(A.x + (bi - A.x) * f - uy * o), j = Math.round(A.y + (bj - A.y) * f + ux * o), t = inMap(i, j) ? tIdx(i, j) : -1;
+    if (t < 0 || seen.has(t)) continue;
+    seen.add(t);
+    const n1 = dist(A.x, A.y, i, j), n2 = dist(i, j, bi, bj);
+    if (n1 < MAGLEV.min || n2 < MAGLEV.min || n1 > MAGLEV.max || n2 > MAGLEV.max) continue;
+    cands.push({ i, j, len: n1 + n2, t, n1: Math.round(n1), n2: Math.round(n2) });
+  }
+  cands.sort((p, q) => p.len - q.len || p.t - q.t);
+  for (const c of cands.slice(0, 120)) if (!magRouteWhy(owner, A, bi, bj, c.i, c.j)) return { i: c.i, j: c.j, n1: c.n1, n2: c.n2 };
+  return null;
+}
+
+/**
+ * Route with bends: one bend beside the straight line, or a jog of two (round something in the way), that makes a line
+ * from A to (bi, bj) work where the straight one can't (a blocked stretch, or more than MAGLEV.max tiles): the shortest
+ * such, as a list of bend tiles from A, or null. Deterministic (fixed candidates in a fixed order).
+ */
+function magRouteBend(owner, A, bi, bj) {
+  if (!A || !inMap(bi, bj)) return null;
+  const L = dist(A.x, A.y, bi, bj);
+  if (L < MAGLEV.seg * 2 || L > MAGLEV.maxBent) return null;
+  const ux = (bi - A.x) / L, uy = (bj - A.y) / L, at = (f, o) => [Math.round(A.x + (bi - A.x) * f - uy * o), Math.round(A.y + (bj - A.y) * f + ux * o)];
+  const cands = [], seen = new Set();
+  const add = (bends) => {
+    const key = bends.map((b) => b.join(',')).join(';');
+    if (seen.has(key) || bends.some(([i, j]) => !inMap(i, j))) return;
+    seen.add(key);
+    const pts = [[A.x, A.y], ...bends, [bi, bj]];
+    let len = 0; for (let k = 1; k < pts.length; k++) len += dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]);
+    cands.push({ bends, len });
+  };
+  for (let o = 1; o <= 10; o++) for (const sg of [1, -1]) {
+    for (const f of [0.5, 0.4, 0.6, 0.3, 0.7]) add([at(f, o * sg)]);
+    for (const [f1, f2] of [[0.3, 0.7], [0.2, 0.8], [0.35, 0.55], [0.45, 0.65]]) add([at(f1, o * sg), at(f2, o * sg)]);
+  }
+  cands.sort((p, q) => p.len - q.len || p.bends.length - q.bends.length);
+  for (const c of cands.slice(0, 160)) if (!magLineCheck(owner, A, bi, bj, c.bends).why) return c.bends;
+  return null;
+}
+
+/**
+ * Could the line being placed from Terminal A (its bends so far, `bends`) bend at (i, j) next? '' if so, else why: a
+ * pylon stands there, the stretch to it is MAGLEV.seg to MAGLEV.max tiles with nothing in the way, the turn at the bend
+ * before is sharp enough, and there's a bend to spare.
+ */
+function magBendTry(owner, A, bends, i, j) {
+  if (!A || !inMap(i, j)) return 'Outside the map.';
+  if (bends.length >= MAGLEV.bends) return `A line bends at ${MAGLEV.bends} pylons at most.`;
+  const pts = [[A.x, A.y], ...bends, [i, j]];
+  for (let k = 1; k < pts.length; k++) {
+    const d = dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]);
+    if (d < MAGLEV.seg) return `Too close: a bend goes ${MAGLEV.seg} tiles at least from the last.`;
+    if (d > MAGLEV.max) return `Too far: ${MAGLEV.max} tiles at most between bends.`;
+  }
+  for (const tr of magPathTurns(pts)) if (tr.deg > MAGLEV.turn + 1e-6) return `Too sharp a bend: a line turns ${MAGLEV.turn}° at most.`;
+  if (magPathLen(pts) > MAGLEV.maxBent - MAGLEV.seg) return `Too far: a bent line runs ${MAGLEV.maxBent} tiles in all.`;
+  const t = tIdx(i, j), why = magSpotWhy(owner, t, 0);
+  if (why === 'skip') return 'A bend needs ground for its pylon, not a chasm or rock.';
+  if (why) return `No bend there: ${why}.`;
+  // the stretch up to it, checked as a line ending there (its spots from A, the bend as a stand-in end)
+  const c = pts.map(([x, y]) => [x + 0.5, y + 0.5]);
+  const bad = magSpotsCheckedPath(owner, c, 0).find((q) => q.kind === 'bad');
+  return bad ? `No line that way: ${bad.why}.` : '';
+}
+
+/** The building a Worker stands at to build site s: the Terminal a Maglev line going up is planned from, else the site itself. */
 function siteWorkAt(s) {
   if (s.magFrom) { const A = getE(s.magFrom); if (A && !A.dead) return A; }
   return s;
@@ -15386,19 +16199,27 @@ function magSiteFar(s) {
   return f && !f.dead ? [f.x + 0.5, f.y + 0.5] : [s.x + 0.5, s.y + 0.5];
 }
 
-/** Line site s has got to `progress`: the pylons that far out go up (a pylon every MAGLEV.spacing tiles from the near end). */
+/** The path of the line site s is building from Terminal A, from its key end (A, or the far end: s.magKey), its bends between. */
+function magSitePath(s, A) {
+  const [fx, fy] = magSiteFar(s), keyFar = !!s.magKey && s.magKey !== A.id, b = (s.magBends || []).map(([i, j]) => [i + 0.5, j + 0.5]);
+  return keyFar ? [[fx, fy], ...b, [A.x + 0.5, A.y + 0.5]] : [[A.x + 0.5, A.y + 0.5], ...b, [fx, fy]];
+}
+
+/** Line site s has got to `progress`: the pylons that far out from where it's built go up (a pylon every MAGLEV.spacing tiles from the key end). */
 function magBuildStep(s) {
   const A = getE(s.magFrom);
-  if (!A || A.dead || A.magMissing) return;
-  const [fx, fy] = magSiteFar(s), ax = A.x + 0.5, ay = A.y + 0.5;
-  const reach = s.progress * dist(ax, ay, fx, fy);
-  const layout = s.magLayout || magLayout(magSpotsAt(ax, ay, fx, fy));
+  if (!A || A.dead || magRebuildSite(A, s)) return;
+  const kpts = magSitePath(s, A), L = magPathLen(kpts);
+  const keyFar = !!s.magKey && s.magKey !== A.id, key = keyFar ? s.magKey : A.id;
+  const reach = s.progress * L;
+  const layout = s.magLayout || magLayout(magSpotsPath(kpts));
   let any = false;
-  for (const sp of magSpotsChecked(A.owner, ax, ay, fx, fy, A.id, layout)) {
-    if (sp.kind !== 'ok' || sp.d > reach + 1e-9 || S.bAt[sp.t]) continue;
+  for (const sp of magSpotsCheckedPath(A.owner, kpts, key, layout)) {
+    const dA = keyFar ? L - sp.d : sp.d;
+    if (sp.kind !== 'ok' || dA > reach + 1e-9 || S.bAt[sp.t]) continue;
     magClearSpot(sp.t);
     const p = addBuilding(A.owner, 'magpylon', sp.i, sp.j, true);
-    p.k = sp.k; p.line = A.id;
+    p.k = sp.k; p.line = key;
     addFx('ring', sp.i + 0.5, sp.j + 0.5, { color: PLAYER_COLORS[A.owner], r: 0.8 });
     any = true;
   }
@@ -15408,19 +16229,34 @@ function magBuildStep(s) {
 /** Line site s is finished: every pylon stands and the two Terminals are joined (or, with an end gone, the line is called off). */
 function magLineDone(s) {
   const A = getE(s.magFrom), B = s.type === 'magpylon' ? getE(s.magFar) : s;
-  if (!A || A.dead || !A.built || !B || B.dead || !B.built || A.owner !== B.owner || A.line || B.line) { magLineCancel(s); return; }
-  if (A.magMissing) { magReconnect(A, B); return; }
+  if (A && !A.dead && A.built && B && !B.dead && B.built && magRebuildSite(A, B)) { // (a lost Terminal rebuilt: its lines join again)
+    A.magSite = 0; delete B.magFrom;
+    magRebuilt(B);
+    return;
+  }
+  if (!A || A.dead || !A.built || !B || B.dead || !B.built || A.owner !== B.owner || magLinkIds(A).includes(B.id) || magSlots(A) >= MAGLEV.hub || magSlots(B) >= MAGLEV.hub) { magLineCancel(s); return; }
   s.progress = 1;
   magBuildStep(s);
-  A.magLayout = s.magLayout;
-  delete s.magLayout;
+  const K = s.magKey && s.magKey === B.id ? B : A, O = K === A ? B : A;
+  if (K === A && magKeyBusy(A)) { magLineCancel(s); return; } // (A came to key another line meanwhile: no room for this one's pylons)
+  const layout = s.magLayout, bends = s.magBends;
+  delete s.magLayout; delete s.magBends;
   delete s.cost;
-  A.line = B.id; B.line = A.id; A.magNear = 1; delete B.magNear;
-  A.magSite = 0; delete B.magFrom; delete s.magFrom;
-  if (s !== B) { s.line = A.id; delete s.magFar; }
+  K.magLayout = layout; // (s may be K itself: the new far Terminal keys the line)
+  if (bends && bends.length) K.magBends = bends; else delete K.magBends;
+  magJoin(K, O);
+  A.magSite = 0; delete B.magFrom; delete s.magFrom; delete s.magKey;
+  if (s !== B) { s.line = K.id; delete s.magFar; }
   S.players[A.owner].railT = undefined; // (plan the line's stock now)
   computeZones();
-  postMsg(A.owner, 'The Maglev line is open. Order Maglev Pods on a Terminal\'s panel (4 Alloy, 2 Chips each) and keep a Generator within 4 tiles of each end.', B.x, B.y, 'good');
+  const hub = magPartners(A).length > 1 || magPartners(B).length > 1;
+  postMsg(A.owner, hub ? 'The Maglev line is open, and joins your network at a hub: pods carry goods on through it, line by line.' : 'The Maglev line is open. Order Maglev Pods on a Terminal\'s panel (4 Alloy, 2 Chips each) and keep a Generator within 4 tiles of each end.', B.x, B.y, 'good');
+  if (B.magNext) { // (Route via a hub: the next line goes on from it)
+    const [x, y] = B.magNext;
+    delete B.magNext;
+    const r = placeMagLine(B.owner, B, x, y);
+    postMsg(B.owner, r.ok ? 'The hub is up: the line goes on from it to the far end.' : `The line on from the hub can't go: ${r.reason}`, B.x, B.y, r.ok ? 'good' : 'warn');
+  }
 }
 
 /** A line going up is called off (its site cancelled or an end lost): the pylons built so far come down. */
@@ -15429,13 +16265,23 @@ function magLineCancel(s) {
   if (A && A.magSite === s.id) A.magSite = 0;
   const far = s.magFar ? getE(s.magFar) : null;
   if (far && far.magFrom === (A && A.id)) delete far.magFrom;
-  delete s.magFrom;
-  if (A && !A.magMissing) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === A.id && p.built && !magPartner(A)) destroyBuilding(p, false, true);
+  const key = s.magKey || (A && A.id), K = getE(key), rebuild = magRebuildSite(A, s);
+  delete s.magFrom; delete s.magKey;
+  if (key && !rebuild && !(K && magKeyPartner(K))) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === key && p.built && !magMissFor(key)) destroyBuilding(p, false, true);
 }
 
-/** The standing spots of the line A–B (A the near end) with no pylon on them: the breaks. [] on a whole line. */
+/** The Terminal holding a suspended line keyed `key` (its pylons carry that id), or null. */
+function magMissFor(key) {
+  for (const b of S.buildings) {
+    if (b.dead || !b.magMissing) continue;
+    for (const m of magMiss(b)) if ((m.near ? m.key ?? b.id : b.id) === key) return b;
+  }
+  return null;
+}
+
+/** The standing spots of the line A–B (A the key end) with no pylon on them: the breaks. [] on a whole line. */
 function magCut(A, B) {
-  B = B || magPartner(A);
+  B = B || magKeyPartner(A);
   if (!B) return [];
   const out = [];
   const ownerId = A.id, layout = A.magLayout;
@@ -15450,8 +16296,11 @@ function magCut(A, B) {
   return out;
 }
 
-/** Is Terminal b's line cut (a pylon down, not yet rebuilt)? */
-function magLineCut(b) { const A = magNearEnd(b); return !!A && magCut(A).length > 0; }
+/** Is the line between joined Terminals a and o cut (a pylon down, not yet rebuilt)? */
+function magPairCut(a, o) { const K = magKey(a, o); return magCut(K, K === a ? o : a).length > 0; }
+
+/** Is any of Terminal b's lines cut? */
+function magLineCut(b) { return magPartners(b).some((o) => magPairCut(b, o)); }
 
 /** A Generator of Terminal b's owner within its radius with Fuel to burn (not off, not cut by the Murmur): the Terminal has power. */
 function magPowered(b) {
@@ -15466,23 +16315,37 @@ function magPowered(b) {
 }
 /** Is a solar flare on (the pods crawl)? */
 function flareOn() { return !!(S.event && S.event.type === 'flare' && S.time >= S.event.t0); }
-/** Does the line Terminal b is on run at speed: both ends powered and no solar flare? */
-function magLinePowered(b) { const o = magPartner(b); return !!o && magPowered(b) && magPowered(o) && !flareOn(); }
+/** Does the line between joined Terminals a and o run at speed: both ends powered and no solar flare? */
+function magPairPowered(a, o) { return magPowered(a) && magPowered(o) && !flareOn(); }
+/** Do Terminal b's lines run at speed: b and every Terminal it is joined to powered, and no solar flare? */
+function magLinePowered(b) { const ps = magPartners(b); return ps.length > 0 && magPowered(b) && ps.every((o) => magPowered(o)) && !flareOn(); }
 
-/** The pods serving the line Terminal b is on (their home is b or the other Terminal). */
+/** The pods serving Terminal b's network (their home is one of its Terminals). */
 function linePods(b) {
-  const o = magPartner(b);
-  return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && (u.home === b.id || (o && u.home === o.id)));
+  const ids = new Set(magNet(b).map((t) => t.id));
+  return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && ids.has(u.home));
 }
-/** Does the line Terminal b is on have a pod (the rail plan counts it as served)? */
-function magRunning(b) { return !!magPartner(b) && linePods(b).length > 0; }
-/** Can Terminal b's pod bay build another pod: a line, under MAGLEV.perLine on it? */
-function magPodRoom(b) { return !!magPartner(b) && linePods(b).length < MAGLEV.perLine; }
+/** How many pods Terminal b's network may have: MAGLEV.perLine for each of its lines. */
+function magPodCap(b) {
+  let n = 0;
+  for (const t of magNet(b)) n += magPartners(t).length;
+  return MAGLEV.perLine * Math.max(1, n / 2);
+}
+/** Is Terminal b on a line with a pod in its network (the rail plan counts it as served)? */
+function magRunning(b) { return magPartners(b).length > 0 && linePods(b).length > 0; }
+/** Can Terminal b's pod bay build another pod: a line, under MAGLEV.perLine a line on its network? */
+function magPodRoom(b) { return magPartners(b).length > 0 && linePods(b).length < magPodCap(b); }
 
-/** Where pod u is along its line, in tiles from the near Terminal A. */
-function podDist(u, A, B) {
-  const ax = A.x + 0.5, ay = A.y + 0.5, L = dist(ax, ay, B.x + 0.5, B.y + 0.5) || 1;
-  return clamp(((u.x - ax) * (B.x + 0.5 - ax) + (u.y - ay) * (B.y + 0.5 - ay)) / L, 0, L);
+/** Where pod u is along its line, in tiles from the key Terminal A. */
+function podDist(u, A, B) { return magPathProject(magPathOf(A, B), u.x, u.y); }
+
+/** How far along the line A–B (A the key end) pylon spot k stands, in tiles. */
+function magSpotD(A, B, k) { const sp = magSpots(A, B).find((q) => q.k === k); return sp ? sp.d : k * MAGLEV.spacing; }
+
+/** The path of survivor S0's suspended line m (to its lost end), from the lost end to S0. */
+function magMissPts(S0, m) {
+  if (m.near) return magPathOf({ x: m.x, y: m.y, magBends: m.bends || (m.key == null ? S0.magBends : null) }, S0);
+  return magPathOf(S0, m).reverse();
 }
 
 /** Pod u's load is lost (shot down with its span, or with its Terminal): what it was bringing isn't on its way any more. */
@@ -15504,21 +16367,24 @@ function podReverse(u) {
     for (const g in u.cargo) bump(from.inc, g, u.cargo[g]);
     u.cargoTo = from.id;
   }
+  if (u.magS != null && to && !to.dead && magLinked(from, to)) u.magS = Math.max(0, magPathLen(magLinePts(from, to)) - u.magS); else delete u.magS;
   u.magTo = from.id; u.magFrom = to && !to.dead ? to.id : 0;
-  u.vel = 0;
+  u.vel = 0; u.thruTo = 0;
   return true;
 }
+
+/** Is pod u running on the line between Terminals A and B (either way)? */
+function podOnLine(u, A, B) { return (u.magTo === A.id && u.magFrom === B.id) || (u.magTo === B.id && u.magFrom === A.id); }
 
 /** Pylon p has come down (shot, dismantled): its line is cut. Pods on the spans it carried are lost, the rest turn back. */
 function magPylonDown(p) {
   const A = p.line ? getE(p.line) : null;
-  if (!A || A.dead) return;
-  const B = magPartner(A);
+  if (!A || A.dead || !BDEFS[A.type].magterm) return;
+  const B = magKeyPartner(A);
   if (!B) return;
-  const d = p.k * MAGLEV.spacing;
+  const d = magSpotD(A, B, p.k);
   for (const u of S.bots) {
-    if (u.dead || u.owner !== A.owner || !BOTS[u.type].magpod || u.inside || !u.magTo) continue;
-    if (u.magTo !== A.id && u.magTo !== B.id) continue;
+    if (u.dead || u.owner !== A.owner || !BOTS[u.type].magpod || u.inside || !u.magTo || !podOnLine(u, A, B)) continue;
     const s = podDist(u, A, B);
     if (Math.abs(s - d) < MAGLEV.spacing) {
       // on a span that rested on it: it falls
@@ -15537,34 +16403,50 @@ function magPylonDown(p) {
   computeZones();
 }
 
-/** Restore a suspended guideway when its missing Terminal is rebuilt. */
-function magReconnect(survivor, replacement) {
-  const missing = survivor.magMissing;
-  const A = missing.near ? replacement : survivor, B = A === survivor ? replacement : survivor;
-  if (A !== survivor) {
-    A.magLayout = survivor.magLayout;
-    delete survivor.magLayout;
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === survivor.id) p.line = A.id;
-  }
-  A.magNear = 1; delete B.magNear;
-  A.line = B.id; B.line = A.id;
-  survivor.magSite = 0;
-  delete survivor.magMissing; delete replacement.magFrom;
-  S.players[A.owner].railT = undefined;
-  postMsg(A.owner, 'Maglev Terminal rebuilt. The guideway is connected again.', replacement.x, replacement.y, 'good');
+/** Survivor's suspended line m comes back: its lost end is rebuilt as Terminal R (the guideway joins them again). */
+function magReconnect(survivor, R, m) {
+  m = m || magMiss(survivor).find((q) => q.x === R.x && q.y === R.y);
+  if (!m) return;
+  if (m.near) { // (the lost Terminal held the pylons: the new one takes them over)
+    const key = m.key ?? survivor.id;
+    for (const p of S.buildings) if (!p.dead && BDEFS[p.type].pylon && p.line === key) p.line = R.id;
+    R.magLayout = m.layout || survivor.magLayout;
+    if (m.bends) R.magBends = m.bends; else if (m.key == null && survivor.magBends) R.magBends = survivor.magBends; else delete R.magBends;
+    if (m.key == null) { delete survivor.magLayout; delete survivor.magBends; } // (a save from before: the survivor kept them)
+    magJoin(R, survivor);
+  } else magJoin(survivor, R);
+  magMissSet(survivor, magMiss(survivor).filter((q) => q !== m));
+  if (survivor.magSite === R.id) survivor.magSite = 0;
+  delete R.magFrom;
+  S.players[R.owner].railT = undefined;
+  postMsg(R.owner, 'Maglev Terminal rebuilt. The guideway is connected again.', R.x, R.y, 'good');
 }
 
-/** Lose one end, keeping the guideway for its surviving Terminal to reopen. */
+/** Terminal R stands where a lost one stood: every suspended line that ended there joins it again. */
+function magRebuilt(R) {
+  for (const c of S.buildings) {
+    if (c.dead || c === R || c.owner !== R.owner || !c.magMissing || !BDEFS[c.type].magterm || !c.built) continue;
+    for (const m of magMiss(c)) if (m.x === R.x && m.y === R.y && magSlots(R) < MAGLEV.hub && !(m.near && magKeyBusy(R))) magReconnect(c, R, m);
+  }
+  computeZones();
+}
+
+/**
+ * Lose Maglev Terminal b (destroyed or dismantled): each line it was on is suspended, the guideway and pylons kept for
+ * the Terminal at its other end to reopen (its panel: Rebuild the missing Terminal). Pods in it go to a Terminal it was
+ * joined to, pods heading for it turn back; lines whose other end was lost already come down.
+ */
 function magTermDown(b) {
-  const o = magPartner(b), A = o && magNearEnd(b);
+  const partners = magPartners(b);
   const pending = magPending(b);
   if (pending) { magLineCancel(pending); destroyBuilding(pending, false, true); }
   if (b.magFrom) {
     const from = getE(b.magFrom), site = magPending(from);
     if (site) { magLineCancel(site); if (site !== b) destroyBuilding(site, false, true); }
   }
-  for (const end of o ? [b, o] : [b]) {
-    if (!end.magFix) continue;
+  // repairs: b's own, and those of the lines it was on
+  for (const end of [b, ...partners]) {
+    if (!end.magFix || (end !== b && magKey(end, b) !== end)) continue;
     const w = getE(end.magFix.u);
     if (w && !w.dead && w.task?.type === 'magfix') cancelTask(w);
     end.magFix = null;
@@ -15572,33 +16454,37 @@ function magTermDown(b) {
   for (const u of S.bots) {
     if (u.dead || u.owner !== b.owner || !BOTS[u.type].magpod) continue;
     if (u.inside === b.id || (u.home === b.id && !u.magTo)) {
-      if (o) podArrive(u, o);
+      if (partners.length) podArrive(u, partners[0]);
       else { podLost(u); killBot(u, true); }
     } else if (u.magTo === b.id) {
-      if (!o || !podReverse(u)) { podLost(u); killBot(u, true); continue; }
-      u.home = o.id; u.magFrom = 0;
-    } else if (u.magFrom === b.id && o) {
-      u.home = o.id; u.magFrom = 0;
+      if (!podReverse(u)) { podLost(u); killBot(u, true); continue; }
+      u.home = u.magTo; u.magFrom = 0;
+    } else if (u.magFrom === b.id) {
+      u.home = u.magTo; u.magFrom = 0;
     }
   }
-  if (o) {
-    o.line = 0;
-    o.magMissing = { x: b.x, y: b.y, near: A === b };
-    if (A === b) o.magLayout = b.magLayout;
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === A.id) p.line = o.id;
+  for (const o of partners) {
+    const K = magKey(b, o), m = { x: b.x, y: b.y, near: K === b };
+    if (K === b) { m.key = b.id; if (b.magLayout) m.layout = b.magLayout.slice(); if (b.magBends) m.bends = b.magBends.map((q) => q.slice()); }
+    magUnjoin(o, b.id);
+    magMissSet(o, [...magMiss(o), m]);
     S.players[o.owner].railT = undefined;
-    postMsg(o.owner, 'Maglev service suspended. Rebuild the lost Terminal to reuse the guideway.', b.x, b.y, 'warn');
-  } else if (b.magMissing) {
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === b.id) destroyBuilding(p, false, true);
+    postMsg(o.owner, 'Maglev service suspended: a Terminal is down. Rebuild it on the same tile to reuse the guideway.', b.x, b.y, 'warn');
   }
-  b.line = 0;
+  // a line already suspended at b: both ends are gone now, and its pylons with them
+  for (const m of magMiss(b)) {
+    const key = m.near ? m.key ?? b.id : b.id;
+    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === key) destroyBuilding(p, false, true);
+  }
+  b.line = 0; delete b.magMore; delete b.magNear; magMissSet(b, []);
 }
 
 /** Pod u sets out from Terminal T for O with `load` ({ goods, total }, or null to run across empty). */
 function podDepart(u, T, O, load) {
   exitBuilding(u);
   u.x = T.x + 0.5; u.y = T.y + 0.5;
-  u.magFrom = T.id; u.magTo = O.id; u.vel = 0; u.face = datan2(O.y - T.y, O.x - T.x);
+  u.magFrom = T.id; u.magTo = O.id; u.vel = 0; u.magS = 0; u.thruTo = 0;
+  const pts = magLinePts(T, O); u.face = datan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]);
   if (load && load.total) {
     for (const g in load.goods) { bump(T.stock, g, -load.goods[g]); bump(O.inc, g, load.goods[g]); }
     u.cargo = load.goods; u.cargoTo = O.id;
@@ -15607,7 +16493,7 @@ function podDepart(u, T, O, load) {
 
 /** Pod u docks at Terminal m: its goods go into m's stock. */
 function podArrive(u, m) {
-  u.magTo = 0; u.magFrom = 0; u.vel = 0;
+  u.magTo = 0; u.magFrom = 0; u.vel = 0; delete u.magS; delete u.thruTo;
   enterBuilding(u, m);
   u.home = m.id; u.atT = S.time;
   if (u.cargo) {
@@ -15632,86 +16518,172 @@ function updatePod(u, dt) {
 }
 
 /**
- * Pod u docked at Terminal m: after MAGLEV.dwell s it loads what the other end wants (shipLoad: the rail plan's loads,
- * as an Airship's) and sets out when the trip is worth it, or runs across empty for a load waiting at the other end
- * (unless another pod is there or on its way), never while the line is cut.
+ * Pod u docked at Terminal m: after MAGLEV.dwell s it loads what the other end of one of m's lines wants (shipLoad:
+ * the rail plan's loads, as an Airship's; at a hub, the line with the biggest load, the first in m's order on a tie)
+ * and sets out when the trip is worth it, or runs across empty for a load waiting at the other end (unless another pod
+ * is there or on its way), never along a line that is cut.
  */
 function podAtTerminal(u, m, dt) {
   if (S.tick % 6 !== u.id % 6) return;
-  const other = magPartner(m);
-  if (!other || magLineCut(m)) return;
+  const ends = magPartners(m).filter((o) => !magPairCut(m, o));
+  if (!ends.length) return;
   if (S.time - (u.atT ?? -99) < MAGLEV.dwell) return;
   if (S.tick % 30 !== u.id % 30) return;
   const cap = BOTS[u.type].carry, waited = S.time - (u.atT ?? 0);
   const worth = (ld) => ld.total >= cap * MAGLEV.fill || (ld.low && ld.total >= 1) || (ld.total >= MAGLEV.least && waited >= MAGLEV.wait);
-  const load = shipLoad(u, m, other);
-  if (worth(load)) { podDepart(u, m, other, load); return; }
-  const mate = S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && BOTS[v.type].magpod && (v.magTo === other.id || v.inside === other.id));
-  if (!mate && worth(shipLoad(u, other, m))) podDepart(u, m, other, null);
+  let best = null, load = null;
+  for (const o of ends) { const ld = shipLoad(u, m, o); if (worth(ld) && (!load || ld.total > load.total)) { best = o; load = ld; } }
+  if (best) { podDepart(u, m, best, load); return; }
+  for (const o of ends) {
+    const mate = S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && BOTS[v.type].magpod && (v.magTo === o.id || v.inside === o.id));
+    if (!mate && worth(shipLoad(u, o, m))) { podDepart(u, m, o, null); return; }
+  }
 }
 
-/** One step of pod u's run: straight along the line, at speed with power (MAGLEV: accelerating and braking hard), crawling without. */
+/**
+ * Pod u, nearing hub m along its line from `from` with a load: where it carries on to without stopping, { o, keep }
+ * (the first other line of m's, in m's order, not cut, whose far end wants goods it holds: a Terminal further from
+ * home, by the rail plan's tree, still short of them; or, heading home, goods m doesn't keep itself), or null to unload
+ * at m. Deterministic; it never waits at m for a line.
+ */
+function podThroughPlan(u, m, from) {
+  if (!u.cargo || !m || m.dead || !from) return null;
+  const ps = magPartners(m);
+  if (ps.length < 2) return null;
+  for (const o of ps) {
+    if (o === from || magPairCut(m, o)) continue;
+    const keep = {};
+    let n = 0;
+    if (o.home === m.id) { // on, away from home: what o (and the Terminals beyond it, whose wants roll into o's) is short of
+      const k = keepOf(o) || {};
+      for (const g in u.cargo) { const c = Math.min(u.cargo[g], Math.floor((k[g] || 0) - supplyOf(o, g) - (o.inc[g] || 0))); if (c >= 1) { keep[g] = c; n += c; } }
+    } else if (m.home === o.id && from.home === m.id) { // on toward home: what m doesn't keep itself
+      const k = keepOf(m) || {};
+      for (const g in u.cargo) if (!(k[g] > 0)) { keep[g] = u.cargo[g]; n += u.cargo[g]; }
+    }
+    if (n >= 1) return { o, keep };
+  }
+  return null;
+}
+
+/** Pod u passes through hub m (plan: podThroughPlan): what m wants is unloaded, the rest stays aboard for o, topped up from m. */
+function podThrough(u, m, plan) {
+  const { o, keep } = plan;
+  let dropped = 0;
+  for (const g in u.cargo) {
+    bump(m.inc, g, -u.cargo[g]); // (it was coming to m)
+    const left = u.cargo[g] - (keep[g] || 0);
+    if (left > 0) { bump(m.stock, g, left); dropped += left; }
+  }
+  if (dropped) { m.magGot = (m.magGot || 0) + dropped; m.airIn = S.time; }
+  u.cargo = {}; u.cargoTo = o.id;
+  for (const g in keep) { u.cargo[g] = keep[g]; bump(o.inc, g, keep[g]); }
+  let room = BOTS[u.type].carry - sumValues(u.cargo);
+  if (room >= 1) { // topped up with what o wants from m, as a load from m would be
+    const ld = shipLoad(u, m, o);
+    for (const g in ld.goods) {
+      const n = Math.min(ld.goods[g], room, Math.floor(supplyOf(m, g)));
+      if (n < 1) continue;
+      bump(m.stock, g, -n); bump(o.inc, g, n); u.cargo[g] = (u.cargo[g] || 0) + n; room -= n;
+    }
+  }
+  u.home = m.id; u.magFrom = m.id; u.magTo = o.id; u.magS = 0; u.thruTo = 0;
+  m.magThrough = (m.magThrough || 0) + 1; // (pods that went through without stopping: the panel and the tests)
+}
+
+/**
+ * One step of pod u's run along its line's path (its bends included), at speed with power (MAGLEV: accelerating and
+ * braking hard), crawling without; slower round a sharp bend (MAGLEV.corner of its top speed at 75° or more, 0.6 from
+ * 30°) and through a hub it carries on through (planned as it nears it: u.thruTo, so it needn't stop).
+ */
 function movePod(u, dt) {
   const to = getE(u.magTo), from = getE(u.magFrom), bt = BOTS[u.type];
   if (!to || to.dead || !to.built || to.owner !== u.owner || !BDEFS[to.type].magterm) {
     if (!podReverse(u)) { podLost(u); killBot(u, true); }
     return;
   }
-  // The line cut ahead of it: back to where it came from.
-  const L2 = magLineOf(to);
-  if (L2) {
-    const [A, B] = L2, cut = magCut(A, B);
+  const linked = !!from && magLinked(from, to);
+  let pts = null;
+  if (linked) {
+    pts = magLinePts(from, to);
+    if (u.magS == null) u.magS = magPathProject(pts, u.x, u.y);
+    // The line cut ahead of it: back to where it came from.
+    const A = magKey(from, to), B = A === from ? to : from, cut = magCut(A, B);
     if (cut.length) {
-      const s = podDist(u, A, B), toFar = to === B;
+      const L = magPathLen(pts), s = A === from ? u.magS : L - u.magS, toFar = to === B;
       if (cut.some((c) => (toFar ? c.d > s : c.d < s))) { if (!podReverse(u)) { podLost(u); killBot(u, true); } return; }
     }
+  } else {
+    // Its line suspended under it (the end it came from lost): on along the guideway to the Terminal still standing.
+    for (const m of magMiss(to)) { const q = magMissPts(to, m), d = magPathProject(q, u.x, u.y), [x, y] = magPathAt(q, d); if (dist2(x, y, u.x, u.y) < 0.36) { pts = q; break; } }
+    if (!pts) pts = [[u.x, u.y], [to.x + 0.5, to.y + 0.5]];
+    u.magS = magPathProject(pts, u.x, u.y);
   }
-  const tx = to.x + 0.5, ty = to.y + 0.5, dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
-  const powered = magLinePowered(to) || (from && !from.dead && magPartner(from) === to && magLinePowered(from));
+  const L = magPathLen(pts), left = Math.max(0, L - u.magS);
+  const powered = magPowered(to) && (!from || from.dead || magPowered(from)) && !flareOn();
   const vmax = powered ? bt.speed : WORKER_SPEED;
-  const want = Math.min(vmax, Math.sqrt(2 * bt.brake * d) + 0.05);
+  if (linked && !u.thruTo && left < 4) { const pl = podThroughPlan(u, to, from); u.thruTo = pl ? pl.o.id : -1; }
+  const endV = u.thruTo > 0 ? vmax * MAGLEV.corner : 0;
+  let want = Math.min(vmax, Math.sqrt(endV * endV + 2 * bt.brake * left) + 0.05);
+  for (const tr of magPathTurns(pts)) {
+    const ahead = tr.d - u.magS;
+    if (ahead < -0.3 || tr.deg < 30) continue;
+    const cv = vmax * (tr.deg >= 75 ? MAGLEV.corner : 0.6);
+    want = Math.min(want, Math.sqrt(cv * cv + 2 * bt.brake * Math.max(0, ahead)) + 0.05);
+  }
   u.vel = want > (u.vel || 0) ? Math.min(want, (u.vel || 0) + bt.accel * dt) : Math.max(want, (u.vel || 0) - bt.brake * dt);
-  u.face = datan2(dy, dx);
   const step = u.vel * dt;
-  if (step >= d - 0.01) { u.x = tx; u.y = ty; podArrive(u, to); return; }
-  u.x += (dx / d) * step; u.y += (dy / d) * step;
+  if (step >= left - 0.01) {
+    u.x = to.x + 0.5; u.y = to.y + 0.5;
+    if (u.thruTo > 0) {
+      const pl = podThroughPlan(u, to, from);
+      if (pl) { podThrough(u, to, pl); u.vel = Math.min(u.vel, vmax * MAGLEV.corner); return; }
+    }
+    podArrive(u, to);
+    return;
+  }
+  u.magS += step;
+  const [x, y, ux, uy] = magPathAt(pts, u.magS);
+  u.x = x; u.y = y; u.face = datan2(uy, ux);
   u.moved = 1; u.busy = 1;
   u.odo = ((u.odo || 0) + step) % 1000;
   u.crawl = powered ? 0 : 1;
 }
 
-/** Terminal b's own step (every second): its status, the repair job on a cut line, the power it draws. */
+/** Terminal b's own step (every second): its status, the repair job on the line it keys, the power it draws. */
 function updateMagTerm(b, dt) {
-  const o = magPartner(b);
+  const ps = magPartners(b);
   b.working = false;
-  if (!o) {
-    const s = magPending(b);
-    b.status = b.magMissing ? 'Maglev service suspended: rebuild the missing Terminal' : s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
+  if (!ps.length) {
+    const s = magPending(b), lost = magMiss(b).length;
+    b.status = lost ? 'Maglev service suspended: rebuild the missing Terminal' : s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
     return;
   }
-  const pods = linePods(b), running = pods.some((u) => u.magTo);
+  const pods = linePods(b), running = pods.some((u) => u.magTo && (u.magTo === b.id || u.magFrom === b.id));
   if (running) b.working = true; // (the Generator in reach burns Fuel for it)
-  const near = magNearEnd(b);
-  if (near === b && S.tick % 30 === b.id % 30) {
-    const cut = magCut(b, o);
+  const kp = magKeyPartner(b);
+  if (kp && S.tick % 30 === b.id % 30) {
+    const cut = magCut(b, kp);
     if (cut.length && !b.magFix) b.magFix = { k: cut[0].k, t: cut[0].t, u: 0, since: 0, paid: 0 };
     else if (!cut.length && b.magFix) { const w = getE(b.magFix.u); if (w && !w.dead && w.task && w.task.type === 'magfix') cancelTask(w); b.magFix = null; }
   }
-  if (magLineCut(b)) b.status = near.magFix && near.magFix.u ? 'Line cut: a Worker is rebuilding the pylon' : near.magFix && !near.magFix.paid ? `Line cut: waiting for ${costText(magLineCost(MAGLEV.spacing))} to rebuild the pylon` : 'Line cut: a pylon is down';
-  else if (!pods.length) b.status = 'On a line, no pods yet: order them below (4 Alloy, 2 Chips each)';
-  else if (!magLinePowered(b)) b.status = flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? 'No power: build a Generator (with Fuel) within 4 tiles; the pods crawl' : 'No power at the other end: the pods crawl';
-  else b.status = running ? `Line running: ${pods.filter((u) => u.magTo).length} pod${pods.filter((u) => u.magTo).length === 1 ? '' : 's'} on the way` : 'Line powered: pods loading';
+  const cutTo = ps.find((o) => magPairCut(b, o)), hub = ps.length > 1 ? `Hub of ${ps.length} lines. ` : '', lost = magMiss(b).length ? ' (a line suspended: rebuild its lost Terminal)' : '';
+  if (cutTo) { const K = magKey(b, cutTo); b.status = hub + (K.magFix && K.magFix.u ? 'Line cut: a Worker is rebuilding the pylon' : K.magFix && !K.magFix.paid ? `Line cut: waiting for ${costText(magLineCost(MAGLEV.spacing))} to rebuild the pylon` : 'Line cut: a pylon is down'); }
+  else if (!pods.length) b.status = hub + 'On a line, no pods yet: order them below (4 Alloy, 2 Chips each)';
+  else if (!magLinePowered(b)) b.status = hub + (flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? 'No power: build a Generator (with Fuel) within 4 tiles; the pods crawl' : 'No power at the other end: the pods crawl');
+  else { const n = pods.filter((u) => u.magTo).length; b.status = hub + (running || n ? `Line running: ${n} pod${n === 1 ? '' : 's'} on the way` : 'Line powered: pods loading'); }
+  b.status += lost;
 }
 
-/** The end of near Terminal A's line nearer its break (where the repair Worker goes). */
+/** The end of key Terminal A's line nearer its break (where the repair Worker goes). */
 function magFixEnd(A) {
-  const o = magPartner(A), F = A.magFix;
+  const o = magKeyPartner(A), F = A.magFix;
   if (!o || !F) return A;
-  const d = F.k * MAGLEV.spacing, L = dist(A.x, A.y, o.x, o.y);
+  const d = magSpotD(A, o, F.k), L = magPathLen(magPathOf(A, o));
   return d <= L / 2 ? A : o;
 }
 
-/** Worker u takes the repair of near Terminal A's line: it goes to the nearer end and rides out to the break. */
+/** Worker u takes the repair of key Terminal A's line: it goes to the nearer end and rides out to the break. */
 function assignMagFix(u, A) {
   const E = magFixEnd(A);
   cancelTask(u);
@@ -15722,7 +16694,7 @@ function assignMagFix(u, A) {
 
 function doMagFix(u, t, dt) {
   const A = getE(t.bld), F = A && !A.dead ? A.magFix : null, E = getE(t.end);
-  if (!F || F.u !== u.id || !E || E.dead || !magPartner(A)) { cancelTask(u); return; }
+  if (!F || F.u !== u.id || !E || E.dead || !magKeyPartner(A)) { cancelTask(u); return; }
   if (t.phase === 'go') {
     if (!moveAlong(u, dt)) return;
     t.phase = 'ride'; F.since = S.time;
@@ -15746,6 +16718,25 @@ function doMagFix(u, t, dt) {
   u.x = E.x + 0.5; u.y = E.y + 0.5;
   u.task = null; u.idleT = 0;
   computeZones();
+}
+
+/**
+ * The path of the line pylon p carries (key end first: magPathOf), whether it is joined or suspended (a lost end is its
+ * old tile), or null: for drawing (the band's height over the ground, the pylon's arm or portal).
+ */
+function magPylonPath(p) {
+  const K = getE(p.line);
+  if (K && !K.dead && BDEFS[K.type].magterm) {
+    const o = magKeyPartner(K);
+    if (o) return magPathOf(K, o);
+    const m = magMiss(K).find((q) => !q.near || q.key == null);
+    if (m) return m.near ? magPathOf({ x: m.x, y: m.y, magBends: K.magBends }, K) : magPathOf(K, m);
+    return null;
+  }
+  const S0 = magMissFor(p.line);
+  if (!S0) return null;
+  const m = magMiss(S0).find((q) => q.near && q.key === p.line);
+  return m ? magPathOf({ x: m.x, y: m.y, magBends: m.bends }, S0) : null;
 }
 
 /* ------------------------------------------------------------------ flak */
@@ -15998,6 +16989,7 @@ function hashState() {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
+    if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
@@ -16006,7 +16998,7 @@ function hashState() {
     obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
-  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
@@ -16035,10 +17027,12 @@ function hashState() {
   for (const b of S.buildings) if (b.line) { int(b.id); int(b.line); } // (Airship lines)
   for (const u of S.bots) if (BOTS[u.type].airship) { int(u.id); int(u.home || 0); num(u.alt || 0); int(u.flight ? u.flight.to : 0); obj(u.cargo); int((u.aboard || []).length); }
   // Maglev lines: the pods (their ends and load), the lines going up and the repairs.
-  for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); }
+  for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); num(u.magS ?? -1); int(u.thruTo || 0); }
   for (const b of S.buildings) { if (b.magSite) { int(b.id); int(b.magSite); } if (b.magFrom) { int(b.id); int(b.magFrom); } if (b.magFix) { int(b.id); int(b.magFix.k); int(b.magFix.u); num(b.magFix.since); int(b.magFix.paid); } if (BDEFS[b.type].pylon) { int(b.id); int(b.k || 0); int(b.line || 0); } }
   for (const b of S.buildings) {
-    if (b.magMissing) { int(b.id); int(b.magMissing.x); int(b.magMissing.y); num(b.magMissing.near); }
+    for (const m of magMiss(b)) { int(b.id); int(m.x); int(m.y); num(m.near); int(m.key || 0); for (const t of m.layout || []) int(t); for (const q of m.bends || []) { int(q[0]); int(q[1]); } } // (suspended lines)
+    if (b.magBends) { int(b.id); for (const q of b.magBends) { int(q[0]); int(q[1]); } } // (a line's bends, on its key end or its site)
+    if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
@@ -16046,9 +17040,15 @@ function hashState() {
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
-    if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); }
+    if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
+    if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
+    if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
+    if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
+  // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
+  for (const f of S.liftFalls || []) { int(f.id); int(f.d); num(f.t); int(f.k); int(f.n); int(f.by); int(f.hit.length); }
+  if (!S.crater) for (const s of S.scrap || []) if (s.cb) { int(s.id); num(s.x); num(s.y); num(s.n); }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
   if (S.drizzle) { // (the Ring drizzle: its clock, its deposits, the pieces in the sky)
@@ -16347,12 +17347,22 @@ function lanceReactor(b) {
   return best;
 }
 
-/** What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium Uranium or an Enriched Uranium in it), or ''. */
+/**
+ * What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium
+ * Uranium or an Enriched Uranium in it), or ''. With both, the Generators, unless Use Reactor is on (b.lUseR): nobody
+ * burns the Uranium they were saving for a nuke without meaning to.
+ */
 function lancePower(b) {
   if (murmurCutOn(b)) return '';
-  if (megaGens(b, LANCE.reach).length >= LANCE.gens) return 'gen';
-  const r = lanceReactor(b);
-  return r && reactorCharge(r) > 0 ? 'reactor' : '';
+  const gens = megaGens(b, LANCE.reach).length >= LANCE.gens, r = lanceReactor(b), rx = !!r && reactorCharge(r) > 0;
+  if (rx && (b.lUseR || !gens)) return 'reactor';
+  return gens ? 'gen' : '';
+}
+
+/** How long Lance b's charge takes: the one under way (b.lTime, set as it began; an older save's: LANCE.charge), else what its power now would take. */
+function lanceTime(b) {
+  if (b.lOn) return b.lTime || LANCE.charge;
+  return lancePower(b) === 'reactor' ? LANCE.reactorCharge : LANCE.charge;
 }
 
 /** Why Lance b can't start a charge now ('' if it can). */
@@ -16391,7 +17401,7 @@ function setLanceAim(b, i, j) {
 /** Lance b starts charging: a Reactor's Uranium goes in now; everyone hears it. */
 function lanceStart(b) {
   const src = lancePower(b);
-  b.lOn = 1; b.lCharge = 0; b.lSrc = src;
+  b.lOn = 1; b.lCharge = 0; b.lSrc = src; b.lTime = src === 'reactor' ? LANCE.reactorCharge : LANCE.charge;
   if (src === 'reactor') {
     const r = lanceReactor(b), g = (r.stock.uranium || 0) >= LANCE.uranium ? 'uranium' : 'fissile', n = g === 'uranium' ? LANCE.uranium : 1;
     bump(r.stock, g, -n); usedGood(b.owner, g, n);
@@ -16399,15 +17409,15 @@ function lanceStart(b) {
   } else b.lReactor = 0;
   const c = bCentre(b);
   sfx('lancecharge', c.x, c.y);
-  postMsg(b.owner, `The Lance of Corvane is charging: it fires in ${LANCE.charge} seconds. Your lights dim and your factories slow meanwhile.`, b.x + 1, b.y + 1, 'info');
-  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is charging the Lance of Corvane! It fires in ${LANCE.charge} seconds, in a line across the whole map.`, b.x + 1, b.y + 1, 'bad');
+  postMsg(b.owner, `The Lance of Corvane is charging${src === 'reactor' ? ' on Reactor power' : ''}: it fires in ${b.lTime} seconds. Your lights dim and your factories slow meanwhile.`, b.x + 1, b.y + 1, 'info');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is charging the Lance of Corvane! It fires in ${b.lTime} seconds, in a line across the whole map.`, b.x + 1, b.y + 1, 'bad');
   logEvent({ t: S.time, k: 'lance', p: b.owner });
 }
 
 /** Call off Lance b's charge (an order: lanceStop, or its power lost). */
 function lanceStop(b, why) {
   if (!b.lOn) return;
-  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0; b.lTime = 0;
   if (why) postMsg(b.owner, why, b.x + 1, b.y + 1, 'bad');
 }
 
@@ -16446,13 +17456,14 @@ function updateLance(b, dt) {
     const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / LANCE.genFuel - 1);
     for (const g of megaGens(b, LANCE.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
   }
-  if (b.lCharge < LANCE.charge) {
-    b.lCharge = Math.min(LANCE.charge, b.lCharge + dt);
-    b.status = `Charging: fires in ${fmtSecs(LANCE.charge - b.lCharge)}`;
-    if (b.lCharge >= LANCE.charge - LANCE.warn && b.lCharge - dt < LANCE.charge - LANCE.warn) {
+  const T = lanceTime(b);
+  if (b.lCharge < T) {
+    b.lCharge = Math.min(T, b.lCharge + dt);
+    b.status = `Charging${b.lSrc === 'reactor' ? ' on Reactor power' : ''}: fires in ${fmtSecs(T - b.lCharge)}`;
+    if (b.lCharge >= T - LANCE.warn && b.lCharge - dt < T - LANCE.warn) {
       for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `The Lance of Corvane fires in ${LANCE.warn} seconds!`, b.x + 1, b.y + 1, 'bad');
     }
-    if (b.lCharge < LANCE.charge) return;
+    if (b.lCharge < T) return;
   }
   if (eventNow('dust')) { b.status = 'Charged, holding: a dust storm scatters the beam. It fires when it blows over'; return; }
   if (!b.lAim) { b.status = 'Charged: tap Aim, then a spot on the map'; return; }
@@ -16481,61 +17492,109 @@ function lanceLine(b, tx, ty) {
   return { x0: c.x, y0: c.y, x1: c.x + ux * len, y1: c.y + uy * len, ux, uy, len, dome };
 }
 
-/** The tiles Lance b's line L passes over (within the beam's width), in order out from the gun, its own square left out. */
+/**
+ * The tiles Lance b's line L passes over, in order out from the gun, its own square left out: `core`, the tiles whose
+ * square touches the strip within LANCE.width / 2 of the line, and `edge`, those of the rest within LANCE.edge more.
+ * (Walked along the line's long axis a column at a time; from the muzzle, half the gun's footprint out.)
+ */
 function lanceTiles(b, L) {
-  const out = [], seen = new Set(), hw = LANCE.width / 2 + 0.35;
-  for (let s = 0; s <= L.len; s += 0.3) {
-    const x = L.x0 + L.ux * s, y = L.y0 + L.uy * s;
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-      const i = Math.floor(x) + di, j = Math.floor(y) + dj;
-      if (!inMap(i, j)) continue;
-      const t = tIdx(i, j);
-      if (seen.has(t) || S.bAt[t] === b.id) continue;
+  const core = [], edge = [], hc = LANCE.width / 2, he = hc + LANCE.edge, pr = 0.5 * (Math.abs(L.ux) + Math.abs(L.uy));
+  const a0 = (BDEFS[b.type].foot || 1) / 2, a1 = L.len + 0.3, xm = Math.abs(L.ux) >= Math.abs(L.uy);
+  const u = xm ? L.ux : L.uy, v = xm ? L.uy : L.ux, p0 = xm ? L.x0 : L.y0, q0 = xm ? L.y0 : L.x0, pN = xm ? S.W : S.H, qN = xm ? S.H : S.W;
+  const span = (he + pr) / Math.abs(u) + 1, pa = p0 + u * a0, pb = p0 + u * a1;
+  const lo = Math.max(0, Math.floor(Math.min(pa, pb) - he - 1)), hi = Math.min(pN - 1, Math.floor(Math.max(pa, pb) + he + 1));
+  for (let k = 0; k <= hi - lo; k++) {
+    const p = u > 0 ? lo + k : hi - k, qc = q0 + (v / u) * (p + 0.5 - p0);
+    for (let q = Math.max(0, Math.floor(qc - span)); q <= Math.min(qN - 1, Math.floor(qc + span)); q++) {
+      const i = xm ? p : q, j = xm ? q : p, t = tIdx(i, j);
+      if (S.bAt[t] === b.id) continue;
       const fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, along = fx * L.ux + fy * L.uy;
-      if (along < 0 || along > L.len + 0.3) continue;
-      if (Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
-      seen.add(t); out.push(t);
+      if (along < a0 || along > a1) continue;
+      const d = Math.abs(fx * L.uy - fy * L.ux) - pr; // (how near the tile's square comes to the line)
+      if (d < hc - 1e-6) core.push(t);
+      else if (d < he - 1e-6) edge.push(t);
     }
   }
-  return out;
+  return { core, edge };
+}
+
+/** The middles of the up Shield Domes of player p's foes. (A Lance shot doesn't reach under one, even at the beam's side: lanceDomed.) */
+function lanceDomes(p) { return S.buildings.filter((d) => !d.dead && d.built && d.dUp && BDEFS[d.type].dome && foes(d.owner, p)).map(bCentre); }
+/** Is (x, y) under one of the Domes Ds (from lanceDomes)? */
+function lanceDomed(Ds, x, y) { return Ds.some((c) => dist2(c.x, c.y, x, y) <= DOME.radius * DOME.radius); }
+
+/** Where robot u stands against Lance line L: 2 in the core, 1 in the scorched edge, 0 clear of it. */
+function lanceBand(L, u) {
+  const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
+  if (along < 1.2 || along > L.len) return 0;
+  const off = Math.abs(fx * L.uy - fy * L.ux);
+  return off < LANCE.width / 2 + 0.2 ? 2 : off < LANCE.width / 2 + LANCE.edge + 0.2 ? 1 : 0;
+}
+
+/**
+ * The buildings Lance b's line L would hit: `core` (wrecked) and `edge` (scorched: touching the edge and none of the
+ * core), each in order out from the gun; Lance b, any on a Trade Post's ground and any under a foe's up Shield Dome left out.
+ */
+function lanceTargets(b, L) {
+  const T = lanceTiles(b, L), core = [], edge = [], inCore = new Set(), seen = new Set(), Ds = lanceDomes(b.owner);
+  const skip = (e) => { if (!e || e.dead || e === b || seen.has(e)) return true; seen.add(e); if (calmB(e)) return true; const c = bCentre(e); return Ds.length > 0 && lanceDomed(Ds, c.x, c.y); };
+  for (const t of T.core) { const e = getE(S.bAt[t]); if (skip(e)) continue; inCore.add(e); core.push(e); }
+  for (const t of T.edge) { const e = getE(S.bAt[t]); if (skip(e)) continue; edge.push(e); }
+  return { core, edge, tiles: T };
 }
 
 /** Lance b fires along its aim: everything on the line is destroyed (see LANCE), and the ground is cut for good. */
 function lanceFire(b) {
   const owner = b.owner, L = lanceLine(b, b.lAim[0] + 0.5, b.lAim[1] + 0.5);
-  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
-  b.lReload = LANCE.reload; b.lShot = S.time;
+  b.lReload = b.lSrc === 'reactor' ? LANCE.reactorReload : LANCE.reload; b.lShot = S.time; // (a Reactor's charge reloads faster)
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0; b.lTime = 0;
   b.working = false;
   const P = S.players[owner];
   if (P) P.stats.lance = (P.stats.lance || 0) + 1;
   S.cuts = S.cuts || [];
-  S.cuts.push({ x0: Math.round(L.x0 * 100) / 100, y0: Math.round(L.y0 * 100) / 100, x1: Math.round(L.x1 * 100) / 100, y1: Math.round(L.y1 * 100) / 100, t: S.time, o: owner, d: L.dome ? 1 : 0 });
+  S.cuts.push({ x0: Math.round(L.x0 * 100) / 100, y0: Math.round(L.y0 * 100) / 100, x1: Math.round(L.x1 * 100) / 100, y1: Math.round(L.y1 * 100) / 100, t: S.time, o: owner, d: L.dome ? 1 : 0, w: LANCE.width }); // (w: its core's width; a cut from an older save, none: 0.8)
   if (S.cuts.length > LANCE.cutsMax) S.cuts.shift();
   sfx('lancefire', L.x0, L.y0);
+  const tg = lanceTargets(b, L), Ds = lanceDomes(owner), domed = S.bots.map((u) => Ds.length > 0 && !u.dead && lanceDomed(Ds, u.x, u.y)); // (what's under a Dome, before the shot drops it)
   if (L.dome) domeHit(L.dome, 'lance', L.x1, L.y1, owner);
-  const tiles = lanceTiles(b, L), lost = S.players.map(() => 0), bots = S.players.map(() => 0), hit = new Set();
+  const tiles = tg.tiles.core, lost = S.players.map(() => 0), bots = S.players.map(() => 0), hurt = S.players.map(() => 0);
   LAND_HOLD = 1;
   try {
-    for (const t of tiles) {
-      const e = getE(S.bAt[t]);
-      if (!e || e.dead || e === b || hit.has(e) || calmB(e)) continue;
-      hit.add(e);
+    for (const e of tg.core) {
+      if (e.dead) continue;
       if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
       e.lastHit = S.time;
       if (BDEFS[e.type].wild) { if (e.owner !== owner) captureBuilding(e, owner); continue; } // (a Murmur nest or exit on the line: cleared)
-      if (captureOnly(e)) { e.armor = Math.min(e.armor, missileFloor(e)); continue; }
+      if (captureOnly(e)) { e.armor = Math.min(e.armor, missileFloor(e)); if (e.armor <= 0) { e.armor = 0; cityDown(e, owner); } continue; }
       if (e.owner >= 0) lost[e.owner]++;
       fortTaken(e, owner);
       destroyBuilding(e, true);
     }
-    const hw = LANCE.width / 2 + 0.2;
-    for (const u of S.bots) {
-      if (u.dead || u.inside || aloft(u) || calmAt(u.x, u.y)) continue;
-      const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
-      if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
-      if (u.owner >= 0 && bots[u.owner] !== undefined) bots[u.owner]++;
+    // The scorched edge: half its armor gone, but never below 1 (a Command Base or Keep: its Missile floor; Arrival City: 0, down).
+    for (const e of tg.edge) {
+      if (e.dead) continue;
+      if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
+      e.lastHit = S.time;
+      const floor = captureOnly(e) ? missileFloor(e) : 1;
+      e.armor = Math.min(e.armor, Math.max(floor, e.armor - BDEFS[e.type].armor * LANCE.edgeDmg));
+      if (BDEFS[e.type].city && e.built && e.armor <= 0) { e.armor = 0; cityDown(e, owner); }
+      if (e.owner >= 0 && !isWild(e.owner)) hurt[e.owner]++;
+    }
+    for (const [n, u] of S.bots.entries()) {
+      if (u.dead || u.inside || aloft(u) || calmAt(u.x, u.y) || domed[n]) continue;
+      const band = lanceBand(L, u);
+      if (!band) continue;
+      if (band === 2) {
+        if (u.owner >= 0 && bots[u.owner] !== undefined) bots[u.owner]++;
+        noteDanger(u);
+        killBot(u);
+        continue;
+      }
+      const dmg = (u.maxHp || u.hp) * LANCE.edgeDmg * (u.armored ? TRAIN_ARMOR.takes : 1);
+      if (u.hp > 1) u.hp = Math.max(1, u.hp - dmg); // (the edge alone kills no robot)
+      u.hurtT = S.time;
+      if (u.trade) convoyHit(u);
       noteDanger(u);
-      killBot(u);
     }
     for (const t of tiles) {
       const i = t % S.W, j = (t / S.W) | 0;
@@ -16548,14 +17607,15 @@ function lanceFire(b) {
     if (zones) computeZones();
   }
   computeTerritory();
-  scarTrench(tiles, L);
-  const mine = lost[owner] || 0, theirs = lost.reduce((a, n, p) => a + (p === owner ? 0 : n), 0);
+  scarTrench(tg.tiles, L);
+  const mine = lost[owner] || 0, theirs = lost.reduce((a, n, p) => a + (p === owner ? 0 : n), 0), singed = hurt.reduce((a, n, p) => a + (p === owner ? 0 : n), 0);
   if (P) P.stats.lanceBest = Math.max(P.stats.lanceBest || 0, theirs); // (the most rival buildings one shot took: a mission counts it)
   for (const Q of S.players) {
     const p = Q.id;
     if (Q.absent || Q.out || isWild(p)) continue;
-    if (p === owner) postMsg(p, L.dome ? `The Lance fired: a Shield Dome took the shot. ${theirs} building${theirs === 1 ? '' : 's'} hit short of it.` : `The Lance fired across the map: ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed${mine ? `, and ${mine} of your own` : ''}.`, b.x + 1, b.y + 1, 'good');
-    else postMsg(p, lost[p] || bots[p] ? `The Lance of Corvane fired: you lost ${lost[p]} building${lost[p] === 1 ? '' : 's'} and ${bots[p]} robot${bots[p] === 1 ? '' : 's'}!` : `${playerName(owner, true)}'s Lance of Corvane fired across the map.`, Math.floor(L.x1), Math.floor(L.y1), lost[p] || bots[p] ? 'lost' : 'bad');
+    if (p === owner) postMsg(p, L.dome ? `The Lance fired: a Shield Dome took the shot. ${theirs} building${theirs === 1 ? '' : 's'} hit short of it.` : `The Lance fired across the map: ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed${mine ? `, and ${mine} of your own` : ''}${singed ? `; ${singed} more scorched along its edge` : ''}.`, b.x + 1, b.y + 1, 'good');
+    else postMsg(p, lost[p] || bots[p] ? `The Lance of Corvane fired: you lost ${lost[p]} building${lost[p] === 1 ? '' : 's'} and ${bots[p]} robot${bots[p] === 1 ? '' : 's'}${hurt[p] ? `, and ${hurt[p]} more were scorched` : ''}!`
+      : hurt[p] ? `The Lance of Corvane fired: ${hurt[p]} of your building${hurt[p] === 1 ? '' : 's'} scorched along its edge!` : `${playerName(owner, true)}'s Lance of Corvane fired across the map.`, Math.floor(L.x1), Math.floor(L.y1), lost[p] || bots[p] ? 'lost' : 'bad');
   }
   if (P && P.ai) for (const Q of S.players) if (Q.id !== owner && lost[Q.id]) doctrineVoice(owner, Q.id, 'missile', Math.floor(L.x1), Math.floor(L.y1), 90);
   logEvent({ t: S.time, k: 'lanceFire', p: owner });
@@ -16565,16 +17625,19 @@ function lanceFire(b) {
  * The Lance's cut (War scars): the ground along it burned to ash for good (on Light, scorched), a furrow of churned
  * craters down the middle, and every animal there dead, its bones left. The trench itself is drawn from S.cuts.
  */
-function scarTrench(tiles, L) {
+function scarTrench(T, L) {
   const lv = scarLevel();
   if (!lv || !S.ash) return;
   S.scarN++;
-  for (const t of tiles) {
+  const nCore = T.core.length;
+  for (const [n, t] of T.core.concat(T.edge).entries()) {
     if (!scarGround(t)) continue;
-    const i = t % S.W, j = (t / S.W) | 0, fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, off = Math.abs(fx * L.uy - fy * L.ux);
-    scarFauna(t, i, j, 6);
-    S.ash[t] = lv === 2 ? Math.max(S.ash[t], SCARS.good) : Math.max(S.ash[t], SCARS.light);
-    if (lv === 2 && off < 0.5) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + 2);
+    const i = t % S.W, j = (t / S.W) | 0, fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, off = Math.abs(fx * L.uy - fy * L.ux), core = n < nCore;
+    if (core) scarFauna(t, i, j, 6);
+    // the core burned to ash (on Light, scorched); the edge only scorched, lighter
+    const ash = core ? (lv === 2 ? SCARS.good : SCARS.light) : (lv === 2 ? SCARS.light : Math.round(SCARS.light * 0.6));
+    S.ash[t] = Math.max(S.ash[t], ash);
+    if (lv === 2 && off < LANCE.width / 2) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + (off < 0.5 ? 2 : 1));
     markDirty(i, j);
   }
 }
@@ -16642,6 +17705,477 @@ function domeHit(d, kind, x, y, by) {
   sfx('domefall', c.x, c.y);
   postMsg(d.owner, `Your Shield Dome dropped${kind === 'nuke' ? ': it took a nuclear missile' : kind === 'lance' ? ': it took a Lance shot' : ''}. It comes back in ${DOME.down} seconds.`, d.x, d.y, 'lost');
   if (by >= 0 && foes(by, d.owner)) postMsg(by, 'An enemy Shield Dome dropped: its base is open for a minute.', d.x, d.y, 'good');
+}
+
+/*
+ * Arrival City (CITY; BDEFS.city). b.cDown: knocked down to 0 (no bonus, dark, capturable) until repaired to CITY.back of
+ * its armor; b.cCap: how long foes' armed warbots have stood at its walls unopposed, b.cBy whose (-1 none); b.cFuel: s
+ * of light left in the Fuel it's burning at night, b.cDry: dark at night for want of Fuel (the bonus halves). It is
+ * `working` while lit at night (the Murmur see it, as they see a Generator).
+ */
+let _cityL = null, _cityT = -1, _cityV = -1, _cityS = null;
+/** The finished Arrival Cities in the game (worked out once a tick, and again whenever the land changes: one finished, or taken). */
+function cityList() {
+  if (_cityS !== S || _cityT !== S.tick || _cityV !== S.territoryVer || !_cityL) { _cityS = S; _cityT = S.tick; _cityV = S.territoryVer; _cityL = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].city); }
+  return _cityL;
+}
+/** Is it dark enough for Arrival City's lights (the game's own night; on an always-night map, all the time)? */
+function cityNight() { return alwaysNightMap() || murmurNight(S.time); }
+/**
+ * How much faster `owner`'s work at (x, y) goes for Arrival City: 1 + CITY.boost within CITY.reach tiles of the middle of
+ * one of theirs that's up (half that while it's dark for want of Fuel), else 1.
+ */
+function cityBoost(owner, x, y) {
+  let k = 1;
+  for (const c of cityList()) {
+    if (c.owner !== owner || c.cDown) continue;
+    const m = bCentre(c);
+    if (dist2(m.x, m.y, x, y) > CITY.reach * CITY.reach) continue;
+    k = Math.max(k, 1 + CITY.boost * (c.cDry ? CITY.dark : 1));
+  }
+  return k;
+}
+/** How many of player p's factories, gatherers and Bot Foundries (staffed or working) are working faster by one of its Arrival Cities now (a mission counts them). */
+function cityDriven(St, p) {
+  let n = 0;
+  for (const b of (St || S).buildings) if (!b.dead && b.built && b.owner === p && (b.working || b.staff) && (BDEFS[b.type].staff || BDEFS[b.type].inp) && cityBoost(p, b.x + 0.5, b.y + 0.5) > 1) n++;
+  return n;
+}
+/** The tiles every Arrival City holds (its ring, cityRing), each once: in Domination they count twice. */
+function cityLand() {
+  const L = cityList();
+  if (!L.length) return [];
+  const seen = new Set(), out = [];
+  for (const b of L) for (const t of cityRing(b)) if (!seen.has(t) && S.terrain[t] === T_GROUND && S.owner[t] === b.owner) { seen.add(t); out.push(t); }
+  return out;
+}
+
+/** Arrival City b, each tick: its lights and their Fuel at night, coming back once repaired, and being taken. */
+function updateCity(b, dt) {
+  const def = BDEFS[b.type], night = cityNight();
+  if (b.cDown && b.armor >= def.armor * CITY.back) {
+    b.cDown = 0;
+    postMsg(b.owner, 'Arrival City is repaired: its lights are back on, and the robots near it work harder again.', b.x, b.y, 'good');
+    if (isMe(b.owner)) sfx('citychime', b.x + 2, b.y + 2);
+  }
+  b.working = false;
+  if (!night || b.cDown) { b.cDry = 0; b.cFuel = b.cDown ? 0 : b.cFuel || 0; }
+  else {
+    // At night its lights burn a Fuel a minute; out of Fuel it goes dark.
+    b.cFuel = (b.cFuel || 0) - dt;
+    if (b.cFuel <= 0) {
+      if ((b.stock.fuel || 0) >= 1) {
+        bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.cFuel += CITY.fuel;
+        if (b.cDry) { b.cDry = 0; markDirty(b.x, b.y); }
+      } else {
+        b.cFuel = 0;
+        if (!b.cDry) { b.cDry = 1; markDirty(b.x, b.y); if (S.time - (b.dryT || -999) > 240) { b.dryT = S.time; postMsg(b.owner, 'Arrival City is dark: it has no Fuel for its lights, so its bonus is halved tonight. A Tanker brings it.', b.x, b.y, 'warn'); } }
+      }
+    }
+    b.working = !b.cDry;
+  }
+  cityCapture(b, dt);
+  const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
+  b.status = b.cDown
+    ? (b.cCap > 0 && b.cBy >= 0 ? `Down, and being taken by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left` : `Down: no bonus and no lights until it's repaired to ${Math.round(CITY.back * 100)}% (send Workers with Cement)`)
+    : b.cDry ? `Dark: no Fuel for its lights, so its robots work only ${pct}% faster tonight`
+    : `Lit${night ? '' : ' at dusk'}: your work within ${CITY.reach} tiles goes ${pct}% faster`;
+}
+
+/**
+ * Is Arrival City b being taken? While it's down, armed warbots of one side (a colony and its team) within
+ * CITY.capReach tiles of its walls, with none of its owner's side there, count up to CITY.cap s, and it's theirs. Any of
+ * its owner's side there, or two rival sides at once, and the count runs back.
+ */
+function cityCapture(b, dt) {
+  if (!b.cDown || b.owner < 0) { b.cCap = 0; b.cBy = -1; return; }
+  let by = -1, held = false, two = false;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !isArmy(u) || BOTS[u.type].wild || aloft(u) || !botArmed(u) || footDist(b, u.x, u.y) > CITY.capReach) continue;
+    if (!foes(u.owner, b.owner)) { held = true; break; }
+    if (by < 0) by = u.owner; else if (by !== u.owner && foes(by, u.owner)) two = true;
+  }
+  if (held || two || by < 0) {
+    b.cCap = Math.max(0, (b.cCap || 0) - dt);
+    if (!b.cCap) b.cBy = -1;
+    return;
+  }
+  if (b.cBy !== by) {
+    if (!(b.cBy >= 0)) { postMsg(b.owner, `Enemy warbots are at the walls of Arrival City: drive them off within ${CITY.cap} seconds or it's theirs!`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
+    b.cBy = by; b.cCap = 0;
+  }
+  b.cCap += dt;
+  if (b.cCap >= CITY.cap) cityTaken(b, by);
+}
+
+/** Arrival City b falls to `by`: its land, its bonus and its double Domination count change sides. */
+function cityTaken(b, by) {
+  const old = b.owner;
+  noteLost(b, by);
+  releaseBotsFrom(b, false);
+  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  b.fixLeft = 0; b.fixer = 0; b.inc = {};
+  b.owner = by; b.cCap = 0; b.cBy = -1; b.lastHit = S.time; b.cut = 0;
+  const P = S.players[by];
+  if (P) P.stats.cities = (P.stats.cities || 0) + 1;
+  logEvent({ t: S.time, k: 'city', p: by, q: old });
+  computeTerritory();
+  S.roadVer = (S.roadVer || 0) + 1;
+  markDirty(b.x, b.y);
+  const c = bCentre(b);
+  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[by], r: 3 });
+  postMsg(by, 'Your warbots took Arrival City! Its land is yours. Repair it (Workers, Cement) and its lights and its bonus come back for you.', b.x, b.y, 'good');
+  postMsg(old, `${playerName(by, true)} took Arrival City: its land and its bonus are theirs now. Knock it down and stand at its walls to take it back.`, b.x, b.y, 'lost');
+  if (isMe(by)) sfx('citychime', c.x, c.y);
+  else if (isMe(old)) sfx('alert');
+}
+
+/** Arrival City b was knocked down to 0 (by `by`, -1 if no one in particular): its bonus stops and it goes dark. */
+function cityDown(b, by) {
+  if (!b || b.dead || !BDEFS[b.type].city) return;
+  b.armor = Math.max(0, b.armor);
+  if (b.cDown) return;
+  b.cDown = 1; b.cDry = 0; b.cCap = 0; b.cBy = -1; b.working = false;
+  b.lastHit = S.time;
+  markDirty(b.x, b.y);
+  const c = bCentre(b);
+  addFx('smoke', c.x, c.y, { r: 1.6 });
+  sfx('boom', c.x, c.y);
+  postMsg(b.owner, `Arrival City is down: its lights are out and its bonus has stopped. Repair it to ${Math.round(CITY.back * 100)}%, and keep enemy warbots off its walls: standing there ${CITY.cap} seconds, they take it.`, b.x, b.y, 'lost');
+  if (by >= 0 && foes(by, b.owner)) postMsg(by, `Arrival City is down! Hold its walls with armed warbots for ${CITY.cap} seconds to take it.`, b.x, b.y, 'good');
+  logEvent({ t: S.time, k: 'cityDown', p: b.owner, q: by });
+}
+
+/* ------------------------------------------------------------------ the Orbital Lift */
+
+/*
+ * The Orbital Lift (LIFT; BDEFS.lift). b.lfDir: its fall line (LIFT_DIRS); b.lfRes: drops left in the Carrier; b.lfBoost:
+ * restocks since the last call (the next drop is LIFT.boost bigger for each); b.lfCd: s until it can call again; the
+ * climber: b.lfMove (0 at the bottom, 1 coming down, 2 going up), b.lfT how far (s of LIFT.climb), b.lfPaid whether this
+ * climb's Fuel is burned (without it, it waits), b.lfLoad and b.lfMul what's coming down and how much of it; b.lfSend
+ * the goods it sends up ({good: the reserve kept home}); b.lfUps, b.lfDrops: climbs made; b.lfWarn: the cable is weak.
+ * A fallen one's cable comes down along S.liftFalls (liftFall, updateLiftFalls).
+ */
+
+/** Generators of b's owner within LIFT.reach of its pad with Fuel in stock (the climb's LIFT.fuel comes from them). */
+function liftGens(b) { return megaGens(b, LIFT.reach).filter((g) => (g.stock.fuel || 0) > 0); }
+/** Fuel in stock at the Generators that power Lift b's climbs. */
+function liftFuel(b) { let n = 0; for (const g of liftGens(b)) n += g.stock.fuel || 0; return n; }
+/** The goods Lift b has gathered to send up (whole units of its lfSend goods, not what a drop left for Haulers). */
+function liftLoaded(b) {
+  let n = 0;
+  for (const g in b.lfSend || {}) n += Math.max(0, Math.floor((b.stock[g] || 0) - ((b.loot && b.loot[g]) || 0)));
+  return n;
+}
+/** How big Lift b's next drop is: 1, and LIFT.boost more for every restock since the last (up to LIFT.boostMax of them). */
+function liftMul(b) { return 1 + LIFT.boost * Math.min(LIFT.boostMax, b.lfBoost || 0); }
+/** What a drop of `load` brings at size `mul` ({ bots: {type: n}, goods: {good: n} }). */
+function liftDropOf(load, mul) {
+  const D = LIFT.drops[load], out = { bots: {}, goods: {} };
+  for (const k in D.bots || {}) out.bots[k] = Math.round(D.bots[k] * mul);
+  for (const g in D.goods || {}) out.goods[g] = Math.round(D.goods[g] * mul);
+  return out;
+}
+/** Why Lift b can't call a climber down with `load` now ('' if it can). */
+function liftCallWhy(b, load) {
+  if (!b || b.dead || !BDEFS[b.type].lift) return 'That Orbital Lift is gone.';
+  if (!b.built) return 'The Orbital Lift is still going up.';
+  if (!ownKey(LIFT.drops, load)) return 'Pick a load: a Security detail, a Work crew, Alloy or Chips.';
+  if (b.lfMove === 1) return 'A climber is already on its way down.';
+  if (b.lfMove === 2) return 'The climber is on its way up to the Carrier: call it once it is back.';
+  if ((b.lfCd || 0) > 0) return `The next call is ready in ${fmtSecs(b.lfCd)}.`;
+  if ((b.lfRes ?? LIFT.reserve) < 1) return 'The Carrier\'s reserve is empty: send goods up to put a drop back.';
+  return '';
+}
+/** Call Lift b's climber down with `load` (an order: liftCall). '' or why not. */
+function liftCall(b, load) {
+  const why = liftCallWhy(b, load);
+  if (why) return why;
+  b.lfRes = (b.lfRes ?? LIFT.reserve) - 1;
+  b.lfMul = liftMul(b); b.lfBoost = 0;
+  b.lfMove = 1; b.lfT = 0; b.lfPaid = 0; b.lfLoad = load;
+  return '';
+}
+/** Turn Lift site b's fall line to d (an order: liftDir): only while it's a site, and only onto a line that will do. '' or why not. */
+function setLiftDir(b, d) {
+  if (b.built) return 'Its fall line was set when it was placed: the cable is up now.';
+  const why = liftLineWhy(b.owner, b.x, b.y, d);
+  if (why) return why;
+  b.lfDir = d;
+  return '';
+}
+/** Send good g up from Lift b (on), or stop sending it. '' or why not. */
+function setLiftSend(b, g, on) {
+  if (!LIFT_GOODS.includes(g)) return 'The Lift sends up made goods and Crystal.';
+  const list = b.lfSend || {};
+  if (on) {
+    if (list[g] !== undefined) return '';
+    if (Object.keys(list).length >= LIFT.goods) return `The Lift sends up to ${LIFT.goods} goods: take one off its list first.`;
+    list[g] = LIFT.sendReserve;
+  } else delete list[g];
+  if (Object.keys(list).length) b.lfSend = list; else delete b.lfSend;
+  return '';
+}
+/** The reserve of good g Lift b leaves at home: d more (or less). */
+function setLiftReserve(b, g, d) {
+  if (!b.lfSend || b.lfSend[g] === undefined) return;
+  b.lfSend[g] = clamp(Math.round(b.lfSend[g] + d), 0, LIFT.sendMax);
+}
+/** How much more of good g Haulers (or Tankers) should bring Lift b: up to a climber's load, from what the colony holds beyond the reserve. */
+function liftWant(b, g) {
+  if (!b.built || !b.lfSend || b.lfSend[g] === undefined || b.lfMove === 2) return 0;
+  let inc = 0;
+  for (const k in b.inc || {}) inc += b.inc[k] || 0;
+  const room = LIFT.load - liftLoaded(b) - inc;
+  const spare = Math.floor(tickTotal(b.owner, g) - b.lfSend[g]);
+  return Math.max(0, Math.min(room, spare));
+}
+/** Lift b's conveyors, every LIFT.feed s: a unit of a good it sends from each store or factory touching its pad. */
+function liftConveyor(b, dt) {
+  b.lfFeed = (b.lfFeed || 0) - dt;
+  if (b.lfFeed > 0) return;
+  b.lfFeed = LIFT.feed;
+  if (!b.lfSend || b.lfMove === 2) return;
+  for (const c of touching(b)) {
+    if (!c.built) continue;
+    const cd = BDEFS[c.type];
+    for (const g in b.lfSend) {
+      if (isLiquid(g) || liftWant(b, g) < 1) continue;
+      const store = c.type === 'lander' || c.type === 'depot';
+      if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); break; }
+    }
+  }
+}
+
+/** The Orbital Lift, each tick: its conveyors, its climber (down with a drop, up with a load), its cooldown and status. */
+function updateLift(b, dt) {
+  if (b.lfRes === undefined) b.lfRes = LIFT.reserve;
+  if (b.lfDir === undefined) b.lfDir = 0;
+  if ((b.lfCd || 0) > 0) b.lfCd = Math.max(0, b.lfCd - dt);
+  liftWeak(b);
+  liftConveyor(b, dt);
+  b.working = false;
+  // A full load gathered and the climber at the bottom: it goes up.
+  if (!b.lfMove && liftLoaded(b) >= LIFT.load) {
+    let n = LIFT.load;
+    for (const g in b.lfSend) {
+      const have = Math.max(0, Math.floor((b.stock[g] || 0) - ((b.loot && b.loot[g]) || 0))), k = Math.min(have, n);
+      if (k > 0) { bump(b.stock, g, -k); usedGood(b.owner, g, k); n -= k; }
+      if (!n) break;
+    }
+    b.lfMove = 2; b.lfT = 0; b.lfPaid = 0; b.lfLoad = '';
+  }
+  if (!b.lfMove) {
+    const why = liftCallWhy(b, 'alloy');
+    b.status = !why ? `Ready: call a climber down (${b.lfRes} of ${LIFT.reserve} drops in the Carrier)` : (b.lfCd || 0) > 0 ? `Next call in ${fmtSecs(b.lfCd)}` : 'The Carrier\'s reserve is empty: send goods up to put a drop back';
+    if (b.lfSend) b.status += `; loading ${liftLoaded(b)} of ${LIFT.load} goods to send up`;
+    return;
+  }
+  const down = b.lfMove === 1;
+  // Each climb burns LIFT.fuel Fuel from the Generators in reach; without it the climber waits where it is.
+  if (!b.lfPaid) {
+    if (murmurCutOn(b) || liftFuel(b) < LIFT.fuel) {
+      b.status = `${down ? 'Climber waiting at the top' : 'Climber waiting at the bottom'}: no power (a Generator with ${LIFT.fuel} Fuel within ${LIFT.reach} tiles)`;
+      return;
+    }
+    let n = LIFT.fuel;
+    for (const g of liftGens(b)) { const k = Math.min(n, Math.floor(g.stock.fuel || 0)); if (k > 0) { bump(g.stock, 'fuel', -k); usedGood(b.owner, 'fuel', k); n -= k; } if (!n) break; }
+    b.lfPaid = 1;
+    const c = bCentre(b);
+    if (down) {
+      // Everyone hears a climber start down (a rival has LIFT.climb s to be waiting at the bottom).
+      for (const P of S.players) {
+        if (P.absent || P.out || isWild(P.id)) continue;
+        postMsg(P.id, P.id === b.owner ? `Climber descending with ${LIFT.drops[b.lfLoad].name.toLowerCase()}: it lands in ${LIFT.climb} seconds.` : `Climber descending at ${playerName(b.owner)}'s Lift: it lands in ${LIFT.climb} seconds.`, Math.floor(c.x), Math.floor(c.y), P.id === b.owner ? 'info' : 'warn');
+      }
+      logEvent({ t: S.time, k: 'liftCall', p: b.owner, g: b.lfLoad });
+    }
+    sfx('liftclimb', c.x, c.y);
+  }
+  if (eventNow('flare')) { b.status = `Climber held ${down ? 'on its way down' : 'on its way up'}: a solar flare (it goes on when it passes)`; return; }
+  b.working = true; // (charge running up the cable: the Murmur see it, and its Generator works)
+  b.lfT = (b.lfT || 0) + dt;
+  const left = LIFT.climb - b.lfT;
+  if (left > 0) { b.status = down ? `Climber coming down with ${LIFT.drops[b.lfLoad].name.toLowerCase()}: lands in ${fmtSecs(left)}` : `Climber going up with ${LIFT.load} goods: at the Carrier in ${fmtSecs(left)}`; return; }
+  if (down) liftLand(b);
+  else liftArrive(b);
+}
+
+/** Lift b's climber is down: its robots step out round the pad, its goods wait for Haulers; the cooldown starts. */
+function liftLand(b) {
+  const load = b.lfLoad, drop = liftDropOf(load, b.lfMul || 1), P = S.players[b.owner], c = bCentre(b);
+  b.lfMove = 0; b.lfT = 0; b.lfPaid = 0; b.lfLoad = ''; b.lfMul = 1;
+  b.lfCd = LIFT.cooldown;
+  b.lfDrops = (b.lfDrops || 0) + 1;
+  if (P) P.stats.liftDrops = (P.stats.liftDrops || 0) + 1;
+  const spots = liftSpots(b);
+  let k = 0, n = 0;
+  for (const type in drop.bots) for (let q = 0; q < drop.bots[type]; q++) {
+    const t = spots.length ? spots[k++ % spots.length] : tIdx(b.x, b.y);
+    addBot(b.owner, type, t % S.W, (t / S.W) | 0);
+    n++;
+  }
+  for (const g in drop.goods) { bump(b.stock, g, drop.goods[g]); b.loot = b.loot || {}; b.loot[g] = (b.loot[g] || 0) + drop.goods[g]; n += drop.goods[g]; }
+  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[b.owner], r: 2.2 });
+  addFx('smoke', c.x, c.y, { r: 1.2, life: 1.4 });
+  sfx('liftland', c.x, c.y);
+  const what = Object.keys(drop.bots).map((t) => `${drop.bots[t]} ${drop.bots[t] === 1 ? BOTS[t].name : BOTS[t].plural}`).concat(Object.keys(drop.goods).map((g) => `${drop.goods[g]} ${goodN(g, drop.goods[g])}`)).join(' and ');
+  postMsg(b.owner, `The climber is down: ${what}${Object.keys(drop.goods).length ? ' (Haulers take them to storage)' : ''}. The next call is ready in ${Math.round(LIFT.cooldown / 60)} minutes.`, b.x + 1, b.y + 1, 'good');
+  logEvent({ t: S.time, k: 'liftDrop', p: b.owner, g: load, n });
+}
+
+/** Lift b's climber reaches the Carrier with its load: a drop goes back into the reserve and the next one grows. */
+function liftArrive(b) {
+  const P = S.players[b.owner];
+  b.lfMove = 0; b.lfT = 0; b.lfPaid = 0;
+  b.lfRes = Math.min(LIFT.reserve, (b.lfRes ?? LIFT.reserve) + 1);
+  b.lfBoost = Math.min(LIFT.boostMax, (b.lfBoost || 0) + 1);
+  b.lfUps = (b.lfUps || 0) + 1;
+  if (P) P.stats.liftUps = (P.stats.liftUps || 0) + 1;
+  postMsg(b.owner, `The Carrier took ${LIFT.load} goods: ${b.lfRes} of ${LIFT.reserve} drops in reserve, and the next drop is ${Math.round((liftMul(b) - 1) * 100)}% bigger.`, b.x + 1, b.y + 1, 'good');
+}
+
+/** Free tiles round Lift b's pad for its robots to step out on, nearest the pad first (open, walkable, no building). */
+function liftSpots(b) {
+  const out = [];
+  for (let r = 1; r <= 3 && out.length < 16; r++) {
+    for (let j = b.y - r; j <= b.y + 2 + r; j++) for (let i = b.x - r; i <= b.x + 2 + r; i++) {
+      if (Math.max(Math.max(b.x - i, i - (b.x + 2)), Math.max(b.y - j, j - (b.y + 2))) !== r || !inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.ramp[t]) continue;
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/** Lift b's cable below LIFT.weak of its armor: it sways, and whoever has land or robots on its line is told (once, until it's mended). */
+function liftWeak(b) {
+  const weak = b.armor < BDEFS[b.type].armor * LIFT.weak;
+  if (!weak) { b.lfWarn = 0; return; }
+  if (b.lfWarn) return;
+  b.lfWarn = 1;
+  const L = liftLineTiles(b.x, b.y, b.lfDir || 0), set = new Set(L), told = new Set();
+  for (const t of L) if (t >= 0 && S.owner[t] >= 0) told.add(S.owner[t]);
+  for (const u of S.bots) if (!u.dead && u.owner >= 0 && set.has(tIdx(Math.floor(u.x), Math.floor(u.y)))) told.add(u.owner);
+  told.add(b.owner);
+  for (const p of told) if (S.players[p] && !isWild(p)) { postMsg(p, `Lift cable unstable: ${p === b.owner ? 'your' : `${playerName(b.owner)}'s`} Orbital Lift is badly hurt, and if it is destroyed its cable falls along the line flashing red.`, b.x + 1, b.y + 1, 'warn'); if (isMe(p)) sfx('liftgroan', b.x + 1.5, b.y + 1.5); }
+}
+
+/** Who brought Lift b down: the foe who hit its colony last, just now (-1: none; its own side's doing, or the ground's). */
+function liftKiller(b) {
+  const P = S.players[b.owner], H = (P && P.hitBy) || {};
+  let by = -1, at = -Infinity;
+  for (const k in H) { const q = +k; if (H[k] >= S.time - 2 && H[k] > at && foes(q, b.owner)) { at = H[k]; by = q; } }
+  return by;
+}
+
+/**
+ * Lift b is being removed (destroyBuilding, built). A climber on the cable is lost with its load. Destroyed by force by a
+ * foe (liftKiller), its cable falls along its line (liftFall); dismantled, moved, or brought down by its own side or
+ * the ground, the cable is reeled in safely.
+ */
+function liftDown(b, burn) {
+  if (b.lfMove) postMsg(b.owner, `The climber on your Orbital Lift's cable was lost${b.lfMove === 1 ? `, with its ${LIFT.drops[b.lfLoad] ? LIFT.drops[b.lfLoad].name.toLowerCase() : 'load'}` : ' with its load'}.`, b.x + 1, b.y + 1, 'lost');
+  b.lfMove = 0;
+  const by = burn ? liftKiller(b) : -1;
+  if (by >= 0) liftFall(b, by);
+  else if (burn) postMsg(b.owner, 'Your Orbital Lift is gone; its cable was reeled in safely.', b.x + 1, b.y + 1, 'lost');
+}
+
+/** Lift b, destroyed by `by`, lets its cable go: LIFT.creak s of creaking, then it comes down along its line (updateLiftFalls). */
+function liftFall(b, by) {
+  const d = b.lfDir || 0, n = liftLineTiles(b.x, b.y, d).length;
+  S.liftFalls = S.liftFalls || [];
+  S.liftFalls.push({ id: b.id, o: b.owner, by, ax: b.x, ay: b.y, d, n, t: 0, k: 0, sp: LIFT.sweep * (biome() === 'lunar' ? LIFT.lunar : 1), hit: [] });
+  const P = S.players[by];
+  if (P) P.stats.liftsFelled = (P.stats.liftsFelled || 0) + 1;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    postMsg(Q.id, Q.id === b.owner ? `Your Orbital Lift is destroyed: its cable is coming down ${LIFT_DIR_NAMES[d]} along its fall line in ${LIFT.creak} seconds! Get clear.` : `${playerName(b.owner, true)}'s Orbital Lift is destroyed: its cable comes down ${LIFT_DIR_NAMES[d]} along its fall line in ${LIFT.creak} seconds.`, b.x + 1, b.y + 1, Q.id === b.owner ? 'lost' : 'bad');
+  }
+  sfx('liftgroan', b.x + 1.5, b.y + 1.5);
+  logEvent({ t: S.time, k: 'liftFall', p: b.owner, q: by });
+}
+
+/** The tile k of fall f's line (its index on the map, -1 off it). */
+function liftFallTile(f, k) {
+  const [dx, dy] = LIFT_DIRS[f.d], x = f.ax + 1 + dx * (k + 2), y = f.ay + 1 + dy * (k + 2);
+  return inMap(x, y) ? tIdx(x, y) : -1;
+}
+
+/** Cables coming down: after LIFT.creak s each sweeps out from its anchor at f.sp tiles a second, crushing as it goes (liftCrush). */
+function updateLiftFalls(dt) {
+  for (const f of S.liftFalls) {
+    const was = f.t;
+    f.t += dt;
+    if (f.t < LIFT.creak) continue;
+    if (was < LIFT.creak) sfx('liftsnap', f.ax + 1.5, f.ay + 1.5);
+    const upto = Math.min(f.n, Math.floor((f.t - LIFT.creak) * f.sp) + 1);
+    while (f.k < upto) liftCrush(f, f.k++);
+  }
+  S.liftFalls = S.liftFalls.filter((f) => f.k < f.n);
+}
+
+/**
+ * The falling cable lands on tile k of fall f's line: a building there takes LIFT.crush (a Keep is left at half, a
+ * Command Base at its Missile floor, a megastructure badly hurt but standing; a Wall, Gate, Viaduct, Ropeway or Maglev
+ * pylon is broken), robots on it are destroyed and those beside it take LIFT.side (aircraft aren't hit), a road or track
+ * on it is broken, and the cable lies there as wreckage (liftWreckPile). Each thing is hit once a fall (f.hit).
+ */
+function liftCrush(f, k) {
+  const t = liftFallTile(f, k);
+  if (t < 0) return;
+  const i = t % S.W, j = (t / S.W) | 0, by = f.by, hit = new Set(f.hit);
+  const e = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (e && !e.dead && !hit.has(e.id) && !calmB(e)) {
+    hit.add(e.id); f.hit.push(e.id);
+    const def = BDEFS[e.type];
+    if (e.owner >= 0 && e.owner !== by) hitByNow(e.owner, by);
+    e.lastHit = S.time;
+    if (def.wild) { if (e.armor <= LIFT.crush) captureBuilding(e, by); else e.armor -= LIFT.crush; }
+    else if (!e.built || def.barrier || def.viaduct || def.ropeway || def.pylon) { fortTaken(e, by); destroyBuilding(e, true); }
+    else if (def.city) { e.armor = Math.max(0, e.armor - LIFT.crush); if (e.armor <= 0) cityDown(e, by); }
+    else if (e.type === 'lander') e.armor = Math.min(e.armor, Math.max(missileFloor(e), e.armor - LIFT.crush));
+    else if (def.keep) e.armor = Math.min(e.armor, def.armor / 2);
+    else if (def.mega) e.armor = Math.max(1, Math.min(e.armor - LIFT.crush, Math.round(def.armor * 0.35)));
+    else {
+      e.armor -= LIFT.crush;
+      if (e.armor <= 0) {
+        postMsg(e.owner, `The falling cable flattened your ${def.name}!`, i, j, 'lost');
+        fortTaken(e, by);
+        destroyBuilding(e, true);
+      }
+    }
+  }
+  // (a robot on the line is crushed when its own tile is struck, never just grazed by the tile before it)
+  const line = new Set(); for (let q = 0; q < f.n; q++) line.add(liftFallTile(f, q));
+  for (const u of S.bots) {
+    if (u.dead || u.inside || aloft(u) || hit.has(u.id) || BOTS[u.type].sea) continue;
+    const ui = Math.floor(u.x), uj = Math.floor(u.y);
+    if (Math.max(Math.abs(ui - i), Math.abs(uj - j)) > 1) continue;
+    if (!(ui === i && uj === j) && inMap(ui, uj) && line.has(tIdx(ui, uj))) continue;
+    hit.add(u.id); f.hit.push(u.id);
+    if (u.owner >= 0 && u.owner !== by) hitByNow(u.owner, by);
+    if (ui === i && uj === j) killBot(u); else damageBot(u, LIFT.side);
+  }
+  if (S.plan[t]) cancelPlan(t);
+  if (S.road[t]) wreckRoad(t, S.owner[t], 'The falling cable broke your road');
+  if (S.rail && S.rail[t]) setRail(t, false);
+  if (S.terrain[t] === T_GROUND && !(S.lava && S.lava[t])) liftWreckPile(t, f.o, f.d);
+  scarBlast(i + 0.5, j + 0.5, 0.45, { crater: false });
+  addFx('smoke', i + 0.5, j + 0.5, { r: 0.7, life: 1.6 });
+  if (k % 3 === 0) sfx('liftimpact', i + 0.5, j + 0.5);
+}
+
+/** The fallen cable's wreckage on tile t: scrap of kind 4 (s.cb), a tile of it, worth LIFT.cut Alloy to the Haulers who cut it up. */
+function liftWreckPile(t, owner, d) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  S.scrap = S.scrap || [];
+  if (S.scrap.some((s) => s.cb && Math.floor(s.x) === i && Math.floor(s.y) === j)) return;
+  S.scrap.push({ id: S.nextId++, x: i + 0.5, y: j + 0.5, n: LIFT.cut, k: 4, c: 1, o: owner, a: Math.floor(hash2(i, j, 4391) * 64), cb: 1, d, ft: Math.round(S.time) }); // (d: which way it lies, for its art)
+  S.scrapVer = (S.scrapVer || 0) + 1;
+  markDirty(i, j);
 }
 
 /* ------------------------------------------------------------------ war scars */
@@ -16871,7 +18405,7 @@ function scrapAdd(x, y, v, k, owner, w) {
   }
   S.scrap = S.scrap || [];
   if (!w) for (const s of S.scrap) {
-    if (s.w || dist2(s.x, s.y, x, y) > 0.36) continue;
+    if (s.w || s.cb || dist2(s.x, s.y, x, y) > 0.36) continue;
     s.n = Math.min(SCARS.pileMax, Math.round((s.n + v) * 100) / 100); s.k = Math.max(s.k, k); s.c = Math.min(12, s.c + 1);
     scrapDirty(s);
     return s;
@@ -16890,11 +18424,11 @@ function scrapDirty(s) { scarDirty(Math.floor(s.x), Math.floor(s.y), s.k >= 2 ||
 function scrapSqueeze() {
   const L = S.scrap;
   let k = -1;
-  for (let q = 0; q < Math.min(40, L.length); q++) if (!L[q].w && (k < 0 || L[q].n < L[k].n)) k = q;
-  if (k < 0) k = 0;
+  for (let q = 0; q < Math.min(40, L.length); q++) if (!L[q].w && !L[q].cb && (k < 0 || L[q].n < L[k].n)) k = q;
+  if (k < 0) { k = L.findIndex((s) => !s.cb); if (k < 0) return; } // (a fallen Lift's cable is never squeezed out)
   const s = L[k];
   let best = null, bd = 9;
-  for (const o of L) { if (o === s || o.w) continue; const d = dist2(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = o; } }
+  for (const o of L) { if (o === s || o.w || o.cb) continue; const d = dist2(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = o; } }
   L.splice(k, 1);
   scrapDirty(s);
   if (best && !s.w) { best.n = Math.min(SCARS.pileMax, Math.round((best.n + s.n) * 100) / 100); best.k = Math.max(best.k, s.k); best.c = Math.min(12, best.c + s.c); scrapDirty(best); }
@@ -16902,10 +18436,10 @@ function scrapSqueeze() {
 
 /** Scrap and bones built over (a building or site, a road, track or pipe) are gone; so is an aircraft wreck's salvage once its wreck is. */
 function scrapTidy() {
-  const n = S.scrap.length, nb = S.bones.length;
-  S.scrap = S.scrap.filter((s) => scrapGround(tIdx(Math.floor(s.x), Math.floor(s.y))) && (!s.w || (S.wrecks || []).some((w) => w.id === s.w)));
-  S.bones = S.bones.filter((b) => scrapGround(tIdx(Math.floor(b.x), Math.floor(b.y))));
-  if (S.scrap.length !== n || S.bones.length !== nb) S.scrapVer = (S.scrapVer || 0) + 1;
+  const n = S.scrap.length, nb = S.bones ? S.bones.length : 0; // (no bones with War scars off: only a fallen Lift's cable)
+  S.scrap = S.scrap.filter((s) => (s.cb ? S.terrain[tIdx(Math.floor(s.x), Math.floor(s.y))] === T_GROUND : scrapGround(tIdx(Math.floor(s.x), Math.floor(s.y)))) && (!s.w || (S.wrecks || []).some((w) => w.id === s.w))); // (a fallen Lift's cable lies where it fell: nothing is built on it)
+  if (S.bones) S.bones = S.bones.filter((b) => scrapGround(tIdx(Math.floor(b.x), Math.floor(b.y))));
+  if (S.scrap.length !== n || (S.bones ? S.bones.length : 0) !== nb) S.scrapVer = (S.scrapVer || 0) + 1;
 }
 
 function scrapById(id) { for (const s of S.scrap || []) if (s.id === id) return s; return null; }
@@ -16943,7 +18477,8 @@ function scrapHeaps() {
  * rivals too. Once every few rounds.
  */
 function salvageRun(p, idle) {
-  if (!scarLevel() || !S.scrap || !S.scrap.length || !idle.length || S.tick % 32 >= 8) return;
+  if (!S.scrap || !S.scrap.length || !idle.length || S.tick % 32 >= 8) return;
+  const scars = scarLevel(); // (with War scars off, only a fallen Lift's cable is salvaged)
   let haulers = idle.filter((u) => u.type === 'hauler' && !(u.failUntil > S.time));
   if (!haulers.length) return;
   const taken = new Map();
@@ -16951,9 +18486,9 @@ function salvageRun(p, idle) {
   const net = roadNet(p), R = Math.ceil(SALVAGE.reach), nets = haulers.map((u) => botNets(u));
   for (const s of S.scrap) {
     if (!haulers.length) return;
-    if (s.n - (taken.get(s.id) || 0) < 1) continue;
-    const si = Math.floor(s.x), sj = Math.floor(s.y);
-    if (S.owner[sj * S.W + si] !== p || foesNear(p, s.x, s.y, CRATE_SAFE)) continue;
+    if ((!scars && !s.cb) || s.n - (taken.get(s.id) || 0) < 1) continue;
+    const si = Math.floor(s.x), sj = Math.floor(s.y), so = S.owner[sj * S.W + si];
+    if ((so !== p && !(s.cb && so < 0)) || foesNear(p, s.x, s.y, CRATE_SAFE)) continue; // (a fallen cable on no one's ground too)
     let best = -1, stand = -1, bd = Infinity;
     for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
       const i = si + di, j = sj + dj;
@@ -16998,6 +18533,7 @@ function doSalvage(u, t, dt) {
   if (!dst) { u.task = null; return; }
   s.n = Math.round((s.n - got) * 100) / 100; s.cut = 1;
   if (s.n < 1 && s.w) { S.wrecks = (S.wrecks || []).filter((w) => w.id !== s.w); S.scrap.splice(S.scrap.indexOf(s), 1); } // (an aircraft's wreck, cut up and carried off)
+  else if (s.n < 1 && s.cb) S.scrap.splice(S.scrap.indexOf(s), 1); // (a tile of fallen cable, cut up: the ground is clear again)
   scrapDirty(s);
   const P = S.players[u.owner];
   P.stats.salvaged = (P.stats.salvaged || 0) + got;
@@ -17006,3 +18542,170 @@ function doSalvage(u, t, dt) {
   bump(dst.inc, 'alloy', got);
   if (!goTo(u, dst.x, dst.y)) cancelTask(u, true);
 }
+
+/* ------------------------------------------------------------------ megastructures: the Great Uplink */
+
+/*
+ * The Great Uplink (GUP; BDEFS.gup), a second way to win with the Great Uplink win on (gupWinOn). b.gOn: transmitting
+ * (once begun it stays on until contact, or until the building is lost or changes hands); b.gT: s of transmission so far
+ * (0 .. GUP.hold); b.gBy: the colony that began it (taken by another, it's lost); b.gJam: the colony + 1 whose warbot jams
+ * it (0: none); b.gPow: 1 while it has its Generators; b.gWarn: the last alert given (s left); b.gBest: the most it held.
+ */
+
+/** Can Great Uplink transmissions begin yet (GUP.at s into a game; at once in a mission that teaches it)? */
+function gupOpen() { return !!S && (!!S.mission || S.time >= GUP.at); }
+
+/** A Nuclear Reactor of b's owner within GUP.reach of it (built, on) with Uranium or Enriched Uranium in it, the fullest; or null. */
+function gupReactor(b) {
+  let best = null;
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) > GUP.reach + 0.5 || !((r.stock.uranium || 0) + (r.stock.fissile || 0))) continue;
+    if (!best || (r.stock.uranium || 0) + 2 * (r.stock.fissile || 0) > (best.stock.uranium || 0) + 2 * (best.stock.fissile || 0)) best = r;
+  }
+  return best;
+}
+
+/**
+ * What powers Great Uplink b now: 'gen' (GUP.gens Generators with Fuel within GUP.reach), 'reactor' (a Nuclear Reactor
+ * there with Uranium, or Uranium already paid for this stretch, b.gU, and GUP.rGens Generator), or '' (none; nor while
+ * the Murmur cut it). The Generators first, so the Uranium is kept for what only it can do.
+ */
+function gupPower(b) {
+  if (murmurCutOn(b)) return '';
+  const n = megaGens(b, GUP.reach).length;
+  if (n >= GUP.gens) return 'gen';
+  if (n >= GUP.rGens && ((b.gU || 0) > 0 || gupReactor(b))) return 'reactor';
+  return '';
+}
+/** Has Great Uplink b its power (gupPower)? */
+function gupPowered(b) { return !!gupPower(b); }
+
+/** On Reactor power, Great Uplink b pays a Uranium for each GUP.uEvery s of transmission (an Enriched Uranium for two). */
+function gupBurnUranium(b, dt) {
+  b.gU = (b.gU || 0) - dt;
+  if (b.gU > 0) return true;
+  const r = gupReactor(b);
+  if (!r) { b.gU = 0; return false; }
+  const g = (r.stock.uranium || 0) >= 1 ? 'uranium' : 'fissile';
+  bump(r.stock, g, -1); usedGood(b.owner, g, 1);
+  b.gU += g === 'uranium' ? GUP.uEvery : 2 * GUP.uEvery;
+  return true;
+}
+
+/** Stand down Great Uplink b's transmission (an order: gupStop): its progress is lost, and every colony is told. '' or why not. */
+function gupStop(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].gup) return 'That Great Uplink is gone.';
+  if (!b.gOn) return 'It is not transmitting.';
+  const c = bCentre(b), lost = fmtClock(b.gT || 0);
+  b.gOn = 0; b.gT = 0; b.gJam = 0; b.gWarn = 0; b.working = false;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    postMsg(Q.id, Q.id === b.owner ? `Your Great Uplink stood down: its ${lost} of transmission is lost.` : `${playerName(b.owner)}'s Great Uplink stood down: its transmission is over.`, c.x, c.y, Q.id === b.owner || allies(Q.id, b.owner) ? 'warn' : 'good');
+  }
+  logEvent({ t: S.time, k: 'gupStop', p: b.owner });
+  return '';
+}
+
+/** The colony + 1 one of whose armed warbots stands within GUP.jam tiles of Great Uplink b's square, jamming it; or 0. */
+function gupJammer(b) {
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner < 0 || isWild(u.owner) || !isArmy(u) || aloft(u) || !foes(u.owner, b.owner) || !botArmed(u)) continue;
+    if (footDist(b, u.x, u.y) <= GUP.jam) return u.owner + 1;
+  }
+  return 0;
+}
+
+/** Why Great Uplink b can't begin a transmission now ('' if it can). */
+function gupBlocked(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].gup) return 'The Great Uplink is not built yet.';
+  if (b.gOn) return 'It is transmitting already.';
+  if (!gupWinOn()) return 'The Great Uplink win is off in this game.';
+  if (S.endless || S.winner >= 0) return 'This game is already won: nothing more is won by contact.';
+  if (!gupOpen()) return `Transmissions open ${GUP.at / 60} minutes into a game: in ${fmtSecs(GUP.at - S.time)}.`;
+  if (!gupPowered(b)) return `No power: it needs ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Nuclear Reactor with Uranium and ${GUP.rGens} Generator there.`;
+  return '';
+}
+
+/** Begin Great Uplink b's transmission (an order: gupBegin). Every colony is told where it is. '' or why not. */
+function gupBegin(b) {
+  const why = gupBlocked(b);
+  if (why) return why;
+  b.gOn = 1; b.gT = 0; b.gBy = b.owner; b.gJam = 0; b.gPow = 1; b.gWarn = GUP.hold; b.gBest = 0;
+  const P = S.players[b.owner], c = bCentre(b), left = fmtClock(GUP.hold);
+  if (P) P.stats.gupTx = (P.stats.gupTx || 0) + 1;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    if (Q.id === b.owner) postMsg(Q.id, `Your Great Uplink is transmitting: hold it for ${left} to make contact. Every colony can see where it is.`, c.x, c.y, 'good');
+    else if (allies(Q.id, b.owner)) postMsg(Q.id, `${playerName(b.owner)} (your team) is transmitting from its Great Uplink: guard it for ${left} and your team wins.`, c.x, c.y, 'good');
+    else postMsg(Q.id, `${playerName(b.owner)} is transmitting from its Great Uplink! Jam it or destroy it within ${left}, or it makes contact and wins.`, c.x, c.y, 'bad');
+  }
+  logEvent({ t: S.time, k: 'gup', p: b.owner });
+  sfx('gupbegin', c.x, c.y);
+  return '';
+}
+
+/** Tell every colony how Great Uplink b's transmission stands (an alert at `w` s left). */
+function gupAlert(b, w) {
+  const c = bCentre(b), when = w >= GUP.hold / 2 ? 'halfway' : w >= 60 ? `${w / 60} minutes from contact` : `${w} seconds from contact`;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    if (Q.id === b.owner) postMsg(Q.id, `Your Great Uplink's transmission is ${when}: hold on!`, c.x, c.y, 'good');
+    else if (allies(Q.id, b.owner)) postMsg(Q.id, `${playerName(b.owner)}'s transmission is ${when}.`, c.x, c.y, 'good');
+    else postMsg(Q.id, `${playerName(b.owner)}'s Great Uplink is ${when}: jam it or destroy it!`, c.x, c.y, 'bad');
+  }
+}
+
+/** The Great Uplink, each tick: its transmission's clock (on, or running back while jammed or unpowered), and contact. */
+function updateGup(b, dt) {
+  if (b.gOn && (b.gBy !== b.owner || S.endless)) { b.gOn = 0; b.gT = 0; b.gJam = 0; b.gWarn = 0; } // (taken by another colony: the transmission is lost; played on past a victory, nothing is won by contact)
+  if (!b.gOn) {
+    b.working = false;
+    b.status = !gupWinOn() ? 'Silent: the Great Uplink win is off in this game' : S.endless ? 'Silent: this game is already won'
+      : !gupOpen() ? `Transmissions open in ${fmtSecs(GUP.at - S.time)}` : gupPowered(b) ? 'Ready: Begin transmission on its panel'
+      : `No power: ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Reactor with Uranium and a Generator`;
+    return;
+  }
+  const jam = gupJammer(b), src = b.cut || b.paused ? '' : gupPower(b), c = bCentre(b);
+  // (on Reactor power, a Uranium for each stretch it transmits: none left, no power)
+  const pow = src && (src !== 'reactor' || jam || gupBurnUranium(b, dt)) ? 1 : 0;
+  b.gSrc = pow ? src : '';
+  if (jam && !b.gJam) {
+    postMsg(b.owner, `${playerName(jam - 1)}'s warbots are jamming your Great Uplink: drive them off! Its clock is running back.`, c.x, c.y, 'bad');
+    postMsg(jam - 1, `Your warbots are jamming ${playerName(b.owner, true)}'s Great Uplink: its clock is running back.`, c.x, c.y, 'good');
+  }
+  if (!pow && b.gPow && !jam) postMsg(b.owner, 'Your Great Uplink lost its power (its Generators are wrecked or out of Fuel): its clock is running back.', c.x, c.y, 'bad');
+  b.gJam = jam; b.gPow = pow;
+  if (jam || !pow) {
+    b.gT = Math.max(0, (b.gT || 0) - dt * GUP.back);
+    b.working = false;
+    b.status = `${jam ? `Jammed by ${playerName(jam - 1)}` : 'No power'}: its clock runs back (contact in ${fmtClock(GUP.hold - b.gT)})`;
+    return;
+  }
+  b.working = true;
+  // Its Generators burn a Fuel every GUP.genFuel s each while it transmits (against BDEFS.generator's own rate).
+  const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / GUP.genFuel - 1);
+  for (const g of megaGens(b, GUP.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
+  b.gT = Math.min(GUP.hold, (b.gT || 0) + dt);
+  b.gBest = Math.max(b.gBest || 0, b.gT);
+  const left = GUP.hold - b.gT;
+  for (const w of GUP.alerts) if (left <= w && (b.gWarn ?? GUP.hold) > w) { b.gWarn = w; gupAlert(b, w); }
+  b.status = `Transmitting${b.gSrc === 'reactor' ? ' on Reactor power' : ''}: contact in ${fmtClock(left)}`;
+  if (left <= 0) gupContact(b);
+}
+
+/** Great Uplink b has made contact: its colony (and its team) wins. */
+function gupContact(b) {
+  if (S.endless || S.winner >= 0) return;
+  const P = S.players[b.owner];
+  if (P) P.stats.contact = (P.stats.contact || 0) + 1;
+  b.gOn = 0; b.working = false;
+  logEvent({ t: S.time, k: 'contact', p: b.owner });
+  S.winner = b.owner; S.endHow = 'contact';
+}
+
+/** The Great Uplinks transmitting now, the furthest along first. */
+function gupLive() { return S.buildings.filter((b) => !b.dead && b.built && b.gOn && b.gBy === b.owner && BDEFS[b.type].gup).sort((a, c) => (c.gT || 0) - (a.gT || 0) || a.id - c.id); }
+
+/** The furthest-along Great Uplink transmitting that belongs to a foe of p's, or null. */
+function gupFoeLive(p) { return gupLive().find((b) => b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner)) || null; }

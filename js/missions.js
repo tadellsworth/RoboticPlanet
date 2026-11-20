@@ -257,6 +257,7 @@ const MISSIONS = [
       'Nearly every building and every road is made of Cement, baked from Stone.',
       'The boulders lie past your border: this time draw the road out first, in Paths (R), then build at its end.',
       'Plans are paid as goods come in. In Paths, tap a road to take it up again, or drag along a planned one to call it off.',
+      'Up to 3 Workers lay a road at once, so the rest stay free to build: <b>Road crew</b>, in Paths, changes that.',
       'When the boulders run out, a Quarry cuts Stone from crags and cliffs or digs it: it never runs dry.',
       'The 1× chip at the top (or ]) speeds time up; [ slows it. The game saves itself: Continue picks up where you left off.',
     ],
@@ -593,12 +594,13 @@ const MISSIONS = [
   },
   {
     id: 'blacktop', name: 'Blacktop', chapter: 'Roads and Traffic',
-    brief: 'Pump oil, cook Asphalt and send a Paver out: the fastest roads on the planet.',
+    brief: 'Pump oil, cook Asphalt and send your Pavers out: new roads laid fast, and the fastest roads on the planet.',
     intro: [
       'Road doubles a robot\'s speed; <b>asphalt</b> is faster still, and trucks love it.',
       'An Oil Pump on a seep pumps Crude, a liquid: Tankers carry it. A road over a seep leaves the oil below.',
-      'An Asphalt Plant cooks Crude with Cement; a Roadworks\' <b>Paver</b> lays it, 4 tiles per Asphalt.',
-      'Busy asphalt wears out: the Paver resurfaces the roads it looks after.',
+      'An Asphalt Plant cooks Crude with Cement; a Roadworks\' two <b>Pavers</b> lay it, 4 tiles per Asphalt.',
+      'Pavers lay your planned roads first, twice as fast as Workers, and leave the Workers free to build.',
+      'Busy asphalt wears out: the Pavers resurface the roads they look after.',
     ],
     mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 3, biome: 'desert', shape: 0, limit: [0, 0, 20],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x + 5, b.y - 5, 1.2, R_OIL, 0.95, 9); },
@@ -618,10 +620,15 @@ const MISSIONS = [
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Asphalt Plant</b> (<kbd>T</kbd>), touching the Oil Pump (Crude flows straight in) and a road.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='tarworks']" },
       // (No #btn-build in ui, so with nothing open the coach lights Build and the Move tab and rings the Bot Foundry: both halves.)
-      { kind: 'roadworks', n: 1, text: 'Build a Roadworks and a Paver', at: 'foundry',
-        count: (P, S) => Math.min(S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'roadworks').length, S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'paver').length),
-        hint: '<b>Build</b> → <b>Move</b> (<kbd>3</kbd>) → <b>Roadworks</b> (<kbd>O</kbd>) by a road. Then tap the Bot Foundry → <b>Pavers +1</b>: you land with none.',
+      { kind: 'roadworks', n: 1, text: 'Build a Roadworks and two Pavers', at: 'foundry',
+        count: (P, S) => Math.min(S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'roadworks').length, Math.floor(S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'paver').length / 2)),
+        hint: '<b>Build</b> → <b>Move</b> (<kbd>3</kbd>) → <b>Roadworks</b> (<kbd>O</kbd>) by a road. Then tap the Bot Foundry → <b>Pavers +1</b>, twice.',
         ui: "#build-tabs [data-g='move'], .bcard[data-t='roadworks'], #sh-orders .order-row[data-k='paver'] [data-d='1']" },
+      // (Pavers lay new road too: a road planned now goes to them before the Workers, who are kept to the Road crew.)
+      { kind: 'paverRoad', n: [6, 10, 14], text: 'Lay {n} tiles of new road with your Pavers',
+        count: (P) => P.paverLaid || 0,
+        hint: '<b>Paths</b> (<kbd>R</kbd>): drag a new road, tap <b>Build</b>. Pavers lay it fast; <b>Road crew</b> caps Workers on it.',
+        ui: "#btn-road, #banner-seg [data-v='road'], #road-crew, #banner-ok" },
       { kind: 'paths', tier: 2, n: [8, 14, 20],
         hint: '<b>Paths</b> → <b>Pave</b> (<kbd>E</kbd>): drag along busy roads to mark them. Or Roadworks → <b>Every joined road</b>.',
         ui: "#btn-road, #banner-seg [data-v='pave'], #sh-pmode [data-v='all']" },
@@ -799,13 +806,15 @@ const MISSIONS = [
   },
   {
     id: 'maglev', name: 'Phase 2', chapter: 'Industry and Trade',
-    brief: 'The Crystal lies far to the north, across the river. Build the Accord\'s Phase 2 transit line at last: a Maglev between two Terminals, powered at both ends.',
+    brief: 'The Crystal lies far to the north, across the river. Build the Accord\'s Phase 2 transit line at last: a Maglev between two Terminals, powered at both ends, and a hub to carry it on.',
     intro: [
       'A <b>Maglev Terminal</b> is storage with a dock on its roof. A line runs straight between two, on pylons, over anything.',
       'Plan it in <b>Paths → Maglev</b>: tap a finished Terminal, then the far end. A Worker builds it out from the near end.',
       '<b>Maglev Pods</b> (ordered at a Terminal) carry 16 goods a trip at three times a Freight Train\'s speed, both ways.',
       'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
       'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
+      'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it without stopping.',
+      'A line can bend at a pylon: tap a spot on the way, then <b>Bend here</b>. Pods slow round sharp bends.',
     ],
     mode: 'colony', seed: 7302, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     layout(m, W) {
@@ -820,7 +829,7 @@ const MISSIONS = [
       const L = getE(S.players[0].lander), P = S.players[0];
       P.stats.startBots = P.stats.bots;
       // (No Crystal near home, so no Chips of its own until the line runs: enough for the Terminals, the line and its pods.)
-      L.stock.cement += 50; L.stock.alloy += 40; L.stock.chip += 30; L.stock.fuel += 16;
+      L.stock.cement += 66; L.stock.alloy += 54; L.stock.chip += 38; L.stock.fuel += 16; // (and a second line on from a hub)
       for (let k = 0; k < 2; k++) enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel: the far one's comes by pod)
       P.stats.startBots = P.stats.bots;
     },
@@ -840,6 +849,10 @@ const MISSIONS = [
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && b.type === 'magterm' ? b.magGot || 0 : 0), 0),
         hint: 'A <b>Crystal Tap</b> (<kbd>C</kbd>) touching the far Terminal: its site\'s goods go out by pod, its Crystal comes home.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+      { kind: 'magHub', n: 1, text: 'Chain a second line on from a Terminal: a hub', at: 'magterm',
+        count: () => (S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'magterm' && magPartners(b).length >= 2) ? 1 : 0),
+        hint: 'Tap the far Terminal → <b>Add a line from here (hub)</b>, or <b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>).',
+        ui: "#sh-magline, #btn-road, #banner-seg [data-v='maglev'], #banner-ok" },
     ],
   },
   {
@@ -1339,7 +1352,7 @@ const MISSIONS = [
       'A belt of crags with a few narrow channels: wall them and cover them with guns. Messages from your <b>Scouts</b> say when it masses or marches (Go shows where).',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
-      'Its warbots come behind a <b>Bulwark</b>, a shield robot: fire from in front can\'t reach them, so cover the channels from the side.',
+      'Its warbots come behind a <b>Bulwark</b>, a shield robot that covers six: gunfire from in front can\'t reach them, so cover the channels from the side.',
     ],
     mode: 'versus', seed: 2121, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 2, players: 2, style: 'rusher',
     rival: ['medium', 'medium', 'normal'], limit: [0, 0, 0],
@@ -1480,13 +1493,13 @@ const MISSIONS = [
   },
   {
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
-    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through, and burn its farmland, with Torches; shield the push with a Bulwark and send in missiles.',
+    brief: 'A Warden (a turtle) hides behind Walls, turrets and a Bulwark picket. Break the shields, burn through with Torches and send in missiles.',
     intro: [
       'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
       '<b>Torches</b> burn through Walls and can <b>Scorch the earth</b>. Send them with a <b>Bulwark</b> and they can fire from behind its shield if the Wall is in reach.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
-      'Their base can wait: this is about breaking in.',
+      'Its picket stands behind <b>Bulwark</b> shields: <b>Arc Casters</b> wear them down, <b>Skirmishers</b> run round, <b>Railgunners</b> shoot through. Their base can wait: this is about breaking in.',
     ],
     mode: 'versus', seed: 2323, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 0, style: 'turtle',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 45],
@@ -1495,6 +1508,18 @@ const MISSIONS = [
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
       siegeWorks(S, diff);
+      // A picket out in front of its Wall: Bulwarks with warbots behind them, holding a flag (shields to break).
+      const R = getE(S.players[1].lander), dx = L.x - R.x, dy = L.y - R.y, d = Math.hypot(dx, dy) || 1;
+      // (14 tiles out, clear of its guns, or nearer if a Trade Post's no-fire ground would cover it)
+      const at = (k) => [Math.round(R.x + (dx / d) * k), Math.round(R.y + (dy / d) * k)];
+      let k0 = 14;
+      while (k0 > 10 && [-3, 0, 3].some((o) => calmAt(at(k0)[0] + o + 0.5, at(k0)[1] + 0.5) || calmAt(at(k0)[0] + 0.5, at(k0)[1] + o + 0.5))) k0--;
+      const [fx, fy] = at(k0);
+      const flag = { id: S.nextId++, owner: 1, x: fx + 0.5, y: fy + 0.5 };
+      S.rallies.push(flag);
+      const pick = [...Array([1, 2, 2][diff]).fill('bulwark'), ...Array([2, 3, 4][diff]).fill('warbot')];
+      pick.forEach((t, k) => { const u = addBot(1, t, fx - 1 + (k % 3), fy - 1 + Math.floor(k / 3)); u.task = { type: 'hold', rally: flag.id, slot: k }; });
+      S.players[1].stats.startBots = S.players[1].stats.bots;
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
@@ -1502,6 +1527,12 @@ const MISSIONS = [
         count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, [1, 2, 2][S.mission.diff]) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>, Bulwarks <b>+1</b>. Torches burn Fuel: keep some.',
         ui: "#sh-orders .order-row[data-k='torch'] [data-d='1'], #sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
+      // The answers to a Bulwark: an Arc Caster's lightning wears its shield down three times as fast, a Skirmisher runs
+      // round it, a Railgunner's slug goes through. (Shields its picket loses to anything count: S.players[1].stats.shieldsDown.)
+      { kind: 'shields', n: [1, 2, 3], text: 'Break {n} Bulwark shields', at: 'foundry',
+        count: (P, S) => (S.players[1].stats.shieldsDown || 0),
+        hint: 'Arc Casters and Torches break shields: Foundry <b>+1</b> each, then <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> the picket.',
+        ui: "#sh-orders .order-row[data-k='arccaster'] [data-d='1'], #sh-orders .order-row[data-k='skirmisher'] [data-d='1'], #btn-attack, #ar-attack" },
       { kind: 'scorch', n: [2, 3, 4], text: 'Scorch {n} patches of their farmland',
         count: (P) => P.stats.scorchedFoe || 0, // (fertile soil a rival farms, or on its land, burned for good: see scorchSoil)
         hint: 'Tap a Torch (or <b>Army</b> → <b>Select all warbots</b>) → <b>Scorch the earth</b> (<kbd>X</kbd>): their farmland.',
@@ -1561,41 +1592,80 @@ const MISSIONS = [
   },
   {
     id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
-    brief: 'The archive\'s last pages hold an orbital defence. Build it here, shield your base, and fire it along the line of their depots.',
+    brief: 'The archive\'s last pages hold an orbital defence, a city, a lift to the Carrier and a dish aimed home. Build them, and fire along their depots.',
     intro: [
       'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
       'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
       'The <b>Lance of Corvane</b> fires a beam across the whole map. It needs 2 Generators with Fuel by its pit.',
       'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',
-      'Their supply depots stand in a row. In free play, Custom Game → Rules switches Megastructures on or off.',
+      '<b>Arrival City</b>, built for colonists who never came: your work within 8 tiles of it goes 20% faster.',
+      'The <b>Orbital Lift</b> calls robots or goods down from your Carrier, and sends your surplus up to restock it.',
+      'The <b>Great Uplink</b> transmits home on 3 Generators. In free play, 8 minutes held wins; enemy warbots near it jam it.',
+      'Their supply depots stand in a row. In free play, Custom Game switches Megastructures and the Great Uplink win.',
     ],
-    mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true,
+    mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true, upWin: true,
     rival: ['easy', 'easy', 'normal'], passive: [true, true, false], limit: [0, 0, 35],
     setup(S) {
       kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander), P = S.players[0];
-      L.stock.cement += 120; L.stock.alloy += 80; L.stock.chip += 40; L.stock.crystal += 50; L.stock.fuel += 30;
+      L.stock.cement += 300; L.stock.alloy += 160; L.stock.chip += 85; L.stock.crystal += 75; L.stock.fuel += 44; L.stock.fiber = (L.stock.fiber || 0) + 30; // (with Arrival City's, and the Orbital Lift's and a load of Cement to send up)
+      L.stock.cement += 60; L.stock.alloy += 48; L.stock.chip += 30; L.stock.crystal += 24; L.stock.fuel += 12; // (the Great Uplink's, and its three Generators')
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
       // Their depots, strung out in a row from their base toward ours: one line of fire from by our base takes most of them.
       const dx = L.x - E.x, dy = L.y - E.y, d = Math.hypot(dx, dy) || 1;
       for (let k = 0; k < 7; k++) preBuild(1, 'depot', Math.round(E.x + dx / d * (3 + k * 2.2)), Math.round(E.y + dy / d * (3 + k * 2.2)), { reach: 1 });
       computeTerritory();
+      // Room for Arrival City: an Outpost by the nearest open ground big enough for it (4 by 4 with a tile clear round it).
+      const open = (i, j) => { for (let b = j - 1; b <= j + 4; b++) for (let a = i - 1; a <= i + 4; a++) { if (!inMap(a, b)) return false; const t = tIdx(a, b); if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.ramp[t] || S.elev[t] !== S.elev[tIdx(i, j)]) return false; } return true; };
+      let sq = null, sd = Infinity;
+      for (let j = L.y - 16; j <= L.y + 16; j++) for (let i = L.x - 16; i <= L.x + 16; i++) { const dd = dist(i + 2, j + 2, L.x + 0.5, L.y + 0.5); if (dd >= 6 && dd < sd && open(i, j)) { sd = dd; sq = [i, j]; } }
+      if (sq && !canPlace(0, 'city', sq[0], sq[1]).ok) {
+        const ring = [];
+        for (let j = sq[1] - 3; j <= sq[1] + 6; j++) for (let i = sq[0] - 3; i <= sq[0] + 6; i++) if (inMap(i, j) && (i < sq[0] - 1 || i > sq[0] + 4 || j < sq[1] - 1 || j > sq[1] + 4)) ring.push([dist(i, j, L.x, L.y), i, j]);
+        ring.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
+        for (const [, i, j] of ring) if (canPlace(0, 'outpost', i, j).ok) { const o = addBuilding(0, 'outpost', i, j, true); for (const t of roadRouteTo(0, o) || []) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); break; }
+      }
       P.stats.startBots = P.stats.bots;
     },
     goals: [
       { kind: 'built', type: 'dome', n: 1,
-        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by your base, then <b>Defend</b> (<kbd>4</kbd>) → <b>Shield Dome</b> (<kbd>H</kbd>) beside it.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='dome'], .bcard[data-t='generator']" },
+        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by your base, then <b>Mega</b> (<kbd>6</kbd>) → <b>Shield Dome</b> (<kbd>H</kbd>) beside it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='dome'], .bcard[data-t='generator']" },
+      { kind: 'built', type: 'city', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Arrival City</b> (<kbd>C</kbd>) by your factories: within 8 tiles they work 20% faster.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='city']" },
+      { kind: 'cityDrive', n: 3, text: 'Have {n} buildings working faster by Arrival City', at: 'city',
+        count: (P, S) => cityDriven(S, 0),
+        hint: 'Tap Arrival City to see its reach, then <b>Smelter</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>M</kbd>) or more inside it.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='smelter'], .bcard[data-t='fab']" },
+      { kind: 'built', type: 'lift', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Orbital Lift</b> (<kbd>O</kbd>); <kbd>R</kbd> turns its fall line. A Generator by it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lift'], .bcard[data-t='generator']" },
+      { kind: 'liftDrop', n: 1, text: 'Call a climber down from the Carrier', at: 'lift',
+        count: (P) => P.stats.liftDrops || 0,
+        hint: 'Tap the Lift → <b>Call down</b> a load (<kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd>). It lands in 45 seconds.',
+        ui: '#sh-lf-security, #sh-lf-crew, #sh-lf-alloy, #sh-lf-chips' },
+      { kind: 'liftUp', n: 1, text: 'Send a load of goods up to the Carrier', at: 'lift',
+        count: (P) => P.stats.liftUps || 0,
+        hint: 'On the Lift\'s panel, <b>Restock the Carrier</b>: tick <b>Cement</b>. At 30 goods the climber goes up.',
+        ui: "#sh-lfadd [data-g='cement'], #sh-lflist" },
+      { kind: 'built', type: 'gup', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Great Uplink</b> (<kbd>U</kbd>), then 3 <b>Generators</b> by it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='gup'], .bcard[data-t='generator']" },
+      { kind: 'gupTx', n: 1, text: 'Begin a transmission from the Great Uplink', at: 'gup',
+        count: (P) => P.stats.gupTx || 0,
+        hint: 'Tap the Great Uplink → <b>Begin transmission</b> (<kbd>T</kbd>). It needs 3 Generators with Fuel.',
+        ui: '#sh-gup-begin' },
       { kind: 'built', type: 'lance', n: 1,
-        hint: '<b>Defend</b> → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
       { kind: 'lanceFired', n: 1, text: 'Fire the Lance of Corvane', at: 'lance',
         count: (P) => P.stats.lance || 0,
         hint: 'Tap the Lance → <b>Aim the Lance</b> (<kbd>F</kbd>), tap a spot past their depots, then <b>Charge</b>.',
         ui: '#sh-aim' },
       { kind: 'lanceLine', n: [2, 3, 4], text: ['Destroy {n} rival building with one shot', 'Destroy {n} rival buildings with one shot'], at: 'lance',
         count: (P) => P.stats.lanceBest || 0,
-        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) down their row of depots: each one ringed red goes. 4 minutes to reload.',
+        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) through their depots: red-ringed ones are wrecked, dashed ones only scorched. 4 min reload.',
         ui: '#sh-aim' },
     ],
   },
@@ -1789,7 +1859,7 @@ function missionOptions(k, diff) {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
-    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega,
+    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, upWin: !!def.upWin,
     layout: def.layout,
     setup(S) {
       // Easy starts with more in the Command Base, Hard with less.
