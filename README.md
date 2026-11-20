@@ -2512,8 +2512,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   furnaces, clanks, drills, pump thumps, beeps; the Smelter and the Bot Foundry also press, ratchet and machine), a train's diesel throb and rail clack that quickens with its speed,
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
-  Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
-  all, **the land's own sounds** (`natureBeds`, `biomeCall`; with the wind, crickets and the sea they go through a bus of
+  Islands, Tidal flats and Four Isles; softer on lakes and rivers) and bubbling lava. Under it
+  all, **the land's own sounds** (`natureBeds`, `biomeCall`, `nightSounds`; with the wind, the night and the sea they go through a bus of
   their own, `AUDIO.natureBus`, set by the Ambience volume apart from the effects, `NATURE_LEVEL` at full): each biome's bed (`NATURE`: leaves rustling as the wind
   gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
   savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
@@ -2523,6 +2523,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   sliding). Both are loudest out in the wilds and fade as the view fills with a town: `WORLD.wild` is the share of the
   land on screen that isn't built on, paved or laid with track (a third built up is all town), eased so it doesn't jump;
   the calls come every few seconds in the wilds, hardly ever in the streets, more at dawn and fewer in rain or fog.
+  **The night** (`nightSounds`, `NIGHT_SET`, Nov 2026): out in the wilds a cricket chorus comes in as dusk deepens (one or
+  two first, the rest joining by full night), each cricket its own pitch, pulse count, chirp rate and loudness, singing
+  in bouts and falling quiet, another taking its place, so it never loops; a tree cricket's soft trill under them, a
+  katydid's rasp far off on the green, warm maps (Greenreach, Blackwater, the Shoals), a cicada's buzz swelling on the
+  Long Grass. In the forests (Greenreach, Emberwood) and Blackwater, now and then an owl hooting, a far-off night bird
+  (a three-note whistle or a nightjar's churr) and the leaves stirring; in Blackwater peepers by the water, frogs and
+  the odd splash; on the Long Grass and in the Rust a few insects and a dry, gusting wind. It follows `WORLD.wild` like
+  the beds, goes quiet in a fight (`WORLD.fray`: robots fighting on screen, or a blast a moment ago) and comes back over
+  ten seconds or so, thins over War scars and near a nest; rain hushes the insects (the frogs call on), a sandstorm or
+  gale too, fog a little. The Hollow, Argos, the poles and the Bloom keep their own nights. It costs at most
+  `NIGHT_VOICES` steady voices (made when a night first comes, let go after half a minute of day, their gates
+  scheduled a moment ahead on the audio clock) and `NIGHT_SHOTS` calls at once; audio only, nothing in the sim.
   Water: surf breaking on a sea map's shore, little waves lapping at a lake's or a river's banks (quicker on a river
   delta). The ground rumbles near the volcano on a Volcano map, harder once it rumbles its warning and while it erupts,
   and over lava. The weather (`weatherSound`: `weatherAt` while weather is shown, or a planet event's dust storm) is
