@@ -145,3 +145,5 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Mission text and curriculum
 
 - Shortened six goal hints, preserved Harbour and Airlift's step-by-step highlights, and moved King of the Hill into War before Final Descent. The mission data check covers the 110-character limit, building targets, affected controls, and saved mission IDs.
+
+- See the [recent fixes handoff](recent-fixes-handoff.md) for a combined reference covering the AI and mission changes, commits, and verification.
