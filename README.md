@@ -1172,8 +1172,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Placing a building shows the links it would make as green arrows (`feedPreview`); a building's panel lists what it
   feeds and what feeds it; the belts are drawn over the gap between buildings, a crate riding across with each good
   (`drawFeeds`, `drawFeedLink`). The AI puts its factories beside their suppliers (`AI_FEED` in `aiSearchSpot`).
-  **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
-  away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
+  **Smoke:** trucks emit faint diesel puffs, with at most 48 active at once, and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
   `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).
   Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
   Fuel Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the

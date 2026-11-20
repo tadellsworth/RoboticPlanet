@@ -5347,12 +5347,22 @@ function driveFrame(u) {
 
 /** Brake lights while it slows or waits, a puff of dust while it speeds up (fading towards full speed). */
 function drawDriveOverlays(ctx, u, x, y, size) {
-  if (u.drive < 0 && ART[u.type + '-brake']) drawArt(ctx, ART[u.type + '-brake'], x, y, size, u.face);
-  else if (u.drive > 0 && ART[u.type + '-boost']) {
+  if (u.drive < 0 && ART[u.type + '-brake']) {
+    if (BOTS[u.type].truck) drawTruckBrakes(ctx, ART[u.type + '-brake'], x, y, size, u.face);
+    else drawArt(ctx, ART[u.type + '-brake'], x, y, size, u.face);
+  } else if (u.drive > 0 && ART[u.type + '-boost']) {
     ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.2, 1);
     drawArt(ctx, ART[u.type + '-boost'], x, y, size, u.face);
     ctx.globalAlpha = 1;
   }
+}
+
+/** Keep road brake lamps legible without lighting up a whole queue. */
+function drawTruckBrakes(ctx, art, x, y, size, face) {
+  ctx.save();
+  ctx.globalAlpha *= 0.55;
+  drawArt(ctx, art, x, y, size, face);
+  ctx.restore();
 }
 
 /** A soft shadow under a bot, cast down-right whichever way the bot faces (for art without one). */
@@ -5930,18 +5940,17 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
 
 /*
  * Smoke (cosmetic, kept in world tiles and game time, so it freezes while paused). Trucks, Tankers and
- * Road Trains puff diesel exhaust from their stacks (EXHAUST_POINTS): a light puff every 0.4 s idling and
- * 0.25 s cruising, thick black smoke every 0.08 s pulling away. Working buildings smoke and steam from
+ * Road Trains puff diesel exhaust from their stacks (EXHAUST_POINTS): smaller, spaced-out puffs with a separate on-screen cap. When pulling away, they puff more often. Working buildings smoke and steam from
  * their chimneys and vents (BUILDING_EMITTERS), a puff every 0.4 s. A puff stays where it was let out (a
  * moving truck leaves a trail), drifting a little downwind; chimney smoke rises. Flame, sparks and dust
  * points wait for their own effect sheets.
  */
-const SMOKE = { puffs: [], next: new Map(), of: null };
-const SMOKE_MAX = 700, SMOKE_WIND = [0.1, -0.03];
+const SMOKE = { puffs: [], exhaust: [], next: new Map(), of: null };
+const SMOKE_MAX = 700, EXHAUST_MAX = 48, SMOKE_WIND = [0.1, -0.03];
 const SMOKE_SHEET = { smoke: 'smoke-exhaust', black: 'smoke-exhaust-heavy', steam: 'smoke-exhaust' };
 
 function smokeReady(key, every) {
-  if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.next.clear(); }
+  if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.exhaust = []; SMOKE.next.clear(); }
   const now = S.time, n = SMOKE.next.get(key);
   every /= gfx().fx; // (Graphics: half as often on Saver, more often on High and Ultra)
   if (n !== undefined && now < n && n - now <= every * 2) return false;
@@ -5949,11 +5958,12 @@ function smokeReady(key, every) {
   return true;
 }
 
-function addPuff(x, y, sheet, size, life, rise, steam) {
+function addPuff(x, y, sheet, size, life, rise, steam, exhaust = false) {
   if (!ART[sheet]) return;
-  SMOKE.puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
-  const most = Math.round(SMOKE_MAX * gfx().fx);
-  if (SMOKE.puffs.length > most) SMOKE.puffs.splice(0, SMOKE.puffs.length - most);
+  const puffs = exhaust ? SMOKE.exhaust : SMOKE.puffs;
+  puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
+  const most = exhaust ? EXHAUST_MAX : Math.round(SMOKE_MAX * gfx().fx);
+  if (puffs.length > most) puffs.splice(0, puffs.length - most);
 }
 
 /** Exhaust from a truck drawn at (x, y) tiles facing `face`. */
@@ -5961,11 +5971,11 @@ function vehicleSmoke(u, x, y, face) {
   const P = typeof EXHAUST_POINTS !== 'undefined' && EXHAUST_POINTS[BOTS[u.type].train ? 'roadtrain' : u.type];
   if (!P || u.inside || !driveFrame(u)) return;
   const v = u.vel || 0, heavy = !!u.path && u.drive > 0 && v < (u.vtop || 1) * 0.8;
-  if (!smokeReady(u.id, heavy ? 0.12 : v > 0.05 ? 0.32 : 0.52)) return;
+  if (!smokeReady(u.id, heavy ? 0.3 : v > 0.05 ? 0.65 : 1.05)) return;
   const k = 0.9 / P.canvas, c = Math.cos(face), s = Math.sin(face);
   for (const [px, py] of P.tips) {
     const ax = (px - P.canvas / 2) * k, ay = (py - P.canvas / 2) * k;
-    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.8 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
+    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.24, 0.72, 0, false, true);
   }
 }
 
@@ -5984,13 +5994,21 @@ function buildingSmoke(b) {
 }
 
 function drawSmoke(ctx, ox, oy, z, inView) {
-  if (!SMOKE.puffs.length || SMOKE.of !== S) return;
+  if (SMOKE.of !== S) return;
+  drawSmokePuffs(ctx, ox, oy, z, inView, SMOKE.puffs, 1);
+  drawSmokePuffs(ctx, ox, oy, z, inView, SMOKE.exhaust, 0.54);
+}
+
+function drawSmokePuffs(ctx, ox, oy, z, inView, puffs, opacity) {
+  if (!puffs.length) return;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
   const now = S.time, tod = TOD.active ? TOD.state.a : 'day';
   let keep = 0;
-  for (const p of SMOKE.puffs) {
+  for (const p of puffs) {
     const age = now - p.t0;
     if (age >= p.life || age < 0) continue;
-    SMOKE.puffs[keep++] = p;
+    puffs[keep++] = p;
     const x = p.x + SMOKE_WIND[0] * age, y = p.y + SMOKE_WIND[1] * age - p.rise * age;
     if (!inView(Math.floor(x), Math.floor(y), 1)) continue;
     const art = ART[p.sheet], A = tod === 'day' || p.steam ? art : todVariant(art, tod);
@@ -5998,7 +6016,8 @@ function drawSmoke(ctx, ox, oy, z, inView) {
     drawSheetFrame(ctx, { img: A.img, frames: art.frames, cols: art.cols }, Math.floor((age / p.life) * art.frames), ox + x * z, oy + y * z, p.sz * z);
     if (p.steam) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
   }
-  SMOKE.puffs.length = keep;
+  puffs.length = keep;
+  ctx.restore();
 }
 
 /**
@@ -6095,7 +6114,7 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
     });
     // Brake lights on the last trailer (the tractor's own are hidden under the first).
     const last = cars[2];
-    if (u.drive < 0 && ART['roadtrain-brake']) drawArt(ctx, ART['roadtrain-brake'], last.x + Math.cos(last.ang) * (35.8 / 256) * size, last.y + Math.sin(last.ang) * (35.8 / 256) * size, size, last.ang);
+    if (u.drive < 0 && ART['roadtrain-brake']) drawTruckBrakes(ctx, ART['roadtrain-brake'], last.x + Math.cos(last.ang) * (35.8 / 256) * size, last.y + Math.sin(last.ang) * (35.8 / 256) * size, size, last.ang);
     return;
   }
   for (const [d, load] of [[1.22, t2], [0.66, t1]]) {
