@@ -18,6 +18,8 @@ Roadmap order the owner set: finish the new transit items, **add all the new meg
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
 
+- **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
+
 **Quick fixes (small, cheap; do these first when usage is short)**
 - **Maglev pods are made only at a Maglev Terminal,** not in the Bot Foundry or any other yard (check the Foundry's order list
   and the Air/Army menus: `BOTS.magpod` must not appear there).
@@ -411,7 +413,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
     *Aimed the Other Way*). The owner's look A (a 3 × 3 gun pit, a long barrel on a turntable), the beam across the whole
     map, killing robots of every side too, 2 Generators or a Reactor, 90 s charge, 4 min reload, allowed on Argos; the
-    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). Still open: power lines
+    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). On Reactor power
+    (the owner, Nov 20): a 45 s charge and a 3 min reload (Generators 90 s and 4 min), 2 Uranium or an Enriched Uranium a
+    shot; with both in reach, the Generators unless Use Reactor is switched on in its panel (the rival switches it on
+    once it has chosen the Lance). Still open: power lines
     to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim

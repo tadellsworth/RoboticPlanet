@@ -9787,7 +9787,7 @@ function lanceMarks(b) {
 /** Lance b's charge as it shows: rings lit one by one with the charge, white-hot at full; cooling after a shot. */
 function drawLanceCharge(ctx, b, cx, cy, s) {
   const since = b.lShot ? S.time - b.lShot : 99;
-  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / LANCE.charge) : 0, cool = since < 8 ? 1 - since / 8 : 0;
+  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = since < 8 ? 1 - since / 8 : 0;
   if (!k && !cool) return;
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
   if (b.lOn && TOD.active) { const m = M.r[4]; ctx.save(); ctx.globalAlpha = 0.4 + 0.6 * k; drawLightPool(ctx, cx + m[0] * s, cy + m[1] * s + s * 0.5, s * (0.8 + k), '#ff8a3a'); ctx.restore(); } // (the barrel's glow on the pit at night)

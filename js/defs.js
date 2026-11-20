@@ -907,7 +907,9 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
  * each while it charges, or a Nuclear Reactor there with `uranium` Uranium (or an Enriched Uranium) in it, taken as the charge starts. While it
  * charges its colony's lights dim and its factories work `slow` slower; wreck its power and the charge is lost. A dust
- * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. A
+ * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. On
+ * Reactor power a charge takes `reactorCharge` s and the reload `reactorReload` s (Generators: `charge` and `reload`).
+ * With both in reach it uses the Generators unless its owner has switched on Use Reactor (b.lUseR, an order). A
  * Shield Dome on the line takes the whole shot and drops. Charging draws the Murmur (chargeWorth). Not in the Hollow
  * (no line of fire under the cavern roof); allowed on Argos.
  *
@@ -919,7 +921,7 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * burns a Crystal every `crystal` s (Haulers bring them, `cap` at most) and needs a Generator with Fuel within `reach`
  * tiles: without either it's down.
  */
-const LANCE = { charge: 90, reload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
+const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 

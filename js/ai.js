@@ -2152,6 +2152,9 @@ function aiMega(p, me, lander, canBuild) {
     const spot = aiMegaSpot(p, 'lance', Rs, LANCE.reach, lander, 1) || aiMegaSpot(p, 'lance', [lander], 12, lander, 1);
     if (spot) placeSite(p, 'lance', spot[0], spot[1]);
   }
+  // Having chosen the Lance over the nukes, it charges on its Reactor when one is in reach (Use Reactor: faster, and the
+  // Uranium has no nuke to go to).
+  if (lance && lance.built) lance.lUseR = P.megaPick === 'lance';
   if (lance && lance.built && P.megaPick === 'lance' && !lanceReactor(lance) && megaGens(lance, LANCE.reach).length < LANCE.gens && canBuild && nukeOn() &&
     !me.some((b) => !b.built && b.type === 'reactor') && aiAffordable(p, 'reactor') && S.time - (P.lanceLook ?? -999) >= AI_MEGA.look) {
     P.lanceLook = S.time;
@@ -2243,7 +2246,7 @@ function aiLanceAim(p, b) {
     const s = aiLanceWorth(p, b, lanceLine(b, e.x + 0.5, e.y + 0.5));
     if (s > bs) { bs = s; best = e; }
   }
-  if (!best) { if (b.lOn && b.lCharge > LANCE.charge - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
+  if (!best) { if (b.lOn && b.lCharge > lanceTime(b) - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
   if (b.lOn) b.lAim = [best.x, best.y];
   else setLanceAim(b, best.x, best.y);
 }
