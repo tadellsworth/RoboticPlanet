@@ -19,11 +19,19 @@
  *   snap    { t, to, turn, data, hash, full }  a game, at the start of a turn: to the devices that went astray (or
  *                           asked for it); a full one carries the players' state and the packets for the turns ahead
  *   pause   { t, on, p }    everyone stops (or goes on) together
+ *   cur     { t, p, x, y }  (co-op) a person's cursor on the map, a few times a second: shown to their partner only
+ *   mark    { t, p, x, y }  (co-op) a ping: a spot marked for everyone on the colony. Neither is a game message: the
+ *                           relay passes them on unnumbered and unlogged, and the game never sees them
  *
  * Once a second (every LS.HASH_EVERY turns, on a tick that's a whole second) each device works out a fingerprint of
  * the game (hashState) and sends it with its next packet. If they differ, the host sends its game at the start of the
  * next such turn, and everyone carries on from there. A player whose packets stop coming for LS.STALL_S seconds is
  * dropped, and their colony is run by the computer, on every device from the same turn, until they're back.
+ *
+ * Shared colony co-op: two people can run one colony. Each device is still one of the lockstep's players (p, MP.me:
+ * its own packets, drops, rejoins and fingerprints), but a player is a person, and the colony a person runs is
+ * mpCol(p) (S.crew[p].c; without S.crew, colony p). Their orders are carried out for that colony, with the person who
+ * gave them noted (applyOrder's `by`); the colony is the computer's only once every person running it is gone.
  */
 const LS = { TURN: 3, DELAY: 3, DELAY_MAX: 15, HASH_EVERY: 10, STALL_S: 12, KEEP: 120, MAX_STEPS: 30, CATCH_STEPS: 240, CATCH_MS: 24 };
 
@@ -52,6 +60,8 @@ const MP = {
   linkOK: true,     // (the transport: is the relay getting through? a device that's cut off drops nobody)
   onSnap: null,     // (the screens' hook: the game was replaced)
   onEvent: null,    // (the screens' hook: a player dropped or back, a pause, a mismatch)
+  onOrder: null,    // (the screens' hook: an order was carried out: who gave it, for which colony; co-op notes it)
+  onPeer: null,     // (the screens' hook: a co-op partner's cursor or ping, which never touches the game)
 };
 
 /**
@@ -59,16 +69,18 @@ const MP = {
  * player; humans: the players people play (the rest are the computer's); send(msg): the transport.
  */
 function mpStart(opts) {
+  const n = Math.max(S.players.length, ...opts.humans.map((p) => p + 1)); // (people beyond the colonies: co-op partners)
   Object.assign(MP, {
     on: true, me: opts.me, humans: opts.humans.slice().sort((a, b) => a - b), send: opts.send, speed: opts.speed || 1,
     turn: S.tick / LS.TURN | 0, begun: -1, acc: 0, stalled: 0, waitFor: [], q: [], seq: 0, cbs: new Map(),
-    packets: new Map(), last: S.players.map(() => -1), hashes: new Map(), sentTo: -1, ctl: new Map(), seen: 0,
+    packets: new Map(), last: Array.from({ length: n }, () => -1), hashes: new Map(), sentTo: -1, ctl: new Map(), seen: 0,
     paused: false, pausedBy: -1, desyncs: 0, snapAt: -1, snapTo: null, snapFull: false, snapTurn: -1, snaps: 0, linkOK: true, rejoinT: -99,
-    d: LS.DELAY, clock: 0, sentAt: new Map(), rtt: 0, adaptT: 0, peerD: S.players.map(() => LS.DELAY),
+    d: LS.DELAY, clock: 0, sentAt: new Map(), rtt: 0, adaptT: 0, peerD: Array.from({ length: n }, () => LS.DELAY),
   });
   MP.t0 = MP.turn;
-  ME = opts.me;
-  for (const P of S.players) P.ai = !P.absent && !MP.humans.includes(P.id); // (the Murmur's slot is nobody's: see murmurStart)
+  ME = mpCol(opts.me);
+  const run = MP.humans.map(mpCol);
+  for (const P of S.players) P.ai = !P.absent && !run.includes(P.id); // (the Murmur's slot is nobody's: see murmurStart)
   // The first LS.DELAY turns have no orders: nobody could have given any yet.
   MP.sentTo = MP.turn + LS.DELAY - 1;
 }
@@ -111,6 +123,8 @@ function mpJoin(opts) {
 /** Every message from the relay comes in here. */
 function mpIn(msg) {
   if (!msg) return;
+  // A co-op partner's cursor or ping: drawn on this device only, never part of the game (nor of its fingerprint).
+  if (msg.t === 'cur' || msg.t === 'mark') { if (MP.on && !MPJ.on && MP.onPeer) MP.onPeer(msg); return; }
   if (MPJ.on) {
     if (msg.t === 'snap' && msg.full && msg.to && msg.to.includes(MPJ.opts.me)) {
       MPJ.on = false;
@@ -123,6 +137,11 @@ function mpIn(msg) {
   }
   mpReceive(msg);
 }
+
+/** The colony person p runs: their own (p), or in co-op the one they share (S.crew). */
+function mpCol(p) { const c = S && S.crew && S.crew[p]; return c ? c.c : p; }
+/** The people running colony c (in co-op, more than one). */
+function mpCrewOf(c) { return MP.humans.filter((q) => mpCol(q) === c); }
 
 /** Does the computer run player p's colony at turn T (they're a person's, but dropped then)? */
 function mpAI(p, T) {
@@ -140,10 +159,15 @@ function mpLive() { return MP.humans.filter((p) => !mpAINow(p)); }
 function mpHost() { return mpLive()[0] ?? -1; }
 function mpIsHost() { return mpHost() === MP.me; }
 /** Am I watching (my colony run by the computer: dropped, or out of the game)? */
-function mpWatching() { return !MP.on || mpAINow(MP.me) || !!(S.players[MP.me] && S.players[MP.me].out); }
+function mpWatching() { return !MP.on || mpAINow(MP.me) || !!(S.players[ME] && S.players[ME].out); }
 
-/** Every player's colony: the computer's or theirs, as at turn T (the same turn on every device). */
-function mpSetAI(T) { for (const p of MP.humans) if (S.players[p]) S.players[p].ai = mpAI(p, T); }
+/**
+ * Every player's colony: the computer's or theirs, as at turn T (the same turn on every device). A shared colony is
+ * the computer's only when everyone running it is gone.
+ */
+function mpSetAI(T) {
+  for (const p of MP.humans) { const c = mpCol(p); if (S.players[c]) S.players[c].ai = mpCrewOf(c).every((q) => mpAI(q, T)); }
+}
 
 /** An order of mine (see act in ui.js): sent with my next packet, carried out a few turns later. */
 MP.order = (name, args, cb) => {
@@ -216,10 +240,10 @@ function mpReceive(msg) {
       const groups = S && S.groups, bgroups = S && S.bgroups;
       // (the narrator's first nightfall is said on each device by its interface, not the simulation: the sender's game
       // doesn't know we've had it, so it's kept, or it would be said again: see nightfallLine)
-      const night = S && S.lore ? S.lore['n.night.' + MP.me] : undefined;
+      const night = S && S.lore ? S.lore['n.night.' + ME] : undefined;
       deserializeGame(msg.data);
       S.msgs = []; // (the sender's messages were for the sender)
-      if (night !== undefined) (S.lore || (S.lore = {}))['n.night.' + MP.me] = night;
+      if (night !== undefined) (S.lore || (S.lore = {}))['n.night.' + ME] = night;
       if (groups) S.groups = groups; else delete S.groups; // (my own control groups stay mine)
       if (bgroups) S.bgroups = bgroups; else delete S.bgroups; // (and the buildings on my number keys)
       MP.snapTurn = msg.turn;
@@ -330,7 +354,8 @@ function mpBeginTurn() {
       if (mpAI(p, T)) continue;
       for (const o of m.get(p)) {
         if (!Array.isArray(o)) continue;
-        const r = applyOrder(p, o[0], o[1]);
+        const c = mpCol(p), r = applyOrder(c, o[0], o[1], p);
+        if (MP.onOrder) { try { MP.onOrder(p, c, o[0], o[1], r); } catch (e) { /* (the screens' note of it: never the game's) */ } }
         if (p === MP.me && MP.cbs.has(o[2])) {
           const cb = MP.cbs.get(o[2]);
           MP.cbs.delete(o[2]);
@@ -378,7 +403,7 @@ function mpFrame(dt) {
   if (!MP.on) return;
   MP.clock += dt;
   // Back after being dropped (and caught up): take my colony back from the computer.
-  if (mpAINow(MP.me) && MP.autoRejoin !== false && !(S.players[MP.me] && S.players[MP.me].out) && mpBehind() <= 2 && MP.clock - (MP.rejoinT || -99) > 10) {
+  if (mpAINow(MP.me) && MP.autoRejoin !== false && !(S.players[ME] && S.players[ME].out) && mpBehind() <= 2 && MP.clock - (MP.rejoinT || -99) > 10) {
     MP.rejoinT = MP.clock;
     mpRejoin();
   }

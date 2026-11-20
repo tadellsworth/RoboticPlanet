@@ -15,12 +15,14 @@
  * From the relay:  hello {seat, code, host, started, seq}   lobby {seats, host, settings}   error {why}
  *                  start {settings, players (null: a computer's colony)}   and every game message, with seq and by
  *                  (the sender's seat).
- * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on).
+ * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on),
+ *                  but a co-op cursor or ping (cur, mark), which goes to the others unnumbered and isn't logged.
  *
  * It also takes players' feedback: POST /feedback (see feedback.js), and keeps cloud saves: /save (see saves.js).
  */
 
 const MAX_SEATS = 4;
+const MAX_SLOTS = 8;         // places in a game: up to four colonies, then (co-op) the people sharing one
 const MAX_MSG = 1 << 20;     // bytes: bigger messages (a whole game) come in pieces
 const MAX_LOG = 48 << 20;    // bytes of log kept (the oldest pieces of whole games go first)
 const CODE = /^[A-Z2-9]{4,8}$/;
@@ -126,9 +128,10 @@ export class Room {
       if (msg.t === 'start') {
         const on = this.seats.map((s, k) => (s && s.on ? k : -1)).filter((k) => k >= 0);
         if (!on.length) return;
-        // Who plays which colony: the seats in order, or (teams) the host's arrangement, -1 for a computer's colony.
+        // Who plays which colony: the seats in order, or (teams, co-op) the host's arrangement, -1 for a computer's colony.
+        // In co-op the places after the colonies are the people sharing one (the game knows whose from its settings).
         let slots = on;
-        if (Array.isArray(msg.slots) && msg.slots.length <= MAX_SEATS) {
+        if (Array.isArray(msg.slots) && msg.slots.length <= MAX_SLOTS) {
           const sl = msg.slots.map((k) => (Number.isInteger(k) && k >= 0 ? k : -1)), used = sl.filter((k) => k >= 0);
           if (used.length === on.length && new Set(used).size === used.length && on.every((k) => used.includes(k))) slots = sl;
         }
@@ -146,8 +149,14 @@ export class Room {
     // A game under way: stamp it and pass it on to everyone, in order. A player only speaks for itself.
     const me = this.players.indexOf(seat);
     if (me < 0) return;
-    if (msg.t === 'turn' || msg.t === 'want' || msg.t === 'rejoin') msg.p = me;
+    if (msg.t === 'turn' || msg.t === 'want' || msg.t === 'rejoin' || msg.t === 'cur' || msg.t === 'mark') msg.p = me;
     msg.by = seat;
+    // A co-op cursor or ping: passed straight on to the others, unnumbered and not kept (it isn't part of the game).
+    if (msg.t === 'cur' || msg.t === 'mark') {
+      const text = JSON.stringify(msg);
+      for (const s of this.seats) if (s && s.ws && s.ws !== ws) { try { s.ws.send(text); } catch (e) { /* closing */ } }
+      return;
+    }
     msg.seq = ++this.seq;
     const text = JSON.stringify(msg);
     this.log.push([msg.seq, text]);

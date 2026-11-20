@@ -667,6 +667,12 @@ or drop.
   partner placed under a minute ago asks to confirm. Technically: two humans share one player seat on the lockstep
   (orders carry the issuer), plus the cursor, pings and badges. It can ship as a Custom Game option before the co-op
   scenarios, which build on it.
+  **Built** (Nov 2026, as decided; see the README's Co-op paragraph and How to play, Multiplayer): Custom Game's
+  **Host a co-op game** in Versus or Colony, the lobby's co-op seat, cursors, the `.` ping (and Ping on the bar for a
+  touch screen: the middle of the view), site badges, order badges and log lines, roles, the Dismantle check. Still
+  open: the co-op scenarios; whether roles should also hide whole quick menus (today they filter pop-up alerts only,
+  as no menu opens by itself); co-op with Teams (two people on one side of a 2 vs 2) is not offered yet; and whether
+  pings deserve a touch gesture of their own (a long press is taken by the map).
 
 ## Trade routes and the finished-goods market (built Nov 2026)
 

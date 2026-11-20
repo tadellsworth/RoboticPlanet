@@ -2200,7 +2200,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
-  **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
+  **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
   recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
@@ -2505,6 +2505,7 @@ js/orders.js              every player action as an order: a name and plain argu
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
 js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
+js/coop.js                shared colony co-op: the partner's cursor, pings, who-placed-what badges and log lines, roles
 js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
 js/goals.js               Colony goals, Records and achievements: read from the game, kept on the device (display only)
 js/photo.js               photo mode: the interface hidden, a time-of-day slider and Save picture (a PNG of the map)
@@ -2567,6 +2568,37 @@ and both colonies of your team win. Teams also work in a one-person game (Versus
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 
+**Co-op: one colony, two players** (shared control, no fixed roles: the owner's design, Nov 2026). Two people run one
+colony against the computer (Versus) or the planet alone (Colony), each on their own device. **Starting one:** Custom
+Game → pick Versus or Colony and the rest → **Host a co-op game** (`m-coophost`: opens Multiplayer and hosts at once
+when the name is known); the partner joins with the room code or link as usual and is listed as *co-op: shares
+Tad's colony*. In the multiplayer settings **Co-op** (`UI.menu.coop`: Own colonies / Share my colony) says whether
+people who join share the host's colony, and the host taps a person in the lobby to move them across (`UI.mpCoopOf`;
+not with Teams). Colony mode in multiplayer is always co-op (Colony has one colony). Each person picks a **role** in
+the lobby (Both, Economy, Military; `terrafall.role` on the device), which only filters which alerts pop up
+(`coopQuiet`: Economy keeps the war's news in the message log, Military the colony's everyday news; losses and the
+Command Base always pop up), never what they may do.
+- **Seats**: the lobby's start (`mpHostStart`) seats the colonies first (the host's colony 0, then anyone with their
+  own, then the computer's) and the people sharing the host's colony after them (`settings.coop`, `cols`, `coopCol`,
+  `slotsN`); the relay takes up to eight places (`MAX_SLOTS`). Every device then sets `S.crew` (by lockstep player:
+  `{ n: name, c: colony }`) from the start message. A person is still one lockstep player (`MP.me`: their own
+  packets, drops, rejoins, fingerprints), but `ME` is their colony (`mpCol(p)`): orders are carried out for the colony,
+  with the giver passed to `applyOrder(p, name, args, by)` (`ORDER_BY` while it runs), so a construction site it places
+  remembers who (`b.by`, set in `addBuilding`, checked by `checkSave`, in `hashState` with `S.crew`). A shared colony
+  is the computer's only once every person running it is dropped or gone (`mpSetAI`, `mpCrewOf`); if one leaves or
+  drops out, the other keeps playing it. The rivals, victory, surrender and Teams see one colony, as before.
+- **The partner's cursor and pings** are not game messages: `cur` (a few times a second, only when it moved) and
+  `mark` go through the relay unnumbered and unlogged to the others (`MP.onPeer` → `coopPeer`), never into the game or
+  its fingerprint. `.` pings the spot under the mouse, **Ping** on the bar (`btn-ping`, co-op only) the middle of the
+  view: rings and a pin on the map and the minimap for 6 s, with the `ping` sound.
+- **Who did what** (`MP.onOrder` → `coopOrder`): a partner's site placed, plans, research and dismantling go in the
+  message log ("Sam placed a Smelter site"), army orders (moves, attacks, rallies, Missiles) pop up as alerts, and a
+  badge with their name shows where their plans and orders went for 5 s. Each construction site has a badge with the
+  placer's initial in their colour (`drawCoop`), and its panel says **Placed by**. **Dismantle** on something the
+  partner placed less than `COOP_CONFIRM_S` (60 s of game time, from `b.born`) ago says who and asks for the second tap.
+- Like any multiplayer game, a co-op game has no Boosts menu and isn't saved for Continue (a save of one, or a
+  catch-up, carries `S.crew` and the badges).
+
 **The relay.** The devices talk through a small relay server: `relay/`, a Cloudflare Worker with one Durable Object per
 game room, free on Cloudflare's free plan. It's deployed from this repository by the **Deploy multiplayer relay**
 workflow (`.github/workflows/relay.yml`, again on every push that changes `relay/`), and runs at
@@ -2625,7 +2657,8 @@ them.
   device sends a fingerprint of its game (`hashState`); if they ever differ, the host sends its game to the device
   that went astray. A player who goes quiet for 12 seconds (or leaves) has their colony run by the computer, on every
   device from the same turn, until they're back (`rejoin`); a device with no game asks for it (`want`).
-- **The relay** (`relay/src/index.js`): seats up to four players per room, keeps the lobby, numbers every game message
+- **The relay** (`relay/src/index.js`): seats up to four players per room (up to eight places in a game: co-op
+  partners come after the colonies), keeps the lobby, numbers every game message
   and hands it to every device in one order (that shared order is what keeps the decisions above the same
   everywhere), and keeps a log so a dropped connection picks up what it missed. **The connection** (`js/net.js`)
   reconnects by itself and sends big messages (a whole game) in pieces; **the screens** are `js/mpui.js`.

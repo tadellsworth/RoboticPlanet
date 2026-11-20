@@ -405,15 +405,22 @@ const ORDERS = {
   shipLine(p, uid, mid) { const u = ownU(p, uid, 'airship'); if (!u) return 'That Airship is gone.'; const b = mid ? ownB(p, mid) : null; if (mid && !b) return 'That Mooring Mast is gone.'; return setShipLine(p, u, b); },
 };
 
+/**
+ * Who gave the order being carried out: in a co-op game (S.crew), the person (their lockstep player, `by`), so a
+ * construction site placed by it remembers who placed it (b.by: see addBuilding); -1 otherwise (and the computer's).
+ */
+let ORDER_BY = -1;
+
 /** Run order `name` for player p (args: a list). What it gives back, or undefined if there's no such order. */
-function applyOrder(p, name, args) {
+function applyOrder(p, name, args, by) {
   const f = Object.prototype.hasOwnProperty.call(ORDERS, name) ? ORDERS[name] : null;
   if (!f || !S || !S.players[p]) return undefined;
+  ORDER_BY = Number.isInteger(by) && by >= 0 ? by : -1;
   try {
     return f(p, ...(Array.isArray(args) ? args : []));
   } catch (e) {
     // (a bad order is dropped, the same way on every device; the game goes on)
     if (typeof console !== 'undefined') console.warn(`Order ${name} failed:`, e && e.message);
     return undefined;
-  }
+  } finally { ORDER_BY = -1; }
 }

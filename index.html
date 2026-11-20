@@ -139,6 +139,11 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <span>Base</span><kbd>H</kbd>
     </button>
+    <!-- Co-op only (js/coop.js): mark the middle of the view for your partner (the . key marks the spot under the mouse). -->
+    <button id="btn-ping" class="tool" hidden title="Ping: mark this spot for your partner">
+      <svg viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" fill="currentColor"/></svg>
+      <span>Ping</span><kbd>.</kbd>
+    </button>
   </nav>
 </div>
 
@@ -208,6 +213,15 @@
               <div class="seg" id="m-mode" role="radiogroup" aria-labelledby="m-l-mode">
                 <button type="button" role="radio" data-v="versus" class="on">Versus</button>
                 <button type="button" role="radio" data-v="colony">Colony</button>
+              </div>
+            </div>
+            <!-- Shared colony co-op (js/coop.js): from Custom Game, host a multiplayer game whose people share your colony;
+                 in the multiplayer settings, whether people who join share it. -->
+            <div class="m-row" id="m-coop-row"><span class="m-rl" id="m-l-coop">Co-op</span>
+              <button type="button" class="btn small" id="m-coophost" data-info="Two of you run this one colony together, each on their own device: you host a multiplayer game with these settings, and whoever joins shares your colony.">Host a co-op game</button>
+              <div class="seg" id="m-coop" role="radiogroup" aria-labelledby="m-l-coop" hidden>
+                <button type="button" role="radio" data-v="0" data-info="Everyone who joins plays a colony of their own (tap one in the lobby to share yours).">Own colonies</button>
+                <button type="button" role="radio" data-v="1" data-info="Everyone who joins shares your colony: one economy, one army, one win or loss, against the computer rivals.">Share my colony</button>
               </div>
             </div>
             <div class="m-row" id="m-players-field"><span class="m-rl" id="m-l-players">Players</span>
@@ -369,6 +383,11 @@
       <div class="section-label">Players</div>
       <ul id="mp-players" class="mp-players"></ul>
       <p class="mp-docnote" id="mp-docnote" aria-live="polite" hidden></p>
+      <!-- Co-op (js/coop.js): this person's role. It only filters which alerts pop up on their own device. -->
+      <div class="mp-role" id="mp-role" hidden><span class="m-rl" id="mp-l-role">Your role</span>
+        <div class="seg" id="mp-roles" role="radiogroup" aria-labelledby="mp-l-role">
+          <button type="button" role="radio" data-v="both">Both</button><button type="button" role="radio" data-v="econ">Economy</button><button type="button" role="radio" data-v="mil">Military</button>
+        </div><small class="hint" id="mp-role-hint"></small></div>
       <div class="section-label">Game</div>
       <p class="mp-sum" id="mp-sum"></p>
       <button type="button" id="mp-settings" class="btn">Change settings</button>
@@ -1218,11 +1237,20 @@
         <p>Play against friends: two to four people, on any mix of phones, tablets and computers. Tap <b>Multiplayer</b> on the main menu and type your name.</p>
         <ul class="chain">
           <li><b>Host a game</b> gets you a room code to give the others (<b>Share</b> sends or copies a link that opens the game with the code filled in: they just tap <b>Join</b>). They type the code and tap <b>Join</b>.</li>
-          <li>The lobby lists everyone, and computer rivals fill the empty places. The host taps <b>Change settings</b> (Versus only, without Unlimited resources), picks each computer's <b>doctrine</b> from its row (point at a row, or tap it, for a line on how that doctrine plays; <b>How it plays</b> opens the whole of it). A doctrine stays with its colony when people come and go or the teams change, and someone away when the game starts leaves their place to the computer, in a 2 vs 2 game taps names to move players between teams, and then <b>Start game</b>.</li>
+          <li>The lobby lists everyone, and computer rivals fill the empty places. The host taps <b>Change settings</b> (Versus or Colony, without Unlimited resources), picks each computer's <b>doctrine</b> from its row (point at a row, or tap it, for a line on how that doctrine plays; <b>How it plays</b> opens the whole of it). A doctrine stays with its colony when people come and go or the teams change, and someone away when the game starts leaves their place to the computer, in a 2 vs 2 game taps names to move players between teams, and then <b>Start game</b>.</li>
           <li>Everyone plays at one speed: there's no speed control and no Boosts menu, and the briefing card doesn't pause.</li>
           <li>The pause menu doesn't stop the game; <b>Pause the game for everyone</b> does, and a banner says who paused. If someone drops out, the computer takes over their colony after a few seconds until they're back.</li>
           <li><b>Leave the game</b> (tap twice) hands your colony to the computer. If you reload or lose the connection, <b>Rejoin multiplayer game</b> on the main menu gets you back in. You can rejoin during a pause. <b>Cancel</b> leaves your seat available if you want to retry.</li>
           <li>If your colony falls you can stay and watch. Multiplayer games aren't saved for Continue.</li>
+        </ul>
+        <p><b>Co-op: one colony, two players.</b> Two of you run one colony together, each on your own device: one economy, one set of buildings and robots, one win or loss. In <b>Custom Game</b> pick Versus (against computer rivals) or Colony (just the two of you and the planet), then <b>Host a co-op game</b>: you get the lobby and a room code, and whoever joins shares your colony (in the multiplayer settings, <b>Co-op: Share my colony</b> does the same; in the lobby the host taps a player to move them into or out of their colony). Colony mode in multiplayer is always co-op.</p>
+        <ul class="chain">
+          <li>Either of you can build, order the army and change any setting: there are no fixed jobs. Each keeps their own view, selection and menus.</li>
+          <li>Your partner's cursor shows on your map as a coloured dot with their name. <kbd>.</kbd> pings the spot under your mouse (on a touch screen, <b>Ping</b> on the bar marks the middle of your view): rings and a pin on both maps and the minimap, with a sound.</li>
+          <li>Each construction site has a small badge with the initial of whoever placed it (its panel says <b>Placed by</b>), your partner's plans and army orders show their name where they went for a few seconds, and the message log says who did what: <i>Sam placed a Smelter site</i>, <i>Sam sent 6 warbots to attack the Outpost</i>.</li>
+          <li><b>Your role</b> in the lobby (Both, Economy or Military) only picks which alerts pop up for you: Economy keeps news of the war in the message log, Military the colony's everyday news (losses and the Command Base always pop up). It never limits what you can do.</li>
+          <li><b>Dismantle</b> on something your partner placed less than a minute ago says so and asks you to tap again.</li>
+          <li>If your partner drops out or leaves, the colony stays yours and the game goes on; the computer takes it over only when both of you are gone. The rivals treat the two of you as one colony.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
@@ -1270,7 +1298,7 @@
           <li><kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot (all but one in each garrison).</li>
           <li><kbd>Shift</kbd>+<kbd>F</kbd> opens your Bot Foundry's <b>Order bots</b> list from anywhere, to order more robots without leaving what you're looking at (again for your next Foundry, if you have several).</li>
           <li><kbd>Shift</kbd>+<kbd>P</kbd> Photo mode: the interface hidden for a picture of your colony (see Views, statistics and settings).</li>
-          <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert; <kbd>M</kbd> minimap; <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
+          <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert; <kbd>M</kbd> minimap; <kbd>.</kbd> ping the spot under the mouse (co-op); <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
           <li><kbd>I</kbd> Statistics; <kbd>U</kbd> Your robots; <kbd>Y</kbd> Goods; <kbd>?</kbd> How to play; <kbd>`</kbd> Boosts.</li>
           <li><kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>Space</kbd> pause; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen.</li>
           <li>Placing a blueprint, <kbd>R</kbd> turns it a quarter turn.</li>
@@ -1737,6 +1765,7 @@
 <script src="js/ui.js"></script>
 <script src="js/insight.js"></script>
 <script src="js/mpui.js"></script>
+<script src="js/coop.js"></script>
 <script src="js/feedback.js"></script>
 <script src="js/qr.js"></script>
 <script src="js/cloud.js"></script>

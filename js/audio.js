@@ -660,6 +660,8 @@ function sfx(name, dest, y, dur) {
       duckMusic(0.45, 1.6);
       break;
     case 'alert': _tone(880, 0.12, 'square', 0.05, null, 0, D); _tone(660, 0.12, 'square', 0.05, null, 0.15, D); break;
+    // A co-op ping (js/coop.js): two bright sonar blips, rising, a spot marked for both of you.
+    case 'ping': _tone(1320, 0.09, 'sine', 0.07, 1500, 0, D); _tone(1760, 0.16, 'sine', 0.06, 1900, 0.11, D); break;
     // A missile leaving its Silo: the ignition pop, then the motor's roar climbing as it rises away.
     // A Howitzer firing: a deep, heavy cannon boom rolling away.
     case 'howitzer':

@@ -636,6 +636,16 @@ function initMenu() {
   for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
   for (const btn of $('m-teams').children) btn.onclick = pick(() => { UI.menu.teams = +btn.dataset.v; });
+  for (const btn of $('m-coop').children) btn.onclick = pick(() => { UI.menu.coop = +btn.dataset.v; UI.mpCoopOf = {}; });
+  // Custom Game's Host a co-op game: a multiplayer game with these settings, whoever joins sharing your colony.
+  $('m-coophost').onclick = () => {
+    sfx('click'); audioUnlock();
+    UI.menu.coop = 1; UI.mpCoopOf = {};
+    saveSettings();
+    showMenuView('home');
+    openMulti();
+    if (netName() && relayUrl()) $('mp-host').click();
+  };
   for (const btn of $('m-victory').children) { btn.dataset.info = VICTORY[btn.dataset.v].info; btn.onclick = pick(() => { UI.menu.victory = btn.dataset.v; }); }
   const choice = (id, labels, get, set, info, meter) => segChoice($(id), labels, get, (v) => pick(() => set(v))(), info, meter);
   choice('m-size', SIZE_PRESETS.map((p) => p.name), menuSize, (v) => { UI.menu.size[UI.menu.mode] = v; });
@@ -800,7 +810,12 @@ function syncMenu() {
   for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
   // Multiplayer settings (the host, from the lobby): Versus only; Players counts everyone, people first, computer rivals after.
   const mps = !!UI.mpSetup;
-  $('m-mode').closest('.m-row').hidden = mps;
+  // (Versus or Colony in multiplayer too: Colony is co-op, everyone sharing the host's colony)
+  // Co-op: Custom Game hosts a co-op game; the multiplayer settings say whether people who join share the colony.
+  $('m-coophost').hidden = mps;
+  $('m-coop').hidden = !mps || colony;
+  $('m-coop-row').hidden = mps && colony;
+  for (const btn of $('m-coop').children) mark(btn, +btn.dataset.v === (m.coop ? 1 : 0));
   $('m-unlimited-row').hidden = mps;
   $('m-l-diff').textContent = mps ? 'Computer rivals' : 'Rival';
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
@@ -2187,6 +2202,8 @@ function initKeyboard() {
       case '+': case '=': zoomBy(1.25); break;
       case '-': case '_': zoomBy(0.8); break;
       case '?': showHelp(); break;
+      // . pings the spot under the mouse for everyone running the colony (co-op: js/coop.js).
+      case '.': if (typeof coopPingHere !== 'function' || !coopPingHere(true)) return; break;
       default: return;
     }
     e.preventDefault();
@@ -6767,6 +6784,8 @@ function openBuildingSheet(b) {
         <div class="limit-row"><span class="hint" id="sh-lim-hint"></span><button class="btn small" id="sh-lim-off"></button></div>`;
     }
     if (!roadFirst && (needsRoad(b) || (b.unlinked !== undefined && !def.store))) html += '<div id="sh-road"></div>';
+    // Co-op: who placed it (its badge on the map is their initial).
+    if (typeof coopOn === 'function' && coopOn() && b.by !== undefined) html += `<p class="hint coop-by"><i class="dot" style="background:${coopColor(b.by)}"></i>Placed by ${b.by === MP.me ? 'you' : esc(coopName(b.by))}</p>`;
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (b.owner === ME && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
@@ -6895,7 +6914,10 @@ function openBuildingSheet(b) {
     if ($('sh-demolish')) $('sh-demolish').onclick = () => {
       if (!UI.demolishArm) {
         UI.demolishArm = 1;
-        $('sh-demolish').textContent = BDEFS[b.type].mil && b.built ? 'Tap again: buildings outside your border will be lost' : 'Tap again to confirm';
+        // Co-op: something your partner placed less than a minute ago says so first.
+        const fresh = typeof coopByMate === 'function' && coopByMate(b) && S.time - (b.born ?? -1e9) < COOP_CONFIRM_S;
+        $('sh-demolish').textContent = fresh ? `${coopName(b.by)} placed this ${Math.max(1, Math.round(S.time - b.born))} s ago: tap again to dismantle it anyway`
+          : BDEFS[b.type].mil && b.built ? 'Tap again: buildings outside your border will be lost' : 'Tap again to confirm';
         return;
       }
       // Say what's left in crates: all its materials, and anything that was inside it.
@@ -8747,6 +8769,7 @@ function uiTick(dt) {
   briefingTick();
   netTick();
   mpBannerTick();
+  if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)
@@ -8759,6 +8782,7 @@ function uiTick(dt) {
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();
+    if (typeof coopQuiet === 'function' && coopQuiet(m.text, m.kind)) { coopLog(m.text, m.kind, m.x, m.y); continue; } // (co-op: not my role's: the log only)
     toast(m.text, m.kind, m.x, m.y);
     if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
     if (m.kind === 'lost') sfx('alert');

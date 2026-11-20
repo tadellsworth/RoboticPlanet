@@ -1376,6 +1376,17 @@ canvas.chart.small { height: 110px; }
 .mp-players li.mp-team small { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .mp-players li.mp-swap { cursor: pointer; }
 .mp-players li.mp-swap:hover { outline: 1px solid var(--line); }
+/* Shared colony co-op (js/coop.js): a person the host can move into (or out of) their colony; this person's role. */
+.mp-players li.mp-coop { cursor: pointer; }
+.mp-players li.mp-coop:hover { outline: 1px solid var(--line); }
+.mp-players li.mp-coophint { justify-content: flex-start; }
+.mp-role { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 6px 10px; margin: 10px 0 2px; }
+.mp-role .m-rl { font-size: 13px; color: var(--muted); }
+.mp-role .seg button { padding: 7px 4px; font-size: 13.5px; }
+.mp-role .hint { grid-column: 1 / -1; }
+#m-coophost { justify-self: start; }
+.coop-by { display: flex; align-items: center; gap: 7px; }
+.coop-by .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
 
 /* ---- Missions as the tutorial: chapters, the next mission, the next goal's hint and the buttons it needs ---- */
 .ms-chapter { margin: 14px 2px 0; }

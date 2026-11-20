@@ -15855,6 +15855,7 @@ function hashState() {
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
   }
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
+  if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
 
