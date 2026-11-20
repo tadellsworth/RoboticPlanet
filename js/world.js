@@ -5398,9 +5398,15 @@ function checkSave(o) {
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
-    if (b.magMissing != null && (b.type !== 'magterm' || !obj(b.magMissing) || !Number.isInteger(b.magMissing.x) ||
-      !Number.isInteger(b.magMissing.y) || b.magMissing.x < 0 || b.magMissing.x >= o.W ||
-      b.magMissing.y < 0 || b.magMissing.y >= o.H || typeof b.magMissing.near !== 'boolean')) bad();
+    // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)
+    const missOk = (m) => obj(m) && Number.isInteger(m.x) && Number.isInteger(m.y) && m.x >= 0 && m.x < o.W && m.y >= 0 && m.y < o.H && typeof m.near === 'boolean' &&
+      (m.key == null || (Number.isSafeInteger(m.key) && m.key > 0)) && (m.layout == null || (Array.isArray(m.layout) && m.layout.length <= Math.floor(MAGLEV.max / MAGLEV.spacing) && m.layout.every((t) => t === -1 || tileOk(t))));
+    if (b.magMissing != null && (b.type !== 'magterm' || !missOk(b.magMissing))) bad();
+    if (b.magMissMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMissMore) || b.magMissMore.length >= MAGLEV.hub || !b.magMissMore.every(missOk))) bad();
+    // a hub's other lines (Terminal ids), a line site's key end, and the next line a hub's site carries on to
+    if (b.magMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMore) || b.magMore.length >= MAGLEV.hub || !b.magMore.every((id) => Number.isSafeInteger(id) && id > 0))) bad();
+    if (b.magKey != null && !(Number.isSafeInteger(b.magKey) && b.magKey > 0)) bad();
+    if (b.magNext != null && !(b.type === 'magterm' && Array.isArray(b.magNext) && b.magNext.length === 2 && Number.isInteger(b.magNext[0]) && Number.isInteger(b.magNext[1]) && b.magNext[0] >= 0 && b.magNext[0] < o.W && b.magNext[1] >= 0 && b.magNext[1] < o.H)) bad();
     if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
       !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
     // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves

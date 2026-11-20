@@ -1630,8 +1630,17 @@ one; RENDERER.md, "The Maglev line").
 
 The band, the pylons and the pods go on after the buildings and robots (so what stands under a line is under it) and
 before the air (`drawMaglevs`); nothing of it is baked, because lines come and go. The placement preview is the same
-band at 75% with every pylon spot ringed (green standing, dashed grey spanned, the first bad one red) and a ghost of
-the far Terminal.
+band at 75% (red and dashed past the first blocked spot) with every pylon spot ringed (`MAG_SPOT`: green standing, blue
+over a road or track, yellow shifted a tile with a dotted tick back to its spot, dashed white spanned, red with a cross
+blocked, the reason in a small dark label beside the first) and a ghost of the far Terminal (and of the hub, labelled,
+on a Route via a hub).
+
+Drawn in code since the hubs (Nov 2026), no new images: a **pylon over a road or track** is a portal frame instead of
+the pylon sprite (`drawMagPortal`): two slim pale legs on the kerb either side of the deck, outlined in the cap's
+gunmetal, a crossbeam just under the deck in hazard yellow with dark chevrons (the pylon cap's), and the legs' small
+shadows on the road, so the road reads as open under it. A **suspended line** (a Terminal lost) keeps its band, without
+the night glow, with an amber dashed stripe down the deck; the lost Terminal is its sprite at 28% on its old tile under a
+pulsing dashed amber ring.
 
 ### Batch 22: Express highways (installed; drawn in code)
 

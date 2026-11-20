@@ -6324,9 +6324,9 @@ function refreshOverlay(type) {
     R.overlay = { type, valid, at: R.time };
     return;
   }
-  // The Maglev tool: your finished Terminals on no line (the near end to tap first).
+  // The Maglev tool: your finished Terminals with a line to spare (a hub joins MAGLEV.hub) or a lost end to rebuild (the near end to tap first).
   if (type === 'maglev') {
-    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].magterm && b.built && !b.line && !magPending(b) && !b.magFrom) valid[tIdx(b.x, b.y)] = 1;
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].magterm && b.built && (magSlots(b) < MAGLEV.hub || b.magMissing) && !magPending(b) && !b.magFrom) valid[tIdx(b.x, b.y)] = 1;
     R.overlay = { type, valid, at: R.time };
     return;
   }
@@ -9250,23 +9250,23 @@ function magGlow(ctx, owner, x0, y0, x1, y1, z, k) {
   ctx.restore();
 }
 
-/** Every line on the map (built, and going up as far as it's got): { A, B, fx, fy, spans, L, owner, building }. */
+/**
+ * Every line on the map (built, suspended with an end lost, and going up as far as it's got): { A, B, fx, fy, spans, L,
+ * owner, building, suspended } (A the key end; a lost end is its old tile).
+ */
 function magLinesToDraw() {
   const out = [];
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].magterm) continue;
-    const o = magPartner(b);
-    if (o && magNearEnd(b) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
-    if (b.magMissing) {
-      // Use the missing dock's old coordinates for spans. Pylons still belong to the survivor.
-      const end = { ...b.magMissing, id: 0 }, missingNear = b.magMissing.near;
-      const A = missingNear ? { ...end, id: b.id, owner: b.owner, magLayout: b.magLayout } : b, B = missingNear ? { ...b, id: 0 } : end;
-      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y),
-        spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
-      continue;
+    for (const o of magPartners(b)) if (magKey(b, o) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
+    for (const m of magMiss(b)) {
+      // The lost end's old tile for the spans; the pylons carry the key end's id (the lost Terminal's, if it was the key).
+      const end = { x: m.x, y: m.y, id: 0 };
+      const A = m.near ? { x: m.x, y: m.y, id: m.key ?? b.id, owner: b.owner, magLayout: m.layout || b.magLayout } : b, B = m.near ? { x: b.x, y: b.y, id: 0 } : end;
+      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y), spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
     }
     const s = magPending(b);
-    if (s) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
+    if (s && !magRebuildSite(b, s)) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
   }
   return out;
 }
@@ -9304,26 +9304,20 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
   cx += dx * z; cy += dy * z;
   const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
   let hs = 1;
-  if (!cut && b.line) {
-    const A = getE(b.line), B = A ? magPartner(A) : null;
-    if (A && B) {
-      const L = dist(A.x, A.y, B.x, B.y) || 1, f = clamp(((b.k || 1) * MAGLEV.spacing) / L, 0, 1);
-      const ref = S.elev[tIdx(A.x, A.y)] * (1 - f) + S.elev[tIdx(B.x, B.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
-      hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
-    }
-  }
-  if (!cut && b.line && b.k) {
-    const A = getE(b.line), B = magPartner(A) || A?.magMissing;
-    if (A && B) {
-      const [first, last] = A.magMissing?.near ? [B, A] : [A, B];
-      const f = (b.k * MAGLEV.spacing) / (dist(first.x, first.y, last.x, last.y) || 1);
-      const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
-      const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
-      ctx.save();
-      ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
-      ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.restore();
-    }
+  const ends = !cut && b.line && b.k ? magPylonEnds(b) : null;
+  if (ends) {
+    // squashed or stretched so its head sits under the band (the ends' ground level along the line)
+    const [first, last] = ends, L = dist(first.x, first.y, last.x, last.y) || 1, f = clamp((b.k * MAGLEV.spacing) / L, 0, 1);
+    const ref = S.elev[tIdx(first.x, first.y)] * (1 - f) + S.elev[tIdx(last.x, last.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
+    hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
+    if (dx || dy) { drawMagPortal(ctx, b, cx - dx * z, cy - dy * z, z, first, last, f, dx, dy); return; } // (over a road or track: a portal over the way)
+    // the arm from the head to the band (a pylon shifted to a shoulder, or standing at a road's side)
+    const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
+    const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
+    ctx.save();
+    ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
+    ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.restore();
   }
   if (!art) {
     ctx.fillStyle = '#cbc6bb'; ctx.fillRect(cx - z * 0.05, cy - MAGLEV.deck * hs * z, z * 0.1, MAGLEV.deck * hs * z);
@@ -9332,6 +9326,35 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
   }
   const s = z * (art.scale || 1.4), W = s, Hh = s * hs, an = Array.isArray(art.anchor) ? art.anchor : [0.5, 0.6145];
   withTod(ctx, art, (v) => ctx.drawImage(artMip(v, s * (R.drawScale || 1)), cx - an[0] * W, cy - an[1] * Hh, W, Hh));
+}
+
+/**
+ * A pylon over a road or track (its tile centre at (cx, cy) on screen): a portal frame, two legs on the kerb (dx, dy:
+ * magPylonOffset) either side of the guideway and a crossbeam under the deck with hazard stripes, so the road reads as
+ * open under it. first/last are the line's ends and f how far along it the pylon stands.
+ */
+function drawMagPortal(ctx, b, cx, cy, z, first, last, f, dx, dy) {
+  const L = dist(first.x, first.y, last.x, last.y) || 1, ux = (last.x - first.x) / L, uy = (last.y - first.y) / L;
+  const px = cx + (first.x + (last.x - first.x) * f - b.x) * z, py = cy + (first.y + (last.y - first.y) * f - b.y) * z; // (the line's ground point)
+  const w = Math.max(1.5, z * 0.085), half = 0.34, up = (MAGLEV.head - 0.1) * z; // (the beam just under the deck)
+  const feet = [-1, 1].map((sg) => [px - uy * half * sg * z + dx * z, py + ux * half * sg * z + dy * z]);
+  const tops = feet.map(([x, y]) => [x, y - up]);
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,10,16,0.22)'; // (the legs' shadows on the road)
+  for (const [x, y] of feet) { ctx.beginPath(); ctx.ellipse(x + z * 0.06, y + z * 0.02, w * 1.1, w * 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
+  for (const [x, y] of feet) { // the legs, from the kerb up to the beam
+    ctx.fillStyle = '#3f4449'; ctx.fillRect(x - w / 2 - 1, y - up, w + 2, up);
+    ctx.fillStyle = '#cbc6bb'; ctx.fillRect(x - w / 2, y - up, w, up);
+  }
+  // the crossbeam from one leg's top to the other's, with hazard stripes
+  const [[x0, y0], [x1, y1]] = tops, len = Math.hypot(x1 - x0, y1 - y0) + w, bh = Math.max(2, z * 0.075);
+  ctx.translate(x0, y0); ctx.rotate(Math.atan2(y1 - y0, x1 - x0));
+  ctx.fillStyle = '#3f4449'; ctx.fillRect(-w / 2 - 1, -bh / 2 - 1, len + 2, bh + 2);
+  ctx.beginPath(); ctx.rect(-w / 2, -bh / 2, len, bh); ctx.clip();
+  ctx.fillStyle = '#f2c230'; ctx.fillRect(-w / 2, -bh / 2, len, bh);
+  ctx.fillStyle = '#2b2d2f';
+  for (let x = -w / 2; x < len; x += bh * 2) { ctx.beginPath(); ctx.moveTo(x, bh / 2); ctx.lineTo(x + bh, -bh / 2); ctx.lineTo(x + bh * 1.6, -bh / 2); ctx.lineTo(x + bh * 0.6, bh / 2); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
 }
 
 /** A pod at ground point (gx, gy) on screen, drawn at deck height, turned to `ang`; loaded or empty; its shadow down-sun. */
@@ -9370,17 +9393,25 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
   // pylons standing (built), y-sorted so lower ones overlap upper ones
   const pyl = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].pylon && inView(b.x, b.y, 2)).sort((a, b) => a.y - b.y);
   for (const b of pyl) drawMagPylon(ctx, b, ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z, false);
+  const docked = new Map(); // (each Terminal's docked pod, drawn once, turned along its first line)
   for (const ln of lines) {
     const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
     const H = MAGLEV.head * z, ang = Math.atan2(uy, ux);
     if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
     // a fallen pylon in every cut
     if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
-    const powered = !ln.suspended && ln.B ? magLinePowered(ln.A) : false;
+    const powered = !ln.suspended && ln.B ? magPairPowered(ln.A, ln.B) : false;
     for (const [d0, d1] of ln.spans) {
       const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
       magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
       if (ln.B && !ln.suspended && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
+      if (ln.suspended) {
+        // out of service: a dashed amber line down the deck
+        ctx.save();
+        ctx.strokeStyle = 'rgba(242,174,99,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.06); ctx.setLineDash([z * 0.22, z * 0.16]);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.restore();
+      }
     }
     if (ln.building) {
       // the rest of the line marked out, dashed, to the far end
@@ -9391,20 +9422,18 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
       ctx.restore();
       continue;
     }
-    // pods: running (at their place along the line), one docked at each end, the repair pod on its way out
-    const docks = ln.suspended ? [ln.survivor] : [ln.A, ln.B];
-    for (const u of S.bots) {
-      if (u.dead || u.owner !== ln.owner || !BOTS[u.type].magpod || !u.magTo || !docks.some((d) => u.magTo === d.id)) continue;
-      drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
-    }
-    for (const T of docks) {
-      const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
-      if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
-    }
+    for (const T of ln.suspended ? [ln.survivor] : [ln.A, ln.B]) if (!docked.has(T.id)) docked.set(T.id, [T, T === ln.A ? ang : ang + Math.PI]);
     if (ln.suspended) {
+      // the lost Terminal: its outline where it stood, dashed and pulsing, until one is built there again
+      const mx = ox + (ln.missing.x + 0.5) * z, my = oy + (ln.missing.y + 0.5) * z, pulse = 0.65 + 0.35 * Math.sin(R.time * 3);
+      const site = S.bAt[tIdx(ln.missing.x, ln.missing.y)];
       ctx.save();
+      if (!site) { ctx.globalAlpha *= 0.28; drawBuilding(ctx, 'magterm', mx, my, z, ln.owner, { built: true, garrison: [], stock: {} }); }
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha *= pulse;
       ctx.strokeStyle = '#f2ae63'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.15, z * 0.1]);
-      ctx.beginPath(); ctx.arc(ox + (ln.missing.x + 0.5) * z, oy + (ln.missing.y + 0.5) * z, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(mx, my, z * 0.5, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
       continue;
     }
@@ -9415,35 +9444,80 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
       drawMagPod(ctx, ln.owner, ox + (ex + (tx - ex) * f) * z, oy + (ey + (ty - ey) * f) * z, z, ang, false);
     }
   }
-  // the preview while a line is placed: from the near Terminal picked to the far end under the pointer or tapped
-  if (preview) {
-    const A = getE(UI.ropeA.id);
-    if (A && !A.dead) {
-      const E = preview, ax = ox + (A.x + 0.5) * z, ay = oy + (A.y + 0.5) * z, fx = E.i + 0.5, fy = E.j + 0.5, L = dist(A.x + 0.5, A.y + 0.5, fx, fy) || 1;
-      const ux = (fx - A.x - 0.5) / L, uy = (fy - A.y - 0.5) / L, H = MAGLEV.head * z;
-      ctx.save();
-      ctx.globalAlpha *= E.ok ? 0.75 : 0.4;
-      magBand(ctx, ME, ax + ux * MAG_END * z, ay + uy * MAG_END * z - H, ax + ux * (L - MAG_END) * z, ay + uy * (L - MAG_END) * z - H, z, false);
-      ctx.restore();
-      if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.8)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); ctx.moveTo(ax, ay - H); ctx.lineTo(ox + fx * z, oy + fy * z - H); ctx.stroke(); ctx.restore(); }
-      ctx.lineWidth = Math.max(1.5, z * 0.06);
-      let badSeen = false;
-      for (const sp of E.spots || []) {
-        const cx = ox + (sp.i + 0.5) * z, cy = oy + (sp.j + 0.5) * z, bad = sp.kind === 'bad' && !badSeen;
-        if (bad) badSeen = true;
-        ctx.save();
-        ctx.strokeStyle = bad ? '#ff6b6b' : sp.kind === 'skip' ? 'rgba(255,255,255,0.55)' : '#9dffb8';
-        if (sp.kind === 'skip') ctx.setLineDash([z * 0.12, z * 0.1]);
-        ctx.beginPath(); ctx.arc(cx, cy, z * 0.38, 0, Math.PI * 2); ctx.stroke();
-        if (sp.kind === 'ok') { ctx.globalAlpha *= 0.55; drawMagPylon(ctx, { owner: ME, x: sp.i, y: sp.j, k: sp.k, line: 0 }, cx, cy, z, false); }
-        ctx.restore();
-      }
-      const t = tIdx(E.i, E.j), far = S.bAt[t] ? getE(S.bAt[t]) : null;
-      if (!far) { ctx.globalAlpha = 0.6; drawBuilding(ctx, 'magterm', ox + fx * z, oy + fy * z, z, ME, { built: true, garrison: [], stock: {} }); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
-      ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
-    }
+  // pods: running (at their place along their line, turned along it), and one docked at each Terminal
+  for (const u of S.bots) {
+    if (u.dead || !BOTS[u.type].magpod || !u.magTo || !inView(u.x, u.y, 2)) continue;
+    const to = getE(u.magTo), from = getE(u.magFrom);
+    const ang = to && from ? Math.atan2(to.y - from.y, to.x - from.x) : to ? Math.atan2(to.y + 0.5 - u.y, to.x + 0.5 - u.x) : 0;
+    drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
   }
+  for (const [T, ang] of docked.values()) {
+    const u = S.bots.find((v) => !v.dead && v.inside === T.id && BOTS[v.type].magpod);
+    if (u) drawMagPod(ctx, u.owner, ox + (T.x + 0.5) * z, oy + (T.y + 0.5) * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
+  }
+  if (preview) drawMaglevPreview(ctx, ox, oy, z, preview);
+}
+
+/** A small label on the map: `text` in a dark box above (x, y), in `color`. */
+function magLabel(ctx, x, y, text, color, z) {
+  const fs = Math.round(clamp(z * 0.3, 11, 15));
+  ctx.save();
+  ctx.font = `600 ${fs}px system-ui, sans-serif`;
+  const w = Math.min(ctx.measureText(text).width, fs * 26) + fs, h = fs * 1.6;
+  ctx.fillStyle = 'rgba(12,16,22,0.82)';
+  ctx.fillRect(x - w / 2, y - h, w, h);
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y - h / 2, fs * 26);
+  ctx.restore();
+}
+
+/**
+ * The preview while a line is placed, from the near Terminal picked to the far end under the pointer or tapped (or,
+ * routed via a hub, through it): the band (red past the first blocked spot), every pylon spot ringed in its colour
+ * (MAG_SPOT: a pylon, one over a road, one shifted a tile with a tick back to its spot, a gap spanned, blocked with a
+ * cross), the reason by the first blocked one, and the Terminals that go up.
+ */
+const MAG_SPOT = { ok: '#9dffb8', road: '#7fd3ff', moved: '#ffd36b', skip: 'rgba(255,255,255,0.6)', bad: '#ff6b6b' };
+function drawMaglevPreview(ctx, ox, oy, z, E) {
+  const A = getE(UI.ropeA.id);
+  if (!A || A.dead) return;
+  const H = MAGLEV.head * z;
+  const legs = E.via ? [[A.x, A.y, E.via.i, E.via.j], [E.via.i, E.via.j, E.i, E.j]] : [[A.x, A.y, E.i, E.j]];
+  const firstBad = (E.spots || []).filter((s) => s.kind === 'bad').sort((p, q) => (p.dA ?? p.d) - (q.dA ?? q.d))[0];
+  for (const [x0, y0, x1, y1] of legs) {
+    const L = dist(x0, y0, x1, y1) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L, bx = ox + (x0 + 0.5) * z, by = oy + (y0 + 0.5) * z;
+    // the band, up to the first blocked spot (red and dashed beyond it)
+    const stop = !E.ok && firstBad && !E.via ? clamp((firstBad.dA ?? firstBad.d) - 0.8, MAG_END, L - MAG_END) : L - MAG_END;
+    ctx.save();
+    ctx.globalAlpha *= E.ok ? 0.75 : 0.5;
+    if (stop > MAG_END + 0.2) magBand(ctx, ME, bx + ux * MAG_END * z, by + uy * MAG_END * z - H, bx + ux * stop * z, by + uy * stop * z - H, z, false);
+    ctx.restore();
+    if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.85)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); ctx.moveTo(bx + ux * stop * z, by + uy * stop * z - H); ctx.lineTo(ox + (x1 + 0.5) * z, oy + (y1 + 0.5) * z - H); ctx.stroke(); ctx.restore(); }
+  }
+  ctx.lineWidth = Math.max(1.5, z * 0.06);
+  for (const sp of E.spots || []) {
+    const cx = ox + (sp.i + 0.5) * z, cy = oy + (sp.j + 0.5) * z, kind = sp.kind === 'ok' ? (sp.moved != null ? 'moved' : sp.road ? 'road' : 'ok') : sp.kind;
+    ctx.save();
+    ctx.strokeStyle = MAG_SPOT[kind];
+    ctx.lineWidth = Math.max(1.5, z * (sp === firstBad ? 0.1 : 0.06));
+    if (kind === 'skip') ctx.setLineDash([z * 0.12, z * 0.1]);
+    ctx.beginPath(); ctx.arc(cx, cy, z * 0.38, 0, Math.PI * 2); ctx.stroke();
+    if (kind === 'bad') { const r = z * 0.2; ctx.beginPath(); ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); ctx.stroke(); }
+    if (kind === 'moved') { const mi = sp.moved % S.W, mj = (sp.moved / S.W) | 0; ctx.setLineDash([z * 0.08, z * 0.08]); ctx.beginPath(); ctx.moveTo(ox + (mi + 0.5) * z, oy + (mj + 0.5) * z); ctx.lineTo(cx, cy); ctx.stroke(); }
+    if (sp.kind === 'ok') { ctx.globalAlpha *= 0.55; drawMagPylon(ctx, { owner: ME, x: sp.i, y: sp.j, k: sp.k, line: 0 }, cx, cy, z, false); }
+    ctx.restore();
+  }
+  if (firstBad && !E.ok) magLabel(ctx, ox + (firstBad.i + 0.5) * z, oy + (firstBad.j - 0.2) * z, firstBad.why, MAG_SPOT.bad, z);
+  // the Terminals that go up: the far one (and the hub)
+  const ends = E.via ? [[E.via.i, E.via.j], [E.i, E.j]] : [[E.i, E.j]];
+  for (const [i, j] of ends) {
+    const fx = i + 0.5, fy = j + 0.5, far = S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
+    if (!far) { ctx.save(); ctx.globalAlpha = 0.6; drawBuilding(ctx, 'magterm', ox + fx * z, oy + fy * z, z, ME, { built: true, garrison: [], stock: {} }); ctx.restore(); }
+    ctx.save(); ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox + i * z + 1, oy + j * z + 1, z - 2, z - 2); ctx.restore();
+  }
+  if (E.via) magLabel(ctx, ox + (E.via.i + 0.5) * z, oy + (E.via.j - 0.3) * z, 'hub', MAG_SPOT.ok, z);
+  else if (!E.ok && !firstBad && E.why) magLabel(ctx, ox + (E.i + 0.5) * z, oy + (E.j - 0.2) * z, E.why.replace(/<[^>]+>/g, ''), MAG_SPOT.bad, z);
 }
 
 /** A parachute canopy at (x, y) (its bottom edge), size s, with its lines down to (x, ly). */

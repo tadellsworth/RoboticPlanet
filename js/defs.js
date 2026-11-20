@@ -331,24 +331,28 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /**
  * The Maglev line (BDEFS.magterm, BDEFS.magpylon, BOTS.magpod): an elevated guideway on pylons, straight across
- * anything, between two Maglev Terminals `min` to `max` tiles apart (b.line on both, as a Mooring Mast's; a Terminal is
- * on one line at most). Planned in Paths (Maglev) with two taps: a built Terminal of yours (the near end), then the far
- * end (a clear spot where the far Terminal goes up, a Terminal site, or a built Terminal). A pylon stands every
- * `spacing` tiles from the near Terminal (magSpots), on open ground, a cliff top or shallow water, never on a building,
- * a road or track; a spot in a chasm or deep water or rock is left out as long as the pylons either side of it stand,
- * so a line crosses a gap of up to `gap` tiles (two spans). The line costs `cost` a tile (and the far Terminal its
- * own cost when it's new), paid from storage as the goods come in like a Viaduct, and a Worker standing at the near
- * Terminal builds it out, `time` seconds a tile, the pylons going up one by one and the far Terminal last. Pods
- * (`perLine` to a line, built at either Terminal's pod bay) carry BOTS.magpod.carry goods both ways, planned as a
- * Freight Train's loads are (railPlan: the far Terminal stocks what the buildings round it need, the home one keeps that
- * for the line, spare goods come home): a pod sets out once `fill` of its hold is worth it, sooner when the far side
- * runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a Generator with Fuel in it
- * within its own radius of each Terminal (magPowered); without one at either end, or in a solar flare, the pods crawl at
- * WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short and go back, one on the spans that
- * rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it in `repair` s at `spacing` tiles'
- * cost. The rival builds none (IDEAS.md).
+ * anything, between two Maglev Terminals `min` to `max` tiles apart. A Terminal is on up to `hub` lines (a hub: b.line,
+ * then b.magMore), so lines join into a network the pods run through, line by line. Planned in Paths (Maglev) with two
+ * taps: a built Terminal of yours (the near end), then the far end (a clear spot where the far Terminal goes up, a
+ * Terminal site, or a built Terminal); a line the straight way can't go (a blocked stretch, or longer than `max`) may
+ * be routed via a new hub Terminal on the way (magRouteVia). A pylon stands every `spacing` tiles from the line's key
+ * end (magSpots: the near Terminal, or the far one when the near one keys a line already), on open ground, a cliff top,
+ * shallow water or over a road or track (its feet at the side: the way stays open), never on a building; a blocked spot
+ * shifts to a shoulder tile; a spot in a chasm or rock is left out as long as the pylons either side of it stand, so a
+ * line crosses a gap of up to `gap` tiles (two spans). The line costs `cost` a tile (and the far Terminal its own cost
+ * when it's new), paid from storage as the goods come in like a Viaduct, and a Worker standing at the near Terminal
+ * builds it out, `time` seconds a tile, the pylons going up one by one and the far Terminal last. Pods (`perLine` for
+ * each line of a network, built at any of its Terminals' pod bays) carry BOTS.magpod.carry goods both ways, planned as
+ * a Freight Train's loads are (railPlan: the far Terminals stock what the buildings round them need, each Terminal
+ * keeps what the ones beyond it want, spare goods come home): a pod sets out once `fill` of its hold is worth it,
+ * sooner when the far side runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a
+ * Generator with Fuel in it within its own radius of each Terminal (magPowered); without one at either end, or in a
+ * solar flare, the pods crawl at WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short
+ * and go back, one on the spans that rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it
+ * in `repair` s at `spacing` tiles' cost. A Terminal lost suspends its lines (the guideway and pylons stand) until one
+ * is built on its tile again, at a Terminal's ordinary cost. The rival builds none (IDEAS.md).
  */
-const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
+const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
  * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods
@@ -1303,12 +1307,12 @@ const BDEFS = {
   },
   magterm: {
     name: 'Maglev Terminal', short: 'Maglev',
-    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four to a line): they carry 16 goods a trip at three times a Freight Train\'s speed. The two Terminals work like a railway\'s stations (the far one stocks what the buildings round it need and sends their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl.',
+    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four for each line): they carry 16 goods a trip at three times a Freight Train\'s speed. A Terminal joins up to three lines (a hub): pods carry goods on through it, line by line. The Terminals work like a railway\'s stations (the far ones stock what the buildings round them need and send their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl. Lost, its lines stand broken until a Terminal is built on its tile again.',
     cost: { cement: 8, alloy: 6, chip: 3 }, store: true, magterm: true, armor: 14, buildTime: 14, yard: ['magpod'],
   },
   magpylon: {
     name: 'Maglev Pylon', short: 'Pylon',
-    desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
+    desc: 'A pylon carrying a Maglev guideway, every 3 tiles along the line; over a road or track its feet stand at the side and the way stays open. As tough as a Wall. Shot down, it cuts the line: pods stop short of the break and go back, and one on the spans it carried is lost; a Worker from the nearer Terminal rides out and rebuilds it. The guideway itself cannot be shot.',
     cost: { cement: 3, alloy: 3, chip: 1 }, pylon: true, armor: 24, buildTime: 20,
   },
   mdriver: {
