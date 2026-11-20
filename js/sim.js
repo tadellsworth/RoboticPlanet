@@ -10729,6 +10729,14 @@ function veinFull() {
   return clamp(Math.round(RES[R_VEIN].amount * pr.amount), 1, 255);
 }
 
+/** Local burst tier from the Deep's remaining health (zero until its first cracks). */
+function deepSurgeTier(b) {
+  if (!b || b.dead || b.type !== 'mound') return 0;
+  const health = b.armor / BDEFS.mound.armor;
+  for (let i = DEEP_SURGES.length - 1; i >= 0; i--) if (health < DEEP_SURGES[i].health) return i + 1;
+  return 0;
+}
+
 /**
  * A nest: keeps its guards up and grows. Runs once a second. It sends no packs of its own, in Colony as in Versus (the
  * owner's decision): its Murmur come up through the tunnels at night (murmurTick). Days are for striking the nests,
@@ -10746,19 +10754,22 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  if (b.type === 'mound' && b.armor < BDEFS.mound.armor * 0.75) {
-    const lost = 1 - b.armor / BDEFS.mound.armor;
-    const tier = lost >= 0.8 ? 3 : lost >= 0.5 ? 2 : 1;
-    if (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0)) {
-      b.deepSurgeAt = S.time + [0, 32, 20, 10][tier];
-      b.deepSurgeTier = tier;
-      const guardsNow = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+  const tier = deepSurgeTier(b);
+  if (tier && (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0))) {
+    const surge = DEEP_SURGES[tier - 1];
+    b.deepSurgeAt = S.time + surge.every;
+    b.deepSurgeTier = tier;
+    const live = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+    const count = Math.min(surge.size, surge.cap - live);
+    if (count > 0) {
       const target = wildPrey(b.x + 0.5, b.y + 0.5, 18);
-      for (let k = 0; k < Math.min(tier * 2, tier * 5 - guardsNow); k++) {
+      for (let k = 0; k < count; k++) {
         const task = target ? { type: 'raid', x: Math.floor(target.x), y: Math.floor(target.y), until: S.time + 28 } : null;
         const u = spawnCritter(b, tier >= 2 && k % 3 === 0 ? 'brute' : 'scuttler', task);
         u.deepGuard = true;
       }
+      addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d797ff', r: 1.5 + 0.65 * tier, life: 0.8 + 0.2 * tier });
+      sfx('deepsurge', b.x + 0.5, b.y + 0.5, tier);
     }
   }
   b.status = `Level ${b.level} nest · ${guards} on guard`;

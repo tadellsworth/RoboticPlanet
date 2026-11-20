@@ -234,7 +234,7 @@ function _noise(dur, vol, o) {
 const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
   launch: 0.3, drizzle: 0.8, mdcharge: 0.8, mdlaunch: 0.4, mdcatch: 0.3, mdburst: 0.2, mdthud: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
-  weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.8, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
+  deepsurge: 0.8, weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.8, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
@@ -648,6 +648,13 @@ function sfx(name, dest, y, dur) {
     case 'fireball': blast(D, { size: 1.3, far, gain: 0.6, fire: true }); duckMusic(0.5, 1.2); break;
     case 'botboom': blast(D, { size: 0.6, far, gain: 0.4 }); break; // (a robot blowing up)
     case 'collapse': rubble(D, far); break;
+    case 'deepsurge': {
+      const tier = clamp(dur || 1, 1, 3), f = [0, 63, 51, 42][tier], tail = 1.1 + 0.35 * tier;
+      _tone(f, tail, 'sine', 0.04 + 0.015 * tier, f * 0.72, 0, D);
+      _tone(f * 1.95, tail * 0.82, 'sine', 0.022, f * 1.36, 0.07, D);
+      _noise(tail, 0.028 + 0.012 * tier, { type: 'lowpass', freq: f * 4, to: f * 1.25, attack: 0.23, dest: D });
+      break;
+    }
     case 'beacon': if (typeof ambHum === 'function') ambHum(D); break; // (a Command Base's beacon coming on at dusk: js/ambient.js)
     // Coming down on you: a bomb's whistle as it falls, a missile's roar as it dives in (each ending as it hits).
     case 'bombfall': incoming(D, 'bomb', BOMBER.fall / spd); break;

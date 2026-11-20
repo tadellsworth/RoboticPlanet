@@ -877,9 +877,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
     menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
-    mound as a nest everywhere), the night windows are surges (the only time packs come, as everywhere; once the Deep's mound has lost a quarter of its
-    armor it also sends packs of its own, bigger and more often as the armor falls: every 32, 20 then 10 seconds at
-    25%, 50% and 80% lost, `deepSurgeAt`/`deepSurgeTier`), and
+    mound as a nest everywhere), the night windows are surges. The Deep also sends local packs of its own: two every 32 seconds below
+    75% armor, three every 24 seconds below two-thirds, and four every 16 seconds below one-third (while under its
+    live guard cap). Its violet pulses grow stronger and each burst rumbles deeper (`deepSurgeAt`/`deepSurgeTier`), and
     `veinLure` still pulls packs and tunnels toward a lured colony's veins (`murmurPrey`, `murmurGoals`). In Colony,
     `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
     night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,

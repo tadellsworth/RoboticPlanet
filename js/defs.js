@@ -741,6 +741,12 @@ const HOLLOW = {
   deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
   relics: { alloy: [3, 5], chip: [1, 2] },
 };
+// The Deep's local defenders, from its first cracks to critical damage.
+const DEEP_SURGES = [
+  { health: 0.75, every: 32, size: 2, cap: 5 },
+  { health: 2 / 3, every: 24, size: 3, cap: 8 },
+  { health: 1 / 3, every: 16, size: 4, cap: 12 },
+];
 /**
  * Bloom veins (R_VEIN, the Hollow): cut down to nothing, a vein grows back in `regrow` seconds (the Bloom spreads back
  * along its ridge). Cutting veins draws the Murmur: a Harvester that cut one in the last `lure` seconds looks `pull`
@@ -1254,7 +1260,7 @@ const BDEFS = {
   },
   // The Hollow: the Deep's mound at the middle of the cathedral (HOLLOW.deep), the biggest nest of all.
   mound: {
-    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
+    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. As it cracks, it sends out more defenders in faster waves. A brighter pulse and deeper rumble warn of the stronger waves. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
     cost: {}, wild: true, armor: 160, buildTime: 1,
   },
   depot: {

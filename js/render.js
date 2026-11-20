@@ -4787,14 +4787,16 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
  * (wider than a Hauler, LORE.md) rising out of its top and stirring.
  */
 function drawMound(ctx, cx, cy, s, b) {
-  const t = R.time, S2 = s * 1.6;
+  const t = R.time, S2 = s * 1.6, tier = deepSurgeTier(b);
+  const pulse = 0.5 + 0.5 * Math.sin(t * (2.2 + 0.55 * tier) + (b ? b.id : 0));
+  if (tier) fxGround(ctx, cx, cy, s * (1.8 + 0.3 * tier), '#cf75ff', (0.12 + 0.07 * tier) * pulse);
   // The art (renderer/b/murmur_moles.js, the Burrow's level 4: a night render, drawn as it is since it's always night in
   // the Hollow): drawn at the nests' size (see drawNest), with their danger ring.
   const art = ART['deep-mound-hollow'];
   if (art) {
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + (b ? b.id : 0)), r = s * 2.4;
+    const r = s * (2.4 + 0.12 * tier);
     ctx.save();
-    ctx.strokeStyle = `rgba(255,70,90,${0.25 + 0.35 * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.06);
+    ctx.strokeStyle = `rgba(255,70,90,${0.25 + (0.35 + 0.08 * tier) * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.06);
     ctx.setLineDash([s * 0.24, s * 0.16]);
     ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.1, r * (0.92 + 0.05 * pulse), r * 0.72 * (0.92 + 0.05 * pulse), 0, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
