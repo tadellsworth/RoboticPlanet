@@ -946,6 +946,41 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
  */
 const CITY = { at: 900, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
+/*
+ * The Orbital Lift (BDEFS.lift; the owner's look A, the Beacon Cable, Nov 2026): a 3 x 3 anchor pad with a cable up to
+ * its colony's Carrier in orbit. As it is placed, R turns its fall line (b.lfDir, one of 8 directions: LIFT_DIRS): a
+ * straight line from the anchor, half the map's width long (liftLen: Small 15 tiles .. Huge 30), that must fit on the map
+ * and cross no other colony's land, Trade Post or neutral Uplink (liftLineWhy). Its panel calls a climber down with one
+ * of four loads (LIFT.drops): it takes `climb` s and unloads at the anchor (robots step out; goods wait there for
+ * Haulers), and every colony hears it start down. Then `cooldown` s from that landing to the next call; the first is
+ * ready when it's finished. The Carrier holds `reserve` drops (b.lfRes): each call uses one. Restock the Carrier: the
+ * goods ticked on its panel (b.lfSend {good: the reserve kept home}, up to `goods` of them: made goods or Crystal) come
+ * by Hauler (and Tanker), and by conveyor from buildings touching the pad; at `load` goods a climber goes up (`climb` s;
+ * never while one is coming down; it doesn't touch the cooldown). Each full climb up puts a drop back (up to `reserve`)
+ * and makes the next drop `boost` bigger again (b.lfBoost, up to `boostMax` restocks: double). Every climb burns `fuel`
+ * Fuel from a Generator within `reach` tiles; without it the climber waits; a solar flare stops it where it is. A climb
+ * draws the Murmur at night like a working Generator. Below `weak` of its armor the cable sways and its line flashes red
+ * for whoever has land or robots on it. Destroyed by a foe (not dismantled, not by its own side) it falls (liftFall):
+ * `creak` s of creaking, then the cable comes down along its line from the anchor out at `sweep` tiles a second (on Argos
+ * `lunar` of that): every building on it takes `crush` (a Keep is left at half, a Command Base at its Missile floor,
+ * another megastructure badly hurt but standing), robots on it are destroyed and those beside it take `side`; Walls,
+ * roads, track and pylons on it are broken; aircraft aren't hit. The line stays as cable wreckage (scrap of kind 4, b.cb:
+ * liftWreckAt) for good: robots cross it at `slow` speed and nothing is built on it until Haulers cut it up, `cut`
+ * Alloy a tile. One per colony. Not in the Hollow (the roof); on Argos the fall is slow.
+ */
+const LIFT = { climb: 45, cooldown: 360, reserve: 6, load: 30, goods: 3, sendReserve: 20, sendStep: 10, sendMax: 200, boost: 0.5, boostMax: 2,
+  reach: 4, fuel: 2, weak: 0.3, creak: 5, sweep: 4, lunar: 0.5, crush: 30, side: 3, slow: 0.5, cut: 1, sparks: 60, feed: 1,
+  drops: {
+    security: { name: 'Security detail', bots: { warbot: 6, bulwark: 2 } },
+    crew: { name: 'Work crew', bots: { worker: 6, truck: 2 } },
+    alloy: { name: 'Alloy', goods: { alloy: 30 } },
+    chips: { name: 'Chips', goods: { chip: 18 } },
+  } };
+/** The 8 directions a Lift's fall line can take (b.lfDir 0..7: east, then clockwise on the map: south-east, south, ...). */
+const LIFT_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+const LIFT_DIR_NAMES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+/** What a Lift can send up: the made goods and Crystal. */
+const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'fissile'];
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1267,6 +1302,11 @@ const BDEFS = {
     desc: 'A 4 by 4 terraced arcology built for the colonists: homes, gardens, a school and a station, all finished and all empty, with the Arrival clock in its glass atrium. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
     cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 300,
   },
+  lift: {
+    name: 'Orbital Lift', short: 'Lift',
+    desc: 'A space elevator: a 3 by 3 anchor pad and a lit cable up to your Carrier in orbit. As you place it, press R to turn its fall line (half the map\'s width, shown on the map), which must not cross another colony\'s land. On its panel, Call down a climber with one of four loads: a Security detail (6 Warbots, 2 Bulwarks), a Work crew (6 Workers, 2 Freight Trucks), 30 Alloy or 18 Chips. It takes 45 seconds and every colony hears it coming; then 6 minutes before the next. The Carrier holds 6 drops. Restock the Carrier: tick goods to send up (Haulers bring what you hold beyond the reserve you set); every 30 that go up put a drop back and make the next drop half again bigger (up to double). Each climb burns 2 Fuel from a Generator within 4 tiles. If an enemy destroys it, the cable comes down along its fall line, crushing what lies there and leaving wreckage Haulers cut up for Alloy. One per colony. Not in the Hollow; on Argos it falls slowly.',
+    cost: { cement: 60, alloy: 44, chip: 26, crystal: 20 }, lift: true, mega: true, foot: 3, armor: 90, buildTime: 330,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1298,7 +1338,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -1306,7 +1346,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city'], late: true },
+  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1907,6 +1947,7 @@ const FLAVOR = {
   lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
   city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
+  lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',

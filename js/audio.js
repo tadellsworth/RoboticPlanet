@@ -239,6 +239,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
+  liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -257,6 +258,7 @@ const BLAST_SIZE = {
   drizzle: 0.4, // (the Ring drizzle: a soft whoosh, heard only on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
   citychime: 1.6, cityclock: 0.5, // (Arrival City's station chime, taken or repaired, heard off screen; its clock's chime only on it)
+  liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
 };
 
 /**
@@ -891,6 +893,35 @@ function sfx(name, dest, y, dur) {
     case 'citychime':
       for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
       break;
+    // An Orbital Lift's climber setting off: a rising electric whine, and the clack of its clamps passing the first joints.
+    case 'liftclimb':
+      _tone(180, 2.2, 'sawtooth', 0.018, 900, 0, D);
+      _tone(360, 2.2, 'sine', 0.02, 1500, 0.05, D);
+      for (let k = 0; k < 5; k++) _noise(0.04, 0.05, { type: 'bandpass', freq: 2400, delay: 0.25 + k * 0.32, dest: D });
+      break;
+    // A climber landing: a heavy clunk as it seats on the collar, then the pneumatic hiss of its doors opening.
+    case 'liftland':
+      _tone(70, 0.5, 'sine', 0.14, 40, 0, D);
+      _noise(0.18, 0.12, { type: 'lowpass', freq: 500, dest: D });
+      _noise(1.1, 0.05, { type: 'highpass', freq: 3000, delay: 0.45, dest: D });
+      break;
+    // The cable groaning under load: a long low creak bending in pitch, like a held string about to go.
+    case 'liftgroan':
+      _tone(62, 2.6, 'sawtooth', 0.03, 48, 0, D);
+      _tone(94, 2.2, 'triangle', 0.02, 120, 0.3, D);
+      _noise(2.4, 0.03, { type: 'bandpass', freq: 220, delay: 0.1, dest: D });
+      break;
+    // The cable snapping free: a sharp crack like a snapped string, and the first of the rumble.
+    case 'liftsnap':
+      _noise(0.08, 0.3, { type: 'highpass', freq: 1800, dest: D });
+      _tone(880, 0.35, 'sawtooth', 0.05, 110, 0.01, D);
+      _noise(2.2, 0.12, { type: 'lowpass', freq: 260, to: 50, delay: 0.1, dest: D });
+      break;
+    // Its cable striking the ground, tile after tile: a rolling thud, running away from the anchor.
+    case 'liftimpact':
+      _tone(55 + Math.random() * 20, 0.6, 'sine', 0.08, 30, 0, D);
+      _noise(0.5, 0.07, { type: 'lowpass', freq: 380, to: 80, dest: D });
+      break;
     // The Arrival clock striking: two slow, low bell notes from the atrium, the second a little lower, fading long.
     case 'cityclock':
       for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
@@ -976,6 +1007,34 @@ function cityHum(k) {
     CITYHUM.o = { a, b, n, g };
   }
   CITYHUM.o.g.gain.setTargetAtTime(0.035 * k, ac.currentTime, 0.8);
+}
+
+/*
+ * An Orbital Lift on screen: the low steady note of its tensioned cable, like a held string, louder the nearer the middle
+ * of the screen (k 0..1; 0 stops it), and a whine over it while a climber is on the move (w 0..1). On the Ambience volume.
+ */
+const LIFTHUM = { o: null };
+function liftHum(k, w) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (LIFTHUM.o) { const t = ac.currentTime, h = LIFTHUM.o; LIFTHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.b.stop(); h.c.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!LIFTHUM.o) {
+    const a = ac.createOscillator(), b = ac.createOscillator(), c = ac.createOscillator(), g = ac.createGain(), gw = ac.createGain(), lp = ac.createBiquadFilter();
+    a.type = 'sine'; b.type = 'triangle'; c.type = 'sawtooth'; a.frequency.value = 73.4; b.frequency.value = 146.9 * 1.003; c.frequency.value = 520;
+    lp.type = 'lowpass'; lp.frequency.value = 900;
+    const ga = ac.createGain(), gb = ac.createGain(); ga.gain.value = 0.6; gb.gain.value = 0.18; gw.gain.value = 0;
+    a.connect(ga).connect(lp); b.connect(gb).connect(lp); c.connect(gw).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); b.start(); c.start();
+    LIFTHUM.o = { a, b, c, g, gw };
+  }
+  const t = ac.currentTime;
+  LIFTHUM.o.g.gain.setTargetAtTime(0.03 * k, t, 0.8);
+  LIFTHUM.o.gw.gain.setTargetAtTime(0.05 * (w || 0), t, 0.4);
+  LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
 }
 
 /** Duck the music for `secs`, down to `to` of its level. */
@@ -1137,6 +1196,16 @@ function audioTick(dt) {
       if (k > ck) { ck = k; cb = m; }
     }
     cityHum(ck);
+    // An Orbital Lift on screen: its cable's note, and a climber's whine while one is on the move.
+    let lk = 0, lw = 0;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -200 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
+    }
+    liftHum(lk, lw);
     WORLD.cityT = (WORLD.cityT ?? 20) - 0.25;
     if (cb && WORLD.cityT <= 0) { WORLD.cityT = 50 + Math.random() * 20; sfx('cityclock', cb.x, cb.y); }
     WORLD.bt = 0.25;

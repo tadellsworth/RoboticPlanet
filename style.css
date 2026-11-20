@@ -698,6 +698,13 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 
 /* Depot supply orders */
 .keep-list { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 6px; }
+/* The Orbital Lift's panel: the Carrier's six lamps, and its four loads to call down. */
+.lift-lamps { display: inline-flex; align-items: center; gap: 4px; }
+.lift-lamps i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+.lift-lamps i.on { background: #ffc35a; box-shadow: 0 0 6px #ffb02e; }
+.lift-loads { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0; }
+.lift-loads .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 7px 9px; }
+.lift-loads .btn small { color: var(--muted); font-size: 11.5px; }
 .keep-cell { display: grid; grid-template-columns: 1fr 64px 52px 52px; align-items: center; gap: 6px; padding: 3px 4px 3px 10px;
   border: 1px solid var(--line); border-radius: 10px; font-size: 14px; font-weight: 600; }
 .keep-cell .kname { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }

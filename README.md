@@ -31,7 +31,7 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
@@ -80,7 +80,7 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
 and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Shield
-Dome and Arrival City; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+Dome, Arrival City and the Orbital Lift; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -182,6 +182,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map that destroys everything on its line; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
+| Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 | Viaduct | Placed in Paths: a level bridge straight across a valley between two clifftops; every bot crosses it |
@@ -2020,7 +2021,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
-  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City), all bigger than a tile: `def.foot` (3, 2 or 4)
+  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift), all bigger than a tile: `def.foot` (3, 2, 4 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -2071,10 +2072,60 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     a wide glow (`drawCityGlow`), its reach and land when placing or selected (`drawRanges`), a ring filling in the
     taker's colour (`drawCityTaking`). Sound: `cityHum` (an empty-city drone on the Ambience volume, near one on screen),
     `cityclock` (its clock striking now and then) and `citychime` (the station chime when it's taken or lit again).
+  - **The Orbital Lift** (`BDEFS.lift`, `LIFT`; key O; 60 Cement, 44 Alloy, 26 Chips, 20 Crystal; 330 s; 3 × 3; armor
+    90; the owner's look A, the Beacon Cable, Nov 2026). **Fall line**: placed with a direction, `b.lfDir` 0..7
+    (`LIFT_DIRS`, east then clockwise; R turns it while placing: `UI.liftDir`, `liftTurn`; the `place` order's axis
+    argument carries it, and `liftDir` turns a site's), `liftLen()` tiles (half the map's width for its size: 15, 20, 25,
+    30) from beside the pad out (`liftLineTiles`; diagonals as long), all on the map and over no other colony's land, Trade
+    Post or Uplink (`liftLineWhy`, in `footPlace`). **Call down** (the `liftCall` order, `liftCall`, `liftCallWhy`): one
+    of `LIFT.drops` (Security: 6 Warbots, 2 Bulwarks; Work crew: 6 Workers, 2 Freight Trucks; 30 Alloy; 18 Chips), times
+    `liftMul` (1 + `boost` 0.5 per restock, `boostMax` 2); `climb` (45) s down (`b.lfMove` 1, `b.lfT`), every colony told
+    as it starts down (`logEvent` `liftCall`), then `liftLand`: robots out round the pad (`liftSpots`), goods into its
+    stock as `b.loot` (Haulers take them to storage), `b.lfCd` = `cooldown` (360) s from the landing. The Carrier's
+    reserve `b.lfRes` (`reserve` 6) goes down a drop a call. **Restock** (`liftSend`, `liftReserve` orders: `b.lfSend`
+    {good: kept home}, up to `goods` 3 of `LIFT_GOODS`): Haulers and Tankers bring what's held beyond the reserve
+    (`needsOf`, `liftWant`), touching stores and factories by conveyor (`liftConveyor`); at `load` (30) goods
+    (`liftLoaded`) it climbs up (`b.lfMove` 2; never while one comes down; the cooldown runs on), and `liftArrive` puts a
+    drop back (`b.lfRes`, up to 6) and adds a restock (`b.lfBoost`). **Power**: each climb burns `fuel` (2) Fuel from
+    Generators within `reach` (4) (`liftGens`, `b.lfPaid`); without it the climber waits; a solar flare holds it
+    (`eventNow('flare')`); climbing it is `working` (the Murmur: `murmurPower`, `chargeWorth` 3). **Weak**: below `weak`
+    (30%) `liftWeak` tells its owner and whoever has land or robots on its line (*Lift cable unstable*, `b.lfWarn`), and
+    the line flashes red on the map and minimap. **The fall**: `destroyBuilding` by force calls `liftDown`; a climber on
+    it is lost; if a foe hit its colony in the last 2 s (`liftKiller`, from `P.hitBy`) it falls (`liftFall`: `S.liftFalls`
+    {id, o, by, ax, ay, d, n, t, k, sp, hit}), else (dismantled, its own side's Lance, the ground) it's reeled in.
+    `updateLiftFalls`: `creak` (5) s, then tile k of the line at `sweep` (4) tiles a second (`lunar` half on Argos):
+    `liftCrush` (each building and robot once: `f.hit`): `crush` (30) off a building (destroyed at 0; Walls, Gates,
+    Viaducts, Ropeways, pylons and sites broken outright; a Keep left at half, a Command Base at `missileFloor`, Arrival
+    City down at 0, another megastructure at 35%), robots on the tile killed and those beside it `side` (3) hurt (not
+    aircraft aloft or ships), roads (`wreckRoad`), track and plans broken, and the wreckage laid (`liftWreckPile`): War
+    scars' scrap of kind 4 (`s.cb`, `s.d` its direction, `s.ft` when it fell), one a tile worth `cut` (1) Alloy, kept even
+    with War scars off, never merged or squeezed (`scrapAdd`, `scrapSqueeze`, `scrapTidy`). `liftWreckAt` (a map remade
+    as the scrap changes) refuses building and roads there (`canPlace`, `footPlace`, `canRoad`) and halves robots' speed
+    (`moveAlong`, `slow`); `salvageRun` cuts it up (with War scars off too; on no one's ground as well as its owner's),
+    the pile gone once cut. `scrapHeaps` brings the Murmur's tunnels. Not in the Hollow (`worldBan`). Saved with the
+    building (`lfDir`, `lfRes`, `lfBoost`, `lfCd`, `lfMove`, `lfT`, `lfPaid`, `lfLoad`, `lfMul`, `lfSend`, `lfUps`,
+    `lfDrops`, `lfWarn`, `lfFeed`) and `S.liftFalls`, all checked by `checkSave`; a save from before has none; `hashState`
+    covers them, and the wreckage when War scars are off. Art: `renderer/b/lift.js` (`tools/render_lift.sh`,
+    `tools/install_lift.py`): `lift@T` and `lift-down@T` (below 30%) at every time of day, framed as the Lance
+    (`LIFT_FRAME`); in code (`js/render.js`, the Orbital Lift): the cable rising up the screen from its foot in a column
+    of its owner's light, red warning lights, climber pods (the higher, the smaller; amber windows at night) and the real
+    climber (`drawLiftCables`, `drawLiftBeam`, `drawLiftPod`), the shadow along its fall line and the red flash
+    (`drawLiftLines`, `drawLiftShadow`; on the minimap too), the line when placing or selected (`drawLiftLine` from
+    `drawRanges`), the floodlights' pools, the falling cable (`drawLiftFalling`) and the wreckage baked into the ground
+    (`drawCableWreck`), sparking for `sparks` (60) s. Sound (`js/audio.js`): `liftHum` (the cable's held note, a whine
+    while a climber moves), `liftclimb`, `liftland`, `liftgroan`, `liftsnap`, `liftimpact`. Its panel: `renderLiftSection`
+    (the six lamps, Call down on Z X C V, Restock the Carrier).
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
-    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect,
-    Warden and Steward; none for the Salvager and Herald; Arrival City for all in Domination: `aiMegaMain`). `aiCity`
+    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
+    and Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 22 min; none for the
+    Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (18 min)
+    once it has a Bot Foundry and half its Cement and Crystal (`aiLiftFunds`), with its line over the fewest of its own
+    buildings, toward open ground, never its Command Base (`aiLiftSpot`), and keeps its other buildings off that line
+    (`aiOnLiftLine`, in `canPlace`). Built, `aiLiftUse` calls a Security detail when attacked or before a push, Alloy or
+    Chips when short (`liftShort`), keeping the last drop for an attack, and sends up what it holds more than `liftSpare`
+    (60) of. The Salvager (`aiLiftAmbush`) sends `ambush` warbots to wait at a foe's anchor once a climber starts down.
+    `aiMarch` goes for a foe's Lift when its fall would crush enough of the foe's (`aiLiftWorth` ≥ `liftWorth`). `aiCity`
     places it from `AI_MEGA.cityAt` (15 min) once it has a Bot Foundry and half the City's Cement and Fiber
     (`aiCityFunds`: its Alloy and Chips never pile up), where its reach covers the most of its factories and gatherers
     near its Command Base (`aiCitySpot`), its site first for goods (`prio` 'high'), never given up. `aiMarch` treats a
