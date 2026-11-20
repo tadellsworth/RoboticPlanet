@@ -3741,8 +3741,33 @@ function aiFarmSoil(p, cx, cy, claimed) {
   return n;
 }
 
+/** Live drizzle deposits of a scarce good that this colony could work with a new gatherer. */
+function aiDrizzleTargets(p, type) {
+  if (S.mode !== 'versus' || !S.drizzle?.spots?.length || !['outpost', 'mine', 'tap'].includes(type)) return [];
+  const P = S.players[p], have = playerGoods(p);
+  const wanted = (r) => {
+    const gatherer = r === R_ORE ? 'mine' : 'tap';
+    return (type === 'outpost' || type === gatherer) &&
+      ((P.short || []).includes(r) || (r === R_CRYSTAL && P.crLow) || have[RES[r].good] < 8);
+  };
+  const targets = [], buildings = playerBuildings(p);
+  for (const drop of S.drizzle.spots) {
+    if ((drop.r !== R_ORE && drop.r !== R_CRYSTAL) || !wanted(drop.r)) continue;
+    const gatherer = drop.r === R_ORE ? 'mine' : 'tap', r2 = BDEFS[gatherer].radius ** 2 + 0.3;
+    for (const t of [drop.t, drop.u]) {
+      if (t < 0 || S.res[t] !== drop.r || !S.amt[t] || hotFor(p, t)) continue;
+      if (S.owner[t] >= 0 && (S.owner[t] !== p || type === 'outpost')) continue;
+      const x = t % S.W, y = (t / S.W) | 0, zone = S.zone[t];
+      if (buildings.some((b) => b.type === gatherer && !aiShut(b) &&
+          S.zone[tIdx(b.x, b.y)] === zone && dist2(x, y, b.x, b.y) <= r2)) continue;
+      targets.push({ t, x, y, zone, score: 5 + Math.min(15, S.amt[t]) * 0.5 });
+    }
+  }
+  return targets;
+}
+
 function aiSearchSpot(p, type, lander, minDeposits = 2) {
-  const def = BDEFS[type], P = S.players[p];
+  const def = BDEFS[type], P = S.players[p], drizzle = aiDrizzleTargets(p, type);
   const fib = gatherRes('harvester'), sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, fib, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
   const freeCr = type === 'outpost' && (P.short || []).includes(R_CRYSTAL) ? [] : null;
@@ -3808,18 +3833,21 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
       if (rc > budget) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
-      let s, gn = -1;
+      let s, gn = -1, dropScore = 0;
       if (def.gather) {
         const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, gatherRes(type)); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < minDeposits && !u) {
+        for (const d of drizzle) {
+          if (d.zone === S.zone[tIdx(i, j)] && dist2(i, j, d.x, d.y) <= def.radius ** 2 + 0.3) dropScore += d.score;
+        }
+        if (n < minDeposits && !u && !dropScore) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
           if (!def.bedrock) continue;
           const f = rockFacesIn(i, j, def.radius);
           if (f < 3) continue;
           s = Math.min(f, 10) * 0.6 - dHome * 0.35 - 8;
-        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
+        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12 + dropScore;
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
@@ -3829,6 +3857,13 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
         if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
+        // Value deposits this Outpost will actually claim on its side of a crossing.
+        const zone = S.zone[tIdx(i, j)];
+        let claim = 0;
+        for (const d of drizzle) {
+          if (d.zone === zone && dist2(i, j, d.x, d.y) <= def.terr ** 2) claim += d.score;
+        }
+        s += Math.min(24, claim);
         if (S.victory === 'domination') s += newLandAt(p, i, j, BDEFS.outpost.terr) * 0.1; // Domination: the land it claims
         if (S.victory === 'uplinks' && S.uplinks) { // Uplinks: one its land would cover, not ours yet, and the way to the nearest free one
           let near = Infinity;
@@ -3951,7 +3986,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
       if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
       if (out && type !== 'outpost') s -= AI_OUT_COST; // (our own land first)
-      cands.push({ x: i, y: j, s, gn });
+      cands.push({ x: i, y: j, s, gn, dropScore });
     }
   }
   // Only the best few spots get the (costly) checks that a building won't block a pass and that
@@ -3965,10 +4000,17 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
     for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
       const c = cands[k];
       let s = c.s;
-      if (c.gn >= minDeposits) {
-        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, gatherRes(type))); // (a Mine counts only the Ore no Mine of ours works: never more)
-        if (w < minDeposits && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
-        s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
+      if (c.gn >= minDeposits || c.dropScore) {
+        const resource = gatherRes(type);
+        let walkedDrop = 0;
+        const visit = c.dropScore ? (t) => {
+          const d = drizzle.find((site) => site.t === t);
+          if (d) walkedDrop += d.score;
+        } : undefined;
+        // Count only the Ore no Mine of ours works, and keep the bonus only for drops a worker can reach.
+        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, resource, visit));
+        if (w < minDeposits && !walkedDrop && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
+        s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2 + walkedDrop - c.dropScore;
       }
       if ((best && s <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;
       best = { x: c.x, y: c.y, s };

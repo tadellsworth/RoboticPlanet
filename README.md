@@ -2007,7 +2007,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Argos), then a puff and a glow, with a soft whoosh (`sfx('drizzle')`, heard on screen only) and a ring pulsing on the
   minimap for 12 s; no message. None falls while `DRIZZLE_CAP` (6) of its deposits lie unclaimed. (Tuned so computer-vs-computer games end as often as without it: the first version, every 120–200 s from minute 3, cap 8, half a Ringfall deposit, left more of them undecided at an hour.) State: `S.drizzle`
   (`next`, `n`, `spots`, `fall`), saved, checked (`checkSave`) and in `hashState`; a save without it starts the clock
-  from when it loads. The rival finds the deposits as any other (`aiSearchSpot` reads `S.res`).
+  from when it loads. Rivals give active drizzle deposits extra weight for Outposts, Ore Mines and Crystal Taps when
+  that mineral runs low. Outposts prefer neutral drops they can bring inside their border. Gatherers can use a
+  single surviving drop tile if their workers have a short walk to it. Existing coverage, enemy fire and road
+  access still matter (`aiDrizzleTargets`, `aiSearchSpot`).
+  In 12 matched Normal Versus games on Medium Long haul, Lakes and Standard (seeds 11, 21, 25 and 37 on each,
+  60-minute cap), rivals mined 158 drizzle Ore and 108 drizzle Crystal, up from 38 and 46. Undecided games stayed at
+  1/12 and the mean game length was 22:36 before and 22:56 after, counting the capped game at 60 minutes.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.

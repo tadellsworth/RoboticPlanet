@@ -189,3 +189,24 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Added Immense to Custom Game and the shared size preset used by Observer and multiplayer. Standard is 84×118. Existing shape and seat limits still apply.
 - Scaled Ringfall and the Hollow's nests and reserves. Added more Oases resource sites, larger Four Isles land pads, and paired fallback Trade Posts on two-player island maps. The whole-map canvas uses a smaller backing buffer on the largest layouts while close views still use HD chunks.
 - Allowed more travel time before rivals recall long marches. Verified all 117 sampled layouts, saved planets, and save/load and split-snapshot multiplayer rejoin. [Performance and match results](immense-validation.md)
+
+### Rival mining of Ring drizzle
+
+- Outposts score scarce neutral drops they can claim. Ore Mines and Crystal Taps score unworked deposits they can reach on foot and accept a single surviving tile. Site affordability, roads and enemy fire still constrain placement.
+- Tested 12 paired Medium, Normal Versus games with two balanced rivals, a 60-minute cap, the Murmur and Planetary events off, and the Ring drizzle on. The benchmark counted only units removed by gatherers from tagged drizzle tiles.
+- Ore mined rose from 38/810 landed to 158/960, and Crystal rose from 46/288 to 108/336. Mean duration went from 22:36 to 22:56, including each capped game at 60 minutes. Undecided games stayed at 1/12.
+
+| Map | Seed | Before | After | Drizzle Ore | Drizzle Crystal |
+| --- | ---: | --- | --- | ---: | ---: |
+| Long haul | 11 | 28:09, Colony 2 | 28:09, Colony 2 | 0 → 0 | 3 → 3 |
+| Long haul | 21 | 13:10, Colony 2 | 13:10, Colony 2 | 0 → 0 | 0 → 0 |
+| Long haul | 25 | 60:00, undecided | 60:00, undecided | 34 → 30 | 35 → 59 |
+| Long haul | 37 | 38:51, Colony 1 | 26:24, Colony 1 | 0 → 15 | 8 → 0 |
+| Lakes | 11 | 15:00, Colony 1 | 15:00, Colony 1 | 0 → 0 | 0 → 0 |
+| Lakes | 21 | 17:15, Colony 1 | 17:15, Colony 1 | 0 → 0 | 0 → 0 |
+| Lakes | 25 | 13:52, Colony 2 | 13:52, Colony 2 | 4 → 4 | 0 → 0 |
+| Lakes | 37 | 12:51, Colony 1 | 12:51, Colony 1 | 0 → 0 | 0 → 0 |
+| Standard | 11 | 16:46, Colony 2 | 16:46, Colony 2 | 0 → 0 | 0 → 0 |
+| Standard | 21 | 19:23, Colony 1 | 34:29, Colony 1 | 0 → 79 | 0 → 46 |
+| Standard | 25 | 17:34, Colony 1 | 19:11, Colony 1 | 0 → 30 | 0 → 0 |
+| Standard | 37 | 18:20, Colony 1 | 18:05, Colony 1 | 0 → 0 | 0 → 0 |

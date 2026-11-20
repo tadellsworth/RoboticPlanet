@@ -3061,9 +3061,9 @@ const _walk = { n: 0, seen: null, q: null, gen: 0 };
  * Nodes in reach of (cx, cy) that are a short walk away too: no more than REACH_WALK times the radius in steps,
  * round cliffs and buildings (reachableRes counts the whole walkable area, so groves on a clifftop two tiles off
  * count as much as those beside the building, when the only way up is fifty tiles round). For the AI's choice of
- * a spot for a gatherer (aiSearchSpot).
+ * a spot for a gatherer (aiSearchSpot). If supplied, visit receives each matching tile once.
  */
-function walkRes(cx, cy, radius, type) {
+function walkRes(cx, cy, radius, type, visit) {
   const start = tIdx(cx, cy), n = reachableRes(cx, cy, radius, type);
   if (!n) return 0;
   const W = S.W, N = W * S.H, r2 = radius * radius + 0.3;
@@ -3075,7 +3075,10 @@ function walkRes(cx, cy, radius, type) {
   for (let steps = radius * REACH_WALK; steps >= 0 && head < tail && found < n; steps--) {
     for (const end = tail; head < end; head++) {
       const t = q[head], i = t % W;
-      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) found++;
+      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) {
+        found++;
+        if (visit) visit(t);
+      }
       if (!steps) continue;
       for (let d = 0; d < 4; d++) {
         const u = d === 0 ? (i + 1 < W ? t + 1 : -1) : d === 1 ? (i > 0 ? t - 1 : -1) : d === 2 ? (t + W < N ? t + W : -1) : t - W;
