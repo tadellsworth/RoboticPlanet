@@ -273,7 +273,8 @@ function aiScrapHeld(P, kind) { return !!(P.scrapT && S.time - (P.scrapT[kind] ?
 /** Has robot u something to do (a job, a load aboard, taking cover)? Going home, charging, filling up or being mended isn't. */
 function aiBusy(u) {
   const tt = u.task && u.task.type;
-  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') || !!u.carry || !!u.mix;
+  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') ||
+    !!(u.carry || u.mix || u.cargo || u.fight || u.fought || u.ferryWait || u.dropping || u.ride >= 0);
 }
 
 /**
@@ -288,13 +289,14 @@ function aiScrap(p, c) {
   for (const u of S.bots) {
     if (u.owner !== p || u.dead || !(u.type in AI_SCRAPPABLE)) continue;
     if (recycling(u)) { away++; continue; }
-    have[u.type] = (have[u.type] || 0) + 1;
     if (aiBusy(u)) { if (u.idleSince !== undefined) u.idleSince = undefined; } // (not deleted: that slows every use of the robot)
     else if (u.idleSince === undefined) u.idleSince = S.time;
+    if (u.type === 'worker' && (u.ferryWait || u.dropping || u.ride >= 0)) continue;
+    have[u.type] = (have[u.type] || 0) + 1;
   }
   if (away >= AI_SCRAP.batch) return;
   const U = c.use, keep = {
-    worker: U.worker + AI_SCRAP.workers, hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
+    worker: Math.max(U.worker + AI_SCRAP.workers, workersWanted(p)), hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
     truck: U.truck, roadtrain: U.roadtrain, agribot: (U.agribot || 0) + 1, paver: (U.paver || 0) + 1,
   };
   if (!AI_SCRAP_KINDS.some((k) => have[k] > keep[k])) return; // (nothing spare)
@@ -303,7 +305,7 @@ function aiScrap(p, c) {
   let sent = 0;
   // Up to `max` robots past `keep` with nothing to do, of the kinds that give back `gives` (any: null), each to the nearest
   // Foundry it can get to, the vehicles first, then the longest idle: ones idle `idleFor` seconds, and with `plain` any
-  // Worker or Hauler, and any of a kind while there are AI_SCRAP.far or more past `keep`.
+  // Hauler, and vehicles while there are AI_SCRAP.far or more past `keep`.
   const send = (max, idleFor, plain, gives, kinds) => {
     if (max <= 0) return 0;
     const ok = {}, list = [];
@@ -311,7 +313,7 @@ function aiScrap(p, c) {
     for (const u of S.bots) {
       if (u.dead || u.owner !== p || !ok[u.type] || recycling(u)) continue;
       if (u.idleSince === undefined || aiBusy(u) || u.shyUntil > S.time || !recyclable(u)) continue;
-      if (S.time - u.idleSince < idleFor && !(plain && (u.type === 'worker' || u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
+      if (S.time - u.idleSince < idleFor && !(plain && u.type !== 'worker' && (u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
       list.push(u);
     }
     list.sort((a, b) => AI_SCRAP_KINDS.indexOf(a.type) - AI_SCRAP_KINDS.indexOf(b.type) || a.idleSince - b.idleSince || a.id - b.id);

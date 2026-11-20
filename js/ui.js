@@ -7667,7 +7667,7 @@ function shieldRows(u) {
 }
 
 /** Does a robot's panel offer Recycle this unit (anything that walks or drives: not a plane, ship or train)? */
-function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.wild; }
+function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !bt.wild; }
 
 /** The Recycle section of one of your robots' panels: Recycle this unit (or why not), or Keep this unit while it's on its way. */
 function refreshRecycle(u) {

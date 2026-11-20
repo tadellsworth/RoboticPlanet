@@ -170,3 +170,10 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Hollow rivals can mine a lone accessible Ore vein, keep key Workers on the job when useful charge is unavailable, and launch a smaller final push when the force can beat the defenders. The four-minute road-site release remains in effect.
 - All six named Hollow and Islands games finished within an hour. The report records the times and winners and the Normal Standard seed 11 comparison for every ordered pair of doctrines. [Ground-army retest](hollow-ground-army-retest.md)
 - The Standard matrix exposed an Architect trying to launch a warhead from its Command Base while under siege. The AI now requires a ready Missile Silo for that order. All 25 Standard matchups finished after the fix.
+
+### Unit recycling and spare Workers
+
+- Synced the upstream Arrival City changes and kept both its lighting and the working branch's night-light fixes.
+- Recycle orders choose the nearest Foundry the unit can reach. Refunds still go into the Foundry and are available for production, spending or pickup. Maglev Pods use their guides and are excluded from the recycle action.
+- Rivals wait for genuinely idle Workers and keep their staffing and builder reserve. Starting a recycle order releases the old job, freight reservations, and any Ammo delivery or convoy escort assigned to that unit.
+- Added `tools/recycle-test.js` for ownership, routing, refunds, AI limits, job cleanup, exact timing, save continuation and lockstep. Help coverage, mission data and lint passed. A Chromium game verified the button, cancellation and refund.

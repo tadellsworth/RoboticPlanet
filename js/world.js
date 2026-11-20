@@ -5240,6 +5240,12 @@ function checkSave(o) {
   }
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag)) ||
     (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
+  for (const u of o.bots) {
+    if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
+    if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
+    if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
+      (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
+  }
   if (o.settings != null) {
     const st = o.settings;
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();

@@ -254,7 +254,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   panel has **Recycle this unit** (**Delete**), a selection of warbots **Recycle these N units** on the selection bar
   (a second tap to confirm; Undo), and Your robots **Recycle spare Workers** (orders `recycle`, `unrecycle`,
   `recycleSpare`). The robot drops what it was doing (a load goes down in crates), heads for the nearest finished Bot
-  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and there stands
+  Foundry it can reach (road vehicles need a connected road route: `recycleFoundry`) with task `recycle`, and there stands
   at the Foundry while it is taken apart: `RECYCLE_TIME` (2 s) for each round of parts (`recycleTime`; `task.t` counts
   them, `recyclingNow`; a Worker or Warbot 2 s, a Crawler 12 s), sparks flying and the robot fading as it goes, the
   Foundry carrying on with its own work and taking apart any number at once. It can be shot meanwhile, and a damaged
@@ -266,8 +266,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`stopRecycle`) or any other order calls it off; its Foundry wrecked, captured or dismantled on the way, it stops
   where it is (`releaseBotsFrom`). A Worker or Hauler that takes cover from enemy warbots on the way (`takeCover`) sets
   off again once they've gone (`u.recycleTo`), and isn't given other work meanwhile. Robots on their way don't count in
-  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, trains and the Murmur
-  can't be recycled (`recyclable`). Spare Workers: past one for each building that takes a Worker (sites too) and
+  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, Freight Trains, Maglev Pods and the Murmur can't be recycled
+  (`recyclable`). The refund can be used at the Foundry or carried to the rest of the colony. Spare Workers: past
+  one for each building that takes a Worker (sites too) and
   `MIN_FREE_WORKERS` + `RECYCLE_KEEP` (4) free for building; picked idle first, never one running a building.
 - **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
@@ -1510,7 +1511,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   its farms and Grove Planters, sites too, and one more) that have stood idle two minutes (or any with nothing to do
   while it has three or more past those), then Workers past the ones its buildings call for and 4 more, then Haulers
   past the ones it wants and 2 more (4 at least), go to its Foundry to be recycled, at most 4 on their way at once and
-  never one at work or carrying goods, until the room is there; its Foundry fills it with warbots. It scraps the same
+  never one at work, carrying goods, fighting, or in transit on another vehicle. Spare Workers must be idle
+  for two minutes, or one minute during a parts shortage. Its Foundry fills the freed places with warbots. It scraps the same
   spares when it's starved (no Alloy or no Chips for a minute and a half, `P.dry`, with under one a minute being made;
   short of Chips, only vehicles, which give Chips back), on every level, Easy too (the owner's call), and on
   Medium and up one vehicle, Agribot or Hauler idle five

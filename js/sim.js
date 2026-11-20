@@ -35,6 +35,7 @@ function simStep(dt) {
   for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
+    if (u.idleSince !== undefined && aiBusy(u)) u.idleSince = undefined;
     if (u.ferryWait) { ferryPassenger(u); continue; }
     if (u.dropping) continue; // coming down by parachute (see updateDrops)
     if (isArmy(u)) updateWarbot(u, dt); else if (BOTS[u.type].siege) updateRocket(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
@@ -1171,7 +1172,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
+  const o = { who: u.owner, breach: isArmy(u) && botArmed(u) && u.task?.type !== 'recycle', noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
@@ -3227,7 +3228,7 @@ function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
   if (BOTS[u.type].airship) { updateAirship(u, dt); return; }
-  if (BOTS[u.type].magpod) { updatePod(u, dt); return; }
+  if (BOTS[u.type].magpod) { if (recycling(u)) stopRecycle(u); updatePod(u, dt); return; }
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   if (BOTS[u.type].rail) { if (u.armorOrder) fitTrainArmor(u, dt); if (u.armored) trainGuns(u, dt); }
@@ -3420,7 +3421,7 @@ function doHaul(u, t, dt) {
         const want = t.mix[k], m = Math.min(want, Math.floor(src.stock[k] || 0));
         bump(src.res, k, -want);
         if (m < want) bump(dst.inc, k, m - want);
-        if (m > 0) { bump(src.stock, k, -m); t.mix[k] = m; mixGot += m; } else delete t.mix[k];
+        if (m > 0) { bump(src.stock, k, -m); if (src.loot?.[k]) bump(src.loot, k, -m); t.mix[k] = m; mixGot += m; } else delete t.mix[k];
       }
       if (Object.keys(t.mix).length) u.mix = Object.assign({}, t.mix); else delete t.mix;
     }
@@ -4174,7 +4175,7 @@ function produce(b, def, dt) {
   b.limitT = 0;
   dt *= batFactor(op);
   for (const g in def.inp) {
-    if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name + (b.type === 'smelter' && g === 'ore' ? ': it smelts 8 Ore a minute, so two or three Ore Mines keep one busy' : ''); return; }
+    if ((b.stock[g] || 0) - (def.bots ? b.res[g] || 0 : 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name + (b.type === 'smelter' && g === 'ore' ? ': it smelts 8 Ore a minute, so two or three Ore Mines keep one busy' : ''); return; }
   }
   if (def.make) {
     for (const g in def.make) {
@@ -4188,7 +4189,14 @@ function produce(b, def, dt) {
   b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city; // (a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
-  for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
+  for (const g in def.inp) {
+    if (def.bots && b.loot?.[g]) {
+      const ordinary = Math.max(0, (b.stock[g] || 0) - b.loot[g]);
+      bump(b.loot, g, -Math.max(0, def.inp[g] - ordinary));
+    }
+    bump(b.stock, g, -def.inp[g]);
+    usedGood(b.owner, g, def.inp[g]);
+  }
   if (def.pump) {
     const seep = pumpSeep(b);
     if (--S.amt[seep] <= 0) { S.amt[seep] = 0; S.res[seep] = R_NONE; markDirty(seep % S.W, (seep / S.W) | 0); }
@@ -4312,7 +4320,7 @@ function spawnFromFoundry(b) {
 /** Could robot u be taken to a Bot Foundry and recycled? Not planes, ships, trains or the Murmur: nothing that can't get there. */
 function recyclable(u) {
   const bt = u && BOTS[u.type];
-  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
+  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
 }
 
 /** Is robot u on its way to be recycled (or waiting to set off again once it's safe)? */
@@ -4342,26 +4350,27 @@ function recycleText(kind) { const got = recycleYield(kind); return Object.keys(
 
 /** The nearest finished Bot Foundry of u's owner that robot u can get to (on its ground; a road vehicle, by road), or null. */
 function recycleFoundry(u) {
-  const here = u.inside ? getE(u.inside) : null, x = here ? here.x + 0.5 : u.x, y = here ? here.y + 0.5 : u.y;
-  const zone = S.zone[tIdx(Math.floor(x), Math.floor(y))], road = roadBound(u);
-  let best = null, bd = Infinity;
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].bots || evacuated(b)) continue;
-    if (S.zone[tIdx(b.x, b.y)] !== zone || (road && !botLinked(u, b))) continue;
-    const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
-    if (d < bd) { bd = d; best = b; }
-  }
-  return best;
+  const here = u.inside ? getE(u.inside) : null;
+  const x = here ? here.x : Math.floor(u.x), y = here ? here.y : Math.floor(u.y);
+  const deckStart = u.deck ? deckEnds({ ...u })?.[0] : undefined;
+  const start = u.ride >= 0 ? u.ride : deckStart ?? tIdx(x, y);
+  const road = roadBound(u), opts = routeOpts(u);
+  opts.breach = false;
+  delete opts.cover; // this preview only checks access, including when called from a unit panel
+  return S.buildings.filter((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots &&
+    !evacuated(b) && (!road || botLinked(u, b)))
+    .sort((a, b) => dist2(a.x, a.y, x, y) - dist2(b.x, b.y, x, y) || a.id - b.id)
+    .find((b) => findPath(start % S.W, (start / S.W) | 0, b.x, b.y, undefined, opts)) || null;
 }
 
 /** Why robot u can't be sent to be recycled now ('' if it can). */
-function recycleWhy(u) {
+function recycleWhy(u, foundry) {
   if (!u || u.dead) return 'That robot is gone.';
   const bt = BOTS[u.type];
-  if (bt.air || bt.sea || bt.rail) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
+  if (bt.air || bt.sea || bt.rail || bt.magpod) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
   if (!recyclable(u)) return 'It can\'t be recycled right now.';
   if (u.task && u.task.type === 'recycle') return 'It\'s already on its way to be recycled.';
-  if (recycleFoundry(u)) return '';
+  if (foundry === undefined ? recycleFoundry(u) : foundry) return '';
   return S.buildings.some((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots)
     ? (roadBound(u) ? 'No road leads from it to a Bot Foundry.' : 'It can\'t get to a Bot Foundry from where it is.')
     : 'Robots are recycled at a Bot Foundry: build one first.';
@@ -4369,21 +4378,30 @@ function recycleWhy(u) {
 
 /** Robot u drops what it was doing (a load it carries is put down in crates) and sets off for Foundry f to be recycled. */
 function startRecycle(u, f) {
+  const ridePath = u.ride >= 0 ? u.path : null;
   if (u.ferryWait && !u.ferryWait.ferry) leaveFerryQueue(u); // (waiting at a Port for a ferry: it stops waiting)
   if (isArmy(u)) readyForOrder(u);
   else { cancelTask(u); exitBuilding(u); u.march = 0; }
-  if (u.carry) dropCarried(u);
+  if (u.carry || u.mix) dropCarried(u);
+  for (const v of S.bots) {
+    if (v.dead || !v.task) continue;
+    if ((v.task.type === 'arty' && v.task.gun === u.id) || (v.task.type === 'escort' && v.task.bot === u.id)) cancelTask(v);
+  }
+  u.trade = 0;
   u.salvo = null;
   u.recycleTo = 0;
   u.task = { type: 'recycle', bld: f.id };
-  u.path = null; u.vel = 0; u.idleT = 0;
+  u.path = ridePath;
+  u.vel = 0; u.idleT = 0; u.idleSince = undefined;
+  if (u.failGoal === tIdx(f.x, f.y)) u.failGoal = -1;
 }
 
 /** Send robot u to the nearest Bot Foundry it can get to, to be recycled. '' if it's on its way, otherwise why not. */
 function goRecycle(u) {
-  const why = recycleWhy(u);
+  const foundry = recyclable(u) ? recycleFoundry(u) : null;
+  const why = recycleWhy(u, foundry);
   if (why) return why;
-  startRecycle(u, recycleFoundry(u));
+  startRecycle(u, foundry);
   return '';
 }
 
@@ -4393,7 +4411,7 @@ function orderRecycle(owner, ids) {
   for (const id of ids) {
     const u = getE(id);
     if (!u || u.dead || u.owner !== owner || !BOTS[u.type]) continue;
-    if (u.task && u.task.type === 'recycle') { n++; continue; } // (on its way already)
+    if (recycling(u)) { n++; continue; } // (on its way already)
     const w = goRecycle(u);
     if (w) why = why || w; else n++;
   }
@@ -4402,7 +4420,7 @@ function orderRecycle(owner, ids) {
 
 /** Call off robot u's trip to be recycled: it stops where it is (a warbot heads back to a garrison, a Worker finds a job). */
 function stopRecycle(u) {
-  if (u.task && u.task.type === 'recycle') { u.task = null; u.path = null; u.vel = 0; }
+  if (u.task && u.task.type === 'recycle') { u.task = null; if (!(u.ride >= 0)) u.path = null; u.vel = 0; }
   u.recycleTo = 0;
 }
 
@@ -4412,13 +4430,13 @@ function stopRecycle(u) {
  */
 function doRecycle(u, t, dt) {
   const f = getE(t.bld);
-  if (!f || f.dead || f.owner !== u.owner || !f.built) { stopRecycle(u); return; }
+  if (!f || f.dead || f.owner !== u.owner || !f.built || !BDEFS[f.type].bots) { stopRecycle(u); return; }
   if (t.t !== undefined) {
     u.vel = 0;
     const was = t.t;
     t.t += dt;
     if (Math.floor(t.t / 0.6) !== Math.floor(was / 0.6)) addFx('spark', u.x - 0.25 + 0.5 * hash2(u.id, S.tick, 41), u.y - 0.3 + 0.4 * hash2(u.id, S.tick, 43), { color: '#ffd98a' });
-    if (t.t >= recycleTime(u.type)) recycleBot(u, f);
+    if (t.t + 1e-9 >= recycleTime(u.type)) recycleBot(u, f);
     return;
   }
   const r = travel(u, f.x, f.y, dt);
@@ -4434,15 +4452,18 @@ function doRecycle(u, t, dt) {
  */
 function recycleBot(u, f) {
   const got = recycleYield(u.type), P = S.players[u.owner];
-  for (const g in got) bump(f.stock, g, got[g]);
+  for (const g in got) {
+    bump(f.stock, g, got[g]);
+    bump(f.loot = f.loot || {}, g, got[g]); // finished goods available to the rest of the colony
+  }
   if (u.carry) dropCarried(u);
   if (u.loot) { addLoot(f.x, f.y, { [u.loot]: 1 }); u.loot = null; }
   if (u.cargo && Object.keys(u.cargo).length) { addLoot(f.x, f.y, u.cargo); u.cargo = null; }
-  u.task = null;
   for (const b of S.buildings) {
     if (b.staff === u.id) b.staff = 0;
     if (b.staffInc === u.id) b.staffInc = 0;
     if (b.builder === u.id) b.builder = 0;
+    if (b.fixer === u.id) b.fixer = 0;
   }
   removeBot(u);
   P.stats.recycled = (P.stats.recycled || 0) + 1;
@@ -8840,6 +8861,7 @@ function takeGood(owner, g, n) {
     }
     if (!best) return false;
     bump(best.stock, g, -1);
+    if (best.loot?.[g]) bump(best.loot, g, -1);
     usedGood(owner, g, 1);
     n--;
   }
@@ -16283,12 +16305,13 @@ function hashState() {
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
     if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
+    if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
-    obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+    obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
