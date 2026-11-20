@@ -1472,15 +1472,17 @@ const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH =
 /**
  * The Ring drizzle (LORE.md: Ringfall keeps restocking the surface): in every game, Planetary events or not (and in a
  * mission only if it asks for it: `drizzle`), a lone piece of the Ring comes down every DRIZZLE_GAP seconds (the first
- * DRIZZLE_FIRST in) on each colony's share of the planet, the same spot mirrored or turned for every colony as Ringfall's
- * (fairShare), DRIZZLE_NEAR tiles from player 0's Command Base. It does no harm: it lands only on open ground no one
+ * DRIZZLE_FIRST in, once the opening is over) on each colony's share of the planet, the same spot mirrored or turned
+ * for every colony as Ringfall's (fairShare), DRIZZLE_NEAR tiles from player 0's Command Base. It does no harm: it lands only on open ground no one
  * holds (no road, building, plan, Trade Post ground, water or rock), so a colony expands to claim it. Each leaves one
  * small deposit of DRIZZLE_TILES tiles of Ore or Crystal (half and half), each DRIZZLE_RICH times a Ringfall deposit's
  * amount; in a Nuclear race now and then (DRIZZLE_URANIUM) a single tile of Uranium instead. None falls while
- * DRIZZLE_CAP of its deposits lie unclaimed. DRIZZLE_FALL: seconds from the streak in the sky to the impact.
+ * DRIZZLE_CAP of its deposits lie unclaimed. DRIZZLE_FALL: seconds from the streak in the sky to the impact. (Tuned so
+ * computer-vs-computer games end as often as without it: every 120-200 s from minute 3, a cap of 8 and half a Ringfall
+ * deposit left more of them undecided at an hour.)
  */
-const DRIZZLE_FIRST = [170, 200], DRIZZLE_GAP = [120, 200], DRIZZLE_NEAR = [10, 30], DRIZZLE_TILES = 2, DRIZZLE_RICH = 0.5;
-const DRIZZLE_CAP = 8, DRIZZLE_URANIUM = 0.1, DRIZZLE_FALL = 1.4, DRIZZLE_TRIES = 60;
+const DRIZZLE_FIRST = [710, 740], DRIZZLE_GAP = [160, 240], DRIZZLE_NEAR = [10, 30], DRIZZLE_TILES = 2, DRIZZLE_RICH = 0.4;
+const DRIZZLE_CAP = 6, DRIZZLE_URANIUM = 0.1, DRIZZLE_FALL = 1.4, DRIZZLE_TRIES = 60;
 /**
  * The trader (the Wren) as a rule takes raw goods only (WREN_TAKES: the one a colony has well over TRADE_KEEP of) and
  * brings finished goods only (WREN_BRINGS: the one it has least of against TRADE_KEEP; Ammo only with a war on). On

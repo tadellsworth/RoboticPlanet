@@ -1942,17 +1942,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   An event card under the top bar shows it with a countdown, the Trade button and which kind of deal it is.
 - **The Ring drizzle** (`updateDrizzle`, `drizzlePlan`, `drizzleLand` in `js/sim.js`; `DRIZZLE_*` in `js/defs.js`): in
   every game, Planetary events or not (in a mission only with `drizzle: true`; none asks yet), a lone piece of the Ring
-  every `DRIZZLE_GAP` (120–200 s, seeded; the first at `DRIZZLE_FIRST`, 170–200 s) on each colony's share of the planet:
+  every `DRIZZLE_GAP` (160–240 s, seeded; the first at `DRIZZLE_FIRST`, 710–740 s, once the opening is over) on each colony's share of the planet:
   a spot `DRIZZLE_NEAR` (10–30, further the more tries it takes) tiles from player 0's Command Base, copied onto every
   colony's share as Ringfall's are (`fairShare`, which `meteorPlan` uses too), every copy on open ground no colony holds
   (`drizzleOk`: bare ground, no road, rail, pipe, plan, building, ramp, fertile soil, lava, ford, tide or fault, off a
   Trade Post's ground, an Uplink or a wreck), or none falls this time; in the Hollow, through a breach on each side
   (`HOLLOW.ringfall.rich` applies). It leaves `DRIZZLE_TILES` (2) tiles of Ore or Crystal (half and half) at
-  `DRIZZLE_RICH` (½) a Ringfall deposit's amount each, or in a Nuclear race now and then (`DRIZZLE_URANIUM`, 10%) a
+  `DRIZZLE_RICH` (0.4) times a Ringfall deposit's amount each, or in a Nuclear race now and then (`DRIZZLE_URANIUM`, 10%) a
   single tile of Uranium; no damage, no crater, no war scar, and a Shield Dome doesn't stop it (it never lands in a
   colony's land). The pieces show for `DRIZZLE_FALL` (1.4 s) as a streak in the sky (effect `'drizzle'`, brighter on
   Argos), then a puff and a glow, with a soft whoosh (`sfx('drizzle')`, heard on screen only) and a ring pulsing on the
-  minimap for 12 s; no message. None falls while `DRIZZLE_CAP` (8) of its deposits lie unclaimed. State: `S.drizzle`
+  minimap for 12 s; no message. None falls while `DRIZZLE_CAP` (6) of its deposits lie unclaimed. (Tuned so computer-vs-computer games end as often as without it: the first version, every 120–200 s from minute 3, cap 8, half a Ringfall deposit, left more of them undecided at an hour.) State: `S.drizzle`
   (`next`, `n`, `spots`, `fall`), saved, checked (`checkSave`) and in `hashState`; a save without it starts the clock
   from when it loads. The rival finds the deposits as any other (`aiSearchSpot` reads `S.res`).
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos

@@ -321,7 +321,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Deep extraction.** On big maps the fields of Ore, Stone and Crystal run dry and late games starve. A Deep Bore
     upgrade lets a Mine, Quarry or Crystal Tap keep drawing a trickle from a spent field for good. (Harvesters already
     have the Grove Planter to regrow their groves.) Partly answered (Nov 20 2026): the Ring drizzle drops a small Ore or
-    Crystal deposit on every colony's share every two to three minutes in every game, and the *Wren* brings a raw good
+    Crystal deposit on every colony's share every three to four minutes from minute 12 in every game, and the *Wren* brings a raw good
     the land is running out of on about one visit in four. Still open: whether long games on Huge maps need more.
   - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
     faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
