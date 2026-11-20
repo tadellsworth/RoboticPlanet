@@ -851,6 +851,7 @@ function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
     for (let i = Math.max(0, Math.floor(v0.x) - 1); i < Math.min(S.W, v1.x + 1) && budget > 0; i++) {
       const t = tIdx(i, j), kind = S.decor[t];
       if ((kind !== 4 && kind !== 6) || S.bAt[t] || S.road[t] || S.plan[t]) continue;
+      if (R.secondRegion && (secondBiomePlant(i, j, S.seed, R.biomeMix[t]) ? R.secondRegion.biome : R.biome) !== 'springs') continue;
       const hx = hash2(i, j, 911), hy = hash2(j, i, 912);
       const x = ox + (i + 0.5 + (hx - 0.5) * 0.1) * z, y = oy + (j + 0.5 + (hy - 0.5) * 0.1) * z;
       const period = 10 + 8 * hx, phase = (now + hy * period) % period;

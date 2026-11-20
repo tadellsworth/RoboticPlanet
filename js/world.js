@@ -2563,6 +2563,7 @@ function newGame(opts) {
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
+  if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
@@ -2686,6 +2687,20 @@ function newGame(opts) {
 /** The biome of the current game. */
 function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
 
+/** A seed picks the direction of a winding boundary, with a band of mixed terrain on either side. */
+function biomeMixAt(x, y, w, h, seed) {
+  const a = Math.floor(hash2(0, 0, seed ^ 0x4145) * 8) * Math.PI / 4;
+  const nx = (x + 0.5) / w - 0.5, ny = (y + 0.5) / h - 0.5;
+  const bend = (fbm(nx * 5, ny * 5, (seed % 100000) + 117, 2) - 0.5) * 0.35;
+  const v = clamp(0.5 + (nx * dcos(a) + ny * dsin(a) + bend) / 0.2, 0, 1);
+  return Math.fround(v * v * (3 - 2 * v));
+}
+
+/** Plant variants from both regions intermingle in the transition. */
+function secondBiomePlant(x, y, seed, mix) {
+  return mix > 0 && (mix >= 1 || hash2(x, y, seed ^ 0x5a95) < mix);
+}
+
 /** Is this game in the Hollow (the Murmur's cavern lair: see hollowMap)? */
 function hollowOn() { return !!(S && S.hollow); }
 
@@ -2720,24 +2735,27 @@ function breachAt(x, y, pad) {
  * loose patches. Made from the seed with a hash, so the map itself is the same in every biome.
  */
 function makeDecor() {
-  const W = S.W, H = S.H, d = new Uint8Array(W * H), dens0 = BIOMES[biome()].plants, sd = S.seed % 100000;
+  const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
+  const primary = BIOMES[biome()], second = BIOMES[S.settings?.biome2];
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const t = j * W + i;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
+    const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed)) ? second : primary;
+    const dens0 = local.plants;
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
     const r = hash2(i * 3 + 1, j * 5 + 2, sd + 733);
-    if (BIOMES[biome()].groves) {
+    if (local.groves) {
       // Stands of conifers (1, 2) and of leafy trees (3, 4), mixed where they meet, with fallen
       // logs (5) and ferns (6) in the undergrowth.
       const g = fbm(i / 7, j / 7, sd + 91, 2), u = hash2(i * 5 + 3, j * 7 + 1, sd + 919);
       d[t] = u < 0.07 ? 5 : u < 0.17 ? 6 : g > 0.53 ? (r < 0.62 ? 1 : 2) : g < 0.47 ? (r < 0.6 ? 3 : 4) : 1 + Math.floor(r * 4);
       continue;
     }
-    const wts = BIOMES[biome()].weights;
+    const wts = local.weights;
     if (wts) { // some varieties rarer than others
       let x = r * wts.reduce((a, w) => a + w, 0), k = 0;
       while (k < wts.length - 1 && x >= wts[k]) x -= wts[k++];
@@ -5328,6 +5346,7 @@ function checkSave(o) {
   }
   if (o.settings != null) {
     const st = o.settings;
+    if (st.biome2 != null && !secondBiomeAllowed(st.biome2, st.biome, st.size, st.shape)) bad();
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();

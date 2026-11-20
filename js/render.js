@@ -43,7 +43,7 @@ const LEVEL_GROUND = [
   ['#e3b781', '#f5d3a0'],
 ];
 
-const THEME = {
+let THEME = {
   ground1: '#ad6f47', ground2: '#c99a66',
   cliffTop: '#62402c', cliffBottom: '#3a2418', slope: '#d9b98a',
   water: '#1c4b5d', waterEdge: '#2e7684', foam: '#9fd9d0',
@@ -177,24 +177,47 @@ const BIOME_LOOK = {
 const THEME_DESERT = {};
 const MM_DESERT = {};
 
+/** The textures, palette and overview colours for one region of a mixed planet. */
+function biomeRegion(key) {
+  const biome = artBiome(key), look = BIOME_LOOK[biome] || BIOME_LOOK.desert;
+  ensureBiomeArt(biome);
+  const tex = { lava: ART.lava || null, cliff: biome === 'desert' ? ART.cliff || null : ART['cliff-' + biome] || null };
+  const mm = { ...MM_DESERT, ...look.mm };
+  for (const k of ['ground', 'water', 'rock']) {
+    tex[k] = biomeTexture(biome, k);
+    const rgb = tex[k] && avgColor(tex[k]);
+    if (rgb) mm[k] = rgb;
+  }
+  return { biome, look, tex, mm, theme: { ...THEME_DESERT, ...look.theme } };
+}
+
+/** Which region draws terrain effects on this tile. */
+function renderBiomeAt(t) {
+  return R.biomeMix?.[t] >= 0.5 ? R.secondRegion.biome : R.biome;
+}
+
+function mixBiomeRGB(a, b, weight) {
+  if (weight <= 0) return a;
+  if (weight >= 1) return b;
+  return a.map((value, channel) => value + (b[channel] - value) * weight);
+}
+
 /** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
 function applyBiome() {
-  const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (a biome without art of its own wears another's: BIOME_ART)
-  ensureBiomeArt(b); // (the map is baked again as it arrives)
-  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt(); // (a game with the Murmur: their art, now)
-  const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
+  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt();
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
-  Object.assign(THEME, THEME_DESERT, look.theme);
-  Object.assign(MM_COLORS, MM_DESERT, look.mm);
-  R.biome = b;
-  R.look = look;
-  R.tex = {};
-  for (const k of ['ground', 'water', 'rock']) R.tex[k] = biomeTexture(b, k);
-  R.tex.cliff = b === 'desert' ? ART.cliff || null : ART['cliff-' + b] || null;
-  R.tex.lava = ART.lava || null; // lava (Volcano maps; the volcanic biome's lakes): the volcanic biome's molten water
+  const primary = R.primaryRegion = biomeRegion(biome());
+  const second = R.secondRegion = S.settings?.biome2 ? biomeRegion(S.settings.biome2) : null;
+  THEME = primary.theme;
+  R.biome = primary.biome;
+  R.look = primary.look;
+  R.tex = primary.tex;
+  Object.assign(MM_COLORS, primary.mm);
   R.lavaGlow = null;
-  // The minimap takes its ground, water and rock colours from the textures themselves.
-  for (const k of ['ground', 'water', 'rock']) { const c = R.tex[k] && avgColor(R.tex[k]); if (c) MM_COLORS[k] = c; }
+  R.biomeMix = second ? new Float32Array(S.W * S.H) : null;
+  if (second) for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
+    R.biomeMix[tIdx(i, j)] = biomeMixAt(i, j, S.W, S.H, S.seed);
+  }
 }
 
 /** The average colour of an art image, [r, g, b] (or null if it can't be read). */
@@ -770,7 +793,7 @@ function flushDirtyTiles() {
  * drawn again, clipped to those 9 tiles: no crown is cut off, and a cleared plant leaves nothing behind.
  */
 function redrawAround(ctx, i, j) {
-  if (!(R.look && R.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
+  if (!(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
@@ -809,9 +832,9 @@ const GLOW_PX = 16;
 function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
-  const b = R.biome;
-  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
-  for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
+  const biomes = R.secondRegion ? [R.biome, R.secondRegion.biome] : [R.biome];
+  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
+  for (let k = 1; k <= PLANT_KINDS && !any; k++) if (biomes.some((b) => ART[`plant-${b}-${k}-glow`])) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
   c.width = S.W * GLOW_PX; c.height = S.H * GLOW_PX;
@@ -826,12 +849,13 @@ function bakeGlow() {
 function glowTiles(i0, j0, i1, j1) {
   const G = R.glowMap;
   if (!G) return;
-  const ctx = G.ctx, b = R.biome, gArt = ART['ground-glow-' + b], wArt = ART['water-glow-' + b];
+  const ctx = G.ctx;
   i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(S.W - 1, i1); j1 = Math.min(S.H - 1, j1);
   ctx.clearRect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP);
   R.inMap = true;
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-    const t = tIdx(i, j);
+    const t = tIdx(i, j), b = renderBiomeAt(t);
+    const gArt = ART['ground-glow-' + b], wArt = ART['water-glow-' + b];
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
@@ -1068,11 +1092,31 @@ function drawTile(i, j, ctx = R.mapCtx) {
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
   R.inMap = true; // the baked map is day art: it's graded as a whole when drawn (see todGradeGround)
-  try { paintTile(ctx, i, j); if (S.scrap) paintScrapTile(ctx, i, j); } finally { R.inMap = false; }
-  R.drawScale = prev;
+  const primary = R.primaryRegion, second = R.secondRegion;
+  const mix = R.biomeMix?.[tIdx(i, j)] || 0;
+  const local = mix >= 0.5 ? second : primary, other = mix >= 0.5 ? primary : second;
+  if (local !== primary) {
+    R.biome = local.biome; R.look = local.look; R.tex = local.tex; THEME = local.theme;
+  }
+  try {
+    paintTile(ctx, i, j, other, Math.min(mix, 1 - mix));
+    if (S.scrap) paintScrapTile(ctx, i, j);
+  } finally {
+    if (local !== primary) {
+      R.biome = primary.biome; R.look = primary.look; R.tex = primary.tex; THEME = primary.theme;
+    }
+    R.inMap = false; R.drawScale = prev;
+  }
 }
 
-function paintTile(ctx, i, j) {
+function blendTexture(ctx, art, weight, i, j, x, y) {
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * weight;
+  drawTexture(ctx, art, i, j, x, y);
+  ctx.globalAlpha = alpha;
+}
+
+function paintTile(ctx, i, j, other, blend) {
   const x = i * TP, y = j * TP, t = tIdx(i, j);
   const terr = pillarAt(t) ? T_GROUND : S.terrain[t]; // (a pillar of the Hollow stands on the cavern floor: see drawPillar)
   const n = fbm(i / 6, j / 6, 991, 3);
@@ -1081,6 +1125,7 @@ function paintTile(ctx, i, j) {
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
   if (tex.ground) {
     drawTexture(ctx, tex.ground, i, j, x, y);
+    if (blend && terr === T_GROUND && other.tex.ground) blendTexture(ctx, other.tex.ground, blend, i, j, x, y);
     // Keep elevation readable on top of the texture: higher ground is lighter, canyons darker.
     const d = S.elev[t] + (R.levelOffset || 0) - 1;
     if (d > 0) { ctx.fillStyle = `rgba(${look.hi},${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
@@ -1099,6 +1144,7 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
+      if (blend && other.biome !== 'volcanic' && other.tex.water) blendTexture(ctx, other.tex.water, blend, i, j, x, y);
       if (plainShore(t)) {
         if (R.biome === 'springs') drawMineralBanks(ctx, i, j, x, y);
         if (R.biome === 'tropical') drawReefShallows(ctx, i, j, x, y);
@@ -1131,6 +1177,7 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_ROCK) {
     if (tex.rock) {
       drawTexture(ctx, tex.rock, i, j, x, y);
+      if (blend && other.tex.rock) blendTexture(ctx, other.tex.rock, blend, i, j, x, y);
       ctx.fillStyle = 'rgba(255,225,190,0.22)';
       if (terrAt(i, j - 1) !== T_ROCK) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_ROCK) ctx.fillRect(x, y, 2, TP);
@@ -1204,14 +1251,16 @@ function paintTile(ctx, i, j) {
  * `plantScale` (one per variety) lets big plants, the Forest's trees, spread a little past their tile.
  */
 function drawPlant(ctx, v, i, j, x, y, glow) {
-  const b = R.biome || 'desert', sd = 911;
+  const mix = R.biomeMix?.[tIdx(i, j)] || 0;
+  const local = secondBiomePlant(i, j, S.seed, mix) ? R.secondRegion : R.primaryRegion;
+  const b = local?.biome || R.biome || 'desert', sd = 911;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
   if (glow && !n) return;
   if (n) {
     // The art is centred with its shadow baked in: a small nudge and size change per tile (plants
     // are drawn after all the ground, so one that leans over a neighbour isn't cut off).
-    const k = ((v - 1) % n) + 1, ps = (R.look && R.look.plantScale && R.look.plantScale[k - 1]) || 1;
+    const k = ((v - 1) % n) + 1, ps = local?.look.plantScale?.[k - 1] || 1;
     const ax = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.1, ay = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.1;
     const art = ART[`plant-${b}-${k}${glow ? '-glow' : ''}`]; // (glow: just the parts of it that glow at night, if any)
     if (art) drawArt(ctx, art, ax, ay, TP * ps * (0.84 + hash2(i, j, sd + 2) * 0.14));
@@ -6677,7 +6726,7 @@ function render(dtReal) {
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawLavaVents(ctx, ox, oy, z, v0, v1);
-  if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
+  if (R.biome === 'springs' || R.secondRegion?.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
@@ -8745,8 +8794,13 @@ function rebuildMinimapBase() {
     const terr = S.terrain[t];
     let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : (S.burnt && S.burnt[t]) || (S.ash && S.ash[t] > SCARS.light) ? MM_COLORS.burnt : S.crater && S.crater[t] >= 3 ? [70, 56, 40] : MM_COLORS.ground;
+    const blend = R.biomeMix?.[t] || 0;
+    if (blend) {
+      const key = c === MM_COLORS.ground ? 'ground' : c === MM_COLORS.water ? 'water' : c === MM_COLORS.rock ? 'rock' : null;
+      if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
+    }
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
-    if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) c = [236, 104, 34];
+    if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
     else if (S.tidal && S.tidal[t]) c = terr === T_WATER ? [Math.min(255, c[0] + 40), Math.min(255, c[1] + 50), Math.min(255, c[2] + 45)] : [184, 164, 120];
     else if (S.fault && S.fault[t] && terr === T_GROUND && !S.res[t]) c = [c[0] * 0.62, c[1] * 0.6, c[2] * 0.58];

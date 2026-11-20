@@ -210,3 +210,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 | Standard | 21 | 19:23, Colony 1 | 34:29, Colony 1 | 0 → 79 | 0 → 46 |
 | Standard | 25 | 17:34, Colony 1 | 19:11, Colony 1 | 0 → 30 | 0 → 0 |
 | Standard | 37 | 18:20, Colony 1 | 18:05, Colony 1 | 0 → 0 | 0 → 0 |
+
+### Optional second biome on Immense
+
+- Added the Second biome control to Custom Game and Observer setup, including multiplayer host settings. Single-biome play is the default. A seeded transition blends terrain, mixes plant varieties and appears on the planet preview and minimap.
+- Checked selection, play, save and reload, and Saved planets in Chromium. The automated Immense check covers mixed-biome save validation and multiplayer fingerprints.
+- Compared current Standard Immense with temporary 112×156 and 120×168 two-player maps. [Size probe results](immense-validation.md#optional-second-biome-and-two-player-size-probes)

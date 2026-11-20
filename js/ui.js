@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -415,6 +415,7 @@ function checkMenuSettings() {
   const m = UI.menu, ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
   if (!ok(m.shape, SHAPE_PRESETS.length)) m.shape = 0;
   if (!ok(m.biome || 0, BIOME_ORDER.length) || !biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
+  if (!BIOME_ORDER.includes(m.biome2)) m.biome2 = null;
   if (!ok(m.rough, TERRAIN_PRESETS.length)) m.rough = DEFAULT_ROUGH;
   if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
@@ -440,7 +441,7 @@ function checkMenuSettings() {
 function saveSettings() {
   const m = UI.menu;
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, biome: m.biome, players: m.players,
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, biome: m.biome, biome2: m.biome2, players: m.players,
       diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
@@ -555,10 +556,11 @@ function menuMods() { return modList(UI.menu.mods, UI.menu.mode); }
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
+  const otherBiome = chosenSecondBiome(m, menuSize());
   const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
-  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
+  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), ...(otherBiome ? [BIOMES[otherBiome].name] : []), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony) {
     // The rivals' doctrines, unless every one is a Steward (the usual).
@@ -716,6 +718,7 @@ function initMenu() {
   // Map type and Biome open their pickers.
   $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
   $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
+  $('m-biome2').onchange = () => { UI.menu.biome2 = $('m-biome2').value || null; syncMenu(); saveSettings(); };
   $('m-picker-close').onclick = () => closePicker();
   // Tapping outside the sheet closes it (on click, so the tap can't land on the menu underneath).
   $('m-picker').addEventListener('click', (e) => { if (e.target === $('m-picker')) closePicker(); });
@@ -954,6 +957,27 @@ function syncPickRows() {
   const m = UI.menu;
   shapePickRow($('m-shape'), m.shapeRnd, m.shape || 0, menuPlayers());
   biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
+  syncSecondBiome('m', m, menuSize());
+}
+
+function secondBiomeChoices(m, size) {
+  if (m.shapeRnd || m.biomeRnd) return [];
+  return BIOME_ORDER.filter((key) => secondBiomeAllowed(key, BIOME_ORDER[m.biome || 0], size, m.shape || 0));
+}
+
+function chosenSecondBiome(m, size) {
+  return m.biome2 && secondBiomeChoices(m, size).includes(m.biome2) ? m.biome2 : null;
+}
+
+function syncSecondBiome(prefix, m, size) {
+  const choices = secondBiomeChoices(m, size), sel = $(prefix + '-biome2'), signature = choices.join(' ');
+  $(prefix + '-biome2-row').hidden = !choices.length;
+  if (sel.dataset.choices !== signature) {
+    sel.replaceChildren(new Option('None', ''), ...choices.map((key) => new Option(BIOMES[key].name, key)));
+    sel.dataset.choices = signature;
+  }
+  sel.value = choices.includes(m.biome2) ? m.biome2 : '';
+  if (sel.value) ensureBiomeArt(sel.value);
 }
 /**
  * A Map type row (.m-pick), shared by Custom Game and Observer mode: Random (rnd, for np players) or map type `shape`.
@@ -1509,11 +1533,12 @@ function previewSettings() {
   st.nuke = !!m.nuke;
   if (mode === 'versus' && m.teams && st.players === 4) st.teams = true; // (Four Isles: the allies' sandbars)
   st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
+  st.biome2 = chosenSecondBiome(m, st.size);
   return { seed: m.seed >>> 0, mode, st };
 }
 function previewKey() {
   const p = previewSettings(), s = p.st;
-  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.teams ? 1 : 0].join(':');
+  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.biome2, s.teams ? 1 : 0].join(':');
 }
 
 function schedulePreview(now) {
@@ -1558,6 +1583,7 @@ function renderPreview(cv, m, p) {
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: [18, 12, 10], fertile: [92, 98, 40] };
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
+  const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -1575,6 +1601,10 @@ function renderPreview(cv, m, p) {
     else if (terr === T_ROCK) c = C.rock;
     else if (Rp[t]) c = C.ramp;
     else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
+    if (other) {
+      const key = terr === T_GROUND && c === C.ground ? 'ground' : terr === T_WATER ? 'water' : terr === T_ROCK ? 'rock' : null;
+      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed));
+    }
     const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
     // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.
     const below = j < H - 1 ? t + W : -1, right = i < W - 1 ? t + 1 : -1, above = j > 0 ? t - W : -1;
@@ -2924,7 +2954,8 @@ const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
 function planetOk(p) {
   const fits = (v, list) => v == null || (Number.isInteger(v) && v >= 0 && v < list.length);
   return !!p && typeof p === 'object' && Number.isFinite(p.seed) && (p.players == null || (Number.isInteger(p.players) && p.players >= 2 && p.players <= 4)) &&
-    fits(p.shape, SHAPE_PRESETS) && fits(p.size, SIZE_PRESETS) && fits(p.rough, TERRAIN_PRESETS) && fits(p.rich, RESOURCE_PRESETS) && fits(p.biome, BIOME_ORDER);
+    fits(p.shape, SHAPE_PRESETS) && fits(p.size, SIZE_PRESETS) && fits(p.rough, TERRAIN_PRESETS) && fits(p.rich, RESOURCE_PRESETS) && fits(p.biome, BIOME_ORDER) &&
+    (p.biome2 == null || secondBiomeAllowed(p.biome2, BIOME_ORDER[p.biome || 0], p.size, p.shape || 0));
 }
 function savedPlanets() {
   let l;
@@ -2936,20 +2967,21 @@ function savedPlanets() {
   return l;
 }
 function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
-const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
+const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.biome2, p.players].join(':');
 function savePlanet(p) { if (planetOk(p)) writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
   return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
-    biome: UI.menu.biome || 0, players: menuPlayers() };
+    biome: UI.menu.biome || 0, biome2: chosenSecondBiome(UI.menu, menuSize()), players: menuPlayers() };
 }
 /** The planet being played. */
 function gamePlanet() {
   const st = S.settings || {}; // (a very old save has none)
-  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
+  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), biome2: st.biome2, players: st.players || 2 };
 }
 function planetLabel(p) {
   const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', biomeName(p.biome || 0)];
+  if (p.biome2) bits.push(BIOMES[p.biome2].name);
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
   if (p.players > 2) bits.push(`${p.players} players`);
@@ -2965,7 +2997,7 @@ function renderPlanets() {
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
-    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
+    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, biome2: p.biome2 || null, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
     UI.menu.size[UI.menu.mode] = p.size;
     if (SHAPE_PRESETS[p.shape] && SHAPE_PRESETS[p.shape].teamDefault) UI.menu.teams = 1; // (a planet of a map made for 2 vs 2: Teams on)
     checkMenuSettings();
@@ -3024,7 +3056,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
+    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });

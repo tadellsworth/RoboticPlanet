@@ -69,7 +69,12 @@ const result = host(`
     }
   }
 
-  const opts = { seed: 37, shape: SHAPE_PRESETS.findIndex((s) => s.cross), size: IMMENSE_SIZE, players: 4, teams: true, humans: [0, 1], murmur: 'active' };
+  assert.equal(S.settings.biome2, undefined, 'single biome is the default');
+  assert.equal(secondBiomeAllowed('jungle', 'desert', IMMENSE_SIZE - 1, 0), false);
+  assert.equal(secondBiomeAllowed('tropical', 'desert', IMMENSE_SIZE, 0), false);
+  assert.equal(secondBiomeAllowed('jungle', 'lunar', IMMENSE_SIZE, 0), false);
+  assert.equal(secondBiomeAllowed('jungle', 'desert', IMMENSE_SIZE, SHAPE_PRESETS.findIndex(s => s.hollow)), false);
+  const opts = { seed: 37, shape: SHAPE_PRESETS.findIndex((s) => s.cross), size: IMMENSE_SIZE, players: 4, teams: true, humans: [0, 1], murmur: 'active', biome: 'desert', biome2: 'jungle' };
   const locals = { opts, sent: [] };
   newGame(opts);
   mpStart({me: 0, humans: opts.humans, send: (msg) => locals.sent.push(msg)});
@@ -82,6 +87,12 @@ const result = host(`
   assert.equal(hashState(), initial, 'save round trip');
   assert.equal(S.settings.size, IMMENSE_SIZE);
   assert.equal(S.W, 146);
+  assert.equal(S.settings.biome2, 'jungle');
+  const mix = (seed) => S.terrain.map((_, t) => Math.round(biomeMixAt(t % S.W, (t / S.W) | 0, S.W, S.H, seed) * 100));
+  const coverage = mix(S.seed);
+  for (const region of [0, 100]) assert.ok(coverage.filter(value => value === region).length > coverage.length / 4);
+  assert.ok(coverage.some(value => value > 0 && value < 100));
+  assert.notDeepEqual(coverage, mix(S.seed + 1));
   assert.equal(aiMarchTime({ x: 0, y: 0 }, { x: 0.5, y: 60.5 }, 150), 150);
   assert.ok(aiMarchTime({ x: 0, y: 0 }, { x: 0.5, y: 180.5 }, 150) > 300);
   // Ringfall mirrors every site even in a game with a Murmur slot.

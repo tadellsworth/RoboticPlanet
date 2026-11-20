@@ -78,7 +78,7 @@ function watchSetup() {
     diff: Object.prototype.hasOwnProperty.call(DIFFICULTY, w.diff) ? w.diff : 'normal',
     victory: Object.prototype.hasOwnProperty.call(VICTORY, w.victory) ? w.victory : 'capture',
     size: idx(w.size, SIZE_PRESETS.length, DEFAULT_SIZE.versus), rough: idx(w.rough, TERRAIN_PRESETS.length, DEFAULT_ROUGH), rich: idx(w.rich, RESOURCE_PRESETS.length, DEFAULT_RICH),
-    biome: biomeAllowed(BIOME_ORDER[biome], w.shapeRnd ? -1 : shape) ? biome : 0, biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
+    biome: biomeAllowed(BIOME_ORDER[biome], w.shapeRnd ? -1 : shape) ? biome : 0, biome2: BIOME_ORDER.includes(w.biome2) ? w.biome2 : null, biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
     nuke: w.nuke === undefined || w.nuke ? 1 : 0, mega: w.mega === undefined || w.mega ? 1 : 0, events: w.events ? 1 : 0,
     mods: modList(w.mods).filter((k) => WATCH_MODS.includes(k)),
     seed: Number.isInteger(w.seed) && w.seed >= 0 ? w.seed : null,
@@ -102,7 +102,7 @@ const watchMurmur = (w) => (watchMurmurOk(w) && murmurLevelOk(w.murmur) ? w.murm
 /** How the game is won: Capture with teams, and in the Hollow instead of Uplinks. */
 const watchVictory = (w) => (watchTeams(w) || (w.victory === 'uplinks' && watchHollow(w)) ? 'capture' : w.victory);
 /** The planet the setup makes, as Custom Game's saved planets keep one (seed: the saved planet's, when one is picked). */
-const watchPlanet = (w) => ({ seed: w.seed, shape: w.shape, size: w.size, rough: w.rough, rich: w.rich, biome: w.biome, players: watchCount(w) });
+const watchPlanet = (w) => ({ seed: w.seed, shape: w.shape, size: w.size, rough: w.rough, rich: w.rich, biome: w.biome, biome2: chosenSecondBiome(w, w.size), players: watchCount(w) });
 /** A change to the map's settings: it's no longer the saved planet picked (a new planet each game again). */
 function watchMapChanged(w) { w.seed = null; }
 
@@ -110,6 +110,8 @@ function watchMapChanged(w) { w.seed = null; }
 function watchSummary(w) {
   const n = watchCount(w), vic = watchVictory(w), main = [watchTeams(w) ? 'Teams · 2 vs 2' : `${n} colonies`, `${DIFFICULTY[w.diff].label}`];
   if (vic !== 'capture') main.push(VICTORY[vic].name);
+  const otherBiome = chosenSecondBiome(w, w.size);
+  if (otherBiome) main.push(BIOMES[otherBiome].name);
   main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[w.size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
@@ -162,11 +164,12 @@ function buildWatch() {
   for (const k of WATCH_MODS) $('w-mod-' + k).onchange = set(() => { const l = w().mods.filter((x) => x !== k); w().mods = modList($('w-mod-' + k).checked ? l.concat(k) : l); });
   $('w-shape').onclick = () => { sfx('click'); openPicker('shape', watchPickCtx()); };
   $('w-biome').onclick = () => { sfx('click'); openPicker('biome', watchPickCtx()); };
+  $('w-biome2').onchange = set(() => { w().biome2 = $('w-biome2').value || null; });
   // A saved planet (Custom Game's Save): its seed and map settings, played each time; or a new planet each game.
   $('w-planet').onchange = set(() => {
     const p = savedPlanets()[+$('w-planet').value], s = w();
     if (!p || $('w-planet').value === '') { s.seed = null; return; }
-    Object.assign(s, { seed: p.seed, shape: p.shape, size: p.size, rough: p.rough, rich: p.rich, biome: p.biome || 0, n: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
+    Object.assign(s, { seed: p.seed, shape: p.shape, size: p.size, rough: p.rough, rich: p.rich, biome: p.biome || 0, biome2: p.biome2 || null, n: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
   });
   WATCH.hover = {};
   // On a phone the Challenge section folds away under More options (it says how many are on).
@@ -256,6 +259,7 @@ function watchPickRows() {
   const w = WATCH.setup;
   shapePickRow($('w-shape'), w.shapeRnd, w.shape, watchCount(w), 'when the game starts');
   biomePickRow($('w-biome'), w.biomeRnd, w.biome, watchHollow(w), 'when the game starts');
+  syncSecondBiome('w', w, w.size);
 }
 
 /** Each section's line: the option under the mouse or focused, or else what's chosen (as Custom Game's syncInfo). */
@@ -304,6 +308,7 @@ function watchStart(setup) {
     nuke: setup.nuke !== 0, mega: setup.mega !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
     murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
     scars: scarsPref(), // (War scars: the Settings menu's)
+    biome2: chosenSecondBiome(setup, setup.size),
     biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : randomBiomeFor(shape, !!setup.murmur && setup.murmur !== 'off'),
   });
   // (newGame gives the first colony the plain Steward when nobody plays it: it gets its doctrine here, before the

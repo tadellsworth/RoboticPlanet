@@ -76,6 +76,11 @@ const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 
 function biomeAllowed(key, shape) {
   return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval));
 }
+/** Mixed scenery belongs on Immense surface maps on Ithaca I. Argos is a separate world. */
+function secondBiomeAllowed(key, primary, size, shape) {
+  return size === IMMENSE_SIZE && !SHAPE_PRESETS[shape]?.hollow && primary !== 'lunar' && primary !== 'hollow' &&
+    key !== primary && key !== 'lunar' && BIOME_ORDER.includes(key) && biomeAllowed(key, shape);
+}
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers

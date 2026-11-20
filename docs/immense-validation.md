@@ -61,3 +61,17 @@ All seats used the balanced doctrine. The Hollow had Active Murmur. Other maps h
 Both Hollow seeds reached the cap. On seed 12, local Fuel and Chips ran out and both colonies still held their bases with six army units apiece. The longer travel allowance did not solve the Hollow economy stalemate. In Long Haul 2v2 rivals sent marches across the map before minute 30. The fixed recall timer was shorter than the travel time of a shield-led formation across a map that can be 200 tiles long. Immense now adds travel time to the recall deadline for targets more than 60 tiles away. At minute 30, the retest had one direct attack order and all four colonies were still in play. The benchmark fixture before the change had no direct attack orders at that point. The updated match still had no winner at minute 40.
 
 Before the travel allowance, Colony 2 took 52:26 to win the Crossroads game. Standard seed 11 still had the same winner and went from 28:38 to 30:27.
+
+## Optional second biome and two-player size probes
+
+On an Immense surface map, choose a specific map shape and primary biome to enable Second biome. The seed sets the orientation and bends of the transition. Terrain textures, decorations and overview colors show both regions. The primary biome supplies the world rules and weather. The choice round-trips through saves and Saved planets, and the lockstep test uses a mixed-biome game on both peers.
+
+To gauge headroom for a future larger two-player tier, three Standard seed 11 Normal observer simulations ran for 20 game minutes on an Apple M1. The two larger dimensions were temporary test presets. All three games were still in play at minute 20. The browser resumed each checkpoint with Rust and Greenreach scenery at 1280×800 in software Chromium with Auto graphics.
+
+| Standard dimensions | Tiles | Mean simulation tick | p95 simulation tick | p95 browser frame interval, zoomed out |
+| --- | ---: | ---: | ---: | ---: |
+| 84×118 | 9,912 | 0.89 ms | 2.33 ms | 33.4 ms |
+| 112×156 | 17,472 | 0.97 ms | 2.23 ms | 33.4 ms |
+| 120×168 | 20,160 | 1.07 ms | 2.78 ms | 33.4 ms |
+
+At 120×168 the p99 tick rose to 11.65 ms, compared with 6.15 ms at 84×118 and 5.77 ms at 112×156. These runs measure early and midgame on one Standard seed. A future desktop two-player tier could start near 112×156, with its dimensions checked by shape. The 120×168 candidate still needs late-game, long-map and mobile testing.
