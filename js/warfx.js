@@ -18,6 +18,12 @@
  * - Shockwaves (wfxShock, drawWfxRings, drawWfxFlash): a Missile, a nuclear blast, Ringfall, a fuel blast and the
  *   Lance's shot send a ring of dust and light rippling out along the ground, and a flash lights the whole area for a
  *   moment, by its size. With the device set to reduce motion: no flash, and a slower, fainter ring.
+ * - Burning oil (wfxOil, drawWfxOilGround, drawWfxOil): an Oil Pump destroyed by force (not taken down by its owner)
+ *   becomes a burning well, like the oil fires of old Earth's desert wars: a roaring jet of flame from the wellhead under
+ *   a thick black column of smoke leaning with the wind, for three or four minutes, then guttering out to a smouldering,
+ *   blackened ruin that stays a while longer. It lights the land round it at night, flickering, and roars (oilRoar in
+ *   js/audio.js, one voice for all of them). A Refinery or Fuel Tank destroyed by force burns the same, lower and
+ *   shorter. Building on the spot puts it out; nothing stops a rebuild.
  * - The land healing (wfxHeal, warHeal, paintScarHeal): where nobody has fought for a few minutes, the War scars green
  *   again, slowly: the scorch and ash fade back into the ground under them, and grass and small flowers come up on the
  *   old craters. The craters stay (the owner's choice), and so do scrap and graveyards until they're salvaged; the
@@ -39,6 +45,13 @@ const WARFX = {
   ash: { cell: 6, full: 6, life: 140, embers: 70, max: { saver: 5, auto: 12, high: 18, ultra: 26 }, specks: 22 },
   // Shockwaves: a blast this big or bigger (tiles) sends one; the ring reaches `reach` times the blast.
   shock: { min: 1.5, reach: 3.2, flash: 0.45 },
+  // Burning oil, by what burned: seconds it burns (the last `gutter` of them dying down) and then smoulders, its jet's
+  // height and width (tiles), its smoke column's strength, the blackened ground's reach (tiles).
+  oil: {
+    pump: { burn: 210, gutter: 35, smoulder: 240, jet: 3.4, w: 0.55, smoke: 2.6, soot: 1.2 },
+    refinery: { burn: 100, gutter: 25, smoulder: 140, jet: 1.9, w: 1.0, smoke: 2, soot: 1.4 },
+    fueltank: { burn: 120, gutter: 25, smoulder: 160, jet: 1.7, w: 1.25, smoke: 2.2, soot: 1.6 },
+  },
   // The land healing: cells (tiles a side) a fight anywhere in (or next to) holds back; `quiet` s with no fighting
   // before the scars start to green, then `grow` s to green as far as they go; `steps` bakes along the way.
   heal: { cell: 6, quiet: 150, grow: 480, steps: 6, every: 1, most: 260 },
@@ -51,7 +64,7 @@ const WFX_FIGHT = new Set(['tracer', 'muzzle', 'boom', 'flame', 'railshot', 'pul
 function wfxState() {
   let W = R.wfx;
   if (!W || W.of !== S) {
-    W = R.wfx = { of: S, tick: S.tick, seen: new WeakSet(), cols: [], fires: [], ash: new Map(), rings: [], flash: [], cutT: S.time, heal: null, n: 0 };
+    W = R.wfx = { of: S, tick: S.tick, seen: new WeakSet(), cols: [], fires: [], ash: new Map(), rings: [], flash: [], oil: [], cutT: S.time, heal: null, n: 0 };
     if (S.cuts && S.cuts.length) W.cutT = Math.max(W.cutT, ...S.cuts.map((c) => c.t));
   }
   return W;
@@ -110,6 +123,9 @@ function wfxNote(W, f) {
       wfxIgnite(W, f.x, f.y, 4, Math.floor(f.x * 7 + f.y * 3));
       wfxAsh(W, f.x, f.y, 3);
       break;
+    case 'collapse':
+      if (f.burn && WARFX.oil[f.btype]) wfxOil(W, f.x, f.y, f.btype);
+      break;
     case 'nuke':
       wfxShock(W, f.x, f.y, r * 1.4, 0, false, true); // (its own flash is the game's: drawNukeGlowFx)
       wfxColumn(W, f.x, f.y, 2.6, 1.5);
@@ -141,6 +157,7 @@ function wfxFought(W, x, y) {
 function wfxColumn(W, x, y, s, life, dark) {
   const C = WARFX.col, L = C.life * life;
   for (const c of W.cols) {
+    if (c.oil) continue; // (a burning well's column stands alone)
     if (Math.abs(c.x - x) > C.join || Math.abs(c.y - y) > C.join) continue;
     // Joined into the one already there: thicker, and it lasts from now.
     const left = c.t0 + c.life - S.time;
@@ -154,7 +171,7 @@ function wfxColumn(W, x, y, s, life, dark) {
   if (W.cols.length > most) {
     // Past the most: the one with least left of it goes.
     let k = 0, low = Infinity;
-    W.cols.forEach((c, n) => { const v = c.s * (c.t0 + c.life - S.time); if (v < low) { low = v; k = n; } });
+    W.cols.forEach((c, n) => { const v = c.oil ? Infinity : c.s * (c.t0 + c.life - S.time); if (v < low) { low = v; k = n; } });
     W.cols.splice(k, 1);
   }
 }
@@ -335,6 +352,7 @@ function drawWarGround(ctx, ox, oy, z, v0, v1) {
   wfxScan(W);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
   if (W.rings.length) drawWfxRings(ctx, W, ox, oy, z, inView);
+  if (W.oil.length) drawWfxOilGround(ctx, W, ox, oy, z, inView);
   if (W.fires.length) drawWfxFires(ctx, W, ox, oy, z, inView);
 }
 
@@ -344,7 +362,9 @@ function drawWarAir(ctx, ox, oy, z, v0, v1) {
   if (!W || W.of !== S) return;
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
   if (W.fires.length) drawWfxFireLight(ctx, W, ox, oy, z, inView);
+  if (W.oil.length) drawWfxOilLight(ctx, W, ox, oy, z, inView);
   if (W.cols.length) drawWfxColumns(ctx, W, ox, oy, z, inView);
+  if (W.oil.length) drawWfxOil(ctx, W, ox, oy, z, inView);
   if (W.ash.size) drawWfxAsh(ctx, W, ox, oy, z, inView);
   if (W.flash.length) drawWfxFlash(ctx, W, ox, oy, z);
 }
@@ -455,9 +475,12 @@ function drawWfxColumns(ctx, W, ox, oy, z, inView) {
     const Hh = C.height * Math.sqrt(c.s) * (air ? 1 : 0.35);
     if (!inView(c.x + lean * Hh * 0.6, c.y - Hh * 0.5, Hh)) continue;
     // in over its first seconds; out over the last part of its life (it thins and stops reaching so high)
-    const k = clamp(age / 3, 0, 1) * Math.pow(clamp((c.life - age) / (c.life * 0.6), 0, 1), 1.2), top = 0.45 + 0.55 * k;
+    let k = clamp(age / 3, 0, 1) * Math.pow(clamp((c.life - age) / (c.life * 0.6), 0, 1), 1.2);
+    if (c.oil) k = clamp(age / 3, 0, 1) * (0.22 + 0.78 * wfxOilLevel(c.oil)) * clamp((c.life - age) / 40, 0, 1) * (c.oil.out ? clamp(1 - (now - c.oil.out) / 3, 0, 1) : 1); // (thick while the well burns, a thin smoulder after)
+    const top = 0.45 + 0.55 * k;
     if (k < 0.01) continue;
-    const x0 = ox + c.x * z, y0 = oy + c.y * z, rate = (less ? 0.03 : 0.055) / Math.sqrt(c.s), w0 = Math.sqrt(c.s);
+    const lift = c.oil ? WARFX.oil[c.oil.kind].jet * 0.8 * wfxOilLevel(c.oil) : 0; // (a burning well's smoke pours off the top of its flame)
+    const x0 = ox + (c.x + lift * lean * 0.12) * z, y0 = oy + (c.y - lift) * z, rate = (less ? 0.03 : 0.055) / Math.sqrt(c.s), w0 = Math.sqrt(c.s);
     const lit = age < 60 ? clamp(1 - age / 60, 0, 1) * (0.15 + 0.6 * night) : 0; // (lit orange from under by the fire while it burns)
     for (let n = 0; n < np; n++) {
       const ph = ((now * rate + n / np + c.sd * 0.0137) % 1) * top, h = hash2(c.sd, n, 3);
@@ -585,5 +608,169 @@ function drawWfxFlash(ctx, W, ox, oy, z) {
     ctx.fillStyle = '#fff1d6';
     ctx.fillRect(0, 0, R.w, R.h);
     ctx.restore();
+  }
+}
+
+/* ------------------------------------------------------------------ burning oil */
+
+/**
+ * An oil well (or a Refinery, a Fuel Tank) destroyed by force at (x, y): it burns. Its own column of black smoke (never
+ * joined with another), fires creeping over the scorched ground round it, and ash.
+ */
+function wfxOil(W, x, y, kind) {
+  const O = WARFX.oil[kind], i = Math.floor(x), j = Math.floor(y);
+  if (!O || !inMap(i, j) || W.oil.some((e) => e.i === i && e.j === j && !e.out)) return;
+  const e = { x, y: y + 0.05, i, j, kind, t0: S.time, sd: (W.n++ * 13 + i * 7 + j * 3) % 997, out: 0 };
+  W.oil.push(e);
+  W.cols.push({ x: e.x, y: e.y, s: O.smoke, t0: S.time, life: O.burn + O.smoulder * 0.45, sd: e.sd, dark: true, oil: e });
+  wfxIgnite(W, x, y, 3, e.sd);
+  wfxAsh(W, x, y, 3);
+  if (W.oil.length > 12) W.oil.shift();
+}
+
+/** How fiercely burning oil e burns now, 0..1: up in a second, steady (with a roar's surges), guttering and sputtering out over its last seconds; 0 smouldering. */
+function wfxOilLevel(e) {
+  const O = WARFX.oil[e.kind], age = S.time - e.t0, out = e.out ? clamp(1 - (S.time - e.out) / 3, 0, 1) : 1;
+  if (age < 0 || age >= O.burn) return 0;
+  let k = Math.min(1, age / 1.2);
+  const left = O.burn - age;
+  if (left < O.gutter) { const q = Math.pow(left / O.gutter, 0.6); k *= q * (0.55 + 0.45 * Math.max(0, Math.sin(S.time * 3.1 + e.sd) * Math.sin(S.time * 7.7 + e.sd * 2))) + 0.08 * q; }
+  return k * out;
+}
+/** Is burning oil e over (smouldered out, or put out by a building on its spot)? */
+function wfxOilGone(e) {
+  const O = WARFX.oil[e.kind];
+  if (!e.out && S.bAt[tIdx(e.i, e.j)]) e.out = S.time; // (built over: put out)
+  return (e.out && S.time - e.out > 3) || S.time - e.t0 > O.burn + O.smoulder;
+}
+/** How much of burning oil e's ruin is left to see, 0..1 (fading over its last 30 s, or as it's built over). */
+function wfxOilRuin(e) {
+  const O = WARFX.oil[e.kind], end = e.out ? e.out + 3 : e.t0 + O.burn + O.smoulder;
+  return clamp((end - S.time) / (e.out ? 3 : 30), 0, 1);
+}
+
+/** A blot of oil-soaked, burnt-black ground (cached): ragged, darkest in the middle. */
+function wfxSootBlot() {
+  if (R.wfxSoot) return R.wfxSoot;
+  const n = 96, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d');
+  for (let b = 0; b < 9; b++) {
+    const a = b * 0.7, d = b ? n * (0.1 + 0.14 * hash2(b, 3, 5)) : 0, bx = n / 2 + Math.cos(a) * d, by = n / 2 + Math.sin(a) * d, r = n * (0.18 + 0.12 * hash2(b, 4, 5));
+    const gr = g.createRadialGradient(bx, by, 0, bx, by, r);
+    gr.addColorStop(0, 'rgba(14,11,10,0.85)'); gr.addColorStop(0.7, 'rgba(22,17,14,0.45)'); gr.addColorStop(1, 'rgba(22,17,14,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, n, n);
+  }
+  return (R.wfxSoot = c);
+}
+
+/**
+ * Under the robots: the burnt-black ground round burning oil, and its ruin: a well's charred wellhead with its
+ * pumpjack's beam fallen across it, or a tank's burst, blackened shell (glowing red while it's hot, at night).
+ */
+function drawWfxOilGround(ctx, W, ox, oy, z, inView) {
+  const blot = wfxSootBlot(), night = fxNight();
+  let keep = 0;
+  for (const e of W.oil) {
+    if (wfxOilGone(e)) continue;
+    W.oil[keep++] = e;
+    const O = WARFX.oil[e.kind], left = wfxOilRuin(e);
+    if (!inView(e.x, e.y, 3) || left <= 0) continue;
+    const x = ox + e.x * z, y = oy + e.y * z, r = O.soot * z, age = S.time - e.t0;
+    ctx.globalAlpha = 0.9 * left * clamp(age / 2, 0, 1);
+    ctx.drawImage(blot, x - r, y - r * 0.7, r * 2, r * 1.4);
+    ctx.globalAlpha = left;
+    const hot = clamp(1 - (age - O.burn) / 60, 0, 1); // (glowing for a minute after the flame dies)
+    ctx.save(); ctx.translate(x, y);
+    if (e.kind === 'pump') {
+      // the beam of the pumpjack, fallen and charred, and the wellhead's stump with its flange
+      ctx.rotate((hash2(e.sd, 1, 1) - 0.5) * 1.2);
+      ctx.fillStyle = '#1b1715'; ctx.fillRect(-z * 0.55, z * 0.08, z * 0.95, z * 0.09);
+      ctx.fillStyle = '#2a2420'; ctx.fillRect(-z * 0.5, z * 0.08, z * 0.85, z * 0.03);
+      ctx.rotate(-(hash2(e.sd, 1, 1) - 0.5) * 1.2);
+      ctx.fillStyle = '#171312'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.17, z * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0c0a09'; ctx.fillRect(-z * 0.07, -z * 0.16, z * 0.14, z * 0.17);
+      ctx.fillStyle = '#3a312b'; ctx.beginPath(); ctx.ellipse(0, -z * 0.16, z * 0.08, z * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // a burst tank's shell: a blackened ring torn open, its roof fallen in
+      const R0 = z * (e.kind === 'fueltank' ? 0.42 : 0.34);
+      ctx.strokeStyle = '#191513'; ctx.lineWidth = Math.max(2, z * 0.07);
+      ctx.beginPath(); ctx.ellipse(0, 0, R0, R0 * 0.62, 0, 0.5 + hash2(e.sd, 2, 1), Math.PI * 2 - 0.3); ctx.stroke();
+      ctx.fillStyle = 'rgba(12,10,9,0.8)'; ctx.beginPath(); ctx.ellipse(0, z * 0.02, R0 * 0.8, R0 * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#3a302a'; ctx.lineWidth = Math.max(1, z * 0.025);
+      ctx.beginPath(); ctx.moveTo(-R0 * 0.6, -R0 * 0.1); ctx.lineTo(R0 * 0.1, R0 * 0.25); ctx.lineTo(R0 * 0.5, -R0 * 0.2); ctx.stroke();
+    }
+    ctx.restore();
+    if (hot > 0 && age > O.burn - 5) {
+      // embers in the ruin, red-hot, fading
+      const k = hot * (0.35 + 0.65 * night) * left;
+      for (let n = 0; n < 4; n++) {
+        const fl = 0.6 + 0.4 * Math.sin(S.time * (2.3 + n) + e.sd + n);
+        fxGlow(ctx, x + (hash2(e.sd, n, 7) - 0.5) * z * 0.6, y + (hash2(e.sd, n, 8) - 0.5) * z * 0.3, z * 0.12 * (0.8 + 0.4 * fl), '#ff5a1e', k * fl);
+      }
+    }
+  }
+  W.oil.length = keep;
+  ctx.globalAlpha = 1;
+}
+
+/** Burning oil's light: strong, flickering firelight over the land and the buildings round it at dusk and night (the light pool), and a glow by day. */
+function drawWfxOilLight(ctx, W, ox, oy, z, inView) {
+  const night = fxNight(), t = S.time;
+  for (const e of W.oil) {
+    const k = wfxOilLevel(e), O = WARFX.oil[e.kind];
+    if (k <= 0.01 || !inView(e.x, e.y, 8)) continue;
+    const x = ox + e.x * z, y = oy + e.y * z, fl = 0.78 + 0.22 * Math.sin(t * 13 + e.sd) * Math.sin(t * 5.3 + e.sd * 0.7) + 0.06 * Math.sin(t * 31 + e.sd);
+    fxGround(ctx, x, y, z * O.jet * 1.6 * (0.9 + 0.1 * fl), '#ff8a2a', 0.9 * k * fl * (1 - 0.65 * night));
+    if (night > 0.02) {
+      ctx.globalAlpha = Math.min(1, 0.7 * k * fl);
+      drawLightPool(ctx, x, y - z * 0.3, z * O.jet * 1.25 * (0.94 + 0.06 * fl), '#ff8a2a');
+      ctx.globalAlpha = Math.min(1, 0.4 * k * fl);
+      drawLightPool(ctx, x, y, z * O.jet * 2.4, '#ff6a1c');
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The flame: a roaring jet of fire from the wellhead, white-hot at its foot, tongues of flame tearing up its length,
+ * leaning with the wind toward the top and breaking into sooty orange where the black smoke takes it. A tank's is a
+ * lower, wider wall of flame.
+ */
+function drawWfxOil(ctx, W, ox, oy, z, inView) {
+  const img = wfxFlame(), wind = wfxWind(), lean = clamp(wind.x / 0.3, -2, 2), t = S.time, less = wfxLess();
+  for (const e of W.oil) {
+    const k = wfxOilLevel(e), O = WARFX.oil[e.kind];
+    if (k <= 0.01 || !inView(e.x, e.y, O.jet + 2)) continue;
+    const x = ox + e.x * z, y = oy + e.y * z, sp = less ? 0.45 : 1;
+    const surge = 0.86 + 0.14 * Math.sin(t * 9 * sp + e.sd) * Math.sin(t * 3.7 * sp + e.sd), H = O.jet * z * k * surge, w0 = O.w * z * (0.7 + 0.3 * k);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // the body of the jet: one long tongue of fire the whole height, swaying at its top, under the tongues tearing up it
+    ctx.globalAlpha = Math.min(1, 0.9 * k);
+    ctx.save(); ctx.translate(x, y); ctx.transform(1, 0, -lean * 0.07 + Math.sin(t * 5 * sp + e.sd) * 0.04, 1, 0, 0);
+    ctx.drawImage(img, -w0 * 0.75, -H * 1.05, w0 * 1.5, H * 1.1);
+    ctx.drawImage(img, -w0 * 0.4, -H * 0.75, w0 * 0.8, H * 0.8);
+    ctx.restore();
+    const M = Math.max(7, Math.round(11 * Math.min(1.5, gfx().fx)));
+    for (let m = 0; m < M; m++) {
+      const q = ((m / M) + (t * 1.6 * sp + hash2(e.sd, m, 1)) % 1 / M), h = hash2(e.sd, m, 2);
+      const cy = y - q * H, cx = x + lean * q * q * H * 0.14 + Math.sin(t * 11 * sp + m * 2.3 + e.sd) * w0 * 0.12 * q;
+      const fw = w0 * (1.05 - 0.55 * q) * (0.8 + 0.4 * h), fh = H * (0.42 - 0.12 * q) * (0.8 + 0.4 * hash2(e.sd, m, 3));
+      ctx.globalAlpha = Math.min(1, (0.9 - 0.45 * q) * Math.min(1, k * 1.4));
+      ctx.drawImage(img, cx - fw / 2, cy - fh * 0.75, fw, fh);
+    }
+    // the white-hot heart of it at the wellhead, and its glow
+    fxGlow(ctx, x, y - H * 0.18, w0 * 1.3, '#ffd27a', 0.6 * k);
+    fxGlow(ctx, x, y - H * 0.5, H * 0.75, '#ff7a2a', 0.45 * k * surge * (1 - 0.4 * fxNight()));
+    ctx.restore();
+    // soot torn off the top of the flame into the column
+    const puff = wfxSmoke(0, fxNight());
+    for (let n = 0; n < 4; n++) {
+      const ph = (t * 0.9 * sp + n / 4 + e.sd * 0.01) % 1, s = w0 * (1 + 1.6 * ph);
+      ctx.globalAlpha = 0.75 * k * Math.sin(ph * Math.PI);
+      ctx.drawImage(puff, x + lean * H * 0.14 + lean * ph * z * 0.5 - s / 2, y - H * (0.85 + 0.25 * ph) - s / 2, s, s);
+    }
+    ctx.globalAlpha = 1;
   }
 }

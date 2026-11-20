@@ -2880,6 +2880,14 @@ the game's own blasts and the planet's hash; it is drawn into the baked ground (
   settling over about two minutes; **shockwaves** (a ring of dust and light along the ground, `WARFX.shock`) from blasts of
   reach 1.5 or more (a Missile, Ringfall, a fuel blast, a nuclear blast) and along the Lance's line, with a flash over the
   area (none with reduced motion, and a fainter, slower ring).
+- **Burning oil** (`js/warfx.js`, looks only). A building destroyed by force (`collapseFx` marks its collapse effect
+  `burn`) that is in `WARFX.oil` burns (`wfxOil`): an Oil Pump for 210 s (its last 35 guttering out) then smoulders 240 s;
+  a Refinery 100 s and 140 s; a Fuel Tank 120 s and 160 s. Drawn: a jet of flame from the wellhead (3.4 tiles high for a
+  well, lower and wider for a tank), its own black smoke column pouring off the top of the flame (never joined with
+  another), blackened ground and the charred wreck (a wellhead stump and fallen beam, a burst tank's shell), embers in
+  it for a minute after. At dusk and night two light pools, flickering (`drawWfxOilLight`). Sound: `oilRoar` in
+  `js/audio.js`, one voice on the Effects bus for all of them (the loudest on screen, panned to it, a little louder with
+  more, at most 1.3×). A building put up on the spot puts it out in 3 s; nothing stops a rebuild.
 - **Saves and lockstep.** `crater` and `ash` are saved sparse (`SPARSE_LAYERS`: tile and value pairs), the lists as they
   are; `checkSave` checks them all; `hashState` takes the blast count (`S.scarN`), every pile and the count of bones.
   `scarLevel()` is 0 for Off (no layers: `S.crater` and `S.ash` are null).
