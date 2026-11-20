@@ -3076,6 +3076,8 @@ function addBuilding(owner, type, x, y, built) {
     // The player's Foundry builds only bots they order; an AI-run Foundry picks its own mode.
     mode: !S.players[owner].ai ? 'off' : S.mode === 'colony' ? 'worker' : 'alt', altNext: 'worker', status: '', born: S.time,
   };
+  // Co-op (S.crew): the person whose order placed this site (ORDER_BY, orders.js), for its badge and the log.
+  if (!built && S.crew && typeof ORDER_BY !== 'undefined' && ORDER_BY >= 0 && S.crew[ORDER_BY]) b.by = ORDER_BY;
   S.buildings.push(b);
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
@@ -5071,8 +5073,12 @@ function checkSave(o) {
     (P.trade.offers || []).forEach(deal); // (a save from before trade routes: its contracts)
     for (const g in P.trade.sat || {}) if (!ownKey(GOOD, g)) bad();
   }
+  // Co-op: the people running a shared colony (S.crew, by lockstep player: their name and colony), and the site
+  // badges (b.by) that point at them.
+  if (o.crew != null && !(Array.isArray(o.crew) && o.crew.length <= 8 && o.crew.every((c) => c === null || (obj(c) && typeof c.n === 'string' && c.n.length <= 16 && owner(c.c) && c.c >= 0)))) bad();
   const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
   for (const b of o.buildings) {
+    if (b.by != null && !(Number.isInteger(b.by) && o.crew && o.crew[b.by])) bad();
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route

@@ -6607,6 +6607,7 @@ function render(dtReal) {
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
+  if (S.crew && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -8680,6 +8681,7 @@ function renderMinimap() {
     ctx.fillStyle = '#ffcf4a';
     ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
+  if (S.crew && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
   const a = screenToWorld(0, 0), c = screenToWorld(R.w, R.h);
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.5;

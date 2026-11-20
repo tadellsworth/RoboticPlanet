@@ -117,6 +117,7 @@ function initMulti() {
   };
   $('m-rejoin').onclick = () => { sfx('click'); audioUnlock(); mpRejoinGame(); };
   $('p-mppause').onclick = () => { sfx('click'); mpPause(!MP.paused); };
+  $('btn-ping').onclick = () => { if (typeof coopPingHere === 'function') coopPingHere(false); }; // (co-op: the middle of the view)
   $('mp-banner-btn').onclick = () => { sfx('click'); if (MP.paused) mpPause(false); };
 
   NET.onError = (why) => {
@@ -182,18 +183,20 @@ function mpRejoinGame() {
 
 /** The host's settings, as they're sent round (final: Random picked, for the start). */
 function mpMenuSettings(final, people) {
-  const m = UI.menu, least = m.shapeRnd ? 2 : minPlayers(m.shape || 0), total = clamp(Math.max(Math.round(m.players) || 2, people || 2, least), 2, 4);
+  const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus', colony = mode === 'colony';
+  const least = m.shapeRnd ? 2 : minPlayers(m.shape || 0), total = clamp(Math.max(Math.round(m.players) || 2, people || 2, least), 2, 4);
   const keep = m.players;
   m.players = total;
   const pick = final ? resolveRandom() : { shape: m.shape || 0, biome: m.biome || 0 };
   m.players = keep;
   return {
-    seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
+    mode, coop: mpCoopSeats(), // (co-op: the seats sharing the host's colony; in Colony everyone does)
+    seed: m.seed, diff: m.diff, size: m.size[mode] ?? DEFAULT_SIZE[mode], rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
     players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
     scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
-    teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, 'versus'),
+    teams: !colony && !!m.teams && total === 4, teamOf: !colony && m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
     sum: mpSummary(),
   };
 }
@@ -210,17 +213,35 @@ function mpTeamSeats() {
   return { ...T };
 }
 
+/**
+ * (the host) Shared colony co-op: the seats that share the host's colony. In Colony mode everyone does (one colony,
+ * no rivals); in Versus whoever the host has tapped across, or everyone who joins once Co-op is on in the settings
+ * (a host's tap moves one back to a colony of their own). Never with Teams.
+ */
+function mpCoopSeats() {
+  if (NET.seat !== NET.host) return (NET.settings && NET.settings.coop) || [];
+  const m = UI.menu, colony = m.mode === 'colony';
+  if (!colony && m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) return [];
+  const T = UI.mpCoopOf || (UI.mpCoopOf = {});
+  return NET.seats.filter((s) => s.seat !== NET.host && (colony || (T[s.seat] ?? !!m.coop))).map((s) => s.seat);
+}
+/** The host's name (for "shares Tad's colony"). */
+function mpHostName() { return (NET.seats.find((s) => s.seat === NET.host) || {}).name || 'the host'; }
+
 /** The game in a line, for the lobby. */
 function mpSummary() {
   const m = UI.menu, bits = [];
+  if (m.mode === 'colony') bits.push('Colony, co-op');
+  else if (mpCoopSeats().length) bits.push('Co-op');
   // (four colonies: as many as asked for, or as the map type is made for: Twin Valleys and Long Haul 2v2 take four)
-  if (m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) bits.push('Teams, 2 vs 2');
-  bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size.versus ?? DEFAULT_SIZE.versus].name.toLowerCase());
-  if (m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
+  const colony = m.mode === 'colony', mode = colony ? 'colony' : 'versus';
+  if (!colony && m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) bits.push('Teams, 2 vs 2');
+  bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size[mode] ?? DEFAULT_SIZE[mode]].name.toLowerCase());
+  if (!colony && m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
   if (m.events) bits.push('Planetary events');
   bits.push(menuMurmurLevel() === 'off' ? 'no Murmur' : `Murmur: ${MURMUR_NAMES[menuMurmurLevel()]}`);
-  const mods = modList(m.mods, 'versus');
+  const mods = modList(m.mods, mode);
   if (mods.length) bits.push('Challenge: ' + mods.map((k) => MODS[k].name).join(', '));
   return bits.join(' · ');
 }
@@ -236,7 +257,10 @@ function renderLobby() {
   const host = NET.seat === NET.host, st = NET.settings;
   $('mp-roomcode').textContent = NET.code;
   const people = NET.seats.filter((s) => s.on);
-  const total = Math.max(st ? st.players : 2, people.length), ai = Math.max(0, total - people.length);
+  // Co-op: the people sharing the host's colony take no colony of their own (Colony mode: one colony, no rivals).
+  const coop = host ? mpCoopSeats() : (st && st.coop) || [], colony = !!(st && st.mode === 'colony');
+  const own = people.filter((s) => !coop.includes(s.seat));
+  const total = colony ? 1 : Math.max(st ? st.players : 2, own.length), ai = colony ? 0 : Math.max(0, total - own.length);
   // Everyone needs the same version of the game (an installed app can hold an older one).
   const hostV = (NET.seats.find((s) => s.seat === NET.host) || {}).v || gameVersion();
   const odd = people.filter((s) => s.v && s.v !== hostV);
@@ -266,8 +290,16 @@ function renderLobby() {
     const away = NET.seats.filter((s) => !s.on);
     if (away.length) html += '<li class="mp-team"><span>Away</span></li>' + away.map((s) => person(s, '#555', `Team ${st.teamOf[s.seat] ? 'B' : 'A'}`)).join('');
   } else {
-    for (const s of NET.seats) html += person(s, s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555');
+    // (co-op: a person sharing the host's colony is in its colour; the host taps a person to move them across, in Versus)
+    const swap = host && !colony;
+    for (const s of NET.seats) {
+      const mate = coop.includes(s.seat);
+      let li = person(s, mate ? PLAYER_COLORS[0] : s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555', mate ? `co-op: shares ${esc(mpHostName())}'s colony` : '');
+      if (swap && s.seat !== NET.host) li = li.replace('<li class="', '<li class="mp-coop ');
+      html += li;
+    }
     for (let a = 0; a < ai; a++) html += cpu(k++ % PLAYER_COLORS.length, false);
+    if (swap && people.length > 1) html += `<li class="mp-team mp-coophint"><small>Tap a player to have them share your colony (co-op), or to give them their own again</small></li>`;
   }
   if (UI.mpLobbyHTML !== html || !$('mp-players').children.length) { $('mp-players').innerHTML = html; UI.mpLobbyHTML = html; }
   UI.mpCpuSlots = slots;
@@ -277,8 +309,16 @@ function renderLobby() {
     saveSettings(); sfx('click'); mpSendSettings(); renderLobby();
   };
   mpDocNote();
+  // (co-op: someone seated, or moved across, since the settings were last sent round: send them again)
+  if (host && st && JSON.stringify(coop) !== JSON.stringify(st.coop || [])) mpSendSettings();
   // (someone seated since the teams were last sent round: put them on one)
   if (host && teams && NET.seats.some((s) => st.teamOf[s.seat] === undefined)) mpSendSettings();
+  if (host) for (const li of $('mp-players').querySelectorAll('li.mp-coop')) li.onclick = () => {
+    const seat = +li.dataset.seat, T = UI.mpCoopOf || (UI.mpCoopOf = {});
+    T[seat] = !mpCoopSeats().includes(seat);
+    sfx('click'); mpSendSettings(); renderLobby();
+  };
+  mpRoleRow(coop.length > 0 && (host || coop.includes(NET.seat)));
   if (host && teams) for (const li of $('mp-players').querySelectorAll('li.mp-swap')) li.onclick = () => {
     const seat = +li.dataset.seat, T = UI.mpTeamOf || {}, to = 1 - (T[seat] ?? 0);
     if (NET.seats.filter((s) => T[s.seat] === to).length >= 2) { mpMsg('That team has two players already: move one of them across first.'); return; }
@@ -299,6 +339,24 @@ function renderLobby() {
   if (host && !st) mpSendSettings();
 }
 
+/**
+ * Co-op: this person's role (Both, Economy or Military), in the lobby while they share a colony. It only filters which
+ * alerts pop up for them (coopQuiet), never what they may do; kept on this device.
+ */
+function mpRoleRow(show) {
+  const row = $('mp-role');
+  row.hidden = !show;
+  if (!show) return;
+  const r = coopRole();
+  for (const b of $('mp-roles').children) {
+    b.classList.toggle('on', b.dataset.v === r); b.setAttribute('aria-checked', b.dataset.v === r ? 'true' : 'false');
+    b.onclick = () => { coopSetRole(b.dataset.v); sfx('click'); mpRoleRow(true); };
+  }
+  $('mp-role-hint').textContent = r === 'econ' ? 'News of the war stays in the message log instead of popping up (losses and the Command Base still do). You can still do everything.'
+    : r === 'mil' ? 'The colony\'s everyday news stays in the message log instead of popping up. You can still do everything.'
+      : 'Every alert pops up. A role only picks which do: either of you can build, order and change anything.';
+}
+
 /** Player slot p's doctrine in the lobby (0 Random, 1 to 5): the host's own choice, or the settings it sent round. */
 function mpSeatDoc(p) {
   if (NET.seat === NET.host) return menuSlotStyle(p);
@@ -313,7 +371,7 @@ function mpSeatDoc(p) {
  * start get no place. `total`: the colonies the settings ask for.
  */
 function mpCpuSlots(total, teamOf) {
-  const on = NET.seats.filter((s) => s.on), n = Math.max(total, on.length);
+  const coop = mpCoopSeats(), on = NET.seats.filter((s) => s.on && !coop.includes(s.seat)), n = Math.max(total, on.length); // (co-op: the people sharing a colony take none)
   if (teamOf && n === 4) {
     const used = new Set();
     for (const t of [0, 1]) on.filter((s) => teamOf[s.seat] === t).slice(0, 2).forEach((s, i) => used.add(t * 2 + i));
@@ -368,8 +426,7 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 /** (the host) Change the settings: the usual new-game screen, set for a multiplayer game. */
 function mpOpenSetup() {
   UI.mpSetup = true;
-  UI.menu.mode = 'versus';
-  UI.menu.unlimited = 0;
+  UI.menu.unlimited = 0; // (Versus or Colony: Colony is co-op, everyone sharing the host's colony)
   $('screen-mp').hidden = true;
   showMenuView('setup', true);
 }
@@ -385,16 +442,24 @@ function mpSetupDone() {
 
 /** (the host) Start: the settings with Random picked; everyone makes the same game from them. */
 function mpHostStart() {
-  const people = NET.seats.filter((s) => s.on).length;
-  if (people < 2) return;
-  UI.menu.mode = 'versus';
-  const settings = mpMenuSettings(true, people);
+  const on = NET.seats.filter((s) => s.on);
+  if (on.length < 2) return;
+  const coop = mpCoopSeats().filter((k) => on.some((s) => s.seat === k)), own = on.filter((s) => !coop.includes(s.seat));
+  const settings = mpMenuSettings(true, own.length);
   // Teams: Team A takes the first two colonies (one side of the map), Team B the other two; the computer fills the rest.
   let slots;
   if (settings.teams && settings.teamOf) {
     slots = [-1, -1, -1, -1];
     for (const t of [0, 1]) NET.seats.filter((s) => s.on && settings.teamOf[s.seat] === t).forEach((s, n) => { slots[t * 2 + n] = s.seat; });
-  }
+  } else if (coop.length) {
+    // Co-op: the colonies first (the host's first, then anyone with their own, then the computer's), then the people
+    // sharing the host's colony, after them: the game hands those places the host's colony (S.crew: see mpOnStart).
+    const cols = settings.mode === 'colony' ? playerCount('colony', settings.shape) : Math.max(settings.players, own.length);
+    slots = own.map((s) => s.seat);
+    while (slots.length < cols) slots.push(-1);
+    for (const k of coop) slots.push(k);
+    Object.assign(settings, { coop, cols, coopCol: 0, slotsN: slots.length });
+  } else settings.coop = [];
   netLobbySend({ t: 'start', settings, slots });
 }
 
@@ -414,7 +479,7 @@ function mpLeaveLobby() {
 function mpGameOpts(s, humans) {
   const total = Math.max(s.players, humans.length), cpus = Array.from({ length: total }, (_, p) => p).filter((p) => !humans.includes(p));
   return {
-    seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
+    seed: s.seed, difficulty: s.diff, mode: s.mode === 'colony' ? 'colony' : 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
     biome: s.biome, players: total, style: docKeyOf(s.style),
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
     // (The Murmur: as the host set them; a host from before the setting sent none, and had none.)
@@ -428,9 +493,23 @@ function mpOnStart(m) {
   if (MP.on || MPJ.on) return; // (a reconnect brings the start again)
   const me = NET.me;
   if (me < 0) return;
-  const humans = m.players.map((P, k) => (P ? k : -1)).filter((k) => k >= 0);
+  const s = m.settings, coop = !!(s && s.slotsN);
+  // (co-op through a relay from before co-op, which seats no more than four places: it got the places wrong)
+  if (coop && m.players.length !== s.slotsN) {
+    netClose(); netRemember(false);
+    if ($('screen-mp').hidden) openMulti();
+    mpView('connect');
+    mpMsg('The multiplayer server needs an update for this co-op game (four colonies and a partner): try it with fewer colonies.');
+    return;
+  }
+  // The places people play: the colonies, then (co-op) the people sharing the host's colony.
+  const people = m.players.map((P, k) => (P ? k : -1)).filter((k) => k >= 0);
+  const humans = coop ? people.filter((k) => k < s.cols) : people;
   MP.onSnap = mpSnapLoaded;
   MP.onEvent = mpEvent;
+  MP.onOrder = coopOrder;
+  MP.onPeer = coopPeer;
+  coopReset();
   if (NET.fresh) {
     // A reloaded page: the game comes from the others (the computer runs our colony till we've caught up).
     UI.mpRejoining = false;
@@ -438,24 +517,32 @@ function mpOnStart(m) {
     mpView('joining');
     MP.onSnap = mpSnapLoaded;
     mpJoin({ me, send: netSend, speed: 1 });
-    MP.onSnap = mpSnapLoaded; MP.onEvent = mpEvent;
+    MP.onSnap = mpSnapLoaded; MP.onEvent = mpEvent; MP.onOrder = coopOrder; MP.onPeer = coopPeer;
     return;
   }
-  const s = m.settings;
   closeMulti();
   closePicker(false);
   newGame(mpGameOpts(s, humans));
-  m.players.forEach((P, k) => { if (P) S.players[k].name = P.name; });
-  ME = me;
-  mpStart({ me, humans, send: netSend });
-  MP.onSnap = mpSnapLoaded; MP.onEvent = mpEvent;
+  m.players.forEach((P, k) => { if (P && k < S.players.length && (!coop || k < s.cols)) S.players[k].name = P.name; });
+  if (coop) {
+    // Shared colony co-op: who runs which colony, by place (the same on every device: it's part of the game).
+    S.crew = m.players.map((P, k) => (P ? { n: String(P.name || 'Player').slice(0, 16), c: k < s.cols ? k : s.coopCol } : null));
+    const col = S.players[s.coopCol];
+    col.name = S.crew.filter((c) => c && c.c === s.coopCol).map((c) => c.n).join(' & ').slice(0, 40);
+  }
+  mpStart({ me, humans: people, send: netSend });
+  MP.onSnap = mpSnapLoaded; MP.onEvent = mpEvent; MP.onOrder = coopOrder; MP.onPeer = coopPeer;
   enterGame();
   updateHUD();
   placeMinimap();
-  const others = m.players.filter((P, k) => P && k !== me && foes(k, me)).map((P) => P.name);
-  const ai = S.players.filter((P) => P.ai && !P.absent && foes(P.id, me)).length;
-  const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
-  postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  const others = m.players.filter((P, k) => P && k < S.players.length && (!coop || k < s.cols) && k !== ME && foes(k, ME)).map((P) => P.name);
+  const ai = S.players.filter((P) => P.ai && !P.absent && foes(P.id, ME)).length;
+  const ally = S.teams ? S.players.find((P) => allies(P.id, ME)) : null;
+  const mates = coop ? coopMates().map(coopName) : [];
+  if (mates.length) {
+    const vs = [...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
+    postMsg(ME, `Co-op: you and ${mates.join(' and ')} run one colony together${S.mode === 'colony' ? '' : vs ? `, against ${vs}` : ''}. Either of you can build, order and change anything; your cursors show on each other's map, and . (or Ping) marks a spot for both of you.`, 0, 0, 'info');
+  } else postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
   doctrineLines();
   modsBriefing();
   $('br-title').textContent = 'Before you start';
@@ -479,11 +566,18 @@ function mpSnapLoaded() {
 /** Something happened to a player: tell everyone. */
 function mpEvent(kind, x) {
   if (!UI.inGame) return;
-  const who = x && x.p >= 0 ? playerName(x.p) : '';
-  if (kind === 'drop') toast(x.p === ME ? 'Your connection dropped: the computer runs your colony until you\'re back.' : `${who} has gone quiet (or left): the computer runs their colony until they're back.`, 'warn');
-  else if (kind === 'rejoin') toast(x.p === ME ? 'You\'re back: your colony is yours again.' : `${who} is back and running their colony again.`, 'good');
+  const who = x && x.p >= 0 ? mpWho(x.p) : '';
+  // (co-op: a partner gone leaves the colony with the one still here; it's the computer's only once everyone's gone)
+  const mate = x && x.p !== MP.me && S.crew && mpCol(x.p) === ME;
+  if (kind === 'drop') {
+    if (x.p === MP.me) toast(coopMates().some((q) => !mpAINow(q)) ? 'Your connection dropped: your partner keeps the colony going until you\'re back.' : 'Your connection dropped: the computer runs your colony until you\'re back.', 'warn');
+    else toast(mate ? `${who} has gone quiet (or left): the colony is yours to run until they're back.` : `${who} has gone quiet (or left): the computer runs their colony until they're back.`, 'warn');
+  } else if (kind === 'rejoin') toast(x.p === MP.me ? 'You\'re back: your colony is yours again.' : mate ? `${who} is back, running the colony with you again.` : `${who} is back and running their colony again.`, 'good');
   else if (kind === 'desync' && typeof console !== 'undefined') console.warn('Terrafall: the games differed; the host is sending its game.', x);
 }
+
+/** Person p's name (a lockstep player): their own in co-op, else their colony's. */
+function mpWho(p) { return S && S.crew && S.crew[p] ? S.crew[p].n : playerName(p); }
 
 /** Who's connected changed (in a game): nothing to show here (the banner and the drops cover it). */
 function mpPresence() { /* (the lobby list is for before the start) */ }
@@ -494,15 +588,16 @@ function mpBannerTick() {
   if (!MP.on || !UI.inGame) { el.hidden = true; return; }
   let text = '', btn = '', wait = false;
   const P = S.players[ME];
-  if (MP.paused) { text = `Paused by ${MP.pausedBy >= 0 ? playerName(MP.pausedBy) : 'a player'}`; btn = 'Resume'; }
+  if (MP.paused) { text = `Paused by ${MP.pausedBy >= 0 ? (MP.pausedBy === MP.me ? 'you' : mpWho(MP.pausedBy)) : 'a player'}`; btn = 'Resume'; }
   else if (MPJ.on) { text = 'Joining the game…'; wait = true; }
   else if (P && P.out) text = 'Your colony has fallen: you\'re watching the rest of the game.';
-  else if (mpAINow(ME)) { text = mpBehind() > 2 ? 'Catching up with the others…' : 'Taking your colony back…'; wait = true; }
+  else if (mpAINow(MP.me)) { text = mpBehind() > 2 ? 'Catching up with the others…' : 'Taking your colony back…'; wait = true; }
   else if (!MP.linkOK && NET.state === 'game') { text = 'Reconnecting…'; wait = true; }
   else if (MP.stalled > 0.8 && MP.waitFor.length) {
-    const names = MP.waitFor.map((p) => playerName(p)).join(' and ');
+    const names = MP.waitFor.map((p) => mpWho(p)).join(' and ');
     const left = Math.max(0, Math.ceil(LS.STALL_S - MP.stalled));
-    text = `Waiting for ${names}` + (MP.stalled > 4 ? ` (the computer takes over in ${left} s)` : '…');
+    const mates = MP.waitFor.every((p) => S.crew && mpCol(p) === ME); // (co-op: a partner gone leaves the colony with me)
+    text = `Waiting for ${names}` + (MP.stalled > 4 ? (mates ? ` (carrying on without them in ${left} s)` : ` (the computer takes over in ${left} s)`) : '…');
     wait = true;
   }
   el.hidden = !text;
@@ -520,7 +615,8 @@ function mpSyncPauseMenu() {
   $('p-resume').textContent = on ? 'Back to the game' : 'Resume';
   $('p-mppause').hidden = !on;
   if (on) $('p-mppause').textContent = MP.paused ? 'Resume the game for everyone' : 'Pause the game for everyone';
-  $('p-quit').textContent = on ? (UI.mpQuitArm ? 'Tap again to leave: the computer takes over your colony' : 'Leave the game') : 'Save & quit';
+  const kept = on && S && S.crew && coopMates().some((q) => !mpAINow(q)); // (co-op: the partner keeps the colony)
+  $('p-quit').textContent = on ? (UI.mpQuitArm ? (kept ? 'Tap again to leave: your partner keeps the colony' : 'Tap again to leave: the computer takes over your colony') : 'Leave the game') : 'Save & quit';
   $('p-quit').classList.toggle('p-arm', on && !!UI.mpQuitArm); // (the long line: a row of its own)
   $('p-saved').hidden = on;
 }
