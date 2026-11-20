@@ -1499,7 +1499,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to download is tried once more a moment later (`loadImg`), and one that still fails draws nothing or the shape drawn
   in code: a missing canyon lip, Viaduct tower, Freight Train wagon or crossing barrier no longer makes the map throw
   (a Rift or Sky islands map could not start).
-- **The menu's backdrop:** an AI-vs-AI demo game plays behind the main menu. It opens 150 s into its game, fast-forwarded
+- **The menu's backdrop:** the planet turning (see **Wind, water, sky and the planet view**); under it an AI-vs-AI demo game plays on, drawn whenever the planet isn't showing. It opens 150 s into its game, fast-forwarded
   a slice each frame (`DEMO_WARM`, at most `WARM_MS` of a frame, in daylight: `TOD.dayHold`), so the page never waits
   for it at launch or on Save and quit (it ran all 4,500 steps at once: seconds on a phone).
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
@@ -2350,7 +2350,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Game's Rules; kept in `localStorage` as `terrafall.graphics`, read once before the first resize, never in the game or
   an order). **Auto**, the default, is all of the above unchanged. **Saver** draws at 1×, runs at most 30 frames a
   second (`frame` in js/main.js), halves sparks, embers, smoke puffs and weather specks (`fxCount`, `wxCount`), and
-  drops the city haze and the roads' wide glow at night (the pools under buildings and the road lines stay). **High**
+  drops the city haze and the roads' wide glow at night (the pools under buildings and the road lines stay), and the
+  heavier touches of `js/nature.js` (swaying plants, wind in the grass, frost, the aurora, the far-zoom tilt). **High**
   lifts the pixel budget to 21 million (a 6K screen at 2×), switches to the sharper ground chunks as soon as the coarser
   ones would be stretched (`hdLevel`), keeps twice the chunk memory, and draws 1.5× the sparks and smoke. **Ultra**
   draws at the screen's full `devicePixelRatio` (budget 36 million), with twice the effects and weather, a finer city
@@ -2737,6 +2738,49 @@ limestone textures, mineral bands along lake shores, and six terrain decorations
 vents and periodic geysers. The mini pools are decorations cleared by construction. The selected
 map type still determines water crossings and resource placement. The terrain and Sky islands
 cliffs are rendered by `renderer/terrain/terrain_springs.py` and load in their own biome bundle.
+
+### Wind, water, sky and the planet view
+
+The land alive, in `js/nature.js`, for looks only: nothing there changes the game, `S`, saves or orders; what it keeps
+(`NAT`) is display-only and made afresh for each game. Anything random comes from the planet's seed (`hash2`), so every
+device sees the same land. Hooks in `render`: `natureGround` after the ground is drawn and before the time of day grades
+it, `natureLight` after the grade (before the water's ripples), `natureOffMap` from `drawOffMap`, and `natureView` over
+the finished frame (before the selection box). Reduced motion stills the sway, the gusts, the twinkles, the waves and the
+clouds' drift (`natureCloudTime`).
+
+- **Wind** (`natureWind`): one wind for the map, its way and strength from the same stretches of the weather's clock as
+  the clouds' drift (`ambWind`, veering as `ambDrift` does), stronger in a spell of weather. Gusts (`natGust`) roll
+  across it downwind: crests `NATFX.wind.gap` tiles apart in patches. Zoomed in past `NATFX.sway` px a tile the
+  decorative plants are drawn live (`natPlants`) instead of baked into the sharp chunks (a chunk baked while they sway
+  has `noPlants`; `drawPlants` skips it, `natRebake` bakes the ones on screen again one a frame), each leaning with the
+  wind and the gust over it, and pushed outward for a moment by a blast near it (`natHear` reads new blasts in `S.fx`).
+  At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
+  masked to `natVegMask`, one tile a pixel, laid over the view in one draw), and a blast sends a ring of them out.
+  Not on Graphics Saver.
+- **Wet ground** (`natureWet`): through a rainstorm and for a few minutes after it (`NATFX.wetFor`) the land is darker
+  and cooler, roads glossy, puddles in the low spots; at night the wet ground mirrors the streetlamps and the lit
+  buildings (`natWetNight`). The spells are the weather's (`weatherAt`), so it needs no state.
+- **Frost** (`natureFrost`): on the Polar Caps, Argos and Emberwood rime creeps over the land in the last of the night,
+  is thickest at dawn and melts by midday, following the time of day as shown. Four layers of crystals, each with more
+  than the last; not on open water, not on Saver.
+- **The night sky** (`natNightSky`): the Ring's faint silver light on the land, its strength, angle and tint by planet
+  (`natRing`), and on the Polar Caps, Argos and the Bloom a slow aurora's light drifting over the ground (not on Saver).
+- **Water** (`natWater`): the sun's sparkle by day (thickest up the view, toward the sun), the Ring's band and Argos
+  mirrored by night with stars on clear nights (fixed on the view, as reflections are), and small waves lapping along
+  the shores (`natShores`). Not on lava or Argos; none of the sky in the Hollow.
+- **The planet view** (`natureOffMap`, `natureView`): past the map's edge its own ground carries on, mirrored, faded and
+  sinking into a haze of the biome's colour (`NATFX.haze`) that thickens outward. Zoomed far out (below
+  `NATFX.tilt.from` times the furthest zoom) the camera tilts a little (`natureTiltAt`, at most `NATFX.tilt.most`): the
+  finished frame is redrawn in strips, each row as wide as its distance makes it (a true perspective: straight lines stay
+  straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
+  `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
+  minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
+- **The main menu** (`js/menuplanet.js`): Ithaca I turns slowly behind the menu card on its own canvas (`#menu-planet`):
+  a coral world from a fixed seed (regions round scattered centres, seas between, ice at the poles, a layer of cloud),
+  shaded per pixel in a small image a few times a second, the Ring and Argos round it, the colonies' lights on the night
+  side and now and then the flash of a fight. Made a few rows a frame at launch; stops while the menu is hidden or the
+  tab is in the background, and holds still with reduced motion. While it shows, the demo game behind the menu plays on
+  but isn't drawn (`menuPlanetCovers` in `drawNeeded`).
 
 ### Cloud shadows, remains and beacons
 

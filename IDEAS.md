@@ -450,8 +450,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
     the blob.
-  - **Map edges, looks only:** faded, unplayable terrain carrying on past the map's edge; a haze in the biome's colour
-    thickening outward; perhaps a slight curve at far zoom.
+  - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
+    on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
+    and zoomed far out the camera tilts a little under a depth haze (the planet view). Still open: a true curve of the
+    horizon at the very furthest zoom.
   - **Road crews:** the rivals and the Roadworks; a shorter phone label ("All" instead of "No limit").
   - **Orbital Lift:** an 18-minute opening time; rivals rarely reach it; the Warden in the Hollow gets no main project.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
