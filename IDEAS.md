@@ -432,6 +432,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
       flicker in time" isn't in. Both are looks only.
     - "Alerts at half, 2 minutes and 30 s" come once each: a clock pushed back past them doesn't repeat them.
     - The Steward builds no Arrival City in a game with the win on, Domination included (the Uplink is its main project).
+    - Measured (Nov 20 2026): 16 AI-vs-AI games with Megastructures on (Normal, 60 minutes; Steward against each doctrine
+      on 12 maps, two 2 vs 2), the win on against off: on, all 16 decided by Capture, none by contact (most end before
+      minute 25; four Stewards had a site up); off, 15 decided and 1 undecided. In six late-start games (both colonies
+      stocked, 20 minutes of peace) a Steward made contact in 2 (against the Architect and the Salvager, its Uplink behind
+      its base: their bands were cut down on the way), was jammed and lost in 1, lost power at 6:18 of 8:00 in 1. Too
+      strong for a Steward building it at home, or the counterplay working as the sheet meant?
     - The campaign's last mission ("No further instructions") and whether its ending should answer differently from free
       play: not done; the mission that teaches it only asks to begin a transmission.
     The notes as filed: A giant dish array to talk to home, and a new way to win: power it and hold it through a long
