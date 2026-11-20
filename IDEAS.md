@@ -33,6 +33,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   and the Air/Army menus: `BOTS.magpod` must not appear there).
 - **No "Pipe to Terminal" button on an Oil Pump with a Refinery right beside it:** the conveyor join to adjacent
   production buildings already feeds it (the button is noise). Show it only when no Refinery or Fuel Tank touches the pump.
+- **Night sounds in the wilds (built Nov 20; open questions).** A cricket chorus that rises at dusk, a tree cricket's
+  trill, katydids and the savanna's cicada, owls, night birds and leaves in the forests, peepers, frogs and splashes in
+  Blackwater, insects and a dry wind on the Long Grass and in the Rust (`nightSounds` in `js/audio.js`; README, Sound).
+  Open: the owner to listen and set the level (the crickets' peak is `0.016` in `nightSchedule`, the calls' rates in
+  `NIGHT_SET`); whether the Shoals and Steamwells want more than their few crickets; whether the Bloom gets a night
+  chorus of its own (stranger, not insects); whether a Murmur night should thin the insects out near their tunnels.
 - **Tone down the road trucks' smoke and brake noise** (the exhaust puffs on Freight Trucks and Road Trains, and the
   brake squeal in `js/audio.js`): a little quieter and less constant.
 - **Dropped goods from a dismantled building go first to Haulers:** crates left by Dismantle are picked up before other
