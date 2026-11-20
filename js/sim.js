@@ -582,6 +582,7 @@ function touching(b) {
   };
   at(b.x, b.y);
   if (BDEFS[b.type] && BDEFS[b.type].long) at(...longTile(b.x, b.y, b.mdAxis)); // (round both tiles of a Mass Driver)
+  if (BDEFS[b.type] && BDEFS[b.type].foot) for (const [i, j] of footTiles(b.type, b.x, b.y)) if (i !== b.x || j !== b.y) at(i, j); // (round a megastructure's square)
   return out;
 }
 
@@ -4000,7 +4001,9 @@ function updateBuilding(b, dt) {
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
   else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';
   else if (def.viaduct) b.status = 'Open to traffic';
-  if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
+  if (def.lance) updateLance(b, dt);
+  else if (def.dome) updateDome(b, dt);
+  else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
   else if ((def.disrupt || def.mortar || def.flak || def.minigun || def.ammo || def.bunker || def.keep) && calmB(b)) b.status = 'Holding fire: nothing shoots on a Trade Post\'s ground';
@@ -4008,7 +4011,7 @@ function updateBuilding(b, dt) {
   else if (def.mortar) updateMortar(b, def, dt);
   else if (def.flak) updateFlak(b, def, dt);
   else if (def.minigun) updateMinigun(b, def, dt);
-  else if (def.ammo) updateTurret(b, def, dt);
+  else if (def.ammo && !def.dome) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
   if (def.charger && !def.store) {
     if (murmurCutOn(b)) b.status = 'Dark: the Murmur cut its power. It comes back at dawn.';
@@ -4092,8 +4095,8 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo))) continue; // (a Maglev Terminal on a line draws power too, and an aimed Mass Driver)
-    if (dist2(c.x, c.y, b.x, b.y) > r2) continue;
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || BDEFS[c.type].mega)) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure)
+    if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
   }
@@ -4153,9 +4156,9 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '');
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1);
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1); // (a third slower while its Lance charges)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
@@ -4752,6 +4755,7 @@ function updateMortar(b, def, dt) {
  */
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
+  if (domeCatch(m.x1, m.y1, m.owner, 'shell', m.x0, m.y0)) return; // (fired from outside a Shield Dome over it)
   blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
   scarBlast(m.x1, m.y1, 0.45); // (a shell hole: see War scars)
   sfx('shellhit', m.x1, m.y1);
@@ -7335,6 +7339,7 @@ function rocketFort(b) { return DEFENCE_TYPES.has(b.type) || BDEFS[b.type].mil; 
 
 /** A Howitzer's shell lands: it knocks ROCKET.damage off its target (×fortMul off a defence; forts no lower than MISSILE_FLOOR), and hurts what's round it. */
 function rocketImpact(m) {
+  if (domeCatch(m.x1, m.y1, m.owner, 'rocket', m.x0, m.y0)) return; // (fired from outside a Shield Dome over it)
   blastFx(m.x1, m.y1, 0.85);
   scarBlast(m.x1, m.y1, 0.85);
   sfx('howitzerhit', m.x1, m.y1);
@@ -8165,6 +8170,7 @@ function hitByNow(p, by) {
 
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
+  if (domeCatch(m.x1, m.y1, m.owner, 'missile')) return; // (a Shield Dome over it takes the hit)
   blastFx(m.x1, m.y1, 2.2);
   scarBlast(m.x1, m.y1, 1.4);
   sfx('missilehit', m.x1, m.y1);
@@ -8398,6 +8404,7 @@ let LAND_HOLD = 0;
 
 function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
+  if (domeCatch(cx, cy, m.owner, 'nuke')) { if (S.evac) for (const p in S.evac) S.evac[p] = (S.evac[p] || []).filter((e) => e.x !== cx || e.y !== cy); return; } // (a Shield Dome takes it, and drops)
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
   scarNuke(cx, cy, NUKE.radius); // (a glassed crater field: see War scars)
@@ -8916,7 +8923,7 @@ const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order
  */
 function movable(b) {
   const def = BDEFS[b.type];
-  return !!(b.built && !b.dead && !b.moving && b.type !== 'lander' && !(def.mil && !def.bunker) && !def.barrier && !def.viaduct && !def.ropeway && !def.ramp && !def.mobile && !def.wild);
+  return !!(b.built && !b.dead && !b.moving && b.type !== 'lander' && !(def.mil && !def.bunker) && !def.barrier && !def.viaduct && !def.ropeway && !def.ramp && !def.mobile && !def.wild && !def.mega); // (nor a megastructure: it's built where it stands)
 }
 
 /**
@@ -9220,6 +9227,7 @@ function rockSpot(rng) {
 /** Rock from the Hollow's roof lands on (r.x, r.y): buildings dented (never wrecked), robots hurt, Stone left lying. */
 function rockfall(r) {
   const cx = r.x + 0.5, cy = r.y + 0.5, R2 = TREMOR.r * TREMOR.r;
+  if (domeCatch(cx, cy, -1, 'rock')) return; // (a Shield Dome takes the falling rock)
   addFx('boom', cx, cy, { r: 1 });
   addFx('dustcloud', cx, cy, { r: 1.5 });
   addFx('crater', cx, cy, { life: 5 });
@@ -9591,6 +9599,7 @@ function hollowRingfall(rng, t0, dur) {
 /** A meteor lands on tile (h.x, h.y). */
 function meteorImpact(E, h) {
   const cx = h.x + 0.5, cy = h.y + 0.5, owner = S.owner[tIdx(h.x, h.y)];
+  if (domeCatch(cx, cy, -1, 'meteor')) return; // (a Shield Dome takes the piece of the Ring)
   addFx('boom', cx, cy, { r: 1.7 });
   addFx('smoke', cx, cy, { r: 1 });
   addFx('crater', cx, cy, { life: 6 });
@@ -10739,6 +10748,7 @@ function murmurPower(e) {
     if (b.dead || !b.built || b.cut || b.paused || !b.working || b.owner < 0 || isWild(b.owner) || murmurCutOn(b)) continue;
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
+    else if (BDEFS[b.type].lance && b.lOn) charge += 5;
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
   }
@@ -10749,7 +10759,8 @@ function murmurPower(e) {
 function chargeWorth(e) {
   const def = BDEFS[e.type];
   if (!e.built) return 0.5;
-  if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e))) return 3; // (a Maglev line running draws them as a Generator does)
+  if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
+  if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
 }
@@ -14468,6 +14479,7 @@ function napalmBurn(f) {
  * (m.deck) counts against the span: off the end nearer it, or the other end if that's the weaker (deckBombEnd).
  */
 function bombImpact(m) {
+  if (domeCatch(m.x1, m.y1, m.owner, m.napalm ? 'napalm' : 'bomb')) return; // (a Shield Dome over it takes it)
   if (m.napalm) { napalmImpact(m); return; }
   blastFx(m.x1, m.y1, 1.0);
   scarBlast(m.x1, m.y1, 1.1);
@@ -15855,6 +15867,13 @@ function hashState() {
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
   }
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
+  // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
+  for (const b of S.buildings) {
+    if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); }
+    if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
+  }
+  for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
+  for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
   if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
@@ -16090,6 +16109,8 @@ function updateCans(dt) {
   for (const m of S.cans) {
     if (m.gone) continue;
     m.t += dt;
+    // A rival's Shield Dome bursts a canister coming down into it (one flying over, high, goes on).
+    if (m.t < m.dur && m.t / m.dur > 0.5 && S.tick % 3 === 0) { const p = canPos(m); if (p.alt < 2.5 && domeCatch(p.x, p.y, m.owner, 'canister', m.x0, m.y0)) { canDown(m, p, -1); continue; } }
     if (m.t < m.dur) continue;
     const C = getE(m.to), i = Math.floor(m.x1), j = Math.floor(m.y1);
     if (C && !C.dead && C.built && C.owner === m.owner && BDEFS[C.type].catcher && C.x === i && C.y === j) {
@@ -16102,6 +16123,339 @@ function updateCans(dt) {
     } else canDown(m, { x: m.x1, y: m.y1 });
   }
   S.cans = S.cans.filter((m) => !m.gone);
+}
+
+/* ------------------------------------------------------------------ megastructures: the Lance of Corvane and the Shield Dome */
+
+/*
+ * The Lance of Corvane (LANCE; BDEFS.lance). b.lAim: the tile it's aimed through ([i, j]); b.lOn: charging; b.lCharge: how
+ * far (s); b.lSrc: what powers this charge ('gen', or 'reactor' with b.lReactor its id: the Uranium went in as it
+ * started); b.lReload: s until it can charge again; b.lShot: when it last fired. b.aim turns slowly toward its aim (the
+ * turntable; looks only). While it charges its owner's lights dim and factories slow (P.dimUntil: lanceDim). It fires
+ * with lanceFire. The Shield Dome (DOME; BDEFS.dome): b.dStr its strength, b.dHit when it was last hit, b.dDown until
+ * when it's dropped, b.dCry s left of the Crystal it burns, b.dUp whether it's up now (domeCatch reads it).
+ */
+
+/** Is player p's Lance charging (its lights dim and its factories slow)? */
+function lanceDim(p) { const P = S.players[p]; return !!(P && P.dimUntil > S.time); }
+
+/** The Generators of b's owner within `reach` tiles of building b's square with Fuel to burn (built, on, not cut by the Murmur). */
+function megaGens(b, reach) {
+  const out = [];
+  for (const g of S.buildings) {
+    if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'generator' || g.paused || murmurCutOn(g)) continue;
+    if (footDist(b, g.x + 0.5, g.y + 0.5) > reach + 0.5) continue;
+    if ((g.energy || 0) > 0 || (g.stock.fuel || 0) > 0) out.push(g);
+  }
+  return out;
+}
+
+/** A Nuclear Reactor of b's owner within LANCE.reach of it (built, on), the one with the most Uranium; or null. */
+function lanceReactor(b) {
+  let best = null;
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) > LANCE.reach + 0.5) continue;
+    if (!best || (r.stock.uranium || 0) > (best.stock.uranium || 0)) best = r;
+  }
+  return best;
+}
+
+/** What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium in it), or ''. */
+function lancePower(b) {
+  if (murmurCutOn(b)) return '';
+  if (megaGens(b, LANCE.reach).length >= LANCE.gens) return 'gen';
+  const r = lanceReactor(b);
+  return r && (r.stock.uranium || 0) >= LANCE.uranium ? 'reactor' : '';
+}
+
+/** Why Lance b can't start a charge now ('' if it can). */
+function lanceBlocked(b) {
+  if (!b || b.dead || !b.built) return 'The Lance is not built yet.';
+  if (b.lReload > 0) return `Reloading: it can charge again in ${fmtSecs(b.lReload)}.`;
+  if (!lancePower(b)) return `No power: it needs ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor there with ${LANCE.uranium} Uranium in it.`;
+  return '';
+}
+
+/** Can Lance b be aimed through tile (i, j)? '' or why not. */
+function lanceAimBlocked(b, i, j) {
+  if (!b || b.dead || !b.built) return 'The Lance is not built yet.';
+  if (!inMap(i, j)) return 'Off the map.';
+  const c = bCentre(b);
+  if (dist(c.x, c.y, i + 0.5, j + 0.5) < 3) return 'Too close: aim it at a spot away from the gun.';
+  return '';
+}
+
+/**
+ * Aim Lance b through tile (i, j) (an order: lanceAim). Not charging, it starts the charge now (if it has power and has
+ * reloaded); charging, it just turns to the new aim. '' or why not.
+ */
+function setLanceAim(b, i, j) {
+  const why = lanceAimBlocked(b, i, j);
+  if (why) return why;
+  if (!b.lOn) {
+    const no = lanceBlocked(b);
+    if (no) return no;
+    lanceStart(b);
+  }
+  b.lAim = [i | 0, j | 0];
+  return '';
+}
+
+/** Lance b starts charging: a Reactor's Uranium goes in now; everyone hears it. */
+function lanceStart(b) {
+  const src = lancePower(b);
+  b.lOn = 1; b.lCharge = 0; b.lSrc = src;
+  if (src === 'reactor') {
+    const r = lanceReactor(b);
+    bump(r.stock, 'uranium', -LANCE.uranium); usedGood(b.owner, 'uranium', LANCE.uranium);
+    b.lReactor = r.id;
+  } else b.lReactor = 0;
+  const c = bCentre(b);
+  sfx('lancecharge', c.x, c.y);
+  postMsg(b.owner, `The Lance of Corvane is charging: it fires in ${LANCE.charge} seconds. Your lights dim and your factories slow meanwhile.`, b.x + 1, b.y + 1, 'info');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is charging the Lance of Corvane! It fires in ${LANCE.charge} seconds, in a line across the whole map.`, b.x + 1, b.y + 1, 'bad');
+  logEvent({ t: S.time, k: 'lance', p: b.owner });
+}
+
+/** Call off Lance b's charge (an order: lanceStop, or its power lost). */
+function lanceStop(b, why) {
+  if (!b.lOn) return;
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
+  if (why) postMsg(b.owner, why, b.x + 1, b.y + 1, 'bad');
+}
+
+/** Is the power lance b's charge started with still there? */
+function lanceStillPowered(b) {
+  if (murmurCutOn(b)) return false;
+  if (b.lSrc === 'reactor') { const r = getE(b.lReactor); return !!(r && !r.dead && r.built && r.owner === b.owner); }
+  return megaGens(b, LANCE.reach).length >= LANCE.gens;
+}
+
+/** The Lance of Corvane, each tick: the turntable, the charge, the shot. */
+function updateLance(b, dt) {
+  if (b.lReload > 0) b.lReload = Math.max(0, b.lReload - dt);
+  if (b.lAim) {
+    const c = bCentre(b), want = datan2(b.lAim[1] + 0.5 - c.y, b.lAim[0] + 0.5 - c.x);
+    let d = want - (b.aim || 0);
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const step = 0.35 * dt;
+    b.aim = Math.abs(d) <= step ? want : (b.aim || 0) + Math.sign(d) * step;
+  }
+  if (!b.lOn) {
+    b.working = false;
+    b.status = b.lReload > 0 ? `Reloading: ready to charge in ${fmtSecs(b.lReload)}` : lancePower(b) ? 'Ready: tap Aim, then a spot on the map' : `No power: ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor with ${LANCE.uranium} Uranium`;
+    return;
+  }
+  if (!lanceStillPowered(b)) {
+    lanceStop(b, b.lSrc === 'reactor' ? 'The Lance lost its Reactor: the charge is gone.' : 'The Lance lost its power (its Generators are wrecked or out of Fuel): the charge is gone.');
+    b.status = 'Charge lost: no power';
+    return;
+  }
+  b.working = true;
+  S.players[b.owner].dimUntil = S.time + 0.5;
+  // Its Generators burn Fuel fast while it charges (one every LANCE.genFuel s each, against BDEFS.generator's own rate).
+  if (b.lSrc === 'gen') {
+    const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / LANCE.genFuel - 1);
+    for (const g of megaGens(b, LANCE.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
+  }
+  if (b.lCharge < LANCE.charge) {
+    b.lCharge = Math.min(LANCE.charge, b.lCharge + dt);
+    b.status = `Charging: fires in ${fmtSecs(LANCE.charge - b.lCharge)}`;
+    if (b.lCharge >= LANCE.charge - LANCE.warn && b.lCharge - dt < LANCE.charge - LANCE.warn) {
+      for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `The Lance of Corvane fires in ${LANCE.warn} seconds!`, b.x + 1, b.y + 1, 'bad');
+    }
+    if (b.lCharge < LANCE.charge) return;
+  }
+  if (eventNow('dust')) { b.status = 'Charged, holding: a dust storm scatters the beam. It fires when it blows over'; return; }
+  if (!b.lAim) { b.status = 'Charged: tap Aim, then a spot on the map'; return; }
+  lanceFire(b);
+}
+
+/**
+ * Where Lance b's beam runs: from its middle through (tx, ty) to the map's edge, stopped by the first Shield Dome it
+ * enters that isn't its own side's. { x0, y0, x1, y1, ux, uy, len, dome }.
+ */
+function lanceLine(b, tx, ty) {
+  const c = bCentre(b), dx = tx - c.x, dy = ty - c.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  let len = Infinity;
+  if (ux > 1e-9) len = Math.min(len, (S.W - c.x) / ux); else if (ux < -1e-9) len = Math.min(len, -c.x / ux);
+  if (uy > 1e-9) len = Math.min(len, (S.H - c.y) / uy); else if (uy < -1e-9) len = Math.min(len, -c.y / uy);
+  let dome = null;
+  for (const d of S.buildings) {
+    if (d.dead || !d.built || !d.dUp || !BDEFS[d.type].dome || !foes(d.owner, b.owner)) continue;
+    const dc = bCentre(d), fx = dc.x - c.x, fy = dc.y - c.y, along = fx * ux + fy * uy, off2 = fx * fx + fy * fy - along * along, R = DOME.radius;
+    if (off2 > R * R) continue;
+    const enter = along - Math.sqrt(R * R - off2), exit = along + Math.sqrt(R * R - off2);
+    if (exit < 0) continue;
+    const s0 = Math.max(0, enter);
+    if (s0 < len) { len = s0; dome = d; }
+  }
+  return { x0: c.x, y0: c.y, x1: c.x + ux * len, y1: c.y + uy * len, ux, uy, len, dome };
+}
+
+/** The tiles Lance b's line L passes over (within the beam's width), in order out from the gun, its own square left out. */
+function lanceTiles(b, L) {
+  const out = [], seen = new Set(), hw = LANCE.width / 2 + 0.35;
+  for (let s = 0; s <= L.len; s += 0.3) {
+    const x = L.x0 + L.ux * s, y = L.y0 + L.uy * s;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const i = Math.floor(x) + di, j = Math.floor(y) + dj;
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (seen.has(t) || S.bAt[t] === b.id) continue;
+      const fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, along = fx * L.ux + fy * L.uy;
+      if (along < 0 || along > L.len + 0.3) continue;
+      if (Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
+      seen.add(t); out.push(t);
+    }
+  }
+  return out;
+}
+
+/** Lance b fires along its aim: everything on the line is destroyed (see LANCE), and the ground is cut for good. */
+function lanceFire(b) {
+  const owner = b.owner, L = lanceLine(b, b.lAim[0] + 0.5, b.lAim[1] + 0.5);
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
+  b.lReload = LANCE.reload; b.lShot = S.time;
+  b.working = false;
+  const P = S.players[owner];
+  if (P) P.stats.lance = (P.stats.lance || 0) + 1;
+  S.cuts = S.cuts || [];
+  S.cuts.push({ x0: Math.round(L.x0 * 100) / 100, y0: Math.round(L.y0 * 100) / 100, x1: Math.round(L.x1 * 100) / 100, y1: Math.round(L.y1 * 100) / 100, t: S.time, o: owner, d: L.dome ? 1 : 0 });
+  if (S.cuts.length > LANCE.cutsMax) S.cuts.shift();
+  sfx('lancefire', L.x0, L.y0);
+  if (L.dome) domeHit(L.dome, 'lance', L.x1, L.y1, owner);
+  const tiles = lanceTiles(b, L), lost = S.players.map(() => 0), bots = S.players.map(() => 0), hit = new Set();
+  LAND_HOLD = 1;
+  try {
+    for (const t of tiles) {
+      const e = getE(S.bAt[t]);
+      if (!e || e.dead || e === b || hit.has(e) || calmB(e)) continue;
+      hit.add(e);
+      if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
+      e.lastHit = S.time;
+      if (BDEFS[e.type].wild) { if (e.owner !== owner) captureBuilding(e, owner); continue; } // (a Murmur nest or exit on the line: cleared)
+      if (captureOnly(e)) { e.armor = Math.min(e.armor, missileFloor(e)); continue; }
+      if (e.owner >= 0) lost[e.owner]++;
+      fortTaken(e, owner);
+      destroyBuilding(e, true);
+    }
+    const hw = LANCE.width / 2 + 0.2;
+    for (const u of S.bots) {
+      if (u.dead || u.inside || aloft(u) || calmAt(u.x, u.y)) continue;
+      const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
+      if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
+      if (u.owner >= 0 && bots[u.owner] !== undefined) bots[u.owner]++;
+      noteDanger(u);
+      killBot(u);
+    }
+    for (const t of tiles) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (S.plan[t]) cancelPlan(t);
+      if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); }
+    }
+  } finally {
+    const zones = LAND_HOLD === 2;
+    LAND_HOLD = 0;
+    if (zones) computeZones();
+  }
+  computeTerritory();
+  scarTrench(tiles, L);
+  const mine = lost[owner] || 0, theirs = lost.reduce((a, n, p) => a + (p === owner ? 0 : n), 0);
+  if (P) P.stats.lanceBest = Math.max(P.stats.lanceBest || 0, theirs); // (the most rival buildings one shot took: a mission counts it)
+  for (const Q of S.players) {
+    const p = Q.id;
+    if (Q.absent || Q.out || isWild(p)) continue;
+    if (p === owner) postMsg(p, L.dome ? `The Lance fired: a Shield Dome took the shot. ${theirs} building${theirs === 1 ? '' : 's'} hit short of it.` : `The Lance fired across the map: ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed${mine ? `, and ${mine} of your own` : ''}.`, b.x + 1, b.y + 1, 'good');
+    else postMsg(p, lost[p] || bots[p] ? `The Lance of Corvane fired: you lost ${lost[p]} building${lost[p] === 1 ? '' : 's'} and ${bots[p]} robot${bots[p] === 1 ? '' : 's'}!` : `${playerName(owner, true)}'s Lance of Corvane fired across the map.`, Math.floor(L.x1), Math.floor(L.y1), lost[p] || bots[p] ? 'lost' : 'bad');
+  }
+  if (P && P.ai) for (const Q of S.players) if (Q.id !== owner && lost[Q.id]) doctrineVoice(owner, Q.id, 'missile', Math.floor(L.x1), Math.floor(L.y1), 90);
+  logEvent({ t: S.time, k: 'lanceFire', p: owner });
+}
+
+/**
+ * The Lance's cut (War scars): the ground along it burned to ash for good (on Light, scorched), a furrow of churned
+ * craters down the middle, and every animal there dead, its bones left. The trench itself is drawn from S.cuts.
+ */
+function scarTrench(tiles, L) {
+  const lv = scarLevel();
+  if (!lv || !S.ash) return;
+  S.scarN++;
+  for (const t of tiles) {
+    if (!scarGround(t)) continue;
+    const i = t % S.W, j = (t / S.W) | 0, fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, off = Math.abs(fx * L.uy - fy * L.ux);
+    scarFauna(t, i, j, 6);
+    S.ash[t] = lv === 2 ? Math.max(S.ash[t], SCARS.good) : Math.max(S.ash[t], SCARS.light);
+    if (lv === 2 && off < 0.5) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + 2);
+    markDirty(i, j);
+  }
+}
+
+/* ---- the Shield Dome */
+
+/** Is a Generator with Fuel within DOME.reach of Shield Dome b? */
+function domePowered(b) { return !murmurCutOn(b) && megaGens(b, DOME.reach).length > 0; }
+
+/** The Shield Dome, each tick: up or down, its Crystal, its strength. */
+function updateDome(b, dt) {
+  if (b.dStr === undefined) b.dStr = DOME.max;
+  if (b.dDown) {
+    if (S.time < b.dDown) { b.dUp = 0; b.working = false; b.status = `Down: it comes back in ${fmtSecs(b.dDown - S.time)}`; return; }
+    b.dDown = 0; b.dStr = Math.max(b.dStr, DOME.back); b.dHit = S.time - DOME.quiet;
+    postMsg(b.owner, 'Your Shield Dome is back up.', b.x, b.y, 'good');
+  }
+  const pow = domePowered(b), cry = (b.dCry || 0) > 0 || (b.stock.crystal || 0) > 0;
+  const was = b.dUp;
+  b.dUp = pow && cry ? 1 : 0;
+  b.working = !!b.dUp;
+  if (!b.dUp) {
+    b.status = !pow ? `Down: no power (a Generator with Fuel within ${DOME.reach} tiles)` : 'Down: no Crystal (Haulers bring it)';
+    if (was) postMsg(b.owner, `Your Shield Dome went down: ${!pow ? 'it has no power' : 'it ran out of Crystal'}.`, b.x, b.y, 'warn');
+    return;
+  }
+  b.dCry = (b.dCry || 0) - dt;
+  if (b.dCry <= 0 && (b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); usedGood(b.owner, 'crystal', 1); b.dCry += DOME.crystal; }
+  if (S.time - (b.dHit ?? -99) >= DOME.quiet && b.dStr < DOME.max) b.dStr = Math.min(DOME.max, b.dStr + DOME.regen * dt);
+  b.status = `Up: ${Math.floor(b.dStr)} of ${DOME.max} strength` + (b.dStr < DOME.max ? (S.time - (b.dHit ?? -99) < DOME.quiet ? ' (hit: it recharges once left alone)' : ', recharging') : '');
+}
+
+/**
+ * Does a Shield Dome stop what falls at (x, y), fired by player `by` (-1: the planet's own, Ringfall or falling rock)?
+ * An up Dome of a foe of `by` (any Dome for the planet's) with (x, y) under it; for a shell from a gun (`sx`, `sy`
+ * given), only if the gun is outside it (guns fire through it from inside). If so, it takes the hit (domeHit: `kind`, a
+ * key of DOME.cost) and the caller's blast doesn't happen. True if stopped.
+ */
+function domeCatch(x, y, by, kind, sx, sy) {
+  let best = null, bd = Infinity;
+  for (const d of S.buildings) {
+    if (d.dead || !d.built || !d.dUp || !BDEFS[d.type].dome) continue;
+    if (by >= 0 && !foes(d.owner, by)) continue;
+    const c = bCentre(d), d2 = dist2(c.x, c.y, x, y), R2 = DOME.radius * DOME.radius;
+    if (d2 > R2 || d2 >= bd) continue;
+    if (sx !== undefined && dist2(c.x, c.y, sx, sy) <= R2) continue;
+    best = d; bd = d2;
+  }
+  if (!best) return false;
+  domeHit(best, kind, x, y, by);
+  return true;
+}
+
+/** Shield Dome d takes a hit of `kind` over (x, y): its strength goes down by DOME.cost[kind]; at 0 it drops for DOME.down s. */
+function domeHit(d, kind, x, y, by) {
+  const cost = DOME.cost[kind] || 10;
+  d.dStr = Math.max(0, (d.dStr ?? DOME.max) - cost);
+  d.dHit = S.time;
+  addFx('domehit', x, y, { life: 0.9, dome: d.id, big: cost >= 25 ? 1 : 0 });
+  if (by >= 0 && foes(by, d.owner)) hitByNow(d.owner, by);
+  if (d.dStr > 0) { sfx('domehit', x, y); return; }
+  d.dUp = 0; d.dDown = S.time + DOME.down; d.working = false;
+  const c = bCentre(d);
+  addFx('domefall', c.x, c.y, { life: 1.6, dome: d.id });
+  sfx('domefall', c.x, c.y);
+  postMsg(d.owner, `Your Shield Dome dropped${kind === 'nuke' ? ': it took a nuclear missile' : kind === 'lance' ? ': it took a Lance shot' : ''}. It comes back in ${DOME.down} seconds.`, d.x, d.y, 'lost');
+  if (by >= 0 && foes(by, d.owner)) postMsg(by, 'An enemy Shield Dome dropped: its base is open for a minute.', d.x, d.y, 'good');
 }
 
 /* ------------------------------------------------------------------ war scars */

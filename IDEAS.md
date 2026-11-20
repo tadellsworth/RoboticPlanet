@@ -59,7 +59,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   sabotage every weak point in your base (the Phase 1+2 "crafty" Murmur is the base to build on).
 
 **Game setup and structure**
-- **Megastructures are an enable-able checkbox on game setup,** like Nuclear race (default off?), so games without them stay as
+- **Megastructures are an enable-able checkbox on game setup,** like Nuclear race (BUILT, Nov 20 2026, with the Lance of
+  Corvane and the Shield Dome: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
+  settings; missions keep their own; a save from before it loads with them off), so games without them stay as
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
 - **A truly global map, a size above Huge,** for those who want an enormous battle, maybe with TWO biomes in it that slowly
   crossfade into each other across the map (a new map type; mind generation time and the 16 MB-free bundle design).
@@ -257,7 +259,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   it near roads for a little Alloy (the rivals too); the Murmur's tunnels lean toward big heaps of it; blasts kill
   animals, their bones stay, wildlife and birdsong leave the battlefields; a setting Off / Light / Full (Full by
   default) in Settings only, fixed into each game as it starts. (An end-of-game tally was dropped by the owner.) Still
-  open: the Lance of Corvane's trench (when the megastructure comes); a renderer sprite set for scrap and bones; carrion
+  open: the Lance of Corvane's trench (built with it, Nov 20 2026: `S.cuts`, `scarTrench`); a renderer sprite set for scrap and bones; carrion
   birds over the old graveyards, not only fresh wrecks; whether ash should also stop Bio Farms and Harvesters (today
   only napalm and Torches burn farmland, as before). The notes as filed:
   **Total war scars the land** (the owner, Nov 18 2026: for later; "I really like the concepts of these battles
@@ -348,7 +350,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
     work; the Murmur hate it and go for it.
-  - **The Lance of Corvane** (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
+  - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
+    *Aimed the Other Way*). The owner's look A (a 3 × 3 gun pit, a long barrel on a turntable), the beam across the whole
+    map, killing robots of every side too, 2 Generators or a Reactor, 90 s charge, 4 min reload, allowed on Argos; the
+    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). Still open: power lines
+    to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim
     and its factories slow while it does, and a glow climbs the barrel for everyone to see. The beam crosses the whole
@@ -360,7 +366,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the beam lights the map for a moment and the cut glows red, then cools. (The game has no power lines: Generators
     power what's within 4 tiles of them. Power lines that carry a Generator's power further, and that the Murmur's
     Leeches drain, would be an idea of their own; the lore already speaks of them.)
-  - **Power for the megastructures: power lines and nuclear power** (the owner: a use for Uranium beyond the bomb).
+  - **Power for the megastructures: power lines and nuclear power** (the owner: a use for Uranium beyond the bomb). For
+    now the Lance runs on 2 Generators or a Nuclear Reactor (2 Uranium a shot) within 4 tiles, and the Dome on a
+    Generator: this is still open, and would take over from those.
     Today Uranium is only in a Nuclear race, enriched at the Reactor for the bomb, and Generators only speed up what is
     within 4 tiles. Instead: a **Nuclear Power Plant** burns Enriched Uranium for far more power than Generators, and
     **power lines** (pylons, laid like roads or track) carry it across the colony. The big structures (the Lance, the
@@ -369,7 +377,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the bomb. Risks: a Plant hit hard enough melts down (a small fallout zone where nothing works for a while); the
     Murmur's Leeches drain power lines at night, the lights going out pylon by pylon (as LORE.md already has it); a
     rival cuts a line to stop a charging Lance.
-  - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
+  - **Shield Dome: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures). The owner's look A (a
+    faint blue hex-panel dome from a 2 × 2 emitter), radius 9, 100 strength, a Crystal every 20 s and a Generator; the
+    rivals put one up late when threatened from afar. The notes as filed: A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
     powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
     ground assault.
 - **High-speed transit** (the owner, Nov 17 2026: saved for later; Nov 18: next after the oil seeps, in this order: Maglev,

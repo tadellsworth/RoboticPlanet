@@ -63,6 +63,7 @@
  * the centre of the pad's top surface sits on the tile centre. Tune the size for all of them here.
  */
 const MD_FRAME = { scale: 2.4789, anchor: [0.5, 0.57] }; // (the Mass Driver's wide frame: see tools/install_massdriver.py)
+const LANCE_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }, DOME_FRAME = { scale: 2.9904, anchor: [0.5, 0.6] }; // (the megastructures' wide frames: see tools/install_lance.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
@@ -235,6 +236,13 @@ const ART_MANIFEST = {
   ...Object.fromEntries([0, 1].flatMap((t) => [[`mdriver@${t}`, { src: `buildings/mdriver-e@${t}.webp`, ...MD_FRAME }],
     ...['e', 'w', 'n', 's'].map((d) => [`mdriver-${d}@${t}`, { src: `buildings/mdriver-${d}@${t}.webp`, ...MD_FRAME }]),
     [`catcher@${t}`, B3D(`buildings/catcher@${t}.webp`)], [`catcher-closed@${t}`, B3D(`buildings/catcher-closed@${t}.webp`)]])),
+  // The megastructures (renderer/b/lance.js and b/dome.js, the owner's look A for both, installed by tools/install_lance.py):
+  // the Lance of Corvane's 3 x 3 gun pit, its gun on the turntable turned each of 16 ways (no team colour: one set for
+  // every team; drawBuilding lays it over the pit by the Lance's aim), and the Shield Dome's 2 x 2 emitter, framed wide
+  // (LANCE_FRAME, DOME_FRAME: the scale in tiles and the anchor, the middle of the square). The dome itself, the beam,
+  // the charge rings' glow and the cut are drawn in code (js/render.js, the megastructures).
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`lance@${t}`, { src: `buildings/lance@${t}.webp`, ...LANCE_FRAME }], [`dome@${t}`, { src: `buildings/dome@${t}.webp`, ...DOME_FRAME }]])),
+  ...Object.fromEntries(Array.from({ length: 16 }, (_, k) => [`lance-head-${k}`, { src: `buildings/lance-head-${k}.webp`, ...LANCE_FRAME }])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

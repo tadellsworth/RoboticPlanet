@@ -2991,8 +2991,12 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const color = PLAYER_COLORS[owner];
   const t = R.time;
   const working = b && b.working;
-  if (b && !b.built) { drawSite(ctx, type, cx, cy, s, owner, b); return; }
-  if (type === 'magpylon' && b && b.id) return; // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
+  if (b && !b.built) {
+    if (BDEFS[type] && BDEFS[type].foot) { drawMegaSite(ctx, type, cx, cy, s, owner, b); return; }
+    drawSite(ctx, type, cx, cy, s, owner, b); return;
+  }
+  if (type === 'magpylon' && b && b.id) return;
+  if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
   // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
@@ -3030,6 +3034,12 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
     if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
+    // The Lance of Corvane: its gun on the turntable turns to its aim (lance-head-0…15), and its rings light as it charges.
+    if (type === 'lance') {
+      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'lance');
+      if (head) drawArt(ctx, head, cx, cy, s);
+      if (b && b.id) drawLanceCharge(ctx, b, cx, cy, s);
+    }
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
@@ -3894,6 +3904,25 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
     if (b.armor < BDEFS[type].armor * 0.3) { ctx.moveTo(r[0] + r[2] * 0.8, r[1] - h + r[3] * 0.2); ctx.lineTo(r[0] + r[2] * 0.6, r[1] - h + r[3] * 0.55); }
     ctx.stroke();
   }
+}
+
+/** A megastructure going up: its square marked out, the finished thing rising out of it as it's built, the site's crates at its door. */
+function drawMegaSite(ctx, type, cx, cy, s, owner, b) {
+  const F = BDEFS[type].foot, w = F * s, color = PLAYER_COLORS[owner];
+  ctx.fillStyle = 'rgba(40,25,15,0.22)'; ctx.fillRect(cx - w / 2, cy - w / 2, w, w);
+  ctx.setLineDash([s * 0.16, s * 0.1]); ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.05);
+  ctx.strokeRect(cx - w / 2 + 2, cy - w / 2 + 2, w - 4, w - 4); ctx.setLineDash([]);
+  const stub = { built: true, garrison: [], stock: {}, aim: -Math.PI / 4, x: b.x, y: b.y };
+  ctx.save(); ctx.globalAlpha = 0.22; drawBuilding(ctx, type, cx, cy, s, owner, stub); ctx.restore();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(cx - w * 1.5, cy + w * 0.5 - w * 1.4 * b.progress, w * 3, w * 3); ctx.clip();
+  ctx.globalAlpha = 0.9; drawBuilding(ctx, type, cx, cy, s, owner, stub);
+  ctx.restore();
+  const art = artFor('site', owner);
+  if (art) drawArt(ctx, art, cx - w / 2 + s * 0.5, cy - w / 2 + s * 0.5, s);
+  const bw = w * 0.8;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(cx - bw / 2, cy + w * 0.46, bw, Math.max(3, s * 0.1));
+  ctx.fillStyle = color; ctx.fillRect(cx - bw / 2, cy + w * 0.46, bw * b.progress, Math.max(3, s * 0.1));
 }
 
 function drawSite(ctx, type, cx, cy, s, owner, b) {
@@ -6327,6 +6356,7 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
+  drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
@@ -6372,7 +6402,7 @@ function render(dtReal) {
 
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
-  for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
+  for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, BDEFS[b.type].foot ? 5 : 2)) items.push(b);
   for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && !BOTS[u.type].magpod && inView(u.x, u.y, 1)) items.push(u); // (Maglev pods ride their guideway: drawMaglevs)
   // Planes parked at an Airfield: one waits at the head of the runway, lined up to roll; the rest are in the
   // hangar (a tag on the Airfield says how many). Nothing parks off the runway, on ground other things use.
@@ -6416,7 +6446,7 @@ function render(dtReal) {
       if (inMap(i, j) && S.over[tIdx(i, j)] && Math.abs(dsin(e.face || 0)) > Math.abs(dcos(e.face || 0)) && e.y > j + 0.4) under.set(e, j + 0.4);
     }
   }
-  const sortY = (a) => (a.ent === 'b' ? a.y + 0.5 : under && under.has(a) ? under.get(a) : a.y);
+  const sortY = (a) => (a.ent === 'b' ? a.y + (BDEFS[a.type].foot ? BDEFS[a.type].foot - 0.5 : 0.5) : under && under.has(a) ? under.get(a) : a.y); // (a megastructure: by its square's bottom row)
   items.sort((a, b) => sortY(a) - sortY(b));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
@@ -6431,10 +6461,13 @@ function render(dtReal) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
       if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || BDEFS[e.type].pylon || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power; a Maglev pylon lights the line, not the ground)
-      const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
-      const dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1; // (a Leech drinking from it: its lights dim)
+      const F = BDEFS[e.type].foot, size = F ? F * 1.05 : e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
+      // (a Leech drinking from it: its lights dim; so do a colony's while its Lance charges, flickering)
+      let dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1;
+      if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
-      pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#a46cff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      const pc = F ? bCentre(e) : { x: e.x + 0.5, y: e.y + 0.5 };
+      pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
     drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
@@ -6450,17 +6483,17 @@ function render(dtReal) {
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
     if (e.ent === 'b') {
-      const c0 = BDEFS[e.type].long ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles)
+      const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
-        const w = z * 0.8;
+        const w = z * 0.8 * (def.foot || 1), by = cy - z * 0.62 * (def.foot || 1);
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(cx - w / 2, cy - z * 0.62, w, Math.max(3, z * 0.08));
+        ctx.fillRect(cx - w / 2, by, w, Math.max(3, z * 0.08));
         ctx.fillStyle = e.armor / def.armor > 0.4 ? '#ffd166' : '#ff5a5a';
-        ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
+        ctx.fillRect(cx - w / 2, by, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
       const mine = e.owner === ME && !R.clean;
       if (mine) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
@@ -6524,6 +6557,8 @@ function render(dtReal) {
   drawLavaVents(ctx, ox, oy, z, v0, v1);
   if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
+  drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
+  drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
@@ -6555,7 +6590,8 @@ function render(dtReal) {
     if (rwy) { ctx.globalAlpha = 0.7; drawRunway(ctx, ox, oy, z, R.ghost.x, R.ghost.y, rwy, true); ctx.globalAlpha = 1; }
   }
   if (R.ghost) {
-    const L = BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long, ns = L && typeof UI !== 'undefined' && UI.mdAxis === 'ns', gw = L && !ns ? 2 : 1, gh = ns ? 2 : 1; // (a Mass Driver: two tiles)
+    const L = BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long, ns = L && typeof UI !== 'undefined' && UI.mdAxis === 'ns', F = (BDEFS[R.ghost.type] && BDEFS[R.ghost.type].foot) || 0;
+    const gw = F || (L && !ns ? 2 : 1), gh = F || (ns ? 2 : 1); // (a Mass Driver: two tiles; a megastructure: its square)
     ctx.globalAlpha = 0.75;
     drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + gw / 2) * z, oy + (R.ghost.y + gh / 2) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, mdAxis: ns ? 'ns' : 'ew' });
     ctx.globalAlpha = 1;
@@ -6574,7 +6610,8 @@ function render(dtReal) {
     ctx.lineWidth = 2;
     ctx.setLineDash([z * 0.15, z * 0.1]);
     ctx.lineDashOffset = -R.time * z * 0.5;
-    const r = sel.type === 'lander' ? z * 0.95 : BDEFS[sel.type] && BDEFS[sel.type].long ? z * 1.1 : z * 0.6, sc = BDEFS[sel.type] && BDEFS[sel.type].long ? bCentre(sel) : { x: sel.x + 0.5, y: sel.y + 0.5 };
+    const F = BDEFS[sel.type] && BDEFS[sel.type].foot;
+    const r = sel.type === 'lander' ? z * 0.95 : F ? z * F * 0.78 : BDEFS[sel.type] && BDEFS[sel.type].long ? z * 1.1 : z * 0.6, sc = BDEFS[sel.type] && (BDEFS[sel.type].long || F) ? bCentre(sel) : { x: sel.x + 0.5, y: sel.y + 0.5 };
     ctx.beginPath(); ctx.arc(ox + sc.x * z, oy + sc.y * z, r, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -7717,6 +7754,16 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
+  if (def.dome || def.lance) {
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
+    if (def.dome) { ctx.fillStyle = 'rgba(120,200,255,0.07)'; ctx.strokeStyle = 'rgba(150,215,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]); ctx.beginPath(); ctx.arc(cx, cy, DOME.radius * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); }
+    // the power it needs: its reach round the square, where Generators (or the Lance's Reactor) count
+    const r = (def.dome ? DOME.reach : LANCE.reach) + (def.foot / 2);
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.stroke();
+    const b = getE(S.bAt[tIdx(x, y)]);
+    if (def.lance && b && b.lAim && b.lOn && (owner === ME || !foes(owner, ME))) drawLanceLine(ctx, ox, oy, z, b, b.lAim[0], b.lAim[1], false);
+    return;
+  }
   const r = def.gather || def.plant ? def.radius + 0.5 : def.burner ? def.burner.radius + 0.5 : def.range ? turretRange({ type, owner: owner || 0 }) : def.missile ? def.missile.range : def.mil ? def.terr : 0;
   if (def.minRange) { // a Mortar Pit's blind zone
     ctx.strokeStyle = 'rgba(255,140,140,0.5)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
@@ -7833,6 +7880,7 @@ function drawLandingPick(ctx, ox, oy, z) {
 function drawAim(ctx, ox, oy, z) {
   const silo = getE(typeof UI !== 'undefined' ? UI.aimSilo : 0);
   if (!silo) return;
+  if (BDEFS[silo.type].lance) { const sp = R.aim || R.aimHover; if (sp && !lanceAimBlocked(silo, sp.i, sp.j)) drawLanceLine(ctx, ox, oy, z, silo, sp.i, sp.j, true); return; }
   const nuke = !!BDEFS[silo.type].nukeSilo;
   const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;
@@ -8204,7 +8252,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
-    if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake') continue; // see drawAirLayer (a quake only shakes the screen: see fxShake)
+    if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake' || f.type === 'domehit' || f.type === 'domefall') continue; // (a Shield Dome's: see drawDomes) // see drawAirLayer (a quake only shakes the screen: see fxShake)
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
@@ -9641,6 +9689,355 @@ function canScreen(m, ox, oy, z, t) {
   const k = clamp(t / m.dur, 0, 1), from = getE(m.from), dir = MD_ART[from && !from.dead ? mdDir(from) : 'e'], c0 = dir.m, c1 = MD_ART.cradle;
   const gx = m.x0 + (m.x1 - m.x0) * k, gy = m.y0 + (m.y1 - m.y0) * k, alt = canAlt(m, k) * MD_ART.lift;
   return { x: ox + (gx + c0[0] * (1 - k) + c1[0] * k) * z, y: oy + (gy + c0[1] * (1 - k) + c1[1] * k - alt) * z, gx: ox + gx * z, gy: oy + gy * z, k };
+}
+
+/* ------------------------------------------------------------------ megastructures: the Lance of Corvane, the Shield Dome */
+
+/*
+ * The megastructures' effects, all drawn in code over their art (renderer/b/lance.js, renderer/b/dome.js): the Lance's
+ * charge rings lighting up its barrel one by one as it charges (LANCE_ART: where each of its eight rings and its muzzle
+ * are, for each of its 16 ways, in tiles from the middle of its square on screen, as tools/install_lance.py printed
+ * them), the beam crossing the map (a white-hot core in an orange-red glow, the whole map lit for a moment at night),
+ * the cut it leaves (S.cuts: a scorched trench for good, glowing red and cooling, steam where it crossed water), and the
+ * Shield Dome (a faint blue lattice of hexagon panels over the base, shimmering, flashing where something hits it,
+ * breaking up as it drops). LANCE_BEAM_UP: how far above the ground the beam runs, in tiles up the screen.
+ */
+const LANCE_BEAM_UP = 0.57, DOME_K = 0.62;
+/** For each of the Lance's 16 ways (0 east, then clockwise): its rings `r`, muzzle `m` and breech `b` (tools/install_lance.py). */
+const LANCE_ART = [
+  { r: [[0.601, -0.372], [0.807, -0.394], [1.013, -0.416], [1.22, -0.438], [1.429, -0.46], [1.637, -0.482], [1.848, -0.504], [2.059, -0.526]], m: [2.499, -0.573], b: [-0.555, -0.249] },
+  { r: [[0.56, -0.178], [0.754, -0.133], [0.95, -0.087], [1.148, -0.042], [1.347, 0.005], [1.55, 0.052], [1.754, 0.1], [1.96, 0.148]], m: [2.396, 0.249], b: [-0.509, -0.427] },
+  { r: [[0.432, -0.011], [0.583, 0.093], [0.736, 0.199], [0.892, 0.306], [1.05, 0.415], [1.211, 0.525], [1.374, 0.638], [1.541, 0.753]], m: [1.894, 0.996], b: [-0.386, -0.575] },
+  { r: [[0.235, 0.102], [0.317, 0.247], [0.402, 0.394], [0.488, 0.544], [0.576, 0.697], [0.665, 0.853], [0.756, 1.013], [0.849, 1.175]], m: [1.048, 1.523], b: [-0.208, -0.672] },
+  { r: [[0.0, 0.142], [0.0, 0.301], [0.0, 0.463], [0.0, 0.629], [0.0, 0.798], [0.0, 0.971], [0.0, 1.147], [0.0, 1.328]], m: [0.0, 1.713], b: [0.0, -0.706] },
+  { r: [[-0.235, 0.102], [-0.317, 0.247], [-0.402, 0.394], [-0.488, 0.544], [-0.576, 0.697], [-0.665, 0.853], [-0.756, 1.013], [-0.849, 1.175]], m: [-1.048, 1.523], b: [0.208, -0.672] },
+  { r: [[-0.432, -0.011], [-0.583, 0.093], [-0.736, 0.199], [-0.892, 0.306], [-1.05, 0.415], [-1.211, 0.525], [-1.374, 0.638], [-1.541, 0.753]], m: [-1.894, 0.996], b: [0.386, -0.575] },
+  { r: [[-0.56, -0.178], [-0.754, -0.133], [-0.95, -0.087], [-1.148, -0.042], [-1.347, 0.005], [-1.55, 0.052], [-1.754, 0.1], [-1.96, 0.148]], m: [-2.396, 0.249], b: [0.509, -0.427] },
+  { r: [[-0.601, -0.372], [-0.807, -0.394], [-1.013, -0.416], [-1.22, -0.438], [-1.429, -0.46], [-1.637, -0.482], [-1.848, -0.504], [-2.059, -0.526]], m: [-2.499, -0.573], b: [0.555, -0.249] },
+  { r: [[-0.551, -0.563], [-0.737, -0.649], [-0.922, -0.734], [-1.108, -0.82], [-1.293, -0.906], [-1.478, -0.991], [-1.662, -1.077], [-1.847, -1.162]], m: [-2.228, -1.338], b: [0.517, -0.07] },
+  { r: [[-0.418, -0.722], [-0.558, -0.86], [-0.697, -0.997], [-0.836, -1.134], [-0.973, -1.27], [-1.109, -1.405], [-1.245, -1.539], [-1.38, -1.672]], m: [-1.656, -1.945], b: [0.398, 0.085] },
+  { r: [[-0.225, -0.827], [-0.3, -0.999], [-0.374, -1.17], [-0.448, -1.339], [-0.521, -1.507], [-0.593, -1.672], [-0.664, -1.837], [-0.735, -1.999]], m: [-0.879, -2.332], b: [0.217, 0.19] },
+  { r: [[0.0, -0.864], [0.0, -1.048], [0.0, -1.23], [0.0, -1.41], [0.0, -1.588], [0.0, -1.765], [0.0, -1.939], [0.0, -2.112]], m: [0.0, -2.465], b: [0.0, 0.227] },
+  { r: [[0.225, -0.827], [0.3, -0.999], [0.374, -1.17], [0.448, -1.339], [0.521, -1.507], [0.593, -1.672], [0.664, -1.837], [0.735, -1.999]], m: [0.879, -2.332], b: [-0.217, 0.19] },
+  { r: [[0.418, -0.722], [0.558, -0.86], [0.697, -0.997], [0.836, -1.134], [0.973, -1.27], [1.109, -1.405], [1.245, -1.539], [1.38, -1.672]], m: [1.656, -1.945], b: [-0.398, 0.085] },
+  { r: [[0.551, -0.563], [0.737, -0.649], [0.922, -0.734], [1.108, -0.82], [1.293, -0.906], [1.478, -0.991], [1.662, -1.077], [1.847, -1.162]], m: [2.228, -1.338], b: [-0.517, -0.07] },
+]; // (the dome's height drawn up the screen: DOME_K of its reach)
+
+/** Where Lance b's head points (way k of 16) and its marks then (from LANCE_ART, or worked out if the art isn't in). */
+function lanceMarks(b) {
+  const n = 16, k = ((Math.round((b.aim || 0) / ((Math.PI * 2) / n)) % n) + n) % n;
+  if (typeof LANCE_ART !== 'undefined' && LANCE_ART[k]) return LANCE_ART[k];
+  const a = (k * Math.PI * 2) / n, c = Math.cos(a), s = Math.sin(a), r = [];
+  for (let i = 0; i < 8; i++) { const d = 0.6 + i * 0.22; r.push([c * d, s * d - 0.55 - i * 0.04]); }
+  return { r, m: [c * 2.4, s * 2.4 - 0.85], b: [-c * 0.5, -s * 0.5 - 0.4] };
+}
+
+/** Lance b's charge as it shows: rings lit one by one with the charge, white-hot at full; cooling after a shot. */
+function drawLanceCharge(ctx, b, cx, cy, s) {
+  const since = b.lShot ? S.time - b.lShot : 99;
+  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / LANCE.charge) : 0, cool = since < 8 ? 1 - since / 8 : 0;
+  if (!k && !cool) return;
+  const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
+  if (b.lOn && TOD.active) { const m = M.r[4]; ctx.save(); ctx.globalAlpha = 0.4 + 0.6 * k; drawLightPool(ctx, cx + m[0] * s, cy + m[1] * s + s * 0.5, s * (0.8 + k), '#ff8a3a'); ctx.restore(); } // (the barrel's glow on the pit at night)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // the barrel warming along its length: a faint heat line from the breech end to as far as the charge has climbed
+  const top = b.lOn ? Math.min(7, Math.floor(k * 8)) : 7, heat = b.lOn ? 0.15 + 0.35 * k : cool * 0.4;
+  ctx.strokeStyle = full ? `rgba(255,236,210,${0.35 + 0.1 * Math.sin(t * 18)})` : `rgba(255,120,50,${heat})`; ctx.lineCap = 'round'; ctx.lineWidth = s * 0.09;
+  ctx.beginPath(); ctx.moveTo(cx + M.r[0][0] * s, cy + M.r[0][1] * s); ctx.lineTo(cx + M.r[top][0] * s, cy + M.r[top][1] * s); ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const lit = b.lOn ? clamp(k * 8 - i, 0, 1) : cool * (0.4 + 0.6 * (i / 7));
+    if (lit <= 0.01) continue;
+    const lead = b.lOn && k < 1 && lit < 1;
+    const pulse = lead ? 0.55 + 0.45 * Math.sin(t * 9 + i) : full ? 0.85 + 0.15 * Math.sin(t * 14 + i * 0.7) : 1;
+    const x = cx + M.r[i][0] * s, y = cy + M.r[i][1] * s, r = s * (0.07 + 0.04 * lit) * (full ? 1.2 : 1);
+    const col = full ? '#fff2d8' : b.lOn ? (i / 7 > 0.6 ? '#ffd27a' : '#ff9a4a') : '#ff4a1a';
+    ctx.globalAlpha = Math.min(1, lit * pulse);
+    ctx.drawImage(glowDisc(col), x - r * 1.6, y - r * 1.6, r * 3.2, r * 3.2); // (the ring itself, bright)
+    ctx.globalAlpha = Math.min(1, lit * pulse) * 0.3;
+    ctx.drawImage(glowDisc(col), x - r * 3.2, y - r * 3.2, r * 6.4, r * 6.4); // (its halo)
+  }
+  // the lens at the muzzle, gathering light as the charge nears full
+  const lens = b.lOn ? k * k : cool * 0.6;
+  if (lens > 0.02) {
+    const x = cx + M.m[0] * s, y = cy + M.m[1] * s, r = s * (0.1 + 0.22 * lens) * (1 + 0.08 * Math.sin(t * 20));
+    ctx.globalAlpha = Math.min(1, lens);
+    ctx.drawImage(glowDisc(b.lOn && k >= 1 ? '#e8fbff' : '#ffb070'), x - r * 2, y - r * 2, r * 4, r * 4);
+  }
+  ctx.restore();
+}
+
+/** The cuts the Lance has made (S.cuts), on the ground: a scorched trench for good, glowing and cooling; steam over water. */
+function lanceRuns(c) {
+  R.cutRuns = R.cutRuns && R.cutRunsOf === S ? R.cutRuns : new Map();
+  R.cutRunsOf = S;
+  const key = `${c.x0},${c.y0},${c.x1},${c.y1},${c.t}`;
+  let v = R.cutRuns.get(key);
+  if (v) return v;
+  const len = Math.hypot(c.x1 - c.x0, c.y1 - c.y0) || 1, ux = (c.x1 - c.x0) / len, uy = (c.y1 - c.y0) / len, runs = [], wet = [];
+  let run = null;
+  for (let d = 1.7; d <= len; d += 0.25) {
+    const x = c.x0 + ux * d, y = c.y0 + uy * d, i = Math.floor(x), j = Math.floor(y);
+    const ground = inMap(i, j) && (S.terrain[tIdx(i, j)] === T_GROUND || S.terrain[tIdx(i, j)] === T_ROCK); // (it cuts through rock too: water boils, a chasm swallows it)
+    if (ground) { if (!run) runs.push((run = [x, y, x, y])); run[2] = x; run[3] = y; } else run = null;
+    if (inMap(i, j) && S.terrain[tIdx(i, j)] === T_WATER && (wet.length === 0 || d - wet[wet.length - 1][2] >= 0.9)) wet.push([x, y, d]);
+  }
+  v = { runs, wet, ux, uy, len };
+  R.cutRuns.set(key, v);
+  return v;
+}
+function drawCuts(ctx, ox, oy, z) {
+  if (!S.cuts || !S.cuts.length) return;
+  ctx.save();
+  ctx.lineCap = 'butt';
+  for (const c of S.cuts) {
+    const L = lanceRuns(c), age = S.time - c.t;
+    if (age < 0) continue;
+    const grow = Math.min(1, age / 0.25); // (the cut runs out along the beam as it fires)
+    const reach = L.len * grow;
+    const seg = (fn) => { for (const r of L.runs) { const d0 = (r[0] - c.x0) * L.ux + (r[1] - c.y0) * L.uy; if (d0 > reach) continue; const d1 = Math.min(reach, (r[2] - c.x0) * L.ux + (r[3] - c.y0) * L.uy); fn(ox + r[0] * z, oy + r[1] * z, ox + (c.x0 + L.ux * d1) * z, oy + (c.y0 + L.uy * d1) * z); } };
+    // the scorched band, the charred furrow, and the furrow's lips
+    ctx.strokeStyle = 'rgba(28,20,14,0.42)'; ctx.lineWidth = z * 1.25;
+    ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+    ctx.strokeStyle = 'rgba(14,10,8,0.7)'; ctx.lineWidth = z * 0.62;
+    ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+    ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineWidth = z * 0.26;
+    ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+    if (z >= 10) {
+      // glassy fused flecks along the furrow and clods thrown out of it
+      const nx = -L.uy, ny = L.ux;
+      ctx.fillStyle = 'rgba(70,60,52,0.55)';
+      for (let d = 2; d < reach; d += 0.55) {
+        const h = hash2(Math.floor(d * 7), Math.floor(c.t), 611), side = h < 0.5 ? -1 : 1, off = (0.38 + 0.25 * hash2(Math.floor(d * 5), 3, 613)) * side;
+        const x = c.x0 + L.ux * d + nx * off, y = c.y0 + L.uy * d + ny * off, i = Math.floor(x), j = Math.floor(y);
+        if (!inMap(i, j) || S.terrain[tIdx(i, j)] === T_WATER) continue;
+        ctx.fillRect(ox + x * z - z * 0.05, oy + y * z - z * 0.04, z * (0.08 + 0.08 * h), z * 0.07);
+      }
+    }
+    // the glow: white-hot, then orange, then a dull red, cooling over LANCE.glow seconds
+    const heat = 1 - age / LANCE.glow;
+    if (heat > 0) {
+      const fl = 0.85 + 0.15 * Math.sin(R.time * 11 + c.t);
+      ctx.globalCompositeOperation = 'lighter';
+      const col = heat > 0.85 ? [255, 236, 190] : heat > 0.55 ? [255, 150, 60] : [220, 50, 20];
+      ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, heat * 1.3) * 0.35 * fl})`; ctx.lineWidth = z * (0.5 + 0.7 * heat);
+      ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+      ctx.strokeStyle = `rgba(${col[0]},${Math.min(255, col[1] + 40)},${col[2] + 30},${Math.min(1, heat * 1.5) * 0.8 * fl})`; ctx.lineWidth = z * (0.12 + 0.12 * heat);
+      ctx.beginPath(); seg((a, b, x, y) => { ctx.moveTo(a, b); ctx.lineTo(x, y); }); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // steam boiling off the water it crossed
+    const steam = 1 - age / 40;
+    if (steam > 0 && L.wet.length) {
+      for (let n = 0; n < Math.min(80, L.wet.length); n++) {
+        const [x, y] = L.wet[n];
+        for (let q = 0; q < 3; q++) {
+          const ph = (R.time * (0.35 + 0.1 * q) + hash2(n, q, 97)) % 1, sx = ox + (x + (hash2(n, q, 98) - 0.5) * 0.8) * z, sy = oy + y * z - ph * z * 1.6;
+          const r = z * (0.25 + 0.55 * ph);
+          ctx.globalAlpha = steam * 0.32 * (1 - ph);
+          ctx.drawImage(glowDisc('#f2f4f6'), sx - r, sy - r, r * 2, r * 2);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
+/** The beam itself, for LANCE.beam seconds after a shot: from the muzzle across the map; at night it lights everything. */
+function drawLanceBeams(ctx, ox, oy, z) {
+  if (!S.cuts || !S.cuts.length) return;
+  for (const c of S.cuts) {
+    const age = S.time - c.t;
+    if (age < 0 || age > LANCE.beam) continue;
+    const A = S.buildings.find((b) => !b.dead && BDEFS[b.type].lance && b.owner === c.o && Math.abs(bCentre(b).x - c.x0) < 0.02 && Math.abs(bCentre(b).y - c.y0) < 0.02);
+    const fade = age < 0.12 ? age / 0.12 : age > LANCE.beam - 0.8 ? (LANCE.beam - age) / 0.8 : 1;
+    const len = Math.hypot(c.x1 - c.x0, c.y1 - c.y0) || 1, ux = (c.x1 - c.x0) / len, uy = (c.y1 - c.y0) / len;
+    const M = A ? lanceMarks(A) : null;
+    const mx = M ? ox + c.x0 * z + M.m[0] * z : ox + (c.x0 + ux * 2.4) * z, my = M ? oy + c.y0 * z + M.m[1] * z : oy + (c.y0 + uy * 2.4) * z - LANCE_BEAM_UP * z;
+    const reach = Math.min(1, age / 0.25);
+    const ex = ox + (c.x0 + (c.x1 - c.x0) * reach) * z, ey = oy + (c.y0 + (c.y1 - c.y0) * reach) * z - LANCE_BEAM_UP * z;
+    const w = 1 + 0.12 * Math.sin(R.time * 40) + 0.08 * Math.sin(R.time * 67);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const [wd, col, al] of [[1.9, '255,70,30', 0.18], [1.0, '255,120,50', 0.35], [0.5, '255,200,140', 0.7], [0.2, '255,255,245', 1]]) {
+      ctx.strokeStyle = `rgba(${col},${al * fade})`; ctx.lineWidth = z * wd * w;
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+    // the light it throws on the ground under it, and the muzzle's flare
+    ctx.strokeStyle = `rgba(255,120,60,${0.2 * fade})`; ctx.lineWidth = z * 3;
+    ctx.beginPath(); ctx.moveTo(mx, my + LANCE_BEAM_UP * z); ctx.lineTo(ex, ey + LANCE_BEAM_UP * z); ctx.stroke();
+    const fr = z * (1.4 + (age < 0.3 ? 2.5 * (1 - age / 0.3) : 0)) * w;
+    ctx.globalAlpha = fade; ctx.drawImage(glowDisc('#fff1d0'), mx - fr, my - fr, fr * 2, fr * 2);
+    // sparks and flares where it bites, flickering along its length
+    for (let n = 0; n < 26; n++) {
+      const d = (hash2(n, Math.floor(R.time * 24), 701) * len * reach), px = ox + (c.x0 + ux * d) * z, py = oy + (c.y0 + uy * d) * z - LANCE_BEAM_UP * z;
+      const r = z * (0.3 + 0.5 * hash2(n, 5, 703));
+      ctx.globalAlpha = fade * 0.6; ctx.drawImage(glowDisc('#ffd8a0'), px - r, py - r, r * 2, r * 2);
+    }
+    if (c.d) { const r = z * 3 * w; ctx.globalAlpha = fade; ctx.drawImage(glowDisc('#bfe6ff'), ex - r, ey - r, r * 2, r * 2); } // (stopped on a Shield Dome)
+    ctx.restore();
+    // at night the whole map is lit for a moment, a warm white flash fading out
+    const night = TOD.active && TOD.state ? TOD.state.lights : 0, flash = age < 1.6 ? (age < 0.08 ? age / 0.08 : Math.pow(1 - (age - 0.08) / 1.52, 2)) : 0;
+    if (flash > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255,214,170,${(0.04 + 0.3 * night) * flash})`;
+      ctx.fillRect(0, 0, R.w, R.h);
+      ctx.restore();
+    }
+  }
+}
+
+/** The hexagon cells of a dome (in tiles from its middle, on the ground under it): made once. */
+function domeCells() {
+  if (R.domeCells) return R.domeCells;
+  const out = [], s = 0.85, R0 = DOME.radius, h = s * Math.sqrt(3);
+  for (let row = -Math.ceil(R0 / h) - 1; row <= Math.ceil(R0 / h) + 1; row++) {
+    for (let col = -Math.ceil(R0 / (1.5 * s)) - 1; col <= Math.ceil(R0 / (1.5 * s)) + 1; col++) {
+      const u = col * 1.5 * s, v = row * h + (col & 1 ? h / 2 : 0);
+      if (u * u + v * v > (R0 - 0.25) * (R0 - 0.25)) continue;
+      const pts = [];
+      for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3; pts.push([u + Math.cos(a) * s * 0.96, v + Math.sin(a) * s * 0.96]); }
+      out.push({ u, v, pts, n: hash2(Math.round(u * 10), Math.round(v * 10), 811) });
+    }
+  }
+  return (R.domeCells = out);
+}
+
+/** A point on dome d's surface over (u, v) tiles from its middle, on screen. */
+function domeAt(cx, cy, z, u, v) {
+  const R0 = DOME.radius, r2 = Math.max(0, R0 * R0 - u * u - v * v);
+  return [cx + u * z, cy + (v - Math.sqrt(r2) * DOME_K) * z];
+}
+
+/** Every Shield Dome that's up (or falling): its faint blue lattice, shimmering, its panels flashing where it's hit. */
+function drawDomes(ctx, ox, oy, z, inView) {
+  R.domeVis = R.domeVis && R.domeVisOf === S ? R.domeVis : new Map();
+  R.domeVisOf = S;
+  const hits = S.fx.filter((f) => (f.type === 'domehit' || f.type === 'domefall') && f.t >= 0);
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].dome) continue;
+    const c = bCentre(b);
+    if (!inView(Math.floor(c.x), Math.floor(c.y), DOME.radius + 2)) continue;
+    const fall = hits.find((f) => f.type === 'domefall' && f.dome === b.id);
+    let vis = R.domeVis.get(b.id) ?? (b.dUp ? 1 : 0);
+    vis += ((b.dUp ? 1 : 0) - vis) * Math.min(1, (R.dt || 0.016) * 2.5);
+    R.domeVis.set(b.id, vis);
+    if (fall) vis = Math.max(vis, 1 - fall.t / fall.life);
+    if (vis < 0.02) continue;
+    const cx = ox + c.x * z, cy = oy + c.y * z, Rp = DOME.radius * z, t = R.time, weak = (b.dStr ?? DOME.max) < 30 && b.dUp;
+    let a = vis * (weak ? 0.6 + 0.4 * Math.abs(Math.sin(t * 13)) : 1);
+    if (fall) a *= 0.5 + 0.5 * (hash2(Math.floor(t * 30), b.id, 5) > 0.4 ? 1 : 0);
+    const col = (b.owner === ME || !foes(b.owner, ME)) ? '120,200,255' : '150,195,255';
+    ctx.save();
+    // the shell: the ground circle's front half and the dome's outline over it, faintly filled, brighter at the rim
+    const top = Rp * Math.sqrt(1 + DOME_K * DOME_K);
+    ctx.beginPath(); ctx.ellipse(cx, cy, Rp, top, 0, Math.PI, Math.PI * 2); ctx.ellipse(cx, cy, Rp, Rp, 0, 0, Math.PI); ctx.closePath();
+    const g = ctx.createRadialGradient(cx, cy - Rp * 0.45, Rp * 0.1, cx, cy - Rp * 0.25, Rp * 1.3);
+    g.addColorStop(0, `rgba(${col},${0.03 * a})`); g.addColorStop(0.7, `rgba(${col},${0.08 * a})`); g.addColorStop(1, `rgba(${col},${0.24 * a})`);
+    ctx.fillStyle = g; ctx.fill();
+    // a soft fresnel band inside the rim, then the rim itself, crisp
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = `rgba(${col},${0.16 * a})`; ctx.lineWidth = Math.max(2, z * 0.9); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = `rgba(200,236,255,${0.55 * a})`; ctx.lineWidth = Math.max(1, z * 0.07); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    // the sheen: a soft highlight high on the side toward the light (upper left), and a thin crescent along that edge
+    { const hx = cx - Rp * 0.38, hy = cy - top * 0.55, hr = Rp * 0.42;
+      const sh = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr); sh.addColorStop(0, `rgba(235,248,255,${0.13 * a})`); sh.addColorStop(1, 'rgba(235,248,255,0)');
+      ctx.fillStyle = sh; ctx.beginPath(); ctx.ellipse(hx, hy, hr, hr * 0.8, -0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(235,248,255,${0.22 * a})`; ctx.lineWidth = Math.max(1, z * 0.12);
+      ctx.beginPath(); ctx.ellipse(cx, cy, Rp * 0.94, top * 0.94, 0, Math.PI * 1.08, Math.PI * 1.42); ctx.stroke(); }
+    // the lattice: hexagon panels on its surface, a shimmer drifting over it
+    if (z >= 5) {
+      const cells = domeCells(), buckets = [[], [], [], []];
+      for (const cl of cells) {
+        const sh = Math.pow(Math.max(0, Math.cos((cl.u * 0.8 + cl.v * 0.5) * 0.45 - t * 1.4)), 6);
+        const k = Math.min(3, Math.floor(sh * 3 + cl.n * 0.9));
+        if (fall && cl.n < fall.t / fall.life) continue; // (breaking up as it drops)
+        buckets[k].push(cl);
+      }
+      for (let k = 0; k < 4; k++) {
+        if (!buckets[k].length) continue;
+        ctx.strokeStyle = `rgba(${col},${(0.07 + 0.08 * k) * a})`; ctx.lineWidth = Math.max(0.6, z * 0.035);
+        ctx.beginPath();
+        for (const cl of buckets[k]) {
+          const p0 = domeAt(cx, cy, z, cl.pts[0][0], cl.pts[0][1]);
+          ctx.moveTo(p0[0], p0[1]);
+          for (let q = 1; q < 6; q++) { const p = domeAt(cx, cy, z, cl.pts[q][0], cl.pts[q][1]); ctx.lineTo(p[0], p[1]); }
+          ctx.closePath();
+        }
+        ctx.stroke();
+      }
+      // panels lighting where it's hit: a flash and a ring spreading over the lattice
+      for (const f of hits) {
+        if (f.type !== 'domehit' || f.dome !== b.id) continue;
+        const k = f.t / f.life, hu0 = f.x - c.x, hv0 = f.y - c.y, d0 = Math.hypot(hu0, hv0), sc = d0 > DOME.radius - 0.6 ? (DOME.radius - 0.6) / d0 : 1, hu = hu0 * sc, hv = hv0 * sc;
+        const reach = (f.big ? 4 : 2.2) * (0.4 + k);
+        for (const cl of cells) {
+          const d = Math.hypot(cl.u - hu, cl.v - hv);
+          if (d > reach) continue;
+          const ring = Math.max(0, 1 - Math.abs(d - reach * 0.8) / 0.9), core = Math.max(0, 1 - d / (reach * 0.5));
+          const al = (1 - k) * Math.max(ring * 0.6, core * 0.9);
+          if (al < 0.03) continue;
+          ctx.fillStyle = `rgba(150,215,255,${al * 0.5})`;
+          ctx.beginPath();
+          const p0 = domeAt(cx, cy, z, cl.pts[0][0], cl.pts[0][1]); ctx.moveTo(p0[0], p0[1]);
+          for (let q = 1; q < 6; q++) { const p = domeAt(cx, cy, z, cl.pts[q][0], cl.pts[q][1]); ctx.lineTo(p[0], p[1]); }
+          ctx.closePath(); ctx.fill();
+        }
+        const p = domeAt(cx, cy, z, hu, hv), r = z * (f.big ? 1.8 : 1.1) * (1 - k * 0.5);
+        ctx.globalAlpha = 1 - k; ctx.drawImage(glowDisc('#cdeeff'), p[0] - r, p[1] - r, r * 2, r * 2); ctx.globalAlpha = 1;
+      }
+    }
+    // a soft blue light on the ground under it at night
+    if (TOD.active && TOD.state && TOD.state.pools > 0.05) { ctx.globalAlpha = 0.25 * a * TOD.state.pools; const r = Rp * 1.1; ctx.drawImage(glowDisc('#6cbcff'), cx - r, cy - r * 0.7, r * 2, r * 1.4); }
+    ctx.restore();
+  }
+}
+
+/** The way the selected Lance (yours) is aimed while it charges: a dashed red line across the map. */
+function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
+  const L = lanceLine(b, i + 0.5, j + 0.5);
+  ctx.save();
+  ctx.strokeStyle = bright ? 'rgba(255,70,50,0.95)' : 'rgba(255,90,70,0.6)';
+  ctx.lineWidth = Math.max(2, z * (bright ? 0.14 : 0.08));
+  ctx.setLineDash([z * 0.6, z * 0.3]); ctx.lineDashOffset = -R.time * z * 2;
+  ctx.beginPath(); ctx.moveTo(ox + L.x0 * z, oy + L.y0 * z); ctx.lineTo(ox + L.x1 * z, oy + L.y1 * z); ctx.stroke();
+  ctx.setLineDash([]);
+  if (bright) {
+    // what it would hit: every building on the line ringed red (yours amber)
+    const seen = new Set();
+    for (const t of lanceTiles(b, L)) {
+      const e = getE(S.bAt[t]);
+      if (!e || e.dead || seen.has(e) || calmB(e)) continue;
+      seen.add(e);
+      const p = bCentre(e), F = BDEFS[e.type].foot || 1;
+      ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : '#ff4b4b';
+      ctx.lineWidth = Math.max(2, z * 0.07);
+      ctx.strokeRect(ox + (p.x - F / 2) * z + 2, oy + (p.y - F / 2) * z + 2, F * z - 4, F * z - 4);
+    }
+    if (L.dome) { const c = bCentre(L.dome); ctx.strokeStyle = '#9fd8ff'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, DOME.radius * z, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
+/** A Lance or a Shield Dome before its art has loaded (or with none): a plain pit and barrel, a plain emitter. */
+function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
+  const F = BDEFS[type].foot, w = F * s * 0.92, color = PLAYER_COLORS[owner];
+  ctx.fillStyle = 'rgba(20,14,10,0.3)'; roundRect(ctx, cx - w / 2 + s * 0.08, cy - w / 2 + s * 0.12, w, w, s * 0.2); ctx.fill();
+  ctx.fillStyle = THEME.hull; roundRect(ctx, cx - w / 2, cy - w / 2, w, w, s * 0.2); ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.stroke();
+  if (type === 'lance') {
+    ctx.fillStyle = THEME.hullHi; ctx.beginPath(); ctx.arc(cx, cy, s * 0.95, 0, Math.PI * 2); ctx.fill();
+    const a = b ? b.aim || 0 : 0;
+    ctx.strokeStyle = '#3c4146'; ctx.lineCap = 'round'; ctx.lineWidth = s * 0.32;
+    ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * s * 0.4, cy - Math.sin(a) * s * 0.4); ctx.lineTo(cx + Math.cos(a) * s * 2.3, cy + Math.sin(a) * s * 2.3 - s * 0.6); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#4fb4f0'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.3, s * 0.35, 0, Math.PI * 2); ctx.fill();
+  }
 }
 
 function drawMassDrivers(ctx, ox, oy, z, inView) {

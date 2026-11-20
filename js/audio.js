@@ -238,6 +238,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
+  lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -253,6 +254,7 @@ const BLAST_SIZE = {
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
   flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
+  lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
 };
 
 /**
@@ -827,6 +829,40 @@ function sfx(name, dest, y, dur) {
       for (const [f, dl] of [[311, 0], [370, 0], [311, 0.3], [370, 0.3]]) _tone(f, 0.22, 'sawtooth', 0.035, f * 0.98, dl, lp);
       break;
     }
+    // The Lance of Corvane starts its charge: heavy contactors closing, then the turbines spinning up (its hum, lanceHum, carries on).
+    case 'lancecharge':
+      _noise(0.12, 0.12, { type: 'lowpass', freq: 500, dest: D }); _tone(70, 0.4, 'square', 0.03, 45, 0, D);
+      _noise(0.1, 0.1, { type: 'lowpass', freq: 400, delay: 0.25, dest: D }); _tone(60, 0.35, 'square', 0.025, 40, 0.25, D);
+      _tone(80, 2.4, 'sawtooth', 0.03, 240, 0.4, D); _tone(160, 2.4, 'sine', 0.025, 480, 0.4, D);
+      break;
+    // The Lance fires: a splitting crack like close thunder, the beam's roar tearing across the map, a deep shock under it.
+    case 'lancefire':
+      _noise(0.09, 0.4, { type: 'highpass', freq: 2200, attack: 0.002, dest: D });
+      _tone(2600, 0.25, 'sawtooth', 0.05, 180, 0, D);
+      _noise(2.8, 0.26, { type: 'bandpass', freq: 1400, to: 160, q: 0.5, attack: 0.03, delay: 0.02, dest: D });
+      _noise(3.6, 0.2, { type: 'lowpass', freq: 600, to: 70, attack: 0.15, delay: 0.1, dest: D });
+      _tone(42, 2.6, 'sine', 0.3, 26, 0.05, D);
+      blast(D, { size: 2.2, far: Math.min(far, 0.4), gain: 0.7, delay: 0.05, deep: true });
+      duckMusic(0.3, 3);
+      break;
+    // Something strikes a Shield Dome: a low resonant thrum through the field, and a glassy shimmer on top.
+    case 'domehit': {
+      const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(92, t0); o.frequency.exponentialRampToValueAtTime(64, t0 + 0.9);
+      lfo.frequency.value = 17; lg.gain.value = 9; lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.0);
+      o.connect(g).connect(D); o.start(t0); lfo.start(t0); o.stop(t0 + 1.05); lfo.stop(t0 + 1.05);
+      _noise(0.5, 0.05, { type: 'bandpass', freq: 3200, to: 1800, q: 3, attack: 0.005, dest: D });
+      _tone(1320, 0.6, 'sine', 0.02, 1180, 0.01, D); _tone(1980, 0.45, 'sine', 0.012, 1760, 0.01, D);
+      break;
+    }
+    // A Shield Dome drops: the field's note falling away, the lattice shattering into a hiss of crackle.
+    case 'domefall':
+      _tone(420, 1.6, 'sawtooth', 0.05, 38, 0, D); _tone(630, 1.2, 'sine', 0.03, 60, 0, D);
+      _noise(1.4, 0.12, { type: 'highpass', freq: 5000, to: 900, attack: 0.01, dest: D });
+      for (let k = 0; k < 10; k++) _tone(1800 + Math.random() * 2600, 0.05, 'square', 0.012, null, 0.05 + Math.random() * 1.2, D);
+      _noise(1.6, 0.08, { type: 'lowpass', freq: 300, to: 60, delay: 0.1, dest: D });
+      break;
     // A nuclear missile coming for you: an air-raid siren, rising and falling.
     case 'siren': {
       const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
@@ -850,6 +886,36 @@ function sfx(name, dest, y, dur) {
       duckMusic(0.12, 6);
       break;
   }
+}
+
+/*
+ * The Lance of Corvane's hum while it charges, heard by every player: a deep electrical drone with a beating tremolo,
+ * rising in pitch and brightness as the charge climbs (k: the fullest charge of any Lance, 0..1; 0 stops it), louder
+ * for the one on screen (near 0..1).
+ */
+const HUM = { o: null };
+function lanceHum(k, near) {
+  const ac = AUDIO.ctx;
+  if (!ac || !sfxReady()) k = 0;
+  if (!k) {
+    if (HUM.o) { const t = ac.currentTime, h = HUM.o; HUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.25); setTimeout(() => { try { h.a.stop(); h.b.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 1500); }
+    return;
+  }
+  if (!HUM.o) {
+    const a = ac.createOscillator(), b = ac.createOscillator(), l = ac.createOscillator(), lg = ac.createGain(), am = ac.createGain(), lp = ac.createBiquadFilter(), g = ac.createGain();
+    a.type = 'sawtooth'; b.type = 'sine'; l.type = 'sine';
+    lp.type = 'lowpass'; lp.Q.value = 2.5; am.gain.value = 0.75; lg.gain.value = 0.25; l.frequency.value = 6;
+    g.gain.value = 0.0001;
+    l.connect(lg).connect(am.gain);
+    a.connect(lp); b.connect(lp); lp.connect(am).connect(g).connect(AUDIO.fxBus);
+    a.start(); b.start(); l.start();
+    HUM.o = { a, b, l, lp, g };
+  }
+  const t = ac.currentTime, h = HUM.o;
+  h.a.frequency.setTargetAtTime(38 + 90 * k, t, 0.3); h.b.frequency.setTargetAtTime(76 + 260 * k * k, t, 0.3);
+  h.l.frequency.setTargetAtTime(4 + 14 * k, t, 0.3);
+  h.lp.frequency.setTargetAtTime(220 + 2400 * k * k, t, 0.3);
+  h.g.gain.setTargetAtTime((0.02 + 0.06 * k) * (0.45 + 0.55 * near), t, 0.3);
 }
 
 /** Duck the music for `secs`, down to `to` of its level. */
@@ -997,6 +1063,10 @@ function audioTick(dt) {
     const live = !!(inGame && !UI.paused && S.winner < 0);
     updateBeds(live, 0.25 - WORLD.bt);
     sirenTick(live);
+    // The Lance of Corvane charging anywhere: its hum, by the fullest charge (louder with one on screen).
+    let hk = 0, near = 0;
+    if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / LANCE.charge); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
+    lanceHum(live ? Math.max(hk, 0.02 * (hk > 0)) : 0, near);
     WORLD.bt = 0.25;
   }
   if (!inGame || UI.paused || S.winner >= 0 || WORLD.t > 0) return;

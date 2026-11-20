@@ -10,3 +10,6 @@ TOD_KEYS.push('wreck-cargoplane', 'wreck-bomber', 'wreck-airship');
 for (const t of [0, 1]) TOD_KEYS.push(`magterm@${t}`, `magpylon@${t}`, `magpylon-cut@${t}`, `magpod@${t}`, `magpod-empty@${t}`, `magdeck@${t}`);
 // The Mass Driver (four ways) and the Catcher (renderer/tools/install_massdriver.py).
 for (const t of [0, 1]) TOD_KEYS.push(`mdriver@${t}`, ...['e', 'w', 'n', 's'].map((d) => `mdriver-${d}@${t}`), `catcher@${t}`, `catcher-closed@${t}`);
+// The megastructures (renderer/tools/install_lance.py): the Lance of Corvane's pit and its 16 heads, the Shield Dome's emitter.
+for (const t of [0, 1]) TOD_KEYS.push(`lance@${t}`, `dome@${t}`);
+for (let k = 0; k < 16; k++) TOD_KEYS.push(`lance-head-${k}`);

@@ -395,7 +395,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield') && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield' || BDEFS[b.type].mega) && S.time - b.born < 420) continue; // saved up for: give it time
       const cost = siteCost(b);
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -450,7 +450,7 @@ function aiThink(p) {
     const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
     const nuke = [];
     if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
-    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2) nuke.push(['nukesilo', 1]);
+    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2 && P.megaPick !== 'lance') nuke.push(['nukesilo', 1]); // (not when it chose the Lance: aiMegaPick)
     plan = plan.slice(0, k).concat(nuke, plan.slice(k));
   }
   // Under attack at the front: a Bunker, a Mortar Pit or a Disruptor Tower beside the fort that is being hit
@@ -1055,6 +1055,7 @@ function aiThink(p) {
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
           (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0) + // (Uplinks: knock out the forts that hold them)
           (soft && aiDefReach(e) && dist2(e.x, e.y, soft.x, soft.y) <= 64 ? 6 : 0); // (the guns holding back an attack: see step 5)
+        if (aiDomed(p, e.x + 0.5, e.y + 0.5)) continue; // (under a Shield Dome: the Missile would only wear it down)
         if (s > bs && !(rain && s < 1)) { bs = s; best = e; } // (an Architect's: nothing worth less, such as a Wall)
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
@@ -1065,6 +1066,8 @@ function aiThink(p) {
   //     blast ring of any heading this way.
   if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
+  // 4b) Megastructures: the Lance of Corvane (or the nukes), and a Shield Dome when threatened (late in the game).
+  aiMega(p, me, lander, !few && sites < maxSites + 1);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, !few && sites < maxSites);
@@ -1941,6 +1944,151 @@ function aiFlood(p, from, seen, bottom, early) {
   return across;
 }
 
+/*
+ * Megastructures (megaOn), late in the game. AI_MEGA: `lanceAt` s in, a rival in a Nuclear race with a Reactor and
+ * Uranium to feed it (a Mine on a deposit, or `uranium` in hand) chooses, once, between the Lance of Corvane and the
+ * nukes (aiMegaPick, kept in P.megaPick); with the Lance it builds no Nuclear Silo, puts the Lance up within reach of
+ * its Reactor, and fires it along the line that takes the most of its enemies' (aiLanceAim, at least `worth`). From
+ * `domeAt` s (sooner once a foe's Lance is going up), a rival threatened from afar (a foe with a Lance, a Missile or
+ * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base, if it can afford it.
+ */
+const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5 };
+/** How each doctrine leans between the Lance (more) and the nukes (less): the Architect builds, the Herald strikes. */
+const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2 };
+
+/**
+ * The Lance or the nukes, for rival p (decided once, deterministically: P.megaPick, with the reasons in P.megaWhy):
+ * its doctrine's lean (AI_MEGA_LEAN), plus a point for the Lance when its enemy's buildings lie strung out (the best line
+ * through them hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
+ * other way round), a point for the Lance when the enemy has a Shield Dome (it swallows a nuke whole; a Lance line can
+ * pass beside it, or knock it down and come again), and a point for the Lance when Uranium is scarce (a nuke takes 12, a
+ * Lance shot 2). More than 0: the Lance; otherwise the nukes.
+ */
+function aiMegaPick(p) {
+  const P = S.players[p], enemy = rivalOf(p), L = getE(P.lander);
+  let score = AI_MEGA_LEAN[P.style] || 0;
+  const why = [`doctrine ${score >= 0 ? '+' : ''}${score}`];
+  const theirs = S.buildings.filter((b) => !b.dead && b.built && b.owner === enemy && !BDEFS[b.type].barrier);
+  let blast = 0, line = 0;
+  const R2 = NUKE.radius * NUKE.radius;
+  for (const c of theirs) {
+    let n = 0;
+    for (const b of theirs) if (dist2(b.x, b.y, c.x, c.y) <= R2) n++;
+    blast = Math.max(blast, n);
+    if (!L) continue;
+    const dx = c.x - L.x, dy = c.y - L.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    let m = 0;
+    for (const b of theirs) { const fx = b.x - L.x, fy = b.y - L.y; if (fx * ux + fy * uy > 0 && Math.abs(fx * uy - fy * ux) <= 0.9) m++; }
+    line = Math.max(line, m);
+  }
+  if (line >= blast + 2) { score++; why.push('strung out +1'); } else if (blast >= line + 2) { score--; why.push('bunched -1'); }
+  if (S.buildings.some((b) => !b.dead && b.owner === enemy && BDEFS[b.type].dome)) { score++; why.push('enemy Dome +1'); }
+  if (goodTotal(p, 'uranium') + 2 * goodTotal(p, 'fissile') < 12 && !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) { score++; why.push('little Uranium +1'); }
+  P.megaWhy = `${why.join(', ')} = ${score} (line ${line}, blast ${blast})`;
+  return score > 0 ? 'lance' : 'nuke';
+}
+
+/** Does p have a Reactor and Uranium to feed it (a Mine on a deposit, or AI_MEGA.uranium in hand)? */
+function aiUraniumFed(p, me) {
+  return me.some((b) => b.built && b.type === 'reactor') && (goodTotal(p, 'uranium') >= AI_MEGA.uranium ||
+    me.some((b) => b.built && b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0));
+}
+
+/** Rival p's megastructures, each think: the choice, the Lance and its aim, the Dome. */
+function aiMega(p, me, lander, canBuild) {
+  if (!megaOn() || S.mode === 'colony') return;
+  const P = S.players[p];
+  // The choice, once it has a Reactor fed with Uranium, late in the game.
+  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance')) P.megaPick = aiMegaPick(p);
+  const lance = me.find((b) => b.type === 'lance');
+  if (P.megaPick === 'lance' && !lance && canBuild && aiAffordable(p, 'lance')) {
+    const R = me.find((b) => b.built && b.type === 'reactor');
+    const spot = R && aiMegaSpot(p, 'lance', [R], LANCE.reach, lander);
+    if (spot) placeSite(p, 'lance', spot[0], spot[1]);
+  }
+  if (lance && lance.built && S.time - (P.lanceT || -99) >= AI_MEGA.think) { P.lanceT = S.time; aiLanceAim(p, lance); }
+  // The Dome: threatened from afar, late in the game (or by a Lance at any time), and within its means.
+  const foeHas = (f) => S.buildings.some((b) => !b.dead && b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner) && f(b));
+  const lanceUp = foeHas((b) => BDEFS[b.type].lance);
+  if (!me.some((b) => b.type === 'dome') && canBuild && (lanceUp || S.time >= AI_MEGA.domeAt) && aiAffordable(p, 'dome')) {
+    const threat = lanceUp || foeHas((b) => BDEFS[b.type].missile || BDEFS[b.type].nukeSilo || BDEFS[b.type].airfield) ||
+      S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].bomber);
+    const gens = me.filter((b) => b.built && b.type === 'generator');
+    if (threat && !gens.length) {
+      // (no Generator yet to power one: a Generator by the Command Base first, unless one is going up)
+      if (!me.some((b) => b.type === 'generator') && aiAffordable(p, 'generator')) {
+        const g = aiFindSpot(p, 'generator', lander) || (() => { for (let r = 3; r <= 7; r++) for (let j = lander.y - r; j <= lander.y + r; j++) for (let i = lander.x - r; i <= lander.x + r; i++) if (Math.max(Math.abs(i - lander.x), Math.abs(j - lander.y)) === r && inMap(i, j) && canPlace(p, 'generator', i, j).ok) return { x: i, y: j }; return null; })();
+        if (g) placeSite(p, 'generator', g.x, g.y);
+      }
+      return;
+    }
+    const spot = threat && aiMegaSpot(p, 'dome', gens, DOME.reach, lander);
+    if (spot) placeSite(p, 'dome', spot[0], spot[1]);
+  }
+}
+
+/** A spot for megastructure `type` of p's within `reach` of one of `near` (its power), as close to its Command Base as can be. */
+function aiMegaSpot(p, type, near, reach, lander) {
+  const F = BDEFS[type].foot;
+  let best = null, bs = Infinity;
+  for (const n of near) {
+    for (let j = n.y - reach - F; j <= n.y + reach; j++) for (let i = n.x - reach - F; i <= n.x + reach; i++) {
+      if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
+      if (footDist({ type, x: i, y: j }, n.x + 0.5, n.y + 0.5) > reach) continue;
+      const s = dist(i + F / 2, j + F / 2, lander.x + 0.5, lander.y + 0.5);
+      if (s >= bs || !canPlace(p, type, i, j).ok) continue;
+      bs = s; best = [i, j];
+    }
+  }
+  return best;
+}
+
+/** What Lance b's shot along line L would be worth to p: the foes' buildings and army on it, less its own side's (heavily). */
+function aiLanceWorth(p, b, L) {
+  let s = 0;
+  const seen = new Set();
+  for (const t of lanceTiles(b, L)) {
+    const e = getE(S.bAt[t]);
+    if (!e || e.dead || seen.has(e) || calmB(e) || isWild(e.owner)) continue;
+    seen.add(e);
+    const d = BDEFS[e.type];
+    const w = e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
+    s += foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w;
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || isWild(u.owner)) continue;
+    const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
+    if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > LANCE.width / 2 + 0.2) continue;
+    s += foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1;
+  }
+  if (L.dome) s += 3; // (it drops their Dome, for the next one)
+  return s;
+}
+
+/** Aim rival p's Lance b through the foe building whose line is worth the most (re-aimed while it charges); start the charge. */
+function aiLanceAim(p, b) {
+  if (!b.lOn && lanceBlocked(b)) return;
+  let best = null, bs = AI_MEGA.worth;
+  const tried = new Set(), c = bCentre(b);
+  for (const e of S.buildings) {
+    if (e.dead || !e.built || e.owner < 0 || !foes(e.owner, p) || isWild(e.owner) || BDEFS[e.type].barrier) continue;
+    const a = Math.round(datan2(e.y + 0.5 - c.y, e.x + 0.5 - c.x) * 120); // (one try for each narrow bearing)
+    if (tried.has(a)) continue;
+    tried.add(a);
+    const s = aiLanceWorth(p, b, lanceLine(b, e.x + 0.5, e.y + 0.5));
+    if (s > bs) { bs = s; best = e; }
+  }
+  if (!best) { if (b.lOn && b.lCharge > LANCE.charge - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
+  if (b.lOn) b.lAim = [best.x, best.y];
+  else setLanceAim(b, best.x, best.y);
+}
+
+/** Is (x, y) under an up Shield Dome of a foe of p's? (Its Missiles and nukes would be spent on the Dome.) */
+function aiDomed(p, x, y) {
+  for (const d of S.buildings) if (!d.dead && d.built && d.dUp && BDEFS[d.type].dome && foes(d.owner, p)) { const c = bCentre(d); if (dist2(c.x, c.y, x, y) <= DOME.radius * DOME.radius) return true; }
+  return false;
+}
+
 /**
  * Pick the nuclear target: each rival building is a candidate centre; score what the blast would
  * take (military buildings and the Command Base count extra), minus our own buildings caught in it.
@@ -1957,6 +2105,7 @@ function aiFireNuke(p, silo) {
       s += b.owner === enemy ? w : -w * 2;
     }
     if (c.type === 'lander') s += 40; // (a direct hit on its Command Base ends the enemy colony)
+    if (aiDomed(p, c.x + 0.5, c.y + 0.5)) s = s * 0.25; // (a Shield Dome over it would take the nuke whole)
     if (s > bs) { bs = s; best = c; }
   }
   if (best) fireNukeAt(silo, best.x, best.y);

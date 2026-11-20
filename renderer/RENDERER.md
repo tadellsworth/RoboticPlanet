@@ -583,3 +583,24 @@ python3 tools/install_massdriver.py            # writes the WebP files into ../a
 Both compose like buildings (`compose.py`); the game draws the Catcher as a `B3D` building (scale 1.4) and the
 Driver by `MD_FRAME` (art-manifest.js: the scale and anchor the install prints). The coil sequence, arcs, guidance beam, canisters and their streaks are drawn in code
 (`drawMassDrivers` in `js/render.js`), from the marks.
+
+## The megastructures
+
+The owner's look A for both (Nov 2026; IDEAS.md, "Megastructures"). `b/lance.js` is the Lance of Corvane: a 3 x 3 gun
+pit on its own 30 x 30 pad (`longPad`, framed wide with `frameCompoundOpts`: the pad's 30 units across 0.62 of the
+frame, so the barrel fits at every turn), in layers like the Flak Gun. `part=base` is the pit (an eight-sided berm with
+the team band along its crest, the turntable race and an empty well, capacitor banks in the corners cabled in, a
+coolant plant, a fire-control bunker, floodlights and transformers); `part=head&rot=k&n=16` is the gun on its turntable
+deck alone, turned way k of 16 (0 east, clockwise), with no team colour, its barrel raised 11° with eight dark ceramic
+charge rings and a Ring Crystal lens at the muzzle. Marks `breech`, `r0`..`r7` (the rings) and `muzzle`. `b/dome.js` is
+the Shield Dome's 2 x 2 emitter on a 20 x 20 pad (a tower of field coils holding a crystal projector, six pylons round
+it); the dome itself is drawn in code. Run from this folder:
+
+```
+sh tools/render_lance.sh [out]     # the pit and the emitter for both teams, the 16 heads, every time of day (~30 min)
+python3 tools/install_lance.py     # writes the WebP files into ../art, prints LANCE_FRAME, DOME_FRAME and LANCE_ART
+```
+
+Both compose like buildings (`compose.py`). The game draws them by `LANCE_FRAME` and `DOME_FRAME` (art-manifest.js) over
+the middle of their square, the head by the Lance's aim (`turretHead`); the charge rings, the beam, the trench and the
+dome are drawn in code (`js/render.js`, the megastructures) from `LANCE_ART`.

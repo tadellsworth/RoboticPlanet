@@ -60,7 +60,7 @@ const WATCH_DIFF_INFO = {
 /**
  * The last setup, kept on this device (WATCH_KEY): { shape, shapeRnd, n (colonies), teams, docs (four doctrine keys or
  * 'random'), murmur ('off', 'quiet' or 'active'), diff (DIFFICULTY, every colony's), victory (VICTORY), size, rough,
- * rich, biome (BIOME_ORDER index), biomeRnd, nuke, events, mods (WATCH_MODS), seed (a saved planet's, or null: a new
+ * rich, biome (BIOME_ORDER index), biomeRnd, nuke, mega (Megastructures), events, mods (WATCH_MODS), seed (a saved planet's, or null: a new
  * planet each game) }. What a setup from an earlier build lacks is as Observer mode always had it: Normal, the usual
  * size, terrain and resources, the Nuclear race on, no planetary events, Capture, a random biome, the Murmur active.
  */
@@ -79,7 +79,7 @@ function watchSetup() {
     victory: Object.prototype.hasOwnProperty.call(VICTORY, w.victory) ? w.victory : 'capture',
     size: idx(w.size, SIZE_PRESETS.length, DEFAULT_SIZE.versus), rough: idx(w.rough, TERRAIN_PRESETS.length, DEFAULT_ROUGH), rich: idx(w.rich, RESOURCE_PRESETS.length, DEFAULT_RICH),
     biome: biomeAllowed(BIOME_ORDER[biome], w.shapeRnd ? -1 : shape) ? biome : 0, biomeRnd: w.biomeRnd === undefined || w.biomeRnd ? 1 : 0,
-    nuke: w.nuke === undefined || w.nuke ? 1 : 0, events: w.events ? 1 : 0,
+    nuke: w.nuke === undefined || w.nuke ? 1 : 0, mega: w.mega === undefined || w.mega ? 1 : 0, events: w.events ? 1 : 0,
     mods: modList(w.mods).filter((k) => WATCH_MODS.includes(k)),
     seed: Number.isInteger(w.seed) && w.seed >= 0 ? w.seed : null,
   };
@@ -116,6 +116,7 @@ function watchSummary(w) {
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');
   if (w.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[w.rich].name + ' resources');
   if (!w.nuke) extra.push('no Nuclear race');
+  if (!w.mega) extra.push('no Megastructures');
   extra.push(watchMurmur(w) === 'off' ? 'no Murmur' : `Murmur: ${MURMUR_NAMES[watchMurmur(w)]}`);
   if (w.events) extra.push('Planetary events');
   if (w.mods.length) extra.push('Challenge: ' + w.mods.map((k) => MODS[k].name).join(', '));
@@ -156,7 +157,7 @@ function buildWatch() {
     if (!watchMurmurOk(w())) { WATCH.hover['w-sec-rules'] = $('w-murmur-row'); syncWatchInfo(); sfx('error'); return; }
     w().murmur = b.dataset.v; WATCH.hover['w-sec-rules'] = b; watchKeepSetup(); syncWatch(); sfx('click');
   };
-  for (const k of ['nuke', 'events']) $('w-' + k).onchange = set(() => { w()[k] = $('w-' + k).checked ? 1 : 0; });
+  for (const k of ['nuke', 'mega', 'events']) $('w-' + k).onchange = set(() => { w()[k] = $('w-' + k).checked ? 1 : 0; });
   $('w-mods').innerHTML = WATCH_MODS.map((k) => `<label class="tchip" id="w-mod-${k}-row" data-info="${esc(MODS[k].desc)}"><input type="checkbox" id="w-mod-${k}" role="switch"><span>${MODS[k].name}</span></label>`).join('');
   for (const k of WATCH_MODS) $('w-mod-' + k).onchange = set(() => { const l = w().mods.filter((x) => x !== k); w().mods = modList($('w-mod-' + k).checked ? l.concat(k) : l); });
   $('w-shape').onclick = () => { sfx('click'); openPicker('shape', watchPickCtx()); };
@@ -238,7 +239,7 @@ function syncWatch() {
   $('w-planet').innerHTML = '<option value="">A new planet each game</option>' + saved.map((q, i) => `<option value="${i}">${planetLabel(q).replace(/<[^>]+>/g, '')}</option>`).join('');
   $('w-planet').value = cur >= 0 ? String(cur) : '';
   // Rules: the Nuclear race, planetary events and the Murmur (none on Argos, or where the map has no room for nests).
-  for (const k of ['nuke', 'events']) { $('w-' + k).checked = !!w[k]; $('w-' + k + '-row').classList.toggle('on', !!w[k]); }
+  for (const k of ['nuke', 'mega', 'events']) { $('w-' + k).checked = !!w[k]; $('w-' + k + '-row').classList.toggle('on', !!w[k]); }
   const silent = !watchMurmurOk(w), mur = watchMurmur(w);
   $('w-murmur-row').classList.toggle('na', silent);
   $('w-murmur-row').dataset.info = silent ? (!w.shapeRnd && !murmurShape(w.shape) ? `The Murmur: none on ${SHAPE_PRESETS[w.shape].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : MURMUR_INFO[mur];
@@ -300,7 +301,7 @@ function watchStart(setup) {
   newGame({
     seed: setup.seed ?? randomSeed(), difficulty: DIFFICULTY[setup.diff] ? setup.diff : 'normal', mode: 'versus', size: setup.size ?? DEFAULT_SIZE.versus,
     rough: setup.rough ?? DEFAULT_ROUGH, rich: setup.rich ?? DEFAULT_RICH, shape, players: n, humans: [], styles: docs, style: 'balanced',
-    nuke: setup.nuke !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
+    nuke: setup.nuke !== 0, mega: setup.mega !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
     murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
     scars: scarsPref(), // (War scars: the Settings menu's)
     biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : randomBiomeFor(shape, !!setup.murmur && setup.murmur !== 'off'),

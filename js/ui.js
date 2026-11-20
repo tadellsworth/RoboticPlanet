@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -433,7 +433,7 @@ function checkMenuSettings() {
 function saveSettings() {
   const m = UI.menu;
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, biome: m.biome, players: m.players,
       diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
@@ -563,6 +563,7 @@ function menuSummary() {
   if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
   if (!m.nuke) extra.push('no Nuclear race');
+  if (!m.mega) extra.push('no Megastructures');
   extra.push(menuMurmurLevel() === 'off' ? 'no Murmur' : `Murmur: ${MURMUR_NAMES[menuMurmurLevel()]}`);
   if (m.events) extra.push('Planetary events');
   if (menuTodMode() !== 'cycle') extra.push(menuTodMode() === 'day' ? 'always day' : 'always night');
@@ -676,7 +677,7 @@ function initMenu() {
     if (!menuMurmur()) { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
     UI.menu.murmur = btn.dataset.v; UI.menuHover['m-sec-rules'] = btn; syncMenu(); saveSettings(); sfx('click');
   };
-  for (const [id, k] of [['m-nuke', 'nuke'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
+  for (const [id, k] of [['m-nuke', 'nuke'], ['m-mega', 'mega'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
   // Challenge modifiers (MODS): a switch each, mixed freely.
@@ -894,7 +895,7 @@ function syncMenu() {
   const noRoom = !m.shapeRnd && !murmurShape(m.shape || 0);
   $('m-murmur-row').dataset.info = silent ? (noRoom ? `The Murmur: none on ${SHAPE_PRESETS[m.shape || 0].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : info(mur);
   for (const btn of $('m-murmur').children) { mark(btn, btn.dataset.v === mur); btn.dataset.info = silent ? $('m-murmur-row').dataset.info : info(btn.dataset.v); }
-  for (const [id, on] of [['m-nuke', m.nuke], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
+  for (const [id, on] of [['m-nuke', m.nuke], ['m-mega', m.mega], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
   }
@@ -1971,7 +1972,7 @@ const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
-  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
+  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n', lance: 'l', dome: 'h' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
 /**
@@ -1992,7 +1993,7 @@ function crossingPlacing() { return R.mode === 'place' && CROSSING_TOOLS.include
 const SHEET_KEYS = {
   'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
   'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
-  'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
+  'sh-recall': 'c', 'sh-unpost': 'c', 'sh-lstop': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
   'sh-bomb': 'z', 'sh-napalm': 'n', 'sh-scorch': 'x', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o', 'sh-tarmor': 'r',
   // The Army panel (Q): its orders, the group size, and its Air tab.
   'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
@@ -2987,7 +2988,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
+    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });
@@ -3415,7 +3416,7 @@ function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
-  const extras = [def.victory && VICTORY[def.victory] && VICTORY[def.victory].name, def.mode === 'colony' && def.war && 'Warbots', (def.murmur || def.wildlife) && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const extras = [def.victory && VICTORY[def.victory] && VICTORY[def.victory].name, def.mode === 'colony' && def.war && 'Warbots', (def.murmur || def.wildlife) && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.mega && 'Megastructures', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
@@ -4638,6 +4639,8 @@ function startAim(silo) {
   setMode('aim');
   UI.aimSilo = silo.id;
   R.selected = silo.id;
+  // The Lance of Corvane: no ring (it reaches across the map); the view stays, and the line follows the pointer.
+  if (BDEFS[silo.type].lance) { if (silo.lAim) R.aim = { i: silo.lAim[0], j: silo.lAim[1] }; showAimBanner(); return; }
   const range = BDEFS[silo.type].nukeSilo ? NUKE.range : BDEFS.silo.missile.range;
   showAimBanner();
   // Fit the whole range ring in the map area left between the top bar and the banner (or the tools, where they
@@ -4666,17 +4669,27 @@ function mapGrab(x, y) {
     const w = screenToWorld(mx + dx, my + dy), i = Math.floor(w.x), j = Math.floor(w.y), silo = getE(UI.aimSilo);
     if (!silo || !inMap(i, j) || (R.aim.i === i && R.aim.j === j)) return;
     // Out of range or onto ground it can't strike: the crosshair waits at the last good spot and the banner says why.
-    const why = BDEFS[silo.type].nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j);
+    const why = aimBlocked(silo, i, j);
     if (!why) R.aim = { i, j };
     showAimBanner(why || undefined);
   };
 }
+
+/** Why the weapon being aimed (a Silo, a Nuclear Silo, the Lance) can't strike tile (i, j) ('' if it can). */
+function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
 
 function showAimBanner(problem) {
   const silo = getE(UI.aimSilo), md = BDEFS.silo.missile;
   if (!silo) { setMode('normal'); return; }
   let html = '', ok = null;
   if (problem) html = `<span class="err">${problem}</span> `;
+  if (BDEFS[silo.type].lance) {
+    html += R.aim
+      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(LANCE.charge - silo.lCharge)}.` : `It charges for ${LANCE.charge} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
+      : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
+    showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
+    return;
+  }
   if (BDEFS[silo.type].nukeSilo) {
     html += R.aim
       ? `<b>Launch the nuclear missile here?</b> Everything within ${NUKE.radius} tiles is destroyed, yours included, and the ground stays scorched for ${Math.round(NUKE.scorch / 60)} minutes. It lands ${NUKE.flight} seconds after launch, and the rival sees it coming.`
@@ -4702,7 +4715,7 @@ function aimTap(i, j) {
   const silo = getE(UI.aimSilo);
   if (!silo) { setMode('normal'); return; }
   if (!inMap(i, j)) return;
-  const why = BDEFS[silo.type].nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j);
+  const why = aimBlocked(silo, i, j);
   if (why) { sfx('error'); R.aim = null; showAimBanner(why); return; }
   if (R.aim && R.aim.i === i && R.aim.j === j) { if (INPUT.mouse) fireAimed(); return; }
   R.aim = { i, j };
@@ -4714,6 +4727,14 @@ function fireAimed() {
   const silo = getE(UI.aimSilo);
   if (!silo || !R.aim) return;
   const { i, j } = R.aim, sid = silo.id;
+  if (BDEFS[silo.type].lance) {
+    const was = silo.lOn;
+    act('lanceAim', [sid, i, j], (why) => {
+      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${LANCE.charge} seconds.`, 'info'); return; }
+      sfx('error'); showAimBanner(why);
+    });
+    return;
+  }
   if (BDEFS[silo.type].nukeSilo) {
     act('nukeAt', [sid, i, j], (ok) => {
       if (ok) { setMode('normal'); sfx('alert'); return; }
@@ -6437,7 +6458,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
@@ -6771,6 +6792,10 @@ function openBuildingSheet(b) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim nuclear missile</button>
         <p class="hint" id="sh-aim-hint"></p>`;
     }
+    if (def.lance && b.built && b.owner === ME) {
+      html += `<button class="btn primary big danger-glow" id="sh-aim">Aim the Lance</button>
+        <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>`;
+    }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
         <p class="hint" id="sh-aim-hint">Shows the Silo's ${def.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.</p>`;
@@ -6834,6 +6859,7 @@ function openBuildingSheet(b) {
       sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); if (!b.dead) openBuildingSheet(b);
     });
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
+    if ($('sh-lstop')) $('sh-lstop').onclick = () => { sfx('click'); act('lanceStop', [b.id], () => { toast('The Lance stands down: its charge is lost.', 'info'); refreshSheet(); }); };
     for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
       const to = +btn.dataset.to;
       act('ferryLine', [b.id, to], (why) => {
@@ -7174,12 +7200,30 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Rounds</span><span>${(b.rounds || 0) + (b.stock.ammo || 0) * def.minigun.rounds} (${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoCap}`, !(b.stock.ammo > 0))})</span></div>`);
       parts.push(`<div class="kv"><span>Fire</span><span>${def.minigun.rate} rounds a second, ${def.minigun.damage} damage each, out to ${def.range} tiles; pins what it hits</span></div>`);
     }
-    if (def.ammo && mine && !def.missile && !def.disrupt && !def.mortar && !def.minigun && !def.flak) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
+    if (def.ammo && mine && !def.missile && !def.disrupt && !def.mortar && !def.minigun && !def.flak && !def.dome) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
     if (def.missile && mine) {
       parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
       parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);
       parts.push(`<div class="kv"><span>Reload</span><span>${b.reload > 0 ? Math.ceil(b.reload) + 's' : 'Ready'}</span></div>`);
       parts.push(`<div class="kv"><span>Range</span><span>${def.missile.range} tiles</span></div>`);
+    }
+    if (def.lance) {
+      const pw = lancePower(b), gens = megaGens(b, LANCE.reach).length, rx = lanceReactor(b);
+      if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / LANCE.charge) * 100)}%${b.lCharge >= LANCE.charge ? ' (ready to fire)' : `, fires in ${fmtSecs(LANCE.charge - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / LANCE.charge) * 100)}%;background:#ff6a3a"></div></div>`);
+      if (mine) {
+        parts.push(`<div class="kv"><span>Power</span><span>${b.lOn ? (b.lSrc === 'reactor' ? 'Nuclear Reactor' : `${gens} Generator${gens === 1 ? '' : 's'}, burning Fuel fast`) : pw === 'gen' ? `${gens} Generators with Fuel in reach` : pw === 'reactor' ? 'Nuclear Reactor in reach' : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium` : ''}`}</span></div>`);
+        parts.push(`<div class="kv"><span>Reload</span><span>${b.lReload > 0 ? fmtSecs(b.lReload) : 'Ready'}</span></div>`);
+        parts.push(`<div class="kv"><span>Charge · reload</span><span>${LANCE.charge} s · ${Math.round(LANCE.reload / 60)} min</span></div>`);
+      }
+    }
+    if (def.dome) {
+      const st = b.dDown ? `Down: back in ${fmtSecs(b.dDown - S.time)}` : b.dUp ? 'Up' : 'Down';
+      parts.push(`<div class="kv"><span>Shield</span><span>${st}, ${Math.floor(b.dStr ?? DOME.max)} of ${DOME.max} strength</span></div><div class="bar"><div style="width:${Math.round(((b.dStr ?? DOME.max) / DOME.max) * 100)}%;background:#5ab8ff"></div></div>`);
+      if (mine) {
+        parts.push(`<div class="kv"><span>Crystal</span><span>${goodTag('crystal', `${b.stock.crystal || 0}/${def.ammoCap}`, !(b.stock.crystal > 0))} (one every ${DOME.crystal} s while up)</span></div>`);
+        parts.push(`<div class="kv"><span>Power</span><span>${domePowered(b) ? 'A Generator with Fuel in reach' : `<b>None</b>: it needs a Generator with Fuel within ${DOME.reach} tiles`}</span></div>`);
+        parts.push(`<div class="kv"><span>Covers · hits</span><span>${DOME.radius} tiles round it · Missile ${DOME.cost.missile}, bomb ${DOME.cost.bomb}, shell ${DOME.cost.shell}</span></div>`);
+      }
     }
     if (def.nukeSilo && mine) {
       parts.push(`<div class="section-label">Nuclear missile parts</div><div class="goodlist">${Object.keys(NUKE.parts).map((g) =>
@@ -7207,7 +7251,13 @@ function refreshBuildingSheet(b) {
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
   if ($('sh-fix')) refreshFix(b);
-  if ($('sh-aim') && def.nukeSilo) {
+  if ($('sh-aim') && def.lance) {
+    const why = b.lOn ? '' : lanceBlocked(b);
+    $('sh-aim').disabled = !!why;
+    $('sh-aim').textContent = b.lOn ? 'Change the aim' : 'Aim the Lance';
+    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${LANCE.charge} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
+    if ($('sh-lstop')) $('sh-lstop').hidden = !b.lOn;
+  } else if ($('sh-aim') && def.nukeSilo) {
     $('sh-aim').disabled = !b.armed;
     $('sh-aim-hint').textContent = b.armed ? `Shows its ${NUKE.range}-tile range: tap a spot inside it to see the ${NUKE.radius}-tile blast, then launch.` : 'Builds a nuclear missile once its parts are in.';
   } else if ($('sh-aim')) {

@@ -2448,6 +2448,19 @@ function mapDims(st) {
   return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
 }
 
+/**
+ * Are the megastructures in this game (the Lance of Corvane, the Shield Dome)? The Megastructures setting (on unless the
+ * game setup turned it off; a save from before it: off), and in a mission only one that teaches them (S.mission.mega).
+ */
+function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission || !!S.mission.mega); }
+
+/** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, the Hollow (the Lance). */
+function megaBlocked(owner, type) {
+  if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
+  if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
+  return '';
+}
+
 /** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? Not in a mission, unless it teaches it. */
 function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke) && !S.hollow; } // (no missiles under the Hollow's roof)
 
@@ -2540,6 +2553,7 @@ function newGame(opts) {
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
+  settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
@@ -2676,6 +2690,7 @@ function worldBan(type) {
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
   if (BDEFS[type] && (BDEFS[type].mdriver || BDEFS[type].catcher)) return 'No Mass Driver in the Hollow: nothing flies under the cavern roof.';
+  if (BDEFS[type] && BDEFS[type].lance) return 'No Lance of Corvane in the Hollow: there is no line of fire under the cavern roof.';
   // (Nor missiles: nothing flies under the cavern roof. No Missile Factory or Silo, and no Nuclear race: see nukeOn.)
   if (type === 'munitions' || (BDEFS[type] && (BDEFS[type].missile || BDEFS[type].nukeSilo))) return 'No missiles fly in the Hollow: there is no sky down here, only the cavern roof.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
@@ -3083,6 +3098,7 @@ function addBuilding(owner, type, x, y, built) {
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
   if (def.long) { b.mdAxis = 'ew'; longClaim(b); } // (a Mass Driver: two tiles, see longTile)
+  if (def.foot) footClaim(b); // (a megastructure: a square of tiles, see footTiles)
   if (type === 'outpost' || type === 'keep' || type === 'gate' || type === 'ropeway' || type === 'viaduct') outpostRoads(x, y); // roads run through it
   return b;
 }
@@ -3104,8 +3120,37 @@ function longRelease(b) {
 }
 /** Lay two-tile building b along `axis` ('ew' or 'ns'). */
 function setLongAxis(b, axis) { longRelease(b); b.mdAxis = axis === 'ns' ? 'ns' : 'ew'; longClaim(b); }
-/** The middle of building b's footprint (a two-tile one's between its tiles). */
-function bCentre(b) { const L = BDEFS[b.type] && BDEFS[b.type].long, ns = b.mdAxis === 'ns'; return { x: b.x + 0.5 + (L && !ns ? 0.5 : 0), y: b.y + 0.5 + (L && ns ? 0.5 : 0) }; }
+/** The middle of building b's footprint (a two-tile one's between its tiles, a megastructure's in the middle of its square). */
+function bCentre(b) {
+  const d = BDEFS[b.type], F = d && d.foot;
+  if (F) return { x: b.x + F / 2, y: b.y + F / 2 };
+  const L = d && d.long, ns = b.mdAxis === 'ns';
+  return { x: b.x + 0.5 + (L && !ns ? 0.5 : 0), y: b.y + 0.5 + (L && ns ? 0.5 : 0) };
+}
+
+/*
+ * A megastructure (def.foot: the Lance of Corvane 3, the Shield Dome 2) stands on a square of foot x foot tiles: its
+ * own tile (b.x, b.y) at the north-west corner, and the rest east and south of it. S.bAt holds it on every one, so they
+ * block the way, can't be built on, and a tap on any picks it. Its door (where its Workers and Haulers come to) is its
+ * own tile, the corner, like a Mass Driver's; its middle (bCentre) is what its reach is measured from.
+ */
+function footTiles(type, x, y) {
+  const F = (BDEFS[type] && BDEFS[type].foot) || 1, out = [];
+  for (let dj = 0; dj < F; dj++) for (let di = 0; di < F; di++) out.push([x + di, y + dj]);
+  return out;
+}
+function footClaim(b) {
+  for (const [i, j] of footTiles(b.type, b.x, b.y)) if (inMap(i, j) && (!S.bAt[tIdx(i, j)] || S.bAt[tIdx(i, j)] === b.id)) { S.bAt[tIdx(i, j)] = b.id; clearDecor(tIdx(i, j)); }
+}
+function footRelease(b) {
+  for (const [i, j] of footTiles(b.type, b.x, b.y)) if (inMap(i, j) && S.bAt[tIdx(i, j)] === b.id) { S.bAt[tIdx(i, j)] = 0; markDirty(i, j); }
+}
+/** The distance from (x, y) to the nearest point of building b's footprint (0 inside it). */
+function footDist(b, x, y) {
+  const d = BDEFS[b.type], F = (d && d.foot) || 1;
+  const dx = Math.max(b.x - x, 0, x - (b.x + F)), dy = Math.max(b.y - y, 0, y - (b.y + F));
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
 function addBot(owner, type, x, y) {
   const maxHp = BOTS[type].hp;
@@ -3467,6 +3512,9 @@ function runwayEnds(b) {
 function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   const def = BDEFS[type];
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
+  if (def.mega) { const why = megaBlocked(owner, type); if (why) return { ok: false, reason: why }; }
+  // A megastructure: its own tile's checks, then every tile of its square has to be open, level ground of yours.
+  if (def.foot && axis !== '_') return footPlace(owner, type, i, j, skipBlockCheck);
   // A two-tile building (the Mass Driver): both its tiles must do, on one level. (axis '_': one tile's own checks.)
   if (def.long && axis !== '_') {
     const r = canPlace(owner, type, i, j, skipBlockCheck, '_');
@@ -3537,6 +3585,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
     const u = tIdx(i + di, j + dj);
     const nb = S.bAt[u] ? getE(S.bAt[u]) : null;
     if (nb && nb.type === 'lander') return { ok: false, reason: 'Too close to the Command Base.' };
+    if (def.foot && di >= 0 && dj >= 0) continue; // (a megastructure's own square: see footPlace)
     if (di !== 0 && dj !== 0) continue;
     if (!nb && canStep(t, u)) open++;
     if (!nb && canStep(t, u) && (S.road[u] || canRoad(owner, i + di, j + dj))) roadSide++;
@@ -3580,6 +3629,71 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   // The most expensive check goes last. (Bots walk through Outposts and Viaducts' ends, so those never block.)
   if (!skipBlockCheck && type !== 'outpost' && type !== 'keep' && type !== 'viaduct' && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
+}
+
+/**
+ * Can a megastructure (def.foot) go with its corner at (i, j)? Its own tile takes every usual check (and is its door);
+ * the others must be open, level ground of yours with nothing on them; the buildings round it keep a side open; and it
+ * mustn't close the only way through.
+ */
+function footPlace(owner, type, i, j, skipBlockCheck) {
+  const tiles = footTiles(type, i, j), F = BDEFS[type].foot, name = BDEFS[type].name;
+  for (const [a, c] of tiles) if (!inMap(a, c)) return { ok: false, reason: 'Outside the map.' };
+  const r = canPlace(owner, type, i, j, true, '_');
+  if (!r.ok) return r;
+  const lv = S.elev[tIdx(i, j)], set = new Set(tiles.map(([a, c]) => tIdx(a, c)));
+  for (const [a, c] of tiles) {
+    const t = tIdx(a, c);
+    if (a === i && c === j) continue;
+    const why = S.terrain[t] !== T_GROUND ? 'the ground there is not buildable' : (S.tidal && S.tidal[t]) ? 'the sea covers part of it at high tide'
+      : scorched(t) ? 'part of it is still scorched' : S.owner[t] !== owner ? 'all of it must stand on your own land' : S.bAt[t] ? 'there is a building in the way'
+      : S.res[t] ? 'there are resources in the way' : (S.road[t] || S.plan[t]) ? 'there is a road in the way' : (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) ? 'there is track in the way'
+      : S.ramp[t] ? 'part of it is on a slope' : S.elev[t] !== lv ? 'it needs level ground' : runwayAt(t) ? 'an Airfield\'s runway is in the way'
+      : calmAt(a + 0.5, c + 0.5) || postAt(t) || uplinkAt(t) ? 'neutral ground is in the way' : (S.pipe && S.pipe[t]) ? 'a pipeline is in the way' : '';
+    if (why) return { ok: false, reason: `The ${name} is ${F} by ${F} tiles, and ${why}.` };
+  }
+  // Every building beside it keeps a side bots can walk in from.
+  for (let c = j - 1; c <= j + F; c++) for (let a = i - 1; a <= i + F; a++) {
+    if (!inMap(a, c) || set.has(tIdx(a, c)) || !S.bAt[tIdx(a, c)]) continue;
+    const u = tIdx(a, c), nb = getE(S.bAt[u]);
+    if (!nb || BDEFS[nb.type].foot) continue;
+    if (nb.type === 'lander') return { ok: false, reason: 'Too close to the Command Base.' };
+    let open = false;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!inMap(a + di, c + dj)) continue;
+      const v = tIdx(a + di, c + dj);
+      if (!set.has(v) && !S.bAt[v] && canStep(u, v)) { open = true; break; }
+    }
+    if (!open) return { ok: false, reason: `That would wall in the ${BDEFS[nb.type].name} next to it.` };
+  }
+  if (!skipBlockCheck && footBlocks(set, i, j, F)) return { ok: false, reason: 'That would block the only way through here.' };
+  return { ok: true, reason: '' };
+}
+
+/** Would building on the tiles in `set` (a square of F from (i, j)) cut the open ground round it in two, near by? */
+function footBlocks(set, i, j, F) {
+  const ring = [];
+  for (let c = j - 1; c <= j + F; c++) for (let a = i - 1; a <= i + F; a++) {
+    if (!inMap(a, c)) continue;
+    const t = tIdx(a, c);
+    if (!set.has(t) && walkable(t) && (!S.bAt[t] || passTile(t))) ring.push(t);
+  }
+  if (ring.length <= 1) return false;
+  const seen = new Set([ring[0]]), q = [ring[0]], lim = 6;
+  let left = ring.length - 1;
+  const want = new Set(ring.slice(1));
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], a = t % S.W, c = (t / S.W) | 0;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = a + di, y = c + dj;
+      if (!inMap(x, y) || x < i - lim || y < j - lim || x > i + F + lim || y > j + F + lim) continue;
+      const u = tIdx(x, y);
+      if (seen.has(u) || set.has(u) || !walkable(u) || (S.bAt[u] && !passTile(u)) || !canStep(t, u)) continue;
+      seen.add(u); q.push(u);
+      if (want.has(u) && --left === 0) return false;
+    }
+  }
+  return true;
 }
 
 /** Would building u still have an open side bots can walk in from if tile t were built on? */
@@ -3653,6 +3767,7 @@ function placeSite(owner, type, i, j, cost, fromStore, axis) {
   if (S.plan[t]) cancelPlan(t);
   if (S.road[t]) removeRoad(owner, i, j, held);
   if (def.long) { const [i2, j2] = longTile(i, j, axis), t2 = tIdx(i2, j2); if (S.plan[t2]) cancelPlan(t2); if (S.road[t2]) removeRoad(owner, i2, j2, false); markDirty(i2, j2); }
+  if (def.foot) for (const [a, c] of footTiles(type, i, j)) markDirty(a, c);
   const b = addBuilding(owner, type, i, j, false);
   if (def.long) setLongAxis(b, axis);
   if (held) b.road = true;
@@ -4798,6 +4913,7 @@ function destroyBuilding(b, burn, quiet) {
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
   if (BDEFS[b.type].long) { longRelease(b); const [i2, j2] = longTile(b.x, b.y, b.mdAxis); if (inMap(i2, j2)) markDirty(i2, j2); }
+  if (BDEFS[b.type].foot) footRelease(b);
   if (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway' || b.type === 'viaduct') outpostRoads(b.x, b.y);
   // A Ropeway is two stations, a Viaduct two abutments: one going takes the other with it.
   if ((b.type === 'ropeway' || b.type === 'viaduct') && b.link) {
@@ -5093,6 +5209,10 @@ function checkSave(o) {
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();
     if (b.mdSend != null && !(obj(b.mdSend) && Object.keys(b.mdSend).length <= MASSDRIVER.goods && Object.keys(b.mdSend).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdSend[g])))) bad();
     for (const k of ['mdFire', 'mdCd', 'mdLast', 'mdShot', 'mdSent', 'mdGot', 'mdCaught']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
+    if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
+    if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
+    for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -5103,6 +5223,7 @@ function checkSave(o) {
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();
+    if (st.mega != null && typeof st.mega !== 'boolean') bad();
   }
   if (o.mission) {
     const M = o.mission;
@@ -5130,6 +5251,9 @@ function checkSave(o) {
   if (o.scrap != null && !(Array.isArray(o.scrap) && o.scrap.length <= 2 * SCARS.scrapMax && o.scrap.every((s) => onMap(s) && Number.isSafeInteger(s.id) &&
     ['n', 'k', 'c', 'a'].every((k) => Number.isFinite(s[k])) && (s.o == null || owner(s.o)) && (s.w == null || Number.isSafeInteger(s.w))))) bad();
   if (o.bones != null && !(Array.isArray(o.bones) && o.bones.length <= 2 * SCARS.bonesMax && o.bones.every((b) => onMap(b) && Number.isFinite(b.k) && Number.isFinite(b.a)))) bad();
+  // The Lance of Corvane's cuts across the map (S.cuts, see lanceFire): numbers on the map.
+  if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) &&
+    [c.x0, c.x1].every((x) => x >= -1 && x <= o.W + 1) && [c.y0, c.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
     Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
@@ -5234,6 +5358,7 @@ function deserializeGame(json) {
   o.loot = o.loot || [];
   o.missiles = o.missiles || [];
   o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
+  o.cuts = o.cuts || []; // (saves from before the Lance of Corvane: no cuts; their settings have no Megastructures: off, see megaOn)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   // The rest works on S. A save that fails part-way leaves the game that was running as it was.
@@ -5243,6 +5368,7 @@ function deserializeGame(json) {
     for (const b of S.buildings) {
       S.byId.set(b.id, b);
       S.bAt[tIdx(b.x, b.y)] = b.id;
+      if (BDEFS[b.type].foot) footClaim(b); // (a megastructure: every tile of its square)
       if (BDEFS[b.type].long) { b.mdAxis = b.mdAxis === 'ns' ? 'ns' : 'ew'; const [i2, j2] = longTile(b.x, b.y, b.mdAxis); if (inMap(i2, j2)) S.bAt[tIdx(i2, j2)] = b.id; } // (a save from before the Mass Driver's two tiles: laid east)
       if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
     }

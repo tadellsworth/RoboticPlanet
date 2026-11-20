@@ -31,7 +31,7 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, the Lance of Corvane, one shot down a row of depots), Keeps and bombers), then a **Bonus**:
   **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
@@ -79,7 +79,8 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
-and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane and the Shield
+Dome; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -173,6 +174,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
+| Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s and fires a beam across the whole map that destroys everything on its line; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below) |
+| Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 | Viaduct | Placed in Paths: a level bridge straight across a valley between two clifftops; every bot crosses it |
@@ -1952,6 +1955,44 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
+- **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for both, built
+  Nov 2026). Late-game, one per colony (`megaBlocked`), on the Defend tab, both bigger than a tile: `def.foot` (3 or 2)
+  is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
+  `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
+  `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
+  - **The Lance of Corvane** (`BDEFS.lance`, `LANCE`; key L; 40 Cement, 30 Alloy, 15 Chips, 10 Crystal; 240 s to
+    build). Its panel's **Aim the Lance**, then a tap anywhere (the `lanceAim` order, `setLanceAim`; `lanceStop` stands
+    it down): it charges for `LANCE.charge` (90) s and fires. Power (`lancePower`): `LANCE.gens` (2) Generators with
+    Fuel within `LANCE.reach` (4) tiles of its square (`megaGens`), each burning a Fuel every `genFuel` (30) s while it
+    charges, or a Nuclear Reactor there with `uranium` (2) Uranium in it, taken as the charge starts; losing that power
+    mid-charge loses the charge (`lanceStillPowered`). While it charges its owner's lights dim and factories work `slow`
+    (a third) slower (`lanceDim`, `P.dimUntil`), every player is told, and a hum rises (`lanceHum` in `js/audio.js`); the
+    Murmur are drawn to it (`chargeWorth` 6, `murmurPower`). A dust storm holds the shot. The beam (`lanceFire`,
+    `lanceLine`, `lanceTiles`) runs from its middle through the aimed tile to the map's edge, `width` wide, stopped by
+    the first foe's Shield Dome it enters (which takes it and drops): every building on it is destroyed (`destroyBuilding`,
+    a Command Base or Keep held at `missileFloor`, Murmur nests and exits cleared), every robot on it killed (not
+    aircraft aloft), groves and crops burned; the cut is kept for good (`S.cuts`, up to `cutsMax`, drawn as a trench
+    that glows and cools, steam over water: `drawCuts`, `drawLanceBeams`) and on War scars burns the ground along it to
+    ash with the animals there (`scarTrench`). Then `reload` (240) s. Not in the Hollow (`worldBan`).
+  - **The Shield Dome** (`BDEFS.dome`, `DOME`; key H; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; 180 s). Up while it
+    has power (a Generator with Fuel within `reach` 4) and Crystal (one every `crystal` 20 s, `cap` 6, hauled as its
+    ammo): `updateDome`, `b.dUp`. `domeCatch(x, y, by, kind, sx, sy)` in each impact (`missileImpact`, `nukeImpact`,
+    `bombImpact` and napalm, `shellImpact` and `rocketImpact` from guns outside it, `meteorImpact`, `rockfall`, a rival
+    canister coming down into it in `updateCans`) lets the nearest up Dome of a foe (any Dome for the planet's own) take
+    it instead: `domeHit` takes `DOME.cost[kind]` off its 100 strength; unhit for `quiet` (10) s it regains `regen` (1) a
+    second; at 0 it drops for `down` (60) s and comes back at `back` (40). Drawn in code (`drawDomes`): a hex lattice on
+    the dome's surface, shimmering, flashing where hit, breaking up as it drops.
+  - **The rivals** (`aiMega` in `js/ai.js`, `AI_MEGA`): from `lanceAt` (25 min), in a Nuclear race, with a Reactor
+    and Uranium to feed it, a rival picks once (`aiMegaPick`, `P.megaPick`, the reasons in `P.megaWhy`) between the
+    Lance and the nukes: its doctrine's lean (`AI_MEGA_LEAN`: Architect +2, Warden +1, Steward 0, Salvager −1, Herald
+    −2), +1 for the Lance when its enemy's buildings lie strung out (the best line through them takes 2 or more more than
+    the best blast), −1 when they're bunched, +1 when the enemy has a Shield Dome (it swallows a nuke whole), +1 when
+    Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. Its Lance
+    goes within reach of its Reactor (`aiMegaSpot`) and fires along the line through a foe building worth the most
+    (`aiLanceWorth`: its foes' buildings and army, its own side's six times over), if worth `worth` (6). From `domeAt`
+    (20 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
+    Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base, if it can afford it; its
+    Missiles and nukes pass over targets under a foe's Dome (`aiDomed`).
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
   gives 2× and 3×.
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or

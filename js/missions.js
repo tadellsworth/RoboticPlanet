@@ -18,8 +18,8 @@
  * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key, or 'random'),
  * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
- * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events (switch on what missions otherwise
- * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events), pressOn (the rival's
+ * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/mega (switch on what missions otherwise
+ * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, Megastructures), pressOn (the rival's
  * trade convoys keep to schedule, out of a besieged base and past raiders: convoysPress), murmur ('quiet' or
  * 'active': the Murmur, with their nests, tunnels and nights; the older wildlife: true is Active), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
  * (1 to 4, met in any order, shown one at a time as the next goal) }.
@@ -1555,6 +1555,46 @@ const MISSIONS = [
     ],
   },
   {
+    id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
+    brief: 'The archive\'s last pages hold an orbital defence. Build it here, shield your base, and fire it along the line of their depots.',
+    intro: [
+      'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
+      'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
+      'The <b>Lance of Corvane</b> fires a beam across the whole map. It needs 2 Generators with Fuel by its pit.',
+      'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',
+      'Their supply depots stand in a row. In free play, Custom Game → Rules switches Megastructures on or off.',
+    ],
+    mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true,
+    rival: ['easy', 'easy', 'normal'], passive: [true, true, false], limit: [0, 0, 35],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const L = getE(S.players[0].lander), E = getE(S.players[1].lander), P = S.players[0];
+      L.stock.cement += 120; L.stock.alloy += 80; L.stock.chip += 40; L.stock.crystal += 50; L.stock.fuel += 30;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
+      // Their depots, strung out in a row from their base toward ours: one line of fire from by our base takes most of them.
+      const dx = L.x - E.x, dy = L.y - E.y, d = Math.hypot(dx, dy) || 1;
+      for (let k = 0; k < 7; k++) preBuild(1, 'depot', Math.round(E.x + dx / d * (3 + k * 2.2)), Math.round(E.y + dy / d * (3 + k * 2.2)), { reach: 1 });
+      computeTerritory();
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'dome', n: 1,
+        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by your base, then <b>Defend</b> (<kbd>4</kbd>) → <b>Shield Dome</b> (<kbd>H</kbd>) beside it.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='dome'], .bcard[data-t='generator']" },
+      { kind: 'built', type: 'lance', n: 1,
+        hint: '<b>Defend</b> → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
+      { kind: 'lanceFired', n: 1, text: 'Fire the Lance of Corvane', at: 'lance',
+        count: (P) => P.stats.lance || 0,
+        hint: 'Tap the Lance → <b>Aim the Lance</b> (<kbd>F</kbd>), tap a spot past their depots, then <b>Charge</b>.',
+        ui: '#sh-aim' },
+      { kind: 'lanceLine', n: [2, 3, 4], text: ['Destroy {n} rival building with one shot', 'Destroy {n} rival buildings with one shot'], at: 'lance',
+        count: (P) => P.stats.lanceBest || 0,
+        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) down their row of depots: each one ringed red goes. 4 minutes to reload.',
+        ui: '#sh-aim' },
+    ],
+  },
+  {
     id: 'descent', name: 'Final Descent', chapter: 'War',
     brief: 'A maze of canyons and a seasoned rival. Use everything you have learned, and take to the air.',
     intro: [
@@ -1746,7 +1786,7 @@ function missionOptions(k, diff) {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
-    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events,
+    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, mega: !!def.mega,
     layout: def.layout,
     setup(S) {
       // Easy starts with more in the Command Base, Hard with less.
@@ -1758,7 +1798,7 @@ function missionOptions(k, diff) {
         for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, pressOn: !!def.pressOn };
+      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, mega: !!def.mega, pressOn: !!def.pressOn };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)

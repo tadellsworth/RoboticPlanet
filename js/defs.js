@@ -611,7 +611,7 @@ function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH,
  * unless you take the land back.
  */
 const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
-const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo']);
+const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -887,6 +887,34 @@ const NUKE_GOODS = ['uranium', 'fissile'];
 const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
+
+/*
+ * Megastructures (the Megastructures setting on game setup, on by default; missions keep their own: megaOn). Late-game,
+ * one per colony, slow to build and seen by everyone.
+ *
+ * The Lance of Corvane (BDEFS.lance): a 3 x 3 gun pit, a long barrel on a slow turntable. Aim it (its panel, then a
+ * spot anywhere) and it charges for `charge` s, then fires a beam in a straight line from the gun through that spot to
+ * the map's edge, `width` tiles wide: every building on the line is wrecked (a Command Base or Keep drops to its
+ * Missile floor), every robot on it dies, whosever it is, Walls are breached, water boils to steam, and a scorched
+ * trench is carved for good (S.cuts; on War scars the ground under it burns to ash and the animals there die). It fires
+ * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
+ * each while it charges, or a Nuclear Reactor there with `uranium` Uranium in it (taken as the charge starts). While it
+ * charges its colony's lights dim and its factories work `slow` slower; wreck its power and the charge is lost. A dust
+ * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. A
+ * Shield Dome on the line takes the whole shot and drops. Charging draws the Murmur (chargeWorth). Not in the Hollow
+ * (no line of fire under the cavern roof); allowed on Argos.
+ *
+ * The Shield Dome (BDEFS.dome): a 2 x 2 emitter raising a dome `radius` tiles round its middle that stops what falls on
+ * it from outside (domeCatch): Missiles, nuclear missiles, bombs and napalm, Ringfall, Howitzer and Mortar shells fired
+ * from outside, rival Mass Driver canisters, rock from the Hollow's tremors, and a Lance shot. Robots walk in and guns
+ * fire through. It has `max` strength; each hit costs `cost` of it (a nuclear missile or a Lance shot all of it); left
+ * unhit for `quiet` s it recharges `regen` a second; at 0 it drops for `down` s and comes back at `back`. While up it
+ * burns a Crystal every `crystal` s (Haulers bring them, `cap` at most) and needs a Generator with Fuel within `reach`
+ * tiles: without either it's down.
+ */
+const LANCE = { charge: 90, reload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
+const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
+  cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 
 // You (blue, COBALT), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
 // from the other three and from every biome's ground (gold would vanish on desert, savanna and lava).
@@ -1187,6 +1215,18 @@ const BDEFS = {
     name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. What lands here is shared out like any Depot\'s stock: Haulers take it where it is needed, and buildings touching it are fed by conveyor. Aim a Mass Driver at it from the Driver\'s panel, 12 to 30 tiles away; one Catcher can take several Drivers.',
     cost: { cement: 6, alloy: 4, chip: 2 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
+  // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
+  // square of foot x foot tiles from its own tile, east and south: footTiles).
+  lance: {
+    name: 'Lance of Corvane', short: 'Lance',
+    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything on the line is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium in it (it holds up to 3). Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
+    cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 240, war: true,
+  },
+  dome: {
+    name: 'Shield Dome', short: 'Dome',
+    desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. One per colony.',
+    cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 180, war: true,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1218,13 +1258,13 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo', 'lance', 'dome'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1761,6 +1801,8 @@ const FLAVOR = {
   station: 'Platform signs in four languages. Every train is freight.',
   magterm: 'Phase 2 transit. Platforms to passenger standard. Departures on time; the seats stay folded.',
   mdriver: 'Survey kit to supply settlements before the roads. The settlements never came. It still fires.',
+  lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
+  dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',

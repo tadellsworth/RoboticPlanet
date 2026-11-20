@@ -334,6 +334,10 @@ const ORDERS = {
   sendAttack(p, tid, n, all) { const t = liveB(tid); return t && foes(t.owner, p) ? sendAttack(p, t, n | 0, !!all) : 0; },
   fireMissile(p, tid) { const t = liveB(tid); return t && foes(t.owner, p) ? fireMissile(p, t) : false; },
   missileAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].missile ? fireMissileAt(s, i, j) : false; },
+  /** Aim Lance of Corvane `id` through tile (i, j): it starts charging (or, charging, turns to the new aim). '' or why not. */
+  lanceAim(p, id, i, j) { const b = ownB(p, id); return b && BDEFS[b.type].lance ? setLanceAim(b, i | 0, j | 0) : 'That Lance is gone.'; },
+  /** Call off Lance `id`'s charge (the charge is lost). */
+  lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },
   /** `want` warbots (-1: every spare one) out of garrisons to hold the ground round (i, j): { sent, rally } (the flag's id). */
   rally(p, i, j, want) {
