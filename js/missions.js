@@ -1807,7 +1807,7 @@ function missionOptions(k, diff) {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
-    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, mega: !!def.mega,
+    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega,
     layout: def.layout,
     setup(S) {
       // Easy starts with more in the Command Base, Hard with less.
@@ -1819,7 +1819,7 @@ function missionOptions(k, diff) {
         for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, mega: !!def.mega, pressOn: !!def.pressOn };
+      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)

@@ -8494,6 +8494,32 @@ function drawEffects(ctx, ox, oy, z) {
         ctx.stroke();
         break;
       }
+      case 'drizzle': {
+        // The Ring drizzle (updateDrizzle): a lone piece of the Ring streaking down (brighter on airless Argos), then a
+        // small puff of dust and a glow where it lands. It does no harm: no scorch, no crater.
+        const land = f.land || 1.4, hot = f.r === R_CRYSTAL ? '#bfe9ff' : f.r === R_URANIUM ? '#d8ff9a' : '#ffd9a0';
+        if (f.t < land) {
+          const q = 1 - f.t / land, dir = f.dir || 1, hx = x + dir * q * z * 5, hy = y - q * z * 9, tail = f.bright ? 3.2 : 2.2;
+          const g = ctx.createLinearGradient(hx, hy, hx + dir * z * tail * 0.6, hy - z * tail);
+          g.addColorStop(0, f.bright ? 'rgba(255,255,240,1)' : 'rgba(255,236,190,0.85)'); g.addColorStop(1, 'rgba(255,160,80,0)');
+          ctx.globalAlpha = Math.min(1, (1 - q) * 4);
+          ctx.strokeStyle = g; ctx.lineWidth = Math.max(2, z * (f.bright ? 0.16 : 0.11)); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + dir * z * tail * 0.6, hy - z * tail); ctx.stroke();
+          ctx.lineCap = 'butt';
+          fxGlow(ctx, hx, hy, z * (f.bright ? 0.5 : 0.32), hot, 0.9);
+          break;
+        }
+        const k2 = (f.t - land) / Math.max(0.1, f.life - land);
+        fxGlow(ctx, x, y, z * (0.5 + 0.4 * k2), hot, 0.7 * (1 - k2));
+        fxGround(ctx, x, y, z * 1.6, hot, 0.8 * (1 - k2));
+        ctx.fillStyle = fxDim('#a8957c');
+        for (let n = 0; n < 5; n++) {
+          const a = n * 1.25 + f.x, d = z * (0.15 + 0.45 * Math.min(1, k2 * 1.8));
+          ctx.globalAlpha = 0.45 * (1 - k2);
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.5 - k2 * z * 0.2, z * (0.12 + k2 * 0.18), 0, Math.PI * 2); ctx.fill();
+        }
+        break;
+      }
       case 'crater': {
         // A meteor's scorch mark, glowing embers fading out.
         ctx.globalAlpha = 0.55 * (1 - k);
@@ -8689,6 +8715,16 @@ function renderMinimap() {
   if (S.hollow) for (const b of S.hollow.breaches) {
     ctx.fillStyle = 'rgba(255,214,140,0.4)';
     ctx.beginPath(); ctx.arc((b.x + 0.5) * sx, (b.y + 0.5) * sy, Math.max(2.5, b.r * sx), 0, Math.PI * 2); ctx.fill();
+  }
+  // The Ring drizzle's new deposits (updateDrizzle): a quiet pulsing ring for a few seconds where each came down.
+  if (S.drizzle) for (const d of S.drizzle.spots) {
+    const age = S.time - d.at;
+    if (age < 0 || age > 12) continue;
+    const f = (R.time * 1.2) % 1, x = ((d.t % S.W) + 0.5) * sx, y = (((d.t / S.W) | 0) + 0.5) * sy;
+    ctx.strokeStyle = d.r === R_CRYSTAL ? '#9fe4ff' : d.r === R_URANIUM ? '#c6ff7a' : '#ffc27a'; ctx.lineWidth = 1.2;
+    ctx.globalAlpha = (1 - f) * (1 - age / 12);
+    ctx.beginPath(); ctx.arc(x, y, 2 + f * 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
   }
   // Trade Posts: gold diamonds.
   if (S.posts) for (const p of S.posts) {

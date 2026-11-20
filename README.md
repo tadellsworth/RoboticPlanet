@@ -1944,12 +1944,32 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Crystal in the strike zones. Listen for the Murmur." (its last words only where the Murmur are in the game, never on
   Lunar). **Solar flare**: battery drain ×
   `FLARE_DRAIN` (2). **The *Wren*** (the trader ship, type `'trader'`; its card shows the name in italics,
-  `EVENTS.trader.html`, and one of its 31-year-old cargo lists, `WREN_CARGO` by the event's number): 75 s; takes raw goods only and brings finished goods only (`traderOffer`:
+  `EVENTS.trader.html`, and one of its 31-year-old cargo lists, `WREN_CARGO` by the event's number): 75 s; as a rule it takes raw goods only and brings finished goods only (`traderOffer`:
   the raw good of `WREN_TAKES`, Stone, Fiber, Ore, Crystal or Crude, you hold furthest over `TRADE_KEEP`, for the finished
   good of `WREN_BRINGS`, Cement, Alloy, Chips, Fuel or Ammo with a war on, you hold least of against it) at `TRADE_BONUS`
-  (1.3×) its worth; the AI takes its deal when short. (Until Nov 2026 it brought the raw good your land ran shortest of,
-  for any good: the owner turned it round.)
-  An event card under the top bar shows it with a countdown and the Trade button.
+  (1.3×) its worth. On about one visit in four (`WREN_RAW_CHANCE` 0.25, rolled for each colony in `startEvent` from the
+  visit's seed) it makes its older offer instead (`wrenRawOffer`, the offer marked `raw`): the raw good of `TRADE_GET`
+  (Ore, Crystal, Stone, or Crude once you have an Oil Pump) your land is closest to running out of (stock plus what's in
+  the ground on your land, against `TRADE_LEFT`), for a good of `TRADE_GIVE` you hold well over `TRADE_KEEP` of (never
+  Chips, Ammo or Missiles, nor a made good for its own ingredient), at the same 1.3×; with nothing to spare for it, the
+  usual offer. The AI takes either deal when `short` (of the finished good it brings, or its land of the raw one). (From
+  Nov 18 to Nov 20 2026 it brought finished goods only; the owner brought the raw offer back now and then.)
+  An event card under the top bar shows it with a countdown, the Trade button and which kind of deal it is.
+- **The Ring drizzle** (`updateDrizzle`, `drizzlePlan`, `drizzleLand` in `js/sim.js`; `DRIZZLE_*` in `js/defs.js`): in
+  every game, Planetary events or not (in a mission only with `drizzle: true`; none asks yet), a lone piece of the Ring
+  every `DRIZZLE_GAP` (160–240 s, seeded; the first at `DRIZZLE_FIRST`, 710–740 s, once the opening is over) on each colony's share of the planet:
+  a spot `DRIZZLE_NEAR` (10–30, further the more tries it takes) tiles from player 0's Command Base, copied onto every
+  colony's share as Ringfall's are (`fairShare`, which `meteorPlan` uses too), every copy on open ground no colony holds
+  (`drizzleOk`: bare ground, no road, rail, pipe, plan, building, ramp, fertile soil, lava, ford, tide or fault, off a
+  Trade Post's ground, an Uplink or a wreck), or none falls this time. None in the Hollow (`drizzleOn`):
+  it's underground, where only Ringfall reaches, through the breaches. It leaves `DRIZZLE_TILES` (2) tiles of Ore or Crystal (half and half) at
+  `DRIZZLE_RICH` (0.4) times a Ringfall deposit's amount each, or in a Nuclear race now and then (`DRIZZLE_URANIUM`, 10%) a
+  single tile of Uranium; no damage, no crater, no war scar, and a Shield Dome doesn't stop it (it never lands in a
+  colony's land). The pieces show for `DRIZZLE_FALL` (1.4 s) as a streak in the sky (effect `'drizzle'`, brighter on
+  Argos), then a puff and a glow, with a soft whoosh (`sfx('drizzle')`, heard on screen only) and a ring pulsing on the
+  minimap for 12 s; no message. None falls while `DRIZZLE_CAP` (6) of its deposits lie unclaimed. (Tuned so computer-vs-computer games end as often as without it: the first version, every 120–200 s from minute 3, cap 8, half a Ringfall deposit, left more of them undecided at an hour.) State: `S.drizzle`
+  (`next`, `n`, `spots`, `fall`), saved, checked (`checkSave`) and in `hashState`; a save without it starts the clock
+  from when it loads. The rival finds the deposits as any other (`aiSearchSpot` reads `S.res`).
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
