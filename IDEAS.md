@@ -26,6 +26,18 @@ Sunsets and sunrises). Open:
   rest of the frame (measured in a software-rendered browser); if that shows up on real phones, Saver's colour grade alone
   could become Auto's too while frames are slow.
 
+## The war on the land: open questions (built Nov 20 2026)
+
+Smoke columns, creeping fires, ash and embers, shockwaves and the scars healing are in (`js/warfx.js`, looks only; see
+README, War scars). Open:
+- The healing is display-only, so it isn't shared: a loaded game starts healing afresh, and two devices in a multiplayer
+  game can show different stages. Making it game state (a per-tile healed-at time in `S`, saved and hashed) would fix
+  both, and would let the herds come back to healed ground. Worth it?
+- Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
+- Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
+  (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
+
 ## The owner's ideas, filed Nov 19 2026
 
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
@@ -47,6 +59,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   and the Air/Army menus: `BOTS.magpod` must not appear there).
 - **No "Pipe to Terminal" button on an Oil Pump with a Refinery right beside it:** the conveyor join to adjacent
   production buildings already feeds it (the button is noise). Show it only when no Refinery or Fuel Tank touches the pump.
+- **Night sounds in the wilds (built Nov 20; open questions).** A cricket chorus that rises at dusk, a tree cricket's
+  trill, katydids and the savanna's cicada, owls, night birds and leaves in the forests, peepers, frogs and splashes in
+  Blackwater, insects and a dry wind on the Long Grass and in the Rust (`nightSounds` in `js/audio.js`; README, Sound).
+  Open: the owner to listen and set the level (the crickets' peak is `0.016` in `nightSchedule`, the calls' rates in
+  `NIGHT_SET`); whether the Shoals and Steamwells want more than their few crickets; whether the Bloom gets a night
+  chorus of its own (stranger, not insects); whether a Murmur night should thin the insects out near their tunnels.
 - **Tone down the road trucks' smoke and brake noise** (the exhaust puffs on Freight Trucks and Road Trains, and the
   brake squeal in `js/audio.js`): a little quieter and less constant.
 - **Dropped goods from a dismantled building go first to Haulers:** crates left by Dismantle are picked up before other

@@ -602,6 +602,16 @@ function duskSteamRgb() {
   return `${(c[0] / 8 | 0) * 8},${(c[1] / 8 | 0) * 8},${(c[2] / 8 | 0) * 8}`;
 }
 
+/** The light catching the top of the war's smoke at sunset ('r,g,b', a few steps only, for warfx's cached puffs), or null. */
+function duskSmokeRgb() {
+  const D = DUSK.st;
+  if (!D || D.B.terminator) return null;
+  const k = Math.round(D.env * D.mute * 3) / 3;
+  if (k < 0.3) return null;
+  const c = duskMixRgb(D.pal.sun, [210, 205, 198], 0.25);
+  return `${(c[0] / 16 | 0) * 16},${(c[1] / 16 | 0) * 16},${(c[2] / 16 | 0) * 16}`;
+}
+
 /*
  * The silhouettes: every plant on the map, dark, in a map of its own at a few pixels a tile, laid over the ground at
  * dusk where a biome has them (sil). Made a few rows a frame (from the start of the game, so it's ready by the first

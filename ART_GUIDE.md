@@ -1281,6 +1281,18 @@ soon as it's in the manifest.
 | A robot is destroyed | a small blast and a scorch mark |
 | A building is destroyed | it shakes, leans and **sinks into the ground**; a main blast, then two smaller blasts 0.35 s and 0.7 s later; a **dust cloud** billows out from its base; it leaves **rubble** and a scorch mark that fade over about a minute and a half |
 
+**The war on the land** (`js/warfx.js`, all drawn in code, no sheets): what a fight leaves in the air and on the
+ground after the effects above are over. The owner's theme: the immense beauty of the planet, torn apart by war, and
+healing.
+
+| What | Look |
+|---|---|
+| Smoke column (a building burned down, a burning wreck, a big blast) | Lumpy billows (`wfxSmoke`: sooty brown-black low down, pale grey up high, shaded at night) rising up to 9 tiles, spreading and leaning further downwind the higher they get; faint at the foot (the robots under it show), thinner zoomed in, lit orange from under while its fire burns. Columns within 1.8 tiles join. Lasts about 3½ minutes (a robot's wreck about 2), thinning over the last part |
+| Ground fire | Teardrop flames (`wfxFlame`) licking up from scorched grass round a wreck, a thin curl of smoke off each; a tree on it burns higher and longer. At dusk and night each throws the light pool, flickering, on the ground and buildings round it |
+| Ash and embers | Grey flakes drifting downwind and settling, orange embers floating up and winking out (glowing at night), over the 6-tile cells where things burned and blew up |
+| Shockwave | An ellipse racing out along the ground to 3.2 × the blast's reach: a dusty band behind a bright warm edge, and a fainter dusty ripple; a flash over the area and briefly the screen (brighter at night; a nuclear blast keeps its own). Reduced motion: no flash, a fainter, slower ring |
+| Healing ground | Baked into the ground with the scars (`paintScarHeal`): the scorch and ash drawn fainter step by step (glass less), grass tufts in the biome's colours, then small flowers (white, yellow, pink, violet by biome: `WFX_BLOOM`), thickest on crater rims. Craters, stumps and scrap stay as they are |
+
 The collapse uses each building's own art (sunk, tilted and clipped at ground level), so no "ruined" version of any
 building is needed. The white flash, laser beams and the Pulse Turret's glow stay drawn in code.
 

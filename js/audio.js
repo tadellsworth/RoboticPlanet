@@ -11,10 +11,11 @@
  * presses, wrenches and machine tools, drills, pumps, beeping fabs), far-off horns in a big city. Trains rumble along with their wheels
  * clacking over the joints, sound their horn pulling out and squeal braking in; aircraft drone
  * overhead, whine in on the approach and screech down on the runway; ships hoot leaving port; the
- * sea washes the shore, lava bubbles, and crickets sing on warm nights. Away from the streets the land itself is
+ * sea washes the shore and lava bubbles. Away from the streets the land itself is
  * heard (see natureBeds and biomeCall): each biome's rustle, hiss, drone or shimmer and its calls, surf and lapping
  * water, a volcano's rumble, the weather (rain and thunder, storms, embers), and near a nest or a tunnel exit (and at
- * night over their tunnels), the Murmur in the ground.
+ * night over their tunnels), the Murmur in the ground; and at night (nightSounds) a cricket chorus, owls, night birds,
+ * peepers and frogs, the leaves stirring and the dry wind.
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
  * groove while you build (three of them, taking turns every ten minutes of play: the original,
@@ -341,6 +342,7 @@ function grains(D, list, type, q) {
 function blast(D, o) {
   const ac = AUDIO.ctx, A = AUDIO, s = o.size || 1, far = o.far || 0, dl = o.delay || 0, t0 = ac.currentTime + dl;
   const rnd = (lo, hi) => lo + Math.random() * (hi - lo), pitch = rnd(0.9, 1.12);
+  if (far < 0.6) WORLD.boomAt = t0; // (the night's insects fall quiet: nightSounds)
   const mix = ac.createGain();
   mix.gain.value = o.gain ?? 1;
   mix.connect(D);
@@ -1269,6 +1271,10 @@ function audioTick(dt) {
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const on = (x, y) => x > v0.x - 1 && x < v1.x + 1 && y > v0.y - 1 && y < v1.y + 1;
   let welders = [], pavers = [], spreaders = [], moving = 0, trucks = 0;
+  // A fight on screen (robots fighting, a blast a moment ago, not far off): the night's insects fall quiet (nightSounds).
+  let fights = 0;
+  for (const u of S.bots) if (u.fight && !u.dead && !u.inside && on(u.x, u.y)) fights++;
+  WORLD.fray = Math.min(1, fights / 6 + Math.max(0, 1 - (ac.currentTime - (WORLD.boomAt ?? -99)) / 12));
   // Vehicles of every colony on screen: aircraft (in the air, on the runway), trains and ships, and what they're doing.
   let fly = 0, flyX = 0, rail = 0, railV = 0;
   const trainsOn = [], now = S.time;
@@ -1469,6 +1475,7 @@ function updateBeds(live, dt) {
   // How wild the view is (WORLD.wildT, from the ground on screen), eased so it doesn't jump as you scroll.
   WORLD.wild = (WORLD.wild || 0) + ((live ? WORLD.wildT || 0 : 0) - (WORLD.wild || 0)) * Math.min(1, dt * 0.8);
   natureBeds(live, dt, zl, b, sway, wx);
+  nightSounds(live, dt, b, wx, zl);
   if (live && BIOME_CALLS[b]) {
     B.chirp -= dt;
     if (B.chirp <= 0) {
@@ -1489,7 +1496,7 @@ function updateBeds(live, dt) {
  * - trains: a diesel throb while any roll on screen, and their wheels clacking over the joints, faster the faster they go;
  * - aircraft: the drone of the engines overhead, panned to where they are;
  * - the sea: the wash of the waves on the shore when there's sea on screen, swelling and falling;
- * and on warm nights in a green biome, crickets.
+ * (The night's crickets and the rest: nightSounds.)
  */
 function ambienceBeds(live, dt, zl) {
   const ac = AUDIO.ctx, A = AUDIO, t = ac.currentTime;
@@ -1530,7 +1537,7 @@ function ambienceBeds(live, dt, zl) {
     if (airPan) { air.g.connect(airPan); abg.connect(airPan); airPan.connect(A.fxBus); } else { air.g.connect(A.fxBus); abg.connect(A.fxBus); }
     // The sea: low, rumbling wash.
     const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.natureBus);
-    WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
+    WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0 };
   }
   const M = WORLD.amb, on = live && AUDIO.fx > 0, natOn = live && AUDIO.amb > 0;
   const night = typeof todNow === 'function' && S ? todNow().lights || 0 : 0;
@@ -1567,19 +1574,6 @@ function ambienceBeds(live, dt, zl) {
   // (The open sea's: lakes and rivers only murmur, and lap at their banks: see natureBeds.)
   const openSea = !!(S && (SHAPE_PRESETS[S.settings.shape || 0] || {}).islands);
   M.sea.g.gain.setTargetAtTime(natOn ? Math.min(0.05, 0.06 * Math.sqrt(WORLD.sea || 0)) * swell * (0.5 + 0.5 * zl) * (openSea ? 1 : 0.35) : 0, t, 0.6);
-  // Crickets on warm nights, out in the wilds (fewer at a town's edge, none in its streets).
-  const b = typeof biome === 'function' && S ? biome() : 'desert', W = WORLD.wild || 0;
-  if (natOn && natureReady() && night > 0.5 && W > 0.12 && ['jungle', 'autumn', 'savanna', 'swamp', 'desert'].includes(b)) {
-    M.cricket -= dt;
-    if (M.cricket <= 0) {
-      M.cricket = (0.6 + Math.random() * 2.2) / Math.max(0.3, W);
-      const g = ac.createGain(), pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
-      g.gain.value = 0.5 * night * (0.3 + 0.7 * W);
-      if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(A.natureBus); } else g.connect(A.natureBus);
-      { const f = 4300 + Math.random() * 500; for (let k = 0; k < 3; k++) _tone(f, 0.035, 'triangle', 0.008, null, k * 0.06, g); } // (as sfx 'cricket', on the Ambience volume)
-      setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 2000);
-    }
-  }
 }
 
 /*
@@ -1857,6 +1851,270 @@ function jungleCall(g, dark) {
     // An insect: a fast trill.
     const f = 4000 + Math.random() * 2500;
     for (let k = 0; k < 8; k++) _tone(f, 0.025, 'triangle', 0.012, f * 1.04, k * 0.035, g);
+  }
+}
+
+/* ------------------------------------------------------------------ the night */
+
+/*
+ * The night out in the wilds (nightSounds, called from updateBeds), on the land's own bus (the Ambience volume):
+ * - a cricket chorus that comes in at dusk, one or two first and the rest joining as the dark deepens: each cricket its
+ *   own pitch, chirp and rhythm, singing a while and falling quiet (and another taking its place), so it never loops;
+ *   a tree cricket's long soft trill under them; a katydid's rasp far off on the warm, green maps, and on the savanna
+ *   a cicada's buzz swelling and fading;
+ * - in the forests and the swamp now and then an owl hooting, a far-off night bird, the leaves rustling in a breath
+ *   of wind; in the swamp the peepers by the water, frogs, and the odd splash; on the savanna and in the desert a few
+ *   insects and the dry wind.
+ * It's loudest out in the wilds and fades as the view fills with a town (WORLD.wild, as natureBeds), and it falls quiet
+ * in a fight (warbots fighting on screen, a blast) and comes back slowly after; rain hushes the insects (not the
+ * frogs); near a Murmur nest they hush too. The Hollow, Argos and the poles keep their own nights (no NIGHT_SET there).
+ * Cheap: at most NIGHT_VOICES steady voices, made once when a night first comes (and let go after a long day) and
+ * played by scheduling their gates a moment ahead, and at most NIGHT_SHOTS calls at once. Audio only: no sim state is
+ * touched and its randomness is the sound's own.
+ */
+// crickets: [voices, pitch Hz, level]; trill: a tree cricket's pitch; buzz: 'katydid' or 'cicada' (and its level);
+// peepers: how many; the calls' rates (owl, bird, rustle, frog, splash: about one a minute at 1, out in the wilds);
+// air: the dry wind [filter Hz, Q, level].
+const NIGHT_SET = {
+  jungle: { crickets: [4, 4500, 1], trill: 2900, buzz: ['katydid', 1], owl: 1.2, bird: 1, rustle: 3 },
+  autumn: { crickets: [4, 4100, 0.9], trill: 2650, owl: 1.6, bird: 0.8, rustle: 4, air: [3800, 0.6, 0.0035] },
+  swamp: { crickets: [3, 4800, 0.8], trill: 3100, buzz: ['katydid', 0.7], peepers: 2, owl: 0.8, bird: 0.8, rustle: 1.5, frog: 5, splash: 3 },
+  tropical: { crickets: [3, 5000, 0.85], trill: 3300, buzz: ['katydid', 0.9], bird: 0.6, rustle: 2 },
+  springs: { crickets: [2, 4300, 0.6], frog: 1.5 },
+  savanna: { crickets: [2, 4700, 0.6], buzz: ['cicada', 0.7], bird: 0.5, sparse: 1, air: [1700, 0.5, 0.0075] },
+  desert: { crickets: [2, 3900, 0.5], sparse: 1, air: [1300, 0.45, 0.0085] },
+};
+const NIGHT_VOICES = 10, NIGHT_SHOTS = 3;
+const NIGHT = { v: null, idle: 0, fray: 0, shots: [], next: {} };
+
+/** The night's steady voices: crickets, a trill, a rasp (noise), peepers, the air; each into a gate, panned. */
+function nightBuild(ac) {
+  const bus = ac.createGain(); bus.gain.value = 0; bus.connect(AUDIO.natureBus);
+  const ins = ac.createGain(); ins.gain.value = 1; ins.connect(bus); // (the insects: rain hushes them)
+  const frogs = ac.createGain(); frogs.gain.value = 1; frogs.connect(bus);
+  const srcs = [];
+  const panned = (dest, p) => { if (!ac.createStereoPanner) return { node: dest, pan: null }; const n = ac.createStereoPanner(); n.pan.value = p; n.connect(dest); return { node: n, pan: n }; };
+  const gated = (src, dest, p) => { const gate = ac.createGain(); gate.gain.value = 0; const pn = panned(dest, p); src.connect(gate).connect(pn.node); return { gate, pan: pn.pan, next: 0, end: 0 }; };
+  const osc = (type) => { const o = ac.createOscillator(); o.type = type || 'sine'; o.start(); srcs.push(o); return o; };
+  const noise = (type, f, q) => {
+    const s = ac.createBufferSource(); s.buffer = AUDIO.noise; s.loop = true; s.start(0, Math.random() * 1.5); srcs.push(s);
+    const flt = ac.createBiquadFilter(); flt.type = type; flt.frequency.value = f; flt.Q.value = q; s.connect(flt); return flt;
+  };
+  const crickets = [];
+  for (let k = 0; k < 4; k++) { const o = osc('sine'), v = gated(o, ins, Math.random() * 1.6 - 0.8); v.o = o; crickets.push(v); }
+  // The tree cricket: a soft tone pulsing fast (an oscillator swinging its gain), in long swells.
+  const to = osc('sine'), am = ac.createGain(); am.gain.value = 0.5;
+  const lfo = osc('sine'), lg = ac.createGain(); lfo.frequency.value = 44; lg.gain.value = 0.5; lfo.connect(lg).connect(am.gain);
+  to.connect(am);
+  const trill = gated(am, ins, Math.random() * 1.2 - 0.6); trill.o = to; trill.lfo = lfo;
+  const bf = noise('bandpass', 6200, 3), buzz = gated(bf, ins, Math.random() * 1.4 - 0.7); buzz.f = bf;
+  const peepers = [];
+  for (let k = 0; k < 2; k++) { const o = osc('sine'), v = gated(o, frogs, (k ? 0.5 : -0.5) + Math.random() * 0.3); v.o = o; peepers.push(v); }
+  const af = noise('bandpass', 1500, 0.5), ag = ac.createGain(); ag.gain.value = 0; af.connect(ag).connect(bus);
+  return { bus, ins, frogs, srcs, crickets, trill, buzz, peepers, air: { f: af, g: ag, next: 0 } };
+}
+
+function nightDrop() {
+  const V = NIGHT.v;
+  NIGHT.v = null;
+  if (!V) return;
+  for (const s of V.srcs) { try { s.stop(); s.disconnect(); } catch (e) { /* gone */ } }
+  try { V.bus.disconnect(); } catch (e) { /* gone */ }
+}
+
+/** A new cricket in voice v: its pitch, how many pulses in a chirp, how long each, how often it chirps, how near. */
+function nightCricket(v, base, sparse) {
+  v.f = base * (0.88 + Math.random() * 0.24);
+  v.p = 2 + Math.floor(Math.random() * 4);
+  v.pl = 0.012 + Math.random() * 0.012;
+  v.pg = v.pl * (1.2 + Math.random() * 0.9);
+  v.per = (sparse ? 0.6 : 0.32) + Math.random() * (sparse ? 0.9 : 0.7);
+  v.a = 0.25 + Math.random() * 0.75;
+  v.per = Math.max(v.per, v.p * (v.pl + v.pg) + 0.12); // (a chirp ends before the next)
+  if (v.pan) v.pan.pan.value = Math.random() * 1.7 - 0.85;
+}
+
+/** Schedule the steady voices' gates from where each left off to `until` (s, on the audio clock). */
+function nightSchedule(V, set, t, until, nk) {
+  const R = Math.random, ramp = (g, a, s, att, len) => { g.setValueAtTime(0, s); g.linearRampToValueAtTime(a, s + att); g.linearRampToValueAtTime(a * 0.7, s + len - att); g.linearRampToValueAtTime(0, s + len); };
+  const fresh = (v) => { if (v.next < t) { v.next = t + 0.05 + R() * 0.6; v.end = 0; } };
+  // Crickets: voice k sings once the night is dark enough (nk past its turn), in bouts.
+  const C = set.crickets, sparse = !!set.sparse;
+  V.crickets.forEach((v, k) => {
+    fresh(v);
+    if (k >= C[0] || nk < 0.12 + (0.6 * k) / C[0]) { v.end = 0; return; }
+    if (!v.f) nightCricket(v, C[1], sparse);
+    while (v.next < until) {
+      if (v.next >= v.end) {
+        if (v.end) { v.next += (sparse ? 5 + R() * 14 : 1 + R() * 7); if (R() < 0.5) nightCricket(v, C[1], sparse); }
+        v.end = v.next + (sparse ? 4 + R() * 12 : 8 + R() * 30);
+        continue;
+      }
+      const s = v.next, a = 0.016 * C[2] * v.a;
+      v.o.frequency.setValueAtTime(v.f * (1 + (R() - 0.5) * 0.006), s);
+      for (let p = 0; p < v.p; p++) ramp(v.gate.gain, a, s + p * (v.pl + v.pg), 0.003, v.pl);
+      v.next += v.per * (0.95 + R() * 0.1);
+    }
+  });
+  // The tree cricket: swells in, trills a while, fades.
+  const T = V.trill;
+  fresh(T);
+  if (set.trill && nk > 0.45) while (T.next < until) {
+    const s = T.next, len = 3 + R() * 8, att = 1 + R() * 1.2;
+    T.o.frequency.setValueAtTime(set.trill * (0.95 + R() * 0.1), s);
+    T.lfo.frequency.setValueAtTime(36 + R() * 18, s);
+    ramp(T.gate.gain, 0.006 * (0.5 + 0.5 * R()), s, att, len);
+    T.next = s + len + 2 + R() * 9;
+  }
+  // A katydid's rasp (two to four, again and again) or the savanna's cicada swelling and fading, far off.
+  const Z = V.buzz, B = set.buzz;
+  fresh(Z);
+  if (B && nk > 0.6) while (Z.next < until) {
+    if (Z.next >= Z.end) {
+      if (Z.end) Z.next += 3 + R() * 12;
+      Z.end = Z.next + 5 + R() * 15;
+      Z.n = 2 + Math.floor(R() * 3);
+      if (Z.pan) Z.pan.pan.value = R() * 1.6 - 0.8;
+      continue;
+    }
+    const s = Z.next;
+    if (B[0] === 'cicada') {
+      Z.f.frequency.setValueAtTime(5200 + R() * 900, s); Z.f.Q.setValueAtTime(6, s);
+      const len = 1.5 + R() * 2.5;
+      ramp(Z.gate.gain, 0.05 * B[1], s, len * 0.45, len);
+      Z.next = s + len + 3 + R() * 6;
+    } else {
+      Z.f.frequency.setValueAtTime(6000 + R() * 1200, s); Z.f.Q.setValueAtTime(2.5, s);
+      const len = 0.045 + R() * 0.025, gap = 0.1 + R() * 0.05;
+      for (let k = 0; k < Z.n; k++) ramp(Z.gate.gain, 0.045 * B[1], s + k * (len + gap), 0.008, len);
+      Z.next = s + 0.9 + R() * 0.5;
+    }
+  }
+  // Peepers by the water: a short rising peep, over and over, two out of step.
+  for (const v of V.peepers) {
+    fresh(v);
+    if (!set.peepers || nk < 0.35) continue;
+    while (v.next < until) {
+      if (v.next >= v.end) {
+        if (v.end) v.next += 2 + R() * 8;
+        v.end = v.next + 6 + R() * 20; v.f = 2700 + R() * 500; v.per = 0.7 + R() * 0.6; v.a = 0.4 + R() * 0.6;
+        continue;
+      }
+      const s = v.next, len = 0.1 + R() * 0.05;
+      v.o.frequency.setValueAtTime(v.f * 0.86, s); v.o.frequency.linearRampToValueAtTime(v.f, s + len);
+      ramp(v.gate.gain, 0.011 * v.a, s, 0.015, len);
+      v.next += v.per * (0.92 + R() * 0.16);
+    }
+  }
+}
+
+/** A soft tone for the night's calls: a gentle attack and release, sliding f to f2 (through a lowpass if lp). */
+function nightTone(g, d, f, f2, dur, vol, type, lp) {
+  const ac = AUDIO.ctx, t0 = ac.currentTime + d, o = ac.createOscillator(), e = ac.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(f, t0);
+  o.frequency.linearRampToValueAtTime((f + f2) / 2 * 1.02, t0 + dur * 0.35);
+  o.frequency.linearRampToValueAtTime(f2, t0 + dur);
+  const a = Math.min(0.06, dur * 0.25);
+  e.gain.value = 0; e.gain.setValueAtTime(0, t0); e.gain.linearRampToValueAtTime(vol, t0 + a); e.gain.setValueAtTime(vol, t0 + dur - a * 1.5); e.gain.linearRampToValueAtTime(0, t0 + dur);
+  let out = o;
+  if (lp) { const flt = ac.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = lp; flt.Q.value = 1.5; o.connect(flt); out = flt; }
+  out.connect(e).connect(g);
+  o.start(t0); o.stop(t0 + dur + 0.05);
+}
+
+/** One of the night's calls, from somewhere round about (vol: how near and loud), on the night's bus. Its length. */
+function nightCall(kind, vol, dest) {
+  const R = Math.random, g = aroundVoice(0.85, vol, dest);
+  if (kind === 'owl') {
+    // An owl: "hoo, h'hoo, hoo, hoo", or a long "hoooo" and a quavering answer.
+    const f = 300 + R() * 90;
+    const notes = R() < 0.55 ? [[0, 0.36, 1], [0.58, 0.16, 1.03], [0.8, 0.42, 1], [1.5, 0.5, 0.98], [2.2, 0.55, 0.96]] : [[0, 0.75, 1.06], [2, 0.14, 1], [2.24, 0.14, 1.02], [2.48, 1.1, 1.04]];
+    for (const [d, len, m] of notes) { nightTone(g, d, f * m * 0.97, f * m * 0.92, len, 0.016); nightTone(g, d, f * m * 1.94, f * m * 1.84, len, 0.002); }
+    return 4;
+  }
+  if (kind === 'bird') {
+    if (R() < 0.6) {
+      // A far-off night bird: three notes, the last rising, again and again.
+      const f = 1150 + R() * 250, n = 3 + Math.floor(R() * 4);
+      for (let k = 0; k < n; k++) { const d = k * (0.72 + R() * 0.06); nightTone(g, d, f * 1.18, f, 0.08, 0.009, 'sine', 2600); nightTone(g, d + 0.13, f, f * 0.95, 0.1, 0.007, 'sine', 2600); nightTone(g, d + 0.3, f * 0.92, f * 1.6, 0.24, 0.01, 'sine', 2600); }
+      return n * 0.75 + 0.6;
+    }
+    // ...or a nightjar's long churr, shifting pitch now and then.
+    const ac = AUDIO.ctx, t0 = ac.currentTime, len = 2 + R() * 3, o = ac.createOscillator(), am = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain(), e = ac.createGain();
+    o.frequency.setValueAtTime(1000 + R() * 150, t0); o.frequency.setValueAtTime(1180 + R() * 150, t0 + len * (0.4 + R() * 0.3));
+    lfo.frequency.value = 26 + R() * 8; lg.gain.value = 0.5; am.gain.value = 0.5; lfo.connect(lg).connect(am.gain);
+    e.gain.value = 0; e.gain.setValueAtTime(0, t0); e.gain.linearRampToValueAtTime(0.006, t0 + 0.4); e.gain.setValueAtTime(0.006, t0 + len - 0.5); e.gain.linearRampToValueAtTime(0, t0 + len);
+    o.connect(am).connect(e).connect(g); o.start(t0); lfo.start(t0); o.stop(t0 + len + 0.05); lfo.stop(t0 + len + 0.05);
+    return len;
+  }
+  if (kind === 'rustle') {
+    // The leaves stirring in a breath of wind, a few of them pattering.
+    const len = 1.6 + R() * 1.6;
+    _noise(len, 0.014, { type: 'bandpass', freq: 3200 + R() * 1500, to: 2200, q: 0.7, attack: 0.5 + R() * 0.5, dest: g });
+    for (let k = 0; k < 2 + Math.floor(R() * 4); k++) _noise(0.03, 0.006, { type: 'highpass', freq: 3500 + R() * 2000, delay: 0.3 + R() * len * 0.7, dest: g });
+    return len;
+  }
+  if (kind === 'frog') {
+    if (R() < 0.5) { const f = 210 + R() * 60; for (let k = 0; k < 1 + Math.floor(R() * 2); k++) { const d = k * (0.5 + R() * 0.4); nightTone(g, d, f, f * 0.86, 0.11, 0.03, 'triangle'); nightTone(g, d, f * 2, f * 1.7, 0.08, 0.008); } return 1.2; } // a green frog's "gunk"
+    const f = 92 + R() * 22; // a bullfrog's "rumm, rumm"
+    for (let k = 0; k < 2 + Math.floor(R() * 2); k++) nightTone(g, k * 0.62, f, f * 0.9, 0.42, 0.03, 'sawtooth', 340);
+    return 2;
+  }
+  if (kind === 'splash') {
+    // Something in the water: a plop and a splash, a drip after.
+    nightTone(g, 0, 620 + R() * 200, 170, 0.08, 0.02);
+    _noise(0.35, 0.028, { type: 'bandpass', freq: 1600, to: 480, q: 0.9, attack: 0.004, dest: g });
+    if (R() < 0.6) nightTone(g, 0.3 + R() * 0.2, 1700 + R() * 500, 900, 0.05, 0.008);
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * The night out in the wilds (see NIGHT_SET), every quarter second from updateBeds: b the biome, wx the weather heard
+ * (weatherSound), zl how near the view is (zoomLoud).
+ */
+function nightSounds(live, dt, b, wx, zl) {
+  const ac = AUDIO.ctx, t = ac.currentTime, set = NIGHT_SET[b];
+  const ok = live && set && !!S && !S.hollow && natureReady();
+  const light = ok && typeof todNow === 'function' ? todNow().lights || 0 : 0;
+  // (the chorus comes in as dusk deepens: nothing in the evening's first light, all of it in full night)
+  const nk = Math.max(0, Math.min(1, (light - 0.2) / 0.7));
+  // A fight on screen hushes it at once; it comes back slowly.
+  const frayT = ok ? Math.min(1, WORLD.fray || 0) : 0;
+  NIGHT.fray += (frayT - NIGHT.fray) * Math.min(1, dt * (frayT > NIGHT.fray ? 3 : 0.1));
+  const W = ok ? WORLD.wild || 0 : 0, scar = typeof faunaScarred === 'function' ? faunaScarred() : 0;
+  const level = ok ? nk * Math.min(1, W * 1.25) * (0.55 + 0.45 * zl) * (1 - NIGHT.fray) * (1 - 0.5 * scar) * (1 - 0.6 * (WORLD.nest || 0)) : 0;
+  if (level < 0.002) {
+    if (NIGHT.v) { NIGHT.v.bus.gain.setTargetAtTime(0, t, 0.8); NIGHT.idle += dt; if (NIGHT.idle > 30) nightDrop(); }
+    return;
+  }
+  NIGHT.idle = 0;
+  if (!NIGHT.v) NIGHT.v = nightBuild(ac);
+  const V = NIGHT.v, kind = wx ? wx.kind : '', wk = wx ? wx.k : 0;
+  V.bus.gain.setTargetAtTime(level, t, 1.2);
+  // Rain hushes the insects (the frogs call on); a sandstorm or a gale, and fog a little.
+  const hushK = kind === 'rain' ? 0.85 : kind === 'sand' || kind === 'leaves' ? 0.7 : kind === 'fog' ? 0.3 : kind === 'snow' ? 1 : 0;
+  V.ins.gain.setTargetAtTime(1 - hushK * wk, t, 1.5);
+  nightSchedule(V, set, t, t + 0.6, nk);
+  // The dry wind (and in the autumn wood, the leaves' soft hiss), gusting.
+  const A = set.air;
+  if (A) {
+    if (t >= V.air.next) { V.air.next = t + 3 + Math.random() * 5; V.air.f.frequency.setTargetAtTime(A[0] * (0.7 + Math.random() * 0.6), t, 1.5); V.air.f.Q.value = A[1]; V.air.g.gain.setTargetAtTime(A[2] * (0.35 + 0.65 * Math.random()), t, 1.6); }
+  } else V.air.g.gain.setTargetAtTime(0, t, 1);
+  // The calls, now and then (rarer the less wild the view, and in rain), at most NIGHT_SHOTS at once.
+  if (nk < 0.5) return;
+  NIGHT.shots = NIGHT.shots.filter((e) => e > t);
+  const wet = kind === 'rain' ? 1 - 0.7 * wk : 1;
+  for (const k of ['owl', 'bird', 'rustle', 'frog', 'splash']) {
+    if (!set[k]) continue;
+    if (NIGHT.next[k] == null) NIGHT.next[k] = t + Math.random() * 20;
+    if (t < NIGHT.next[k]) continue;
+    NIGHT.next[k] = t + ((30 + Math.random() * 60) / set[k]) / Math.max(0.3, W) / (k === 'frog' ? 1 : wet);
+    if (NIGHT.shots.length >= NIGHT_SHOTS) continue;
+    const len = nightCall(k, (0.5 + 0.5 * Math.random()) * (k === 'owl' || k === 'bird' ? wet : 1), V.bus);
+    NIGHT.shots.push(t + len);
   }
 }
 
