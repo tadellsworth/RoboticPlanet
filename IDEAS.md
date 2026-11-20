@@ -472,7 +472,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). On Reactor power
     (the owner, Nov 20): a 45 s charge and a 3 min reload (Generators 90 s and 4 min), 2 Uranium or an Enriched Uranium a
     shot; with both in reach, the Generators unless Use Reactor is switched on in its panel (the rival switches it on
-    once it has chosen the Lance). Still open: power lines
+    once it has chosen the Lance). Widened (the owner, Nov 20: a full-map shot often took only 2 buildings, no more
+    than a Missile): a 2-tile core that destroys every building it touches and a 1-tile scorched edge either side that
+    takes half the armor of buildings and half the health of robots without destroying anything; the trench, its War
+    scars and the aim line widened to match, and the rival's aim scores the wider line. Open: whether the core should
+    grow to 3, or the edge burn crops and groves too. Still open: power lines
     to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim

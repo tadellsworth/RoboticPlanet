@@ -1650,7 +1650,7 @@ const MISSIONS = [
         ui: '#sh-aim' },
       { kind: 'lanceLine', n: [2, 3, 4], text: ['Destroy {n} rival building with one shot', 'Destroy {n} rival buildings with one shot'], at: 'lance',
         count: (P) => P.stats.lanceBest || 0,
-        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) down their row of depots: each one ringed red goes. 4 minutes to reload.',
+        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) through their depots: red-ringed ones are wrecked, dashed ones only scorched. 4 min reload.',
         ui: '#sh-aim' },
     ],
   },

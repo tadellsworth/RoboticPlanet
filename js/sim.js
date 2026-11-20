@@ -17004,23 +17004,55 @@ function lanceLine(b, tx, ty) {
   return { x0: c.x, y0: c.y, x1: c.x + ux * len, y1: c.y + uy * len, ux, uy, len, dome };
 }
 
-/** The tiles Lance b's line L passes over (within the beam's width), in order out from the gun, its own square left out. */
+/**
+ * The tiles Lance b's line L passes over, in order out from the gun, its own square left out: `core`, the tiles whose
+ * square touches the strip within LANCE.width / 2 of the line, and `edge`, those of the rest within LANCE.edge more.
+ * (Walked along the line's long axis a column at a time; from the muzzle, half the gun's footprint out.)
+ */
 function lanceTiles(b, L) {
-  const out = [], seen = new Set(), hw = LANCE.width / 2 + 0.35;
-  for (let s = 0; s <= L.len; s += 0.3) {
-    const x = L.x0 + L.ux * s, y = L.y0 + L.uy * s;
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-      const i = Math.floor(x) + di, j = Math.floor(y) + dj;
-      if (!inMap(i, j)) continue;
-      const t = tIdx(i, j);
-      if (seen.has(t) || S.bAt[t] === b.id) continue;
+  const core = [], edge = [], hc = LANCE.width / 2, he = hc + LANCE.edge, pr = 0.5 * (Math.abs(L.ux) + Math.abs(L.uy));
+  const a0 = (BDEFS[b.type].foot || 1) / 2, a1 = L.len + 0.3, xm = Math.abs(L.ux) >= Math.abs(L.uy);
+  const u = xm ? L.ux : L.uy, v = xm ? L.uy : L.ux, p0 = xm ? L.x0 : L.y0, q0 = xm ? L.y0 : L.x0, pN = xm ? S.W : S.H, qN = xm ? S.H : S.W;
+  const span = (he + pr) / Math.abs(u) + 1, pa = p0 + u * a0, pb = p0 + u * a1;
+  const lo = Math.max(0, Math.floor(Math.min(pa, pb) - he - 1)), hi = Math.min(pN - 1, Math.floor(Math.max(pa, pb) + he + 1));
+  for (let k = 0; k <= hi - lo; k++) {
+    const p = u > 0 ? lo + k : hi - k, qc = q0 + (v / u) * (p + 0.5 - p0);
+    for (let q = Math.max(0, Math.floor(qc - span)); q <= Math.min(qN - 1, Math.floor(qc + span)); q++) {
+      const i = xm ? p : q, j = xm ? q : p, t = tIdx(i, j);
+      if (S.bAt[t] === b.id) continue;
       const fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, along = fx * L.ux + fy * L.uy;
-      if (along < 0 || along > L.len + 0.3) continue;
-      if (Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
-      seen.add(t); out.push(t);
+      if (along < a0 || along > a1) continue;
+      const d = Math.abs(fx * L.uy - fy * L.ux) - pr; // (how near the tile's square comes to the line)
+      if (d < hc - 1e-6) core.push(t);
+      else if (d < he - 1e-6) edge.push(t);
     }
   }
-  return out;
+  return { core, edge };
+}
+
+/** The middles of the up Shield Domes of player p's foes. (A Lance shot doesn't reach under one, even at the beam's side: lanceDomed.) */
+function lanceDomes(p) { return S.buildings.filter((d) => !d.dead && d.built && d.dUp && BDEFS[d.type].dome && foes(d.owner, p)).map(bCentre); }
+/** Is (x, y) under one of the Domes Ds (from lanceDomes)? */
+function lanceDomed(Ds, x, y) { return Ds.some((c) => dist2(c.x, c.y, x, y) <= DOME.radius * DOME.radius); }
+
+/** Where robot u stands against Lance line L: 2 in the core, 1 in the scorched edge, 0 clear of it. */
+function lanceBand(L, u) {
+  const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
+  if (along < 1.2 || along > L.len) return 0;
+  const off = Math.abs(fx * L.uy - fy * L.ux);
+  return off < LANCE.width / 2 + 0.2 ? 2 : off < LANCE.width / 2 + LANCE.edge + 0.2 ? 1 : 0;
+}
+
+/**
+ * The buildings Lance b's line L would hit: `core` (wrecked) and `edge` (scorched: touching the edge and none of the
+ * core), each in order out from the gun; Lance b, any on a Trade Post's ground and any under a foe's up Shield Dome left out.
+ */
+function lanceTargets(b, L) {
+  const T = lanceTiles(b, L), core = [], edge = [], inCore = new Set(), seen = new Set(), Ds = lanceDomes(b.owner);
+  const skip = (e) => { if (!e || e.dead || e === b || seen.has(e)) return true; seen.add(e); if (calmB(e)) return true; const c = bCentre(e); return Ds.length > 0 && lanceDomed(Ds, c.x, c.y); };
+  for (const t of T.core) { const e = getE(S.bAt[t]); if (skip(e)) continue; inCore.add(e); core.push(e); }
+  for (const t of T.edge) { const e = getE(S.bAt[t]); if (skip(e)) continue; edge.push(e); }
+  return { core, edge, tiles: T };
 }
 
 /** Lance b fires along its aim: everything on the line is destroyed (see LANCE), and the ground is cut for good. */
@@ -17032,17 +17064,16 @@ function lanceFire(b) {
   const P = S.players[owner];
   if (P) P.stats.lance = (P.stats.lance || 0) + 1;
   S.cuts = S.cuts || [];
-  S.cuts.push({ x0: Math.round(L.x0 * 100) / 100, y0: Math.round(L.y0 * 100) / 100, x1: Math.round(L.x1 * 100) / 100, y1: Math.round(L.y1 * 100) / 100, t: S.time, o: owner, d: L.dome ? 1 : 0 });
+  S.cuts.push({ x0: Math.round(L.x0 * 100) / 100, y0: Math.round(L.y0 * 100) / 100, x1: Math.round(L.x1 * 100) / 100, y1: Math.round(L.y1 * 100) / 100, t: S.time, o: owner, d: L.dome ? 1 : 0, w: LANCE.width }); // (w: its core's width; a cut from an older save, none: 0.8)
   if (S.cuts.length > LANCE.cutsMax) S.cuts.shift();
   sfx('lancefire', L.x0, L.y0);
+  const tg = lanceTargets(b, L), Ds = lanceDomes(owner), domed = S.bots.map((u) => Ds.length > 0 && !u.dead && lanceDomed(Ds, u.x, u.y)); // (what's under a Dome, before the shot drops it)
   if (L.dome) domeHit(L.dome, 'lance', L.x1, L.y1, owner);
-  const tiles = lanceTiles(b, L), lost = S.players.map(() => 0), bots = S.players.map(() => 0), hit = new Set();
+  const tiles = tg.tiles.core, lost = S.players.map(() => 0), bots = S.players.map(() => 0), hurt = S.players.map(() => 0);
   LAND_HOLD = 1;
   try {
-    for (const t of tiles) {
-      const e = getE(S.bAt[t]);
-      if (!e || e.dead || e === b || hit.has(e) || calmB(e)) continue;
-      hit.add(e);
+    for (const e of tg.core) {
+      if (e.dead) continue;
       if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
       e.lastHit = S.time;
       if (BDEFS[e.type].wild) { if (e.owner !== owner) captureBuilding(e, owner); continue; } // (a Murmur nest or exit on the line: cleared)
@@ -17051,14 +17082,31 @@ function lanceFire(b) {
       fortTaken(e, owner);
       destroyBuilding(e, true);
     }
-    const hw = LANCE.width / 2 + 0.2;
-    for (const u of S.bots) {
-      if (u.dead || u.inside || aloft(u) || calmAt(u.x, u.y)) continue;
-      const fx = u.x - L.x0, fy = u.y - L.y0, along = fx * L.ux + fy * L.uy;
-      if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > hw) continue;
-      if (u.owner >= 0 && bots[u.owner] !== undefined) bots[u.owner]++;
+    // The scorched edge: half its armor gone, but never below 1 (a Command Base or Keep: its Missile floor; Arrival City: 0, down).
+    for (const e of tg.edge) {
+      if (e.dead) continue;
+      if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
+      e.lastHit = S.time;
+      const floor = captureOnly(e) ? missileFloor(e) : 1;
+      e.armor = Math.min(e.armor, Math.max(floor, e.armor - BDEFS[e.type].armor * LANCE.edgeDmg));
+      if (BDEFS[e.type].city && e.built && e.armor <= 0) { e.armor = 0; cityDown(e, owner); }
+      if (e.owner >= 0 && !isWild(e.owner)) hurt[e.owner]++;
+    }
+    for (const [n, u] of S.bots.entries()) {
+      if (u.dead || u.inside || aloft(u) || calmAt(u.x, u.y) || domed[n]) continue;
+      const band = lanceBand(L, u);
+      if (!band) continue;
+      if (band === 2) {
+        if (u.owner >= 0 && bots[u.owner] !== undefined) bots[u.owner]++;
+        noteDanger(u);
+        killBot(u);
+        continue;
+      }
+      const dmg = (u.maxHp || u.hp) * LANCE.edgeDmg * (u.armored ? TRAIN_ARMOR.takes : 1);
+      if (u.hp > 1) u.hp = Math.max(1, u.hp - dmg); // (the edge alone kills no robot)
+      u.hurtT = S.time;
+      if (u.trade) convoyHit(u);
       noteDanger(u);
-      killBot(u);
     }
     for (const t of tiles) {
       const i = t % S.W, j = (t / S.W) | 0;
@@ -17071,14 +17119,15 @@ function lanceFire(b) {
     if (zones) computeZones();
   }
   computeTerritory();
-  scarTrench(tiles, L);
-  const mine = lost[owner] || 0, theirs = lost.reduce((a, n, p) => a + (p === owner ? 0 : n), 0);
+  scarTrench(tg.tiles, L);
+  const mine = lost[owner] || 0, theirs = lost.reduce((a, n, p) => a + (p === owner ? 0 : n), 0), singed = hurt.reduce((a, n, p) => a + (p === owner ? 0 : n), 0);
   if (P) P.stats.lanceBest = Math.max(P.stats.lanceBest || 0, theirs); // (the most rival buildings one shot took: a mission counts it)
   for (const Q of S.players) {
     const p = Q.id;
     if (Q.absent || Q.out || isWild(p)) continue;
-    if (p === owner) postMsg(p, L.dome ? `The Lance fired: a Shield Dome took the shot. ${theirs} building${theirs === 1 ? '' : 's'} hit short of it.` : `The Lance fired across the map: ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed${mine ? `, and ${mine} of your own` : ''}.`, b.x + 1, b.y + 1, 'good');
-    else postMsg(p, lost[p] || bots[p] ? `The Lance of Corvane fired: you lost ${lost[p]} building${lost[p] === 1 ? '' : 's'} and ${bots[p]} robot${bots[p] === 1 ? '' : 's'}!` : `${playerName(owner, true)}'s Lance of Corvane fired across the map.`, Math.floor(L.x1), Math.floor(L.y1), lost[p] || bots[p] ? 'lost' : 'bad');
+    if (p === owner) postMsg(p, L.dome ? `The Lance fired: a Shield Dome took the shot. ${theirs} building${theirs === 1 ? '' : 's'} hit short of it.` : `The Lance fired across the map: ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed${mine ? `, and ${mine} of your own` : ''}${singed ? `; ${singed} more scorched along its edge` : ''}.`, b.x + 1, b.y + 1, 'good');
+    else postMsg(p, lost[p] || bots[p] ? `The Lance of Corvane fired: you lost ${lost[p]} building${lost[p] === 1 ? '' : 's'} and ${bots[p]} robot${bots[p] === 1 ? '' : 's'}${hurt[p] ? `, and ${hurt[p]} more were scorched` : ''}!`
+      : hurt[p] ? `The Lance of Corvane fired: ${hurt[p]} of your building${hurt[p] === 1 ? '' : 's'} scorched along its edge!` : `${playerName(owner, true)}'s Lance of Corvane fired across the map.`, Math.floor(L.x1), Math.floor(L.y1), lost[p] || bots[p] ? 'lost' : 'bad');
   }
   if (P && P.ai) for (const Q of S.players) if (Q.id !== owner && lost[Q.id]) doctrineVoice(owner, Q.id, 'missile', Math.floor(L.x1), Math.floor(L.y1), 90);
   logEvent({ t: S.time, k: 'lanceFire', p: owner });
@@ -17088,16 +17137,19 @@ function lanceFire(b) {
  * The Lance's cut (War scars): the ground along it burned to ash for good (on Light, scorched), a furrow of churned
  * craters down the middle, and every animal there dead, its bones left. The trench itself is drawn from S.cuts.
  */
-function scarTrench(tiles, L) {
+function scarTrench(T, L) {
   const lv = scarLevel();
   if (!lv || !S.ash) return;
   S.scarN++;
-  for (const t of tiles) {
+  const nCore = T.core.length;
+  for (const [n, t] of T.core.concat(T.edge).entries()) {
     if (!scarGround(t)) continue;
-    const i = t % S.W, j = (t / S.W) | 0, fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, off = Math.abs(fx * L.uy - fy * L.ux);
-    scarFauna(t, i, j, 6);
-    S.ash[t] = lv === 2 ? Math.max(S.ash[t], SCARS.good) : Math.max(S.ash[t], SCARS.light);
-    if (lv === 2 && off < 0.5) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + 2);
+    const i = t % S.W, j = (t / S.W) | 0, fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, off = Math.abs(fx * L.uy - fy * L.ux), core = n < nCore;
+    if (core) scarFauna(t, i, j, 6);
+    // the core burned to ash (on Light, scorched); the edge only scorched, lighter
+    const ash = core ? (lv === 2 ? SCARS.good : SCARS.light) : (lv === 2 ? SCARS.light : Math.round(SCARS.light * 0.6));
+    S.ash[t] = Math.max(S.ash[t], ash);
+    if (lv === 2 && off < LANCE.width / 2) S.crater[t] = (S.crater[t] & 0xf0) | Math.min(15, (S.crater[t] & 15) + (off < 0.5 ? 2 : 1));
     markDirty(i, j);
   }
 }

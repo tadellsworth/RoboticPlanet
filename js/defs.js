@@ -912,8 +912,11 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  *
  * The Lance of Corvane (BDEFS.lance): a 3 x 3 gun pit, a long barrel on a slow turntable. Aim it (its panel, then a
  * spot anywhere) and it charges for `charge` s, then fires a beam in a straight line from the gun through that spot to
- * the map's edge, `width` tiles wide: every building on the line is wrecked (a Command Base or Keep drops to its
- * Missile floor), every robot on it dies, whosever it is, Walls are breached, water boils to steam, and a scorched
+ * the map's edge. Its core is `width` tiles wide: every building whose footprint touches it is wrecked (a Command Base or
+ * Keep drops to its Missile floor), every robot in it dies, whosever it is, Walls are breached. Either side of the core
+ * runs a scorched edge `edge` tiles wide: buildings touching it (and none of the core) lose `edgeDmg` of their full
+ * armor, robots in it `edgeDmg` of their full health, but the edge alone never destroys anything (it leaves at least 1,
+ * and a Command Base or Keep no lower than its Missile floor); water boils to steam, and a scorched
  * trench is carved for good (S.cuts; on War scars the ground under it burns to ash and the animals there die). It fires
  * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
  * each while it charges, or a Nuclear Reactor there with `uranium` Uranium (or an Enriched Uranium) in it, taken as the charge starts. While it
@@ -981,7 +984,7 @@ const LIFT_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], 
 const LIFT_DIR_NAMES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 /** What a Lift can send up: the made goods and Crystal. */
 const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'fissile'];
-const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
+const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 
@@ -1289,7 +1292,7 @@ const BDEFS = {
   // square of foot x foot tiles from its own tile, east and south: footTiles).
   lance: {
     name: 'Lance of Corvane', short: 'Lance',
-    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything on the line is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
+    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; a tile either side is scorched (half armor or health, nothing destroyed); water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
     cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 240, war: true,
   },
   dome: {

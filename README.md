@@ -179,7 +179,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
-| Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map that destroys everything on its line; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
+| Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
@@ -2033,12 +2033,19 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     mid-charge loses the charge (`lanceStillPowered`). While it charges its owner's lights dim and factories work `slow`
     (a third) slower (`lanceDim`, `P.dimUntil`), every player is told, and a hum rises (`lanceHum` in `js/audio.js`); the
     Murmur are drawn to it (`chargeWorth` 6, `murmurPower`). A dust storm holds the shot. The beam (`lanceFire`,
-    `lanceLine`, `lanceTiles`) runs from its middle through the aimed tile to the map's edge, `width` wide, stopped by
-    the first foe's Shield Dome it enters (which takes it and drops): every building on it is destroyed (`destroyBuilding`,
-    a Command Base or Keep held at `missileFloor`, Murmur nests and exits cleared), every robot on it killed (not
-    aircraft aloft), groves and crops burned; the cut is kept for good (`S.cuts`, up to `cutsMax`, drawn as a trench
-    that glows and cools, steam over water: `drawCuts`, `drawLanceBeams`) and on War scars burns the ground along it to
-    ash with the animals there (`scarTrench`). Then `reload` (240) s. Not in the Hollow (`worldBan`).
+    `lanceLine`, `lanceTiles`, `lanceTargets`, `lanceBand`) runs from its middle through the aimed tile to the map's
+    edge, stopped by the first foe's Shield Dome it enters (which takes it and drops; nothing under a foe's up Dome is
+    touched, even beside the line: `lanceDomes`). Its **core** is `width` (2) tiles wide: every building whose footprint
+    touches the strip within 1 tile of the line is destroyed (`destroyBuilding`, a Command Base or Keep held at
+    `missileFloor`, Arrival City knocked to 0 and down, Murmur nests and exits cleared), every robot within it killed
+    (not aircraft aloft), groves and crops burned. Its **scorched edge**, `edge` (1) tile more either side: buildings
+    touching it (and not the core) lose `edgeDmg` (half) of their full armor, robots there half their full health, but
+    the edge alone destroys nothing (it leaves at least 1; a Command Base or Keep its Missile floor). Nothing on a Trade
+    Post's ground is touched. The cut is kept for good (`S.cuts`, up to `cutsMax`, each with its core's width `w`, an
+    older save's cuts none: drawn 0.8 wide; drawn as a trench that glows and cools, its edge a fainter scorch, steam over
+    water: `drawCuts`, `drawLanceBeams`) and on War scars burns the core's ground to ash with the animals there and
+    scorches the edge lighter (`scarTrench`). The aim line (`drawLanceLine`) shows the core as a red band and the edge
+    as a fainter orange one, buildings in the core ringed red (yours amber) and those only in the edge ringed dashed. Then `reload` (240) s. Not in the Hollow (`worldBan`).
   - **The Shield Dome** (`BDEFS.dome`, `DOME`; key H; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; 180 s). Up while it
     has power (a Generator with Fuel within `reach` 4) and Crystal (one every `crystal` 20 s, `cap` 6, hauled as its
     ammo): `updateDome`, `b.dUp`. `domeCatch(x, y, by, kind, sx, sy)` in each impact (`missileImpact`, `nukeImpact`,
@@ -2146,7 +2153,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. Its Lance
     goes within reach of its Reactor, on the enemy's side of it so its own buildings stay off its lines (`aiMegaSpot`;
     with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
-    (`aiLanceWorth`: its foes' buildings and army, its own side's six times over, 5 for dropping a foe's Dome), if worth
+    (`aiLanceWorth`: its foes' buildings and army in the core, 0.3 of that for those only in the scorched edge, its own side's six times over, 5 for dropping a foe's Dome), if worth
     `worth` (6). From `domeAt`
     (20 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
     Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base (a Generator first if it has none),
