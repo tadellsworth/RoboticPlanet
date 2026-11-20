@@ -1374,6 +1374,11 @@ const MISSIONS = [
       { kind: 'survive', n: [10, 12, 15], text: 'Hold out for {n} minutes', count: (P, S) => (S.winner === 0 ? 99 : Math.floor(S.time / 60)),
         hint: 'Order more Warbots, add <b>Minigun Nests</b> (<kbd>G</kbd>), and tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='minigun']" },
+      // War scars: the scrap of the robots that fell at the walls, salvaged by idle Haulers from a road beside it (met at
+      // once with War scars Off, where nothing is left to salvage).
+      { kind: 'salvaged', n: [1, 2, 2], text: 'Salvage {n} Alloy from the scrap', count: (P) => (scarLevel() ? P.stats.salvaged || 0 : 99),
+        hint: 'Idle Haulers salvage scrap near roads: <b>Paths</b> (<kbd>R</kbd>), run a road out to the fallen robots.',
+        ui: '#btn-road' },
     ],
   },
 

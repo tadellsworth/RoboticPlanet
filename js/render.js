@@ -900,7 +900,9 @@ function drawPlants(ctx, i0, j0, i1, j1, glow) {
   try {
     for (let j = Math.max(0, j0); j <= Math.min(S.H - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(S.W - 1, i1); i++) {
       const t = tIdx(i, j);
-      if (S.decor[t] && S.terrain[t] === T_GROUND && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, i * TP, j * TP, glow);
+      if (!S.decor[t] || S.terrain[t] !== T_GROUND || S.road[t] || S.res[t] || S.plan[t] || S.bAt[t]) continue;
+      if (S.ash && scarStump(t)) { if (!glow) drawStump(ctx, S.decor[t], i, j, i * TP, j * TP); } // (burned or shelled to a charred stump: War scars)
+      else drawPlant(ctx, S.decor[t], i, j, i * TP, j * TP, glow);
     }
   } finally { R.inMap = false; R.drawScale = prev; }
 }
@@ -1061,7 +1063,7 @@ function drawTile(i, j, ctx = R.mapCtx) {
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
   R.inMap = true; // the baked map is day art: it's graded as a whole when drawn (see todGradeGround)
-  try { paintTile(ctx, i, j); } finally { R.inMap = false; }
+  try { paintTile(ctx, i, j); if (S.scrap) paintScrapTile(ctx, i, j); } finally { R.inMap = false; }
   R.drawScale = prev;
 }
 
@@ -1163,6 +1165,7 @@ function paintTile(ctx, i, j) {
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
+  if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
     if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
@@ -6324,6 +6327,7 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
+  drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
   if (typeof faunaGround === 'function') faunaGround(ctx, ox, oy, z, v0, v1); // the wildlife on the ground and in the trees (looks only: js/wildlife.js)
@@ -8521,7 +8525,7 @@ function rebuildMinimapBase() {
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
     let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
-      : S.fert && S.fert[t] ? MM_COLORS.fertile : S.burnt && S.burnt[t] ? MM_COLORS.burnt : MM_COLORS.ground;
+      : S.fert && S.fert[t] ? MM_COLORS.fertile : (S.burnt && S.burnt[t]) || (S.ash && S.ash[t] > SCARS.light) ? MM_COLORS.burnt : S.crater && S.crater[t] >= 3 ? [70, 56, 40] : MM_COLORS.ground;
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
@@ -9973,4 +9977,353 @@ function drawRunway(ctx, ox, oy, z, i, j, r, planned) {
     ctx.globalCompositeOperation = 'source-over';
   }
   ctx.restore();
+}
+
+/* ------------------------------------------------------------------ war scars (drawn) */
+
+/*
+ * War scars on the ground (the game's own: S.crater, S.ash, S.scrap, S.bones; see the War scars section of js/sim.js),
+ * all baked into the ground with the tile they lie on (paintScars, paintScrapTile), so a battlefield costs nothing a
+ * frame: a light scorch (dry, brown, fading back to grass as the game steps it down), ash for good (grey-black earth,
+ * flecked), a nuclear blast's glass (black, with a sheen), churned mud where shell holes overlap, shell holes, big
+ * craters (a rim of thrown earth round a dark bowl, spilling onto the tiles round them), scrap (bits, broken hulls,
+ * burnt-out wrecks, rubble, heaped into graveyards) and bleached bones. Trees on ash are charred stumps (drawPlants).
+ * Only rain is drawn each frame: dark puddles in the big craters (drawScarPuddles). Code art, no sheets (ART_GUIDE).
+ */
+const SCAR_COL = {
+  scorch: '68,54,36', ash: '#3b3530', ashHi: 'rgba(168,160,150,', mud: '#55402b', mudDark: '#33261a', mudHi: '#7a6146',
+  rim: '#6e5638', rimHi: '#93775120', bowl: '#2b2119', glass: '#141315', bone: '#e4ddc9', boneDark: '#8f8670',
+};
+
+/** Where the big crater in tile t sits (its middle, in tiles) and its reach (tiles): the high four bits of S.crater. */
+function scarCrater(t) {
+  const hi = S.crater[t] >> 4;
+  if (!hi) return null;
+  const i = t % S.W, j = (t / S.W) | 0;
+  return { x: i + 0.5 + (hash2(i, j, 431) - 0.5) * 0.3, y: j + 0.5 + (hash2(j, i, 433) - 0.5) * 0.3, r: (hi / 8) * 0.52 };
+}
+
+/** The scars of tile (i, j) (open ground), into the baked ground: its scorch or ash, churned mud, shell holes, then the big craters that reach it. */
+function paintScars(ctx, i, j, x, y, t) {
+  const a = S.ash[t], c = S.crater[t], lo = c & 15;
+  const near = (di, dj, f) => inMap(i + di, j + dj) && f(tIdx(i + di, j + dj));
+  // The grass dying back round the fighting: khaki, dead ground, deeper the more scarred tiles there are round it.
+  const bl = scarBlight(i, j);
+  if (bl >= 2) scarPatch(ctx, i, j, x, y, (u) => scarBlight(u % S.W, (u / S.W) | 0) >= 2, '#5e4d36', Math.min(0.85, 0.2 * bl));
+  if (a) {
+    if (a > SCARS.light) {
+      const same = (u) => S.ash[u] > SCARS.light && S.terrain[u] === T_GROUND;
+      scarPatch(ctx, i, j, x, y, same, a >= SCARS.glass ? SCAR_COL.glass : SCAR_COL.ash, 0.93);
+      // flecks of grey ash (on glass: streaks of sheen) and a few dark cinders
+      for (let k = 0; k < 9; k++) {
+        const px = x + 3 + hash2(i, j, 440 + k) * (TP - 7), py = y + 3 + hash2(i, j, 460 + k) * (TP - 6);
+        if (a >= SCARS.glass) { ctx.fillStyle = `rgba(120,140,150,${0.12 + 0.12 * hash2(i, j, 480 + k)})`; ctx.fillRect(px, py, 4 + 3 * hash2(i, j, 500 + k), 1); }
+        else { ctx.fillStyle = k < 7 ? SCAR_COL.ashHi + (0.16 + 0.2 * hash2(i, j, 480 + k)) + ')' : 'rgba(16,12,10,0.6)'; ctx.fillRect(px, py, 1 + (k % 3), 1 + (k % 2)); }
+      }
+    } else {
+      // a light scorch: dry, browned ground in ragged patches, stronger for the first third of its time
+      const k = Math.ceil(a / 20) / 3;
+      const same = (u) => S.ash[u] > 0 && S.terrain[u] === T_GROUND;
+      scarPatch(ctx, i, j, x, y, same, `rgba(${SCAR_COL.scorch},${0.22 + 0.4 * k})`, 1);
+      ctx.fillStyle = `rgba(30,22,14,${0.12 + 0.2 * k})`;
+      for (let n = 0; n < 4; n++) { const px = x + 4 + hash2(i, j, 520 + n) * (TP - 12), py = y + 4 + hash2(i, j, 530 + n) * (TP - 10); ctx.beginPath(); ctx.ellipse(px, py, 3 + 4 * hash2(i, j, 540 + n), 2 + 2 * hash2(i, j, 550 + n), 0, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  // Torn earth round shell holes, browner with each, churned into mud with its ridges where they overlap (or big
+  // craters crowd round).
+  let churn = lo >= 4 ? 1 : 0;
+  if (!churn && lo >= 2) { let m = 0; for (const [di, dj] of ARM_DIRS) if (near(di, dj, (u) => S.crater[u])) m++; churn = m >= 3 ? 1 : 0; }
+  if (lo && !churn) scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) > 0 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.85, 0.32 + lo * 0.16));
+  if (churn) {
+    scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) >= 2 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.95, 0.7 + lo * 0.04));
+    ctx.lineCap = 'round';
+    for (let n = 0; n < 5; n++) {
+      const px = x + 2 + hash2(i, j, 560 + n) * (TP - 8), py = y + 3 + hash2(i, j, 570 + n) * (TP - 6), w = 5 + 7 * hash2(i, j, 580 + n);
+      ctx.strokeStyle = n % 2 ? SCAR_COL.mudDark : SCAR_COL.mudHi; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + w / 2, py - 2 + 4 * hash2(i, j, 590 + n), px + w, py + 1); ctx.stroke();
+    }
+  }
+  // Shell holes: each a dark bowl with a lighter lip of thrown earth (light from the upper left).
+  for (let n = 0, m = Math.min(lo, 7); n < m; n++) {
+    const r = TP * (0.09 + 0.07 * hash2(i, j, 600 + n)), px = x + r + 2 + hash2(i, j, 610 + n) * (TP - 2 * r - 4), py = y + r + 2 + hash2(i, j, 620 + n) * (TP - 2 * r - 4);
+    scarHole(ctx, px, py, r);
+  }
+  // The big craters reaching this tile (its own and its neighbours'), clipped to it.
+  let clip = false;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (!(S.crater[u] >> 4)) continue;
+    const C = scarCrater(u);
+    if ((di || dj) && (Math.abs(C.x - (i + 0.5)) > 0.5 + C.r * 1.35 || Math.abs(C.y - (j + 0.5)) > 0.5 + C.r * 1.35)) continue;
+    if (!clip) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip(); clip = true; }
+    scarBigCrater(ctx, C.x * TP, C.y * TP, C.r * TP, u);
+  }
+  if (clip) ctx.restore();
+}
+
+/**
+ * Fill tile (x, y) with `fill`, flush to each side whose neighbour is the same (same(u)), ragged and pulled in where it
+ * isn't, the bumps from the corner's own hash so two patches meet cleanly.
+ */
+function scarPatch(ctx, i, j, x, y, same, fill, alpha) {
+  const s = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && same(tIdx(i + di, j + dj)));
+  const pts = [], N = 4;
+  const inset = (px, py, side) => (s[side] ? 0 : 2 + 5 * hash2(Math.round(px), Math.round(py), 657));
+  for (let k = 0; k < N; k++) { const px = x + (TP * k) / N; pts.push(px, y + inset(px, y, 0)); } // top, left to right
+  for (let k = 0; k < N; k++) { const py = y + (TP * k) / N; pts.push(x + TP - inset(x + TP, py, 1), py); } // right, down
+  for (let k = 0; k < N; k++) { const px = x + TP - (TP * k) / N; pts.push(px, y + TP - inset(px, y + TP, 2)); } // bottom, right to left
+  for (let k = 0; k < N; k++) { const py = y + TP - (TP * k) / N; pts.push(x + inset(x, py, 3), py); } // left, up
+  // (a corner where either side is open is pulled in too)
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1]);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/** A shell hole of radius r (px) at (x, y): the lip, the bowl, its shadowed far side. */
+function scarHole(ctx, x, y, r) {
+  ctx.fillStyle = 'rgba(122,98,68,0.75)';
+  ctx.beginPath(); ctx.ellipse(x - r * 0.1, y - r * 0.12, r * 1.3, r * 1.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(38,28,20,0.92)';
+  ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(14,10,8,0.6)';
+  ctx.beginPath(); ctx.ellipse(x + r * 0.15, y + r * 0.12, r * 0.6, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+}
+
+/** A big crater of radius r (px) at (x, y), seeded by its tile s: thrown earth round it in clods, a deep bowl, the shade. */
+function scarBigCrater(ctx, x, y, r, s) {
+  const h = (k) => hash2(s, k, 701);
+  // the spray of earth thrown out, then the raised rim
+  ctx.fillStyle = 'rgba(92,72,48,0.55)';
+  ctx.beginPath();
+  for (let k = 0; k <= 16; k++) { const an = (k / 16) * Math.PI * 2, rr = r * (1.45 + 0.35 * h(k)); ctx.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.86); }
+  ctx.fill();
+  ctx.fillStyle = SCAR_COL.rim;
+  ctx.beginPath(); ctx.ellipse(x, y, r * 1.18, r * 1.0, 0, 0, Math.PI * 2); ctx.fill();
+  for (let k = 0; k < 12; k++) {
+    const an = h(20 + k) * Math.PI * 2, rr = r * (1.05 + 0.5 * h(40 + k)), cs = r * (0.08 + 0.08 * h(60 + k));
+    ctx.fillStyle = k % 3 ? '#7d6343' : '#4c3a27';
+    ctx.beginPath(); ctx.ellipse(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.86, cs, cs * 0.8, an, 0, Math.PI * 2); ctx.fill();
+  }
+  // the lit lip on the upper left, the bowl, its far wall in shade
+  ctx.strokeStyle = 'rgba(160,132,92,0.55)'; ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.beginPath(); ctx.ellipse(x, y, r * 1.02, r * 0.86, 0, Math.PI * 0.9, Math.PI * 1.75); ctx.stroke();
+  const g = ctx.createRadialGradient(x + r * 0.15, y + r * 0.15, r * 0.1, x, y, r);
+  g.addColorStop(0, '#1e1712'); g.addColorStop(0.7, SCAR_COL.bowl); g.addColorStop(1, '#4a3826');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.84, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(8,6,4,0.35)';
+  ctx.beginPath(); ctx.ellipse(x - r * 0.12, y - r * 0.14, r * 0.75, r * 0.52, 0, Math.PI, Math.PI * 2); ctx.fill();
+}
+
+/** The scrap and bones on or reaching tile (i, j), into the baked ground (clipped to the tile: each tile draws its share). */
+function paintScrapTile(ctx, i, j) {
+  const I = scarIndex();
+  if (!I.size) return;
+  const t = tIdx(i, j);
+  if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || (S.rail && S.rail[t])) return;
+  let clip = false;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!inMap(i + di, j + dj)) continue;
+    const list = I.get(tIdx(i + di, j + dj));
+    if (!list) continue;
+    if (!clip) { ctx.save(); ctx.beginPath(); ctx.rect(i * TP, j * TP, TP, TP); ctx.clip(); clip = true; }
+    for (const e of list) { if (e.n !== undefined) drawScrap(ctx, e); else drawBones(ctx, e); }
+  }
+  if (clip) ctx.restore();
+}
+
+/** The scrap piles (not aircraft wrecks: S.wrecks draws those) and bones by their tile, made again when they change. */
+function scarIndex() {
+  const ver = (S.scrapVer || 0) + ':' + (S.bones ? S.bones.length : 0) + ':' + (S.bones && S.bones.length ? S.bones[0].x : 0);
+  if (R.scarIdx && R.scarIdxOf === S && R.scarIdxVer === ver) return R.scarIdx;
+  const I = new Map();
+  const put = (e) => { const t = tIdx(Math.floor(e.x), Math.floor(e.y)); const l = I.get(t); if (l) l.push(e); else I.set(t, [e]); };
+  for (const b of S.bones || []) put(b);
+  for (const s of S.scrap || []) if (!s.w) put(s);
+  R.scarIdx = I; R.scarIdxOf = S; R.scarIdxVer = ver;
+  return I;
+}
+
+/**
+ * A pile of scrap (px from its tile position): a burn under it, then its pieces, as many as robots fell there (up to 7),
+ * the first of its own kind, the rest of its kind or smaller, scattered round it: bits of a Worker or Hauler, a warbot's
+ * broken hull and head, a heavy burnt-out wreck with its tracks, a building's rubble. Cut up for salvage, a stripped
+ * frame is all that's left.
+ */
+function drawScrap(ctx, s) {
+  const x = s.x * TP, y = s.y * TP, cut = s.cut && s.n < 1, n = cut ? 1 : Math.min(7, s.c || 1);
+  const col = PLAYER_COLORS[s.o] || '#9aa2ab', h = (k) => hash2(s.id % 4096, k, 811);
+  const spread = TP * (0.12 + 0.05 * Math.min(6, n));
+  ctx.fillStyle = 'rgba(20,14,10,0.42)'; // (the ground it burned on, oil-stained)
+  ctx.beginPath(); ctx.ellipse(x, y + TP * 0.04, spread + TP * 0.2 * (s.k >= 2 ? 1.5 : 1), (spread + TP * 0.16) * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(8,6,5,0.3)';
+  ctx.beginPath(); ctx.ellipse(x + TP * 0.05, y + TP * 0.08, spread * 0.8 + TP * 0.1, (spread * 0.8 + TP * 0.08) * 0.6, 0.3, 0, Math.PI * 2); ctx.fill();
+  if (cut) ctx.globalAlpha = 0.6;
+  for (let k = 0; k < n; k++) {
+    const kind = k === 0 ? s.k : Math.min(s.k === 3 ? 1 : s.k, Math.floor(h(k) * 3));
+    const an = h(k + 10) * Math.PI * 2, d = k === 0 ? 0 : spread * (0.45 + 0.55 * h(k + 20));
+    const px = x + Math.cos(an) * d, py = y + Math.sin(an) * d * 0.7, rot = ((s.a || 0) / 64) * Math.PI * 2 + h(k + 30) * 2.4;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(rot);
+    if (kind === 3) scrapRubble(ctx, h, k);
+    else if (kind === 2) scrapWreck(ctx, h, k, col);
+    else if (kind === 1) scrapHull(ctx, h, k, col);
+    else scrapBits(ctx, h, k, col);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+/** Scrap's colours, piece by piece: [body, other half, lit plate]: gunmetal, burnt black, rusting. */
+const SCRAP_TONES = [['#34373b', '#3d4045', '#56595e'], ['#26231f', '#2e2a26', '#45403a'], ['#3d3128', '#4a3a2c', '#6b5240'], ['#2f3236', '#5a3a26', '#4b4f55']];
+function scrapPoly(ctx, pts, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (let k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1]); ctx.closePath(); ctx.fill(); }
+/** Bits: a few twisted plates, a wheel, a fleck of the colony's paint. */
+function scrapBits(ctx, h, k, col) {
+  const u = TP / 32;
+  for (let q = 0; q < 3; q++) {
+    const ox = (h(k * 7 + q) - 0.5) * 9 * u, oy = (h(k * 7 + q + 3) - 0.5) * 6 * u, w = (2 + 2.5 * h(k * 5 + q)) * u;
+    scrapPoly(ctx, [ox - w, oy - w * 0.5, ox + w * 0.6, oy - w * 0.8, ox + w, oy + w * 0.4, ox - w * 0.4, oy + w * 0.6], q === 1 ? '#5b5f65' : '#3c3f44');
+  }
+  ctx.strokeStyle = '#25272b'; ctx.lineWidth = 1.2 * u;
+  ctx.beginPath(); ctx.arc(3 * u, 2 * u, 1.8 * u, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = col; ctx.globalAlpha *= 0.8; ctx.fillRect(-3 * u, -1 * u, 2.2 * u, 1.2 * u); ctx.globalAlpha /= 0.8;
+}
+/** A warbot's hull, broken in two and burnt out: its torso halves apart, a leg strut thrown off, its head rolled away, a chip of paint. */
+function scrapHull(ctx, h, k, col) {
+  const u = TP / 32 * 1.25;
+  ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.beginPath(); ctx.ellipse(1.5 * u, 2.2 * u, 9 * u, 5 * u, 0, 0, Math.PI * 2); ctx.fill();
+  // the two halves of the torso, split along a jagged tear
+  const tone = SCRAP_TONES[Math.floor(h(k + 200) * SCRAP_TONES.length)]; // (gunmetal, burnt or rusting: no two alike)
+  scrapPoly(ctx, [-7 * u, -3.4 * u, -0.6 * u, -3.8 * u, 0.6 * u, -1 * u, -0.8 * u, 0.6 * u, 0.4 * u, 3.4 * u, -7 * u, 3.2 * u], tone[0]);
+  ctx.save(); ctx.translate(2.2 * u, 0.8 * u); ctx.rotate(0.35 + h(k + 42) * 0.4);
+  scrapPoly(ctx, [-1 * u, -3.6 * u, 6.5 * u, -3.2 * u, 6.8 * u, 3.4 * u, -0.2 * u, 3.6 * u, 1 * u, 1 * u, -0.6 * u, -0.6 * u], tone[1]);
+  ctx.fillStyle = tone[2]; ctx.fillRect(0.6 * u, -3 * u, 5.4 * u, 1.6 * u);
+  ctx.restore();
+  ctx.fillStyle = tone[2]; ctx.fillRect(-6.4 * u, -3 * u, 5 * u, 1.6 * u); // (the top plate, lit)
+  // burnt black through the middle, rust at the edges
+  ctx.fillStyle = 'rgba(12,9,7,0.85)'; ctx.beginPath(); ctx.ellipse(0, 0.3 * u, 2.8 * u, 2.6 * u, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(122,66,32,0.6)'; ctx.beginPath(); ctx.ellipse(-5 * u, 2 * u, 1.8 * u, 1 * u, 0, 0, Math.PI * 2); ctx.fill();
+  if (h(k + 210) < 0.4) { ctx.fillStyle = col; ctx.globalAlpha *= 0.4; ctx.fillRect(-6 * u, -0.4 * u, 3.2 * u, 1 * u); ctx.globalAlpha /= 0.4; } // (what's left of its colony's stripe, on some)
+  // a leg strut thrown out, the head rolled off with its dead lens, shards round it
+  ctx.strokeStyle = '#26282c'; ctx.lineWidth = 1.5 * u; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-6 * u, 3 * u); ctx.lineTo(-9.5 * u, 6 * u); ctx.lineTo(-12 * u, 5 * u); ctx.stroke();
+  const hx = 11 * u, hy = (h(k + 41) - 0.5) * 7 * u;
+  ctx.fillStyle = '#3f4247'; ctx.beginPath(); ctx.arc(hx, hy, 2.3 * u, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1a1714'; ctx.beginPath(); ctx.arc(hx + 0.6 * u, hy + 0.5 * u, 1 * u, 0, Math.PI * 2); ctx.fill();
+  for (let q = 0; q < 4; q++) { const sx = (h(k * 4 + q + 140) - 0.5) * 22 * u, sy = (h(k * 4 + q + 150) - 0.5) * 12 * u, w = (1 + 1.5 * h(q + 160)) * u; scrapPoly(ctx, [sx - w, sy, sx, sy - w * 0.7, sx + w, sy + w * 0.3], q % 2 ? '#4a4d52' : '#2c2e31'); }
+}
+/** A heavy wreck: a long burnt hull on its tracks, its cab or turret block, torn plating and rust. */
+function scrapWreck(ctx, h, k, col) {
+  const u = TP / 32 * 1.2, L = 11 * u, W = 5.5 * u;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(2 * u, 3 * u, L * 1.15, W * 1.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1f1d1c'; ctx.fillRect(-L, -W - 1.6 * u, 2 * L, 2.4 * u); ctx.fillRect(-L, W - 0.8 * u, 2 * L, 2.4 * u); // the tracks
+  ctx.fillStyle = '#3a3633';
+  for (let q = -L; q < L; q += 2.2 * u) { ctx.fillRect(q, -W - 1.6 * u, 1 * u, 2.4 * u); ctx.fillRect(q, W - 0.8 * u, 1 * u, 2.4 * u); }
+  ctx.fillStyle = '#2f2b28'; ctx.fillRect(-L * 0.92, -W, 1.84 * L, 2 * W);
+  ctx.fillStyle = '#6b3f22'; ctx.globalAlpha *= 0.7;
+  for (let q = 0; q < 3; q++) { ctx.beginPath(); ctx.ellipse((h(k * 3 + q + 50) - 0.5) * 1.6 * L, (h(k * 3 + q + 53) - 0.5) * W, 2.6 * u, 1.6 * u, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.globalAlpha /= 0.7;
+  ctx.fillStyle = '#45403b'; ctx.fillRect(-3 * u, -3 * u, 7 * u, 6 * u);
+  ctx.fillStyle = '#141210'; ctx.fillRect(-1.6 * u, -1.6 * u, 3.6 * u, 3.2 * u); // (burnt out)
+  scrapPoly(ctx, [L * 0.5, -W, L * 0.95, -W - 3 * u, L * 1.05, -W + 1 * u], '#55504a'); // torn plating
+  ctx.fillStyle = col; ctx.globalAlpha *= 0.45; ctx.fillRect(-L * 0.8, -W + 0.6 * u, 3 * u, 1.2 * u); ctx.globalAlpha /= 0.45;
+  ctx.fillStyle = 'rgba(10,8,6,0.55)'; ctx.beginPath(); ctx.ellipse(L * 0.3, 0, L * 0.45, W * 0.8, 0, 0, Math.PI * 2); ctx.fill(); // (where it burned)
+}
+/** A building's rubble: a low heap of broken concrete and twisted steel. */
+function scrapRubble(ctx, h, k) {
+  const u = TP / 32;
+  ctx.fillStyle = 'rgba(40,32,26,0.55)'; ctx.beginPath(); ctx.ellipse(0, 0, 13 * u, 8 * u, 0, 0, Math.PI * 2); ctx.fill();
+  for (let q = 0; q < 10; q++) {
+    const an = h(q + 70) * Math.PI * 2, rr = 10 * u * h(q + 90), cs = (2 + 2.5 * h(q + 110)) * u, px = Math.cos(an) * rr, py = Math.sin(an) * rr * 0.6;
+    scrapPoly(ctx, [px - cs, py - cs * 0.4, px + cs * 0.6, py - cs * 0.7, px + cs, py + cs * 0.3, px - cs * 0.4, py + cs * 0.6], q % 3 === 0 ? '#5d5e60' : q % 3 === 1 ? '#8a847a' : '#6b5646');
+  }
+  ctx.strokeStyle = 'rgba(46,40,38,0.9)'; ctx.lineWidth = 1 * u;
+  for (let q = 0; q < 3; q++) { const an = h(q + 130) * 6.28; ctx.beginPath(); ctx.moveTo(Math.cos(an) * 2 * u, -1 * u); ctx.lineTo(Math.cos(an) * 9 * u, -(3 + q * 2) * u); ctx.stroke(); }
+}
+
+/** An animal's bleached bones where it fell: a curved spine, ribs, the skull at one end, a leg bone or two (by its size, k). */
+function drawBones(ctx, b) {
+  const s = [0.5, 0.85, 1.25][b.k] || 0.6, u = (TP / 32) * s, x = b.x * TP, y = b.y * TP, h = (k) => hash2(Math.round(b.x * 100), Math.round(b.y * 100) + k, 841);
+  ctx.save(); ctx.translate(x, y); ctx.rotate((b.a / 64) * Math.PI * 2);
+  ctx.lineCap = 'round';
+  for (const [dx, dy, c, w] of [[0.8 * u, 0.8 * u, 'rgba(40,34,26,0.45)', 1.6], [0, 0, SCAR_COL.bone, 1.2]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w * u;
+    ctx.beginPath(); ctx.moveTo(-7 * u + dx, dy); ctx.quadraticCurveTo(0 + dx, -2 * u + dy, 6 * u + dx, dy); ctx.stroke(); // spine
+    for (let r = 0; r < 4; r++) {
+      const rx = -3 * u + r * 2.2 * u + dx;
+      ctx.beginPath(); ctx.moveTo(rx, -1.2 * u + dy); ctx.quadraticCurveTo(rx + 1.2 * u, -4 * u + dy, rx + 0.4 * u, -5 * u + dy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rx, -0.6 * u + dy); ctx.quadraticCurveTo(rx + 1.2 * u, 2.8 * u + dy, rx + 0.4 * u, 3.8 * u + dy); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(-9 * u + dx, (h(1) * 4 + 3) * u + dy); ctx.lineTo(-4 * u + dx, (h(2) * 3 + 5) * u + dy); ctx.stroke(); // a leg bone
+  }
+  ctx.fillStyle = SCAR_COL.bone;
+  ctx.beginPath(); ctx.ellipse(8.2 * u, -0.2 * u, 2.6 * u, 1.8 * u, 0.2, 0, Math.PI * 2); ctx.fill(); // the skull
+  ctx.fillStyle = 'rgba(40,34,26,0.75)'; ctx.beginPath(); ctx.arc(8.6 * u, -0.6 * u, 0.6 * u, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** A charred stump where a plant stood on ash (War scars): a stake of burnt trunk with a split top and its shadow; a fallen log burnt black. */
+function drawStump(ctx, v, i, j, x, y) {
+  const k = ((v - 1) % PLANT_KINDS) + 1, ps = (R.look && R.look.plantScale && R.look.plantScale[k - 1]) || 1;
+  const u = (TP / 32) * Math.min(1.4, 0.7 + 0.35 * ps), cx = x + TP / 2 + (hash2(i, j, 911) - 0.5) * TP * 0.1, cy = y + TP / 2 + (hash2(j, i, 912) - 0.5) * TP * 0.1;
+  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(cx + 3 * u, cy + 1.5 * u, 4.5 * u, 2 * u, 0.3, 0, Math.PI * 2); ctx.fill();
+  if (hash2(i, j, 913) < 0.2) { // a burnt log, fallen
+    ctx.strokeStyle = '#1b1714'; ctx.lineWidth = 3 * u; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - 6 * u, cy + 1 * u); ctx.lineTo(cx + 6 * u, cy - 1.5 * u); ctx.stroke();
+    ctx.strokeStyle = 'rgba(150,140,128,0.35)'; ctx.lineWidth = 0.8 * u;
+    ctx.beginPath(); ctx.moveTo(cx - 5 * u, cy - 0.2 * u); ctx.lineTo(cx + 5 * u, cy - 2.4 * u); ctx.stroke();
+    return;
+  }
+  const hgt = (5 + 6 * hash2(i, j, 914)) * u;
+  ctx.fillStyle = '#1d1916';
+  ctx.beginPath(); ctx.moveTo(cx - 2 * u, cy); ctx.lineTo(cx - 1.4 * u, cy - hgt); ctx.lineTo(cx - 0.3 * u, cy - hgt + 1.8 * u); ctx.lineTo(cx + 0.6 * u, cy - hgt * 0.8); ctx.lineTo(cx + 1.5 * u, cy - hgt * 0.92); ctx.lineTo(cx + 2 * u, cy); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(160,150,138,0.3)'; ctx.fillRect(cx - 1.6 * u, cy - hgt * 0.8, 0.8 * u, hgt * 0.7); // (the lit side, ashen)
+  ctx.fillStyle = '#2a231e'; ctx.beginPath(); ctx.ellipse(cx, cy, 2.4 * u, 1.1 * u, 0, 0, Math.PI * 2); ctx.fill();
+  if (hash2(i, j, 915) < 0.5) { ctx.strokeStyle = '#1d1916'; ctx.lineWidth = 0.9 * u; ctx.beginPath(); ctx.moveTo(cx + 0.5 * u, cy - hgt * 0.6); ctx.lineTo(cx + 3.5 * u, cy - hgt * 0.85); ctx.stroke(); } // a burnt branch
+}
+
+/** Rain on a battlefield: dark puddles in the big craters in view, coming with the rain and drying out slowly after. */
+function drawScarPuddles(ctx, ox, oy, z, v0, v1) {
+  if (!S.crater || z < 9) return;
+  const W = typeof weatherOn === 'function' && weatherOn() && typeof weatherAt === 'function' ? weatherAt(S.time) : null;
+  const want = W && W.kind === 'rain' ? W.k : 0, dt = Math.min(0.1, R.dt || 0);
+  R.scarWet = clamp((R.scarWet || 0) + (want > R.scarWet ? dt / 15 : -dt / 90), 0, Math.max(want, R.scarWet || 0));
+  const wet = R.scarWet;
+  if (wet < 0.02) return;
+  const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
+  ctx.save();
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = j * S.W + i;
+    if ((S.crater[t] >> 4) < 5 || S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t])) continue; // (filled in: built over)
+    const C = scarCrater(t), x = ox + C.x * z, y = oy + C.y * z + C.r * z * 0.12, r = C.r * z * 0.62;
+    ctx.globalAlpha = 0.8 * wet;
+    ctx.fillStyle = '#2b3138';
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.45 * wet;
+    ctx.strokeStyle = '#a9bccb'; ctx.lineWidth = Math.max(1, z * 0.02);
+    ctx.beginPath(); ctx.ellipse(x - r * 0.15, y - r * 0.1, r * 0.55, r * 0.3, 0, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
+    const ph = (S.time * 1.7 + hash2(i, j, 1)) % 1; // a raindrop's ring
+    if (want > 0.2) { ctx.globalAlpha = 0.35 * wet * (1 - ph); ctx.beginPath(); ctx.ellipse(x + (hash2(i, j, 2) - 0.5) * r, y, r * 0.3 * ph, r * 0.2 * ph, 0, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
+/** Does a big crater in a tile next to (i, j) spill onto it (so it is painted with scars though it has none of its own)? */
+function scarSpill(i, j) {
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && inMap(i + di, j + dj) && S.crater[tIdx(i + di, j + dj)] >= 16) return true;
+  return false;
+}
+
+/** Is the plant on tile t a stump now (War scars): its ground burned to ash for good, shelled twice, or a big crater in it? */
+function scarStump(t) { return S.ash[t] >= SCARS.good || S.crater[t] > 0 || scarBlight(t % S.W, (t / S.W) | 0, true) >= 3; }
+/**
+ * How many of tile (i, j) and the eight round it are scarred (scorched, burned or cratered): the blight of the fighting
+ * there. `lasting`: only the scars that stay (craters, ash), so a stump never grows back as a scorch fades.
+ */
+function scarBlight(i, j, lasting) {
+  let n = 0;
+  for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (a >= 0 && b >= 0 && a < S.W && b < S.H) { const u = b * S.W + a; if (S.crater[u] || (lasting ? S.ash[u] > SCARS.light : S.ash[u])) n++; }
+  return n;
 }

@@ -2543,6 +2543,7 @@ function newGame(opts) {
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
+  settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
   // The players people play: you (player 0), or in multiplayer everyone in opts.humans. The rest are the computer's,
   // with the difficulty's head start.
@@ -2651,6 +2652,7 @@ function newGame(opts) {
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
+  scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
   const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || SH.tip);
@@ -4698,6 +4700,7 @@ function killBot(bot, quiet) {
   if (BOTS[bot.type].airship && typeof airChanged === 'function') airChanged(); // (its line may have no Airship left)
   // One of the Murmur on Active: no blast, no fire; the body lies where it fell until they drag it off (murmurBody).
   if (BOTS[bot.type].wild && !quiet && typeof murmurBody === 'function' && murmurBody(bot)) return;
+  if (!quiet && typeof scarBotDown === 'function') scarBotDown(bot); // (its scrap stays where it fell: War scars)
   if (boom >= 0) {
     postMsg(bot.owner, `A ${BOTS[bot.type].name} carrying ${load} exploded!`, Math.floor(bot.x), Math.floor(bot.y), 'bad');
     fuelBlast(bot.x, bot.y, 'tanker', boom, bot.owner);
@@ -4823,6 +4826,7 @@ function destroyBuilding(b, burn, quiet) {
   // (blown up: an explosion; taken down on purpose, dismantled or moved: no wreck, the rubble just comes down)
   if (!quiet) { collapseFx(b, burn); sfx(burn ? 'boom' : 'collapse', b.x + 0.5, b.y + 0.5); }
   if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
+  if (burn && b.built && !quiet && typeof scarBuildingDown === 'function') scarBuildingDown(b); // (its rubble stays: War scars)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }
 
@@ -4999,6 +5003,10 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
+/** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
+const SPARSE_LAYERS = ['crater', 'ash'];
+function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
+function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
@@ -5012,7 +5020,7 @@ function serializeGame() {
   const o = {};
   for (const k in S) {
     if (k === 'byId' || k === 'fx' || k === 'decals' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
-    o[k] = TYPED_FIELDS[k] && S[k] ? Array.from(S[k]) : S[k]; // (exactly: a multiplayer game reloads a save to catch up)
+    o[k] = TYPED_FIELDS[k] && S[k] ? Array.from(S[k]) : SPARSE_LAYERS.includes(k) && S[k] ? sparseOut(S[k]) : S[k]; // (exactly: a multiplayer game reloads a save to catch up)
   }
   o.buildings = S.buildings.filter((b) => !b.dead);
   o.bots = S.bots.filter((u) => !u.dead);
@@ -5088,6 +5096,7 @@ function checkSave(o) {
     const st = o.settings;
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
+    if (st.scars != null && !scarsOk(st.scars)) bad();
   }
   if (o.mission) {
     const M = o.mission;
@@ -5108,6 +5117,13 @@ function checkSave(o) {
   if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
+  // War scars: craters and ash as tile and value pairs, scrap piles and bones (numbers on the map).
+  for (const k of SPARSE_LAYERS) if (o[k] != null && !(Array.isArray(o[k]) && o[k].length % 2 === 0 && o[k].length <= 2 * o.W * o.H &&
+    o[k].every((v, n) => (n % 2 ? Number.isInteger(v) && v > 0 && v < 256 : tileOk(v))))) bad();
+  const onMap = (e) => obj(e) && Number.isFinite(e.x) && Number.isFinite(e.y) && e.x >= 0 && e.y >= 0 && e.x < o.W && e.y < o.H;
+  if (o.scrap != null && !(Array.isArray(o.scrap) && o.scrap.length <= 2 * SCARS.scrapMax && o.scrap.every((s) => onMap(s) && Number.isSafeInteger(s.id) &&
+    ['n', 'k', 'c', 'a'].every((k) => Number.isFinite(s[k])) && (s.o == null || owner(s.o)) && (s.w == null || Number.isSafeInteger(s.w))))) bad();
+  if (o.bones != null && !(Array.isArray(o.bones) && o.bones.length <= 2 * SCARS.bonesMax && o.bones.every((b) => onMap(b) && Number.isFinite(b.k) && Number.isFinite(b.a)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
     Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
@@ -5186,6 +5202,7 @@ function deserializeGame(json) {
   o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
   o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
+  for (const k of SPARSE_LAYERS) o[k] = Array.isArray(o[k]) ? sparseIn(o[k], o.W * o.H) : null; // (War scars: made below for a save from before)
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
@@ -5233,6 +5250,7 @@ function deserializeGame(json) {
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
+    scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }
   // Unit types switched off for now (BOTS_OFF) leave the game.
   const off = dropOffBots();

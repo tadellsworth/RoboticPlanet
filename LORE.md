@@ -449,6 +449,13 @@ stay folded"; the pod, "Twelve seats, folded. Forty crates"; the pylon, "Phase 2
 standard, thirty years late." The line draws its power from the colony's Generators, so the Murmur hear it as they hear
 a Generator, and a pylon shot down cuts it until a Worker rides out and rebuilds it. No one rides it.
 
+War scars (the owner's decision, Nov 19 2026; built): a long war shows on the land. Every blast leaves its crater, fire
+leaves ash and charred stumps where the garden's woods stood, and the robots stay where they fall, their scrap heaped
+into graveyards that Haulers cut up for Alloy wherever a road reaches. The garden pays for it: the animals a blast
+catches leave their bones, and the herds and birds keep off the old battlefields, which go quiet. The Murmur drain what
+charge is left in the wreckage, and their tunnels lean toward the graveyards: the war feeds them. The survey still files
+the cratered acres as land made ready for Arrival. (A setting, Off, Light or Full, Full by default.)
+
 Express highways (the owner's decision, Nov 19 2026; built): the road standards had a chapter on arterials: dual
 carriageways between the towns, banked for speed and lit all night, for the day the towns had traffic to send each
 other. COBALT wrote it, for coastal cities that were already losing their coasts; every vanguard carried a copy. The

@@ -245,7 +245,17 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   "the ground under it is hollow". Collapsing the exits, wrecking the nest (its network dies back) or a Seismic Lance (see
   Megastructures) shores it up; the Sapper (the Murmur form that digs) would lead it. It makes ignoring the Murmur
   costly in long games, as the tunnel network keeps spreading under the old battlefields (LORE.md).
-- **Total war scars the land** (the owner, Nov 18 2026: for later; "I really like the concepts of these battles
+- **Total war scars the land: BUILT, Nov 19 2026, as War scars** (README, "War scars"; How to play, War scars). The
+  owner's decisions: lasting craters from every real explosion sized by weapon (a nuke a glassed crater field), looks
+  only; scorch that grows back in ten minutes, ash and charred stumps for good, a Grove Planter greens a patch; scrap
+  from every destroyed robot and rubble from every building wrecked by force, for good, into graveyards; Haulers salvage
+  it near roads for a little Alloy (the rivals too); the Murmur's tunnels lean toward big heaps of it; blasts kill
+  animals, their bones stay, wildlife and birdsong leave the battlefields; a setting Off / Light / Full (Full by
+  default) in Settings only, fixed into each game as it starts. (An end-of-game tally was dropped by the owner.) Still
+  open: the Lance of Corvane's trench (when the megastructure comes); a renderer sprite set for scrap and bones; carrion
+  birds over the old graveyards, not only fresh wrecks; whether ash should also stop Bio Farms and Harvesters (today
+  only napalm and Torches burn farmland, as before). The notes as filed:
+  **Total war scars the land** (the owner, Nov 18 2026: for later; "I really like the concepts of these battles
   affecting the environment"). The picture: a long war slowly turns a green, forested map into a World War 1
   battlefield. Animals in a blast's radius die (the fauna is scenery today, js/wildlife.js: they scatter from
   fighting but nothing kills them); trees and living plants burn and stay burnt (a charred trunk, a blackened stump,

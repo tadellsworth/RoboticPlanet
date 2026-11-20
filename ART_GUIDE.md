@@ -1659,6 +1659,29 @@ writes the WebP files (jobs.txt lists each one; RENDERER.md, "The Mass Driver an
 | `catcher@0`, `catcher@1`, `catcher-closed@0`, `catcher-closed@1` (+ times of day) | The Catcher: a wide ribbed steel funnel cradle on an octagonal concrete plinth, its rim lit in the team colour, copper braking rings glowing in its throat, four magnetic arms in hazard yellow on legs round it, swung up and out (open) or in over the funnel with their magnet heads lit (closed); a small control cabin, a floodlight pole. 512 px | `B3D` at scale 1.4; the closed art while a canister is landing (`mdArmsIn`) |
 | (code) | The shot | `drawMassDrivers`: the coils light blue-white in sequence breech to muzzle as it charges, arcs of light crackling between them and up the rail, a ray along the rail; on the shot every coil blazes and a flash at the muzzle; a faint dashed guidance beam from the muzzle to the Catcher's cradle while a canister flies; the canister, a stubby gunmetal cargo container (ribbed sides, dark corner castings, a band in the team colour, an amber running light blinking at its nose) holding its heading along the arc, with a short glowing streak and its shadow on the ground; after dark the coils glow faintly between shots. `MD_ART` holds the renders' marks |
 
+### War scars (drawn in code; no images)
+
+The owner's War scars (Nov 19 2026: README, "War scars"): a long war turns the land into a World War One battlefield.
+Everything is drawn in code into the baked ground (`js/render.js`: `paintScars`, `scarBigCrater`, `scarHole`,
+`scarPatch`, `drawScrap`, `scrapBits`, `scrapHull`, `scrapWreck`, `scrapRubble`, `drawBones`, `drawStump`,
+`drawScarPuddles`; colours in `SCAR_COL`), so it is re-lit for the time of day with the rest of the ground and costs
+nothing a frame. The look: earth browns and greys whatever the biome (mud is mud on snow or sand), light from the upper
+left like the art (a lit lip on each crater, its far wall in shade), team colour only as a faded chip of paint on scrap.
+
+| What | How it's drawn |
+|---|---|
+| Light scorch | Ragged patches of dry, browned ground over the grass, stronger at first, fading in three steps back to grass. |
+| Ash for good / glass | Grey-black earth flecked with pale ash and cinders, flush to scarred neighbours and ragged at the edge; a nuke's glass near-black with streaks of sheen. |
+| Shell hole | A lip of lighter thrown earth, a dark bowl, its shadowed far side; up to seven a tile. |
+| Churned mud | Brown mud with dark and light ridges where four or more holes overlap. |
+| Big crater | A spray of thrown earth and clods, a raised rim with a lit lip, a deep graded bowl; spills onto the tiles round it. With rain: a dark puddle with a sky glint and raindrop rings. |
+| Scrap | A burn under each pile, then up to seven pieces: bits (twisted plates, a wheel), a warbot's hull broken in two and burnt through (a leg strut, its head rolled off), a heavy wreck on its tracks (burnt-out cab, rust, torn plating), a building's rubble (concrete chunks, rebar). Cut up for salvage: a stripped, paler frame. |
+| Bones | A bleached spine, ribs, skull and a leg bone with a soft shadow, at three sizes. |
+| Stumps | A charred split stake with an ashen lit side and its shadow, or a burnt fallen log. |
+
+A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
+on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

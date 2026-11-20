@@ -123,6 +123,18 @@ function faunaChorus() {
   const d = (dayClock(S.time) - NIGHT_TO + TOD_LEN) % TOD_LEN;
   return d < 50 ? 1 - d / 50 : 0;
 }
+/** How much of the land in view is battlefield (War scars: cratered or burned out), 0 to 1: the birdsong there thins out (js/audio.js). */
+function faunaScarred() { return FAUNA.scarred || 0; }
+function faunaScarCount(v) {
+  if (!S.ash) { FAUNA.scarred = 0; return; }
+  let n = 0, k = 0;
+  for (let j = Math.max(0, Math.floor(v.y0)); j < Math.min(S.H, Math.ceil(v.y1)); j += 2) for (let i = Math.max(0, Math.floor(v.x0)); i < Math.min(S.W, Math.ceil(v.x1)); i += 2) {
+    const t = j * S.W + i;
+    if (S.terrain[t] !== T_GROUND) continue;
+    n++; if (scarDead(t)) k++;
+  }
+  FAUNA.scarred = n ? Math.min(1, (k / n) * 1.6) : 0;
+}
 function faunaSongs() {
   return !!(S && S.wildlife && FAUNA_SONG[biome()] && typeof murmurNight === 'function' && !alwaysNightMap());
 }
@@ -169,7 +181,7 @@ function faunaReset() {
 }
 
 /** Is tile t in use (a road, a building, a deposit, a plan, a rail or a pipe): nothing rests on it. */
-function faunaBusy(t) { return S.road[t] || S.bAt[t] || S.res[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]); }
+function faunaBusy(t) { return S.road[t] || S.bAt[t] || S.res[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || (S.ash && scarDead(t)); } // (War scars: nothing lives on cratered or burned-out ground)
 /** Visible footprint of roads, track and buildings. Planned roads only matter once laid. */
 function faunaDevelopment(x, y) {
   const i = Math.floor(x), j = Math.floor(y);
@@ -287,6 +299,7 @@ function faunaHear(v) {
     let r = FAUNA_FEAR[f.type] || 0;
     if (f.type === 'fire' && f.life >= 5) faunaCarrion(f.x, f.y); // (a wreck burning: a robot or a building)
     if (!r) continue;
+    if (f.type === 'boom' && S.ash) faunaKilled(f.x, f.y, (f.r || 0.6) * 1.3); // (War scars: the blast kills what it catches; its bones are the game's, S.bones)
     if (f.type === 'boom' || f.type === 'flash') r += 4 * Math.min(2, f.r || 0.6);
     if (f.x < v.x0 - r - 4 || f.x > v.x1 + r + 4 || f.y < v.y0 - r - 4 || f.y > v.y1 + r + 4) continue;
     F.fear.push({ x: f.x, y: f.y, r });
@@ -296,6 +309,20 @@ function faunaHear(v) {
       const cx = clamp(f.x, ci * FAUNA_CELL, (ci + 1) * FAUNA_CELL), cy = clamp(f.y, cj * FAUNA_CELL, (cj + 1) * FAUNA_CELL);
       if (dist2(cx, cy, f.x, f.y) < r * r * 0.6) F.spook.set(ci + cj * 4096, S.time);
     }
+  }
+}
+
+/**
+ * A blast at (x, y) of reach r (War scars): the animals on the ground in it are killed, gone at once, not fled (the game
+ * itself leaves their bones: scarFauna). Birds aloft and the bold scavengers get away.
+ */
+function faunaKilled(x, y, r) {
+  for (const a of FAUNA.list) {
+    if (a.done || a.K.bold) continue;
+    const m = a.m[0];
+    if (!m || m.fly || dist2(m.x, m.y, x, y) > r * r) continue;
+    a.done = true; a.st = 'dead';
+    if (a.e) a.e.back = S.time + 90;
   }
 }
 
@@ -367,7 +394,7 @@ function faunaFrame(z, v0, v1) {
   if (W) { if (['rain', 'snow', 'sand', 'leaves', 'dust'].includes(W.kind)) F.storm = W.k; if (W.kind === 'rain') F.rain = W.k; }
   if (S.event && S.event.type === 'dust') F.storm = 1;
   faunaHear(v);
-  if (F.t >= F.murAt) { F.murAt = F.t + 0.5; faunaMurmur(v); }
+  if (F.t >= F.murAt) { F.murAt = F.t + 0.5; faunaMurmur(v); faunaScarCount(v); }
   // The cells round the view (kept), and those on screen (where animals appear).
   const m = 2, c0 = Math.max(0, Math.floor((v.x0 - m) / FAUNA_CELL)), c1 = Math.min(Math.ceil(S.W / FAUNA_CELL) - 1, Math.floor((v.x1 + m) / FAUNA_CELL));
   const d0 = Math.max(0, Math.floor((v.y0 - m) / FAUNA_CELL)), d1 = Math.min(Math.ceil(S.H / FAUNA_CELL) - 1, Math.floor((v.y1 + m) / FAUNA_CELL));

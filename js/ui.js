@@ -119,7 +119,7 @@ function initUI() {
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
   $('p-back').onclick = () => { sfx('click'); pauseView('main', true); };
   // Its choices (Graphics, Time of day) are radio groups: ← → (↑ ↓) pick the next one, as anywhere else.
-  for (const id of ['p-gfx', 'p-daynight']) {
+  for (const id of ['p-gfx', 'p-daynight', 'p-scars']) {
     $(id).addEventListener('keydown', (e) => {
       const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
       if (!d) return;
@@ -180,6 +180,15 @@ function initUI() {
   // What the game overrules (read by daynight.js's todForced): the Murmur keep the cycle on. (An always-night map, the
   // Hollow, is night whatever happens: todForced sees to that itself.)
   TOD.force = () => (UI.inGame && S && S.wildlife ? 'murmur' : '');
+  // War scars (scarsPref): Off, Light or Full, for the next game (a game keeps the one it started with).
+  UI.syncScars = () => {
+    const v = scarsPref();
+    for (const b of $('p-scars').children) { b.classList.toggle('on', b.dataset.v === v); b.setAttribute('aria-checked', b.dataset.v === v ? 'true' : 'false'); b.title = SCARS_INFO[b.dataset.v]; }
+    const cur = UI.inGame && S && S.settings ? SCARS.levels[scarLevel()] : null;
+    $('p-scars-note').textContent = SCARS_INFO[v] + (cur && cur !== v ? ` From your next game: this one keeps ${SCARS_NAMES[cur]}.` : '');
+  };
+  UI.syncScars();
+  for (const b of $('p-scars').children) b.onclick = () => { setScarsPref(b.dataset.v); UI.syncScars(); sfx('click'); };
   const syncWx = () => pauseSwitch('p-weather', weatherOn());
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
@@ -369,9 +378,23 @@ function pauseView(v, focus) {
   $('p-setview').hidden = !set;
   $('screen-pause').querySelector('.card').classList.toggle('p-set', set);
   $('screen-pause').scrollTop = 0;
-  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); }
+  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); if (UI.syncScars) UI.syncScars(); }
   if (focus) $(set ? 'p-back' : 'p-settings').focus({ preventScroll: true });
 }
+
+/*
+ * War scars (SCARS): this device's setting, Full unless changed in Settings. A new game, a mission, a game to watch and a
+ * multiplayer game (the host's) take it as they start (newGame's opts.scars: S.settings.scars), and keep it.
+ */
+const SCARS_KEY = 'botfall.scars';
+const SCARS_NAMES = { off: 'Off', light: 'Light', full: 'Full' };
+const SCARS_INFO = {
+  off: 'Off: battles leave only marks that fade, and remains that grow over.',
+  light: 'Light: only big blasts leave lasting craters, and scorched ground grows back; scrap and bones stay.',
+  full: 'Full: every blast leaves its crater, ash and charred stumps stay, and scrap and bones pile up for good.',
+};
+function scarsPref() { try { const v = localStorage.getItem(SCARS_KEY); return scarsOk(v) ? v : 'full'; } catch (e) { return 'full'; } }
+function setScarsPref(v) { try { localStorage.setItem(SCARS_KEY, v); } catch (e) { /* storage unavailable: this session only */ } }
 
 /** One of the pause menu's on/off settings (Full screen, Weather, Scout reports, Custom cursor, Vibration): its switch, On or Off. */
 function pauseSwitch(id, on) {
@@ -2949,7 +2972,7 @@ function startNewGame() {
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
-    victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(),
+    victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });
   enterGame();
   updateHUD();
@@ -3422,7 +3445,7 @@ function goalText(g, diff) { return goalLabel(g, goalNeed(g, diff)); }
 function startMission(k, diff) {
   clearSave();
   $('screen-missions').hidden = true;
-  newGame(missionOptions(k, diff));
+  newGame({ ...missionOptions(k, diff), scars: scarsPref() });
   enterGame();
   updateHUD();
   placeMinimap();
@@ -7445,6 +7468,7 @@ function botActivity(u) {
   if (t.type === 'home') return 'Heading back to storage';
   if (t.type === 'dock') return 'Trade convoy: waiting at the Trade Post for the ledger to take its run';
   if (t.type === 'haul' && u.trade) return t.dst === u.trade ? (t.phase === 'toSrc' ? `Trade convoy: loading ${GOOD[t.good].name} at the ${nm(t.src)}` : `Trade convoy: taking ${GOOD[t.good].name} out to the Trade Terminal`) : t.phase === 'toSrc' ? `Trade convoy: going to the Trade Post for its ${GOOD[t.good].name}` : `Trade convoy: bringing ${GOOD[t.good].name} home from the Trade Post`;
+  if (t.type === 'salvage') return t.phase === 'cut' ? 'Salvaging scrap: cutting it up for Alloy' : 'Driving out to salvage scrap';
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
   if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : `Constructing ${a}`; }
   if (t.type === 'staff') {

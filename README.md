@@ -2433,6 +2433,63 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   a base under rock would only light the roof. When your own base's beacon comes on in view, a soft low hum
   (`ambHum`, through `sfx('beacon')` and `mapVoice`).
 
+### War scars
+
+The owner's design (Nov 19 2026): over a long war the land between colonies turns from green nature into a World War
+One battlefield. Most of it is the simulation's own and in `S` (so saves, multiplayer and every device agree), made from
+the game's own blasts and the planet's hash; it is drawn into the baked ground (`paintScars`, `paintScrapTile`,
+`drawStump` in `js/render.js`), so a battlefield costs nothing a frame. The War scars section of `js/sim.js` has the rules,
+`SCARS` and `SALVAGE` in `js/defs.js` the numbers.
+
+- **The setting** (`S.settings.scars`: `off`, `light` or `full`, **Full by default**). Only in the pause menu's Settings
+  (`#p-scars`, `scarsPref` in `js/ui.js`, kept on this device as `botfall.scars`), never on the new-game screen. Each game
+  takes it as it starts (`newGame`'s `opts.scars`: Play and Custom Game, missions, Observer, and in multiplayer the
+  host's, sent with the lobby settings) and keeps it, so it can't drift between devices; changed during a game it applies
+  from the next (the Settings note says so). A save from before the setting plays on with Full from where it is.
+- **Craters** (`S.crater`, a byte a tile: the low four bits count shell holes, the high four a big crater's size, its
+  reach in eighths of a tile). `scarBlast(x, y, r)` is called where a real explosion lands: a Mortar shell (0.45), a
+  robot going up (0.3, a heavy one 0.55), a Howitzer's shell (0.85), a bomb (1.1), a Missile (1.4), a fuel blast (its
+  reach × 0.6, at least 0.7) and a crash (the aircraft's `blast`); `scarNuke` a nuclear blast (glass to 0.7 of its reach,
+  ash beyond, craters scattered across it). From `SCARS.big` (0.7) up a blast leaves a big crater (another in it churns
+  it); below, a shell hole (Full only). Four or more holes in a tile churn into mud. Drawn: a rim of thrown earth round a
+  dark bowl, spilling onto the tiles round it (each tile draws its share, clipped); with rain, dark puddles in the big
+  ones (`drawScarPuddles`, the only per-frame part). A tile with shell holes is torn earth, browner with each. Craters never slow anything.
+- **Scorch and ash** (`S.ash`, a byte a tile: 1 to `SCARS.light` a light scorch that steps back toward grass every
+  `SCARS.step` s, about ten minutes in all, redrawn as it passes each third (`scarFade`); `SCARS.good` ash for good;
+  `SCARS.glass` a nuclear blast's glass). Blasts scorch their reach and on Full burn their heart (r × 0.55) to ash; a
+  Torch's flame lightly scorches the ground it licks (`scarBurn`); napalm burns its 3 × 3 to ash (`scarNapalm`). The
+  decorative plants on ash, in a big crater or on a tile with two shell holes are drawn as charred stumps or burnt logs
+  (`scarStump`, `drawStump`; `S.decor` is untouched). A Grove
+  Planter planting a grove clears the scars of the tile and the eight round it (`scarHeal`).
+- **Scrap** (`S.scrap`: piles `{ id, x, y, n (Alloy in it), k (0 bits, 1 hull, 2 heavy wreck, 3 rubble), c (pieces),
+  o (owner), a (its turn), cut, w }`, at most `SCARS.scrapMax`). `scarBotDown` (from `killBot`, not quiet ones) and
+  `scarBuildingDown` (from `destroyBuilding` by force) add it with `scrapAdd`: on a road, track or building it lands on
+  open ground beside it; within 0.6 of a tile of another pile it joins it (graveyards), up to `SCARS.pileMax` Alloy.
+  Worth: a Worker's, Hauler's or warbot's 0.5, a Torch's (or anything else of two rounds of parts) 1, a Bulwark's,
+  vehicle's, train's, Crawler's or Howitzer's parts / 2 (at least 1.5), a building's 1 + its Alloy cost / 2 (a Command Base's 4 more, at most 6). An aircraft wreck
+  (`crashLand`, `S.wrecks`, drawn by `js/ambient.js`) gets a pile linked by `w`, worth parts / 2; cut up, the wreck goes.
+  Past the cap the smallest of the oldest forty piles joins its nearest neighbour within 3 tiles (`scrapSqueeze`). Built
+  over (a building, road, track or pipe), a pile goes (`scrapTidy`). Murmur creatures leave none (they take their dead),
+  ships sink. With scars on, `js/ambient.js` takes in no remains of robots and buildings (the scrap stands for them).
+- **Salvage** (`salvageRun`, last of `dispatch`'s jobs, every fourth round; `doSalvage`): an idle Hauler goes for a pile
+  on its colony's land with a whole Alloy in it and no enemy within `CRATE_SAFE`, from a road tile on its network within
+  `SALVAGE.reach` (2.5) tiles of it; it cuts for `SALVAGE.time` (5) s, takes the whole Alloy up to its load, and goes on to
+  storage as a crate run (`stats.salvaged` counts it). A cut pile keeps `cut` and is drawn stripped. The rival AI does the
+  same through the same dispatch.
+- **The Murmur** (`murmurGoals`, `murmurIndustry`): heaps of 6 Alloy or more in a 10-tile cell (`scrapHeaps`) are goals
+  for their tunnels, weighted like a building with charge (up to 2.5, below a Generator's 3); on Active an exit with 10
+  Alloy of scrap within 12 tiles adds a Scuttler (inside the usual caps). Deterministic, from `S` only.
+- **Animals and bones** (`S.bones`, at most `SCARS.bonesMax`). The fauna is scenery (`js/wildlife.js`), so the deaths
+  that leave bones are worked out by the simulation (`scarFauna`): each untouched open tile in a blast's reach (no scar,
+  road, building or deposit) had an animal on it with a chance of `SCARS.fauna` (more under trees, more near the middle,
+  every tile for a nuke); its bones (small, a deer's or a bison's size) stay. On screen, the animals on the ground in a
+  blast are killed (`faunaKilled`: gone at once), the ground the game counts as heavily scarred (`scarDead`) is no
+  habitat (`faunaBusy`), and the birdsong and insects thin out as the view fills with battlefield (`faunaScarred`, read by
+  `biomeCall` and the drone in `js/audio.js`).
+- **Saves and lockstep.** `crater` and `ash` are saved sparse (`SPARSE_LAYERS`: tile and value pairs), the lists as they
+  are; `checkSave` checks them all; `hashState` takes the blast count (`S.scarN`), every pile and the count of bones.
+  `scarLevel()` is 0 for Off (no layers: `S.crater` and `S.ash` are null).
+
 ## Project layout
 
 ```
