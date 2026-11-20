@@ -1142,7 +1142,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Fuel Tank** (`fueltank`: `tank: 120`, `store`, `explodes`; Gather tab, T; 5 Cement, 2 Alloy): the hub of an **oil
   bloc**. Storage for Crude and Fuel only (`storeTakes`: liquids, never past its cap, counting what's on the way:
   `tankRoom`; `storeAccepts` leaves it out, so no other good is ever sent there, and it takes no supply orders). A pump's
-  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank (both `explodes`). A line with a Fuel Tank
+  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank. It appears when there are new pipe tiles to plan and no adjacent Refinery or Fuel Tank to take Crude directly. A line with a Fuel Tank
   on it moves `PIPE_RATE_TANK` (8) Crude and 8 Fuel a second instead of 4, and fills its Fuel Tanks before other storage
   (`updatePipes`). It takes part in feed links (below): it feeds Crude, and Fuel, to up to `FEED_MAX_TANK` (4) neighbours
   that use them, and takes in by conveyor only what a neighbour makes (an Oil Pump's Crude, a Refinery's Fuel; a

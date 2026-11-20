@@ -6778,10 +6778,9 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
         <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
-    if (def.pump && b.built && b.owner === ME && !feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'))) {
-      const pr = pipeToRefinery(ME, b);
-      if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it in: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
-        <p class="hint">A pipeline to the nearest Refinery or Fuel Tank sends its Crude there every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
+    if (def.pump && b.built && b.owner === ME) {
+      html += '<div id="sh-pipe-offer" hidden><button class="btn" id="sh-pipe">Pipe it in</button>' +
+        '<p class="hint">A pipeline sends Crude to a Refinery or Fuel Tank without Tanker trips.</p></div>';
     }
     if (fuelUser(def) && b.built && b.owner === ME) {
       const pr = pipeToFuel(ME, b);
@@ -6877,7 +6876,8 @@ function openBuildingSheet(b) {
       if ($('sh-found')) $('sh-found').onclick = () => { const f = portFerry(b); if (!f) return; sfx('click'); startLanding(f, 0, 'port'); };
     }
     if ($('sh-pipe')) $('sh-pipe').onclick = () => {
-      $('sh-pipe').hidden = true;
+      $('sh-pipe-offer').hidden = $('sh-pipe').hidden = true;
+      delete $('sh-pipe-offer').dataset.tick;
       act('pipeToRefinery', [b.id], (r) => {
         if (r.why) { sfx('error'); toast(r.why, 'warn'); refreshSheet(); return; }
         const { n, owed } = r;
@@ -7050,6 +7050,14 @@ function refreshRoadLink(b) {
 }
 
 function refreshBuildingSheet(b) {
+  const pipeOffer = $('sh-pipe-offer');
+  if (pipeOffer && pipeOffer.dataset.tick !== String(Math.floor(S.tick / 30))) {
+    pipeOffer.dataset.tick = String(Math.floor(S.tick / 30));
+    const route = pipeToRefinery(ME, b);
+    pipeOffer.hidden = $('sh-pipe').hidden = !!route.why;
+    if (!route.why) $('sh-pipe').textContent = `Pipe it in: ${route.tiles.length} tile${route.tiles.length === 1 ? '' : 's'}, ${costText(route.cost)}`;
+  }
+
   const def = BDEFS[b.type];
   const mine = b.owner === ME;
   if (mine && def.terminal && b.built) renderTrade(b);
@@ -7122,7 +7130,10 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
       if (mine) {
         const joined = refineryPipes(ME), ns = buildingPipes(b);
-        parts.push(`<div class="kv"><span>Pipeline</span><span>${ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects'}</span></div>`);
+        const direct = feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'));
+        const link = direct ? 'Direct feed to a neighbour' : pumpFeedsNextDoor(b) ? 'Direct feed when the neighbour is built'
+          : ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects';
+        parts.push(`<div class="kv"><span>Crude delivery</span><span>${link}</span></div>`);
       }
       // (the bar stays while it waits, empty: the panel doesn't jump each time it starts and stops)
       if (mine) parts.push(`<div class="bar"><div style="width:${b.timer > 0 && /^Working/.test(b.status || '') ? Math.round((b.timer / def.work) * 100) : 0}%"></div></div>`);

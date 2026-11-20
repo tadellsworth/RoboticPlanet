@@ -13375,11 +13375,17 @@ function refineryPipes(owner) {
   return out;
 }
 
+/** A touching Refinery or Fuel Tank can take the pump's Crude directly once built. */
+function pumpFeedsNextDoor(b) {
+  return touching(b).some((c) => c.type === 'refinery' || BDEFS[c.type].tank);
+}
+
 /**
  * Pipe for building b (an Oil Pump) to the nearest Refinery: to a tile beside one, or to pipe already
  * joined to one. Returns { tiles (the new pipe to lay), cost } or { why } when there's no way (or no Refinery).
  */
 function pipeToRefinery(owner, b) {
+  if (pumpFeedsNextDoor(b)) return { why: 'A neighbouring Refinery or Fuel Tank takes Crude directly.' };
   const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
   if (!refs.length) return { why: 'Build a Refinery or a Fuel Tank first: the pipe runs from the pump to it.' };
   return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery or Fuel Tank.', 'No way to run pipe from here to a Refinery or Fuel Tank (water, rock or a rival\'s land in the way?).');
@@ -13419,9 +13425,11 @@ function pipeToward(owner, b, ends, joined, already, noWay) {
   const route = pipeRoute(owner, start, (t) => beside.has(t) || (S.pipe[t] === owner + 1 && joined.has(net.comp[t])), 80);
   if (!route) return { why: noWay };
   // No pipe under b itself unless it stands right beside the line's end, nor under the building it runs to.
-  const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(k === route.length - 1 && route.length > 1 && endAt.has(t)));
+  let tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(k === route.length - 1 && route.length > 1 && endAt.has(t)));
   // b right beside where it's going: one tile of pipe under it joins them.
   if (!tiles.length && !route.some((t) => S.pipe[t])) tiles.push(start);
+  tiles = tiles.filter((t) => S.pipePlan[t] !== owner + 1);
+  if (!tiles.length) return { why: 'This pipe route is already laid or planned.' };
   const cost = {};
   for (const t of tiles) { const c = pipeCost(t); for (const g in c) cost[g] = (cost[g] || 0) + c[g]; }
   for (const g in cost) cost[g] = Math.round(cost[g] * 100) / 100;
