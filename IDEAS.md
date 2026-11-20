@@ -36,6 +36,8 @@ README, War scars). Open:
 - Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
 - Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
   (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Burning oil wells (built Nov 2026) are looks only. A gameplay version (a burning well can't be rebuilt until it's put
+  out, a Worker or a new firefighting unit capping it; the smoke blinding turrets) was not asked for; the owner's call.
 - Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
 
 ## The owner's ideas, filed Nov 19 2026

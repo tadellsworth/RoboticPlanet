@@ -5302,7 +5302,7 @@ function collapseFx(b, burn) {
   const big = b.type === 'lander' ? 1.6 : 1, x = b.x + 0.5, y = b.y + 0.5;
   const h = (k) => hash2(b.x * 7 + k, b.y * 13, b.id);
   if (b.built && !BDEFS[b.type].viaduct && b.type !== 'ropeway') {
-    addFx('collapse', x, y, { btype: b.type, owner: b.owner, life: 1.5, aim: b.aim, s: big, lean: h(1) < 0.5 ? -1 : 1, t: burn ? -0.15 : 0 });
+    addFx('collapse', x, y, { btype: b.type, owner: b.owner, life: 1.5, aim: b.aim, s: big, lean: h(1) < 0.5 ? -1 : 1, t: burn ? -0.15 : 0, burn: !!burn }); // (burn: destroyed by force, not taken down: js/warfx.js sets an oil well alight)
   }
   addFx('dustcloud', x, y + 0.25 * big, { r: 0.9 * big, life: 2.2, t: burn ? -0.3 : 0, seed: b.id });
   if (burn) {
