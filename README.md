@@ -570,7 +570,19 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the banner (`maglevBendButtons`, `UI.ropeBends`; **Undo bend**); each straight stretch `seg` (3) to `max` tiles,
   `maxBent` (60) in all, turning at most `turn` (120°) at a bend; a bend is a pylon spot of its own on the bend tile
   (never shifted: blocked there, the line can't bend there); the line's cost and build time go by its length along the
-  bends. **Route with bends** (`magRouteBend`): a bend beside the straight way, or a jog of two, the shortest that
+  bends. **Edit bends** on a built line (a Terminal's panel, by each line: `openMagEdit`, `UI.magEdit`, `maglevEditTap`,
+  `maglevEditShow`; the `magRebend` order, `placeMagRebend`): pick a bend and put it elsewhere, Remove bend, add one by
+  tapping near the line (it goes on the stretch passing nearest), Straighten; checked as a new line is (`magEditCheck`,
+  the same messages). It's a construction job: a pylon site on the first new pylon spot (`s.magEdit`, `s.magFrom` the
+  key end, `s.magFar`, the new `s.magBends`/`s.magLayout`; the key end's `b.magEditSite`), built by a Worker at the key
+  Terminal, costing only the length added and each new pylon's footing (`MAGLEV.cost` a tile, and once a pylon); the
+  old guideway runs meanwhile (the new path drawn dashed with its progress). From 90% no pod sets out on the line or
+  passes through onto it (`magEditHold`) and the switch-over waits until none runs on it (`magEditBusy`), so no pod is
+  ever on a guideway that moves. At the switch-over (`magEditDone`, `magEditApply`) the pylons on the new path stay
+  (renumbered), new ones go up, the rest come down (`p.magGone`: not a cut), and they and any length taken off come
+  back as crates by the key Terminal, as a dismantled building's goods do; a repair under way is called off; a lost
+  Terminal at either end calls the job off. With no new pylon needed (a bend taken out, say) it's done at once.
+  **Route with bends** (`magRouteBend`): a bend beside the straight way, or a jog of two, the shortest that
   works, offered first when a straight line can't go (blocked, or 40 to 60 tiles). **Route via a hub** (`magRouteVia`, `magRouteWhy`, `placeMagRoute`; the `magLine` order with the
   hub's tile): where a straight line can't go (a blocked stretch, or more than `max` tiles, up to twice that), the tool
   looks along and beside the straight line for the shortest pair of lines through a new hub Terminal and offers it; the

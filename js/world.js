@@ -5411,6 +5411,8 @@ function checkSave(o) {
     // a hub's other lines (Terminal ids), a line site's key end, and the next line a hub's site carries on to
     if (b.magMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMore) || b.magMore.length >= MAGLEV.hub || !b.magMore.every((id) => Number.isSafeInteger(id) && id > 0))) bad();
     if (b.magKey != null && !(Number.isSafeInteger(b.magKey) && b.magKey > 0)) bad();
+    for (const k of ['magEditSite', 'magFar']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad(); // (a bends edit: the key Terminal's site, the site's far end)
+    if (b.magEdit != null && !(b.type === 'magpylon' && (b.magEdit === 1 || b.magEdit === true))) bad();
     if (b.magNext != null && !(b.type === 'magterm' && Array.isArray(b.magNext) && b.magNext.length === 2 && Number.isInteger(b.magNext[0]) && Number.isInteger(b.magNext[1]) && b.magNext[0] >= 0 && b.magNext[0] < o.W && b.magNext[1] >= 0 && b.magNext[1] < o.H)) bad();
     if (b.magLayout != null && !layoutOk(b.magLayout)) bad();
     if (b.magBends != null && !(BDEFS[b.type] && (BDEFS[b.type].magterm || BDEFS[b.type].pylon) && bendsOk(b.magBends))) bad(); // (a line's bends: on its key Terminal, or its site)

@@ -101,6 +101,17 @@ const ORDERS = {
     if (bends != null && !(Array.isArray(bends) && bends.length <= MAGLEV.bends && bends.every((q) => Array.isArray(q) && q.length === 2))) return { ok: false, reason: 'Those bends can\'t be had.' };
     return placeMagLine(p, b, bi | 0, bj | 0, (bends || []).map((q) => [q[0] | 0, q[1] | 0]));
   },
+  /**
+   * Change the bends of the Maglev line from Terminal `id` to Terminal `to` (both p's, joined) to `bends` (tiles in
+   * order from `id`, up to MAGLEV.bends; [] for a straight line): a construction job, paid for the length and pylons
+   * added, what's taken down coming back as crates. { ok, reason, id } (the job's site, 0 if done at once).
+   */
+  magRebend(p, id, to, bends) {
+    const b = ownB(p, id), o = ownB(p, to);
+    if (!b || !o) return { ok: false, reason: 'That Maglev Terminal is gone.' };
+    if (!(Array.isArray(bends) && bends.length <= MAGLEV.bends && bends.every((q) => Array.isArray(q) && q.length === 2))) return { ok: false, reason: 'Those bends can\'t be had.' };
+    return placeMagRebend(p, b, o, bends.map((q) => [q[0] | 0, q[1] | 0]));
+  },
   /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
   mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
   airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)

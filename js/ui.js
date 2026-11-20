@@ -4375,7 +4375,7 @@ function renderMagSection(b) {
   const ps = magPartners(b), net = ps.length ? magNet(b) : [b], site = magPending(b), miss = magMiss(b);
   const pods = ps.length ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id);
   const lines = ps.map((o) => { const K = magKey(b, o); return { o, cut: magPairCut(b, o), powered: magPairPowered(b, o), fix: K.magFix }; });
-  const sig = JSON.stringify([lines.map((l) => [l.o.id, l.cut, l.powered, l.fix && l.fix.u, l.fix && l.fix.paid, magPowered(l.o)]), net.length, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, miss, b.magRelay, magPowered(b), flareOn(), b.auto, b.autoOff, sumValues(b.inc), magSlots(b), b.magThrough || 0]);
+  const sig = JSON.stringify([lines.map((l) => [l.o.id, l.cut, l.powered, l.fix && l.fix.u, l.fix && l.fix.paid, magPowered(l.o), (() => { const es = magEditSiteOf(b, l.o); return es ? Math.round(es.progress * 100) : -1; })()]), net.length, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, miss, b.magRelay, magPowered(b), flareOn(), b.auto, b.autoOff, sumValues(b.inc), magSlots(b), b.magThrough || 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let h = '';
@@ -4386,6 +4386,9 @@ function renderMagSection(b) {
     for (const l of lines) {
       const state = l.cut ? '<span class="err">Cut: a pylon is down</span>' : l.powered ? 'Powered: pods run at speed' : '<span class="err">Unpowered: pods crawl</span>';
       h += `<div class="kv"><span>${ps.length === 1 ? 'Line' : `Line ${dirText(b, l.o)}`}</span><span>${state}</span></div>`;
+      const es = magEditSiteOf(b, l.o);
+      h += es ? `<div class="kv"><span>New bends going up</span><span>${Math.round(es.progress * 100)}%${es.progress >= 0.9 ? ' (pods held at the Terminals)' : ''}</span></div>`
+        : `<div class="kv"><span></span><span><button class="btn small" data-edit="${l.o.id}">Edit bends</button></span></div>`;
     }
     const cut = lines.find((l) => l.cut);
     if (cut) h += `<p class="hint">${cut.fix && cut.fix.u ? 'A Worker is riding out to rebuild the pylon.' : cut.fix && !cut.fix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods keep off that line until then.</p>`;
@@ -4434,6 +4437,7 @@ function renderMagSection(b) {
     });
   };
   if ($('sh-magline')) $('sh-magline').onclick = () => { sfx('click'); openMaglevFrom(b); };
+  for (const btn of el.querySelectorAll('button[data-edit]')) btn.onclick = () => { const o = getE(+btn.dataset.edit); if (o && !o.dead) { sfx('click'); openMagEdit(b, o); } };
   for (const btn of el.querySelectorAll('button[data-pod]')) btn.onclick = () => { const u = getE(+btn.dataset.pod); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
 }
 
@@ -4441,7 +4445,7 @@ function renderMagSection(b) {
 function openMaglevFrom(b) {
   closeSheet();
   enterPlaceMode('maglev');
-  UI.ropeA = { i: b.x, j: b.y, id: b.id }; UI.ropeBends = [];
+  UI.ropeA = { i: b.x, j: b.y, id: b.id }; UI.ropeBends = []; UI.magEdit = null;
   R.overlay = null;
   showBanner(maglevFarText(b), null, 'Cancel');
 }
@@ -4502,7 +4506,7 @@ function maglevTap(i, j) {
     const why = !b || b.owner !== ME || !BDEFS[b.type].magterm ? 'Tap one of your Maglev Terminals (highlighted) for the near end.' : !b.built ? 'That Terminal is still going up: the line starts from a finished one.'
       : magPending(b) ? 'That Terminal\'s line is still going up.' : b.magFrom ? 'A line is coming to that Terminal already.' : magSlots(b) >= MAGLEV.hub && !b.magMissing ? `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.` : '';
     if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
-    UI.ropeA = { i, j, id: b.id }; UI.ropeBends = [];
+    UI.ropeA = { i, j, id: b.id }; UI.ropeBends = []; UI.magEdit = null;
     R.overlay = null; R.ghost = null;
     sfx('click');
     showBanner(maglevFarText(b), null, 'Cancel');
@@ -4510,6 +4514,7 @@ function maglevTap(i, j) {
   }
   const A = getE(UI.ropeA.id);
   if (!A || A.dead) { setMode('normal'); return; }
+  if (UI.magEdit) { maglevEditTap(A, i, j); return; }
   UI.ropeBends = UI.ropeBends || [];
   if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.ok && ((R.ropeEnd.i === i && R.ropeEnd.j === j) || (R.ropeEnd.via && R.ropeEnd.via.i === i && R.ropeEnd.via.j === j) || (R.ropeEnd.snapFrom === tIdx(i, j)))) { confirmBanner(); return; }
   let E = maglevPreview(i, j, true), note = '';
@@ -4556,6 +4561,64 @@ function maglevTap(i, j) {
   const nb = E.bends.length, extra = [nb ? `bending ${nb === 1 ? 'once' : `${nb} times`}` : '', gaps ? `${gaps} gap${gaps > 1 ? 's' : ''} spanned` : '', roads ? `${roads} over a road or track` : '', moved ? `${moved} shifted a tile` : ''].filter(Boolean).join(', ');
   showBanner(`${note}A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}${magPartners(A).length || (far && magPartners(far).length) ? ': a hub, pods carry on through it' : ''}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})${bendBtns}`, 'Build', 'Cancel');
   maglevBendWire(A, i, j);
+}
+
+/*
+ * Edit bends (a Terminal's panel, for one of its lines): the Maglev tool on that line, its bends in order from the
+ * Terminal (UI.ropeBends), UI.magEdit { to: the other Terminal, sel: the bend picked to move, or -1 }. Tap a bend to
+ * pick it, then tap where it goes (or Remove bend); tap a spot near the line to add a bend there; Straighten takes them
+ * all away. The preview and the banner check it as placing a line does (magEditCheck); Build sends the magRebend order.
+ */
+function openMagEdit(b, o) {
+  closeSheet();
+  enterPlaceMode('maglev');
+  const K = magKey(b, o), kb = (K.magBends || []).map((q) => q.slice());
+  UI.ropeA = { i: b.x, j: b.y, id: b.id };
+  UI.ropeBends = K === b ? kb : kb.reverse();
+  UI.magEdit = { to: o.id, sel: -1 };
+  R.overlay = null;
+  maglevEditShow();
+}
+
+/** The edit's preview (R.ropeEnd, to the other Terminal) and its banner, with `note` first. */
+function maglevEditShow(note) {
+  const A = getE(UI.ropeA && UI.ropeA.id), O = getE(UI.magEdit && UI.magEdit.to);
+  if (!A || !O || A.dead || O.dead) { setMode('normal'); return; }
+  const bends = UI.ropeBends, chk = magEditCheck(ME, A, O, bends), sel = UI.magEdit.sel;
+  R.ropeEnd = { i: O.x, j: O.y, ok: !chk.why, why: chk.why, spots: chk.spots, far: O.id, tapped: true, bends, L: chk.L, edit: chk };
+  const n = bends.length;
+  let h = note ? `${note} ` : '';
+  h += sel >= 0 ? `<b>Bend ${sel + 1}</b> picked: tap where it goes, or remove it.` : `<b>Editing this line's bends</b> (${n} now): tap a bend to move it, or a spot near the line to add one (up to ${MAGLEV.bends}).`;
+  if (chk.why) h += ` <span class="err">${chk.why}</span>`;
+  else {
+    const back = Object.keys(chk.refund).filter((g) => chk.refund[g] >= 1);
+    h += ` A ${Math.round(chk.L)}-tile line, ${chk.fresh.length} new pylon${chk.fresh.length === 1 ? '' : 's'}${chk.added ? `, ${chk.added} tile${chk.added === 1 ? '' : 's'} longer` : chk.cut ? `, ${chk.cut} tile${chk.cut === 1 ? '' : 's'} shorter` : ''}: ${chk.fresh.length || chk.added ? costInline(chk.cost, playerGoods(ME)) : 'nothing to pay'}${back.length ? `; back as crates: ${costText(chk.refund)}` : ''}. A Worker builds it from the Terminal; the old guideway runs until it's done (the pods wait at the Terminals for the switch-over).`;
+  }
+  h += ` <span class="mag-bends">${sel >= 0 ? '<button class="btn small" id="mag-rmbend">Remove bend</button>' : ''}${n ? ' <button class="btn small ghost" id="mag-straight">Straighten</button>' : ''}</span>`;
+  showBanner(h, chk.why ? null : 'Build', 'Cancel');
+  if ($('mag-rmbend')) $('mag-rmbend').onclick = () => { sfx('click'); UI.ropeBends.splice(UI.magEdit.sel, 1); UI.magEdit.sel = -1; maglevEditShow(); };
+  if ($('mag-straight')) $('mag-straight').onclick = () => { sfx('click'); UI.ropeBends = []; UI.magEdit.sel = -1; maglevEditShow(); };
+}
+
+/** A tap while editing bends: pick a bend, put the picked one down, or add one where the line runs nearest. */
+function maglevEditTap(A, i, j) {
+  const E = UI.magEdit, bends = UI.ropeBends, O = getE(E.to);
+  if (!O) { setMode('normal'); return; }
+  const at = bends.findIndex(([x, y]) => x === i && y === j);
+  if (at >= 0) { sfx('click'); E.sel = E.sel === at ? -1 : at; maglevEditShow(); return; }
+  if (E.sel >= 0) { sfx('click'); bends[E.sel] = [i, j]; E.sel = -1; maglevEditShow(); return; }
+  if (bends.length >= MAGLEV.bends) { sfx('error'); maglevEditShow(`<span class="err">A line bends at ${MAGLEV.bends} pylons at most.</span>`); return; }
+  // where the new bend goes in the list: on the stretch passing nearest the tap
+  const pts = [[A.x, A.y], ...bends, [O.x, O.y]];
+  let best = 0, bd = Infinity;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L2 = dist2(ax, ay, bx, by) || 1e-9, f = clamp(((i - ax) * (bx - ax) + (j - ay) * (by - ay)) / L2, 0, 1);
+    const d = dist2(ax + (bx - ax) * f, ay + (by - ay) * f, i, j);
+    if (d < bd) { bd = d; best = k - 1; }
+  }
+  sfx('click');
+  bends.splice(best, 0, [i, j]);
+  maglevEditShow();
 }
 
 /* ------------------------------------------------------------------ Mooring Masts and Airships */
@@ -5232,6 +5295,18 @@ function confirmBanner() {
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
   if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
+  if (R.mode === 'place' && UI.placeType === 'maglev' && UI.magEdit && UI.ropeA) {
+    const A = UI.ropeA, E = R.ropeEnd, to = UI.magEdit.to;
+    if (!E || !E.ok) return;
+    act('magRebend', [A.id, to, UI.ropeBends.map((q) => q.slice())], (res) => {
+      if (!res.ok) { sfx('error'); maglevEditShow(`<span class="err">${res.reason}</span>`); return; }
+      sfx('place'); haptic('order');
+      toast(res.id ? 'New bends planned: a Worker builds them from the Terminal; the line runs as it is until they\'re done.' : 'The line\'s bends are changed.', 'good');
+      UI.magEdit = null;
+      setMode('normal');
+    });
+    return;
+  }
   if (R.mode === 'place' && UI.placeType === 'maglev') {
     const A = UI.ropeA, E = R.ropeEnd;
     if (!A || !E || !E.ok) return;
