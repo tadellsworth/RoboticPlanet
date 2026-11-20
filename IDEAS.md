@@ -43,6 +43,7 @@ README, War scars). Open:
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
+  In the Missions revamp, also bring the long mission texts within the static test's limits (goals of 40 characters, intros of 5 lines): Arterial's goals, Maglev's hub goal and intro, and the older Blacktop and Lance ones (the owner, Nov 20).
 
 - **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
 - **Road crews (built Nov 20; open questions).** At most 3 Workers lay planned road at once (Road crew 2, 3, 5 or No
