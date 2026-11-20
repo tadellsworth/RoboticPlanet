@@ -1964,7 +1964,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     build). Its panel's **Aim the Lance**, then a tap anywhere (the `lanceAim` order, `setLanceAim`; `lanceStop` stands
     it down): it charges for `LANCE.charge` (90) s and fires. Power (`lancePower`): `LANCE.gens` (2) Generators with
     Fuel within `LANCE.reach` (4) tiles of its square (`megaGens`), each burning a Fuel every `genFuel` (30) s while it
-    charges, or a Nuclear Reactor there with `uranium` (2) Uranium in it, taken as the charge starts; losing that power
+    charges, or a Nuclear Reactor there with `uranium` (2) Uranium or an Enriched Uranium in it (`reactorCharge`), taken as the charge starts; losing that power
     mid-charge loses the charge (`lanceStillPowered`). While it charges its owner's lights dim and factories work `slow`
     (a third) slower (`lanceDim`, `P.dimUntil`), every player is told, and a hum rises (`lanceHum` in `js/audio.js`); the
     Murmur are drawn to it (`chargeWorth` 6, `murmurPower`). A dust storm holds the shot. The beam (`lanceFire`,
@@ -1988,10 +1988,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     −2), +1 for the Lance when its enemy's buildings lie strung out (the best line through them takes 2 or more more than
     the best blast), −1 when they're bunched, +1 when the enemy has a Shield Dome (it swallows a nuke whole), +1 when
     Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. Its Lance
-    goes within reach of its Reactor (`aiMegaSpot`) and fires along the line through a foe building worth the most
-    (`aiLanceWorth`: its foes' buildings and army, its own side's six times over), if worth `worth` (6). From `domeAt`
+    goes within reach of its Reactor, on the enemy's side of it so its own buildings stay off its lines (`aiMegaSpot`;
+    with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
+    (`aiLanceWorth`: its foes' buildings and army, its own side's six times over, 5 for dropping a foe's Dome), if worth
+    `worth` (6). From `domeAt`
     (20 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
-    Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base, if it can afford it; its
+    Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base (a Generator first if it has none),
+    once it has half of either one's cost in hand (`aiHalfway`: the site fills as the rest comes in, and is never given
+    up); its
     Missiles and nukes pass over targets under a foe's Dome (`aiDomed`).
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
   gives 2× and 3×.

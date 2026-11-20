@@ -898,7 +898,7 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * Missile floor), every robot on it dies, whosever it is, Walls are breached, water boils to steam, and a scorched
  * trench is carved for good (S.cuts; on War scars the ground under it burns to ash and the animals there die). It fires
  * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
- * each while it charges, or a Nuclear Reactor there with `uranium` Uranium in it (taken as the charge starts). While it
+ * each while it charges, or a Nuclear Reactor there with `uranium` Uranium (or an Enriched Uranium) in it, taken as the charge starts. While it
  * charges its colony's lights dim and its factories work `slow` slower; wreck its power and the charge is lost. A dust
  * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. A
  * Shield Dome on the line takes the whole shot and drops. Charging draws the Murmur (chargeWorth). Not in the Hollow
@@ -1219,7 +1219,7 @@ const BDEFS = {
   // square of foot x foot tiles from its own tile, east and south: footTiles).
   lance: {
     name: 'Lance of Corvane', short: 'Lance',
-    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything on the line is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium in it (it holds up to 3). Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
+    desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything on the line is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
     cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 240, war: true,
   },
   dome: {

@@ -7211,7 +7211,7 @@ function refreshBuildingSheet(b) {
       const pw = lancePower(b), gens = megaGens(b, LANCE.reach).length, rx = lanceReactor(b);
       if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / LANCE.charge) * 100)}%${b.lCharge >= LANCE.charge ? ' (ready to fire)' : `, fires in ${fmtSecs(LANCE.charge - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / LANCE.charge) * 100)}%;background:#ff6a3a"></div></div>`);
       if (mine) {
-        parts.push(`<div class="kv"><span>Power</span><span>${b.lOn ? (b.lSrc === 'reactor' ? 'Nuclear Reactor' : `${gens} Generator${gens === 1 ? '' : 's'}, burning Fuel fast`) : pw === 'gen' ? `${gens} Generators with Fuel in reach` : pw === 'reactor' ? 'Nuclear Reactor in reach' : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium` : ''}`}</span></div>`);
+        parts.push(`<div class="kv"><span>Power</span><span>${b.lOn ? (b.lSrc === 'reactor' ? 'Nuclear Reactor' : `${gens} Generator${gens === 1 ? '' : 's'}, burning Fuel fast`) : pw === 'gen' ? `${gens} Generators with Fuel in reach` : pw === 'reactor' ? 'Nuclear Reactor in reach' : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium and no Enriched Uranium` : ''}`}</span></div>`);
         parts.push(`<div class="kv"><span>Reload</span><span>${b.lReload > 0 ? fmtSecs(b.lReload) : 'Ready'}</span></div>`);
         parts.push(`<div class="kv"><span>Charge · reload</span><span>${LANCE.charge} s · ${Math.round(LANCE.reload / 60)} min</span></div>`);
       }

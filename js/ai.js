@@ -395,7 +395,8 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield' || BDEFS[b.type].mega) && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield') && S.time - b.born < 420) continue; // saved up for: give it time
+      if (BDEFS[b.type].mega) continue; // (a megastructure is saved up for as long as it takes: see aiMega)
       const cost = siteCost(b);
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -1950,9 +1951,10 @@ function aiFlood(p, from, seen, bottom, early) {
  * nukes (aiMegaPick, kept in P.megaPick); with the Lance it builds no Nuclear Silo, puts the Lance up within reach of
  * its Reactor, and fires it along the line that takes the most of its enemies' (aiLanceAim, at least `worth`). From
  * `domeAt` s (sooner once a foe's Lance is going up), a rival threatened from afar (a foe with a Lance, a Missile or
- * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base, if it can afford it.
+ * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
+ * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5 };
+const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20 };
 /** How each doctrine leans between the Lance (more) and the nukes (less): the Architect builds, the Herald strikes. */
 const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2 };
 
@@ -1990,7 +1992,7 @@ function aiMegaPick(p) {
 
 /** Does p have a Reactor and Uranium to feed it (a Mine on a deposit, or AI_MEGA.uranium in hand)? */
 function aiUraniumFed(p, me) {
-  return me.some((b) => b.built && b.type === 'reactor') && (goodTotal(p, 'uranium') >= AI_MEGA.uranium ||
+  return me.some((b) => b.built && b.type === 'reactor') && (goodTotal(p, 'uranium') + 2 * goodTotal(p, 'fissile') >= AI_MEGA.uranium ||
     me.some((b) => b.built && b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0));
 }
 
@@ -2001,16 +2003,25 @@ function aiMega(p, me, lander, canBuild) {
   // The choice, once it has a Reactor fed with Uranium, late in the game.
   if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance')) P.megaPick = aiMegaPick(p);
   const lance = me.find((b) => b.type === 'lance');
-  if (P.megaPick === 'lance' && !lance && canBuild && aiAffordable(p, 'lance')) {
-    const R = me.find((b) => b.built && b.type === 'reactor');
-    const spot = R && aiMegaSpot(p, 'lance', [R], LANCE.reach, lander);
+  // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
+  // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
+  if (P.megaPick === 'lance' && !lance && canBuild && aiHalfway(p, 'lance') && S.time - (P.lanceLook ?? -999) >= AI_MEGA.look) {
+    P.lanceLook = S.time;
+    const Rs = me.filter((b) => b.built && b.type === 'reactor');
+    const spot = aiMegaSpot(p, 'lance', Rs, LANCE.reach, lander, 1) || aiMegaSpot(p, 'lance', [lander], 12, lander, 1);
     if (spot) placeSite(p, 'lance', spot[0], spot[1]);
+  }
+  if (lance && lance.built && P.megaPick === 'lance' && !lanceReactor(lance) && megaGens(lance, LANCE.reach).length < LANCE.gens && canBuild && nukeOn() &&
+    !me.some((b) => !b.built && b.type === 'reactor') && aiAffordable(p, 'reactor') && S.time - (P.lanceLook ?? -999) >= AI_MEGA.look) {
+    P.lanceLook = S.time;
+    const spot = aiMegaSpot(p, 'reactor', [lance], LANCE.reach, lander, -1);
+    if (spot) placeSite(p, 'reactor', spot[0], spot[1]);
   }
   if (lance && lance.built && S.time - (P.lanceT || -99) >= AI_MEGA.think) { P.lanceT = S.time; aiLanceAim(p, lance); }
   // The Dome: threatened from afar, late in the game (or by a Lance at any time), and within its means.
   const foeHas = (f) => S.buildings.some((b) => !b.dead && b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner) && f(b));
   const lanceUp = foeHas((b) => BDEFS[b.type].lance);
-  if (!me.some((b) => b.type === 'dome') && canBuild && (lanceUp || S.time >= AI_MEGA.domeAt) && aiAffordable(p, 'dome')) {
+  if (!me.some((b) => b.type === 'dome') && canBuild && (lanceUp || S.time >= AI_MEGA.domeAt) && aiHalfway(p, 'dome')) {
     const threat = lanceUp || foeHas((b) => BDEFS[b.type].missile || BDEFS[b.type].nukeSilo || BDEFS[b.type].airfield) ||
       S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].bomber);
     const gens = me.filter((b) => b.built && b.type === 'generator');
@@ -2027,15 +2038,28 @@ function aiMega(p, me, lander, canBuild) {
   }
 }
 
-/** A spot for megastructure `type` of p's within `reach` of one of `near` (its power), as close to its Command Base as can be. */
-function aiMegaSpot(p, type, near, reach, lander) {
-  const F = BDEFS[type].foot;
+/** Has p half of everything a `type` costs in hand (a megastructure's site then fills as the rest comes in)? */
+function aiHalfway(p, type) {
+  const have = playerGoods(p), cost = BDEFS[type].cost;
+  for (const g in cost) if ((have[g] || 0) < cost[g] / 2) return false;
+  return true;
+}
+
+/**
+ * A spot for megastructure `type` of p's within `reach` of one of `near` (its power), as close to its Command Base as can
+ * be. `front` 1: rather on the enemy's side of what it's near (a Lance in front of its Reactor, so its own buildings
+ * aren't on its lines of fire); -1: rather behind it (a Reactor behind its Lance).
+ */
+function aiMegaSpot(p, type, near, reach, lander, front) {
+  const F = BDEFS[type].foot || 1, E = front ? getE(S.players[rivalOf(p)] && S.players[rivalOf(p)].lander) : null;
+  const eu = E ? (() => { const dx = E.x - lander.x, dy = E.y - lander.y, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; })() : null;
   let best = null, bs = Infinity;
   for (const n of near) {
     for (let j = n.y - reach - F; j <= n.y + reach; j++) for (let i = n.x - reach - F; i <= n.x + reach; i++) {
       if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
-      if (footDist({ type, x: i, y: j }, n.x + 0.5, n.y + 0.5) > reach) continue;
-      const s = dist(i + F / 2, j + F / 2, lander.x + 0.5, lander.y + 0.5);
+      if (BDEFS[n.type].foot ? footDist(n, i + F / 2, j + F / 2) - F / 2 > reach : footDist({ type, x: i, y: j }, n.x + 0.5, n.y + 0.5) > reach) continue;
+      let s = dist(i + F / 2, j + F / 2, lander.x + 0.5, lander.y + 0.5);
+      if (eu) { const nc = BDEFS[n.type].foot ? bCentre(n) : { x: n.x + 0.5, y: n.y + 0.5 }, vx = i + F / 2 - nc.x, vy = j + F / 2 - nc.y, l = Math.hypot(vx, vy) || 1; s -= front * 8 * (vx * eu[0] + vy * eu[1]) / l; }
       if (s >= bs || !canPlace(p, type, i, j).ok) continue;
       bs = s; best = [i, j];
     }
@@ -2061,7 +2085,7 @@ function aiLanceWorth(p, b, L) {
     if (along < 1.2 || along > L.len || Math.abs(fx * L.uy - fy * L.ux) > LANCE.width / 2 + 0.2) continue;
     s += foes(u.owner, p) ? (isArmy(u) ? 0.6 : 0.3) : -1;
   }
-  if (L.dome) s += 3; // (it drops their Dome, for the next one)
+  if (L.dome) s += 5; // (it drops their Dome for a minute: their base open to the next bombardment, and to a ground assault)
   return s;
 }
 

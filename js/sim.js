@@ -16150,30 +16150,33 @@ function megaGens(b, reach) {
   return out;
 }
 
-/** A Nuclear Reactor of b's owner within LANCE.reach of it (built, on), the one with the most Uranium; or null. */
+/** How many charges Reactor r holds for the Lance: LANCE.uranium Uranium, or an Enriched Uranium, makes one. */
+function reactorCharge(r) { return Math.floor((r.stock.uranium || 0) / LANCE.uranium) + (r.stock.fissile || 0); }
+
+/** A Nuclear Reactor of b's owner within LANCE.reach of it (built, on), the one with the most to give; or null. */
 function lanceReactor(b) {
   let best = null;
   for (const r of S.buildings) {
     if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
     if (footDist(b, r.x + 0.5, r.y + 0.5) > LANCE.reach + 0.5) continue;
-    if (!best || (r.stock.uranium || 0) > (best.stock.uranium || 0)) best = r;
+    if (!best || reactorCharge(r) > reactorCharge(best)) best = r;
   }
   return best;
 }
 
-/** What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium in it), or ''. */
+/** What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium Uranium or an Enriched Uranium in it), or ''. */
 function lancePower(b) {
   if (murmurCutOn(b)) return '';
   if (megaGens(b, LANCE.reach).length >= LANCE.gens) return 'gen';
   const r = lanceReactor(b);
-  return r && (r.stock.uranium || 0) >= LANCE.uranium ? 'reactor' : '';
+  return r && reactorCharge(r) > 0 ? 'reactor' : '';
 }
 
 /** Why Lance b can't start a charge now ('' if it can). */
 function lanceBlocked(b) {
   if (!b || b.dead || !b.built) return 'The Lance is not built yet.';
   if (b.lReload > 0) return `Reloading: it can charge again in ${fmtSecs(b.lReload)}.`;
-  if (!lancePower(b)) return `No power: it needs ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor there with ${LANCE.uranium} Uranium in it.`;
+  if (!lancePower(b)) return `No power: it needs ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor there with ${LANCE.uranium} Uranium (or an Enriched Uranium) in it.`;
   return '';
 }
 
@@ -16207,8 +16210,8 @@ function lanceStart(b) {
   const src = lancePower(b);
   b.lOn = 1; b.lCharge = 0; b.lSrc = src;
   if (src === 'reactor') {
-    const r = lanceReactor(b);
-    bump(r.stock, 'uranium', -LANCE.uranium); usedGood(b.owner, 'uranium', LANCE.uranium);
+    const r = lanceReactor(b), g = (r.stock.uranium || 0) >= LANCE.uranium ? 'uranium' : 'fissile', n = g === 'uranium' ? LANCE.uranium : 1;
+    bump(r.stock, g, -n); usedGood(b.owner, g, n);
     b.lReactor = r.id;
   } else b.lReactor = 0;
   const c = bCentre(b);
@@ -16245,7 +16248,7 @@ function updateLance(b, dt) {
   }
   if (!b.lOn) {
     b.working = false;
-    b.status = b.lReload > 0 ? `Reloading: ready to charge in ${fmtSecs(b.lReload)}` : lancePower(b) ? 'Ready: tap Aim, then a spot on the map' : `No power: ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor with ${LANCE.uranium} Uranium`;
+    b.status = b.lReload > 0 ? `Reloading: ready to charge in ${fmtSecs(b.lReload)}` : lancePower(b) ? 'Ready: tap Aim, then a spot on the map' : `No power: ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor with ${LANCE.uranium} Uranium or an Enriched Uranium`;
     return;
   }
   if (!lanceStillPowered(b)) {

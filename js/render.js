@@ -10002,10 +10002,17 @@ function drawDomes(ctx, ox, oy, z, inView) {
 function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
   const L = lanceLine(b, i + 0.5, j + 0.5);
   ctx.save();
-  ctx.strokeStyle = bright ? 'rgba(255,70,50,0.95)' : 'rgba(255,90,70,0.6)';
-  ctx.lineWidth = Math.max(2, z * (bright ? 0.14 : 0.08));
-  ctx.setLineDash([z * 0.6, z * 0.3]); ctx.lineDashOffset = -R.time * z * 2;
-  ctx.beginPath(); ctx.moveTo(ox + L.x0 * z, oy + L.y0 * z); ctx.lineTo(ox + L.x1 * z, oy + L.y1 * z); ctx.stroke();
+  const x0 = ox + L.x0 * z, y0 = oy + L.y0 * z, x1 = ox + L.x1 * z, y1 = oy + L.y1 * z;
+  // the corridor it burns (a translucent red band as wide as the beam), a dark edge for contrast, the dashed line on top
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = bright ? 'rgba(255,50,30,0.2)' : 'rgba(255,60,40,0.1)'; ctx.lineWidth = Math.max(4, z * (LANCE.width + 0.7));
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = 'rgba(30,8,4,0.55)'; ctx.lineWidth = Math.max(4, z * (bright ? 0.2 : 0.12)) + 2;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = bright ? 'rgba(255,80,60,1)' : 'rgba(255,100,80,0.75)';
+  ctx.lineWidth = Math.max(3, z * (bright ? 0.2 : 0.12));
+  ctx.setLineDash([Math.max(10, z * 0.6), Math.max(6, z * 0.3)]); ctx.lineDashOffset = -R.time * Math.max(20, z * 2);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.setLineDash([]);
   if (bright) {
     // what it would hit: every building on the line ringed red (yours amber)
@@ -10016,7 +10023,7 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
       seen.add(e);
       const p = bCentre(e), F = BDEFS[e.type].foot || 1;
       ctx.strokeStyle = e.owner === b.owner || allies(e.owner, b.owner) ? '#ffcf4a' : '#ff4b4b';
-      ctx.lineWidth = Math.max(2, z * 0.07);
+      ctx.lineWidth = Math.max(2.5, z * 0.1);
       ctx.strokeRect(ox + (p.x - F / 2) * z + 2, oy + (p.y - F / 2) * z + 2, F * z - 4, F * z - 4);
     }
     if (L.dome) { const c = bCentre(L.dome); ctx.strokeStyle = '#9fd8ff'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, DOME.radius * z, 0, Math.PI * 2); ctx.stroke(); }
