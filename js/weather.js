@@ -317,19 +317,15 @@ function wxFog(ctx, W, night, camX, camY) {
   }
   ctx.globalAlpha = 1;
   if (!night || biome() === 'springs') return;
-  // The fog's own fireflies, scattered through it: the wildlife's warm sprites (faunaFlySprites), slow and out of step.
-  if (typeof faunaFlySprites !== 'function') return;
-  const spr = faunaFlySprites();
   ctx.globalCompositeOperation = 'lighter';
   for (let n = 0, N = wxCount(110); n < N; n++) {
-    const h1 = hash2(n, 73, 91), h2 = hash2(n, 79, 93), per = 2.8 + h2 * 3.2, ph = ((t + h1 * 10) / per) % 1;
-    const blink = 0.12 + 0.88 * (ph < 0.2 ? Math.sin((ph / 0.2) * Math.PI) ** 2 : 0);
-    const x = wxWrap(h1 * cw + Math.sin(t * 0.3 + n) * 30 - camX, cw, 20), y = wxWrap(h2 * ch + Math.cos(t * 0.25 + n * 2) * 20 - camY, ch, 20);
-    ctx.globalAlpha = 0.8 * blink * k;
-    if (blink > 0.3) ctx.drawImage(spr.halo, x - 9, y - 9, 18, 18);
-    ctx.drawImage(spr.core, x - 2.5, y - 2.5, 5, 5);
+    const h1 = hash2(n, 73, 91), h2 = hash2(n, 79, 93), blink = Math.max(0, Math.sin(t * (1.6 + h2 * 2) + n * 1.7));
+    if (blink < 0.2) continue;
+    const x = wxWrap(h1 * cw + Math.sin(t * 0.5 + n) * 30 - camX, cw, 20), y = wxWrap(h2 * ch + Math.cos(t * 0.4 + n * 2) * 20 - camY, ch, 20);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 6);
+    g.addColorStop(0, `rgba(220,255,120,${0.9 * blink * k})`); g.addColorStop(1, 'rgba(160,255,80,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - 6, y - 6, 12, 12);
   }
-  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
 }
 

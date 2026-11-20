@@ -1869,13 +1869,3 @@ Deer have a high, slender neck, articulated legs, pale rump and occasional branc
 a heavy shoulder, lower rump, mane, hooked horns and dark hooves. The game draws these shapes and their gait
 from `js/wildlife.js`. Blackwater adds plated alligator backs and domed turtle shells. The Bloom uses folding
 shell plates, vane-headed runners and triangular sailwings in place of the drifting bells.
-
-### Fireflies (drawn in code; no images)
-
-The Forest's and Blackwater's fireflies are drawn in code (`faunaFireflies` in `js/wildlife.js`), as loose swarms of
-seven to sixteen lights over the water's edge, the tree edges and the grass, never on or beside roads, track or
-buildings. Each light is two soft sprites made once (`faunaFlySprites`): a warm yellow-green core (pale cream at the
-centre, about `#f0ff8c`) and a wide faint halo round it, so a swarm reads as a glowing cloud zoomed out and as single
-blinking points close in. Each blinks on its own slow beat (2.6 to 6 seconds), out of step with its neighbours, and
-the swarm drifts a tile or so about its spot. They come out one by one at dusk, are thickest at night and go out at
-dawn; rain puts them out. The swamp fog's own fireflies (`wxFog` in `js/weather.js`) use the same sprites.

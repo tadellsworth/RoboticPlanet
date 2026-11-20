@@ -39,11 +39,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   loose goods (priority in the Hauler's pickup choice, `doLoot`/`lootNear` and the Hauler job order).
 - **The main base beacon doesn't go so far up the screen at night:** shorter, dimmer beam (the Command Base's beam in
   `js/daynight.js`/`js/render.js`); it fills too much of the view.
-- **Night lights: fewer bugs and less clutter** (the moths and lamp insects round lights at night; see
-  `js/wildlife.js` `light:` kinds): fewer, smaller, and none on phone/Saver. (Not the fireflies: the owner hadn't
-  noticed them, so they were made brighter and gathered into swarms over the shores and tree edges, Nov 2026,
-  `faunaFireflies`. Open: are they now too many on a phone, or do they want a gentle hum or none at all in the
-  night ambience?)
+- **Night lights: fewer bugs and less clutter** (the moths, fireflies and lamp insects round lights at night; see
+  `js/wildlife.js` `light:` kinds): fewer, smaller, and none on phone/Saver.
 - **Change the AI's difficulty mid-game** (a setting on the pause menu; rivals' difficulty is read from `P.diff`;
   lockstep: it must be an order so every device agrees, and a note in a multiplayer game).
 - **The Deep spouts more Murmur the nearer it is to death** (the Hollow's mound: raise its exit/pack rate and size as its
