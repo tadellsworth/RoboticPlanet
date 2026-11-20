@@ -339,7 +339,7 @@ function aiThink(p) {
     if (!aiShut(b)) counts[b.type] = (counts[b.type] || 0) + 1;
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
-  const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
+  const maxSites = p === 0 && P.ai && !S.teams ? 2 : lvl.maxSites;
   if (!few) {
     aiWalls(p);
     aiTurtleWalls(p);
@@ -354,17 +354,30 @@ function aiThink(p) {
   const kinds = {};
   for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
   workers = kinds.worker || 0;
+  const islandWar = S.mode !== 'colony' && navalMap() && SHAPE_PRESETS[S.settings.shape].islands;
+  const hz = islandWar ? homeZone(p) : 0;
+  // A first sea crossing needs its ships before the small home fields can run dry.
+  const seaCrossing = islandWar && !kinds.ferry && !botBanned(p, 'ferry') && !S.players.some((q) => {
+    const base = foes(q.id, p) && !isWild(q.id) && !q.out && !q.absent && getE(q.lander);
+    return base && S.zone[tIdx(base.x, base.y)] === hz;
+  });
   for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew && !aiShut(b)) staffed++;
   // Keep a few workers free to build: a colony with every worker staffed stalls.
   const canStaffMore = staffed + Math.max(3, Math.round(workers * 0.2)) <= workers;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
   // more of it comes before anything else.
   const inLand = {};
-  let crGround = 0;
-  for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) {
-    inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
-    if (S.res[t] === R_CRYSTAL) crGround += S.amt[t];
+  let crGround = 0, homeOre = 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    const r = S.res[t];
+    if (!r) continue;
+    if (seaCrossing && r === R_ORE && S.amt[t] && S.zone[t] === hz && (S.owner[t] < 0 || S.owner[t] === p)) homeOre++;
+    if (S.owner[t] !== p) continue;
+    inLand[r] = (inLand[r] || 0) + 1;
+    if (r === R_CRYSTAL) crGround += S.amt[t];
   }
+  // At most the six deposits the usual three Mines need, even with all the home island Ore in reach.
+  const firstFerry = seaCrossing && homeOre <= 3 * 2;
   // Crystal is judged by how long what's left would last at the rate the Chip Fabs burn it (see AI_CRYSTAL_MINS), not
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
@@ -419,7 +432,8 @@ function aiThink(p) {
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
-  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
+  // On an isolated, Ore-poor island, the first Ferry gets the construction budget before a bomber.
+  if (S.mode !== 'colony' && !firstFerry && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
   // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
   // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
@@ -726,7 +740,7 @@ function aiThink(p) {
         }
         continue;
       }
-      const spot = aiFindSpot(p, type, lander);
+      const spot = aiFindSpot(p, type, lander, islandWar && type === 'mine' && starved.includes(type));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -1033,7 +1047,7 @@ function aiThink(p) {
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
   //    two rivals, the one it's up against is the nearest still in the game.)
   const enemy = rivalOf(p);
-  const rival = (o) => o >= 0 && o !== p && !S.players[o].out && !S.players[o].absent;
+  const rival = (o) => o >= 0 && foes(o, p) && !S.players[o].out && !S.players[o].absent;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
     // missile can knock no lower (see captureOnly).
@@ -1071,7 +1085,11 @@ function aiThink(p) {
   aiMega(p, me, lander, !few && sites < maxSites + 1);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
-  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, !few && sites < maxSites);
+  // A colony short on home-island Ore can use an extra site for its first Port.
+  if (S.mode !== 'colony' && navalMap()) {
+    const portRoom = firstFerry && !counts.port && siteCount(p) <= maxSites;
+    aiNaval(p, me, kinds, lvl, lander, !few && (sites < maxSites || portRoom), firstFerry);
+  }
 
   // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
@@ -1352,7 +1370,7 @@ function aiMurmurStrike(p, e, need, send, all, rear) {
  * a Ferry for it; and every few minutes, with warbots to spare, a beach landing of up to six of them on
  * the shore beside the enemy building the Ferry can reach that's least covered by turrets and garrisons.
  */
-function aiNaval(p, me, kinds, lvl, lander, canBuild) {
+function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
   const P = S.players[p];
   // Warbots it landed march on from the beach once there's nothing left to fight round the flag: the
   // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
@@ -1395,7 +1413,10 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferries = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].ferry), ferry = ferries[0];
-  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) orderAtYard(yard, 'ferry', 1);
+  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) {
+    orderAtYard(yard, 'ferry', 1);
+    if (firstFerry) yard.prio = 'high';
+  }
   // Later on, a second Port out toward the enemy, kept stocked from home by a Container Ship (Cement for
   // building at the front, Ammo for the warbots there).
   if (ports.length === 1 && ports[0].built && S.time > 900 && canBuild && aiAffordable(p, 'port')) {
@@ -1425,7 +1446,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   let weak = -1, wa = 4;
   for (let o = 0; o < S.players.length; o++) {
     const eL = getE(S.players[o].lander);
-    if (o === p || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
+    if (!foes(o, p) || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
     const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && isArmy(u) ? 1 : 0), 0);
     if (n < wa) { wa = n; weak = o; }
   }
@@ -2733,9 +2754,8 @@ function aiPush(p, lvl, army, enemyArmy) {
  * as soon as that is enough to take the base (while it masses, a warbot that brought a crate home stays there: lootHeld);
  * until then, while its whole army would be, it masses for the base and marches on nothing else, for up to four
  * minutes (P.stormT; then a cheaper fort first, as above). Against a crushed rival (twice its army and two more) it
- * goes however the base's guns count, once it can gather twice the enemy's whole army and two more, 8 at least, and
- * three in five of its own armed army outside Bunkers (or the full count, if that is less); with three times the
- * enemy's army and four more it masses for that meanwhile and marches on nothing else. The band forms up out of the
+ * can use the smaller storm only against light gun cover. Heavy guns require the estimated full assault force.
+ * It gathers that force if it has the army, or looks for a cheaper fort to take and weaken the defences. The band forms up out of the
  * guns' reach (aiStage) and goes in once it has (aiStorm). Not in an Uplinks game, which is won at the Uplinks.
  * (With the bases defended, a rival far ahead used to march on the cheapest Outpost every few minutes and never on
  * the base, losing band after band, until the game ran out.) Returns true when a march set off.
@@ -2770,9 +2790,11 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     if (g > n && sp.n > n) { n = Math.min(sp.n, g + 2); g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n)); }
     let whole = 0; // (its armed army outside Bunkers)
     if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
-    const go = crushing ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
+    // A weak field army says little about fixed defences. Use the smaller assault only when the base lacks heavy gun cover.
+    const heavy = crushing && n < g && aiFire(aiGuards(eb.owner, eb.x, eb.y, 2, eb).filter((e) => aiDefReach(e.b)), 0) >= AI_HEAVY;
+    const go = crushing && !heavy ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
     if (n >= Math.max(4, g) || n >= go) { tgt = eb; spot = by; size = n; storm = true; }
-    else if (crushing && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
+    else if (crushing && !heavy && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
     else if (g <= army - 2 && S.time - (P.stormT || (P.stormT = S.time)) < 240) { storm = true; hard = { b: eb, need: g }; }
   }
   if (!storm || tgt) P.stormT = 0;
@@ -2990,9 +3012,9 @@ function aiSiege(p) {
 }
 
 /**
- * Answer raids: an enemy rally flag inside our land with warbots at it gets twice as many of ours
- * sent to the same spot (they fight whatever is there), called home once the raiders are gone; none
- * when it can't spare a third more than the flag has.
+ * Answer a hostile rally flag on our land, or cover an ally who hasn't responded yet.
+ * Send up to twice as many warbots and call them back when the raiders are gone. Only commit
+ * if we can spare a third more than the raiders, and keep defenders home under a home alert.
  */
 function aiCounterRaid(p) {
   const P = S.players[p];
@@ -3005,7 +3027,13 @@ function aiCounterRaid(p) {
   for (const r of S.rallies) {
     if (!foes(r.owner, p) || P.counters.some((c) => c.enemy === r.id)) continue;
     const i = Math.floor(r.x), j = Math.floor(r.y);
-    if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
+    if (!inMap(i, j)) continue;
+    const owner = S.owner[tIdx(i, j)];
+    if (owner !== p) {
+      if (owner < 0 || !allies(owner, p) || P.homeCall > S.time) continue;
+      const ally = S.players[owner];
+      if (ally.out || ally.absent || ally.counters?.some((c) => c.enemy === r.id && rallyById(c.mine))) continue;
+    }
     const raiders = rallyMembers(r.id).length;
     // (Only with a third more warbots than the flag has, at least: fewer stay behind their walls. It used to send
     // whatever it had, one warbot as often as not.)
@@ -3136,9 +3164,9 @@ function aiRoads(p, me) {
       }
       continue;
     }
-    // Linked by road as far as the planner can tell, yet the Haulers still can't get there after four minutes (the
-    // two disagree, whatever the reason): give the site up rather than let it hold a place for good.
-    if (!route.length && !route.pending && !b.built && b.unlinked && S.time - b.born > 240) {
+    // A road on paper can still leave a site with no deliveries. Give up an idle site after four minutes
+    // even when its road is entirely planned: workers may never be able to lay those tiles.
+    if (!route.length && !b.built && b.unlinked && !b.progress && !sumValues(b.inc) && S.time - b.born > 240) {
       P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + 240 }]);
       demolish(b);
       continue;
@@ -3284,13 +3312,14 @@ function resourceSums(type) {
 /** Buildings the AI likes to put beside their suppliers or customers, for feed links. */
 const AI_FEED = new Set(['smelter', 'fab', 'foundry', 'armory', 'munitions', 'tarworks', 'roadworks', 'refinery', 'kiln', 'charger', 'generator', 'repair', 'fueltank']);
 
-function aiFindSpot(p, type, lander) {
+function aiFindSpot(p, type, lander, singleOre) {
   // A search that found nothing isn't repeated until the territory changes or 20 s pass.
   const P = S.players[p];
   P.noSpot = P.noSpot || {};
   const miss = P.noSpot[type];
   if (miss && miss.ver === S.territoryVer && S.time < miss.until) return null;
-  const spot = aiSearchSpot(p, type, lander);
+  // A stranded colony can use an isolated Ore deposit once its mines have run dry.
+  const spot = aiSearchSpot(p, type, lander) || (singleOre ? aiSearchSpot(p, type, lander, 1) : null);
   if (!spot) P.noSpot[type] = { ver: S.territoryVer, until: S.time + 20 };
   return spot;
 }
@@ -3346,7 +3375,7 @@ function aiFarmSoil(p, cx, cy, claimed) {
   return n;
 }
 
-function aiSearchSpot(p, type, lander) {
+function aiSearchSpot(p, type, lander, minDeposits = 2) {
   const def = BDEFS[type], P = S.players[p];
   const fib = gatherRes('harvester'), sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, fib, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
@@ -3418,7 +3447,7 @@ function aiSearchSpot(p, type, lander) {
         const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, gatherRes(type)); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < 2 && !u) {
+        if (n < minDeposits && !u) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
           if (!def.bedrock) continue;
           const f = rockFacesIn(i, j, def.radius);
@@ -3570,9 +3599,9 @@ function aiSearchSpot(p, type, lander) {
     for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
       const c = cands[k];
       let s = c.s;
-      if (c.gn >= 2) {
+      if (c.gn >= minDeposits) {
         const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, gatherRes(type))); // (a Mine counts only the Ore no Mine of ours works: never more)
-        if (w < 2 && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
+        if (w < minDeposits && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
         s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
       }
       if ((best && s <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;

@@ -31,8 +31,8 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, the Lance of Corvane, one shot down a row of depots), Keeps and bombers), then a **Bonus**:
-  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
+  is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
@@ -703,7 +703,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
-  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Against a rival across the water
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). An island colony that has
+  run out of working Mines can use a single reachable Ore deposit. When its home island is short on Ore and its
+  enemies are across the water, the first Port can use an extra build slot and its first Ferry gets priority for
+  parts before the rival starts a bomber Airfield. Against a rival across the water
   (Medium and up, in missions too), once it has a decisive lead (half as many warbots again and four more) or a landing
   is held back by the guns over the beach, it lands a band instead (`aiBeach`, `P.beach`, `AI_BEACH`): it picks the
   rival's Command Base if it has the warbots to take it, or else the fort it takes fewest to take, and a beach out of
@@ -1584,10 +1587,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
   flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
   the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.
-  Against a crushed rival (twice its army and two more) it storms however the base's guns count, once it can gather
-  twice the enemy's whole army and two more, 8 at least, and three in five of its own armed army outside Bunkers (or
-  the full count, if that is less); with three times the enemy's army and four more it masses for that and marches on
-  nothing else meanwhile. In the last fight of a free-for-all (three or four colonies, one rival left) that storm
+  Against a crushed rival (twice its army and two more), it can storm a lightly defended base with a smaller force.
+  It still wants at least eight warbots, twice the enemy's whole army and two more, and three in five of its armed
+  army outside Bunkers (or the full count, if that is less). Heavy gun cover requires the full estimated force.
+  If it cannot gather that many, it looks for a cheaper fort to take or a way to soften the defences. In the last fight of a free-for-all (three or four colonies, one rival left) that storm
   draws on every garrison, front forts, Keeps and the Command Bases it took too (`aiSpare` with 'storm',
   `sendToRally` with rear 'all'; its own Command Base keeps its home guard): the colony that won the earlier fights
   holds two or three colonies' forts, nearly all in reach of the last rival and each keeping warbots back, and on a
@@ -1676,7 +1679,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Route to does in Paths, when that way (each Ramp counted as 6 tiles) is at most 60% of the long road and 6 tiles
   shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
-  tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to.
+  tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to. A site waiting four minutes
+  with no construction or incoming deliveries can be abandoned even when the missing road is already on the books.
+  That frees a build slot for work the colony can reach.
 - **The rival's opening** (Medium, Normal and Hard, a mission's rival too: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`):
   its Bot Foundry goes up straight after its first Fuel Station (it lands with what the Foundry costs), and the rest of
   the plan's opening (two Harvesters, a Quarry, a Cement Works, a Mine, a Crystal Tap, a Smelter, a Chip Fab) comes
@@ -2608,8 +2613,11 @@ two western colonies (south-west and north-west) play the two eastern ones (on L
 Teams on, the two southern colonies play the two northern ones). The lobby shows the two teams, people
 first and then computer players, and the host taps a person to move them to the other team (never more than two a
 side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
-computer only ever goes after the other team, and a team game is won by **Capture**: take both enemy Command Bases
-and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+computer only goes after the other team. A computer ally can send spare Warbots against a raid on your land when its
+own base is safe, using a garrison that can reach the raid. Teams get mirrored neutral Trade Posts where the terrain
+allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
+Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
+won by **Capture**: take both enemy Command Bases and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 

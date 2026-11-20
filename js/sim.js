@@ -19,7 +19,11 @@ function simStep(dt) {
   if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !isWild(p)) dispatch(p);
-  for (let k = 0; k < S.buildings.length; k++) {
+  // In Teams, give units and guns from both sides chances to act first. Change parity each second
+  // so an action on an exact second-based cooldown doesn't always share the same update order.
+  const reverse = S.teams && (S.tick + Math.floor(S.tick / 30)) % 2 === 0;
+  const step = reverse ? -1 : 1;
+  for (let k = reverse ? S.buildings.length - 1 : 0; k >= 0 && k < S.buildings.length; k += step) {
     const b = S.buildings[k];
     if (!b.dead) updateBuilding(b, dt);
   }
@@ -28,7 +32,7 @@ function simStep(dt) {
   countTraffic();
   SHIELDS.length = 0;
   for (const u of S.bots) if (!u.dead && !u.inside && BOTS[u.type].shield) SHIELDS.push(u);
-  for (let k = 0; k < S.bots.length; k++) {
+  for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
     if (u.ferryWait) { ferryPassenger(u); continue; }
@@ -54,14 +58,17 @@ function simStep(dt) {
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
-  // Only one AI thinks in a step (its search for building spots is the dearest thing in one): another that's due
-  // the same step waits a few steps, which also pulls apart timers that start (or an older save has) in step.
+  // Only one AI thinks in a step. In Teams, interleave seats from both sides (0, 2, 1, 3)
+  // and rotate who goes first on ties. A rival that misses its turn can try again the next tick.
+  const firstAI = S.teams ? (S.seed + S.tick) & 3 : 0;
   let thought = false;
-  for (const P of S.players) {
+  for (let k = 0; k < S.players.length; k++) {
+    const seat = (firstAI + k) & 3;
+    const P = S.players[S.teams && k < 4 ? (seat >> 1) + 2 * (seat & 1) : k];
     if (!P.ai || P.out || P.absent) continue;
     P.aiT -= dt;
     if (P.aiT > 0) continue;
-    if (thought) { P.aiT = 5 * dt; continue; }
+    if (thought) { if (!S.teams) P.aiT = 5 * dt; continue; }
     thought = true;
     P.aiT = DIFFICULTY[S.difficulty].think;
     aiThink(P.id);
@@ -9983,8 +9990,8 @@ function placeHollowNests(rng) {
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
- * to dock, the colonies' own land (reachable on foot) first. (Long Haul 2v2: after the first, they come in pairs, each
- * with its twin turned half round, so both teams have the same.)
+ * to dock, the colonies' own land (reachable on foot) first. In Teams they come in half-turn pairs.
+ * Long Haul 2v2 keeps its shared central post and pairs the others.
  */
 function placePosts(seed) {
   S.posts = [];
@@ -10007,26 +10014,28 @@ function placePosts(seed) {
     if (d[0] < TRADE_POST.minFromBase) continue;
     cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
   }
-  const pairs = haul4Map(S.settings) && Ls.length === 4, at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
+  const longHaulPairs = haul4Map(S.settings) && Ls.length === 4, teamPairs = !!S.teams && Ls.length === 4 && !longHaulPairs;
+  const at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
   const twinOf = (c) => at.get(tIdx(S.W - 1 - c.i, S.H - 1 - c.j));
   // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
   // only way to have two posts at all. The first is about as near every colony; where nowhere is (the middle of
   // Twin Valleys is a mountain), each post is about as near the two colonies nearest it, like the others.
-  let allFair = true;
+  let allFair = !teamPairs;
   for (let k = 0, lim = TRADE_POST.fair; k < want; k++) {
-    if (pairs && S.posts.length && want - S.posts.length < 2) break; // (no room left for a pair)
+    const paired = teamPairs || (longHaulPairs && S.posts.length > 0);
+    if (paired && want - S.posts.length < 2) break;
     let best = null, bs = -Infinity;
     for (const c of cands) {
       let near = Infinity;
       for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
       if (near < TRADE_POST.apart) continue;
-      const tw = pairs && S.posts.length ? twinOf(c) : null;
-      if (pairs && S.posts.length && (!tw || dist(c.i, c.j, tw.i, tw.j) < TRADE_POST.apart || S.posts.some((p) => dist(p.x, p.y, tw.i, tw.j) < TRADE_POST.apart))) continue;
+      const tw = paired ? twinOf(c) : null;
+      if (paired && (!tw || dist(c.i, c.j, tw.i, tw.j) < TRADE_POST.apart || S.posts.some((p) => dist(p.x, p.y, tw.i, tw.j) < TRADE_POST.apart))) continue;
       let s;
       if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
       else {
         const unfair = k === 0 && allFair ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
-        if (!grandCanyon && unfair > lim) continue; // Grand Canyon's remaining flat pads can be further from one rim.
+        if (!teamPairs && !grandCanyon && unfair > lim) continue; // A mirrored pair serves both teams, and canyon rims have few pads.
         s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
       }
       if (S.posts.length) s += Math.min(near, 40) * 0.25;
@@ -10034,13 +10043,33 @@ function placePosts(seed) {
       if (s > bs) { bs = s; best = c; }
     }
     if (!best) {
+      if (teamPairs) break;
       if (!S.posts.length && allFair && lim >= TRADE_POST.fair * 4 && Ls.length > 2) { allFair = false; lim = TRADE_POST.fair; k--; continue; }
       // (Long Haul 2v2: a pair is fair between the teams however it leans, so up to twice as far, to have all of them.)
-      if ((S.posts.length >= 2 && !(pairs && lim < TRADE_POST.fair * 2)) || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
+      if ((S.posts.length >= 2 && !(longHaulPairs && lim < TRADE_POST.fair * 2)) || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
       lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
     }
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
-    if (pairs && S.posts.length > 1) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
+    if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
+  }
+  // A small central island or pass may only have room for one post. Use one both teams can
+  // reach for the same effort, to within one tile of walking.
+  if (teamPairs && !S.posts.length && cands.length) {
+    const starts = Ls.map((L) => ({ team: teamOf(L.owner), cost: travelCost(tIdx(L.x, L.y)) }));
+    let best = null, effort = Infinity, closePair = null, pairEffort = Infinity;
+    for (const c of cands) {
+      const t = tIdx(c.i, c.j), teamCost = [Infinity, Infinity];
+      for (const start of starts) teamCost[start.team] = Math.min(teamCost[start.team], start.cost[t]);
+      const distance = Math.max(...teamCost) - c.h * 0.5;
+      if (Math.abs(teamCost[0] - teamCost[1]) <= 1 && distance < effort) { best = c; effort = distance; }
+      // A narrow valley might have room for a closer pair with no shared calm tiles.
+      const twin = twinOf(c), nearest = Math.min(...teamCost);
+      if (twin && dist(c.i, c.j, twin.i, twin.j) > 2 * TRADE_POST.calm && nearest < pairEffort) {
+        closePair = [c, twin]; pairEffort = nearest;
+      }
+    }
+    const sites = best ? [best] : closePair || [];
+    for (const c of sites) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
   }
 }
 

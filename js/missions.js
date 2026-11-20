@@ -9,8 +9,8 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War; after them a
- * Bonus (King of the Hill: an Uplinks race for three). From the second mission on, setup puts down the colony the earlier
+ * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War,
+ * including the Uplinks race in King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
@@ -26,7 +26,7 @@
  * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal: the
  * real button names in <b> and keys in <kbd>), ui (CSS selector of the button(s) to light up meanwhile; when none is
  * on screen the button that opens them lights up, and for a panel button a ring pulses on the building to tap: `at`,
- * a building type, or the one the hint names), text (its own objective text, "{n}" for the number, or [one, many] to
+ * a building type, or the one the hint names), focus(S) (a specific target or { e, ui } for a goal with stages), text (its own objective text, "{n}" for the number, or [one, many] to
  * pick by the number), hold (it must still hold at the end: a goal once met otherwise stays met), wait (for a `built`
  * goal: the hint while its site goes up, else a stock one says to wait, or to Lay road to a site with none) }.
  * Goal kinds the game counts by itself:
@@ -958,7 +958,8 @@ const MISSIONS = [
       // Haulers riding the Ferry line take it. The ring goes to each step in turn.)
       { kind: 'shipped', n: 8, text: 'Ship {n} goods to the new Port',
         count: (P, S) => overseasPorts(P, S).reduce((n, b) => n + (b.shipIn || 0), 0),
-        at: (S) => {
+        at: 'port',
+        focus: (S) => {
           const P = S.players[0], far = overseasPorts(P, S)[0], kept = (b) => (b && b.keep && b.keep.alloy) || 0;
           const home = S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'port' && b !== far);
           const more = { ui: "#sh-keep .keep-cell[data-g='alloy'] [data-d='5']" };
@@ -967,7 +968,7 @@ const MISSIONS = [
           if (kept(home) < 10 || !far || (home.stock.alloy || 0) < 8) return { e: home, ...more };
           return { e: far, ...more };
         },
-        hint: 'Your first Port → Shipyard: Container Ships <b>+1</b>, and Supply orders: Alloy <b>+5</b> twice. Once it holds 8, the same order at the new Port.',
+        hint: 'First Port → <b>Shipyard</b>: Container Ships <b>+1</b>. <b>Supply orders</b>: Alloy <b>+5</b> twice, then at the new Port after 8 Alloy.',
         ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1'], #sh-keep .keep-cell[data-g='alloy'] [data-d='5']" },
     ],
   },
@@ -1039,7 +1040,11 @@ const MISSIONS = [
     goals: [
       { kind: 'crawlerOut', n: 1, text: 'Deploy a Crawler off the plateau',
         // (The ring: on the Bot Foundry to order it, then on the Crawler itself once it rolls out.)
-        at: (S) => S.bots.find((u) => !u.dead && u.owner === 0 && BOTS[u.type].crawler) || S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'foundry') || null,
+        at: 'foundry',
+        focus: (S) => {
+          const crawler = S.bots.find((u) => !u.dead && u.owner === 0 && BOTS[u.type].crawler);
+          return crawler ? { e: crawler, ui: '#sh-crawl, #sh-deploy' } : null;
+        },
         count: (P, S) => {
           // (Deployed off the level top the Command Base stands on: down a slope, past the cliffs.)
           const L = getE(P.lander), cs = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'crawlerbase');
@@ -1052,8 +1057,8 @@ const MISSIONS = [
           }
           return cs.filter((b) => !top[tIdx(b.x, b.y)]).length;
         },
-        hint: 'Tap the Bot Foundry → <b>Order bots</b>: Crawlers <b>+1</b>. Then tap the Crawler → <b>Drive somewhere</b> (<kbd>G</kbd>), off the plateau.',
-        ui: "#sh-orders .order-row[data-k='crawler'] [data-d='1'], #sh-crawl" },
+        hint: 'Bot Foundry → <b>Order bots</b>: Crawlers <b>+1</b>. Crawler → <b>Drive somewhere</b> (<kbd>G</kbd>) off the plateau, then <b>Deploy here</b> (<kbd>E</kbd>).',
+        ui: "#sh-orders .order-row[data-k='crawler'] [data-d='1'], #sh-crawl, #sh-deploy" },
       { kind: 'built', type: 'airfield', n: 1,
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Airfield</b> (<kbd>I</kbd>), with 5 flat tiles for its runway. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='airfield'], #sh-layroad" },
@@ -1068,7 +1073,7 @@ const MISSIONS = [
         // (Off the plateau no road reaches the Crawler unless you lay one, so its supply orders come by plane only, once
         // one is based. With a road from home to it On does nothing, as Haulers supply it, and its panel says so: pack it
         // up and drive it on past the roads, hence "out past your roads".)
-        hint: 'Tap the deployed Crawler, out past your roads → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
+        hint: 'Tap deployed Crawler beyond roads → <b>Supply by air</b>: <b>On</b>. <b>Supply orders</b>: Cement <b>+5</b> for an air drop.',
         ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },
@@ -1365,7 +1370,7 @@ const MISSIONS = [
       // (A Gate counts: it's what a wall line gets where it crosses a road.)
       { kind: 'walls', n: [4, 6, 8], text: 'Build {n} Walls',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && (b.type === 'wall' || b.type === 'gate')).length,
-        hint: '<b>Walls</b> (<kbd>X</kbd>): drag a line across each channel and a second row behind it, then <b>Build</b>. The outer row goes up first.',
+        hint: '<b>Walls</b> (<kbd>X</kbd>): draw two rows across each channel, then <b>Build</b>. The outer row goes up first.',
         ui: "#btn-road, #banner-seg [data-v='wall'], #build-walls, #banner-ok" },
       { kind: 'mannedBunker', n: 1, text: 'Man a Bunker with 2 warbots', at: 'bunker',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'bunker' && b.garrison.length >= 2).length,
@@ -1510,7 +1515,7 @@ const MISSIONS = [
         // robots shooting, burning or capturing one count, and so does a missile, bomb, nuke or Howitzer shell that wrecks
         // one: "take out" reads as any means. The goals before this one see that the Torches and Bulwark get built and used.)
         count: (P) => P.stats.forts || 0,
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; one a missile or bomb finishes counts too.',
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Lead with Bulwark and Torches. Missiles and bombs count.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },
@@ -1595,6 +1600,31 @@ const MISSIONS = [
     ],
   },
   {
+    id: 'hill', name: 'King of the Hill', chapter: 'War',
+    brief: 'Three vanguards, three Uplinks: whoever holds them speaks for Ithaca I. Hold two of the three for longer than both rivals.',
+    intro: [
+      'The Pathfinder raised the <b>Uplinks</b> to talk to home. Under the Accord, whoever holds them speaks for Ithaca I.',
+      'An Uplink is yours while it stands in your land: put an Outpost or a Keep beside it. Tap the Uplinks card at the top to look at each.',
+      'They come online 8 minutes in. Then hold 2 of the 3, more than either rival, and your clock runs: 5 minutes in all wins.',
+      'Armed warbots right beside an Uplink jam it: it counts for no one. Theirs can jam yours; yours can jam theirs.',
+      'Two rivals, their doctrines dealt at random. Every vanguard wants to be holding the Uplinks if home ever answers.',
+    ],
+    mode: 'versus', seed: 30117, size: 2, rough: 1, rich: 3, biome: 'desert', shape: 17, players: 3, style: 'random',
+    victory: 'uplinks', rival: ['easy', 'medium', 'normal'], limit: [0, 0, 35], // (Hard ones on Hard: a scripted player won none of five; Normal, one in three)
+    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with the Ammo Plant)
+    goals: [
+      { kind: 'uplink', n: 1, text: 'Hold an Uplink', count: (P, S) => uplinksHeld(S),
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Outpost</b> (<kbd>O</kbd>) toward the nearest Uplink, and <b>Lay road</b>: its land takes it.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], #sh-layroad, #win-card" },
+      { kind: 'uplinks', n: 2, text: 'Hold 2 Uplinks at once', count: (P, S) => uplinksHeld(S),
+        hint: '<b>Outpost</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>O</kbd>) by the second Uplink. <b>Bunker</b> (<kbd>U</kbd>) by each one you hold to stop jamming.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], .bcard[data-t='bunker']" },
+      { kind: 'race', n: 1, text: 'Win the Uplinks race', count: (P, S) => (S.winner === 0 && S.endHow === 'uplinks' ? 1 : 0),
+        hint: 'Hold 2 of 3 for 5 min total. Check the card. <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by a rival Uplink to jam it.',
+        ui: '#btn-attack, #ar-hold, #win-card' },
+    ],
+  },
+  {
     id: 'descent', name: 'Final Descent', chapter: 'War',
     brief: 'A maze of canyons and a seasoned rival. Use everything you have learned, and take to the air.',
     intro: [
@@ -1620,33 +1650,6 @@ const MISSIONS = [
       { kind: 'capture',
         hint: 'Tap their base → <b>Bomb it</b> (<kbd>Z</kbd>) to soften it. <b>Army</b> (<kbd>Q</kbd>) → <b>All</b> (<kbd>4</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) right beside it.',
         ui: '#sh-bomb, #btn-attack, #ar-nall, #ar-hold' },
-    ],
-  },
-
-  // Bonus: the free-play ways to win the campaign only mentions. An Uplinks race for three.
-  {
-    id: 'hill', name: 'King of the Hill', chapter: 'Bonus',
-    brief: 'Three vanguards, three Uplinks: whoever holds them speaks for Ithaca I. Hold two of the three for longer than both rivals.',
-    intro: [
-      'The Pathfinder raised the <b>Uplinks</b> to talk to home. Under the Accord, whoever holds them speaks for Ithaca I.',
-      'An Uplink is yours while it stands in your land: put an Outpost or a Keep beside it. Tap the Uplinks card at the top to look at each.',
-      'They come online 8 minutes in. Then hold 2 of the 3, more than either rival, and your clock runs: 5 minutes in all wins.',
-      'Armed warbots right beside an Uplink jam it: it counts for no one. Theirs can jam yours; yours can jam theirs.',
-      'Two rivals, their doctrines dealt at random. Every vanguard wants to be holding the Uplinks if home ever answers.',
-    ],
-    mode: 'versus', seed: 30117, size: 2, rough: 1, rich: 3, biome: 'desert', shape: 17, players: 3, style: 'random',
-    victory: 'uplinks', rival: ['easy', 'medium', 'normal'], limit: [0, 0, 35], // (Hard ones on Hard: a scripted player won none of five; Normal, one in three)
-    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with the Ammo Plant)
-    goals: [
-      { kind: 'uplink', n: 1, text: 'Hold an Uplink', count: (P, S) => uplinksHeld(S),
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Outpost</b> (<kbd>O</kbd>) toward the nearest Uplink, and <b>Lay road</b>: its land takes it.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], #win-card" },
-      { kind: 'uplinks', n: 2, text: 'Hold 2 Uplinks at once', count: (P, S) => uplinksHeld(S),
-        hint: 'An <b>Outpost</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>O</kbd>) by a second Uplink, and a <b>Bunker</b> (<kbd>U</kbd>) beside each one you hold: rivals send warbots to jam them.',
-        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], .bcard[data-t='bunker']" },
-      { kind: 'race', n: 1, text: 'Win the Uplinks race', count: (P, S) => (S.winner === 0 && S.endHow === 'uplinks' ? 1 : 0),
-        hint: 'Hold 2 of the 3 for 5 minutes in all: the card shows the clocks. A rival\'s running? <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) beside its Uplink: that jams it.',
-        ui: '#btn-attack, #ar-hold, #win-card' },
     ],
   },
 ];
