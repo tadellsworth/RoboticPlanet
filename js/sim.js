@@ -10003,7 +10003,7 @@ function endEvent(E) {
  * ways on Long Haul 2v2). Copies can fall off the map (a turn on a map that isn't square): callers check.
  */
 function fairShare() {
-  const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
+  const W = S.W, H = S.H, np = nColonies(), alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
@@ -10023,15 +10023,18 @@ function fairShare() {
   return { mine, copies };
 }
 
+function ringfallHits(alone) {
+  return (SIZE_PRESETS[S.settings?.size]?.ringfallHits ?? METEOR_HITS) * (alone ? 2 : 1);
+}
+
 /**
- * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
- * of them near its landing site), each copied to the same spot on every other colony's share (fairShare),
- * so the shower is fair.
+ * Half the sites are sought near the starting base, the others across its share of the planet. Sites
+ * are copied onto every colony's share (fairShare).
  */
 function meteorPlan(rng, t0, dur) {
   if (S.hollow) return hollowRingfall(rng, t0, dur);
   const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
-  const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  const L = getE(S.players[0].lander), hits = [], n = ringfallHits(alone);
   for (let k = 0; k < n; k++) {
     let x = -1, y = -1;
     for (let tries = 0; tries < 40 && x < 0; tries++) {
@@ -10047,13 +10050,13 @@ function meteorPlan(rng, t0, dur) {
 }
 
 /**
- * Ringfall in the Hollow falls only through the breaches, concentrated and rich: METEOR_HITS strikes on each colony's
+ * Ringfall in the Hollow falls only through the breaches, concentrated and rich: the usual number of strikes on each colony's
  * share as anywhere, HOLLOW.ringfall.contested of them through the contested breaches on its side and the rest through
  * its own (each strike with its twin, through the twin breach, on the other colony's side); in Colony twice as many,
  * over every breach. Richer where they land: see meteorImpact.
  */
 function hollowRingfall(rng, t0, dur) {
-  const alone = S.mode === 'colony', B = S.hollow.breaches, W = S.W, H = S.H, hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  const alone = S.mode === 'colony', B = S.hollow.breaches, W = S.W, H = S.H, hits = [], n = ringfallHits(alone);
   const own = alone ? B : B.filter((b, k) => k % 2 === 0); // (player 0's: its own and the contested ones on its side; each one's twin follows it)
   const home = own.filter((b) => b.home), open = own.filter((b) => !b.home);
   for (let k = 0; k < n; k++) {
@@ -10650,6 +10653,18 @@ function placePosts(seed) {
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
     if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
   }
+  if (!S.posts.length && S.settings.size === IMMENSE_SIZE &&
+      SHAPE_PRESETS[S.settings.shape].islands && Ls.length === 2) {
+    // If the open sea has no shared site, trade can start on the two home islands at mirrored posts.
+    let best = null, score = -Infinity;
+    for (const c of cands) {
+      const twin = twinOf(c);
+      if (!c.home || !twin?.home || dist(c.i, c.j, twin.i, twin.j) < TRADE_POST.apart) continue;
+      const s = -c.d[0] + c.h * 0.5;
+      if (s > score) { best = c; score = s; }
+    }
+    if (best) for (const c of [best, twinOf(best)]) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
+  }
   // A small central island or pass may only have room for one post. Use one both teams can
   // reach for the same effort, to within one tile of walking.
   if (teamPairs && !S.posts.length && cands.length) {
@@ -10734,7 +10749,9 @@ function placeUplinks(seed) {
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const canyonZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
   const reachableSite = (t) => !SH.grandCanyon || S.zone[t] === canyonZone;
-  const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
+  const span = dhypot(W, H), immenseIsles = SH.isles4 && S.settings.size === IMMENSE_SIZE;
+  // The sea grows faster than the usable land on each home island. Keep a shore relay in range.
+  const minBase = immenseIsles ? 10 : Math.max(10, span * 0.12);
   const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
   for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
     const t = tIdx(i, j);
@@ -16550,7 +16567,7 @@ function hashState() {
   const num = (v) => { if (typeof v !== 'number') { int(v === undefined ? -7 : v === null ? -8 : v === true ? -9 : v === false ? -10 : -11); return; } _hv[0] = v; int(_hu[0]); int(_hu[1]); };
   const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
-  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty);
+  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); num(S.settings?.size);
   if (S.mission?.workerDrop) int(1);
   if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {

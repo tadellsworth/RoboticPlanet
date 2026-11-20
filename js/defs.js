@@ -643,11 +643,13 @@ const SHIP_MIN_LOAD = 8; // a far Port sends spare goods home by ship in loads o
 const RAIL_TUNNEL_COST = { cement: 3, alloy: 1 };
 
 /* New-game map settings (each is a slider on the menu). */
+const IMMENSE_SIZE = 4;
 const SIZE_PRESETS = [
   { name: 'Small', w: 30, h: 42 },
   { name: 'Medium', w: 40, h: 56 },
   { name: 'Large', w: 50, h: 70 },
   { name: 'Huge', w: 60, h: 84 },
+  { name: 'Immense', w: 84, h: 118, ringfallHits: 9 },
 ];
 /*   levels  elevation levels (1 = flat)       scale  size of hills (smaller = more cliffs)
  *   extra   chance of extra ramps per cliff  gap    min tiles between extra ramps
@@ -739,7 +741,7 @@ const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
  *             share `contested` of them through the contested breaches, each leaving up to `tiles` deposits `rich`
  *             times as rich as a Ringfall deposit elsewhere
  *   crystal   Floating Crystal: a mass's Crystal holds this many times a cluster's usual amount
- *   nests     Murmur nest sites on each colony's side, Small to Huge, besides the Deep's mound at the centre
+ *   nests     Murmur nest sites on each colony's side, Small to Immense, besides the Deep's mound at the centre
  *   deep      the Deep's mound (BDEFS mound): the level it starts at, guards on top of a nest's, and the hoard that
  *             spills out when it's wrecked; wrecking it knocks every other nest back to level 1 (see clearNest)
  *   relics    each crate in a side chamber's rows of robot parts: Alloy or Chips, between the two numbers
@@ -748,7 +750,7 @@ const HOLLOW = {
   breach: { home: 3.2, open: 2.6 }, contested: 4,
   ringfall: { contested: 0.67, tiles: 4, rich: 1.5 },
   crystal: 2.5,
-  nests: [4, 5, 6, 7],
+  nests: [4, 5, 6, 7, 9],
   deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
   relics: { alloy: [3, 5], chip: [1, 2] },
 };

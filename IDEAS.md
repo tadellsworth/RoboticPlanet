@@ -73,8 +73,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Corvane and the Shield Dome, and Arrival City since: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
   settings; missions keep their own; a save from before it loads with them off), so games without them stay as
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
-- **A truly global map, a size above Huge,** for those who want an enormous battle, maybe with TWO biomes in it that slowly
-  crossfade into each other across the map (a new map type; mind generation time and the 16 MB-free bundle design).
+- **Immense map size** (built): 84×118 on Standard and about 40% longer in each direction than Huge on every shape.
+  A two-biome planet with a gradual transition across the map is still an idea for another map type.
 
 **New content**
 - **Biome: Boiling Springs.** A geothermal basin: vibrant, mineral-hued hot springs and steaming geysers among

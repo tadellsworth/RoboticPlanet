@@ -183,3 +183,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Added Arterial after Blacktop in Roads and Traffic. The colony has a stocked Roadworks, a Paver, a Freight Truck, and a survey Depot. The goals mark a 16-tile Express pair, connect both side ramps, surface the lanes, and complete 2, 3, or 4 Freight Truck deliveries by difficulty.
 - The delivery goal counts actual loaded travel along Express. The headless Hard run also verified that an earlier delivery along the ordinary service road earns no credit.
 - Played Normal in Chromium from the mission picker and briefing through the recorded campaign victory. Verified the sign gantry and the three qualifying deliveries. The mission data, help coverage and lint checks passed.
+
+### Immense maps
+
+- Added Immense to Custom Game and the shared size preset used by Observer and multiplayer. Standard is 84×118. Existing shape and seat limits still apply.
+- Scaled Ringfall and the Hollow's nests and reserves. Added more Oases resource sites, larger Four Isles land pads, and paired fallback Trade Posts on two-player island maps. The whole-map canvas uses a smaller backing buffer on the largest layouts while close views still use HD chunks.
+- Allowed more travel time before rivals recall long marches. Verified all 117 sampled layouts, saved planets, and save/load and split-snapshot multiplayer rejoin. [Performance and match results](immense-validation.md)

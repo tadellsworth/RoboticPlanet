@@ -1315,8 +1315,11 @@ function aiThink(p) {
       } else if (spot && avail >= need - guns) P.shieldWant = S.time; // (held back by the guns there)
     }
   }
-  // Recall a march that has nothing left to fight. (Not a storm: see aiStorm.)
-  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150 && !(P.stormOn && P.stormOn.id === P.march)) { recallRally(P.march); P.march = 0; }
+  // Recall a march after it has had time to reach the flag and fight. (Storms use aiStorm.)
+  const march = P.march && rallyById(P.march);
+  if (march && !(P.stormOn && P.stormOn.id === P.march) && S.time - (P.lastMarch || 0) > aiMarchTime(lander, march, 150)) {
+    recallRally(march.id); P.march = 0;
+  }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
@@ -3051,17 +3054,24 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   return false;
 }
 
+/** Allow time for the slow units and detours on long Immense marches. */
+function aiMarchTime(lander, flag, baseTime) {
+  if (S.settings.size !== IMMENSE_SIZE || !lander) return baseTime;
+  const extraTiles = Math.max(0, dist(lander.x + 0.5, lander.y + 0.5, flag.x, flag.y) - 60);
+  return baseTime + extraTiles * WARBOT_OFFROAD / BOTS.bulwark.speed;
+}
+
 /**
  * A storm of the enemy Command Base under way (P.stormOn: the march's flag `id`, the `base` and its owner `foe`, the
  * `n` sent, and `go` once it goes in). The band forms up under its flag, out of the guns' reach (aiStage); once three in
  * five of it stand within 5 tiles of the flag, the flag moves beside the base and the band goes in, at the gun that
  * covers the flag first (rally.first, see holdRally), then the next, then the base. It is called off when fewer than
- * two in five are left armed, or when the band hasn't formed up five minutes after setting off.
+ * two in five are left armed, or when the band hasn't formed up after five minutes plus any extra time for a long Immense march.
  */
 function aiStorm(p) {
   const P = S.players[p], T = P.stormOn, eb = getE(T.base), r = rallyById(T.id);
   const band = r ? rallyMembers(r.id).filter((u) => botArmed(u)) : [];
-  if (!eb || eb.dead || eb.owner !== T.foe || !r || band.length * 5 < T.n * 2 || (!T.go && S.time - (P.lastMarch || 0) > 300)) {
+  if (!eb || eb.dead || eb.owner !== T.foe || !r || band.length * 5 < T.n * 2 || (!T.go && S.time - (P.lastMarch || 0) > aiMarchTime(getE(P.lander), r, 300))) {
     if (r) recallRally(r.id);
     if (P.march === T.id) P.march = 0;
     P.stormOn = null;

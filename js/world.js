@@ -116,7 +116,9 @@ function generateMap(seed, W, H, cfg) {
       // the sea round it) an islet on the line between each pair of neighbours. Only the bottom-left quarter is
       // cut (it holds the islet below the middle and its twin to the left); the turn lays it on the others.
       const qb = Math.max(10, Math.round(hw * 0.42)), hx = qb, hy = H - 1 - qb;
-      const hr = clamp(hw * 0.29, 8.5, 11), cR = clamp(hw * 0.2, 4.5, 7.5), mR = clamp(hw * 0.1, 2.6, 4), gap = ISLE_GAP + 1.5;
+      const immense = cfg.size === IMMENSE_SIZE;
+      const hr = clamp(hw * 0.29, 8.5, immense ? 14 : 11), cR = clamp(hw * 0.2, 4.5, immense ? 9.5 : 7.5);
+      const mR = clamp(hw * 0.1, 2.6, 4), gap = ISLE_GAP + 1.5;
       isles = [{ x: hx, y: hy, rx: hr, ry: hr }, { x: ccx, y: ccy, rx: cR, ry: cR }];
       for (let d = cR + mR + gap; d < hw - mR - 1; d += 0.5) {
         if (dist(hx, hy, ccx, ccy + d) - hr - mR < gap) continue;
@@ -632,11 +634,11 @@ function generateMap(seed, W, H, cfg) {
     links = [[2, half], [W - 3, half]];
   };
   // Oases: a barren waste strewn with crags, where only round your base and in a few rich oases (three
-  // on each side, one in the middle) is anything worth having; narrow passes wind between them.
+  // on each side, five at Immense, and one in the middle) is anything worth having; narrow passes wind between them.
   const oasesShape = () => {
     const cr = makeRng(seed ^ 0x4c5d23), sO2 = seed * 37 + 7, home = clamp(Math.round(W * 0.3), 9, 13); // less round the base on a small map
-    const pts = [];
-    for (let tries = 0; pts.length < 3 && tries < 600; tries++) {
+    const pts = [], want = cfg.size === IMMENSE_SIZE ? 5 : 3;
+    for (let tries = 0; pts.length < want && tries < 600; tries++) {
       const x = 4 + cr() * (W - 8), y = half + 4 + cr() * Math.max(1, H - half - 9);
       if (nearBase(x, y, home + 2) || dist2(x, y, ccx, ccy) < 100 || pts.some((q) => dist2(x, y, q.x, q.y) < 90)) continue;
       pts.push({ x, y });
@@ -2082,7 +2084,7 @@ function hollowMap(seed, W, H, cfg) {
   const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
   const cr = makeRng((seed ^ 0x4011a3) >>> 0), sW = seed * 67 + 5, sV = seed * 71 + 13;
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, bx = Math.floor(W / 2), by = H - 8, Dy = by - ccy;
-  const sz = clamp(cfg.size ?? 1, 0, 3);
+  const sz = clamp(cfg.size ?? 1, 0, HOLLOW.nests.length - 1);
   const P = (u, v) => [u * (W - 1), ccy + v * Dy]; // a place on player 0's side: u across (0 west, 1 east), v from the middle line (0) to the base (1)
   // Every change to a tile is made to its twin too (the same spot turned half round, on player 1's side).
   const put = (t, terr, lv, k) => {
@@ -2361,7 +2363,9 @@ function hollowMap(seed, W, H, cfg) {
     if (!res[t]) continue;
     const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
-    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
+    // The larger caverns have more distance to supply, while their authored Ore and Oil clusters stay few.
+    const reserves = sz === IMMENSE_SIZE && (res[t] === R_ORE || res[t] === R_OIL) ? 1.5 : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * reserves * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
   }
 
   // 9) The Murmur's nest sites (the nests themselves go down with the Murmur: see placeNests): the Deep's mound in the
@@ -5187,6 +5191,7 @@ function checkSave(o) {
   const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
   if (!obj(o) || o.v !== 1) bad();
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
+  if (o.settings?.size != null && (!Number.isInteger(o.settings.size) || !SIZE_PRESETS[o.settings.size])) bad();
   if (o.mission?.workerDrop !== undefined && typeof o.mission.workerDrop !== 'boolean') bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();

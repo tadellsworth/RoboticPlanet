@@ -727,10 +727,14 @@ function bakeMap() {
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
   // image, tens of megabytes of it, waiting to be collected, and a phone has only so much canvas memory.
   if (!R.map) R.map = document.createElement('canvas');
-  R.map.width = S.W * TP;
-  R.map.height = S.H * TP;
+  // Keep the whole-map canvas within 4096 pixels on each side. Close views still use HD chunks.
+  const px = R.mapPx = Math.min(TP, Math.floor(4096 / Math.max(S.W, S.H)));
+  R.map.width = S.W * px;
+  R.map.height = S.H * px;
   R.mapCtx = R.map.getContext('2d');
-  R.mapCtx.hdScale = 1;
+  const scale = px / TP;
+  R.mapCtx.setTransform(scale, 0, 0, scale, 0, 0);
+  R.mapCtx.hdScale = scale;
   hdReset();
   seepIndexBuild(); // (the oil seeps' puddles, drawn with the ground: js/seep.js)
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
@@ -1015,7 +1019,8 @@ function drawMapLayer(ctx, ox, oy, z) {
       if (!bare) continue;
       const i0 = cx * C, j0 = cy * C, w = Math.min(C, S.W - i0), h = Math.min(C, S.H - j0);
       const x0 = edge(ox + i0 * z), y0 = edge(oy + j0 * z);
-      ctx.drawImage(R.map, i0 * TP, j0 * TP, w * TP, h * TP, x0, y0, edge(ox + (i0 + w) * z) - x0, edge(oy + (j0 + h) * z) - y0);
+      const px = R.mapPx;
+      ctx.drawImage(R.map, i0 * px, j0 * px, w * px, h * px, x0, y0, edge(ox + (i0 + w) * z) - x0, edge(oy + (j0 + h) * z) - y0);
       continue;
     }
     const ch = hdBake(level, cx, cy);

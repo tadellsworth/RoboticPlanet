@@ -71,8 +71,12 @@ how goods move.
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
 Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
-Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
-Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
+Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
+Immense). On Standard, Huge is 60×84 tiles and Immense is 84×118, or about 40% longer in each direction and nearly
+twice the ground. Other shapes keep their own proportions and supported player counts, including 2v2. With Planetary
+events enabled, Immense Ringfall targets up to nine sites per colony's share (six at smaller sizes). On Immense,
+rivals allow more travel time for distant marches. Oases has five oases per side, Four Isles has larger home and
+central islands, and the Hollow has richer Ore and Oil deposits and up to nine nest sites per side. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
 Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Steamwells (geothermal basin), the Shoals (tropical islands), the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
