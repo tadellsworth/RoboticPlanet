@@ -9669,8 +9669,11 @@ function meteorImpact(E, h) {
 
 /* ------------------------------------------------------------------ the Ring drizzle */
 
-/** Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it. */
-function drizzleOn() { return !S.mission || !!S.mission.drizzle; }
+/**
+ * Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it, and never
+ * in the Hollow: it's underground, where only Ringfall reaches, through the breaches (as no Mass Driver works there).
+ */
+function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow; }
 
 /** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
 function drizzleOk(t) {
@@ -9712,26 +9715,19 @@ function updateDrizzle() {
 /**
  * Where the next drizzle falls: a spot (and, unless it's Uranium, a second tile beside it) on player 0's share, DRIZZLE_NEAR
  * tiles from its Command Base (further out the more tries it takes), with the same spot on every other colony's share
- * (fairShare), every one of them open ground no one holds (drizzleOk); in the Hollow, through a breach (each with its
- * twin on the other side). null if no such spot turns up. The pieces show streaking down at once (addFx 'drizzle').
+ * (fairShare), every one of them open ground no one holds (drizzleOk). null if no such spot turns up. The pieces show streaking down at once (addFx 'drizzle').
  */
 function drizzlePlan(rng) {
-  const W = S.W, H = S.H, alone = S.mode === 'colony';
+  const W = S.W, H = S.H;
   const r = nukeOn() && rng() < DRIZZLE_URANIUM ? R_URANIUM : rng() < 0.5 ? R_ORE : R_CRYSTAL;
   const two = r !== R_URANIUM && DRIZZLE_TILES > 1, dir = rng() < 0.5 ? -1 : 1;
   const SIDES = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-  let mine, copies;
-  if (S.hollow) { mine = () => true; copies = (x, y) => (alone ? [[x, y]] : [[x, y], [W - 1 - x, H - 1 - y]]); } else ({ mine, copies } = fairShare());
-  const B = S.hollow ? (alone ? S.hollow.breaches : S.hollow.breaches.filter((b, k) => k % 2 === 0)) : null; // (player 0's side; each one's twin follows)
+  const { mine, copies } = fairShare();
   const L = getE(S.players[0].lander);
   const ok = (list) => list.every(([i, j]) => inMap(i, j) && drizzleOk(tIdx(i, j)));
   for (let tries = 0; tries < DRIZZLE_TRIES; tries++) {
     let i, j;
-    if (B) {
-      if (!B.length) return null;
-      const b = B[Math.floor(rng() * B.length)], a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * (b.r - 0.4);
-      i = Math.round(b.x + dcos(a) * d); j = Math.round(b.y + dsin(a) * d);
-    } else if (L) {
+    if (L) {
       const a = rng() * Math.PI * 2, d = DRIZZLE_NEAR[0] + rng() * (DRIZZLE_NEAR[1] - DRIZZLE_NEAR[0] + tries);
       i = Math.round(L.x + dcos(a) * d); j = Math.round(L.y + dsin(a) * d);
     } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
@@ -9741,7 +9737,7 @@ function drizzlePlan(rng) {
     if (!ok(a)) continue;
     const b = two ? copies(i + side[0], j + side[1]) : null, second = b && b.length === a.length && ok(b);
     const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
-    const amt = clamp(Math.round(RES[r].amount * DRIZZLE_RICH * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH * (S.hollow ? HOLLOW.ringfall.rich : 1))), 1, 255);
+    const amt = clamp(Math.round(RES[r].amount * DRIZZLE_RICH * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH)), 1, 255);
     const tiles = a.map(([x, y], k) => [tIdx(x, y), second ? tIdx(b[k][0], b[k][1]) : -1]);
     const lunar = !!(S.settings && S.settings.biome === 'lunar');
     for (const [x, y] of a) {

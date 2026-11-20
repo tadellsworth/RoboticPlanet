@@ -1471,7 +1471,7 @@ const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a cha
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
 /**
  * The Ring drizzle (LORE.md: Ringfall keeps restocking the surface): in every game, Planetary events or not (and in a
- * mission only if it asks for it: `drizzle`), a lone piece of the Ring comes down every DRIZZLE_GAP seconds (the first
+ * mission only if it asks for it: `drizzle`; never in the Hollow, underground), a lone piece of the Ring comes down every DRIZZLE_GAP seconds (the first
  * DRIZZLE_FIRST in, once the opening is over) on each colony's share of the planet, the same spot mirrored or turned
  * for every colony as Ringfall's (fairShare), DRIZZLE_NEAR tiles from player 0's Command Base. It does no harm: it lands only on open ground no one
  * holds (no road, building, plan, Trade Post ground, water or rock), so a colony expands to claim it. Each leaves one
