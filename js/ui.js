@@ -8562,6 +8562,8 @@ function updateEventCard() {
     else {
       html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${goodN(o.give, o.n)}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${goodN(o.get, o.m)}</span>` +
         '<button class="btn small primary" id="ev-trade">Trade</button></div>';
+      // (now and then the Wren brings the raw good the land is running out of, not a finished one: see traderOffer)
+      html += `<div class="ev-desc">${o.raw ? `This time it brings ${GOOD[o.get].name}: your land is running lowest on it.` : `You are shortest of ${GOOD[o.get].name}.`}</div>`;
     }
     // The Wren's cargo list, 31 years out of date (LORE.md): goods for a colony that hasn't come.
     if (E.type === 'trader' && E.started) html += `<div class="ev-cargo">Cargo list, 31 years old: ${wrenCargo(E.n)}.</div>`;
