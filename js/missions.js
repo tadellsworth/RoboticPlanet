@@ -813,7 +813,8 @@ const MISSIONS = [
       '<b>Maglev Pods</b> (ordered at a Terminal) carry 16 goods a trip at three times a Freight Train\'s speed, both ways.',
       'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
       'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
-      'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it, line by line.',
+      'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it without stopping.',
+      'A line can bend at a pylon: tap a spot on the way, then <b>Bend here</b>. Pods slow round sharp bends.',
     ],
     mode: 'colony', seed: 7302, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     layout(m, W) {

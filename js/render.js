@@ -6592,8 +6592,8 @@ function render(dtReal) {
     ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
     ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
   } else
-  // Placing a Ropeway: the cable from the near station to the far end picked so far.
-  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd) {
+  // Placing a Ropeway: the cable from the near station to the far end picked so far. (Not a Maglev line: drawMaglevs.)
+  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType !== 'maglev') {
     const A = UI.ropeA, E = R.ropeEnd, ax = ox + (A.i + 0.5) * z, ay = oy + (A.j + 0.5) * z, bx = ox + (E.i + 0.5) * z, by = oy + (E.j + 0.5) * z;
     const c = ropeCurve(ax, ay, bx, by, z);
     ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = Math.max(2, z * 0.05);
@@ -9039,11 +9039,31 @@ function magDock(b, ox, oy, z) { return [ox + (b.x + 0.5) * z, oy + (b.y + 0.5 -
 
 /** The spans of the line A–B (A the near end) in tiles from A: [[d0, d1]], split at every cut. */
 function magSpans(A, B) {
-  const L = dist(A.x, A.y, B.x, B.y), cuts = magCut(A, B).map((c) => c.d).sort((p, q) => p - q), out = [];
+  const L = magPathLen(magPathOf(A, B)), cuts = magCut(A, B).map((c) => c.d).sort((p, q) => p - q), out = [];
   let d0 = MAG_END;
   for (const d of cuts) { out.push([d0, d - MAGLEV.spacing * 0.55]); d0 = d + MAGLEV.spacing * 0.55; }
   out.push([d0, L - MAG_END]);
   return out.filter(([a, b]) => b - a > 0.2);
+}
+
+/**
+ * The straight pieces of path pts (tile coordinates) from d0 to d1 tiles along it: [[x0, y0, x1, y1]], each piece
+ * running on a little past a bend (`ext` tiles) so the band's corners meet.
+ */
+function magPieces(pts, d0, d1, ext = 0.14) {
+  const out = [];
+  let base = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by);
+    const a = Math.max(d0, base), b = Math.min(d1, base + L);
+    if (b - a > 0.01) {
+      const ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1);
+      const s0 = a - base - (k > 1 && a <= base + 1e-6 ? ext : 0), s1 = b - base + (k < pts.length - 1 && b >= base + L - 1e-6 ? ext : 0);
+      out.push([ax + ux * s0, ay + uy * s0, ax + ux * s1, ay + uy * s1]);
+    }
+    base += L;
+  }
+  return out;
 }
 
 /** The guideway tile repeated along a straight band on screen from (x0, y0) to (x1, y1), tile size z, for team `owner` (art, or a plain band). */
@@ -9086,15 +9106,19 @@ function magLinesToDraw() {
   const out = [];
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].magterm) continue;
-    for (const o of magPartners(b)) if (magKey(b, o) === b) out.push({ A: b, B: o, fx: o.x + 0.5, fy: o.y + 0.5, L: dist(b.x, b.y, o.x, o.y), spans: magSpans(b, o), owner: b.owner, building: false });
+    for (const o of magPartners(b)) if (magKey(b, o) === b) { const pts = magPathOf(b, o); out.push({ A: b, B: o, pts, fx: o.x + 0.5, fy: o.y + 0.5, L: magPathLen(pts), spans: magSpans(b, o), owner: b.owner, building: false }); }
     for (const m of magMiss(b)) {
       // The lost end's old tile for the spans; the pylons carry the key end's id (the lost Terminal's, if it was the key).
       const end = { x: m.x, y: m.y, id: 0 };
-      const A = m.near ? { x: m.x, y: m.y, id: m.key ?? b.id, owner: b.owner, magLayout: m.layout || b.magLayout } : b, B = m.near ? { x: b.x, y: b.y, id: 0 } : end;
-      out.push({ A, B, fx: B.x + 0.5, fy: B.y + 0.5, L: dist(A.x, A.y, B.x, B.y), spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
+      const A = m.near ? { x: m.x, y: m.y, id: m.key ?? b.id, owner: b.owner, magLayout: m.layout || b.magLayout, magBends: m.bends || (m.key == null ? b.magBends : null) } : b, B = m.near ? { x: b.x, y: b.y, id: 0 } : end;
+      const pts = magPathOf(A, B);
+      out.push({ A, B, pts, fx: B.x + 0.5, fy: B.y + 0.5, L: magPathLen(pts), spans: magSpans(A, B), owner: b.owner, suspended: true, survivor: b, missing: end });
     }
     const s = magPending(b);
-    if (s && !magRebuildSite(b, s)) { const [fx, fy] = magSiteFar(s), L = dist(b.x + 0.5, b.y + 0.5, fx, fy), got = Math.min(L - MAG_END, Math.max(0, s.progress * (s.magN || L))); out.push({ A: b, B: null, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s }); }
+    if (s && !magRebuildSite(b, s)) {
+      const kp = magSitePath(s, b), pts = s.magKey && s.magKey !== b.id ? kp.reverse() : kp, [fx, fy] = magSiteFar(s), L = magPathLen(pts), got = Math.min(L - MAG_END, Math.max(0, s.progress * L));
+      out.push({ A: b, B: null, pts, fx, fy, L, spans: got > MAG_END + 0.2 ? [[MAG_END, got]] : [], owner: b.owner, building: true, site: s });
+    }
   }
   return out;
 }
@@ -9106,10 +9130,7 @@ function drawMaglevShadows(ctx, ox, oy, z) {
   const H = MAGLEV.head, sx = MAG_SHADOW[0] * H * z, sy = MAG_SHADOW[1] * H * z;
   ctx.save();
   ctx.globalAlpha *= 0.26 * (TOD.active ? 1 - 0.55 * (TOD.state.pools || 0) : 1);
-  for (const ln of lines) {
-    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
-    for (const [d0, d1] of ln.spans) magBand(ctx, ln.owner, ax + ux * d0 * z + sx, ay + uy * d0 * z + sy, ax + ux * d1 * z + sx, ay + uy * d1 * z + sy, z, true);
-  }
+  for (const ln of lines) for (const [d0, d1] of ln.spans) for (const [x0, y0, x1, y1] of magPieces(ln.pts, d0, d1)) magBand(ctx, ln.owner, ox + x0 * z + sx, oy + y0 * z + sy, ox + x1 * z + sx, oy + y1 * z + sy, z, true);
   ctx.restore();
 }
 
@@ -9132,16 +9153,18 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
   cx += dx * z; cy += dy * z;
   const art = artFor(cut ? 'magpylon-cut' : 'magpylon', b.owner);
   let hs = 1;
-  const ends = !cut && b.line && b.k ? magPylonEnds(b) : null;
-  if (ends) {
+  const pts = !cut && b.line && b.k ? magPylonPath(b) : null;
+  if (pts) {
     // squashed or stretched so its head sits under the band (the ends' ground level along the line)
-    const [first, last] = ends, L = dist(first.x, first.y, last.x, last.y) || 1, f = clamp((b.k * MAGLEV.spacing) / L, 0, 1);
-    const ref = S.elev[tIdx(first.x, first.y)] * (1 - f) + S.elev[tIdx(last.x, last.y)] * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
+    const sp = magSpotsPath(pts).find((q) => q.k === b.k), L = magPathLen(pts) || 1, d = sp ? sp.d : b.k * MAGLEV.spacing, f = clamp(d / L, 0, 1);
+    const [lx, ly, ux, uy] = magPathAt(pts, d), first = pts[0], last = pts[pts.length - 1];
+    const el = (q) => S.elev[tIdx(Math.floor(q[0]), Math.floor(q[1]))];
+    const ref = el(first) * (1 - f) + el(last) * f, e = (S.terrain[tIdx(b.x, b.y)] === T_GROUND ? S.elev[tIdx(b.x, b.y)] : 0) - ref;
     hs = clamp((MAGLEV.deck - MAG_LEVEL * e) / MAGLEV.deck, 0.3, 2.6);
-    if (dx || dy) { drawMagPortal(ctx, b, cx - dx * z, cy - dy * z, z, first, last, f, dx, dy); return; } // (over a road or track: a portal over the way)
+    if (dx || dy) { drawMagPortal(ctx, cx - dx * z, cy - dy * z, z, lx - b.x - 0.5, ly - b.y - 0.5, ux, uy, dx, dy); return; } // (over a road or track: a portal over the way)
     // the arm from the head to the band (a pylon shifted to a shoulder, or standing at a road's side)
-    const tx = cx + (first.x + (last.x - first.x) * f - b.x - dx) * z;
-    const ty = cy + (first.y + (last.y - first.y) * f - b.y - dy - MAGLEV.head) * z;
+    const tx = cx + (lx - b.x - 0.5 - dx) * z;
+    const ty = cy + (ly - b.y - 0.5 - dy - MAGLEV.head) * z;
     ctx.save();
     ctx.strokeStyle = '#858a87'; ctx.lineWidth = Math.max(1, z * 0.09);
     ctx.beginPath(); ctx.moveTo(cx, cy - MAGLEV.deck * hs * z); ctx.lineTo(tx, ty); ctx.stroke();
@@ -9159,11 +9182,10 @@ function drawMagPylon(ctx, b, cx, cy, z, cut) {
 /**
  * A pylon over a road or track (its tile centre at (cx, cy) on screen): a portal frame, two legs on the kerb (dx, dy:
  * magPylonOffset) either side of the guideway and a crossbeam under the deck with hazard stripes, so the road reads as
- * open under it. first/last are the line's ends and f how far along it the pylon stands.
+ * open under it.
  */
-function drawMagPortal(ctx, b, cx, cy, z, first, last, f, dx, dy) {
-  const L = dist(first.x, first.y, last.x, last.y) || 1, ux = (last.x - first.x) / L, uy = (last.y - first.y) / L;
-  const px = cx + (first.x + (last.x - first.x) * f - b.x) * z, py = cy + (first.y + (last.y - first.y) * f - b.y) * z; // (the line's ground point)
+function drawMagPortal(ctx, cx, cy, z, ox, oy, ux, uy, dx, dy) {
+  const px = cx + ox * z, py = cy + oy * z; // (the line's ground point, (ox, oy) tiles from the tile centre; (ux, uy) its way)
   const w = Math.max(1.5, z * 0.085), half = 0.34, up = (MAGLEV.head - 0.1) * z; // (the beam just under the deck)
   const feet = [-1, 1].map((sg) => [px - uy * half * sg * z + dx * z, py + ux * half * sg * z + dy * z]);
   const tops = feet.map(([x, y]) => [x, y - up]);
@@ -9223,14 +9245,16 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
   for (const b of pyl) drawMagPylon(ctx, b, ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z, false);
   const docked = new Map(); // (each Terminal's docked pod, drawn once, turned along its first line)
   for (const ln of lines) {
-    const ax = ox + (ln.A.x + 0.5) * z, ay = oy + (ln.A.y + 0.5) * z, ux = (ln.fx - ln.A.x - 0.5) / (ln.L || 1), uy = (ln.fy - ln.A.y - 0.5) / (ln.L || 1);
-    const H = MAGLEV.head * z, ang = Math.atan2(uy, ux);
-    if (!inView((ln.A.x + ln.fx) / 2, (ln.A.y + ln.fy) / 2, ln.L / 2 + 2)) continue;
+    const H = MAGLEV.head * z, P = ln.pts, n = P.length;
+    const ang = Math.atan2(P[1][1] - P[0][1], P[1][0] - P[0][0]), angB = Math.atan2(P[n - 2][1] - P[n - 1][1], P[n - 2][0] - P[n - 1][0]);
+    let x0v = Infinity, y0v = Infinity, x1v = -Infinity, y1v = -Infinity;
+    for (const [x, y] of P) { x0v = Math.min(x0v, x); y0v = Math.min(y0v, y); x1v = Math.max(x1v, x); y1v = Math.max(y1v, y); }
+    if (!inView((x0v + x1v) / 2, (y0v + y1v) / 2, Math.max(x1v - x0v, y1v - y0v) / 2 + 2)) continue;
     // a fallen pylon in every cut
     if (ln.B) for (const c of magCut(ln.A, ln.B)) drawMagPylon(ctx, { owner: ln.owner, x: c.i, y: c.j, k: c.k, line: 0 }, ox + (c.i + 0.5) * z, oy + (c.j + 0.5) * z, z, true);
     const powered = !ln.suspended && ln.B ? magPairPowered(ln.A, ln.B) : false;
-    for (const [d0, d1] of ln.spans) {
-      const x0 = ax + ux * d0 * z, y0 = ay + uy * d0 * z - H, x1 = ax + ux * d1 * z, y1 = ay + uy * d1 * z - H;
+    for (const [d0, d1] of ln.spans) for (const [px0, py0, px1, py1] of magPieces(P, d0, d1)) {
+      const x0 = ox + px0 * z, y0 = oy + py0 * z - H, x1 = ox + px1 * z, y1 = oy + py1 * z - H;
       magBand(ctx, ln.owner, x0, y0, x1, y1, z, false);
       if (ln.B && !ln.suspended && !murmurDarkAt(ln.A.x, ln.A.y)) magGlow(ctx, ln.owner, x0, y0, x1, y1, z, powered ? 1 : 0.3);
       if (ln.suspended) {
@@ -9246,11 +9270,11 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
       const got = ln.spans.length ? ln.spans[0][1] : MAG_END;
       ctx.save();
       ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.setLineDash([z * 0.15, z * 0.12]);
-      ctx.beginPath(); ctx.moveTo(ax + ux * got * z, ay + uy * got * z - H); ctx.lineTo(ax + ux * (ln.L - MAG_END) * z, ay + uy * (ln.L - MAG_END) * z - H); ctx.stroke();
+      ctx.beginPath(); for (const [px0, py0, px1, py1] of magPieces(P, got, ln.L - MAG_END, 0)) { ctx.moveTo(ox + px0 * z, oy + py0 * z - H); ctx.lineTo(ox + px1 * z, oy + py1 * z - H); } ctx.stroke();
       ctx.restore();
       continue;
     }
-    for (const T of ln.suspended ? [ln.survivor] : [ln.A, ln.B]) if (!docked.has(T.id)) docked.set(T.id, [T, T === ln.A ? ang : ang + Math.PI]);
+    for (const T of ln.suspended ? [ln.survivor] : [ln.A, ln.B]) if (!docked.has(T.id)) docked.set(T.id, [T, T === ln.A ? ang : angB]);
     if (ln.suspended) {
       // the lost Terminal: its outline where it stood, dashed and pulsing, until one is built there again
       const mx = ox + (ln.missing.x + 0.5) * z, my = oy + (ln.missing.y + 0.5) * z, pulse = 0.65 + 0.35 * Math.sin(R.time * 3);
@@ -9267,16 +9291,16 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
     }
     const F = ln.A.magFix;
     if (F && F.u && F.since > 0) {
-      const E = magFixEnd(ln.A), f = clamp((S.time - F.since) / (MAGLEV.repair * 0.3), 0, 1), d = F.k * MAGLEV.spacing;
-      const ex = E.x + 0.5, ey = E.y + 0.5, tx = ln.A.x + 0.5 + ux * d, ty = ln.A.y + 0.5 + uy * d;
-      drawMagPod(ctx, ln.owner, ox + (ex + (tx - ex) * f) * z, oy + (ey + (ty - ey) * f) * z, z, ang, false);
+      // the repair pod rides out along the guideway from the end nearer the break
+      const E = magFixEnd(ln.A), f = clamp((S.time - F.since) / (MAGLEV.repair * 0.3), 0, 1), d = magSpotD(ln.A, ln.B, F.k);
+      const at = E === ln.A ? d * f : ln.L - (ln.L - d) * f, [rx, ry, rux, ruy] = magPathAt(P, at);
+      drawMagPod(ctx, ln.owner, ox + rx * z, oy + ry * z, z, Math.atan2(ruy, rux), false);
     }
   }
   // pods: running (at their place along their line, turned along it), and one docked at each Terminal
   for (const u of S.bots) {
     if (u.dead || !BOTS[u.type].magpod || !u.magTo || !inView(u.x, u.y, 2)) continue;
-    const to = getE(u.magTo), from = getE(u.magFrom);
-    const ang = to && from ? Math.atan2(to.y - from.y, to.x - from.x) : to ? Math.atan2(to.y + 0.5 - u.y, to.x + 0.5 - u.x) : 0;
+    const ang = u.face ?? 0; // (along its stretch of the line: movePod)
     drawMagPod(ctx, u.owner, ox + u.x * z, oy + u.y * z, z, ang, !!(u.cargo && sumValues(u.cargo) > 0));
   }
   for (const [T, ang] of docked.values()) {
@@ -9310,17 +9334,24 @@ function drawMaglevPreview(ctx, ox, oy, z, E) {
   const A = getE(UI.ropeA.id);
   if (!A || A.dead) return;
   const H = MAGLEV.head * z;
-  const legs = E.via ? [[A.x, A.y, E.via.i, E.via.j], [E.via.i, E.via.j, E.i, E.j]] : [[A.x, A.y, E.i, E.j]];
+  const c = (i, j) => [i + 0.5, j + 0.5], bends = E.bends || [];
+  const paths = E.via ? [[c(A.x, A.y), c(E.via.i, E.via.j)], [c(E.via.i, E.via.j), c(E.i, E.j)]] : [[c(A.x, A.y), ...bends.map(([i, j]) => c(i, j)), c(E.i, E.j)]];
   const firstBad = (E.spots || []).filter((s) => s.kind === 'bad').sort((p, q) => (p.dA ?? p.d) - (q.dA ?? q.d))[0];
-  for (const [x0, y0, x1, y1] of legs) {
-    const L = dist(x0, y0, x1, y1) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L, bx = ox + (x0 + 0.5) * z, by = oy + (y0 + 0.5) * z;
+  for (const pts of paths) {
+    const L = magPathLen(pts) || 1;
     // the band, up to the first blocked spot (red and dashed beyond it)
-    const stop = !E.ok && firstBad && !E.via ? clamp((firstBad.dA ?? firstBad.d) - 0.8, MAG_END, L - MAG_END) : L - MAG_END;
+    const stop = !E.ok && firstBad && !E.via ? clamp((firstBad.dA ?? firstBad.d) - 0.8, MAG_END, L - MAG_END) : !E.ok && !E.via ? MAG_END : L - MAG_END;
     ctx.save();
     ctx.globalAlpha *= E.ok ? 0.75 : 0.5;
-    if (stop > MAG_END + 0.2) magBand(ctx, ME, bx + ux * MAG_END * z, by + uy * MAG_END * z - H, bx + ux * stop * z, by + uy * stop * z - H, z, false);
+    if (stop > MAG_END + 0.2) for (const [x0, y0, x1, y1] of magPieces(pts, MAG_END, stop)) magBand(ctx, ME, ox + x0 * z, oy + y0 * z - H, ox + x1 * z, oy + y1 * z - H, z, false);
     ctx.restore();
-    if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.85)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); ctx.moveTo(bx + ux * stop * z, by + uy * stop * z - H); ctx.lineTo(ox + (x1 + 0.5) * z, oy + (y1 + 0.5) * z - H); ctx.stroke(); ctx.restore(); }
+    if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.85)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); for (const [x0, y0, x1, y1] of magPieces(pts, stop, L, 0)) { ctx.moveTo(ox + x0 * z, oy + y0 * z - H); ctx.lineTo(ox + x1 * z, oy + y1 * z - H); } ctx.stroke(); ctx.restore(); }
+  }
+  // the bends: a diamond at deck height over each
+  for (const [i, j] of bends) {
+    const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z - H, r = z * 0.22;
+    ctx.save(); ctx.strokeStyle = E.ok ? MAG_SPOT.ok : MAG_SPOT.moved; ctx.lineWidth = Math.max(1.5, z * 0.07);
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke(); ctx.restore();
   }
   ctx.lineWidth = Math.max(1.5, z * 0.06);
   for (const sp of E.spots || []) {

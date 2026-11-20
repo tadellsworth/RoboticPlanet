@@ -4293,7 +4293,7 @@ function renderMagSection(b) {
   const ps = magPartners(b), net = ps.length ? magNet(b) : [b], site = magPending(b), miss = magMiss(b);
   const pods = ps.length ? linePods(b) : S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && u.home === b.id);
   const lines = ps.map((o) => { const K = magKey(b, o); return { o, cut: magPairCut(b, o), powered: magPairPowered(b, o), fix: K.magFix }; });
-  const sig = JSON.stringify([lines.map((l) => [l.o.id, l.cut, l.powered, l.fix && l.fix.u, l.fix && l.fix.paid, magPowered(l.o)]), net.length, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, miss, b.magRelay, magPowered(b), flareOn(), b.auto, b.autoOff, sumValues(b.inc), magSlots(b)]);
+  const sig = JSON.stringify([lines.map((l) => [l.o.id, l.cut, l.powered, l.fix && l.fix.u, l.fix && l.fix.paid, magPowered(l.o)]), net.length, b.home, pods.map((u) => [u.id, podStatus(u)]), site && Math.round(site.progress * 100), !!b.magFrom, miss, b.magRelay, magPowered(b), flareOn(), b.auto, b.autoOff, sumValues(b.inc), magSlots(b), b.magThrough || 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let h = '';
@@ -4308,16 +4308,19 @@ function renderMagSection(b) {
     const cut = lines.find((l) => l.cut);
     if (cut) h += `<p class="hint">${cut.fix && cut.fix.u ? 'A Worker is riding out to rebuild the pylon.' : cut.fix && !cut.fix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods keep off that line until then.</p>`;
     else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends of a line need power.`}</p>`; }
-    h += `<p class="hint">${ps.length > 1 ? 'Pods carry goods on through this hub, line by line: it keeps what the Terminals beyond it want, and passes their spare goods on home.' : farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
+    const bent = ps.map((o) => { const K = magKey(b, o); return (K.magBends || []).length; }).reduce((a, n) => a + n, 0);
+    if (bent) h += `<div class="kv"><span>Bends</span><span>${bent} (pods slow round the sharp ones)</span></div>`;
+    if (ps.length > 1) h += `<div class="kv"><span>Pods through without stopping</span><span>${b.magThrough || 0}</span></div>`;
+    h += `<p class="hint">${ps.length > 1 ? 'Pods carry goods on through this hub without stopping: what the Terminals beyond it want stays aboard, the rest is unloaded here, and they top up as they pass.' : farStation(b) ? 'This is the far Terminal: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Terminal (nearer your Command Base): it keeps what the far Terminal wants, ready to load.'} The line draws power from the Generators in reach of each Terminal.</p>`;
     h += pods.length ? `<div class="kv"><span>${net.length > 2 ? 'Pods on the network' : 'Pods on the line'}</span><span>${pods.length} of ${magPodCap(b)}</span></div>` + pods.map((u) => `<div class="kv army-row"><span>${podStatus(u)}</span><span><button class="btn small ghost" data-pod="${u.id}">Pod ›</button></span></div>`).join('')
       : '<p class="hint"><b>No pods yet:</b> order them in the pod bay below (4 Alloy, 2 Chips each).</p>';
   }
   miss.forEach((m, k) => {
     const check = magLineCheck(ME, b, m.x, m.y);
-    h += `<div class="status err">Service suspended: the Terminal ${dirText(b, m)} is down.</div><p class="hint">Its guideway and pylons still stand, the line broken until a Terminal goes up on that tile again (at a Terminal's own cost: the guideway is free). The pods wait at this end.</p>`;
+    h += `<div class="status err">Service suspended: the Terminal ${dirText(b, m)} is down.</div><p class="hint">Its guideway and pylons still stand, the line broken until a Terminal goes up on that tile again: on its old foundation it costs half (${costText(magRebuildCost())}), and the guideway is free. The pods wait at this end.</p>`;
     if (site && site.x === m.x && site.y === m.y) h += `<p class="hint">Replacement Terminal: ${Math.round(site.progress * 100)}% complete.</p>`;
     else if (check.why) h += `<p class="hint">${check.why}</p>`;
-    else h += `<button class="btn primary" id="sh-magrebuild${k ? k : ''}" data-miss="${k}">Rebuild the missing Terminal</button>`;
+    else h += `<button class="btn primary" id="sh-magrebuild${k ? k : ''}" data-miss="${k}">Rebuild the missing Terminal (${costText(magRebuildCost())})</button>`;
   });
   if (site && !magRebuildSite(b, site)) {
     h += `<div class="status">A line is going up from here: ${Math.round(site.progress * 100)}%.</div><p class="hint">A Worker standing here builds it out, pylon by pylon; the far Terminal goes up last. It is paid from storage as the goods come in (${costText(stillOwed(site))} still owed).${site.magNext ? ' Once that Terminal is up, the line goes on from it (a hub) to the far end.' : ''}</p>`;
@@ -4356,34 +4359,60 @@ function renderMagSection(b) {
 function openMaglevFrom(b) {
   closeSheet();
   enterPlaceMode('maglev');
-  UI.ropeA = { i: b.x, j: b.y, id: b.id };
+  UI.ropeA = { i: b.x, j: b.y, id: b.id }; UI.ropeBends = [];
   R.overlay = null;
   showBanner(maglevFarText(b), null, 'Cancel');
 }
 
 function maglevFarText(b) {
   if (b.magMissing && magSlots(b) >= MAGLEV.hub) return 'Tap the original end of the guideway to reconnect the line. You only pay for a replacement Terminal.';
-  return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours${magPartners(b).length ? ' (this one becomes a hub)' : ''}.${b.magMissing ? ' Tap the lost Terminal\'s tile to rebuild it instead.' : ''} The preview rings each pylon spot: <span style="color:${MAG_SPOT.ok}">a pylon</span>, <span style="color:${MAG_SPOT.road}">over a road (it stays open)</span>, <span style="color:${MAG_SPOT.moved}">shifted a tile</span>, <span style="color:${MAG_SPOT.bad}">blocked</span>. ${costText(magLineCost(1))} a tile, from storage.`;
+  return `Now tap the <b>far end</b>: ${MAGLEV.min} to ${MAGLEV.max} tiles away in any direction, a clear spot (the far Terminal goes up there) or another Maglev Terminal of yours${magPartners(b).length ? ' (this one becomes a hub)' : ''}; or tap a spot on the way and <b>Bend here</b> (up to ${MAGLEV.bends} bends).${b.magMissing ? ' Tap the lost Terminal\'s tile to rebuild it instead.' : ''} The preview rings each pylon spot: <span style="color:${MAG_SPOT.ok}">a pylon</span>, <span style="color:${MAG_SPOT.road}">over a road (it stays open)</span>, <span style="color:${MAG_SPOT.moved}">shifted a tile</span>, <span style="color:${MAG_SPOT.bad}">blocked</span>. ${costText(magLineCost(1))} a tile, from storage.`;
 }
 
-/** The preview of a line from the near Terminal picked to (i, j): R.ropeEnd (drawMaglevs draws it); `via`: a route through a hub there. */
-function maglevPreview(i, j, tapped, via) {
+/**
+ * The preview of a line from the near Terminal picked to (i, j): R.ropeEnd (drawMaglevs draws it); `via`: a route
+ * through a hub there; `bends`: the tiles it bends at (the bends placed so far, UI.ropeBends, by default).
+ */
+function maglevPreview(i, j, tapped, via, bends) {
   const A = getE(UI.ropeA && UI.ropeA.id);
   if (!A || !inMap(i, j)) { R.ropeEnd = null; return null; }
   if (via) {
     const one = magLineCheck(ME, A, via.i, via.j), two = magLineCheck(ME, magGhost(ME, via.i, via.j, one.key === -1), i, j);
-    R.ropeEnd = { i, j, ok: true, why: '', spots: [...one.spots, ...two.spots], far: two.far ? two.far.id : 0, tapped: !!tapped, via };
+    R.ropeEnd = { i, j, ok: true, why: '', spots: [...one.spots, ...two.spots], far: two.far ? two.far.id : 0, tapped: !!tapped, via, bends: [], L: one.L + two.L };
     return R.ropeEnd;
   }
-  const chk = magLineCheck(ME, A, i, j);
-  R.ropeEnd = { i, j, ok: !chk.why, why: chk.why, spots: chk.spots, far: chk.far ? chk.far.id : 0, tapped: !!tapped, rebuild: !!chk.miss };
+  bends = bends || UI.ropeBends || [];
+  const chk = magLineCheck(ME, A, i, j, bends);
+  R.ropeEnd = { i, j, ok: !chk.why, why: chk.why, spots: chk.spots, far: chk.far ? chk.far.id : 0, tapped: !!tapped, rebuild: !!chk.miss, bends: chk.miss ? [] : bends, L: chk.L };
   return R.ropeEnd;
 }
 
+/** The bend buttons for the Maglev banner: Bend here (at tile (i, j), when a bend can go there) and Undo bend. */
+function maglevBendButtons(A, i, j) {
+  const why = magBendTry(ME, A, UI.ropeBends || [], i, j), n = (UI.ropeBends || []).length;
+  return ` <span class="mag-bends">${!why ? '<button class="btn small" id="mag-bend">Bend here</button>' : ''}${n ? ` <button class="btn small ghost" id="mag-unbend">Undo bend (${n})</button>` : ''}</span>`;
+}
+function maglevBendWire(A, i, j) {
+  if ($('mag-bend')) $('mag-bend').onclick = () => {
+    sfx('click');
+    (UI.ropeBends = UI.ropeBends || []).push([i, j]);
+    R.ropeEnd = null;
+    showBanner(`Bend ${UI.ropeBends.length} at that pylon: now tap the next bend or the <b>far end</b>. Each stretch runs ${MAGLEV.seg} to ${MAGLEV.max} tiles, ${MAGLEV.maxBent} in all, turning ${MAGLEV.turn}° at most.${maglevBendButtons(A, -1, -1)}`, null, 'Cancel');
+    maglevBendWire(A, -1, -1);
+  };
+  if ($('mag-unbend')) $('mag-unbend').onclick = () => {
+    sfx('click');
+    (UI.ropeBends || []).pop();
+    R.ropeEnd = null;
+    showBanner(`${UI.ropeBends.length ? `${UI.ropeBends.length} bend${UI.ropeBends.length > 1 ? 's' : ''} so far: tap` : 'Tap'} the next bend or the <b>far end</b>.${maglevBendButtons(A, -1, -1)}`, null, 'Cancel');
+    maglevBendWire(A, -1, -1);
+  };
+}
+
 /**
- * Placing a Maglev line: the first tap picks the near Terminal, the second the far end (tap it again to build). A far
- * end that can't be had snaps to a good tile beside it; a line that can't go straight there (a blocked stretch, or too
- * far) is offered via a hub Terminal on the way.
+ * Placing a Maglev line: the first tap picks the near Terminal, the second the far end (tap it again to build), or a
+ * bend on the way (Bend here; Undo bend). A far end that can't be had snaps to a good tile beside it; a line that can't
+ * go straight there (a blocked stretch, or too far) is offered with a bend or two round it, or else via a hub Terminal.
  */
 function maglevTap(i, j) {
   if (!UI.ropeA) {
@@ -4391,7 +4420,7 @@ function maglevTap(i, j) {
     const why = !b || b.owner !== ME || !BDEFS[b.type].magterm ? 'Tap one of your Maglev Terminals (highlighted) for the near end.' : !b.built ? 'That Terminal is still going up: the line starts from a finished one.'
       : magPending(b) ? 'That Terminal\'s line is still going up.' : b.magFrom ? 'A line is coming to that Terminal already.' : magSlots(b) >= MAGLEV.hub && !b.magMissing ? `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.` : '';
     if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
-    UI.ropeA = { i, j, id: b.id };
+    UI.ropeA = { i, j, id: b.id }; UI.ropeBends = [];
     R.overlay = null; R.ghost = null;
     sfx('click');
     showBanner(maglevFarText(b), null, 'Cancel');
@@ -4399,40 +4428,52 @@ function maglevTap(i, j) {
   }
   const A = getE(UI.ropeA.id);
   if (!A || A.dead) { setMode('normal'); return; }
+  UI.ropeBends = UI.ropeBends || [];
   if (R.ropeEnd && R.ropeEnd.tapped && R.ropeEnd.ok && ((R.ropeEnd.i === i && R.ropeEnd.j === j) || (R.ropeEnd.via && R.ropeEnd.via.i === i && R.ropeEnd.via.j === j) || (R.ropeEnd.snapFrom === tIdx(i, j)))) { confirmBanner(); return; }
   let E = maglevPreview(i, j, true), note = '';
-  const tapped = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
-  if (E && !E.ok && !E.rebuild && !(E.spots && E.spots.length) && !(tapped && BDEFS[tapped.type].magterm)) {
+  const tapped = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null, bendBtns = maglevBendButtons(A, i, j);
+  if (E && !E.ok && !E.rebuild && !(E.spots && E.spots.length) && !(tapped && BDEFS[tapped.type].magterm) && !/Too far|Too close|bend/i.test(E.why)) {
     // the far end itself is bad (a road, a building, rough ground): snap to the nearest good tile beside it
     const near = FEED_NB.map(([di, dj]) => [i + di, j + dj]).filter(([x, y]) => inMap(x, y)).sort(([a, b], [c, d]) => dist2(a, b, A.x, A.y) - dist2(c, d, A.x, A.y))
-      .find(([x, y]) => !magLineCheck(ME, A, x, y).why);
+      .find(([x, y]) => !magLineCheck(ME, A, x, y, UI.ropeBends).why);
     if (near) { const why = E.why; E = maglevPreview(near[0], near[1], true); E.snapFrom = tIdx(i, j); note = `<span class="hint">${why} The far end moved a tile, to a spot that works.</span> `; }
   }
-  if (E && !E.ok && !E.rebuild) {
-    // no straight line there: offer a route via a hub
+  if (E && !E.ok && !E.rebuild && !UI.ropeBends.length) {
+    // no straight line there: offer one with a bend or two round what's in the way, else a route via a hub
+    const why = E.why, bends = magRouteBend(ME, A, E.i, E.j);
+    if (bends) {
+      E = maglevPreview(E.i, E.j, true, null, bends);
+      const n = Math.round(E.L), far = E.far ? getE(E.far) : null, cost = magLineCost(n);
+      if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+      sfx('click');
+      showBanner(`<span class="err">${why}</span> <b>Route with ${bends.length === 1 ? 'a bend' : `${bends.length} bends`}</b>: a line ${n} tiles long round it, bending at ${bends.length === 1 ? 'a pylon' : `${bends.length} pylons`} (no Terminal on the way)? ${costInline(cost, playerGoods(ME))}${bendBtns}`, 'Build', 'Cancel');
+      maglevBendWire(A, i, j);
+      return;
+    }
     const via = magRouteVia(ME, A, E.i, E.j);
     if (via) {
-      const why = E.why;
       E = maglevPreview(E.i, E.j, true, via);
       const n = via.n1 + via.n2, cost = magLineCost(via.n1);
       const c2 = magLineCost(via.n2);
       for (const g in c2) cost[g] = (cost[g] || 0) + c2[g];
       for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g] * (E.far ? 1 : 2);
       sfx('click');
-      showBanner(`<span class="err">${why}</span> <b>Route via a hub</b>: two lines, ${via.n1} and ${via.n2} tiles (${n} in all), through a new hub Terminal on the way? ${costInline(cost, playerGoods(ME))} (the second line is planned once the hub is up)`, 'Build', 'Cancel');
+      showBanner(`<span class="err">${why}</span> <b>Route via a hub</b>: two lines, ${via.n1} and ${via.n2} tiles (${n} in all), through a new hub Terminal on the way? ${costInline(cost, playerGoods(ME))} (the second line is planned once the hub is up)${bendBtns}`, 'Build', 'Cancel');
+      maglevBendWire(A, i, j);
       return;
     }
   }
-  if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end.`, null, 'Cancel'); return; }
-  const fi = E.i, fj = E.j, n = Math.round(dist(A.x, A.y, fi, fj)), far = E.far ? getE(E.far) : null, cost = E.rebuild ? {} : magLineCost(n);
-  if (!far) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
+  if (!E || !E.ok) { sfx('error'); showBanner(`<span class="err">${E ? E.why : 'Outside the map.'}</span> Tap another far end${UI.ropeBends.length ? ', or undo a bend' : ''}.${bendBtns}`, null, 'Cancel'); maglevBendWire(A, i, j); return; }
+  const fi = E.i, fj = E.j, n = Math.round(E.L || dist(A.x, A.y, fi, fj)), far = E.far ? getE(E.far) : null, cost = E.rebuild ? magRebuildCost() : magLineCost(n);
+  if (!far && !E.rebuild) for (const g in BDEFS.magterm.cost) cost[g] = (cost[g] || 0) + BDEFS.magterm.cost[g];
   if (E.rebuild) {
-    showBanner(far?.built ? 'Reconnect the surviving guideway to this Terminal?' : `Rebuild the missing Terminal? ${far ? 'Continue its construction.' : `${costInline(cost, playerGoods(ME))} (a Terminal's own cost: the guideway stands)`}`, far?.built ? 'Reconnect' : 'Build', 'Cancel');
+    showBanner(far?.built ? 'Reconnect the surviving guideway to this Terminal?' : `Rebuild the missing Terminal? ${far ? 'Continue its construction.' : `${costInline(cost, playerGoods(ME))} (half a Terminal's cost, on its old foundation: the guideway stands)`}`, far?.built ? 'Reconnect' : 'Build', 'Cancel');
     return;
   }
   const pyl = E.spots.filter((s) => s.kind === 'ok').length, gaps = E.spots.filter((s) => s.kind === 'skip').length, roads = E.spots.filter((s) => s.kind === 'ok' && s.road).length, moved = E.spots.filter((s) => s.kind === 'ok' && s.moved != null).length;
-  const extra = [gaps ? `${gaps} gap${gaps > 1 ? 's' : ''} spanned` : '', roads ? `${roads} over a road or track` : '', moved ? `${moved} shifted a tile` : ''].filter(Boolean).join(', ');
-  showBanner(`${note}A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}${magPartners(A).length || (far && magPartners(far).length) ? ': a hub, pods carry on through it' : ''}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
+  const nb = E.bends.length, extra = [nb ? `bending ${nb === 1 ? 'once' : `${nb} times`}` : '', gaps ? `${gaps} gap${gaps > 1 ? 's' : ''} spanned` : '', roads ? `${roads} over a road or track` : '', moved ? `${moved} shifted a tile` : ''].filter(Boolean).join(', ');
+  showBanner(`${note}A <b>Maglev line</b> ${n} tiles long, ${pyl} pylon${pyl === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}${far ? far.built ? ', to your Terminal there' : ', to your Terminal site there' : ', the far Terminal included'}${magPartners(A).length || (far && magPartners(far).length) ? ': a hub, pods carry on through it' : ''}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})${bendBtns}`, 'Build', 'Cancel');
+  maglevBendWire(A, i, j);
 }
 
 /* ------------------------------------------------------------------ Mooring Masts and Airships */
@@ -4959,8 +5000,8 @@ const CROSSING_HOW = {
     `It's an ordinary site (${costText(BDEFS.ropeway.cost)}): Haulers bring the goods to the near station, so lay a road to it. Once it's built the cable goes across and the far station goes up. ` +
     'Haulers, Workers and warbots ride it as part of your road network; Freight Trucks, Road Trains and Crawlers are too heavy and keep to the roads.',
   maglev: () => `A Maglev line is an elevated guideway on pylons between two Maglev Terminals (Build → Move → Maglev Terminal, ${costText(BDEFS.magterm.cost)}), ${MAGLEV.min} to ${MAGLEV.max} tiles apart in any direction, straight across water, cliffs and chasms. Tap a finished Terminal of yours, then the far end: a clear spot where the far Terminal goes up, or another Terminal of yours. ` +
-    `A pylon stands every ${MAGLEV.spacing} tiles, on open ground or in shallow water, or over a road or track with its feet at the side (the way stays open). A blocked spot shifts to a tile beside it. A chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles). The preview rings each spot: green a pylon, blue over a road, yellow shifted a tile, red blocked (the reason beside it); a far end on a road or building snaps to a good tile beside it, and where no straight line can go (or it's over ${MAGLEV.max} tiles) the tool offers a <b>Route via a hub</b>: two lines through a new Terminal on the way. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
-    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it. A Terminal joins up to ${MAGLEV.hub} lines (a <b>hub</b>): tap one already on a line and the new line meets it there, and pods carry goods on through it, line by line (${MAGLEV.perLine} pods for each line of the network). Terminals of two lines side by side also pass freight by conveyor. If a Terminal falls, its lines stand broken until you rebuild it on the same tile (a Terminal's own cost; the guideway is free).`,
+    `A pylon stands every ${MAGLEV.spacing} tiles, on open ground or in shallow water, or over a road or track with its feet at the side (the way stays open). A blocked spot shifts to a tile beside it. A chasm under one spot is spanned (a gap of up to ${MAGLEV.gap} tiles). The preview rings each spot: green a pylon, blue over a road, yellow shifted a tile, red blocked (the reason beside it); a far end on a road or building snaps to a good tile beside it, a line can bend at up to ${MAGLEV.bends} pylons (tap a spot on the way, then <b>Bend here</b>; each stretch ${MAGLEV.seg} to ${MAGLEV.max} tiles, ${MAGLEV.maxBent} in all, turning ${MAGLEV.turn}° at most), and where no straight line can go (or it's over ${MAGLEV.max} tiles) the tool offers <b>Route with a bend</b>, else a <b>Route via a hub</b>: two lines through a new Terminal on the way. Pods slow round sharp bends. It costs ${costText(magLineCost(1))} a tile (and the far Terminal its own cost when it's new), paid from storage as the goods come in; a Worker standing at the near Terminal builds it out, pylon by pylon, the far Terminal last. ` +
+    `Order Maglev Pods on a Terminal's panel (4 Alloy, 2 Chips each, ${MAGLEV.perLine} to a line): ${BOTS.magpod.carry} goods a trip, several kinds, both ways, at three times a Freight Train's speed, with a Generator within ${BDEFS.generator.burner.radius} tiles of each Terminal (without, or in a solar flare, they crawl). Pylons can be shot down (a Wall's toughness): the line is cut until a Worker rides out and rebuilds it. A Terminal joins up to ${MAGLEV.hub} lines (a <b>hub</b>): tap one already on a line and the new line meets it there, and pods carry goods on through it without stopping (${MAGLEV.perLine} pods for each line of the network). Terminals of two lines side by side also pass freight by conveyor. If a Terminal falls, its lines stand broken until you rebuild it on the same tile (half a Terminal's cost from its panel; the guideway is free).`,
 };
 
 /**
@@ -5112,7 +5153,7 @@ function confirmBanner() {
   if (R.mode === 'place' && UI.placeType === 'maglev') {
     const A = UI.ropeA, E = R.ropeEnd;
     if (!A || !E || !E.ok) return;
-    act('magLine', E.via ? [A.id, E.i, E.j, E.via.i, E.via.j] : [A.id, E.i, E.j], (res) => {
+    act('magLine', E.via ? [A.id, E.i, E.j, E.via.i, E.via.j] : E.bends && E.bends.length ? [A.id, E.i, E.j, null, null, E.bends] : [A.id, E.i, E.j], (res) => {
       if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
       sfx('place'); haptic('order');
       addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });

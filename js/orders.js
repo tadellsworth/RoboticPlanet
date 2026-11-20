@@ -79,14 +79,16 @@ const ORDERS = {
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
   /**
    * Plan a Maglev line from Maglev Terminal `id` (built, with a line to spare) to tile (bi, bj): the far Terminal (or a
-   * Terminal there); at the end of a suspended line, the lost Terminal rebuilt. With (hx, hy): Route via a hub, two
-   * lines through a new hub Terminal there. { ok, reason, id }.
+   * Terminal there); at the end of a suspended line, the lost Terminal rebuilt (half price). With (hx, hy): Route via a
+   * hub, two lines through a new hub Terminal there. `bends`: the tiles it bends at, in order from the Terminal (a list
+   * of [i, j], up to MAGLEV.bends). { ok, reason, id }.
    */
-  magLine(p, id, bi, bj, hx, hy) {
+  magLine(p, id, bi, bj, hx, hy, bends) {
     const b = ownB(p, id);
     if (!b) return { ok: false, reason: 'That Maglev Terminal is gone.' };
     if (hx != null && hy != null) return placeMagRoute(p, b, bi | 0, bj | 0, hx | 0, hy | 0);
-    return placeMagLine(p, b, bi | 0, bj | 0);
+    if (bends != null && !(Array.isArray(bends) && bends.length <= MAGLEV.bends && bends.every((q) => Array.isArray(q) && q.length === 2))) return { ok: false, reason: 'Those bends can\'t be had.' };
+    return placeMagLine(p, b, bi | 0, bj | 0, (bends || []).map((q) => [q[0] | 0, q[1] | 0]));
   },
   /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
   mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
