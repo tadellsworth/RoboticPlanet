@@ -13,5 +13,7 @@ for (const t of [0, 1]) TOD_KEYS.push(`mdriver@${t}`, ...['e', 'w', 'n', 's'].ma
 // The megastructures (renderer/tools/install_lance.py): the Lance of Corvane's pit and its 16 heads, the Shield Dome's emitter.
 for (const t of [0, 1]) TOD_KEYS.push(`lance@${t}`, `dome@${t}`);
 for (let k = 0; k < 16; k++) TOD_KEYS.push(`lance-head-${k}`);
+// Arrival City (renderer/tools/install_city.py): whole and battle-damaged (its light layers serve every time of day).
+for (const t of [0, 1]) TOD_KEYS.push(`city@${t}`, `city-down@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);

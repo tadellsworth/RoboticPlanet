@@ -60,7 +60,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 **Game setup and structure**
 - **Megastructures are an enable-able checkbox on game setup,** like Nuclear race (BUILT, Nov 20 2026, with the Lance of
-  Corvane and the Shield Dome: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
+  Corvane and the Shield Dome, and Arrival City since: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
   settings; missions keep their own; a save from before it loads with them off), so games without them stay as
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
 - **A truly global map, a size above Huge,** for those who want an enormous battle, maybe with TWO biomes in it that slowly
@@ -388,7 +388,25 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Great Uplink.** A giant dish array to talk to home, and a new way to win: power it and hold it through a long
     transmission window to "make contact", while rivals try to wreck or jam it. Ties into the campaign's last mission
     ("No further instructions"); in free play a last-stage victory, with a lore twist on what answers.
-  - **Arrival City.** An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
+  - **Arrival City: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
+    *Aimed the Other Way*). The owner's look A from the design sheet (the Terraced Arcology, 4 × 4: three terraces of
+    homes stepping back to the north, a school and running track, a park and pond, allotments and two grazing deer, a
+    glass atrium with the Arrival clock at T+31, a ring road, a station with an empty tram, bus shelters, a welcome
+    sign; its windows lit on a timer at dusk, tier by tier, nobody home), the sheet's numbers (60 Cement, 30 Alloy, 15
+    Chips, 24 Fiber, 5 min; +20% work within 8 tiles for factories, gatherers and builders; 6 tiles of land counting
+    twice in Domination; a Fuel a minute at night or dark at half bonus; opens 15 minutes in). The owner's answers: it
+    can never be destroyed, only captured (knocked to 0 it's down: no bonus, battle damage, dark windows, capturable;
+    repairs bring it back; warbots at its walls 20 s take it); it stores nothing; not on Argos; a new Mega tab (key 6,
+    with the Lance and the Dome moved there). Rivals: one weapon and two megastructures at most (a Dome in answer to a
+    threat doesn't count); the Architect, Warden and Steward build it as their main project, the Salvager and Herald
+    don't (in Domination, all do); they march on a foe's City to take it. Still open, for the owner:
+    - Fuel for its lights was the sheet's recommendation and is in; the owner's answers didn't mention it. Keep it?
+    - "Repaired to a quarter of its armor, it's up again" and "taken from within 2.5 tiles of its walls" (its square is
+      solid, so warbots can't stand on it) are this build's readings of the answers.
+    - The sheet's "deer graze its terraces" is in the art only; real wildlife on its terraces would be a wildlife.js job.
+    - The sheet's school bell at dawn and the lights' click at dusk aren't in; its hum, the clock's chime and the station
+      chime (taken, or lit again) are.
+    The notes as filed: An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
     it goes up (the robots work harder for Arrival), and its land counts double for Domination. At night, a whole lit
     city for no one.
   - **Orbital Lift.** A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,

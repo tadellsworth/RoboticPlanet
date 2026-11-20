@@ -2026,7 +2026,38 @@ function aiFlood(p, from, seen, bottom, early) {
  * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1080, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3 };
+const AI_MEGA = { lanceAt: 1080, domeAt: 1200, cityAt: 900, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3 };
+
+/*
+ * How many megastructures a rival builds (the owner's rule, Nov 2026): at most AI_MEGA_CAP.weapons weapon and
+ * AI_MEGA_CAP.total in all. Each kind of megastructure is a 'weapon' (the Lance; the nukes count as one too: the choice
+ * between them, P.megaPick), a 'main' project (Arrival City) or a 'shield' (the Shield Dome, put up in answer to a
+ * threat: it never counts). A doctrine's main project is AI_MEGA_MAIN (none for the Salvager and the Herald); in
+ * Domination every doctrine's is Arrival City. A megastructure added later takes a kind here and fits under the cap.
+ */
+const AI_MEGA_CAP = { weapons: 1, total: 2 };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main' };
+const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'city', balanced: 'city', raider: null, rusher: null };
+
+/** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
+function aiMegaProjects(p) {
+  const P = S.players[p], types = new Set();
+  if (P.megaPick) types.add(P.megaPick === 'nuke' ? 'nukesilo' : P.megaPick);
+  for (const b of S.buildings) if (!b.dead && b.owner === p && AI_MEGA_KIND[b.type] && AI_MEGA_KIND[b.type] !== 'shield' && (BDEFS[b.type].mega || P.megaPick)) types.add(b.type);
+  let weapons = 0, total = 0;
+  for (const t of types) { if (AI_MEGA_KIND[t] === 'weapon') weapons++; total++; }
+  // (the Lance or the nukes is one choice: one weapon, however it's built)
+  if (weapons > 1) { total -= weapons - 1; weapons = 1; }
+  return { weapons, total, has: types };
+}
+/** May rival p start a megastructure project of `kind` ('weapon', 'main' or 'shield') under AI_MEGA_CAP? */
+function aiMegaRoom(p, kind) {
+  if (kind === 'shield') return true;
+  const n = aiMegaProjects(p);
+  return n.total < AI_MEGA_CAP.total && (kind !== 'weapon' || n.weapons < AI_MEGA_CAP.weapons);
+}
+/** Rival p's main megastructure project ('city' or null): its doctrine's, or Arrival City for anyone in Domination. */
+function aiMegaMain(p) { return S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[S.players[p].style] || null; }
 
 /**
  * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
@@ -2109,7 +2140,8 @@ function aiMega(p, me, lander, canBuild) {
   if (!megaOn() || S.mode === 'colony') return;
   const P = S.players[p];
   // The choice, once it has a Reactor fed with Uranium, late in the game.
-  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance')) P.megaPick = aiMegaPick(p);
+  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon')) P.megaPick = aiMegaPick(p);
+  aiCity(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2146,10 +2178,52 @@ function aiMega(p, me, lander, canBuild) {
   }
 }
 
-/** Has p half of everything a `type` costs in hand (a megastructure's site then fills as the rest comes in)? */
-function aiHalfway(p, type) {
+/**
+ * Arrival City, rival p's main project (aiMegaMain), from AI_MEGA.cityAt s once its economy runs (a Bot Foundry, and
+ * aiCityFunds; its site then has its goods first, prio 'high', and fills as they come in), on its own land where the most of its factories and gatherers will be within
+ * CITY.reach of its middle (aiCitySpot), a search every AI_MEGA.look s while it finds none. Never past the cap.
+ */
+function aiCity(p, me, lander, canBuild) {
+  const P = S.players[p], site = me.find((b) => !b.built && BDEFS[b.type].city);
+  if (site) { if (!site.prio) { site.prio = 'high'; site.sitePrio = 1; } return; } // (its goods come first: it fills as they come in)
+  if (aiMegaMain(p) !== 'city' || !canBuild || !lander || S.time < AI_MEGA.cityAt || me.some((b) => BDEFS[b.type].city)) return;
+  if (worldBan('city') || megaBlocked(p, 'city') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiCityFunds(p)) return;
+  if (S.time - (P.cityLook ?? -999) < AI_MEGA.look) return;
+  P.cityLook = S.time;
+  const spot = aiCitySpot(p, lander);
+  const r = spot && placeSite(p, 'city', spot[0], spot[1]);
+  if (r && r.ok) { P.cityAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+
+/**
+ * Has rival p the bulk goods for Arrival City in hand (half its Cement and Fiber)? Its Alloy and Chips never pile up
+ * (they go into warbots as fast as they're made), so the site waits for those, and gets them first.
+ */
+function aiCityFunds(p) { const have = playerGoods(p), c = BDEFS.city.cost; return have.cement >= c.cement / 2 && have.fiber >= c.fiber / 2 && have.alloy >= 2; }
+
+/** Where rival p's Arrival City goes: its corner on p's land, where its bonus reaches the most work, near its Command Base. */
+function aiCitySpot(p, lander) {
+  const F = BDEFS.city.foot, R = 16, work = [], cands = [];
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && (BDEFS[b.type].staff || BDEFS[b.type].inp)) work.push(b);
+  for (let j = lander.y - R; j <= lander.y + R; j++) for (let i = lander.x - R; i <= lander.x + R; i++) {
+    if (!inMap(i, j) || !inMap(i + F - 1, j + F - 1)) continue;
+    let open = true;
+    for (let dj = 0; dj < F && open; dj++) for (let di = 0; di < F; di++) { const t = tIdx(i + di, j + dj); if (S.owner[t] !== p || S.bAt[t] || S.terrain[t] !== T_GROUND || S.res[t] || S.road[t]) { open = false; break; } }
+    if (!open) continue;
+    const cx = i + F / 2, cy = j + F / 2;
+    let n = 0;
+    for (const b of work) if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= CITY.reach * CITY.reach) n++;
+    cands.push([n * 3 - dist(cx, cy, lander.x + 0.5, lander.y + 0.5) * 0.25, i, j]);
+  }
+  cands.sort((a, b) => b[0] - a[0] || a[2] - b[2] || a[1] - b[1]);
+  for (let k = 0; k < Math.min(14, cands.length); k++) if (canPlace(p, 'city', cands[k][1], cands[k][2]).ok) return [cands[k][1], cands[k][2]];
+  return null;
+}
+
+/** Has p half (or `share`) of everything a `type` costs in hand (a megastructure's site then fills as the rest comes in)? */
+function aiHalfway(p, type, share = 0.5) {
   const have = playerGoods(p), cost = BDEFS[type].cost;
-  for (const g in cost) if ((have[g] || 0) < cost[g] / 2) return false;
+  for (const g in cost) if ((have[g] || 0) < cost[g] * share) return false;
   return true;
 }
 
@@ -2886,13 +2960,14 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   }
   if (!storm || tgt) P.stormT = 0;
   if (!storm) for (const b of S.buildings) {
-    if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue;
+    // (Its forts, and the enemy's Arrival City: knocked down and held, it's theirs, land, bonus and all: see cityCapture.)
+    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city) || BDEFS[b.type].bunker) continue;
     const at = !aiBeaten(P, b, 22) && spotBy(b);
     if (!at) continue;
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0);
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0); // (Arrival City: the richest prize, more so in Domination)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -2904,7 +2979,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
-      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j); // (at the gun covering the flag first: see holdRally)
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
