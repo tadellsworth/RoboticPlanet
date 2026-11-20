@@ -739,6 +739,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Crawlers** (`updateCrawler`, `deployCrawler`, `packCrawler`): a slow tracked bot that drives off-road and deploys
   into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
   turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.
+- **Dismantled crates:** idle Haulers take reachable crates before their regular jobs. Workers can carry the remainder
+  when Haulers cannot take it, after construction, staffing and other local Worker jobs.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the

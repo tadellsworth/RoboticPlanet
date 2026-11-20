@@ -2043,13 +2043,11 @@ function dispatch(p) {
   }
   const tankerReach = (src, dst) => fleetReaches(tankNets, src, dst);
 
-  // Dismantled buildings' crates get first call on the colony's idle haulers. (Not a rival's: it dismantles every
-  // gatherer that runs dry and every stuck site, and its haulers then fetched those crates before the Fiber and Alloy
-  // its new sites were waiting for: a colony on Crossroads stalled from minute 4 and fell at 13.)
-  function collectCrates(priority) {
+  // Dismantled buildings get first call on idle Haulers. Workers help with what's left after their normal work.
+  function collectCrates(priority, workersOnly = false) {
     for (const l of S.loot || []) {
       if (!idle.length) return;
-      if ((l.dismantled === p && !P.ai) !== priority) continue;
+      if ((l.dismantled === p) !== priority) continue;
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
@@ -2061,15 +2059,20 @@ function dispatch(p) {
           .filter(({left}) => left > 0).sort((a, b) => b.left - a.left);
         let chosen = -1, good, amount;
         for (const {g, left} of goods) {
-          const liq = isLiquid(g), wants = liq ? [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul']
+          const liq = isLiquid(g);
+          const wants = workersOnly ? ['worker'] : liq ? (priority ? ['haul', 'tanker'] : [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul'])
             : left >= TRUCK_MIN_LOAD * 2 ? (priority ? ['haul', 'truck'] : ['truck', 'haul']) : ['haul'];
           let bd = Infinity;
           for (const want of wants) {
             for (let k = 0; k < idle.length; k++) {
               const u = idle[k], bt = BOTS[u.type];
               if (u.failGoal === tIdx(l.x, l.y) && u.failUntil > S.time) continue;
-              if (bt.rail || bt.sea || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
-              if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
+              if (want === 'worker') {
+                if (u.type !== 'worker' || zoneAt(u.x, u.y) !== zoneAt(l.x, l.y) || !crateStore(u, g, l, 1)) continue;
+              } else {
+                if (bt.rail || bt.sea || bt.train || !(bt.haul || (!priority && P.noHaulers && bt.build))) continue;
+                if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
+              }
               if (roadBound(u) && !botNets(u).some((n) => (bt.truck ? netsT : nets).includes(n))) continue;
               const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
               if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u)) continue;
@@ -2493,6 +2496,7 @@ function dispatch(p) {
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
+  collectCrates(true, true);
   // 7) Haulers with nothing else to do salvage scrap near a road on the colony's land (War scars: see salvageRun).
   salvageRun(p, idle);
 }
@@ -6207,6 +6211,7 @@ function crateStore(u, g, l, n) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || tankRoom(b) < n || evacuated(b) || shunned(b)) continue;
     if (nets && !buildingNets(b, !!bt.truck).some((k) => nets.indexOf(k) >= 0)) continue;
+    if (u.type === 'worker' && S.zone[tIdx(b.x, b.y)] !== S.zone[tIdx(l.x, l.y)]) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, l.x + 0.5, l.y + 0.5);
     if (d < bd) { bd = d; best = b; }
   }
