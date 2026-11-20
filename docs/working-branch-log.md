@@ -146,3 +146,12 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Shortened six goal hints, preserved Harbour and Airlift's step-by-step highlights, and moved King of the Hill into War before Final Descent. The mission data check covers the 110-character limit, building targets, affected controls, and saved mission IDs.
 
+
+### Freight, salvage, and night lighting
+
+- Restricted Cargo Plane freight to a finished, owned Trade Terminal. Old or interrupted drops cannot spawn freight on open ground. Airlift now teaches a Worker parachute drop in its final goal.
+- Hid redundant Oil Pump pipe shortcuts beside a Refinery or Fuel Tank and when the route was already planned.
+- Softened road-vehicle exhaust, brake lights, and air brakes. Exhaust tops out at 48 active puffs and the air-brake audio has a global 1.8-second gap.
+- Gave idle Haulers first call on their colony’s dismantled crates, with idle Workers handling reachable leftovers after their regular tasks.
+- Reduced the Command Base beacon’s height limit from 33% to 16% of the view. Always day still uses the illuminated mast without a sky beam.
+- Checked the night rendering of the building and vehicle catalog. Centered multi-tile light pools, drew Mass Driver coil effects at building depth, tightened darkness and destruction checks, and added local structure, vehicle, and gantry markers.

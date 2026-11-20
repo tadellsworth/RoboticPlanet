@@ -1876,13 +1876,17 @@ function expressGantries(v0, v1) {
 }
 function z0Gantry() { return R.cam.z < 10; } // (too far out to see one)
 
+/** The fixture above one lane can go dark independently of the other. */
+function gantryLamp(e, lane) {
+  return TOD.active && !murmurDarkAt(e.i + (e.ew ? 0 : lane), e.j + (e.ew ? lane : 0)) ? TOD.state.lights : 0;
+}
+
 /** A sign gantry: two grey steel posts on the verges, a lattice beam across both carriageways, and a blank green board
  * over each lane (white border); at night a small lamp under each board lights it. */
 function drawGantry(ctx, e, ox, oy, z) {
   // Seen from nearly straight above: a steel beam across both carriageways (lifted a little, its shadow on the road),
   // a post at each end on the verge, and a blank green board over each lane hanging from the beam.
   const lift = z * 0.22, steel = '#9aa1a8', dark = '#4f555b', green = '#1f6b3e', rim = '#eef3ef';
-  const on = TOD.active && !murmurDarkAt(e.i, e.j) ? TOD.state.lights : 0;
   // Along u (0..1 across both lanes) and v (thickness across the beam), mapped to the screen for either direction.
   const P = e.ew ? (u, v) => [ox + (e.i + 0.5 + v) * z, oy + (e.j - 0.04 + u * 2.08) * z - lift]
     : (u, v) => [ox + (e.i - 0.04 + u * 2.08) * z, oy + (e.j + 0.5 + v) * z - lift];
@@ -1897,6 +1901,7 @@ function drawGantry(ctx, e, ox, oy, z) {
     const sg = e.sides ? e.sides[k] : 1, V = (a) => a * sg;
     rect(c - 0.2, c + 0.2, V(0.06), V(0.34), rim);
     rect(c - 0.19, c + 0.19, V(0.075), V(0.325), green);
+    const on = gantryLamp(e, k);
     if (on > 0.02) { ctx.globalAlpha = on * 0.85; rect(c - 0.16, c + 0.16, V(0.335), V(0.36), '#fff3c8'); ctx.globalAlpha = 1; }
   });
   ctx.restore();
@@ -5219,10 +5224,32 @@ function drawShip(ctx, u, sx, sy, s) {
     ctx.fillRect(-L * 0.95, -B * 0.6, L * 0.3, B * 1.2);
     ctx.restore();
   }
+  // Port and starboard markers are attached to the hull, including while docked.
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night > 0.02) {
+    const c = Math.cos(f), si = Math.sin(f);
+    for (const side of [-1, 1]) {
+      fxGlow(ctx, sx + c * L * 0.5 - si * B * side, sy + si * L * 0.5 + c * B * side,
+        s * 0.13, side < 0 ? '#ff6960' : '#68f5c0', night * 0.65);
+    }
+  }
   if (u.hp < u.maxHp && R.clean < 2) {
     const w = s * 0.6;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.42, w, Math.max(2, s * 0.05));
     ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.42, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+  }
+}
+
+/** Short headlamps fitted to the three specialists' front corners. */
+function drawSpecialistHeadlights(ctx, u, x, y, size) {
+  const night = TOD.active ? TOD.state.headlights : 0;
+  if (night <= 0.02) return;
+  const a = u.face || 0, c = Math.cos(a), s = Math.sin(a);
+  const front = (u.type === 'railgunner' ? 0.16 : 0.29) * size;
+  const halfWidth = (u.type === 'skirmisher' ? 0.11 : 0.16) * size;
+  for (const side of [-halfWidth, halfWidth]) {
+    const px = x + c * front - s * side, py = y + s * front + c * side;
+    fxGlow(ctx, px, py, size * 0.16, '#f0f5ff', night * 0.85);
   }
 }
 
@@ -5254,10 +5281,12 @@ function drawBot(ctx, u, sx, sy, s) {
     if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
     else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
     else {
-      // (the Skirmisher, Arc Caster and Railgunner light their way with the warbots' headlights, and have lights of their own)
+      // The newer units use lamps placed on their own silhouettes.
       const lamps = BOTS[u.type].flank || BOTS[u.type].arc || BOTS[u.type].railgun;
-      drawHeadlights(ctx, lamps ? 'warbot' : art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
-      if (lamps) drawArmyLights(ctx, u, sx, sy + bob, s, size);
+      if (lamps) {
+        drawSpecialistHeadlights(ctx, u, sx, sy + bob, size);
+        drawArmyLights(ctx, u, sx, sy + bob, s, size);
+      } else drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
     }
   } else if (!isArmy(u)) {
     const r = s * 0.16;
@@ -6240,6 +6269,42 @@ function refreshOverlay(type) {
 
 /* ------------------------------------------------------------------ main draw */
 
+/** Night pools fade when their source is lost, disabled or in a Murmur blackout. */
+function buildingNightOn(b) {
+  if (b.ent !== 'b' || !b.built || b.dead || murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y)) return false;
+  const def = BDEFS[b.type];
+  return !def.viaduct && !def.pylon && !def.ramp;
+}
+
+function drawCityGlow(ctx, ox, oy, z, items) {
+  const night = gfx().night;
+  if (!TOD.active || !(TOD.state.pools > 0.01) || !night) return;
+  // The haze is soft, so it's built at an eighth of the screen's size (a quarter on Ultra) and laid over it in one draw (cheap).
+  const k = night > 1 ? 1 / 4 : 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
+  let buf = TOD.cityBuf;
+  if (!buf) buf = TOD.cityBuf = document.createElement('canvas');
+  if (buf.width !== w || buf.height !== h) { buf.width = w; buf.height = h; }
+  const c = buf.getContext('2d');
+  c.clearRect(0, 0, w, h);
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = 0.085 * TOD.state.pools;
+  let any = false;
+  for (const e of items) {
+    if (!buildingNightOn(e) || BDEFS[e.type].wild || BDEFS[e.type].barrier) continue;
+    const col = PLAYER_COLORS[e.owner];
+    if (!col) continue;
+    const center = bCentre(e), r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
+    c.drawImage(glowDisc(col), (ox + center.x * z) * k - r, (oy + center.y * z) * k - r, r * 2, r * 2);
+    any = true;
+  }
+  if (!any) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(buf, 0, 0, w / k, h / k);
+  ctx.restore();
+}
+
 function render(dtReal) {
   R.time += dtReal;
   R.dt = dtReal;
@@ -6485,20 +6550,32 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || BDEFS[e.type].pylon || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power; a Maglev pylon lights the line, not the ground)
-      const F = BDEFS[e.type].foot, size = F ? F * 1.05 : e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
+      if (e.ent === 'gantry') {
+        for (const lane of [0, 1]) {
+          const on = gantryLamp(e, lane);
+          if (on <= 0.02) continue;
+          const x = e.i + 0.5 + (e.ew ? 0 : lane), y = e.j + 0.5 + (e.ew ? lane : 0);
+          const startAlpha = ctx.globalAlpha;
+          ctx.globalAlpha = startAlpha * on * 0.28;
+          pool(ox + x * z, oy + y * z, z * 0.55, '#fff0c5');
+          ctx.globalAlpha = startAlpha;
+        }
+        continue;
+      }
+      if (!buildingNightOn(e)) continue;
+      const def = BDEFS[e.type], pc = bCentre(e);
+      const size = def.foot ? def.foot * 1.05 : def.long ? 1.55 : e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       // (a Leech drinking from it: its lights dim; so do a colony's while its Lance charges, flickering)
-      let dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1;
+      let dim = S.wildlife ? drunkLight(pc.x, pc.y) : 1;
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
-      const pc = F ? bCentre(e) : { x: e.x + 0.5, y: e.y + 0.5 };
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
     drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
-    if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
+    if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items.filter((e) => e.ent === 'u' && !BOTS[e.type].sea)); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
-    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused && !shorted(e)) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if ((e.type === 'turret' || e.type === 'minigun') && buildingNightOn(e) && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
@@ -6511,6 +6588,8 @@ function render(dtReal) {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
+      if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
+      if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
@@ -9656,7 +9735,7 @@ function drawBeacons(ctx, ox, oy, z) {
   const pulse = 0.86 + 0.14 * Math.sin((R.time * Math.PI * 2) / AMB.pulse), wx = S.hollow ? 0 : ambWeather();
   let drew = false;
   for (const b of S.buildings) {
-    if (b.type !== 'lander' || b.dead || !b.built) continue;
+    if (b.type !== 'lander' || !buildingNightOn(b)) continue;
     const was = A.beacons.get(b.id);
     A.beacons.set(b.id, on);
     if (on && was === false && isMe(b.owner) && R.time - A.humAt > 8 && typeof mapVoice === 'function' && typeof sfxReady === 'function' && sfxReady()) {
@@ -9888,7 +9967,6 @@ function drawLanceCharge(ctx, b, cx, cy, s) {
   const k = b.lOn ? Math.min(1, (b.lCharge || 0) / LANCE.charge) : 0, cool = since < 8 ? 1 - since / 8 : 0;
   if (!k && !cool) return;
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
-  if (b.lOn && TOD.active) { const m = M.r[4]; ctx.save(); ctx.globalAlpha = 0.4 + 0.6 * k; drawLightPool(ctx, cx + m[0] * s, cy + m[1] * s + s * 0.5, s * (0.8 + k), '#ff8a3a'); ctx.restore(); } // (the barrel's glow on the pit at night)
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   // the barrel warming along its length: a faint heat line from the breech end to as far as the charge has climbed
@@ -10197,6 +10275,59 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   }
 }
 
+function drawMassDriverLamps(ctx, b, cx, cy, z) {
+  const A = MD_ART[mdDir(b)], P = (q) => [cx + q[0] * z, cy + q[1] * z];
+  const dark = TOD.active ? TOD.state.lights : 0, BLUE = 'rgba(191,227,255,A)';
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
+  if (charging) {
+    // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
+    const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
+    for (let k = 0; k < NC; k++) {
+      const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
+      mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
+    }
+    const [bx, by] = P(A.b), [tx, ty] = P(A.c[Math.max(0, lit - 1)]);
+    if (lit > 0) for (let n = 0; n < 1 + Math.floor(p * 2); n++) mdBolt(ctx, bx, by - z * 0.04, tx, ty - z * 0.04, Math.max(1, z * 0.01), 6 + lit, z * 0.07, 'rgba(120,195,255,1)');
+    for (let k = 1; k < lit; k++) if (Math.random() < 0.5) { const [x0, y0] = P(A.c[k - 1]), [x1, y1] = P(A.c[k]); mdBolt(ctx, x0, y0 - z * 0.09, x1, y1 - z * 0.09, Math.max(1, z * 0.008), 3, z * 0.06, 'rgba(120,195,255,1)'); }
+    // a ray of light along the whole rail, breech to muzzle, gathering as it charges
+    const [mx, my] = P(A.m), g = ctx.createLinearGradient(bx, by, mx, my);
+    g.addColorStop(0, `rgba(150,210,255,${0.35 * p})`); g.addColorStop(1, `rgba(150,210,255,${0.12 * p})`);
+    ctx.strokeStyle = g; ctx.lineWidth = Math.max(1.5, z * 0.035 * p); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+  }
+  if (since < 0.5) {
+    // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
+    const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
+    for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
+    mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
+    ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+  } else if (!charging && dark > 0.3 && buildingNightOn(b)) {
+    // after dark the coils glow faintly between shots
+    for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
+  }
+  ctx.restore();
+}
+
+function drawStructureMarkers(ctx, b, x, y, s) {
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night <= 0.02) return;
+  let points, color, intensity = 0.55;
+  switch (b.type) {
+    case 'mdriver': points = [MD_ART[mdDir(b)].b]; color = '#8ecfff'; break;
+    case 'catcher':
+      points = [[-0.25, MD_ART.cradle[1]], [0.25, MD_ART.cradle[1]]];
+      color = '#7adfff'; intensity = mdArmsIn(b) ? 0.95 : 0.60; break;
+    case 'lance': points = [[-0.60, 0.72], [0.60, 0.72]]; color = b.lOn ? '#ffd39c' : '#ffc17a'; break;
+    case 'dome':
+      points = [[-0.37, 0.18], [0.37, 0.18]]; color = b.dUp ? '#8ee6ff' : '#d5a27a'; break;
+    default: return;
+  }
+  for (const [dx, dy] of points) fxGlow(ctx, x + dx * s, y + dy * s, s * 0.13, color, night * intensity);
+}
+
 function drawMassDrivers(ctx, ox, oy, z, inView) {
   const ui = typeof UI !== 'undefined' ? UI : {}, BLUE = 'rgba(191,227,255,A)';
   ctx.save();
@@ -10223,44 +10354,11 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     }
   } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
   ctx.globalCompositeOperation = 'lighter';
-  const dark = typeof TOD !== 'undefined' && TOD.active && TOD.state ? TOD.state.lights || 0 : 0;
-  for (const b of S.buildings) {
-    if (b.dead || !b.built || !BDEFS[b.type].mdriver || !inView(b.x, b.y, 3)) continue;
-    const A = MD_ART[mdDir(b)], bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, P = (q) => [cx + q[0] * z, cy + q[1] * z];
-    const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
-    if (charging) {
-      // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
-      const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
-      for (let k = 0; k < NC; k++) {
-        const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
-        mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
-      }
-      const [bx, by] = P(A.b), [tx, ty] = P(A.c[Math.max(0, lit - 1)]);
-      if (lit > 0) for (let n = 0; n < 1 + Math.floor(p * 2); n++) mdBolt(ctx, bx, by - z * 0.04, tx, ty - z * 0.04, Math.max(1, z * 0.01), 6 + lit, z * 0.07, 'rgba(120,195,255,1)');
-      for (let k = 1; k < lit; k++) if (Math.random() < 0.5) { const [x0, y0] = P(A.c[k - 1]), [x1, y1] = P(A.c[k]); mdBolt(ctx, x0, y0 - z * 0.09, x1, y1 - z * 0.09, Math.max(1, z * 0.008), 3, z * 0.06, 'rgba(120,195,255,1)'); }
-      // a ray of light along the whole rail, breech to muzzle, gathering as it charges
-      const [mx, my] = P(A.m), g = ctx.createLinearGradient(bx, by, mx, my);
-      g.addColorStop(0, `rgba(150,210,255,${0.35 * p})`); g.addColorStop(1, `rgba(150,210,255,${0.12 * p})`);
-      ctx.strokeStyle = g; ctx.lineWidth = Math.max(1.5, z * 0.035 * p); ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
-    }
-    if (since < 0.5) {
-      // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
-      const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
-      for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
-      mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
-      ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
-      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
-    } else if (!charging && dark > 0.3) {
-      // after dark the coils glow faintly between shots
-      for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
-    }
-  }
   // canisters in flight: the guidance beam from the muzzle toward the Catcher, the canister and its glowing streak
   for (const m of S.cans || []) {
-    const from = getE(m.from), p = canScreen(m, ox, oy, z, m.t);
+    const from = getE(m.from), to = getE(m.to), p = canScreen(m, ox, oy, z, m.t);
     if (!inView(m.x0 + (m.x1 - m.x0) * p.k, m.y0 + (m.y1 - m.y0) * p.k, 6) && !inView(m.x1, m.y1, 2)) continue;
-    if (from && !from.dead && from.built) {
+    if (from && !from.dead && from.built && to && !to.dead && to.built) {
       const A = MD_ART[mdDir(from)], fc = bCentre(from), mx = ox + (fc.x + A.m[0]) * z, my = oy + (fc.y + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
       const fade = Math.min(1, p.k * 6, (1 - p.k) * 6) * 0.3, g = ctx.createLinearGradient(mx, my, tx, ty);
       g.addColorStop(0, `rgba(191,227,255,${fade})`); g.addColorStop(0.5, `rgba(191,227,255,${fade * 0.35})`); g.addColorStop(1, `rgba(191,227,255,${fade * 0.8})`);
@@ -10269,7 +10367,6 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
       ctx.lineWidth = Math.max(1.5, z * 0.05);
       ctx.setLineDash([z * 0.5, z * 0.35]); ctx.lineDashOffset = -(R.time * z * 4) % (z * 0.85);
       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
-      mdGlow(ctx, tx, ty, z * 0.45, BLUE, fade * 1.6); // (the Catcher's cradle lit, waiting)
     }
     // the streak: where it was over the last moment
     const N = 10, tail = 0.24;

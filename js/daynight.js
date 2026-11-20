@@ -470,40 +470,6 @@ function glowDisc(color) {
 }
 
 /**
- * At dusk and night, a city glows: a wide, faint haze in its owner's colour round every finished building,
- * so where buildings crowd together the haze builds up into a glow over the whole town. Graphics: none on Saver (the
- * pools under the buildings still show where the towns are), and made at twice the size on Ultra, smoother on a big screen.
- */
-function drawCityGlow(ctx, ox, oy, z, items) {
-  const night = gfx().night;
-  if (!TOD.active || !(TOD.state.pools > 0.01) || !night) return;
-  // The haze is soft, so it's built at an eighth of the screen's size (a quarter on Ultra) and laid over it in one draw (cheap).
-  const k = night > 1 ? 1 / 4 : 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
-  let buf = TOD.cityBuf;
-  if (!buf) buf = TOD.cityBuf = document.createElement('canvas');
-  if (buf.width !== w || buf.height !== h) { buf.width = w; buf.height = h; }
-  const c = buf.getContext('2d');
-  c.clearRect(0, 0, w, h);
-  c.globalCompositeOperation = 'lighter';
-  c.globalAlpha = 0.085 * TOD.state.pools;
-  let any = false;
-  for (const e of items) {
-    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue;
-    const col = PLAYER_COLORS[e.owner];
-    if (!col) continue;
-    const r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
-    c.drawImage(glowDisc(col), (ox + (e.x + 0.5) * z) * k - r, (oy + (e.y + 0.5) * z) * k - r, r * 2, r * 2);
-    any = true;
-  }
-  if (!any) return;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(buf, 0, 0, w / k, h / k);
-  ctx.restore();
-}
-
-/**
  * At dusk and night, roads light up: a thin glowing line in the owner's colour along each road's edges
  * (brighter on asphalt), so a colony's road network shows as lit lines across the dark. (Graphics on Saver: the lines
  * without the wider glow round them.)

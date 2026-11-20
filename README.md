@@ -2394,6 +2394,8 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
+Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
+
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
   drives), including the 3D Pulse Turret and its heads, every Wall and Gate piece, the Viaduct's abutments and the
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
