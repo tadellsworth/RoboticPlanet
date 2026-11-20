@@ -418,7 +418,7 @@ function aiThink(p) {
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
   // or when the Taps bring in less than the Fabs use with little in stock: then more Taps, and Crystal by trade.
-  const crRate = goodRates(p).crystal, crHave = playerGoods(p).crystal || 0;
+  const rates = goodRates(p), crRate = rates.crystal, crHave = playerGoods(p).crystal || 0;
   const crBurn = Math.max(crRate.used, counts.foundry ? AI_CRYSTAL_BURN : 0);
   const crShort = S.mode !== 'colony' && crBurn > 0 && crGround + crHave < crBurn * AI_CRYSTAL_MINS;
   const crLow = P.crLow = crShort || (S.mode !== 'colony' && crHave < 10 && crRate.made < crBurn);
@@ -783,7 +783,7 @@ function aiThink(p) {
         }
         continue;
       }
-      const spot = aiFindSpot(p, type, lander, islandWar && type === 'mine' && starved.includes(type));
+      const spot = aiFindSpot(p, type, lander, (islandWar || hollowOn()) && type === 'mine' && starved.includes(type));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -1106,7 +1106,11 @@ function aiThink(p) {
     // An Architect on Normal or Hard rains them on what its rival lives on (aiMissileWorth), and under siege into the
     // army at its gates (aiMissileKnot).
     const rain = !!st.missiles && (S.difficulty === 'normal' || S.difficulty === 'hard');
-    if (rain && P.homeCall > S.time) for (const silo of me) { const k = siloReady(silo) && aiMissileKnot(p, lander, silo); if (k) fireMissileAt(silo, k.i, k.j); }
+    if (rain && P.homeCall > S.time) for (const silo of me) {
+      if (silo.type !== 'silo' || !siloReady(silo)) continue;
+      const k = aiMissileKnot(p, lander, silo);
+      if (k) fireMissileAt(silo, k.i, k.j);
+    }
     for (const silo of me) {
       if (!siloReady(silo)) continue;
       let best = null, bs = -Infinity;
@@ -1229,11 +1233,19 @@ function aiThink(p) {
   // masses first; with a decisive lead, a storm of the enemy Command Base (aiMarch). An Easy rival marches on the
   // nearest, and with twice the enemy's army on the enemy Command Base itself.
   const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
-  const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
+  // A stranded Foundry cannot supply the usual march. A clear advantage still counts with a
+  // smaller army, provided it can actually beat its target's guns and garrison.
+  const ready = army - unarmed;
+  const stalledParts = hollowOn() && smart && ['alloy', 'chip'].some((g) => {
+    const dry = P.dry?.[g];
+    return haveG[g] < 1 && ((dry && S.time - dry[0] >= AI_SCRAP.crisis) || rates[g].made === 0);
+  });
+  const finish = stalledParts && ready >= lvl.threshold && ready >= enemyArmy * 2 + 2;
+  const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
   if (st.push) aiPush(p, lvl, army, enemyArmy);
   const pushing = P.pushOn > S.time; // (a Warden marches only on its push)
-  if ((st.push ? pushing : army >= lvl.threshold * 2) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
+  if ((st.push ? pushing : army >= lvl.threshold * 2 || finish) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
     let tgt = null, bd = Infinity;
     const enemyBase = getE(S.players[enemy].lander);
     // Uplinks: the nearest fort holding one of the enemy's Uplinks comes first, even ahead of a crushed rival's Command Base.
@@ -1243,7 +1255,7 @@ function aiThink(p) {
       if (d < bd) { bd = d; tgt = b; }
     }
     if (tgt) { /* (an Uplink fort) */ }
-    else if (smart) { if (aiMarch(p, lvl, enemy, army, enemyArmy, crushing)) return; }
+    else if (smart) { if (aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish)) return; }
     else if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
     else for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
@@ -1324,6 +1336,9 @@ const AI_NEST_ORE = 150, AI_NEST_OIL = 60, AI_NEST_RICH_REACH = 34;
 function aiNestRiches(p, nests) {
   const out = new Map(), zone = homeZone(p), c2 = aiNestClear() ** 2, held = [];
   const farm = S.buildings.some((b) => !b.dead && b.owner === p && b.built && b.type === 'farm' && !b.depleted);
+  // Once its last working Mine runs out, a vein on the far side of the Hollow is not a reserve.
+  const oreCrisis = hollowOn() && goodTotal(p, 'ore') < BDEFS.smelter.inp.ore &&
+    !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'mine' && aiGathers(b));
   let ore = 0, oil = 0;
   for (let t = 0; t < S.W * S.H; t++) {
     const r = S.res[t];
@@ -1332,7 +1347,10 @@ function aiNestRiches(p, nests) {
     const i = t % S.W, j = (t / S.W) | 0;
     let by = null, n = 0;
     for (const b of nests) if (dist2(b.x, b.y, i, j) < c2) { by = b; n++; }
-    if (!n) { if (r === R_ORE) ore += S.amt[t]; else oil += S.amt[t]; }
+    if (!n) {
+      if (r === R_OIL) oil += S.amt[t];
+      else if (!oreCrisis || S.owner[t] === p || (inReach(p, t) && !hotFor(p, t))) ore += S.amt[t];
+    }
     else if (n === 1) held.push([by.id, r, S.amt[t]]);
   }
   for (const [id, r, a] of held) if (r === R_ORE ? ore < AI_NEST_ORE : oil < AI_NEST_OIL) out.set(id, (out.get(id) || 0) + a);
@@ -2847,7 +2865,7 @@ function aiPush(p, lvl, army, enemyArmy) {
  * (With the bases defended, a rival far ahead used to march on the cheapest Outpost every few minutes and never on
  * the base, losing band after band, until the game ran out.) Returns true when a march set off.
  */
-function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
+function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   const P = S.players[p], lander = getE(P.lander), hz = homeZone(p);
   const spotBy = (b) => {
     for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
@@ -2865,11 +2883,12 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   // garrison, front forts, Keeps and the Command Bases it took too (its own keeps its home guard). The colony that won
   // the earlier fights holds two or three colonies' forts, nearly all of them in reach of the last rival and each
   // keeping warbots back, so it could never gather the storm (Crossroads on a small planet: the last two sat out the
-  // clock).
-  const last = crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id));
+  // clock). A Hollow colony short of parts can make this same call if its base is safe.
+  const fullGarrisons = (finish && !(P.homeCall > S.time)) ||
+    (crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id)));
   const eb = getE(S.players[enemy].lander), by = strong && eb && !eb.dead && eb.owner === enemy && !aiBeaten(P, eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
   if (by) {
-    const sp = aiSpare(p, { x: by.i, y: by.j }, last ? 'storm' : 'flag');
+    const sp = aiSpare(p, { x: by.i, y: by.j }, fullGarrisons ? 'storm' : 'flag');
     let n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
     // (A base that takes more than 30: the storm is as big as that and two more, when it can gather them. It used to
     // stop at 30 whatever the base took, so a base behind enough guns could never be stormed, and the rival marched
@@ -2899,7 +2918,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sc < hs && g <= 28) { hs = sc; hard = { b, need: g }; }
   }
   if (tgt) {
-    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, storm && last ? 'all' : true, false, true);
+    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, storm && fullGarrisons ? 'all' : true, false, true);
     if (sent && breach && breach.need > breach.shots) { recallRally(rally.id); aiWalled(P, tgt); } // (walls in the way it can't shoot through)
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;

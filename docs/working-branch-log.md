@@ -162,3 +162,11 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - The Deep's local packs escalate below 75%, two-thirds, and one-third armor. Its pulse strengthens and its rumble drops in pitch with each tier. All five Hollow matches ended before and after the change. Medium 11, 12 and 25 finished with identical results. Small 21 finished 23 seconds sooner with the same winner and Small 25 finished at 40:26 with the opposite winner. [Match results](deep-surge-retest.md)
 - Solo games keep up to five minute-by-minute restore points in browser storage. The menu labels them by age, asks for confirmation, and hides them in multiplayer. **Continue** still opens older single autosaves. Chromium play confirmed the difficulty toast, restore confirmation and cancellation, quota trimming, and legacy Continue.
 - Updated the README, in-game help, and illustrated guide for each feature. The existing mission goals still cover their authored challenges.
+
+
+### Hollow ground-army stalemates
+
+- Compared the ground-army revisions with the current working branch. The traces found depleted local Ore, trips for too little Fuel to help production, and a march minimum that could keep a smaller winning army at home.
+- Hollow rivals can mine a lone accessible Ore vein, keep key Workers on the job when useful charge is unavailable, and launch a smaller final push when the force can beat the defenders. The four-minute road-site release remains in effect.
+- All six named Hollow and Islands games finished within an hour. The report records the times and winners and the Normal Standard seed 11 comparison for every ordered pair of doctrines. [Ground-army retest](hollow-ground-army-retest.md)
+- The Standard matrix exposed an Architect trying to launch a warhead from its Command Base while under siege. The AI now requires a ready Missile Silo for that order. All 25 Standard matchups finished after the fix.

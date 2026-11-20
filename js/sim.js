@@ -966,8 +966,9 @@ function standingBy(b) {
  * out of Fuel with more on its way, the wait for it. So a busy Fuel Station at home beats a long walk out to an
  * empty one (a queue there costs seconds; a walk across the map, much longer and half the charge). One an enemy
  * gun covers (or with enemy warbots about) only as a last resort. maxWalk: seconds; none further (a top-up).
+ * With workTrip, a staffed Worker stays at work if a charger has too little Fuel for a useful round trip.
  */
-function findCharger(u, maxWalk) {
+function findCharger(u, maxWalk, workTrip) {
   let best = null, bs = Infinity, queue = null;
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   const spd = (BOTS[u.type].speed || WORKER_SPEED) * batFactor(u), need = Math.max(10, 100 - (u.bat ?? 100));
@@ -982,6 +983,13 @@ function findCharger(u, maxWalk) {
     const wait = murmurCutOn(b) ? b.murCut - S.time : chargerDry(b) ? fuelEta(b) : 0; // (one the Murmur cut: dark till dawn)
     if (wait === Infinity) continue;
     if (!queue) queue = chargeQueue(u);
+    // A staffed building can work slowly. Don't leave it for a trip whose share of the remaining
+    // Fuel won't get the worker back with enough charge to do any better.
+    if (workTrip && ch.fuel) {
+      const energy = (b.energy || 0) + (b.stock.fuel || 0) * FUEL_ENERGY;
+      const useful = Math.max(0, BATTERY.low - (u.bat ?? 100)) + 2 * walk * BATTERY.workerMove;
+      if (energy < useful * ((queue.get(b.id) || 0) + 1)) continue;
+    }
     const rate = ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / ((queue.get(b.id) || 0) + 1));
     const s = Math.max(walk, wait) + need / rate + (gunShy(u) && shunned(b) ? 600 : 0);
     if (s < bs) { bs = s; best = b; }
@@ -3778,7 +3786,8 @@ function doStaff(u, t, dt) {
       if (t.wait > 0) return;
       if ((u.bat ?? 100) < BATTERY.low || ((u.bat ?? 100) < IDLE_TOP && standingBy(b))) {
         // Step out to recharge, then come back to this job (early, while there is nothing to do here: see standingBy).
-        const c = findCharger(u);
+        const essential = def.pump || b.type === 'refinery' || b.type === 'smelter' || b.type === 'fab';
+        const c = findCharger(u, undefined, essential && hollowOn() && S.players[u.owner].ai);
         t.trip = false;
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;

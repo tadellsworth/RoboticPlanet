@@ -894,6 +894,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore. A fifth to four fifths of a map's
     Ore, and up to half its oil, lies within that many tiles of a nest (more on Small maps), so once its own run low it
     clears the nests sitting on them first (`aiNestRiches`, see The Murmur).
+    With parts scarce and a clear lead, a rival can gather a smaller armed force for the final push if it can
+    beat the guns and garrison. At low Fuel, key industry Workers keep working if the available charge would not
+    repay the trip. An Ore-starved rival can mine a single accessible vein and ignores distant, unclaimed veins
+    when judging which nests to clear.
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
     Refinery, the Refinery comes first after the opening and is started as soon as the Cement is there, its Alloy
     delivered first (as a turret's is: `oilFirst` in `aiThink`). Its Oil Pumps go to the seeps nearest home: a tile

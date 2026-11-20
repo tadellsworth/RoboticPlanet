@@ -1132,6 +1132,11 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   With the ground army (Skirmishers, Arc Casters, Railgunners) the same rule flips it the other way: Medium seed 11,
   both Balanced, ends at 32.7 without the rule and runs to 75 minutes with it; giving a site waiting on a planned
   road 8 minutes instead of 4 ends it (27.0) but leaves Medium seed 12 open on main. Medium 12 and Small 21 stay open
-  on the ground-army branch either way (to decide with the ground army).
+  on that ground-army revision either way.
+  **Working-branch retest (Nov 20):** the four-minute road rule stays. The Hollow AI now works isolated Ore veins
+  when starved, keeps essential Workers at their jobs when a charging trip would gain too little, and can storm
+  with a smaller armed force if parts have dried up and its opponent is clearly beaten. All six named Hollow and
+  Islands matches finished within an hour. See the [ground-army retest](docs/hollow-ground-army-retest.md) for
+  the upstream comparison and every Standard doctrine matchup.
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
