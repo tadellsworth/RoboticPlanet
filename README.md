@@ -122,7 +122,12 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
+In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Easy, Medium, Normal and Hard
+apply to all computer colonies from that point in the match. In multiplayer only the host can send the
+`rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
+and production without changing stock already on the map. Missions keep their selected difficulty.
+
+Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave.
 
 ## How to play
 

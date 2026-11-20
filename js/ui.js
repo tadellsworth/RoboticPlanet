@@ -112,7 +112,14 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('p-difficulty').onchange = () => act('rivalDifficulty', [$('p-difficulty').value], syncSaved);
+  $('p-difficulty').onchange = () => {
+    const select = $('p-difficulty'), value = select.value;
+    select.value = S.difficulty;
+    if (value !== S.difficulty) act('rivalDifficulty', [value], (ok) => {
+      syncRivalDifficulty();
+      if (!ok) toast('The rival difficulty could not be changed.', 'warn');
+    });
+  };
   $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
@@ -1760,11 +1767,15 @@ function initDialogs() {
   }, true);
 }
 
-function syncSaved() {
+function syncRivalDifficulty() {
   const diff = $('p-difficulty');
-  $('p-difficulty-row').hidden = !S || !!S.mission || !!UI.watch || !S.players.some((r) => r.ai && !r.out);
+  $('p-difficulty-row').hidden = !S || S.winner >= 0 || !!S.mission || !!UI.watch ||
+    (MP.on && !mpIsHost()) || !rivalDifficultyTargets().length;
   if (S) diff.value = S.difficulty;
-  diff.disabled = MP.on && !mpIsHost();
+}
+
+function syncSaved() {
+  syncRivalDifficulty();
   syncPauseMods();
   if (UI.syncTod) UI.syncTod();
   syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
@@ -8857,7 +8868,7 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }
