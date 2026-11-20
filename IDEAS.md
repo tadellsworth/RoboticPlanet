@@ -62,8 +62,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   for goods across networks that touch only by conveyor.
 - **Bends** (built): a line bends at up to 4 pylons (Bend here while placing; each stretch 3 to 40 tiles, 60 in all,
   120° at most a bend), Route with a bend (or a jog of two) round a blocked stretch or past 40 tiles, before Route via a
-  hub; pods follow the bends at 0.6 of top speed round 30° and 0.35 round 75° or more. *Open:* dragging a bend by hand
-  after it's placed; bends on a line that is already built (today: rebuild it).
+  hub; pods follow the bends at 0.6 of top speed round 30° and 0.35 round 75° or more. **Edit bends** on a built line
+  (built Nov 20 2026, the owner's yes): tap-to-pick-and-place on the line's Terminal panel rather than dragging (it
+  works the same on a phone and with a mouse, and each tap is checked as placing is); a construction job paid only for
+  length and pylons added, the old line running until the switch-over, pods held at the Terminals for the last 10%,
+  what's taken down back as crates. *Open:* dragging a bend's diamond with the mouse; an edit that moves a line's end
+  Terminal (today: a new line).
 - **Easier line placement, and pylons over roads** (built): pylons over roads and track as a portal frame with the way
   open, the preview's colours and reasons, a far end snapping a tile over.
 - **The rival and the Maglev** (built, Nov 20 2026, the owner's call: the Architect first, others only if it pays).
@@ -73,8 +77,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   31 41), before and after, came out identical (Balanced won six, two undecided both times): the Architect never held
   the goods to spare with a busy cluster 24+ tiles out, so it built no line. It does build and run one when it has them
   (a scripted test: lh/maglev-ai-test.js). So it doesn't pay in today's games and stays rare on purpose; undecided games
-  did not go up. The other doctrines build none. *For the owner:* loosen the spare-goods rule (it would then compete with
-  the Architect's army and Missiles) or leave it as a late-game flourish?
+  did not go up. The other doctrines build none. The owner (Nov 20 2026): keep the rule as it is, a late-game
+  flourish.
 
 **Murmur: a bigger rework (after the megastructures and the audit, before the campaign)**
 - **Smarter Murmur:** they sometimes walk straight past robots that then shoot them; fix their threat and target choice

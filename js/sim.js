@@ -3537,6 +3537,7 @@ function doBuild(u, t, dt) {
     s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5)) / (s.buildTime || def.buildTime)); // (faster by Arrival City)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
+    if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
   }
   if (s.progress >= 0.9999) {
     completeBuilding(s);
@@ -3556,7 +3557,8 @@ function completeBuilding(b) {
   if (def.ropeway && !b.link) ropewayAcross(b);
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
-  if (b.magFrom) magLineDone(b); // (a Maglev line's site: the line opens)
+  if (b.magEdit) magEditDone(b); // (a Maglev line's new bends: the guideway switches over)
+  else if (b.magFrom) magLineDone(b); // (a Maglev line's site: the line opens)
   else if (def.magterm) magRebuilt(b); // (built where a lost Terminal stood: its suspended lines join it again)
   b.status = ''; // (a site's "Under construction" mustn't outlive it)
   b.stock = {};
@@ -16208,7 +16210,7 @@ function magSitePath(s, A) {
 /** Line site s has got to `progress`: the pylons that far out from where it's built go up (a pylon every MAGLEV.spacing tiles from the key end). */
 function magBuildStep(s) {
   const A = getE(s.magFrom);
-  if (!A || A.dead || magRebuildSite(A, s)) return;
+  if (!A || A.dead || s.magEdit || magRebuildSite(A, s)) return;
   const kpts = magSitePath(s, A), L = magPathLen(kpts);
   const keyFar = !!s.magKey && s.magKey !== A.id, key = keyFar ? s.magKey : A.id;
   const reach = s.progress * L;
@@ -16261,6 +16263,7 @@ function magLineDone(s) {
 
 /** A line going up is called off (its site cancelled or an end lost): the pylons built so far come down. */
 function magLineCancel(s) {
+  if (s.magEdit) { magEditCancel(s); return; }
   const A = s.magFrom ? getE(s.magFrom) : null;
   if (A && A.magSite === s.id) A.magSite = 0;
   const far = s.magFar ? getE(s.magFar) : null;
@@ -16378,6 +16381,7 @@ function podOnLine(u, A, B) { return (u.magTo === A.id && u.magFrom === B.id) ||
 
 /** Pylon p has come down (shot, dismantled): its line is cut. Pods on the spans it carried are lost, the rest turn back. */
 function magPylonDown(p) {
+  if (p.magGone) return; // (taken down by a bends edit: not a cut)
   const A = p.line ? getE(p.line) : null;
   if (!A || A.dead || !BDEFS[A.type].magterm) return;
   const B = magKeyPartner(A);
@@ -16438,6 +16442,7 @@ function magRebuilt(R) {
  */
 function magTermDown(b) {
   const partners = magPartners(b);
+  for (const e of S.buildings.slice()) if (!e.dead && e.magEdit && !e.built && (e.magFrom === b.id || e.magFar === b.id)) destroyBuilding(e, false, true); // (a bends edit on one of its lines: called off)
   const pending = magPending(b);
   if (pending) { magLineCancel(pending); destroyBuilding(pending, false, true); }
   if (b.magFrom) {
@@ -16525,7 +16530,7 @@ function updatePod(u, dt) {
  */
 function podAtTerminal(u, m, dt) {
   if (S.tick % 6 !== u.id % 6) return;
-  const ends = magPartners(m).filter((o) => !magPairCut(m, o));
+  const ends = magPartners(m).filter((o) => !magPairCut(m, o) && !magEditHold(m, o));
   if (!ends.length) return;
   if (S.time - (u.atT ?? -99) < MAGLEV.dwell) return;
   if (S.tick % 30 !== u.id % 30) return;
@@ -16551,7 +16556,7 @@ function podThroughPlan(u, m, from) {
   const ps = magPartners(m);
   if (ps.length < 2) return null;
   for (const o of ps) {
-    if (o === from || magPairCut(m, o)) continue;
+    if (o === from || magPairCut(m, o) || magEditHold(m, o)) continue;
     const keep = {};
     let n = 0;
     if (o.home === m.id) { // on, away from home: what o (and the Terminals beyond it, whose wants roll into o's) is short of
@@ -16737,6 +16742,147 @@ function magPylonPath(p) {
   if (!S0) return null;
   const m = magMiss(S0).find((q) => q.near && q.key === p.line);
   return m ? magPathOf({ x: m.x, y: m.y, magBends: m.bends }, S0) : null;
+}
+
+/*
+ * Editing a built line's bends (Edit bends on a Terminal's panel, the magRebend order): the new path is checked as a
+ * new line would be (magEditCheck), then built as a construction job, a pylon site on the first new pylon spot
+ * (s.magEdit, s.magFrom the line's key end, s.magFar the other, s.magBends and s.magLayout the new path's, in order
+ * from the key end; the key end's b.magEditSite), the old guideway in use meanwhile. It costs only the length added
+ * (MAGLEV.cost a tile) and each new pylon's footing (MAGLEV.cost once); at the switch-over (magEditDone) the pylons the
+ * new path doesn't use come down and, with any length taken off, come back as crates as a dismantled building's
+ * goods do. The last stretch waits for the line's pods: from 90% none sets out on it (magEditHold) and the switch-over
+ * waits until none is running on it (magEditBusy), so no pod is ever on a guideway that moves.
+ */
+
+/** The bends edit going up on the line between joined Terminals a and o, or null. */
+function magEditSiteOf(a, o) {
+  const K = magKey(a, o), s = K.magEditSite ? getE(K.magEditSite) : null;
+  return s && !s.dead && !s.built && s.magEdit && s.magFrom === K.id && s.magFar === (K === a ? o : a).id ? s : null;
+}
+/** Are pods held off the line a–o: its bends edit has 10% or less to go? */
+function magEditHold(a, o) { const s = magEditSiteOf(a, o); return !!s && s.progress >= 0.9; }
+/** Is a pod still running on the line bends edit s is for (the switch-over waits)? */
+function magEditBusy(s) {
+  const K = getE(s.magFrom), O = getE(s.magFar);
+  return !!K && !!O && S.bots.some((u) => !u.dead && u.owner === K.owner && BOTS[u.type].magpod && u.magTo && podOnLine(u, K, O));
+}
+
+/**
+ * Could owner change the bends of the line from its Terminal T to Terminal O to `bends` (tiles, in order from T)?
+ * { why, spots, L, key, kbends, layout, added, cut, fresh, gone, cost, refund }: the new path's spots from the key end
+ * (dA from T), its length, the tiles added (or `cut` off), the new pylon spots (`fresh`) and the pylons it no longer
+ * uses (`gone`), what it costs and what comes back.
+ */
+function magEditCheck(owner, T, O, bends) {
+  const out = { why: '', spots: [], L: 0, key: 0, kbends: [], layout: [], added: 0, cut: 0, fresh: [], gone: [], cost: {}, refund: {} };
+  if (!T || !O || T.owner !== owner || !magLinked(T, O)) { out.why = 'Those two Terminals are not joined by a line.'; return out; }
+  if (magEditSiteOf(T, O)) { out.why = 'That line\'s bends are being changed already.'; return out; }
+  bends = bends || [];
+  const bwhy = magBendsWhy(T, O.x, O.y, bends);
+  if (bwhy) { out.why = bwhy; return out; }
+  const K = magKey(T, O), kb = K === T ? bends.map((q) => q.slice()) : bends.map((q) => q.slice()).reverse();
+  const pts = magPathOf({ x: K.x, y: K.y, magBends: kb }, K === T ? O : T), L = magPathLen(pts);
+  Object.assign(out, { L, key: K.id, kbends: kb });
+  if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
+  if (!bends.length && L > MAGLEV.max) { out.why = `Too far: a straight Maglev line reaches ${MAGLEV.max} tiles (bend it, ${MAGLEV.maxBent} in all, or go on from a hub).`; return out; }
+  if (L > MAGLEV.maxBent) { out.why = `Too far: a bent Maglev line reaches ${MAGLEV.maxBent} tiles in all (go on from a hub: a Terminal on the way).`; return out; }
+  const same = JSON.stringify(kb) === JSON.stringify(K.magBends || []);
+  out.spots = magSpotsCheckedPath(owner, pts, K.id);
+  for (const sp of out.spots) sp.dA = K === T ? sp.d : +(L - sp.d).toFixed(1);
+  const bad = out.spots.filter((q) => q.kind === 'bad').sort((p, q) => p.dA - q.dA)[0];
+  if (bad) { out.why = `No line this way: ${bad.why} (${Math.round(bad.dA)} tiles out).`; return out; }
+  if (same) { out.why = 'That is the line as it stands: add, move or take away a bend first.'; return out; }
+  out.layout = magLayout(out.spots);
+  const Lold = magPathLen(magPathOf(K, K === T ? O : T)), use = new Set(out.spots.filter((q) => q.kind === 'ok').map((q) => q.t));
+  out.added = Math.max(0, Math.ceil(L - Lold - 1e-9)); out.cut = Math.max(0, Math.floor(Lold - L + 1e-9));
+  for (const q of out.spots) if (q.kind === 'ok') { const b = S.bAt[q.t] ? getE(S.bAt[q.t]) : null; if (!(b && BDEFS[b.type].pylon && b.line === K.id)) out.fresh.push(q); }
+  for (const p of S.buildings) if (!p.dead && p.built && BDEFS[p.type].pylon && p.line === K.id && !use.has(tIdx(p.x, p.y))) out.gone.push(p);
+  out.cost = magLineCost(out.added + out.fresh.length);
+  const back = magLineCost(0), add = (c) => { for (const g in c) back[g] = (back[g] || 0) + c[g]; };
+  add(magLineCost(out.cut)); for (let k = 0; k < out.gone.length; k++) add(MAGLEV.cost);
+  for (const g in back) back[g] = Math.floor(back[g] + 1e-9);
+  out.refund = back;
+  return out;
+}
+
+/** Plan the bends edit of the line from T to O (magEditCheck): a construction job, or done at once if it needs no new pylon. { ok, reason, id }. */
+function placeMagRebend(owner, T, O, bends) {
+  const chk = magEditCheck(owner, T, O, bends);
+  if (chk.why) return { ok: false, reason: chk.why };
+  const K = getE(chk.key), Oe = K === T ? O : T;
+  const first = chk.fresh.filter((q) => !S.bAt[q.t]).sort((p, q) => p.dA - q.dA)[0];
+  if (!first) { magEditApply(K, Oe, chk.kbends, chk.layout, null); return { ok: true, reason: '', id: 0 }; }
+  magClearSpot(first.t);
+  const s = addBuilding(owner, 'magpylon', first.i, first.j, false);
+  s.magEdit = 1; s.magFrom = K.id; s.magFar = Oe.id; s.k = first.k; s.line = K.id;
+  s.magLayout = chk.layout; if (chk.kbends.length) s.magBends = chk.kbends;
+  s.cost = chk.cost; s.fromStore = true;
+  s.buildTime = MAGLEV.time * Math.max(2, chk.added + chk.fresh.length);
+  K.magEditSite = s.id;
+  if (S.players[owner].ai) { if (!payInto(s)) queuePlan('b', s.id, owner); }
+  else { queuePlan('b', s.id, owner); settlePlans(); }
+  markDirty(s.x, s.y);
+  return { ok: true, reason: '', id: s.id };
+}
+
+/** A bends edit called off (its site cancelled or lost): the old guideway carries on as it was. */
+function magEditCancel(s) {
+  const K = getE(s.magFrom);
+  if (K && K.magEditSite === s.id) K.magEditSite = 0;
+  delete s.magFrom; delete s.magEdit;
+}
+
+/** Bends edit site s is built: the guideway switches over to its new path. */
+function magEditDone(s) {
+  const K = getE(s.magFrom), O = getE(s.magFar);
+  const bends = s.magBends || [], layout = s.magLayout;
+  delete s.magFrom; delete s.magFar; delete s.magEdit; delete s.magBends; delete s.magLayout; delete s.cost;
+  if (K && K.magEditSite === s.id) K.magEditSite = 0;
+  if (!K || !O || !magLinked(K, O) || magKey(K, O) !== K) { destroyBuilding(s, false, true); return; }
+  magEditApply(K, O, bends, layout, s);
+}
+
+/**
+ * The line K–O (K its key end) takes its new path (bends in order from K, layout): the pylons on it stay (renumbered),
+ * new ones go up (site s becomes one), the rest come down; the pylons taken down and any length taken off come back as
+ * crates (as a dismantled building's goods do); a repair under way is called off (the new path has its own pylons).
+ */
+function magEditApply(K, O, bends, layout, s) {
+  const Lold = magPathLen(magPathOf(K, O)), owner = K.owner;
+  const pts = magPathOf({ x: K.x, y: K.y, magBends: bends }, O);
+  const spots = magSpotsCheckedPath(owner, pts, K.id, layout), keep = new Set();
+  if (s) keep.add(s);
+  for (const sp of spots) {
+    if (sp.kind !== 'ok') continue;
+    const b = S.bAt[sp.t] ? getE(S.bAt[sp.t]) : null;
+    if (b && b === s) { s.k = sp.k; s.line = K.id; continue; }
+    if (b && BDEFS[b.type].pylon && b.line === K.id && b.built) { b.k = sp.k; keep.add(b); continue; }
+    if (b) continue; // (something stands there now: the line shows a cut there, and a Worker rides out to it)
+    magClearSpot(sp.t);
+    const p = addBuilding(owner, 'magpylon', sp.i, sp.j, true);
+    p.k = sp.k; p.line = K.id; keep.add(p);
+    addFx('ring', sp.i + 0.5, sp.j + 0.5, { color: PLAYER_COLORS[owner], r: 0.8 });
+  }
+  const back = {};
+  for (const p of S.buildings.slice()) {
+    if (p.dead || !BDEFS[p.type].pylon || p.line !== K.id || keep.has(p) || !p.built) continue;
+    for (const g in MAGLEV.cost) back[g] = (back[g] || 0) + MAGLEV.cost[g];
+    p.magGone = 1;
+    destroyBuilding(p, false, true);
+  }
+  const cut = Math.max(0, Math.floor(Lold - magPathLen(pts) + 1e-9));
+  const c = magLineCost(cut);
+  for (const g in c) back[g] = (back[g] || 0) + c[g];
+  const crates = {};
+  for (const g in back) if (Math.floor(back[g] + 1e-9) >= 1) crates[g] = Math.floor(back[g] + 1e-9);
+  if (Object.keys(crates).length) addLoot(K.x, K.y, crates, false, owner);
+  if (bends.length) K.magBends = bends.map((q) => q.slice()); else delete K.magBends;
+  K.magLayout = layout;
+  if (K.magFix) { const w = getE(K.magFix.u); if (w && !w.dead && w.task && w.task.type === 'magfix') cancelTask(w); K.magFix = null; }
+  for (const u of S.bots) if (!u.dead && BOTS[u.type].magpod && u.magTo && podOnLine(u, K, O)) u.magS = magPathProject(magLinePts(getE(u.magFrom), getE(u.magTo)), u.x, u.y); // (none should be: they're held)
+  computeZones();
+  postMsg(owner, 'The Maglev line\'s new bends are built: the guideway runs the new way.' + (Object.keys(crates).length ? ' What it no longer uses lies in crates by the Terminal.' : ''), K.x, K.y, 'good');
 }
 
 /* ------------------------------------------------------------------ flak */
@@ -17032,6 +17178,7 @@ function hashState() {
   for (const b of S.buildings) {
     for (const m of magMiss(b)) { int(b.id); int(m.x); int(m.y); num(m.near); int(m.key || 0); for (const t of m.layout || []) int(t); for (const q of m.bends || []) { int(q[0]); int(q[1]); } } // (suspended lines)
     if (b.magBends) { int(b.id); for (const q of b.magBends) { int(q[0]); int(q[1]); } } // (a line's bends, on its key end or its site)
+    if (b.magEdit || b.magEditSite || b.magFar) { int(b.id); int(b.magEdit || 0); int(b.magEditSite || 0); int(b.magFar || 0); } // (a bends edit going up)
     if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }

@@ -9106,7 +9106,11 @@ function magLinesToDraw() {
   const out = [];
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].magterm) continue;
-    for (const o of magPartners(b)) if (magKey(b, o) === b) { const pts = magPathOf(b, o); out.push({ A: b, B: o, pts, fx: o.x + 0.5, fy: o.y + 0.5, L: magPathLen(pts), spans: magSpans(b, o), owner: b.owner, building: false }); }
+    for (const o of magPartners(b)) if (magKey(b, o) === b) {
+      const pts = magPathOf(b, o), es = magEditSiteOf(b, o);
+      out.push({ A: b, B: o, pts, fx: o.x + 0.5, fy: o.y + 0.5, L: magPathLen(pts), spans: magSpans(b, o), owner: b.owner, building: false,
+        edit: es ? { pts: magPathOf({ x: b.x, y: b.y, magBends: es.magBends }, o), site: es } : null }); // (its bends being changed: the new path, dashed)
+    }
     for (const m of magMiss(b)) {
       // The lost end's old tile for the spans; the pylons carry the key end's id (the lost Terminal's, if it was the key).
       const end = { x: m.x, y: m.y, id: 0 };
@@ -9265,6 +9269,17 @@ function drawMaglevs(ctx, ox, oy, z, inView) {
         ctx.restore();
       }
     }
+    if (ln.edit) {
+      // a bends edit going up: the new path marked out at deck height, dashed, its bends ringed, and how far it's got
+      ctx.save();
+      ctx.strokeStyle = 'rgba(127,211,255,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.07); ctx.setLineDash([z * 0.2, z * 0.14]);
+      ctx.beginPath(); for (const [px0, py0, px1, py1] of magPieces(ln.edit.pts, MAG_END, magPathLen(ln.edit.pts) - MAG_END, 0)) { ctx.moveTo(ox + px0 * z, oy + py0 * z - H); ctx.lineTo(ox + px1 * z, oy + py1 * z - H); } ctx.stroke();
+      ctx.setLineDash([]);
+      for (const [bx, by] of ln.edit.pts.slice(1, -1)) { const x = ox + bx * z, y = oy + by * z - H, r = z * 0.22; ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke(); }
+      ctx.restore();
+      const es = ln.edit.site;
+      magLabel(ctx, ox + (es.x + 0.5) * z, oy + (es.y - 0.4) * z, `new bends ${Math.round(es.progress * 100)}%${es.progress >= 0.9 ? ' (pods held)' : ''}`, MAG_SPOT.road, z);
+    }
     if (ln.building) {
       // the rest of the line marked out, dashed, to the far end
       const got = ln.spans.length ? ln.spans[0][1] : MAG_END;
@@ -9347,9 +9362,9 @@ function drawMaglevPreview(ctx, ox, oy, z, E) {
     ctx.restore();
     if (!E.ok) { ctx.save(); ctx.strokeStyle = 'rgba(255,107,107,0.85)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.beginPath(); for (const [x0, y0, x1, y1] of magPieces(pts, stop, L, 0)) { ctx.moveTo(ox + x0 * z, oy + y0 * z - H); ctx.lineTo(ox + x1 * z, oy + y1 * z - H); } ctx.stroke(); ctx.restore(); }
   }
-  // the bends: a diamond at deck height over each
-  for (const [i, j] of bends) {
-    const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z - H, r = z * 0.22;
+  // the bends: a diamond at deck height over each (bigger: the one picked to move, editing a line's bends)
+  for (const [k, [i, j]] of bends.entries()) {
+    const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z - H, r = z * (UI.magEdit && UI.magEdit.sel === k ? 0.36 : 0.22);
     ctx.save(); ctx.strokeStyle = E.ok ? MAG_SPOT.ok : MAG_SPOT.moved; ctx.lineWidth = Math.max(1.5, z * 0.07);
     ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke(); ctx.restore();
   }
