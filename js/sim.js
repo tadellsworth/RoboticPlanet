@@ -17393,10 +17393,13 @@ function liftCrush(f, k) {
       }
     }
   }
+  // (a robot on the line is crushed when its own tile is struck, never just grazed by the tile before it)
+  const line = new Set(); for (let q = 0; q < f.n; q++) line.add(liftFallTile(f, q));
   for (const u of S.bots) {
     if (u.dead || u.inside || aloft(u) || hit.has(u.id) || BOTS[u.type].sea) continue;
     const ui = Math.floor(u.x), uj = Math.floor(u.y);
     if (Math.max(Math.abs(ui - i), Math.abs(uj - j)) > 1) continue;
+    if (!(ui === i && uj === j) && inMap(ui, uj) && line.has(tIdx(ui, uj))) continue;
     hit.add(u.id); f.hit.push(u.id);
     if (u.owner >= 0 && u.owner !== by) hitByNow(u.owner, by);
     if (ui === i && uj === j) killBot(u); else damageBot(u, LIFT.side);
