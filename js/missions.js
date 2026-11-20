@@ -1661,13 +1661,14 @@ const MISSIONS = [
   },
   {
     id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
-    brief: 'The archive\'s last pages hold an orbital defence and a city for the colonists. Build both, shield your base, and fire along their depots.',
+    brief: 'The archive\'s last pages hold an orbital defence, a city for the colonists and a lift to the Carrier. Build them, and fire along their depots.',
     intro: [
       'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
       'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
       'The <b>Lance of Corvane</b> fires a beam across the whole map. It needs 2 Generators with Fuel by its pit.',
       'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',
       '<b>Arrival City</b>, built for colonists who never came: your work within 8 tiles of it goes 20% faster.',
+      'The <b>Orbital Lift</b> calls robots or goods down from your Carrier, and sends your surplus up to restock it.',
       'Their supply depots stand in a row. In free play, Custom Game → Rules switches Megastructures on or off.',
     ],
     mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true,
@@ -1675,7 +1676,7 @@ const MISSIONS = [
     setup(S) {
       kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander), P = S.players[0];
-      L.stock.cement += 180; L.stock.alloy += 110; L.stock.chip += 55; L.stock.crystal += 50; L.stock.fuel += 36; L.stock.fiber = (L.stock.fiber || 0) + 30; // (with Arrival City's)
+      L.stock.cement += 300; L.stock.alloy += 160; L.stock.chip += 85; L.stock.crystal += 75; L.stock.fuel += 44; L.stock.fiber = (L.stock.fiber || 0) + 30; // (with Arrival City's, and the Orbital Lift's and a load of Cement to send up)
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
       // Their depots, strung out in a row from their base toward ours: one line of fire from by our base takes most of them.
       const dx = L.x - E.x, dy = L.y - E.y, d = Math.hypot(dx, dy) || 1;
@@ -1704,6 +1705,17 @@ const MISSIONS = [
         count: (P, S) => cityDriven(S, 0),
         hint: 'Tap Arrival City to see its reach, then <b>Smelter</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>M</kbd>) or more inside it.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='smelter'], .bcard[data-t='fab']" },
+      { kind: 'built', type: 'lift', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Orbital Lift</b> (<kbd>O</kbd>); <kbd>R</kbd> turns its fall line. A Generator by it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lift'], .bcard[data-t='generator']" },
+      { kind: 'liftDrop', n: 1, text: 'Call a climber down from the Carrier', at: 'lift',
+        count: (P) => P.stats.liftDrops || 0,
+        hint: 'Tap the Lift → <b>Call down</b> a load (<kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd>). It lands in 45 seconds.',
+        ui: '#sh-lf-security, #sh-lf-crew, #sh-lf-alloy, #sh-lf-chips' },
+      { kind: 'liftUp', n: 1, text: 'Send a load of goods up to the Carrier', at: 'lift',
+        count: (P) => P.stats.liftUps || 0,
+        hint: 'On the Lift\'s panel, <b>Restock the Carrier</b>: tick <b>Cement</b>. At 30 goods the climber goes up.',
+        ui: "#sh-lfadd [data-g='cement'], #sh-lflist" },
       { kind: 'built', type: 'lance', n: 1,
         hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
         ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
@@ -1713,7 +1725,7 @@ const MISSIONS = [
         ui: '#sh-aim' },
       { kind: 'lanceLine', n: [2, 3, 4], text: ['Destroy {n} rival building with one shot', 'Destroy {n} rival buildings with one shot'], at: 'lance',
         count: (P) => P.stats.lanceBest || 0,
-        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) down their row of depots: each one ringed red goes. 4 minutes to reload.',
+        hint: '<b>Aim the Lance</b> (<kbd>F</kbd>) through their depots: red-ringed ones are wrecked, dashed ones only scorched. 4 min reload.',
         ui: '#sh-aim' },
     ],
   },

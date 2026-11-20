@@ -622,3 +622,20 @@ python3 tools/install_city.py     # writes the WebP files into ../art, prints CI
 The City composes like a building (`compose.py`); `install_city.py` blooms each tier's glow pass itself and writes it as
 light to add (colour divided by alpha). The game draws them by `CITY_FRAME` (art-manifest.js) over the middle of the
 square, and adds the lights tier by tier at dusk (`cityLights` in `js/render.js`).
+
+## The Orbital Lift
+
+The owner's look A, the Beacon Cable (Nov 2026; IDEAS.md, "Megastructures"). `b/lift.js` is the 3 x 3 anchor pad on its
+own 30 x 30 pad, framed like the Lance (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12, width: 0.62, cy: 0.56 })`).
+Only the pad is a sprite: the collar, its clamps, the cable's foot (a braided stub with its guide rails and the climber
+dock), the winches, the control house and the floodlight masts. The rest of the cable rising up the screen, its climbers,
+warning lights, shadow and fall are drawn in code (`js/render.js`, the Orbital Lift), from the cable's foot. `state=down`
+is the Lift below 30% of its armor. Marks `foot` (where the game's beam starts) and `dock`. Run from this folder:
+
+```
+bash tools/render_lift.sh [out]   # the pad and the damaged pad for both teams at every time of day (~10 min)
+python3 tools/install_lift.py     # writes the WebP files into ../art, prints LIFT_FRAME and LIFT_MARKS
+```
+
+The Lift composes like a building (`compose.py`). The game draws it by `LIFT_FRAME` (art-manifest.js) over the middle of
+its square, and its cable from `LIFT_MARKS.foot` (`liftFoot` in `js/render.js`).

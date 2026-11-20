@@ -2005,7 +2005,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', dome: 'h', city: 'c' },
+  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
@@ -2035,6 +2035,8 @@ const SHEET_KEYS = {
   'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
   // A Mooring Mast's Link (or Unlink); a Maglev Terminal's Plan a line from here.
   'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l', 'sh-magrebuild': 'l',
+  // An Orbital Lift's four loads to call down.
+  'sh-lf-security': 'z', 'sh-lf-crew': 'x', 'sh-lf-alloy': 'c', 'sh-lf-chips': 'v',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -2203,6 +2205,7 @@ function initKeyboard() {
     if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
     // Placing a Mass Driver: R turns its two tiles (east-west or north-south).
     if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].long && k === 'r') { e.preventDefault(); mdTurn(); return; }
+    if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].lift && k === 'r') { e.preventDefault(); liftTurn(e.shiftKey ? -1 : 1); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
@@ -4511,6 +4514,48 @@ function renderMdSection(b) {
   if ($('sh-mdadd')) for (const btn of $('sh-mdadd').querySelectorAll('button')) btn.onclick = () => act('mdSend', [b.id, btn.dataset.g, true], done);
 }
 
+/**
+ * An Orbital Lift's panel (its owner's): the Carrier's six lamps, the climber, the four loads to call down (Z X C V), and
+ * Restock the Carrier, the goods it sends up with what stays home (rebuilt only when something changes).
+ */
+function renderLiftSection(b) {
+  const el = $('sh-lift');
+  if (!el) return;
+  const list = b.lfSend || {}, res = b.lfRes ?? LIFT.reserve, why = liftCallWhy(b, 'alloy'), mul = liftMul(b);
+  const sig = JSON.stringify([res, b.lfBoost || 0, b.lfMove || 0, Math.ceil(b.lfCd || 0), Math.ceil(b.lfT || 0), b.lfPaid || 0, list, liftLoaded(b), liftFuel(b) >= LIFT.fuel, b.lfUps || 0, b.lfDrops || 0]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  let h = `<div class="kv"><span>The Carrier's reserve</span><span class="lift-lamps" title="${res} of ${LIFT.reserve} drops">${Array.from({ length: LIFT.reserve }, (_, k) => `<i class="${k < res ? 'on' : ''}"></i>`).join('')} ${res} of ${LIFT.reserve}</span></div>`;
+  if (b.lfMove) h += `<div class="kv"><span>Climber</span><span>${b.lfMove === 1 ? `coming down with ${LIFT.drops[b.lfLoad] ? LIFT.drops[b.lfLoad].name.toLowerCase() : 'its load'}` : `going up with ${LIFT.load} goods`}: ${b.lfPaid ? `${fmtSecs(Math.max(0, LIFT.climb - (b.lfT || 0)))} to go` : '<span class="err">waiting for power</span>'}</span></div><div class="bar"><div style="width:${Math.round(Math.min(1, (b.lfT || 0) / LIFT.climb) * 100)}%"></div></div>`;
+  else if ((b.lfCd || 0) > 0) h += `<div class="kv"><span>Next call</span><span>in ${fmtSecs(b.lfCd)}</span></div><div class="bar"><div style="width:${Math.round((1 - b.lfCd / LIFT.cooldown) * 100)}%"></div></div>`;
+  h += `<div class="section-label">Call down <span class="label-note">${mul > 1 ? `the next drop is ${Math.round((mul - 1) * 100)}% bigger` : `${LIFT.climb} s down; every colony hears it`}</span></div><div class="lift-loads">`;
+  for (const k in LIFT.drops) {
+    const d = liftDropOf(k, mul), what = Object.keys(d.bots).map((t) => `${d.bots[t]} ${BOTS[t].plural}`).concat(Object.keys(d.goods).map((g) => `${d.goods[g]} ${goodN(g, d.goods[g])}`)).join(', ');
+    h += `<button class="btn" id="sh-lf-${k}" data-load="${k}"${why ? ' disabled' : ''}><b>${LIFT.drops[k].name}</b><small>${what}</small></button>`;
+  }
+  h += '</div>';
+  h += `<p class="hint">${why || `Calls a climber down from the Carrier: it lands at the anchor in ${LIFT.climb} s, then ${Math.round(LIFT.cooldown / 60)} minutes to the next call.`} Each climb burns ${LIFT.fuel} Fuel from a Generator within ${LIFT.reach} tiles${liftFuel(b) >= LIFT.fuel ? '.' : ': <span class="err">none in reach now</span>.'}</p>`;
+  const gs = Object.keys(list);
+  h += `<div class="section-label">Restock the Carrier <span class="label-note">${liftLoaded(b)} of ${LIFT.load} loaded; the number is what stays home</span></div>`;
+  h += gs.length ? `<div class="keep-list" id="sh-lflist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name}</span><b class="n">${list[g]}</b>
+      <button class="btn" data-d="-${LIFT.sendStep}" aria-label="Keep less ${GOOD[g].name} at home">−${LIFT.sendStep}</button><button class="btn" data-d="${LIFT.sendStep}" aria-label="Keep more ${GOOD[g].name} at home">+${LIFT.sendStep}</button><button class="btn ghost" data-x="1" aria-label="Stop sending ${GOOD[g].name}">✕</button></div>`).join('')}</div>`
+    : '<p class="hint"><b>Nothing to send up yet:</b> tick a good below.</p>';
+  if (gs.length < LIFT.goods) {
+    const opts = LIFT_GOODS.filter((g) => !list[g] && (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
+    h += `<div class="goodlist" id="sh-lfadd">${opts.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span></button>`).join('')}</div>`;
+  }
+  h += `<p class="hint">Haulers (Tankers for Fuel) bring it what you hold of these beyond the number kept home, and buildings touching the pad feed it by conveyor. At ${LIFT.load} goods the climber goes up (${LIFT.climb} s; never while one is coming down): each load puts a drop back in the Carrier and makes the next drop half again bigger, up to double. Sent up so far: ${b.lfUps || 0}; called down: ${b.lfDrops || 0}.</p>`;
+  el.innerHTML = h;
+  markSheetKeys();
+  const done = (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); };
+  for (const btn of el.querySelectorAll('[data-load]')) btn.onclick = () => act('liftCall', [b.id, btn.dataset.load], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else { sfx('order'); toast(`Climber called: ${LIFT.drops[btn.dataset.load].name.toLowerCase()} lands at the anchor in ${LIFT.climb} seconds. Every colony hears it coming.`, 'good'); } el.dataset.sig = ''; refreshSheet(); });
+  if ($('sh-lflist')) for (const btn of $('sh-lflist').querySelectorAll('button')) btn.onclick = () => {
+    const g = btn.parentElement.dataset.g;
+    if (btn.dataset.x) act('liftSend', [b.id, g, false], done); else act('liftReserve', [b.id, g, +btn.dataset.d], done);
+  };
+  if ($('sh-lfadd')) for (const btn of $('sh-lfadd').querySelectorAll('button')) btn.onclick = () => act('liftSend', [b.id, btn.dataset.g, true], done);
+}
+
 /** Aim at a Catcher: pick it on the map (a tap on it aims the Driver). */
 function startMdAim(b) {
   closeSheet();
@@ -4718,7 +4763,7 @@ function showAimBanner(problem) {
   if (problem) html = `<span class="err">${problem}</span> `;
   if (BDEFS[silo.type].lance) {
     html += R.aim
-      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
+      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything in the red core (2 tiles wide) is destroyed, yours too; the fainter edge either side is scorched to half armor.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
     return;
@@ -4869,6 +4914,7 @@ function enterPlaceMode(type, moveFrom) {
   UI.placeType = type;
   UI.moveFrom = moveFrom || 0;
   if (BDEFS[type] && BDEFS[type].long) { const f = moveFrom ? getE(moveFrom) : null; UI.mdAxis = (f && f.mdAxis) || UI.mdAxis || 'ew'; }
+  if (BDEFS[type] && BDEFS[type].lift) UI.liftDir = liftDirOf(UI.liftDir);
   document.body.classList.toggle('mode-road', crossing);
   $('btn-road').classList.toggle('on', crossing);
   refreshOverlay(type);
@@ -4879,6 +4925,7 @@ function enterPlaceMode(type, moveFrom) {
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (BDEFS[type] && BDEFS[type].long) mdTurnBanner();
+  if (BDEFS[type] && BDEFS[type].lift) liftTurnBanner();
   if (type === 'maglev' && !R.overlay.valid.some((v) => v)) { showBanner(`<span class="err">No Maglev Terminal to start a line from: build one first (Build → Move → <b>Maglev Terminal</b>, <kbd>G</kbd>; ${costText(BDEFS.magterm.cost)}), finished and on no line.</span>`, null, 'Close'); crossingTools(); return; }
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
@@ -4903,6 +4950,26 @@ function mdTurn() {
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].long) R.ghost.ok = !!R.overlay.valid[tIdx(R.ghost.x, R.ghost.y)];
   const s = document.querySelector('#banner-text .md-turn'); if (s) s.remove();
   mdTurnBanner();
+}
+
+/**
+ * Placing an Orbital Lift: its fall line (drawn on the map from the ghost) points one of 8 ways; the banner says which and
+ * offers Turn (R; Shift+R the other way). The spots where it fits follow the line.
+ */
+function liftTurnBanner() {
+  const t = $('banner-text');
+  if (!t || t.querySelector('#lift-turn')) return;
+  t.insertAdjacentHTML('beforeend', ` <span class="lift-turn">If it is destroyed by an enemy its cable falls <b>${LIFT_DIR_NAMES[liftDirOf(UI.liftDir)]}</b>, ${liftLen()} tiles: <button class="btn small" id="lift-turn">Turn <kbd>R</kbd></button></span>`);
+  $('lift-turn').onclick = (e) => { e.stopPropagation(); liftTurn(1); };
+}
+/** Turn the fall line of the Lift being placed an eighth round (k 1 clockwise, -1 back). */
+function liftTurn(k) {
+  UI.liftDir = (liftDirOf(UI.liftDir) + (k < 0 ? 7 : 1)) % 8;
+  sfx('click');
+  refreshOverlay(UI.placeType);
+  if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].lift) R.ghost.ok = !!R.overlay.valid[tIdx(R.ghost.x, R.ghost.y)];
+  const s = document.querySelector('#banner-text .lift-turn'); if (s) s.remove();
+  liftTurnBanner();
 }
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
@@ -4997,7 +5064,7 @@ function confirmBanner() {
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const from = UI.moveFrom ? getE(UI.moveFrom) : null;
-  const ax = BDEFS[type].long ? [UI.mdAxis || 'ew'] : []; // (a Mass Driver: which way its two tiles lie)
+  const ax = BDEFS[type].long ? [UI.mdAxis || 'ew'] : BDEFS[type].lift ? [liftDirOf(UI.liftDir)] : []; // (a Mass Driver: which way its two tiles lie; an Orbital Lift: its fall line)
   act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y, ...ax] : [type, x, y, ...ax], (res) => {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
@@ -5163,7 +5230,7 @@ function onMapTap(i, j, wx, wy) {
     if (type === 'viaduct') { viaductTap(i, j); return; }
     if (type === 'maglev') { maglevTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
-    const chk = canPlace(ME, type, i, j, false, type === 'mdriver' ? UI.mdAxis : undefined);
+    const chk = canPlace(ME, type, i, j, false, type === 'mdriver' ? UI.mdAxis : BDEFS[type] && BDEFS[type].lift ? liftDirOf(UI.liftDir) : undefined);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
     if (chk.ok) {
       let extra = '';
@@ -6711,6 +6778,7 @@ function garrisonMix(b) {
 function ownedText(type) {
   if (BDEFS[type].city && worldBan(type)) return 'Not on the moon';
   if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
+  if (BDEFS[type].lift && worldBan(type)) return 'No sky down here';
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -6751,6 +6819,7 @@ function openBuildingSheet(b) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.magterm && b.built && mine) html += magSection();
     if ((def.mdriver || def.catcher) && b.built && mine) html += mdSection(b);
+    if (def.lift && b.built && mine) html += '<div class="section-label">Orbital Lift</div><div id="sh-lift"></div>';
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
@@ -7304,6 +7373,11 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Covers · hits</span><span>${DOME.radius} tiles round it · Missile ${DOME.cost.missile}, bomb ${DOME.cost.bomb}, shell ${DOME.cost.shell}</span></div>`);
       }
     }
+    if (def.lift && b.built) {
+      const c = b.lfMove === 1 ? 'coming down' : b.lfMove === 2 ? 'going up' : 'at the anchor';
+      parts.push(`<div class="kv"><span>Fall line</span><span>${liftLen()} tiles ${LIFT_DIR_NAMES[b.lfDir || 0]} (drawn on the map): if an enemy destroys it, the cable comes down there${b.armor < def.armor * LIFT.weak ? ': <b class="err">cable unstable</b>' : ''}</span></div>`);
+      if (b.owner !== ME) parts.push(`<div class="kv"><span>Climber</span><span>${c}${b.lfMove === 1 && b.lfPaid ? `: lands in ${fmtSecs(Math.max(0, LIFT.climb - (b.lfT || 0)))}` : ''}</span></div>`);
+    }
     if (def.city && b.built) {
       const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;
       const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
@@ -7346,7 +7420,7 @@ function refreshBuildingSheet(b) {
     const why = b.lOn ? '' : lanceBlocked(b);
     $('sh-aim').disabled = !!why;
     $('sh-aim').textContent = b.lOn ? 'Change the aim' : 'Aim the Lance';
-    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
+    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, yours too; the edge either side is scorched to half armor.`);
     if ($('sh-lstop')) $('sh-lstop').hidden = !b.lOn;
     if ($('sh-luser')) {
       $('sh-luser').textContent = `Use Reactor: ${b.lUseR ? 'On' : 'Off'}`; $('sh-luser').setAttribute('aria-pressed', b.lUseR ? 'true' : 'false'); $('sh-luser').classList.toggle('on', !!b.lUseR);
@@ -7462,6 +7536,7 @@ function refreshBuildingSheet(b) {
     renderMastSection(b);
   }
   if ($('sh-md')) renderMdSection(b);
+  if ($('sh-lift')) renderLiftSection(b);
   if ($('sh-mag')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     renderMagSection(b);

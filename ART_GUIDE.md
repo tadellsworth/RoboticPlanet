@@ -1675,6 +1675,26 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 27: the Orbital Lift (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Beacon Cable". The anchor pad is rendered with
+`renderer/b/lift.js` at every time of day for both teams, whole and below 30% of its armor, by
+`renderer/tools/render_lift.sh`; `renderer/tools/install_lift.py` writes the WebP files and prints its frame and marks
+(RENDERER.md, "The Orbital Lift"). Framed like the Lance (`LIFT_FRAME`). Everything that moves or reads at a distance is
+drawn in code, so it stays sharp at any zoom and takes its owner's colour: the cable rising up the screen, its climbers
+and warning lights, its shadow along the fall line, and the fall.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `lift@0`, `lift@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad with a painted ring; an eight-sided stepped concrete collar in the middle with a team-colour band round its crest; eight clamp housings round a steel clamp ring; the cable's foot, a bright braided stub with four guide rails and the climber dock's yellow buffer ring, two red warning lights on it; two tension winches with fat cable drums led in to the collar; a control house with an amber window band and a team stripe; a power cabinet, a red Fuel feed pipe; four floodlight masts at the corners aimed in, each with a red beacon (white floods lit at dusk and night) | `drawLift` over the middle of its square |
+| `lift-down@0`, `lift-down@1` (+ times of day) | Below 30%: scorch over the pad, rubble and torn plates strewn over it, one clamp housing torn open and charred, a crack down the collar, the south-east floodlight mast knocked down across the pad, the floods and window band dark | `drawLift` while `b.armor < 30%` |
+| (code) | The cable | `drawLiftBeam` from the cable's foot (`liftFoot`): a soft column of light in its owner's colour, brighter at night, fading out up the screen; a white core line; six red warning lights stepping up it, blinking in turn (bright by night); two climber pods riding it, the higher the smaller; swaying when weak |
+| (code) | The climber | `drawLiftPod`: a white capsule with a band of windows (amber at night) and its owner's stripe when it carries a drop, coming down (growing) or going up (shrinking) over its 45 s; waiting at the top or bottom without power |
+| (code) | The shadow | `drawLiftShadow`: a soft dark line along the ground the way it would fall, flashing red while it's weak for whoever has land or robots on it; on the minimap a faint line, flashing red |
+| (code) | The fall | `drawLiftFalling`: for 5 s the cable stands over the gone anchor, swaying harder, its line flashing red; then it comes down from the anchor out, the part still falling hanging from where it struck to its top, dust and smoke where it lands (`addFx`) |
+| (code) | The wreckage | `drawCableWreck`, baked into the ground: the braided cable lying along its line through each tile, torn plates of its climber track beside it in its owner's colour; sparks along it for a minute after it falls, the Murmur's violet glimmer over it at night |
+| (code) | Its lights | the floodlights' four white pools at the pad's corners and its owner's glow under the cable (the light pass) |
+
 ### Batch 26: Arrival City (installed)
 
 The owner's look **A** from the design sheet (Nov 20 2026), the "Terraced Arcology". Rendered with `renderer/b/city.js`

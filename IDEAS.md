@@ -391,13 +391,16 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the land is running out of on about one visit in four. Still open: whether long games on Huge maps need more.
   - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
     faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
+    The owner, Nov 20 2026: circle back to this later (a Research Lab for Versus; today it is Colony only). It came up
+    as one of the Orbital Lift's possible rewards for sending goods up (Research in Colony mode), not the one chosen.
   - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
     of a Worker: Workers saved in a big late colony.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
   everyone, so rivals can race or raid them. The owner's order (Nov 18), after the high-speed transit items: the Ring
   Breaker, the Sunlance, the Great Uplink, Arrival City, the Lance of Corvane and the Shield Dome; the Seismic Lance,
-  the Orbital Lift, the Atmosphere Engine and the power plant perhaps later.
-  - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
+  the Orbital Lift (built, in the Ring Breaker's place), the Atmosphere Engine and the power plant perhaps later.
+  - **Ring Breaker** (weapon; dropped from the line-up on the Orbital Lift's sheet, Nov 20 2026: the Lift took its
+    place, and the rivals' weapon pick stays the Lance or the nukes). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
     you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
     so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
     the Sponsors did to Earth.
@@ -421,7 +424,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     repairs bring it back; warbots at its walls 20 s take it); it stores nothing; not on Argos; a new Mega tab (key 6,
     with the Lance and the Dome moved there). Rivals: one weapon and two megastructures at most (a Dome in answer to a
     threat doesn't count); the Architect, Warden and Steward build it as their main project, the Salvager and Herald
-    don't (in Domination, all do); they march on a foe's City to take it. Still open, for the owner:
+    don't (in Domination, all do); they march on a foe's City to take it. (Since the Orbital Lift, the Warden builds the
+    Lift instead.) Still open, for the owner:
     - Fuel for its lights was the sheet's recommendation and is in; the owner's answers didn't mention it. Keep it?
     - "Repaired to a quarter of its armor, it's up again" and "taken from within 2.5 tiles of its walls" (its square is
       solid, so warbots can't stand on it) are this build's readings of the answers.
@@ -431,7 +435,33 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     The notes as filed: An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
     it goes up (the robots work harder for Arrival), and its land counts double for Domination. At night, a whole lit
     city for no one.
-  - **Orbital Lift.** A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
+  - **Orbital Lift: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
+    *Aimed the Other Way*). It takes the Ring Breaker's place as the third non-weapon megastructure. The owner's look A
+    (the Beacon Cable: a 3 × 3 anchor pad and collar, the cable a bright beam rising up the screen with climber pods
+    riding it, the higher the smaller, red warning lights, floodlights; its shadow along the fall line), and the sheet's
+    recommendations for the rest: 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 330 s, armor 90; the fall line turned with
+    R as it is placed (8 ways, half the map's width, on the map, over no other colony's land, Trade Post or Uplink); four
+    loads (a Security detail, a Work crew, 30 Alloy, 18 Chips), 45 s down, everyone told, 6 minutes from a landing to the
+    next call; the Carrier holds 6 drops, refilled by sending 30 goods up, each load a drop back and the next drop half
+    again bigger, up to double; 2 Fuel a climb from a Generator within 4 tiles, a solar flare holds it; below 30% its line
+    flashes red ("Lift cable unstable"); destroyed by an enemy, 5 s of creaking, then the cable falls along its line at 4
+    tiles a second (2 on Argos), 30 damage to each building (a Keep at half, a Command Base at its floor, another
+    megastructure badly hurt), robots on it destroyed and beside it hurt, Walls, roads and track broken, aircraft not hit,
+    and its wreckage stays (War scars' scrap: half speed, nothing built on it until Haulers cut it up, an Alloy a tile);
+    not in the Hollow. Rivals: the Warden builds it as its main project (no longer Arrival City), the Herald past 22
+    minutes, both calling Security when attacked or before a push; the Salvager waits at a foe's anchor when a climber
+    comes down; marches go for a Lift whose fall would crush enough. Still open, for the owner:
+    - The reserve Command Base through the Lift (restock the Carrier fully, say three times, for a second Command Base if
+      the first falls): not approved yet; ask again later.
+    - The player can build it from the start (Arrival City opens at 15 minutes; the Lift has no hour of its own, only its
+      price). Should it open at 18 minutes, as the rivals build it?
+    - "Only a Lift destroyed by an enemy falls" reads here as: a foe hit its colony in the last 2 seconds (`liftKiller`).
+      Its own side's Lance, or the ground, reels it in. The Murmur count as an enemy.
+    - The sheet's "the Murmur drain the charge left in the wreckage at night" is in the art only (a violet glimmer); their
+      tunnels lean toward it as toward any scrap heap.
+    - The Warden builds no Arrival City now, even where the Lift is banned (the Hollow): it builds no main project there.
+    - The robots a drop brings come whatever the bot limit (they are the Carrier's, not the Foundry's).
+    The notes as filed: A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
     Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
   - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
@@ -442,7 +472,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). On Reactor power
     (the owner, Nov 20): a 45 s charge and a 3 min reload (Generators 90 s and 4 min), 2 Uranium or an Enriched Uranium a
     shot; with both in reach, the Generators unless Use Reactor is switched on in its panel (the rival switches it on
-    once it has chosen the Lance). Still open: power lines
+    once it has chosen the Lance). Widened (the owner, Nov 20: a full-map shot often took only 2 buildings, no more
+    than a Missile): a 2-tile core that destroys every building it touches and a 1-tile scorched edge either side that
+    takes half the armor of buildings and half the health of robots without destroying anything; the trench, its War
+    scars and the aim line widened to match, and the rival's aim scores the wider line. Open: whether the core should
+    grow to 3, or the edge burn crops and groves too. Still open: power lines
     to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim

@@ -172,7 +172,8 @@ const ORDERS = {
   place(p, type, i, j, axis) {
     if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' };
     if (modNoBuild(type)) return { ok: false, reason: modNoBuild(type) }; // (No turrets, a challenge modifier)
-    const r = placeSite(p, type, i, j, undefined, undefined, axis === 'ns' ? 'ns' : 'ew'); // (axis: a Mass Driver's two tiles, east-west or north-south)
+    // (axis: a Mass Driver's two tiles, east-west or north-south; an Orbital Lift's fall line, 0..7: LIFT_DIRS)
+    const r = placeSite(p, type, i, j, undefined, undefined, BDEFS[type].lift ? liftDirOf(axis) : axis === 'ns' ? 'ns' : 'ew');
     if (r.ok) r.building.placedAt = S.time; // (when: it can be taken back for SITE_UNDO s, see undoSite)
     return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 };
   },
@@ -349,6 +350,14 @@ const ORDERS = {
   missileAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].missile ? fireMissileAt(s, i, j) : false; },
   /** Aim Lance of Corvane `id` through tile (i, j): it starts charging (or, charging, turns to the new aim). '' or why not. */
   lanceAim(p, id, i, j) { const b = ownB(p, id); return b && BDEFS[b.type].lance ? setLanceAim(b, i | 0, j | 0) : 'That Lance is gone.'; },
+  /** Call Orbital Lift `id`'s climber down with `load` (a key of LIFT.drops). '' or why not. */
+  liftCall(p, id, load) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? liftCall(b, String(load)) : 'That Orbital Lift is gone.'; },
+  /** Send good g up from Orbital Lift `id` (on), or stop sending it. '' or why not. */
+  liftSend(p, id, g, on) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? setLiftSend(b, String(g), !!on) : 'That Orbital Lift is gone.'; },
+  /** The reserve of good g Orbital Lift `id` leaves at home, d more (or less). */
+  liftReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].lift) setLiftReserve(b, String(g), +d || 0); },
+  /** Turn Orbital Lift site `id`'s fall line to direction d (0..7), while it's still a site. '' or why not. */
+  liftDir(p, id, d) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? setLiftDir(b, liftDirOf(d)) : 'That Orbital Lift is gone.'; },
   /** Lance `id`'s Use Reactor switch: with a Reactor and Generators both in reach, charge on the Reactor (faster, Uranium a shot). */
   lanceReactor(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].lance) b.lUseR = !!on; },
   /** Call off Lance `id`'s charge (the charge is lost). */
