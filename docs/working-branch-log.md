@@ -155,3 +155,10 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Gave idle Haulers first call on their colony’s dismantled crates, with idle Workers handling reachable leftovers after their regular tasks.
 - Reduced the Command Base beacon’s height limit from 33% to 16% of the view. Always day still uses the illuminated mast without a sky beam.
 - Checked the night rendering of the building and vehicle catalog. Centered multi-tile light pools, drew Mass Driver coil effects at building depth, tightened darkness and destruction checks, and added local structure, vehicle, and gantry markers.
+
+### Pause menu, the Deep, and restore points
+
+- **Rival difficulty** applies to every computer rival in a custom game and shows a toast. Multiplayer checks the host's player seat when the order runs, including when two people share a colony or the host changes. Verified that both peers reached the same simulation hash, non-host orders were rejected, and a disconnected player's colony was left alone.
+- The Deep's local packs escalate below 75%, two-thirds, and one-third armor. Its pulse strengthens and its rumble drops in pitch with each tier. All five Hollow matches ended before and after the change. Medium 11, 12 and 25 finished with identical results. Small 21 finished 23 seconds sooner with the same winner and Small 25 finished at 40:26 with the opposite winner. [Match results](deep-surge-retest.md)
+- Solo games keep up to five minute-by-minute restore points in browser storage. The menu labels them by age, asks for confirmation, and hides them in multiplayer. **Continue** still opens older single autosaves. Chromium play confirmed the difficulty toast, restore confirmation and cancellation, quota trimming, and legacy Continue.
+- Updated the README, in-game help, and illustrated guide for each feature. The existing mission goals still cover their authored challenges.

@@ -1623,12 +1623,24 @@ function renderPreview(cv, m, p) {
 
 /* ------------------------------------------------------------------ autosave */
 
-// Continue keeps its usual local save. The rolling history uses IndexedDB so large maps
-// can keep several snapshots without competing for localStorage's small quota.
-const AUTOSAVE_EVERY = 60, CHECKPOINT_LIMIT = 5;
+// Continue keeps its own save. Restore points are optional if the device is short on space.
+const AUTOSAVE_EVERY = 60, CHECKPOINT_LIMIT = 5, CHECKPOINT_KEY = 'terrafall.restorePoints.v1';
 let checkpointDB;
 
-function checkpointStore(run, update) {
+function readCheckpoints() {
+  try {
+    const book = JSON.parse(localStorage.getItem(CHECKPOINT_KEY));
+    if (typeof book?.run === 'string' && Array.isArray(book.entries)) return book;
+  } catch (e) { /* blocked or damaged history */ }
+  return null;
+}
+
+function removeCheckpointBook() {
+  try { localStorage.removeItem(CHECKPOINT_KEY); return true; } catch (e) { return false; }
+}
+
+// Read the previous version's history until a localStorage book is available for this game.
+function legacyCheckpoints(run) {
   if (!checkpointDB) {
     checkpointDB = new Promise((resolve, reject) => {
       const req = indexedDB.open('terrafall.checkpoints', 1);
@@ -1638,19 +1650,12 @@ function checkpointStore(run, update) {
     });
   }
   return checkpointDB.then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction('history', update ? 'readwrite' : 'readonly'), store = tx.objectStore('history');
-    const read = store.get('recent');
-    let entries = [];
+    const read = db.transaction('history', 'readonly').objectStore('history').get('recent');
     read.onsuccess = () => {
       const book = read.result;
-      entries = book && (run === null || book.run === run) ? book.entries : [];
-      if (update) {
-        const next = [update, ...entries.filter((e) => e.time !== update.time)].slice(0, CHECKPOINT_LIMIT);
-        store.put({ run, entries: next }, 'recent');
-      }
+      resolve(book && (run === null || book.run === run) ? book.entries : []);
     };
-    tx.oncomplete = () => resolve(entries);
-    tx.onabort = () => reject(tx.error);
+    read.onerror = () => reject(read.error);
   }));
 }
 
@@ -1669,16 +1674,24 @@ function canCheckpoint() {
 
 function checkpointTick() {
   if (!canCheckpoint() || UI.paused || S.time + 1e-6 < UI.nextCheckpoint) return;
-  const time = UI.nextCheckpoint;
-  UI.nextCheckpoint += AUTOSAVE_EVERY;
-  const json = serializeGame();
-  autoSave(json);
-  const run = S.checkpointRun;
-  checkpointStore(run, { time, json }).catch(() => {
-    if (S?.checkpointRun !== run || UI.checkpointFailed) return;
+  const time = S.time, run = S.checkpointRun;
+  UI.nextCheckpoint = (Math.floor((time + 1e-6) / AUTOSAVE_EVERY) + 1) * AUTOSAVE_EVERY;
+  const json = serializeGame(), prior = readCheckpoints();
+  const earlier = prior?.run === run ? prior.entries.filter((e) => e.time < time) : [];
+  const entries = [{ time, json }, ...earlier].slice(0, CHECKPOINT_LIMIT);
+  autoSave(json, prior ? removeCheckpointBook : undefined);
+  // Keep the newest snapshots first. A failed setItem leaves the previous book intact.
+  while (entries.length) {
+    try {
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ run, entries }));
+      UI.checkpointFailed = false;
+      return;
+    } catch (e) { entries.pop(); }
+  }
+  if (!UI.checkpointFailed && !UI.saveFailed) {
     UI.checkpointFailed = true;
-    toast('This browser couldn’t keep the rolling save history.', 'warn');
-  });
+    toast('This browser couldn’t keep a restore point. Continue is still available.', 'warn');
+  }
 }
 
 async function showCheckpoints(prefix = 'p') {
@@ -1688,33 +1701,41 @@ async function showCheckpoints(prefix = 'p') {
   row.hidden = true;
   if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
   try {
-    const entries = await checkpointStore(run);
-    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix) || !entries.length) return;
+    const book = readCheckpoints();
+    const stored = book && (fromMenu || book.run === run) ? book.entries : await legacyCheckpoints(run);
+    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix)) return;
+    const entries = stored.filter((e) => typeof e?.json === 'string' && Number.isFinite(e.time) &&
+      (fromMenu || e.time <= game.time + 1e-6)).slice(0, CHECKPOINT_LIMIT);
+    if (!entries.length) return;
     if (fromMenu) {
       let seed;
       try { seed = JSON.parse(entries[0].json)?.seed; } catch (e) { /* The selected entry is checked when restored. */ }
-      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent checkpoints for Planet #${seed}` : 'Recent solo checkpoints';
+      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent restore points for Planet #${seed}` : 'Recent solo restore points';
     }
-    select.replaceChildren(...entries.map((e, i) => new Option(fmtClock(e.time) + ' game time', i)));
+    const now = fromMenu ? entries[0].time : game.time;
+    select.replaceChildren(...entries.map((e, i) => {
+      const minutes = Math.floor((now - e.time + 1e-6) / AUTOSAVE_EVERY);
+      return new Option(`Restore point: ${minutes > 0 ? minutes + ' min ago' : 'just now'}`, i);
+    }));
     $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value], prefix);
     row.hidden = false;
   } catch (e) { /* history is unavailable; Continue remains independent */ }
 }
 
 function restoreCheckpoint(entry, prefix) {
-  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the checkpoint from ${fmtClock(entry.time)} game time?`)) return;
+  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the point from ${fmtClock(entry.time)} game time?`)) return;
   if (prefix === 'm') audioUnlock();
-  if (loadSaveText(entry.json, 'Checkpoint restored.')) {
+  if (loadSaveText(entry.json, 'Restore point loaded.')) {
     $('screen-pause').hidden = true;
     $('screen-over').hidden = true;
-  } else if (prefix === 'm') menuMsg('That checkpoint couldn’t be loaded.');
-  else toast('That checkpoint couldn’t be loaded.', 'warn');
+  } else if (prefix === 'm') menuMsg('That restore point couldn’t be loaded.');
+  else toast('That restore point couldn’t be loaded.', 'warn');
 }
 
-function autoSave(json) {
+function autoSave(json, makeRoom) {
   // (UI.saveHold: the game keeps failing, see `stage` in main.js. The last good save is left alone.)
   if (!canCheckpoint()) return;
-  if (saveGame(json)) { UI.savedAt = Date.now(); UI.saveFailed = false; }
+  if (saveGame(json) || (makeRoom?.() && saveGame(json))) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
     toast('Couldn\'t save the game: this browser\'s storage is full or blocked. Keep this tab open to keep playing.', 'warn');

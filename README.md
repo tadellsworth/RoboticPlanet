@@ -127,7 +127,7 @@ apply to all computer colonies from that point in the match. In multiplayer only
 `rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
 and production without changing stock already on the map. Missions keep their selected difficulty.
 
-Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave.
+Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 
 ## How to play
 
@@ -1214,9 +1214,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
-- **Saving:** the game saves single-player progress every in-game minute and keeps the latest five checkpoints.
-  Use **Restore checkpoint** in the pause menu or on the game-over screen. The main menu opens the latest saved solo
-  checkpoint history, even after a reload following defeat. Switching away or closing the tab also
+- **Saving:** solo games keep up to five restore points about a game minute apart in localStorage. Pick one by
+  its age and choose **Restore** in the pause menu or on the game-over screen, then confirm. The main menu opens the
+  latest solo history after a reload, and **Continue** still opens older single autosaves. If storage is tight, the
+  game keeps fewer points. Multiplayer hides restore points. Switching away or closing the tab also
   updates the save used by **Continue**. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
