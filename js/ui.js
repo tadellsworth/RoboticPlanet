@@ -2106,7 +2106,7 @@ const SHEET_KEYS = {
   // An Orbital Lift's four loads to call down.
   'sh-lf-security': 'z', 'sh-lf-crew': 'x', 'sh-lf-alloy': 'c', 'sh-lf-chips': 'v',
   // A Great Uplink's Begin transmission.
-  'sh-gup-begin': 't',
+  'sh-gup-begin': 't', 'sh-gup-stop': 'c',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -4642,7 +4642,8 @@ function renderGupSection(b) {
   const el = $('sh-gup');
   if (!el) return;
   const mine = b.owner === ME, why = gupBlocked(b), gens = megaGens(b, GUP.reach).length, T = b.gT || 0;
-  const sig = JSON.stringify([b.gOn || 0, Math.floor(T), b.gJam || 0, b.gPow || 0, gens, why, mine]);
+  const src = b.gOn ? b.gSrc || '' : gupPower(b), rx = gupReactor(b);
+  const sig = JSON.stringify([b.gOn || 0, Math.floor(T), b.gJam || 0, b.gPow || 0, gens, why, mine, src, Math.ceil(b.gU || 0), rx ? (rx.stock.uranium || 0) + '/' + (rx.stock.fissile || 0) : '']);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   const col = PLAYER_COLORS[b.owner] || '#ffffff';
@@ -4653,13 +4654,18 @@ function renderGupSection(b) {
     h += `<div class="kv"><span>Signal</span><span>${st}</span></div>`;
   } else h += `<div class="kv"><span>Signal</span><span>${gupWinOn() ? 'Silent' : 'Silent: the Great Uplink win is off in this game'}</span></div>`;
   if (mine) {
-    h += `<div class="kv"><span>Power</span><span>${gens >= GUP.gens ? `${gens} Generators with Fuel` : `<b>Not enough</b>: ${gens} of ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles`}; each burns a Fuel every ${GUP.genFuel} s while it transmits</span></div>`;
+    const ru = rx ? `${rx.stock.uranium || 0} Uranium${rx.stock.fissile ? `, ${rx.stock.fissile} Enriched` : ''} in its Reactor` : '';
+    h += `<div class="kv"><span>Power</span><span>${src === 'gen' ? `${gens} Generators with Fuel: each burns a Fuel every ${GUP.genFuel} s while it transmits`
+      : src === 'reactor' ? `Reactor and ${gens} Generator${gens === 1 ? '' : 's'}: a Uranium every ${GUP.uEvery / 60} minutes of transmission (an Enriched Uranium lasts ${GUP.uEvery / 30}), ${ru}${b.gU > 0 ? `, ${fmtSecs(b.gU)} paid for` : ''}; the Generator a Fuel every ${GUP.genFuel} s`
+      : `<b>None</b>: ${gens} of ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Nuclear Reactor with Uranium and ${GUP.rGens} Generator there${rx ? '' : ' (no Reactor with Uranium in reach)'}`}</span></div>`;
     if (!b.gOn) h += `<button class="btn primary big danger-glow" id="sh-gup-begin"${why ? ' disabled' : ''}>Begin transmission</button>`;
+    else h += `<button class="btn" id="sh-gup-stop">Stand down (the transmission is lost)</button>`;
     h += `<p class="hint">${!b.gOn && why ? why + ' ' : ''}Hold the transmission for ${GUP.hold / 60} minutes and you make contact: your colony${S.teams ? ' and your team' : ''} win${S.teams ? '' : 's'}. Every colony sees the countdown and where it is. An enemy warbot within ${GUP.jam} tiles jams it; jammed or without power its clock runs back at half speed. Destroyed, the transmission is lost.</p>`;
   } else if (b.gOn) h += `<p class="hint">${allies(b.owner, ME) ? 'Your team wins when it makes contact: guard it.' : `Warbots within ${GUP.jam} tiles of it jam it and wind its clock back; destroy it and the transmission is lost.`}</p>`;
   el.innerHTML = h;
   markSheetKeys();
   if ($('sh-gup-begin')) $('sh-gup-begin').onclick = () => act('gupBegin', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('order'); el.dataset.sig = ''; refreshSheet(); });
+  if ($('sh-gup-stop')) $('sh-gup-stop').onclick = () => act('gupStop', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); });
 }
 
 /** Aim at a Catcher: pick it on the map (a tap on it aims the Driver). */

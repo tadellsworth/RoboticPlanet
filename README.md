@@ -201,7 +201,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
-| Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits); 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
+| Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
@@ -2153,15 +2153,20 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu
     leaves it out otherwise). Its panel's **Begin transmission** (`gupBegin` order and function; `gupBlocked` why not;
     key T: `renderGupSection`) from `GUP.at` (25 min; at once in a mission: `gupOpen`), with `gens` (3) Generators with
-    Fuel within `reach` (4) tiles (`megaGens`, `gupPowered`), each burning a Fuel every `genFuel` (30) s while it
-    transmits. `updateGup`: `b.gT` counts up to `hold` (480) s and `gupContact` wins (`S.winner` its owner, `S.endHow`
+    Fuel within `reach` (4) tiles (`megaGens`, `gupPower` 'gen'), each burning a Fuel every `genFuel` (30) s while it
+    transmits; or a Nuclear Reactor with Uranium and `rGens` (1) Generator there (`gupReactor`, `gupPower` 'reactor'):
+    `gupBurnUranium` takes a Uranium for each `uEvery` (240) s of transmission as the stretch begins (`b.gU` the seconds
+    paid for; an Enriched Uranium pays for two), so a whole transmission costs 2 Uranium, a sixth of a nuke (12) on a map
+    with about 24; while jammed none is burned. With both, the Generators (`b.gSrc` says which). **Stand down** (the
+    `gupStop` order and function, key C) ends a transmission: its progress is lost (a transmission paused and resumed
+    would dodge jamming and Fuel for free), every colony is told (`logEvent` `gupStop`); a rival never stands down. `updateGup`: `b.gT` counts up to `hold` (480) s and `gupContact` wins (`S.winner` its owner, `S.endHow`
     `'contact'`; with teams its side). An armed warbot of a foe within `jam` (3) tiles of its square (`gupJammer`,
     `b.gJam`), or no power (`b.gPow`), stops it and runs the clock back at `back` (half) speed, down to 0. Once begun it
     stays on (`b.gOn`) until contact; destroyed, the transmission is lost; taken by another colony (`b.gBy`), or played on
     past a victory (`S.endless`), it stops. Everyone is told as it begins and at `alerts` (4, 2 minutes and 30 s left:
     `gupAlert`, `b.gWarn`); `logEvent` `gup` and `contact`; `P.stats.gupTx`. Working while it transmits: it draws the
     Murmur (`murmurPower`, `chargeWorth` 3). Saved with the building (`gOn`, `gT`, `gBy`, `gJam`, `gPow`, `gWarn`,
-    `gBest`), checked by `checkSave`; `hashState` covers them. **The banner** (`updateGupCard`, `#gup-card`): for every
+    `gBest`, `gU`, `gSrc`), checked by `checkSave`; `hashState` covers them. **The banner** (`updateGupCard`, `#gup-card`): for every
     colony and in Observer mode, the sender's callsign and colour, "transmitting · contact in m:ss", a bar, JAMMED or NO
     POWER; tap to look at it (`gupLive` orders them). **The end screen**: *Contact!*, and under it what answered,
     `GUP_ANSWER` ("Signal acknowledged. Source unidentified. Further instructions to follow."), for winner and loser

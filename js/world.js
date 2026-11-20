@@ -5414,7 +5414,8 @@ function checkSave(o) {
     for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // the Orbital Lift (see updateLift): its fall line, the Carrier's reserve, the climber and the goods it sends up
     // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
-    for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.gSrc != null && !['', 'gen', 'reactor'].includes(b.gSrc)) bad();
+    for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest', 'gU']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
