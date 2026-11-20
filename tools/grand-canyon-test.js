@@ -49,10 +49,29 @@ const cases = new Function('assert', 'sfx', source + `
         }
         assert.equal(islands, 2, label + ' midstream islands');
         assert.ok(fertileFloor >= 12, label + ' fertile bottomland');
+        const paths = Array.from({ length: 4 }, () => []);
+        for (let t = 0; t < ramp.length; t++) {
+          if (!ramp[t]) continue;
+          const south = t >= W * H / 2, col = t % W;
+          const fromWest = south ? col : W - 1 - col;
+          paths[(south ? 0 : 2) + (fromWest < W * 0.3 ? 0 : 1)].push(t);
+        }
+        for (const route of paths) assert.deepEqual(route.map(t => elev[t]).sort(), [0, 1, 2], label + ' single-lane descent');
+        const baseTiles = starts.map(e => tIdx(e.x, e.y));
+        for (const west of [0, 1]) {
+          const closed = [...paths[west], ...paths[west + 2]];
+          for (const t of closed) ramp[t] = 0;
+          computeZones();
+          assert.equal(S.zone[baseTiles[0]], S.zone[baseTiles[1]], label + ' either descent works independently');
+          for (const t of closed) ramp[t] = 1;
+        }
+        for (const t of paths.flat()) ramp[t] = 0;
+        computeZones();
+        assert.notEqual(S.zone[baseTiles[0]], S.zone[baseTiles[1]], label + ' sheer cliffs between routes');
         cases++;
       }
     }
   }
   return cases;
 `)(assert, () => {});
-console.log(`Grand Canyon: ${cases} layouts verified for symmetry, island meadows, rim access and a continuous river.`);
+console.log(`Grand Canyon: ${cases} layouts verified for symmetry, island meadows, two narrow descents per rim and a continuous river.`);

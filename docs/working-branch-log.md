@@ -2,6 +2,14 @@
 
 This log covers the chat that started November 18, 2026, with a GitHub access check. Work from the chat is saved on `codex/working-branch` for review before any integration into `main`. Add dated entries as work is completed, with commit links, verification, and any open follow-up.
 
+## Session summary
+
+- **Transport and logistics.** Made Maglev lines recoverable after terminal loss, kept pods at terminals, enabled road-sharing pylons and transfers between lines, prioritized dismantle crates, and audited freight, Worker assignments, and military movement. Added the Arterial Express tutorial and tightened unit recycling and refunds. See [gameplay fixes](#maglev-recovery-and-gameplay-fixes), [freight assignments](#freight-and-worker-assignments), and [Arterial](#arterial-express-tutorial).
+- **Biomes and presentation.** Added geothermal and tropical scenery, naval wildlife, waves, animated lava, and more varied land animals that move away from development. Reduced truck effects and night-light clutter. Generated radio dialogue was disabled in play. See [scenery](#new-biomes-and-scenery), [wildlife](#wildlife-and-concept-art), and [night lighting](#freight-salvage-and-night-lighting).
+- **Rival and Murmur behavior.** Improved Murmur sabotage and ambush tactics, scaled the Deep's waves with damage, addressed seeded AI stalls and naval crossings, improved 2v2 support and fairness, and taught rivals to mine Ring drizzle deposits. See [seeded fixes](ai-stalemate-fixes.md), [Hollow retest](hollow-ground-army-retest.md), and [drizzle results](#rival-mining-of-ring-drizzle).
+- **Saves, multiplayer, and controls.** Added solo restore points and host-controlled midgame rival difficulty. Audited reconnects, stalled orders, save recovery, opening usability, input, and late-game performance. See [audit synthesis](audit-synthesis.md) and [pause and restore changes](#pause-menu-the-deep-and-restore-points).
+- **Maps.** Added Immense and the two-colony Planetary size, both with optional 65/35 mixed biomes. Reworked Grand Canyon with fertile basins, river islands, and two single-lane natural descents per rim. See [size and compatibility results](immense-validation.md) and [Grand Canyon](#grand-canyon-river-basins).
+
 ## November 18, 2026
 
 ### Repository and workflow
@@ -227,3 +235,4 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Reworked the gorge into alternating narrow passages and broader river basins. The river branches around two fertile islands, with meadows on the banks and rocky outcrops on the higher shelves.
 - Tested 126 layouts across the six sizes and three terrain settings. Both rims have access by ramps and fords, and ships have a continuous river. Verified the map through Custom Game in Chromium.
+- Narrowed the two natural descents on each rim to one ramp per terrace. The switchback and side-canyon trail each work with the other closed. Kept a continuous footpath along the banks where the wide bends meet the narrows. The committed regression test covers 126 layouts, and a second 576-layout sweep also passed.

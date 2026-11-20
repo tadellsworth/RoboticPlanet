@@ -908,9 +908,12 @@ function generateMap(seed, W, H, cfg) {
       const left = Math.min(i, W - 1 - i);
       return 2 + 4.4 * basin(left, islandX, islandR * 1.6) + 0.9 * basin(left, meadowX, W * 0.065);
     };
+    const bankRow = (i) => Math.ceil(river(i) + waterWidth(i));
     for (let i = 0; i < W; i++) {
       const mid = river(i), n = fromNarrows(i), wet = waterWidth(i);
-      const edge = Math.max(floorEdge(i), wet + (n <= 1 ? 1.9 : 3));
+      // Keep neighboring stretches of the riverbank joined, even where a wide bend meets the narrows.
+      const bank = Math.max(bankRow(Math.max(0, i - 1)), bankRow(Math.min(W - 1, i + 1)));
+      const edge = Math.max(floorEdge(i), wet + (n <= 1 ? 1.9 : 3), bank - mid + 1);
       const island = n <= 1 || isFord(i) ? 0 : 2.55 * Math.sqrt(basin(Math.min(i, W - 1 - i), islandX, islandR));
       const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
       for (let j = Math.ceil(mid); j < H; j++) {
@@ -940,18 +943,16 @@ function generateMap(seed, W, H, cfg) {
       }
     }
 
-    // Two descents per rim. Shift the middle ramp sideways so there is a switchback on the terrace.
+    // One natural ramp at each terrace of two single-lane descents. Stagger the middle ramp for a switchback.
     for (const [x, dir] of [[main, 1], [flank, -1]]) {
       for (let level = 0; level < 3; level++) {
-        const start = x + (level === 1 ? 3 * dir : 0);
-        for (let i = start; i < start + 2; i++) {
-          for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
-            const t = id(i, j);
-            if (elev[t] !== level || elev[t + W] !== level + 1) continue;
-            put(t, T_GROUND, level);
-            flag(ramp, t);
-            break;
-          }
+        const i = x + (level === 1 ? 3 * dir : 0);
+        for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
+          const t = id(i, j);
+          if (terrain[t] !== T_GROUND || terrain[t + W] !== T_GROUND ||
+              elev[t] !== level || elev[t + W] !== level + 1) continue;
+          flag(ramp, t);
+          break;
         }
       }
     }
