@@ -138,3 +138,4 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ### Seeded stalemate and fairness fixes
 
 - Updated `codex/working-branch` to `d56b30e` before fixing the seeded AI stalls. Hollow Medium seed 11 finished at 35:29 after the AI learned to retire disconnected sites waiting indefinitely for planned roads. [Tests and rationale](ai-stalemate-fixes.md)
+- Restricted the smaller finishing storm to bases with light gun cover. Reproduced the undersized storms on the earlier revision. The current Hollow Small seed 25 retained its Colony 2 win at 24:04. [Tests and rationale](ai-stalemate-fixes.md#2-hollow-small-seed-25)

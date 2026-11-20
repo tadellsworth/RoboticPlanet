@@ -1581,10 +1581,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
   flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
   the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.
-  Against a crushed rival (twice its army and two more) it storms however the base's guns count, once it can gather
-  twice the enemy's whole army and two more, 8 at least, and three in five of its own armed army outside Bunkers (or
-  the full count, if that is less); with three times the enemy's army and four more it masses for that and marches on
-  nothing else meanwhile. In the last fight of a free-for-all (three or four colonies, one rival left) that storm
+  Against a crushed rival (twice its army and two more), it can storm a lightly defended base with a smaller force.
+  It still wants at least eight warbots, twice the enemy's whole army and two more, and three in five of its armed
+  army outside Bunkers (or the full count, if that is less). Heavy gun cover requires the full estimated force.
+  If it cannot gather that many, it looks for a cheaper fort to take or a way to soften the defences. In the last fight of a free-for-all (three or four colonies, one rival left) that storm
   draws on every garrison, front forts, Keeps and the Command Bases it took too (`aiSpare` with 'storm',
   `sendToRally` with rear 'all'; its own Command Base keeps its home guard): the colony that won the earlier fights
   holds two or three colonies' forts, nearly all in reach of the last rival and each keeping warbots back, and on a

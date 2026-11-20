@@ -2560,9 +2560,8 @@ function aiPush(p, lvl, army, enemyArmy) {
  * as soon as that is enough to take the base (while it masses, a warbot that brought a crate home stays there: lootHeld);
  * until then, while its whole army would be, it masses for the base and marches on nothing else, for up to four
  * minutes (P.stormT; then a cheaper fort first, as above). Against a crushed rival (twice its army and two more) it
- * goes however the base's guns count, once it can gather twice the enemy's whole army and two more, 8 at least, and
- * three in five of its own armed army outside Bunkers (or the full count, if that is less); with three times the
- * enemy's army and four more it masses for that meanwhile and marches on nothing else. The band forms up out of the
+ * can use the smaller storm only against light gun cover. Heavy guns require the estimated full assault force.
+ * It gathers that force if it has the army, or looks for a cheaper fort to take and weaken the defences. The band forms up out of the
  * guns' reach (aiStage) and goes in once it has (aiStorm). Not in an Uplinks game, which is won at the Uplinks.
  * (With the bases defended, a rival far ahead used to march on the cheapest Outpost every few minutes and never on
  * the base, losing band after band, until the game ran out.) Returns true when a march set off.
@@ -2597,9 +2596,11 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     if (g > n && sp.n > n) { n = Math.min(sp.n, g + 2); g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n)); }
     let whole = 0; // (its armed army outside Bunkers)
     if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
-    const go = crushing ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
+    // A weak field army says little about fixed defences. Use the smaller assault only when the base lacks heavy gun cover.
+    const heavy = crushing && n < g && aiFire(aiGuards(eb.owner, eb.x, eb.y, 2, eb).filter((e) => aiDefReach(e.b)), 0) >= AI_HEAVY;
+    const go = crushing && !heavy ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
     if (n >= Math.max(4, g) || n >= go) { tgt = eb; spot = by; size = n; storm = true; }
-    else if (crushing && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
+    else if (crushing && !heavy && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
     else if (g <= army - 2 && S.time - (P.stormT || (P.stormT = S.time)) < 240) { storm = true; hard = { b: eb, need: g }; }
   }
   if (!storm || tgt) P.stormT = 0;

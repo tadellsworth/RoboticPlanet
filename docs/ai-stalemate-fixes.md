@@ -20,3 +20,20 @@ The AI now retires an unlinked site with no work started or materials in transit
 | Long haul Medium, seed 11 | 30:56, Colony 2 | 30:56, Colony 2 |
 
 The 2v2 winner changed in this seed. Team fairness is measured separately in the fourth fix.
+
+## 2. Hollow Small seed 25
+
+The current baseline already wins this seed for Colony 2 in just over 24 minutes. To reproduce the failure, I also ran the revision that introduced the old storm rule (`d947f83`). It was open at 75 minutes. In that run Colony 2 repeatedly stormed a base whose defence estimate was 33 to 41 with groups as small as 17 to 24. Its field-army advantage kept qualifying for the smaller storm even though the defending guns were intact.
+
+The smaller storm is now reserved for light gun cover. A fortified base requires the estimated full force. When the AI cannot gather that force, it can wait for more units or pursue a cheaper fort. A test with 24 available units and an estimate of 34 confirmed that heavy guns block the order and the lightly defended control can still make a storm. The fix reuses existing military state.
+
+| Match | Before | After |
+| --- | --- | --- |
+| Hollow Small, seed 25 | 24:04, Colony 2 | 24:04, Colony 2 |
+| Hollow Medium, seed 11 | 35:29, Colony 2 | 35:29, Colony 2 |
+| Standard Medium, seed 64 | 15:58, Colony 1 | 15:58, Colony 1 |
+| Crossroads Small, seed 1, four-colony free for all | 34:33, Colony 4 | 34:33, Colony 4 |
+| Crossroads Small, seed 3, 2v2 | 20:07, Team 1 | 20:07, Team 1 |
+| Long haul Medium, seed 11 | 30:56, Colony 2 | 30:56, Colony 2 |
+
+On the historical revision, replaying with the narrower rule withheld the 24-unit storm at minute 32. Neither historical replay had a winner at the minute-45 comparison point. A separate trial that also tightened assembly at the staging flag introduced a new 55-minute stall on the current seed, so the committed change leaves assembly alone.
