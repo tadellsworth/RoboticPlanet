@@ -4,13 +4,25 @@ Immense is 84×118 tiles on Standard, compared with Huge at 60×84. Every shape 
 
 ## Generation and compatibility
 
-`node tools/immense-map-test.js` checks 117 Immense layouts across the 25 shapes using seeds 11, 21 and 37. It checks the starting stock and access to Ore and Stone, exact symmetry of those opening deposits on mirrored layouts, clear ground at Trade Posts and Uplinks, and Ringfall. Three-way rotation rounds to the tile grid. Uplinks follow the existing victory rules, so they are absent in Teams and in the Hollow. The Hollow also has no Trade Posts.
+`node tools/immense-map-test.js` checks 117 Immense layouts across the 25 shapes using seeds 11, 21 and 37. It checks the starting stock and access to Ore and Stone, exact symmetry of those opening deposits on mirrored layouts, clear ground at Trade Posts and Uplinks, and Ringfall. Three-way rotation rounds to the tile grid. The comparison found more total deposit resources at Immense than Huge in all 117 layouts, with a median increase of about 72%. Uplinks follow the existing victory rules, so they are absent in Teams and in the Hollow. The Hollow also has no Trade Posts.
 
 Oases has five resource sites per side. Four Isles has more land on its main islands and enough shore space for four outer Uplinks and one in the middle on the tested layouts. On two-player island maps, paired home-island Trade Posts can substitute for a shared post if the generator cannot find a fair shared site. The Hollow has up to nine nests per side and 50% more Ore and Oil per deposit than it would have at the usual deposit amounts. Ringfall targets up to nine sites per colony's share. The Murmur is excluded from that division of the map.
 
 The automated check generated the same 146×146 Teams game on two peers and verified identical simulation fingerprints on a save/load and after lockstep rejoin. The transport split and reassembled the 1.1 MB snapshot in the test. A minute-30 Long Haul 2v2 save was 1.36 MB raw and about 89 KB gzipped. Chromium testing covered Custom Game, road construction, Save & quit, Continue after refreshing the page, and restoring Immense and its seed from Saved planets.
 
 ## Performance
+
+On the published build, a matched Standard seed 11 run reached 30 game minutes at both sizes, with two balanced Normal rivals, no Murmur and no Planetary events. The matches developed different armies, so the numbers describe the whole match workload, including those different fights.
+
+| Standard seed 11 | Huge | Immense |
+| --- | ---: | ---: |
+| Headless wall time | 93 s | 90 s |
+| Mean simulation tick | 1.72 ms | 1.67 ms |
+| 95th percentile simulation tick | 4.19 ms | 3.80 ms |
+| Browser simulation tick, zoomed out, median / p95 | 2.0 / 4.1 ms | 1.5 / 4.1 ms |
+| Browser frame interval, zoomed out, median / p95 | 33.4 / 50.0 ms | 33.3 / 50.0 ms |
+
+The browser used the same 30-minute checkpoint method and Chromium settings as the stress comparison below.
 
 Long Haul 2v2, seed 11, Normal, four balanced rivals, no Murmur or Planetary events. Each run reached 30 game minutes and neither had a winner at that checkpoint. Timings are from an Apple M1 with other tests running. The 30-minute headless fixtures were recorded before the distance-based march recall change.
 
@@ -27,6 +39,7 @@ The browser resumed both fixtures at minute 30 and measured about 5.5 seconds in
 | --- | ---: | ---: |
 | Frame interval at base | 33.4 / 83.3 ms | 50.0 / 100.0 ms |
 | Frame interval zoomed out | 33.3 / 50.1 ms | 33.4 / 50.1 ms |
+| Browser simulation tick zoomed out | 5.2 / 8.2 ms | 7.9 / 18.6 ms |
 | Drawing zoomed out | 15.7 / 20.2 ms | 17.6 / 21.1 ms |
 | Minimap zoomed out | 0.3 / 0.8 ms | 0.4 / 1.2 ms |
 
@@ -38,10 +51,13 @@ All seats used the balanced doctrine. The Hollow had Active Murmur. Other maps h
 
 | Immense map | Seed | Setup | Time | Result |
 | --- | ---: | --- | ---: | --- |
-| Standard | 11 | Two rivals | 28:38 | Colony 1 |
+| Standard | 11 | Two rivals | 30:27 | Colony 1 |
 | Standard | 37 | Two rivals | 19:57 | Colony 2 |
 | Islands | 21 | Two rivals | 14:59 | Colony 1 |
-| Crossroads | 19 | Four-player free-for-all | 52:26 | Colony 2 |
+| Crossroads | 19 | Four-player free-for-all | 37:28 | Colony 2 |
 | The Hollow | 12 | Two rivals, Active Murmur | 75:00 | Undecided |
+| The Hollow | 25 | Two rivals, Active Murmur | 75:00 | Undecided |
 
-The Hollow test exhausted local Fuel and Chips. At the cap both colonies still held their bases, with six army units apiece. In Long Haul 2v2 rivals sent marches across the map before minute 30. The fixed recall timer was shorter than the travel time of a shield-led formation across a map that can be 200 tiles long. Immense now adds travel time to the recall deadline for targets more than 60 tiles away. At minute 30, the retest had one direct attack order and all four colonies were still in play. The benchmark fixture before the change had no direct attack orders at that point.
+Both Hollow seeds reached the cap. On seed 12, local Fuel and Chips ran out and both colonies still held their bases with six army units apiece. The longer travel allowance did not solve the Hollow economy stalemate. In Long Haul 2v2 rivals sent marches across the map before minute 30. The fixed recall timer was shorter than the travel time of a shield-led formation across a map that can be 200 tiles long. Immense now adds travel time to the recall deadline for targets more than 60 tiles away. At minute 30, the retest had one direct attack order and all four colonies were still in play. The benchmark fixture before the change had no direct attack orders at that point. The updated match still had no winner at minute 40.
+
+Before the travel allowance, Colony 2 took 52:26 to win the Crossroads game. Standard seed 11 still had the same winner and went from 28:38 to 30:27.
