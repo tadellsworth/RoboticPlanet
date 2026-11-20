@@ -990,14 +990,16 @@ const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'am
  * default; it works alongside whichever Victory was picked) and Megastructures on; never in Colony games or the Hollow
  * (no sky): gupWinOn. Its panel's Begin transmission opens `at` s into a game (at once in a mission that teaches it) and
  * needs `gens` Generators with Fuel within `reach` tiles of its square, each burning a Fuel every `genFuel` s while it
- * transmits. `hold` s of transmission make contact, and that colony (and its team) wins (S.endHow 'contact'). An armed
+ * transmits; or a Nuclear Reactor and `rGens` Generator there, the Reactor burning a Uranium every `uEvery` s of
+ * transmission (two for a whole one; an Enriched Uranium counts as two), taken as each stretch begins. With both, the
+ * Generators (the Uranium is kept). Its panel's Stand down ends a transmission: its progress is lost. `hold` s of transmission make contact, and that colony (and its team) wins (S.endHow 'contact'). An armed
  * warbot of another colony within `jam` tiles of its square jams it; jammed or unpowered, the clock stops and runs back
  * at `back` speed (down to 0). Destroyed, the transmission is lost: a rebuilt one starts from 0. While it transmits every
  * colony sees a banner in the sender's colour and a ping on the map; alerts when it starts, at half, at 2 minutes and at
  * 30 s left (`alerts`). Its signal pulses every `pulse` s (looks and sound only). In the last `echo` s the Murmur repeat the pulse back (the sound). It draws the Murmur like a
  * working Generator while it transmits. One per colony; two colonies may transmit at once, and the first to finish wins.
  */
-const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, jam: 3, back: 0.5, alerts: [240, 120, 30], echo: 20, pulse: 2.4 };
+const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, rGens: 1, uEvery: 240, jam: 3, back: 0.5, alerts: [240, 120, 30], echo: 20, pulse: 2.4 };
 /** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
 const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };

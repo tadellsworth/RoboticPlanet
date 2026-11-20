@@ -351,6 +351,8 @@ const ORDERS = {
   lanceReactor(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].lance) b.lUseR = !!on; },
   /** Begin Great Uplink `id`'s transmission (the Great Uplink win: 8 minutes held makes contact). '' or why not. */
   gupBegin(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupBegin(b) : 'That Great Uplink is gone.'; },
+  /** Stand down Great Uplink `id`'s transmission: its progress is lost. '' or why not. */
+  gupStop(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupStop(b) : 'That Great Uplink is gone.'; },
   /** Call off Lance `id`'s charge (the charge is lost). */
   lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },

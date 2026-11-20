@@ -16561,7 +16561,7 @@ function hashState() {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
-    if (BDEFS[b.type].gup) { int(b.id); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
+    if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
   // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
@@ -18073,8 +18073,57 @@ function doSalvage(u, t, dt) {
 /** Can Great Uplink transmissions begin yet (GUP.at s into a game; at once in a mission that teaches it)? */
 function gupOpen() { return !!S && (!!S.mission || S.time >= GUP.at); }
 
-/** Has Great Uplink b its power: GUP.gens Generators with Fuel within GUP.reach tiles (and not cut by the Murmur)? */
-function gupPowered(b) { return !murmurCutOn(b) && megaGens(b, GUP.reach).length >= GUP.gens; }
+/** A Nuclear Reactor of b's owner within GUP.reach of it (built, on) with Uranium or Enriched Uranium in it, the fullest; or null. */
+function gupReactor(b) {
+  let best = null;
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) > GUP.reach + 0.5 || !((r.stock.uranium || 0) + (r.stock.fissile || 0))) continue;
+    if (!best || (r.stock.uranium || 0) + 2 * (r.stock.fissile || 0) > (best.stock.uranium || 0) + 2 * (best.stock.fissile || 0)) best = r;
+  }
+  return best;
+}
+
+/**
+ * What powers Great Uplink b now: 'gen' (GUP.gens Generators with Fuel within GUP.reach), 'reactor' (a Nuclear Reactor
+ * there with Uranium, or Uranium already paid for this stretch, b.gU, and GUP.rGens Generator), or '' (none; nor while
+ * the Murmur cut it). The Generators first, so the Uranium is kept for what only it can do.
+ */
+function gupPower(b) {
+  if (murmurCutOn(b)) return '';
+  const n = megaGens(b, GUP.reach).length;
+  if (n >= GUP.gens) return 'gen';
+  if (n >= GUP.rGens && ((b.gU || 0) > 0 || gupReactor(b))) return 'reactor';
+  return '';
+}
+/** Has Great Uplink b its power (gupPower)? */
+function gupPowered(b) { return !!gupPower(b); }
+
+/** On Reactor power, Great Uplink b pays a Uranium for each GUP.uEvery s of transmission (an Enriched Uranium for two). */
+function gupBurnUranium(b, dt) {
+  b.gU = (b.gU || 0) - dt;
+  if (b.gU > 0) return true;
+  const r = gupReactor(b);
+  if (!r) { b.gU = 0; return false; }
+  const g = (r.stock.uranium || 0) >= 1 ? 'uranium' : 'fissile';
+  bump(r.stock, g, -1); usedGood(b.owner, g, 1);
+  b.gU += g === 'uranium' ? GUP.uEvery : 2 * GUP.uEvery;
+  return true;
+}
+
+/** Stand down Great Uplink b's transmission (an order: gupStop): its progress is lost, and every colony is told. '' or why not. */
+function gupStop(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].gup) return 'That Great Uplink is gone.';
+  if (!b.gOn) return 'It is not transmitting.';
+  const c = bCentre(b), lost = fmtClock(b.gT || 0);
+  b.gOn = 0; b.gT = 0; b.gJam = 0; b.gWarn = 0; b.working = false;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    postMsg(Q.id, Q.id === b.owner ? `Your Great Uplink stood down: its ${lost} of transmission is lost.` : `${playerName(b.owner)}'s Great Uplink stood down: its transmission is over.`, c.x, c.y, Q.id === b.owner || allies(Q.id, b.owner) ? 'warn' : 'good');
+  }
+  logEvent({ t: S.time, k: 'gupStop', p: b.owner });
+  return '';
+}
 
 /** The colony + 1 one of whose armed warbots stands within GUP.jam tiles of Great Uplink b's square, jamming it; or 0. */
 function gupJammer(b) {
@@ -18092,7 +18141,7 @@ function gupBlocked(b) {
   if (!gupWinOn()) return 'The Great Uplink win is off in this game.';
   if (S.endless || S.winner >= 0) return 'This game is already won: nothing more is won by contact.';
   if (!gupOpen()) return `Transmissions open ${GUP.at / 60} minutes into a game: in ${fmtSecs(GUP.at - S.time)}.`;
-  if (!gupPowered(b)) return `No power: it needs ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles.`;
+  if (!gupPowered(b)) return `No power: it needs ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Nuclear Reactor with Uranium and ${GUP.rGens} Generator there.`;
   return '';
 }
 
@@ -18132,10 +18181,13 @@ function updateGup(b, dt) {
     b.working = false;
     b.status = !gupWinOn() ? 'Silent: the Great Uplink win is off in this game' : S.endless ? 'Silent: this game is already won'
       : !gupOpen() ? `Transmissions open in ${fmtSecs(GUP.at - S.time)}` : gupPowered(b) ? 'Ready: Begin transmission on its panel'
-      : `No power: ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles`;
+      : `No power: ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles, or a Reactor with Uranium and a Generator`;
     return;
   }
-  const jam = gupJammer(b), pow = gupPowered(b) && !b.cut && !b.paused ? 1 : 0, c = bCentre(b);
+  const jam = gupJammer(b), src = b.cut || b.paused ? '' : gupPower(b), c = bCentre(b);
+  // (on Reactor power, a Uranium for each stretch it transmits: none left, no power)
+  const pow = src && (src !== 'reactor' || jam || gupBurnUranium(b, dt)) ? 1 : 0;
+  b.gSrc = pow ? src : '';
   if (jam && !b.gJam) {
     postMsg(b.owner, `${playerName(jam - 1)}'s warbots are jamming your Great Uplink: drive them off! Its clock is running back.`, c.x, c.y, 'bad');
     postMsg(jam - 1, `Your warbots are jamming ${playerName(b.owner, true)}'s Great Uplink: its clock is running back.`, c.x, c.y, 'good');
@@ -18156,7 +18208,7 @@ function updateGup(b, dt) {
   b.gBest = Math.max(b.gBest || 0, b.gT);
   const left = GUP.hold - b.gT;
   for (const w of GUP.alerts) if (left <= w && (b.gWarn ?? GUP.hold) > w) { b.gWarn = w; gupAlert(b, w); }
-  b.status = `Transmitting: contact in ${fmtClock(left)}`;
+  b.status = `Transmitting${b.gSrc === 'reactor' ? ' on Reactor power' : ''}: contact in ${fmtClock(left)}`;
   if (left <= 0) gupContact(b);
 }
 

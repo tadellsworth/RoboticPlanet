@@ -395,6 +395,17 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     as one of the Orbital Lift's possible rewards for sending goods up (Research in Colony mode), not the one chosen.
   - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
     of a Worker: Workers saved in a big late colony.
+- **Approved for later (the owner, Nov 20 2026).** On record, none started:
+  - **Commands for an AI teammate** in team games: attack here, defend this area, help me, hold back, ask for goods.
+    Design it with the owner first.
+  - **A Research Lab for Versus** (Colony only today).
+  - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
+    dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
+    the blob.
+  - **Map edges, looks only:** faded, unplayable terrain carrying on past the map's edge; a haze in the biome's colour
+    thickening outward; perhaps a slight curve at far zoom.
+  - **Road crews:** the rivals and the Roadworks; a shorter phone label ("All" instead of "No limit").
+  - **Orbital Lift:** an 18-minute opening time; rivals rarely reach it; the Warden in the Hollow gets no main project.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
   everyone, so rivals can race or raid them. The owner's order (Nov 18), after the high-speed transit items: the Ring
   Breaker, the Sunlance, the Great Uplink, Arrival City, the Lance of Corvane and the Shield Dome; the Seismic Lance,
@@ -424,10 +435,13 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     silence and one answering tone. Rivals: the Steward builds it as its main project when the win is on (else Arrival
     City); every rival makes a foe's transmission its first target (warbots to jam it, Missiles, bombers and the Lance).
     Still open, for the owner:
-    - Power is 3 Generators only. The sheet also offered "a Reactor and 1 Generator (the Reactor taking 1 Uranium a
-      minute)"; not built, as the owner's choice named 3 Generators. Add it?
-    - Once begun a transmission can't be called off (it runs back while stalled, down to 0, and stays on). A Stand down
-      button, to save Fuel, would be easy.
+    - Power, answered: a Nuclear Reactor and 1 Generator also power it, the Reactor burning a Uranium every 4 minutes of
+      transmission (2 a whole one: a Uranium-rich map holds about 24, a nuke takes 12, a Lance shot 2); with both in
+      reach, the Generators. Built Nov 20 2026.
+    - Stand down, answered: built. Its progress is lost (decaying would let a colony pause through a raid or a Fuel
+      shortage and pick up where it left off); everyone is told. A rival never stands down: losing the Uplink costs it
+      no more than standing down would.
+    - Stewards building it at home and winning 2 of 6 late games: the owner's answer, fine, leave it.
     - The dish doesn't turn to follow the sky (the sprite is one still frame); the sheet's "the colony's street lights
       flicker in time" isn't in. Both are looks only.
     - "Alerts at half, 2 minutes and 30 s" come once each: a clock pushed back past them doesn't repeat them.
