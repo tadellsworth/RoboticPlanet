@@ -81,7 +81,7 @@ const ORDERS = {
   magLine(p, id, bi, bj) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That Maglev Terminal is gone.' }; return placeMagLine(p, b, bi | 0, bj | 0); },
   /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
   mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
-  airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
+  airSupply(p, id, on) { const b = ownB(p, id); if (b && (!on || (airSuppliable(b) && !onHomeNet(b)))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
   pipeToRefinery(p, id) {
     const b = ownB(p, id); if (!b || !BDEFS[b.type].pump) return { why: 'That Oil Pump is gone.' };
     const r = pipeToRefinery(p, b);

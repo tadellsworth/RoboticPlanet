@@ -3776,9 +3776,6 @@ function placeSite(owner, type, i, j, cost, fromStore, axis) {
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
   if (fromStore) b.fromStore = true;
-  // A site in the land of a place supplied by air (a Drop Outpost, or an Outpost you set to it) that no road or
-  // ferry line from home reaches is supplied by air too.
-  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].terr && dist2(d.x, d.y, i, j) <= sq(BDEFS[d.type].terr + 1) && !onHomeGroup(d))) b.airSupply = true;
   if (storeFunded(b)) {
     if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
     else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
@@ -5161,6 +5158,7 @@ function checkSave(o) {
   const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
   if (!obj(o) || o.v !== 1) bad();
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
+  if (o.mission?.workerDrop !== undefined && typeof o.mission.workerDrop !== 'boolean') bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();

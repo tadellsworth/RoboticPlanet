@@ -9596,7 +9596,7 @@ function drawCrateLanding(ctx, f, ox, oy, z) {
   for (const c of f.crates) {
     const t = f.t - c.lag * 0.4;
     if (t < 0) continue;
-    const x = ox + (f.x + c.dx) * z, y = oy + (f.y + c.dy) * z;
+    const x = ox + (f.x + clamp(c.dx, -0.32, 0.32)) * z, y = oy + (f.y + clamp(c.dy, -0.32, 0.32)) * z;
     // the dust kicked up
     if (t < 0.7) {
       const q = t / 0.7;
@@ -9624,11 +9624,11 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
   for (const d of S.drops || []) {
     if (d.kind === 'wreck') { drawWreck(ctx, d, ox, oy, z, inView); continue; }
     if (d.kind === 'supply') {
-      if (!inView(d.i, d.j, 4)) continue;
-      for (const c of d.crates || [{ dx: 0, dy: 0.62, lag: 0 }]) {
+      if (!inView(d.i, d.j, 4) || !airFreightTarget(d.owner, d.to, d.i, d.j)) continue;
+      for (const c of d.crates || [{ dx: 0, dy: 0.24, lag: 0 }]) {
         const p = clamp((S.time - d.t0 - c.lag) / AIR_DROP_FALL, 0, 1);
         if (S.time - d.t0 - c.lag < 0) continue;
-        const tx = d.i + 0.5 + c.dx, ty = d.j + 0.5 + c.dy, x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p;
+        const tx = d.i + 0.5 + clamp(c.dx, -0.32, 0.32), ty = d.j + 0.5 + clamp(c.dy, -0.32, 0.32), x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p;
         const h = (1 - p) * (1 - p * 0.3) * 1.5 * z, sway = Math.sin((S.time - d.t0) * 2.6 + c.lag * 5) * 0.16 * (1 - p * 0.7);
         if (p < 1) drawFallingCrate(ctx, d.owner, ox + x * z, oy + y * z, h, z, sway, p);
       }
