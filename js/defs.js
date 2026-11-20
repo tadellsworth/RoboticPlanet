@@ -907,7 +907,9 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * only with power: at least `gens` Generators with Fuel within `reach` tiles of it, burning a Fuel every `genFuel` s
  * each while it charges, or a Nuclear Reactor there with `uranium` Uranium (or an Enriched Uranium) in it, taken as the charge starts. While it
  * charges its colony's lights dim and its factories work `slow` slower; wreck its power and the charge is lost. A dust
- * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. A
+ * storm holds the shot (it waits, charged, until the storm blows over). `reload` s after a shot it can charge again. On
+ * Reactor power a charge takes `reactorCharge` s and the reload `reactorReload` s (Generators: `charge` and `reload`).
+ * With both in reach it uses the Generators unless its owner has switched on Use Reactor (b.lUseR, an order). A
  * Shield Dome on the line takes the whole shot and drops. Charging draws the Murmur (chargeWorth). Not in the Hollow
  * (no line of fire under the cavern roof); allowed on Argos.
  *
@@ -968,7 +970,7 @@ const LIFT_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], 
 const LIFT_DIR_NAMES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 /** What a Lift can send up: the made goods and Crystal. */
 const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'fissile'];
-const LANCE = { charge: 90, reload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
+const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 
@@ -1371,17 +1373,19 @@ const YARD = { work: 8, hopper: 2 };
 const KEEP = { fire: 4, aura: 7, wallMul: 1.5, mend: 0.33, quiet: 8, range: 1, rate: 0.8, spacing: 16 };
 /**
  * The Bulwark (BOTS.bulwark): a purple shield across its front, `r` tiles out, spanning `arc` radians either side of
- * where it faces. A shot (or flame) from in front, at the Bulwark or at a robot of its owner's within `cover` tiles
- * behind the shield line, hits the shield instead: it soaks up to `shield` damage, comes back `regen` a second once
+ * where it faces. A shot from in front, at the Bulwark or at one of the `coverMax` robots of its owner's nearest it
+ * within `cover` tiles behind the shield line (shieldCovers), hits the shield instead (a Torch's flame half gets round
+ * it: TORCH.shieldPass): it soaks up to `shield` damage, comes back `regen` a second once
  * it's had `wait` s without a hit, and worn right down it fails for `down` s, coming back at `reboot` of full.
  * Blasts from above (shells, bombs, missiles, fuel blasts) and fire from the side or behind get past it; a
  * Disruptor Tower's pulse drains `drain` off it. It turns (`turn` rad/s) to face the nearest threat. Its twin
  * blasters: `dmg` a shot every `reload` s.
  */
-const BULWARK = { shield: 40, regen: 4, wait: 2.5, down: 8, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, turn: 1.8, dmg: 1, reload: 0.9, drain: 14, look: 6 };
+const BULWARK = { shield: 40, regen: 4, wait: 2.5, down: 8, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, coverMax: 6, turn: 1.8, dmg: 1, reload: 0.9, drain: 14, look: 6 };
 /**
  * The Torch (BOTS.torch): every `tick` s while it has a target in reach (BOTS.torch.range) it sprays a cone `cone`
- * radians either side of its aim: `bot` damage to each enemy robot in it and `bld` to the building it's burning
+ * radians either side of its aim: `bot` damage to each enemy robot in it (a Bulwark's shield in the way stops only
+ * 1 − `shieldPass` of it, and that burns the shield `shieldMul` times as fast) and `bld` to the building it's burning
  * (`fort` times that to defences and Walls/Gates). Its tank holds `tank` seconds of fire; a Fuel refills `perFuel`
  * seconds, from its owner's Command Base, a Depot or a Fuel Station.
  * Scorch the earth (its panel): a Torch whose tank is at least `scorchMin` full (nearly full: 90%, 10.8 of its 12 s)
@@ -1389,7 +1393,7 @@ const BULWARK = { shield: 40, regen: 4, wait: 2.5, down: 8, reboot: 0.35, arc: 1
  * `scorch` s, scorching it for good (scorchSoil, as napalm does); then it goes to refill. A group given the order
  * takes a patch each, the tapped one and the nearest round it within `scorchSpread` tiles.
  */
-const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
+const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, shieldPass: 0.5, shieldMul: 2, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
 /**
  * The Skirmisher (BOTS.skirmisher): `dmg` a shot every `reload` s (Ammo, as a warbot), `bonus` times that against the
  * kinds it hunts (twice against a Bulwark, half again against a Railgunner, an Arc Caster or a Howitzer) and `soft`

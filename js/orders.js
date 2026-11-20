@@ -345,6 +345,8 @@ const ORDERS = {
   liftReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].lift) setLiftReserve(b, String(g), +d || 0); },
   /** Turn Orbital Lift site `id`'s fall line to direction d (0..7), while it's still a site. '' or why not. */
   liftDir(p, id, d) { const b = ownB(p, id); return b && BDEFS[b.type].lift ? setLiftDir(b, liftDirOf(d)) : 'That Orbital Lift is gone.'; },
+  /** Lance `id`'s Use Reactor switch: with a Reactor and Generators both in reach, charge on the Reactor (faster, Uranium a shot). */
+  lanceReactor(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].lance) b.lUseR = !!on; },
   /** Call off Lance `id`'s charge (the charge is lost). */
   lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },

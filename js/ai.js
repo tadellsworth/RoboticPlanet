@@ -131,6 +131,18 @@ function aiAnswers(p, wb, army) {
   return want;
 }
 
+/**
+ * Is player q fielding a blob: at least AI_BLOB.bulwarks Bulwarks and AI_BLOB.army robots in its army? (A rival that sees
+ * one builds Mortar Pits toward it, a Howitzer more when it can, and Arc Casters and Railgunners: aiAnswers.)
+ */
+const AI_BLOB = { bulwarks: 2, army: 12, mortars: 2, wait: 360 };
+function aiBlob(q) {
+  if (q === undefined || q < 0 || !S.players[q]) return false;
+  let b = 0, n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) { n++; if (BOTS[u.type].shield) b++; }
+  return b >= AI_BLOB.bulwarks && n >= AI_BLOB.army;
+}
+
 function aiArmyOf(q) { let n = 0; if (q >= 0) for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) n++; return n; }
 
 /**
@@ -538,6 +550,20 @@ function aiThink(p) {
       if (f) { P.defWant = { type: 'mortar', n: (counts.mortar || 0) + 1, until: S.time + 120, x: f.x, y: f.y, ax: Math.round(sx), ay: Math.round(sy) }; P.defAt = P.parkAt = S.time; }
     }
   }
+  // A rival fielding a blob behind Bulwarks (aiBlob): Mortar Pits, whose shells come down over any shield, by its fort
+  // nearest that rival's Command Base, aimed out along the way the blob would come (7 to 10 tiles off, see
+  // aiSearchSpot): one every three minutes, up to AI_BLOB.mortars from this (and three Mortar Pits in all).
+  if (S.mode !== 'colony' && warOn() && S.time > AI_DEFENCE_AT && !few && !(P.defWant && S.time < P.defWant.until) &&
+      S.time - (P.blobMortAt ?? -999) > 180 && (counts.mortar || 0) < 3 && (P.blobMortN || 0) < AI_BLOB.mortars && aiBlob(rivalOf(p))) {
+    const R0 = S.players[rivalOf(p)], foeL = R0 && getE(R0.lander);
+    const front = foeL && me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker).sort((a, c) => dist2(a.x, a.y, foeL.x, foeL.y) - dist2(c.x, c.y, foeL.x, foeL.y) || a.id - c.id)[0];
+    if (front) {
+      const d = dist(front.x, front.y, foeL.x, foeL.y) || 1, k = Math.min(8, d / 2);
+      P.defWant = { type: 'mortar', n: (counts.mortar || 0) + 1, until: S.time + AI_BLOB.wait, x: front.x, y: front.y,
+        ax: Math.round(front.x + ((foeL.x - front.x) / d) * k), ay: Math.round(front.y + ((foeL.y - front.y) / d) * k), blob: true };
+      P.blobMortAt = S.time; P.blobMortN = (P.blobMortN || 0) + 1; // (its site waits up to AI_BLOB.wait s for its Alloy: the Foundry takes every bar)
+    }
+  }
   // Front defences without waiting to be hit there: a Minigun Nest or a Bunker (whichever it has fewer of) by its
   // fort nearest the rival's Command Base, one every six minutes from about ten minutes in, up to aiFort's `front`.
   const FT = aiFort(p);
@@ -694,6 +720,10 @@ function aiThink(p) {
   // Uplinks: the Bunker for an Uplink it holds goes first, past the usual limit on sites, once they're nearly online.
   const upFirst = !!(P.defWant && P.defWant.up && S.time < P.defWant.until && S.time >= UPLINK.online - 60 && (counts.bunker || 0) < P.defWant.n);
   if (upFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['bunker', P.defWant.n]].concat(plan); }
+  // A Mortar Pit against a rival's blob (P.defWant.blob, see aiBlob) doesn't wait for a free site either, and goes up as
+  // soon as the Cement is there (its Alloy delivered to the site): waiting, it waited behind the Mines and Outposts.
+  const blobFirst = !!(P.defWant && P.defWant.blob && S.time < P.defWant.until && (counts.mortar || 0) < P.defWant.n);
+  if (blobFirst) siteCap = Math.max(siteCap, capBefore, sites + 1);
   // The late game of a Nuclear race (AI_MEGA.reactorAt on): with Uranium in hand or a Mine on a deposit and no Reactor,
   // the Reactor goes first, past the usual limit on sites (see aiUranium). Tenth in the plan it waited behind every
   // Outpost, Mine and Harvester the colony wanted, with its price in hand, and in most games never went up.
@@ -742,6 +772,7 @@ function aiThink(p) {
       if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
+      if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
       if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
@@ -774,7 +805,8 @@ function aiThink(p) {
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
         (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
-        (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])); // (the Hollow's first Refinery: see oilFirst)
+        (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])) || // (the Hollow's first Refinery: see oilFirst)
+        (type === 'mortar' && blobFirst && aiAffordable(p, type, ['alloy'])); // (against a blob: see blobFirst)
       if (!aiAffordable(p, type) && !defenceNow) {
         if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost' || type === 'tap')) {
@@ -995,7 +1027,8 @@ function aiThink(p) {
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if ((kinds.truck || 0) < wantTrucks && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
-    const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
+    // (one more against a rival's blob behind Bulwarks: a Howitzer's shells come down over the shields; see aiBlob)
+    const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0) + (aiBlob(rivalOf(p)) ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && !botBanned(p, 'rocket') && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
     // The army's specialists, a third of it at most once it's up: a Bulwark to lead its attacks for every five
     // warbots (two at most) and a Torch to burn down defences and Walls for every four (three at most, and only
@@ -2157,6 +2190,9 @@ function aiMega(p, me, lander, canBuild) {
     const spot = aiMegaSpot(p, 'lance', Rs, LANCE.reach, lander, 1) || aiMegaSpot(p, 'lance', [lander], 12, lander, 1);
     if (spot) placeSite(p, 'lance', spot[0], spot[1]);
   }
+  // Having chosen the Lance over the nukes, it charges on its Reactor when one is in reach (Use Reactor: faster, and the
+  // Uranium has no nuke to go to).
+  if (lance && lance.built) lance.lUseR = P.megaPick === 'lance';
   if (lance && lance.built && P.megaPick === 'lance' && !lanceReactor(lance) && megaGens(lance, LANCE.reach).length < LANCE.gens && canBuild && nukeOn() &&
     !me.some((b) => !b.built && b.type === 'reactor') && aiAffordable(p, 'reactor') && S.time - (P.lanceLook ?? -999) >= AI_MEGA.look) {
     P.lanceLook = S.time;
@@ -2408,7 +2444,7 @@ function aiLanceAim(p, b) {
     const s = aiLanceWorth(p, b, lanceLine(b, e.x + 0.5, e.y + 0.5));
     if (s > bs) { bs = s; best = e; }
   }
-  if (!best) { if (b.lOn && b.lCharge > LANCE.charge - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
+  if (!best) { if (b.lOn && b.lCharge > lanceTime(b) - 1) { b.lAim = null; } return; } // (nothing worth it: it holds, charged)
   if (b.lOn) b.lAim = [best.x, best.y];
   else setLanceAim(b, best.x, best.y);
 }

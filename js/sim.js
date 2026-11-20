@@ -32,6 +32,7 @@ function simStep(dt) {
   countTraffic();
   SHIELDS.length = 0;
   for (const u of S.bots) if (!u.dead && !u.inside && BOTS[u.type].shield) SHIELDS.push(u);
+  for (const w of SHIELDS) shieldCovers(w);
   for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
@@ -4925,6 +4926,7 @@ const SHIELDS = [];
 /** Does w's active shield intercept a shot toward u or its proposed firing position? */
 function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
+  if (u !== w && !(w.covIds && w.covIds.has(u.id))) return false; // (one of the BULWARK.coverMax it shelters: shieldCovers)
   const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
   if (ad < BULWARK.r + 0.15) return false;
   const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
@@ -4934,6 +4936,23 @@ function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) return false;
   const tx = x - sx, ty = y - sy, td = dhypot(tx, ty) || 1;
   return Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td <= BULWARK.r * 2.35;
+}
+
+/**
+ * The robots Bulwark w shelters this step (w.covIds, rebuilt each step with SHIELDS; not saved): of its owner's robots
+ * in its lee (within BULWARK.cover of it and behind its shield line), the BULWARK.coverMax nearest it, ties by id. Any
+ * others behind it get no cover from it: a huge blob behind one or two Bulwarks is mostly in the open.
+ */
+function shieldCovers(w) {
+  const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa), C2 = BULWARK.cover * BULWARK.cover, list = [];
+  for (const v of S.bots) {
+    if (v === w || v.dead || v.inside || v.owner !== w.owner || BOTS[v.type].air || BOTS[v.type].sea) continue;
+    const bx = v.x - w.x, by = v.y - w.y, d2 = bx * bx + by * by;
+    if (d2 > C2 || bx * fx + by * fy > BULWARK.r) continue;
+    list.push([d2, v.id]);
+  }
+  list.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  w.covIds = new Set(list.slice(0, BULWARK.coverMax).map((e) => e[1]));
 }
 
 /**
@@ -5029,7 +5048,15 @@ function torchFire(u, tx, ty, power, bld) {
     if (v.dead || v.inside || !foes(v.owner, u.owner) || v.dropping || (BOTS[v.type].air && v.flight)) continue;
     const dx = v.x - u.x, dy = v.y - u.y, d = dhypot(dx, dy);
     if (d > R || d < 0.05 || (dx * ca + dy * sa) / d < c) continue;
-    damageBot(v, TORCH.bot * power, u.x, u.y);
+    // Fire wraps round a shield: TORCH.shieldPass of it gets past, and the rest burns the shield TORCH.shieldMul as fast.
+    let dmg = TORCH.bot * power;
+    const w = SHIELDS.length && !calmAt(v.x, v.y) ? shieldAt(v, u.x, u.y) : null;
+    if (w) {
+      const blocked = dmg * (1 - TORCH.shieldPass), want = blocked * TORCH.shieldMul, took = Math.min(w.sh, want);
+      shieldTake(w, v, u.x, u.y, took, want);
+      dmg = dmg * TORCH.shieldPass + blocked * (1 - took / want);
+    }
+    damageBot(v, dmg);
   }
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
@@ -16311,7 +16338,7 @@ function hashState() {
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
-    if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); }
+    if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
@@ -16617,12 +16644,22 @@ function lanceReactor(b) {
   return best;
 }
 
-/** What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium Uranium or an Enriched Uranium in it), or ''. */
+/**
+ * What could power a charge of Lance b now: 'gen' (LANCE.gens Generators with Fuel), 'reactor' (one with LANCE.uranium
+ * Uranium or an Enriched Uranium in it), or ''. With both, the Generators, unless Use Reactor is on (b.lUseR): nobody
+ * burns the Uranium they were saving for a nuke without meaning to.
+ */
 function lancePower(b) {
   if (murmurCutOn(b)) return '';
-  if (megaGens(b, LANCE.reach).length >= LANCE.gens) return 'gen';
-  const r = lanceReactor(b);
-  return r && reactorCharge(r) > 0 ? 'reactor' : '';
+  const gens = megaGens(b, LANCE.reach).length >= LANCE.gens, r = lanceReactor(b), rx = !!r && reactorCharge(r) > 0;
+  if (rx && (b.lUseR || !gens)) return 'reactor';
+  return gens ? 'gen' : '';
+}
+
+/** How long Lance b's charge takes: the one under way (b.lTime, set as it began; an older save's: LANCE.charge), else what its power now would take. */
+function lanceTime(b) {
+  if (b.lOn) return b.lTime || LANCE.charge;
+  return lancePower(b) === 'reactor' ? LANCE.reactorCharge : LANCE.charge;
 }
 
 /** Why Lance b can't start a charge now ('' if it can). */
@@ -16661,7 +16698,7 @@ function setLanceAim(b, i, j) {
 /** Lance b starts charging: a Reactor's Uranium goes in now; everyone hears it. */
 function lanceStart(b) {
   const src = lancePower(b);
-  b.lOn = 1; b.lCharge = 0; b.lSrc = src;
+  b.lOn = 1; b.lCharge = 0; b.lSrc = src; b.lTime = src === 'reactor' ? LANCE.reactorCharge : LANCE.charge;
   if (src === 'reactor') {
     const r = lanceReactor(b), g = (r.stock.uranium || 0) >= LANCE.uranium ? 'uranium' : 'fissile', n = g === 'uranium' ? LANCE.uranium : 1;
     bump(r.stock, g, -n); usedGood(b.owner, g, n);
@@ -16669,15 +16706,15 @@ function lanceStart(b) {
   } else b.lReactor = 0;
   const c = bCentre(b);
   sfx('lancecharge', c.x, c.y);
-  postMsg(b.owner, `The Lance of Corvane is charging: it fires in ${LANCE.charge} seconds. Your lights dim and your factories slow meanwhile.`, b.x + 1, b.y + 1, 'info');
-  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is charging the Lance of Corvane! It fires in ${LANCE.charge} seconds, in a line across the whole map.`, b.x + 1, b.y + 1, 'bad');
+  postMsg(b.owner, `The Lance of Corvane is charging${src === 'reactor' ? ' on Reactor power' : ''}: it fires in ${b.lTime} seconds. Your lights dim and your factories slow meanwhile.`, b.x + 1, b.y + 1, 'info');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is charging the Lance of Corvane! It fires in ${b.lTime} seconds, in a line across the whole map.`, b.x + 1, b.y + 1, 'bad');
   logEvent({ t: S.time, k: 'lance', p: b.owner });
 }
 
 /** Call off Lance b's charge (an order: lanceStop, or its power lost). */
 function lanceStop(b, why) {
   if (!b.lOn) return;
-  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0; b.lTime = 0;
   if (why) postMsg(b.owner, why, b.x + 1, b.y + 1, 'bad');
 }
 
@@ -16716,13 +16753,14 @@ function updateLance(b, dt) {
     const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / LANCE.genFuel - 1);
     for (const g of megaGens(b, LANCE.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
   }
-  if (b.lCharge < LANCE.charge) {
-    b.lCharge = Math.min(LANCE.charge, b.lCharge + dt);
-    b.status = `Charging: fires in ${fmtSecs(LANCE.charge - b.lCharge)}`;
-    if (b.lCharge >= LANCE.charge - LANCE.warn && b.lCharge - dt < LANCE.charge - LANCE.warn) {
+  const T = lanceTime(b);
+  if (b.lCharge < T) {
+    b.lCharge = Math.min(T, b.lCharge + dt);
+    b.status = `Charging${b.lSrc === 'reactor' ? ' on Reactor power' : ''}: fires in ${fmtSecs(T - b.lCharge)}`;
+    if (b.lCharge >= T - LANCE.warn && b.lCharge - dt < T - LANCE.warn) {
       for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `The Lance of Corvane fires in ${LANCE.warn} seconds!`, b.x + 1, b.y + 1, 'bad');
     }
-    if (b.lCharge < LANCE.charge) return;
+    if (b.lCharge < T) return;
   }
   if (eventNow('dust')) { b.status = 'Charged, holding: a dust storm scatters the beam. It fires when it blows over'; return; }
   if (!b.lAim) { b.status = 'Charged: tap Aim, then a spot on the map'; return; }
@@ -16773,8 +16811,8 @@ function lanceTiles(b, L) {
 /** Lance b fires along its aim: everything on the line is destroyed (see LANCE), and the ground is cut for good. */
 function lanceFire(b) {
   const owner = b.owner, L = lanceLine(b, b.lAim[0] + 0.5, b.lAim[1] + 0.5);
-  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0;
-  b.lReload = LANCE.reload; b.lShot = S.time;
+  b.lReload = b.lSrc === 'reactor' ? LANCE.reactorReload : LANCE.reload; b.lShot = S.time; // (a Reactor's charge reloads faster)
+  b.lOn = 0; b.lCharge = 0; b.lSrc = ''; b.lReactor = 0; b.lTime = 0;
   b.working = false;
   const P = S.players[owner];
   if (P) P.stats.lance = (P.stats.lance || 0) + 1;
