@@ -491,6 +491,11 @@ function drawCityGlow(ctx, ox, oy, z, items) {
     if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue;
     const col = PLAYER_COLORS[e.owner];
     if (!col) continue;
+    if (e.type === 'city') { // (Arrival City: the warmest light on the map, a soft glow round it seen from far off; dark while it's down)
+      const on = !e.cDown && !e.cDry && typeof cityLightLevel === 'function' ? cityLightLevel(1) : 0;
+      if (on > 0.01) { const m = bCentre(e), r = z * 8 * k, ga = c.globalAlpha; c.globalAlpha = ga * 2.2 * on; c.drawImage(glowDisc('#ffcf8a'), (ox + m.x * z) * k - r, (oy + m.y * z) * k - r, r * 2, r * 2); c.globalAlpha = ga; any = true; }
+      continue;
+    }
     const r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
     c.drawImage(glowDisc(col), (ox + (e.x + 0.5) * z) * k - r, (oy + (e.y + 0.5) * z) * k - r, r * 2, r * 2);
     any = true;

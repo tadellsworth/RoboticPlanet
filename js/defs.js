@@ -919,6 +919,20 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
  * burns a Crystal every `crystal` s (Haulers bring them, `cap` at most) and needs a Generator with Fuel within `reach`
  * tiles: without either it's down.
  */
+/*
+ * Arrival City (BDEFS.city): a 4 x 4 terraced arcology of homes, parks, a school and a station, built for colonists who
+ * never came (the owner's look A, Nov 2026). It opens `at` s into a free-play game (a mission that teaches it: at once).
+ * Every factory, gatherer, Oil Pump and Bot Foundry of its owner's within `reach` tiles of its middle works `boost`
+ * faster, and Workers build that much faster there (cityBoost). It holds `land` tiles of land round its middle as an
+ * Outpost does (a military claim), and in Domination every tile of that ring counts twice (cityLand). Its lights burn a
+ * Fuel every `fuel` s at night only (Tankers bring it, `fuelCap` at most); out of Fuel at night it goes dark and its
+ * boost falls to `dark` of itself. It can never be destroyed: whatever hits it (warbots, Missiles, bombs, shells, a nuke,
+ * a Lance shot) knocks it down to 0 at most, and then it is down (b.cDown): its bonus stops, its windows go dark, and
+ * armed warbots of another colony within `capReach` tiles of its walls, with none of its owner's side there, take it
+ * after `cap` s (b.cCap; it changes hands, land, bonus and all). Repaired to `back` of its armor it is up again.
+ * Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
+ */
+const CITY = { at: 900, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
 const LANCE = { charge: 90, reload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 0.8, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1234,6 +1248,11 @@ const BDEFS = {
     desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. One per colony.',
     cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 180, war: true,
   },
+  city: {
+    name: 'Arrival City', short: 'City',
+    desc: 'A 4 by 4 terraced arcology built for the colonists: homes, gardens, a school and a station, all finished and all empty, with the Arrival clock in its glass atrium. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
+    cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 300,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1265,13 +1284,15 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo', 'lance', 'dome'], walls: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
+  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1869,6 +1890,7 @@ const FLAVOR = {
   mdriver: 'Survey kit to supply settlements before the roads. The settlements never came. It still fires.',
   lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
+  city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',

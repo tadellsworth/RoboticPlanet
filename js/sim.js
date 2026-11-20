@@ -3471,7 +3471,7 @@ function doBuild(u, t, dt) {
   const def = BDEFS[s.type];
   const cap = siteFrac(s);
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u)) / (s.buildTime || def.buildTime));
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5)) / (s.buildTime || def.buildTime)); // (faster by Arrival City)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
   }
@@ -3875,7 +3875,7 @@ function doStaff(u, t, dt) {
     case 'work': {
       u.busy = 1;
       b.working = true;
-      t.timer -= dt * mult * batFactor(u);
+      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5); // (faster by Arrival City)
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
@@ -4013,6 +4013,7 @@ function updateBuilding(b, dt) {
   else if (def.viaduct) b.status = 'Open to traffic';
   if (def.lance) updateLance(b, dt);
   else if (def.dome) updateDome(b, dt);
+  else if (def.city) updateCity(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -4105,7 +4106,7 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || BDEFS[c.type].mega)) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
@@ -4166,9 +4167,10 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
+  const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1); // (a third slower while its Lance charges)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city; // (a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
@@ -5587,6 +5589,8 @@ function hitBuilding(b, dmg, by) {
   }
   // A computer rival has its say now and then, after the alert it goes with (see toast: a story line never hides one).
   if (by >= 0 && foes(by, b.owner)) doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240);
+  // Arrival City is never destroyed: knocked to 0 it's down, and taken by warbots at its walls (cityCapture).
+  if (BDEFS[b.type].city && b.built) { if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } return; }
   // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
   if (b.armor < 1 && S.mission && b.type === 'lander' && typeof captureLocked === 'function' && captureLocked(b, by)) b.armor = 1;
   if (b.armor <= 0) captureBuilding(b, by);
@@ -6555,6 +6559,9 @@ function updateDomination() {
     const o = S.owner[t];
     if (o >= 0 && o < land.length) land[o]++;
   }
+  // Arrival City's ring counts twice for whoever holds it (each tile once more, however many cities cover it).
+  const twice = cityLand();
+  for (const t of twice) { const o = S.owner[t]; if (o >= 0 && o < land.length) land[o]++; }
   const held = land.reduce((a, v) => a + v, 0), share = domShare();
   D.land = land; D.held = held; D.ground = ground;
   let lead = -1;
@@ -7609,7 +7616,7 @@ function rocketHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); } // (held at its floor; its owner still hears of the shelling)
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } } // (held at its floor; its owner still hears of the shelling)
   else if (b.armor <= 0) {
     postMsg(by, `Your artillery wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy artillery wrecked your ${def.name}!`, b.x, b.y, 'lost');
@@ -8401,14 +8408,14 @@ function updateMissiles(dt) {
  * Missiles can't take a fort (Outpost, Command Base) below MISSILE_FLOOR of its armor: they soften
  * it up, and warbots still have to shoot their way in past the garrison that comes out to meet them.
  */
-function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); }
+function missileFloor(b) { return BDEFS[b.type].city ? 0 : Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); } // (Arrival City: down to 0, never gone)
 
 /**
  * A building weapons can only knock down to its missileFloor, never destroy: a Command Base or a Keep (they
  * have to be captured by warbots on the ground). Every other building, Outposts and Bunkers included, a
  * Missile, a bomb or a Howitzer's rockets can knock out.
  */
-function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep)); }
+function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep || BDEFS[b.type].city)); } // (and Arrival City, to 0: cityDown)
 
 /** Player p was hit by a Missile of `by`'s just now (a nuclear one too): remembered like a warbot's or a shell's hit (see rivalOf). */
 function hitByNow(p, by) {
@@ -8435,9 +8442,10 @@ function missileImpact(m) {
       fortTaken(b, m.owner);
       destroyBuilding(b, true);
     } else {
-      const floor = captureOnly(b) ? missileFloor(b) : 0;
-      if (floor && b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
-      postMsg(m.owner, `Missile hit the enemy ${name}${floor && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
+      const held = captureOnly(b), floor = held ? missileFloor(b) : 0;
+      if (held && b.armor <= floor) b.armor = Math.max(floor, Math.min(floor, b.armor + md.damage));
+      if (held && b.armor <= 0) cityDown(b, m.owner); // (Arrival City knocked down)
+      postMsg(m.owner, `Missile hit the enemy ${name}${held && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
     }
   }
@@ -8450,7 +8458,10 @@ function missileImpact(m) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'lost');
       fortTaken(e, m.owner);
       destroyBuilding(e, true);
-    } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
+    } else if (captureOnly(e) && e.armor <= missileFloor(e)) {
+      e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
+      if (e.armor <= 0) { e.armor = 0; cityDown(e, m.owner); } // (Arrival City knocked down)
+    }
   }
   for (const u of S.bots) {
     if (!u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
@@ -8673,6 +8684,8 @@ function nukeImpact(m) {
         b.lastHit = S.time;
         // A direct hit (aimed at the Command Base itself) destroys it: that colony is out.
         if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= NUKE.direct * NUKE.direct && m.owner >= 0 && b.owner >= 0 && foes(m.owner, b.owner) && S.players[b.owner] && !S.players[b.owner].out) { direct.push(b); lost[b.owner]++; }
+      } else if (BDEFS[b.type].city && b.built) {
+        b.armor = 0; b.lastHit = S.time; cityDown(b, m.owner); // (Arrival City stands: knocked down, never gone)
       } else {
         lost[b.owner]++;
         fortTaken(b, m.owner);
@@ -9099,7 +9112,7 @@ function releaseScore(b) {
  * Returns { cost: the materials left, crates: every crate left, inside: those that were inside it }.
  */
 function demolish(b) {
-  if (b.dead || b.type === 'lander') return null;
+  if (b.dead || b.type === 'lander' || (BDEFS[b.type].city && b.built)) return null; // (Arrival City can't be taken down: only captured)
   // A building on the move: dismantling either end calls the move off (the old one stays as it was; the new site cost nothing).
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; b.gone = 1; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
   if (b.moving) cancelMove(b);
@@ -11167,6 +11180,7 @@ function murmurPower(e) {
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
+    else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
   }
@@ -11178,6 +11192,7 @@ function chargeWorth(e) {
   const def = BDEFS[e.type];
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
+  if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
@@ -14926,7 +14941,7 @@ function bombHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); } // (held at its floor; its owner still hears of the hit)
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } } // (held at its floor; its owner still hears of the hit)
   else if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'lost');
@@ -16290,6 +16305,7 @@ function hashState() {
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
+    if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
   }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
@@ -16765,7 +16781,7 @@ function lanceFire(b) {
       if (e.owner >= 0 && e.owner !== owner) hitByNow(e.owner, owner);
       e.lastHit = S.time;
       if (BDEFS[e.type].wild) { if (e.owner !== owner) captureBuilding(e, owner); continue; } // (a Murmur nest or exit on the line: cleared)
-      if (captureOnly(e)) { e.armor = Math.min(e.armor, missileFloor(e)); continue; }
+      if (captureOnly(e)) { e.armor = Math.min(e.armor, missileFloor(e)); if (e.armor <= 0) { e.armor = 0; cityDown(e, owner); } continue; }
       if (e.owner >= 0) lost[e.owner]++;
       fortTaken(e, owner);
       destroyBuilding(e, true);
@@ -16884,6 +16900,145 @@ function domeHit(d, kind, x, y, by) {
   sfx('domefall', c.x, c.y);
   postMsg(d.owner, `Your Shield Dome dropped${kind === 'nuke' ? ': it took a nuclear missile' : kind === 'lance' ? ': it took a Lance shot' : ''}. It comes back in ${DOME.down} seconds.`, d.x, d.y, 'lost');
   if (by >= 0 && foes(by, d.owner)) postMsg(by, 'An enemy Shield Dome dropped: its base is open for a minute.', d.x, d.y, 'good');
+}
+
+/*
+ * Arrival City (CITY; BDEFS.city). b.cDown: knocked down to 0 (no bonus, dark, capturable) until repaired to CITY.back of
+ * its armor; b.cCap: how long foes' armed warbots have stood at its walls unopposed, b.cBy whose (-1 none); b.cFuel: s
+ * of light left in the Fuel it's burning at night, b.cDry: dark at night for want of Fuel (the bonus halves). It is
+ * `working` while lit at night (the Murmur see it, as they see a Generator).
+ */
+let _cityL = null, _cityT = -1, _cityV = -1, _cityS = null;
+/** The finished Arrival Cities in the game (worked out once a tick, and again whenever the land changes: one finished, or taken). */
+function cityList() {
+  if (_cityS !== S || _cityT !== S.tick || _cityV !== S.territoryVer || !_cityL) { _cityS = S; _cityT = S.tick; _cityV = S.territoryVer; _cityL = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].city); }
+  return _cityL;
+}
+/** Is it dark enough for Arrival City's lights (the game's own night; on an always-night map, all the time)? */
+function cityNight() { return alwaysNightMap() || murmurNight(S.time); }
+/**
+ * How much faster `owner`'s work at (x, y) goes for Arrival City: 1 + CITY.boost within CITY.reach tiles of the middle of
+ * one of theirs that's up (half that while it's dark for want of Fuel), else 1.
+ */
+function cityBoost(owner, x, y) {
+  let k = 1;
+  for (const c of cityList()) {
+    if (c.owner !== owner || c.cDown) continue;
+    const m = bCentre(c);
+    if (dist2(m.x, m.y, x, y) > CITY.reach * CITY.reach) continue;
+    k = Math.max(k, 1 + CITY.boost * (c.cDry ? CITY.dark : 1));
+  }
+  return k;
+}
+/** How many of player p's factories, gatherers and Bot Foundries (staffed or working) are working faster by one of its Arrival Cities now (a mission counts them). */
+function cityDriven(St, p) {
+  let n = 0;
+  for (const b of (St || S).buildings) if (!b.dead && b.built && b.owner === p && (b.working || b.staff) && (BDEFS[b.type].staff || BDEFS[b.type].inp) && cityBoost(p, b.x + 0.5, b.y + 0.5) > 1) n++;
+  return n;
+}
+/** The tiles every Arrival City holds (its ring, cityRing), each once: in Domination they count twice. */
+function cityLand() {
+  const L = cityList();
+  if (!L.length) return [];
+  const seen = new Set(), out = [];
+  for (const b of L) for (const t of cityRing(b)) if (!seen.has(t) && S.terrain[t] === T_GROUND && S.owner[t] === b.owner) { seen.add(t); out.push(t); }
+  return out;
+}
+
+/** Arrival City b, each tick: its lights and their Fuel at night, coming back once repaired, and being taken. */
+function updateCity(b, dt) {
+  const def = BDEFS[b.type], night = cityNight();
+  if (b.cDown && b.armor >= def.armor * CITY.back) {
+    b.cDown = 0;
+    postMsg(b.owner, 'Arrival City is repaired: its lights are back on, and the robots near it work harder again.', b.x, b.y, 'good');
+    if (isMe(b.owner)) sfx('citychime', b.x + 2, b.y + 2);
+  }
+  b.working = false;
+  if (!night || b.cDown) { b.cDry = 0; b.cFuel = b.cDown ? 0 : b.cFuel || 0; }
+  else {
+    // At night its lights burn a Fuel a minute; out of Fuel it goes dark.
+    b.cFuel = (b.cFuel || 0) - dt;
+    if (b.cFuel <= 0) {
+      if ((b.stock.fuel || 0) >= 1) {
+        bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.cFuel += CITY.fuel;
+        if (b.cDry) { b.cDry = 0; markDirty(b.x, b.y); }
+      } else {
+        b.cFuel = 0;
+        if (!b.cDry) { b.cDry = 1; markDirty(b.x, b.y); if (S.time - (b.dryT || -999) > 240) { b.dryT = S.time; postMsg(b.owner, 'Arrival City is dark: it has no Fuel for its lights, so its bonus is halved tonight. A Tanker brings it.', b.x, b.y, 'warn'); } }
+      }
+    }
+    b.working = !b.cDry;
+  }
+  cityCapture(b, dt);
+  const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
+  b.status = b.cDown
+    ? (b.cCap > 0 && b.cBy >= 0 ? `Down, and being taken by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left` : `Down: no bonus and no lights until it's repaired to ${Math.round(CITY.back * 100)}% (send Workers with Cement)`)
+    : b.cDry ? `Dark: no Fuel for its lights, so its robots work only ${pct}% faster tonight`
+    : `Lit${night ? '' : ' at dusk'}: your work within ${CITY.reach} tiles goes ${pct}% faster`;
+}
+
+/**
+ * Is Arrival City b being taken? While it's down, armed warbots of one side (a colony and its team) within
+ * CITY.capReach tiles of its walls, with none of its owner's side there, count up to CITY.cap s, and it's theirs. Any of
+ * its owner's side there, or two rival sides at once, and the count runs back.
+ */
+function cityCapture(b, dt) {
+  if (!b.cDown || b.owner < 0) { b.cCap = 0; b.cBy = -1; return; }
+  let by = -1, held = false, two = false;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !isArmy(u) || BOTS[u.type].wild || aloft(u) || !botArmed(u) || footDist(b, u.x, u.y) > CITY.capReach) continue;
+    if (!foes(u.owner, b.owner)) { held = true; break; }
+    if (by < 0) by = u.owner; else if (by !== u.owner && foes(by, u.owner)) two = true;
+  }
+  if (held || two || by < 0) {
+    b.cCap = Math.max(0, (b.cCap || 0) - dt);
+    if (!b.cCap) b.cBy = -1;
+    return;
+  }
+  if (b.cBy !== by) {
+    if (!(b.cBy >= 0)) { postMsg(b.owner, `Enemy warbots are at the walls of Arrival City: drive them off within ${CITY.cap} seconds or it's theirs!`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
+    b.cBy = by; b.cCap = 0;
+  }
+  b.cCap += dt;
+  if (b.cCap >= CITY.cap) cityTaken(b, by);
+}
+
+/** Arrival City b falls to `by`: its land, its bonus and its double Domination count change sides. */
+function cityTaken(b, by) {
+  const old = b.owner;
+  noteLost(b, by);
+  releaseBotsFrom(b, false);
+  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  b.fixLeft = 0; b.fixer = 0; b.inc = {};
+  b.owner = by; b.cCap = 0; b.cBy = -1; b.lastHit = S.time; b.cut = 0;
+  const P = S.players[by];
+  if (P) P.stats.cities = (P.stats.cities || 0) + 1;
+  logEvent({ t: S.time, k: 'city', p: by, q: old });
+  computeTerritory();
+  S.roadVer = (S.roadVer || 0) + 1;
+  markDirty(b.x, b.y);
+  const c = bCentre(b);
+  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[by], r: 3 });
+  postMsg(by, 'Your warbots took Arrival City! Its land is yours. Repair it (Workers, Cement) and its lights and its bonus come back for you.', b.x, b.y, 'good');
+  postMsg(old, `${playerName(by, true)} took Arrival City: its land and its bonus are theirs now. Knock it down and stand at its walls to take it back.`, b.x, b.y, 'lost');
+  if (isMe(by)) sfx('citychime', c.x, c.y);
+  else if (isMe(old)) sfx('alert');
+}
+
+/** Arrival City b was knocked down to 0 (by `by`, -1 if no one in particular): its bonus stops and it goes dark. */
+function cityDown(b, by) {
+  if (!b || b.dead || !BDEFS[b.type].city) return;
+  b.armor = Math.max(0, b.armor);
+  if (b.cDown) return;
+  b.cDown = 1; b.cDry = 0; b.cCap = 0; b.cBy = -1; b.working = false;
+  b.lastHit = S.time;
+  markDirty(b.x, b.y);
+  const c = bCentre(b);
+  addFx('smoke', c.x, c.y, { r: 1.6 });
+  sfx('boom', c.x, c.y);
+  postMsg(b.owner, `Arrival City is down: its lights are out and its bonus has stopped. Repair it to ${Math.round(CITY.back * 100)}%, and keep enemy warbots off its walls: standing there ${CITY.cap} seconds, they take it.`, b.x, b.y, 'lost');
+  if (by >= 0 && foes(by, b.owner)) postMsg(by, `Arrival City is down! Hold its walls with armed warbots for ${CITY.cap} seconds to take it.`, b.x, b.y, 'good');
+  logEvent({ t: S.time, k: 'cityDown', p: b.owner, q: by });
 }
 
 /* ------------------------------------------------------------------ war scars */

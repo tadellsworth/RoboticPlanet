@@ -238,7 +238,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
-  lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1,
+  lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -256,6 +256,7 @@ const BLAST_SIZE = {
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
   drizzle: 0.4, // (the Ring drizzle: a soft whoosh, heard only on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
+  citychime: 1.6, cityclock: 0.5, // (Arrival City's station chime, taken or repaired, heard off screen; its clock's chime only on it)
 };
 
 /**
@@ -886,6 +887,14 @@ function sfx(name, dest, y, dur) {
       for (let k = 0; k < 10; k++) _tone(1800 + Math.random() * 2600, 0.05, 'square', 0.012, null, 0.05 + Math.random() * 1.2, D);
       _noise(1.6, 0.08, { type: 'lowpass', freq: 300, to: 60, delay: 0.1, dest: D });
       break;
+    // Arrival City changing hands, or lit again: the recorded station chime, four soft bell notes rising, for no one.
+    case 'citychime':
+      for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
+      break;
+    // The Arrival clock striking: two slow, low bell notes from the atrium, the second a little lower, fading long.
+    case 'cityclock':
+      for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
+      break;
     // A nuclear missile coming for you: an air-raid siren, rising and falling.
     case 'siren': {
       const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
@@ -939,6 +948,34 @@ function lanceHum(k, near) {
   h.l.frequency.setTargetAtTime(4 + 14 * k, t, 0.3);
   h.lp.frequency.setTargetAtTime(220 + 2400 * k * k, t, 0.3);
   h.g.gain.setTargetAtTime((0.02 + 0.06 * k) * (0.45 + 0.55 * near), t, 0.3);
+}
+
+/*
+ * Arrival City on screen, lit: the hum of an empty city (the low drone of its services running, a soft wind through
+ * the terraces), as loud as it is near the middle of the screen (k 0..1; 0 stops it). On the Ambience volume.
+ */
+const CITYHUM = { o: null };
+function cityHum(k) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (CITYHUM.o) { const t = ac.currentTime, h = CITYHUM.o; CITYHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.b.stop(); h.n.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!CITYHUM.o) {
+    const a = ac.createOscillator(), b = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    a.type = 'sine'; b.type = 'sine'; a.frequency.value = 55; b.frequency.value = 110.6; // (a mains hum, beating slowly)
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    let v = 0; for (let i = 0; i < len; i++) { v = v * 0.985 + (Math.random() * 2 - 1) * 0.015; d[i] = v * 6; } // (brown-ish: wind)
+    n.buffer = buf; n.loop = true;
+    lp.type = 'lowpass'; lp.frequency.value = 420;
+    const ga = ac.createGain(), gb = ac.createGain(), gn = ac.createGain(); ga.gain.value = 0.5; gb.gain.value = 0.22; gn.gain.value = 0.9;
+    a.connect(ga).connect(lp); b.connect(gb).connect(lp); n.connect(gn).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); b.start(); n.start();
+    CITYHUM.o = { a, b, n, g };
+  }
+  CITYHUM.o.g.gain.setTargetAtTime(0.035 * k, ac.currentTime, 0.8);
 }
 
 /** Duck the music for `secs`, down to `to` of its level. */
@@ -1090,6 +1127,18 @@ function audioTick(dt) {
     let hk = 0, near = 0;
     if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / LANCE.charge); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
     lanceHum(live ? Math.max(hk, 0.02 * (hk > 0)) : 0, near);
+    // Arrival City on screen, lit: its hum, and now and then its clock striking.
+    let ck = 0, cb = null;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !BDEFS[b.type].city || b.cDown) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -80 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > ck) { ck = k; cb = m; }
+    }
+    cityHum(ck);
+    WORLD.cityT = (WORLD.cityT ?? 20) - 0.25;
+    if (cb && WORLD.cityT <= 0) { WORLD.cityT = 50 + Math.random() * 20; sfx('cityclock', cb.x, cb.y); }
     WORLD.bt = 0.25;
   }
   if (!inGame || UI.paused || S.winner >= 0 || WORLD.t > 0) return;
