@@ -311,6 +311,7 @@ function initPhoto() {
       }
       return;
     }
+    if (!$('screen-keys').hidden || (plain && k === SHORTCUT_SHEET_KEY)) return;
     if (k === 'escape' || (k === 'p' && e.shiftKey && plain)) { e.preventDefault(); e.stopPropagation(); photoExit(); return; }
     photoWake();
     if (e.altKey && k === 'enter') return; // (full screen)

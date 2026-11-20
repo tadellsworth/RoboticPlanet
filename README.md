@@ -2542,6 +2542,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
+- **Keyboard shortcut sheet:** press **/** during a game, or tap **Keys** in the pause menu. **/** or **Esc** closes
+  it. The sheet pauses single-player games while open, and multiplayer play continues. **?** still opens **How to play**.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control

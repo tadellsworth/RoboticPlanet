@@ -135,7 +135,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
   code search found these gaps (no key rebinding, no chat in multiplayer, one save only, no credits screen, no gamepad,
   no replays):
-  - **Controls and navigation:** a shortcut cheat sheet on `?` (nothing like it today); key rebinding; camera bookmarks
+  - **Controls and navigation:** shortcut cheat sheet shipped on `/` and Pause → Keys; key rebinding; camera bookmarks
     and a "jump to the last alert" key; an idle-army button beside the idle-Worker one; attack-move and shift-queued
     orders if not complete.
   - **Feedback and clarity:** income per minute beside each resource in the top bar; warnings for "storage nearly full"
@@ -149,7 +149,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     patterns (partly there); fuller screen-reader labels.
   - **Meta:** a "Daily Planet", a shared seed of the day with your own best result, easy to run on the relay.
   - **Bigger and optional:** gamepad support, translations, replays (already on the hold list).
-  - **Where to start (most polish for the effort):** the shortcut cheat sheet, camera bookmarks and last-alert jump,
+  - **Where to start (most polish for the effort):** camera bookmarks and last-alert jump,
     unit acknowledgement sounds, income rates and warnings, multiple save slots.
   - **A UX audit by Gemini:** the owner sends it screenshots of the main screens, and it lists confusing or unpolished
     spots against studio standards: a cheap, prioritised list (see handoff/ for how the export and import work).

@@ -238,7 +238,7 @@ const MISSIONS = [
   // Chapter 1, First Steps. One idea at a time: your first building and road, Stone and Cement, batteries, and the first Alloy.
   {
     id: 'touchdown', name: 'Touchdown', chapter: 'First Steps',
-    brief: 'Your first landing. Place a Harvester by the stalk groves, join it to your roads and watch the Fiber come in.',
+    brief: 'Your first landing. Place a Harvester by the stalk groves, join it to your roads and watch the Fiber come in. Press / for keyboard shortcuts.',
     intro: [
       'Drag to look around (with a mouse: right-drag or W A S D); pinch or scroll to zoom.',
       'A new building starts as a site: Haulers bring its materials from the Command Base, then a Worker builds it.',

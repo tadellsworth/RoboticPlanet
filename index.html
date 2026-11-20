@@ -415,7 +415,7 @@
 <div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-labelledby="p-title" tabindex="-1" hidden>
   <div class="card p-card">
     <div class="p-view" id="p-main">
-      <div class="p-head"><h2 id="p-title">Paused</h2>
+      <div class="p-head"><h2 id="p-title">Paused</h2><button id="p-keys" class="btn small" aria-haspopup="dialog">Keys</button>
         <p class="p-mods" id="p-mods" hidden></p></div>
       <div class="p-top">
         <button id="p-resume" class="btn primary big">Resume</button>
@@ -577,6 +577,17 @@
   </div>
 </div>
 
+<div id="screen-keys" class="screen" role="dialog" aria-modal="true" aria-labelledby="keys-title" tabindex="-1" hidden>
+  <div class="card keys-card">
+    <header class="ks-head">
+      <div><h2 id="keys-title">Keyboard shortcuts</h2>
+        <p class="hint"><kbd>/</kbd> toggles this sheet · <kbd>Esc</kbd> closes it</p></div>
+      <button id="keys-close" class="btn">Close</button>
+    </header>
+    <div id="keys-body" role="region" aria-label="Shortcut groups" tabindex="0"></div>
+  </div>
+</div>
+
 <div id="screen-help" class="screen" role="dialog" aria-modal="true" aria-label="How to play" tabindex="-1" hidden>
   <div class="card help-card">
     <h2>How to play</h2>
@@ -591,7 +602,7 @@
             <li><b>Roads:</b> in Paths one finger sketches and <b>two fingers move the map</b>; or tap <b>Route to</b>, then where the road should go.</li>
             <li><b>Army:</b> tap Army, pick an order, then tap a rival building or open ground.</li>
             <li><b>Warbots:</b> tap one to select it (again for all in view), then tap where to send them; <b>Undo</b> takes it back. Hold, then drag, to box several.</li>
-            <li><b>Back</b> closes what's open, then pauses. The game saves itself.</li>
+            <li><b>Back</b> closes what's open, then pauses. The game saves itself. Tap <b>Keys</b> in the pause menu for the shortcut sheet.</li>
           </ul>
           <p class="hint">The rest is below: pick a section.</p>
         </div>
@@ -1363,7 +1374,7 @@
           <li>Then <b>right-click</b>: open ground to hold it, a rival robot to hunt it, a rival building to attack it, your Outpost, Keep, Bunker, Drop Outpost or Command Base to station them, your Repair Station to get the damaged ones fixed, or your Ferry to walk over and board. For an open-ground move, armed Warbots with no route stay on their current orders and the message counts how many can go.</li>
           <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> (or <kbd>Alt</kbd>/<kbd>⌥</kbd>, or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group (in a Mac browser tab ⌘ + a number may switch tabs: use ⌥, or <b>Save as group</b>). <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it. Groups show as chips above the selection bar and are kept with the saved game. <b>Buildings too:</b> with a building of yours open (and no robots selected), the same keys put it on that number; then <kbd>1</kbd>–<kbd>9</kbd> opens its panel, twice to jump to it. A number holds a group of robots or one building.</li>
         </ul>
-        <p class="keys"><b>Keys.</b></p>
+        <p class="keys"><b>Keys.</b> Press <kbd>/</kbd> to open the shortcut sheet. Press it again or use <kbd>Esc</kbd> to close it.</p>
         <ul class="chain keys">
           <li><kbd>B</kbd> Build, then a tab (<kbd>1</kbd> Gather, <kbd>2</kbd> Make, <kbd>3</kbd> Move, <kbd>4</kbd> Defend, <kbd>5</kbd> All, <kbd>6</kbd> Mega; <kbd>Tab</kbd> steps through them) and the letter on a card (on All a card shows both, like 2 C). A new game opens on Gather, after that on the tab you used last. <kbd>R</kbd> is the Ore Mine on Gather and the Refinery on Make; on the other tabs <kbd>B</kbd> <kbd>R</kbd> lays roads, <kbd>B</kbd> <kbd>X</kbd> walls.</li>
           <li><kbd>R</kbd> Paths on Roads (again to close); <kbd>P</kbd> Paths on the tool you used last. The tool keys work straight from the map too: <kbd>G</kbd> Bridges, <kbd>V</kbd> Ramps, <kbd>E</kbd> Pave, <kbd>O</kbd> Arrows, <kbd>L</kbd> Junctions, <kbd>X</kbd> Walls, <kbd>N</kbd> Rail, <kbd>K</kbd> Pipes, <kbd>T</kbd> Traffic map, <kbd>Z</kbd> Route to; <kbd>Shift</kbd>+<kbd>V</kbd> Viaducts, <kbd>Shift</kbd>+<kbd>Y</kbd> Ropeways, <kbd>Shift</kbd>+<kbd>T</kbd> Goods flow.</li>

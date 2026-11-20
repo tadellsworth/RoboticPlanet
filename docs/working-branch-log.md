@@ -236,3 +236,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Reworked the gorge into alternating narrow passages and broader river basins. The river branches around two fertile islands, with meadows on the banks and rocky outcrops on the higher shelves.
 - Tested 126 layouts across the six sizes and three terrain settings. Both rims have access by ramps and fords, and ships have a continuous river. Verified the map through Custom Game in Chromium.
 - Narrowed the two natural descents on each rim to one ramp per terrace. The switchback and side-canyon trail each work with the other closed. Kept a continuous footpath along the banks where the wide bends meet the narrows. The committed regression test covers 126 layouts, and a second 576-layout sweep also passed.
+
+### Keyboard shortcut sheet
+
+- Added the in-game shortcut sheet on `/` and **Keys** in the pause menu. Kept `?` on **How to play**. The sheet draws its map, Build, Paths and panel entries from the live bindings and pauses only single-player games.
+- Updated the first mission briefing, in-game help, README and Field Manual, and marked the polish item complete in IDEAS.
+- Verified binding coverage and exercised the live keyboard dispatcher in Chromium. Checked 1366×768 and ultrawide layouts, the touch pause menu, solo pause and resume, and that a loopback multiplayer session kept advancing without sending a pause order. Help coverage, mission data, lint and the single-file build passed.

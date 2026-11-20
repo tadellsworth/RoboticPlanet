@@ -121,6 +121,9 @@ function initUI() {
     });
   };
   $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
+  $('p-keys').onclick = openKeys;
+  $('keys-close').onclick = closeKeys;
+  $('screen-keys').onclick = (e) => { if (e.target === $('screen-keys')) closeKeys(); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
@@ -1829,7 +1832,7 @@ function topScreen() {
  * back where it was. (Tab reached the buttons behind the pause menu.)
  */
 function initDialogs() {
-  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, textarea, summary')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
+  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, textarea, summary, #keys-body')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
   const watch = new MutationObserver((list) => {
     for (const m of list) {
       const scr = m.target, open = !scr.hidden, a = document.activeElement;
@@ -2092,25 +2095,69 @@ function crossingPlacing() { return R.mode === 'place' && CROSSING_TOOLS.include
  * pressed twice like the button.
  */
 const SHEET_KEYS = {
-  'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
-  'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
-  'sh-recall': 'c', 'sh-unpost': 'c', 'sh-lstop': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
-  'sh-bomb': 'z', 'sh-napalm': 'n', 'sh-scorch': 'x', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o', 'sh-tarmor': 'r',
-  // The Army panel (Q): its orders, the group size, and its Air tab.
-  'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
-  'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
-  // A Trade Terminal's route: Start (or Change) it, Stop it, Escort on or off.
-  'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
-  // A Mooring Mast's Link (or Unlink); a Maglev Terminal's Plan a line from here.
-  'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l', 'sh-magrebuild': 'l',
-  // An Orbital Lift's four loads to call down.
-  'sh-lf-security': 'z', 'sh-lf-crew': 'x', 'sh-lf-alloy': 'c', 'sh-lf-chips': 'v',
-  // A Great Uplink's Begin transmission.
-  'sh-gup-begin': 't', 'sh-gup-stop': 'c',
+  'sh-send': ['q', 'Send warbots'],
+  'sh-bombard': ['q', 'Bombard a building'],
+  'sh-fire': ['f', 'Fire missile'],
+  'sh-aim': ['f', 'Aim missiles or the Lance'],
+  'sh-rgo': ['g', 'Drive somewhere'],
+  'sh-crawl': ['g', 'Drive somewhere'],
+  'sh-deploy': ['e', 'Deploy here'],
+  'sh-gate': ['g', 'Make a Gate'],
+  'sh-move': ['m', 'Move or cancel move'],
+  'sh-pack': ['m', 'Pack up to move'],
+  'sh-pause': ['p', 'Pause or resume production'],
+  'sh-fixbtn': ['e', 'Repair'],
+  'sh-layroad': ['r', 'Lay road'],
+  'sh-pipe': ['k', 'Pipe it in'],
+  'sh-recall': ['c', 'Call back this squad'],
+  'sh-unpost': ['c', 'Send back stationed warbots'],
+  'sh-lstop': ['c', 'Stand down the Lance'],
+  'rl-recall': ['c', 'Call back a rally'],
+  'sh-land': ['l', 'Choose the beach'],
+  'sh-st-send': ['v', 'Station here'],
+  'nk-evac': ['v', 'Evacuate a strike zone'],
+  'sh-bomb': ['z', 'Bomb it'],
+  'sh-napalm': ['n', 'Napalm'],
+  'sh-scorch': ['x', 'Scorch the earth'],
+  'sh-strike': ['q', 'Pick a target'],
+  'sh-fsail': ['g', 'Sail somewhere'],
+  'sh-fembark': ['e', 'Take warbots aboard'],
+  'sh-fland': ['l', 'Put them ashore'],
+  'sh-fhome': ['h', 'Back to its line'],
+  'sh-found': ['p', 'Found a Port'],
+  'sh-fout': ['o', 'Sail out of the Port'],
+  'sh-tarmor': ['r', 'Armor this train'],
+  'ar-attack': ['q', 'Attack'],
+  'ar-hold': ['g', 'Hold ground'],
+  'ar-station': ['v', 'Station'],
+  'ar-recall': ['c', 'Recall all'],
+  'ar-select': ['f', 'Select all warbots'],
+  'ar-n2': ['1', 'Group of 2'],
+  'ar-n4': ['2', 'Group of 4'],
+  'ar-n8': ['3', 'Group of 8'],
+  'ar-nall': ['4', 'Group of all'],
+  'ar-tab-army': ['z', 'Army tab'],
+  'ar-tab-air': ['x', 'Air tab'],
+  'ar-strike': ['e', 'Strike: pick a target'],
+  'sh-tgo': ['g', 'Start or change a trade route'],
+  'sh-tstop': ['x', 'Stop trade route'],
+  'sh-escort': ['e', 'Toggle trade escort'],
+  'sh-mlink': ['l', 'Link Mooring Masts'],
+  'sh-munlink': ['l', 'Unlink Mooring Masts'],
+  'sh-magline': ['l', 'Plan a Maglev line'],
+  'sh-magrebuild': ['l', 'Rebuild a Maglev line'],
+  'sh-lf-security': ['z', 'Call down Security'],
+  'sh-lf-crew': ['x', 'Call down Crew'],
+  'sh-lf-alloy': ['c', 'Call down Alloy'],
+  'sh-lf-chips': ['v', 'Call down Chips'],
+  'sh-gup-begin': ['t', 'Begin Uplink transmission'],
+  'sh-gup-stop': ['c', 'Stand down the Uplink'],
 };
+const ARMY_SIZE_KEYS = Object.fromEntries(Object.entries(SHEET_KEYS)
+  .filter(([id]) => id.startsWith('ar-n')).map(([id, [key]]) => [key, id]));
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
-  for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id].toUpperCase(); }
+  for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id][0].toUpperCase(); }
   const d = $('sh-demolish') || $('sh-recycle'); if (d && !d.dataset.key) d.dataset.key = 'Del';
 }
 /** The open panel's button for key k, if it's showing and can be pressed. */
@@ -2118,7 +2165,7 @@ function sheetKeyButton(k) {
   if (!UI.sheetKind || UI.sheetKind === 'build') return null;
   if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
   for (const id in SHEET_KEYS) {
-    if (SHEET_KEYS[id] !== k) continue;
+    if (SHEET_KEYS[id][0] !== k) continue;
     const el = $(id);
     if (el && !el.disabled && !el.hidden && el.offsetParent) return el;
   }
@@ -2178,6 +2225,162 @@ function openPaths(v) {
   sfx('click');
 }
 
+// Each row names the action bound on the map, before an individual tool or panel takes precedence.
+const MAP_KEYS = [
+  { keys: ['b'], group: 'build', label: 'Toggle Build', run: () => { $('btn-build').click(); } },
+  { keys: ['p'], group: 'paths', label: 'Toggle Paths on the last tool', run: () => { $('btn-road').click(); } },
+  { keys: ['r'], group: 'paths', label: 'Toggle Paths on Roads', run: () => {
+    if (R.mode === 'road' && UI.roadMode === 'road' && !UI.route) $('btn-road').click(); else openRoadDraw();
+  } },
+  { keys: ['o'], group: 'paths', label: 'Arrows', run: () => openPaths('arrows') },
+  { keys: ['g'], group: 'paths', label: 'Bridges', run: () => openPaths('bridge') },
+  { keys: ['v'], group: 'paths', label: 'Ramps', run: () => openPaths('ramp') },
+  { keys: ['e'], group: 'paths', label: 'Pave', run: () => openPaths('pave') },
+  { keys: ['t'], group: 'paths', label: 'Traffic map', run: () => togglePathsMap('traffic', R.traffic) },
+  { keys: ['l'], group: 'paths', label: 'Junctions and traffic lights', run: () => openPaths('lights') },
+  { keys: ['x'], group: 'paths', label: 'Walls (Versus)', run: () => { if (warOn()) openPaths('wall'); } },
+  { keys: ['n'], group: 'paths', label: 'Rail', run: () => openPaths('rail') },
+  { keys: ['k'], group: 'paths', label: 'Pipes', run: () => openPaths('pipe') },
+  { keys: ['z'], group: 'paths', label: 'Toggle Route to', run: toggleRoute },
+  { keys: ['q'], group: 'army', label: 'Toggle Army panel', run: () => { if (!$('btn-attack').hidden) $('btn-attack').click(); } },
+  { keys: ['c'], group: 'army', label: 'Recall all warbots', run: () => { if (warOn()) recallAllWarbots(); } },
+  { keys: ['h', 'home'], group: 'camera', label: 'Go to your Command Base', run: () => { $('btn-home').click(); } },
+  { keys: ['m'], group: 'camera', label: 'Toggle minimap', run: () => setMinimap(!MM.on) },
+  { keys: ['f'], group: 'selection', label: 'Select all warbots', run: () => {
+    selectBots(armyIds(ME), false);
+    if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info');
+  } },
+  { keys: ['i'], group: 'panels', label: 'Statistics', run: () => { if ($('screen-stats').hidden) openStats(); } },
+  { keys: ['u'], group: 'panels', label: 'Your robots', run: () => { $('pop').click(); } },
+  { keys: ['y'], group: 'panels', label: 'Toggle Goods', run: () => {
+    if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); }
+  } },
+  { keys: ['j'], group: 'camera', label: 'Jump to latest alert', run: () => {
+    if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); }
+  } },
+  { keys: ['['], group: 'game', label: 'Slow down', run: () => { stepSpeed(-1); } },
+  { keys: [']'], group: 'game', label: 'Speed up', run: () => { stepSpeed(1); } },
+  { keys: ['+', '='], group: 'camera', label: 'Zoom in', run: () => zoomBy(1.25) },
+  { keys: ['-', '_'], group: 'camera', label: 'Zoom out', run: () => zoomBy(0.8) },
+  { keys: ['?'], group: 'panels', label: 'How to play', run: showHelp },
+  { keys: ['.'], group: 'army', label: 'Ping under the pointer (co-op)', run: () => typeof coopPingHere === 'function' && !!coopPingHere(true) },
+];
+const SHIFT_KEYS = {
+  f: { group: 'panels', label: 'Order bots (again for the next Foundry)', run: openFoundryOrders },
+  t: { group: 'paths', label: 'Toggle Goods flow', run: () => togglePathsMap('goods', R.goodsMap) },
+  ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {
+    group: 'paths', label: { viaduct: 'Viaducts', ropeway: 'Ropeways', maglev: 'Maglev lines', express: 'Express' }[tool],
+    run: () => openPaths(tool),
+  }])),
+};
+function togglePathsMap(map, on) {
+  if (R.mode !== 'road') setMode('road');
+  setRoadMap(on ? '' : map);
+  showRoadBanner();
+  sfx('click');
+}
+
+const SHORTCUT_SHEET_KEY = '/';
+let keysWasPaused = null;
+
+function openKeys() {
+  const top = topScreen();
+  if (!UI.inGame || UI.briefing || (top && top.id !== 'screen-pause')) return false;
+  if (!MP.on) { keysWasPaused = UI.paused; UI.paused = true; }
+  R.keys.clear();
+  renderKeys();
+  $('screen-keys').hidden = false;
+  $('keys-body').scrollTop = 0;
+  return true;
+}
+
+function closeKeys() {
+  $('screen-keys').hidden = true;
+  if (!MP.on && keysWasPaused !== null) UI.paused = keysWasPaused;
+  keysWasPaused = null;
+}
+
+/** Show context-specific bindings alongside the ones used on the map. */
+function renderKeys() {
+  const names = { home: 'Home', arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓' };
+  const caps = (keys) => keys.map((key) => `<kbd>${names[key] || (key.length === 1 ? key.toUpperCase() : key)}</kbd>`).join(' ');
+  const row = ([keys, label]) => `<div class="ks-row"><dt>${caps(keys)}</dt><dd>${label}</dd></div>`;
+  const section = (title, rows, intro = '') => `<section class="ks-group"><h3>${title}</h3>${intro}<dl>${rows.map(row).join('')}</dl></section>`;
+  const sub = (title, rows) => `<h4>${title}</h4><dl>${rows.map(row).join('')}</dl>`;
+  const map = (group) => [
+    ...MAP_KEYS.filter((b) => b.group === group).map(({ keys, label }) => [keys, label]),
+    ...Object.entries(SHIFT_KEYS).filter(([, b]) => b.group === group).map(([key, { label }]) => [[`Shift+${key.toUpperCase()}`], label]),
+  ];
+  // Use the panel button bindings, combining actions that share a key on different panels.
+  const panel = (prefix) => {
+    const byKey = new Map();
+    for (const [id, [key, label]] of Object.entries(SHEET_KEYS)) {
+      if (id.startsWith('ar-') !== (prefix === 'army')) continue;
+      if (!byKey.has(key)) byKey.set(key, new Set());
+      byKey.get(key).add(label);
+    }
+    return [...byKey].sort(([a], [b]) => a.localeCompare(b)).map(([key, labels]) => [[key], [...labels].join(' · ')]);
+  };
+  const tabs = Object.entries(BUILD_TAB_KEYS).map(([group, key]) => {
+    const def = BUILD_GROUPS.find(({ key }) => key === group);
+    const title = `${caps([key])} ${def ? def.name : 'All'}`;
+    const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type].name]);
+    if (def?.roads) rows.unshift([['r'], 'Roads']);
+    if (def?.walls) rows.unshift([['x'], 'Walls']);
+    return rows.length ? sub(title, rows) : `<h4>${title}</h4><p>Use a card’s tab number, then its letter.</p>`;
+  });
+  const col = (...sections) => `<div class="ks-column">${sections.join('')}</div>`;
+  $('keys-body').innerHTML = col(
+    section('Camera', [
+      [Object.keys(PAN_KEYS), 'Pan the map'],
+      ...map('camera'),
+      [['Shift + scroll'], 'Pan sideways with a trackpad'],
+      [['F'], 'Follow the action (Observer)'],
+    ]),
+    section('Selection and control groups', [
+      ...map('selection'),
+      [['Shift + drag'], 'Add warbots to selection'],
+      [['Ctrl/Cmd/Alt/Shift+1–9'], 'Save selected warbots or the open building'],
+      [['1–9'], 'Recall a group or building; twice to center'],
+    ]),
+    section('Game', [
+      [['Space'], 'Pause or resume. Save from the pause menu.'],
+      [['Esc'], 'Step back or open Pause'],
+      ...map('game'),
+      [['Alt+Enter'], 'Toggle full screen'],
+      [['Shift+P'], 'Enter or leave Photo mode'],
+      [['`'], 'Toggle Boosts'],
+    ]),
+  ) + col(
+    section('Build menu', [
+      ...map('build'),
+      [['Tab', 'Shift+Tab'], 'Next or previous build tab'],
+      [['Ctrl/Cmd+Z'], 'Undo a just-placed site'],
+      [['R'], 'Rotate a blueprint, Mass Driver or Orbital Lift'],
+      [['Shift+R'], 'Turn Orbital Lift the other way'],
+    ]),
+    `<section class="ks-group ks-build" aria-label="Build tabs">${tabs.join('')}</section>`,
+  ) + col(
+    section('Paths tools', [
+      ...map('paths'),
+      [['Shift + drag'], 'Draw a single Express lane'],
+      [['Esc', 'Ctrl/Cmd+Z'], 'Undo last Paths stroke'],
+    ]),
+    section('Army (Q) and orders', [
+      ...map('army'),
+      [['Enter'], 'Confirm the map banner’s main action'],
+      [['B', 'N'], 'Bomb or Napalm (while choosing a target)'],
+    ]),
+      `<section class="ks-group" aria-label="Army panel keys">${sub('In the Army panel', panel('army'))}</section>`,
+  ) + col(
+    section('Panels', map('panels')),
+    section('Building and unit panels', [
+      [['Delete', 'Backspace'], 'Press twice to dismantle or recycle'],
+      ...panel('building'),
+    ], '<p>When a panel is open, its available buttons take priority.</p>'),
+  );
+}
+
 function initKeyboard() {
   window.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
@@ -2185,6 +2388,18 @@ function initKeyboard() {
     // A slider or switch keeps its own keys (arrows, Home, End); Esc and Space still reach the game from one.
     if (tag === 'INPUT' && !(/^(range|checkbox)$/.test(e.target.type) && (e.key === 'Escape' || e.key === ' '))) return;
     if (!UI.inGame) return;
+    const key = e.key.toLowerCase(), bare = !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (!$('screen-keys').hidden) {
+      if (key === 'escape' || (bare && key === SHORTCUT_SHEET_KEY)) {
+        e.preventDefault();
+        if (!e.repeat) closeKeys();
+      }
+      return;
+    }
+    if (bare && key === SHORTCUT_SHEET_KEY) {
+      if (!e.repeat && openKeys()) e.preventDefault();
+      return;
+    }
     // Send feedback open: no key is the game's (its own keys stop there; this is one from outside it, the focus lost).
     if (!$('screen-feedback').hidden) { if (e.key === 'Escape') { e.preventDefault(); closeFeedback(); } return; }
     // Control groups: Cmd/Ctrl (or Shift, or Option/Alt) + 1–9 saves the selected warbots and Howitzers as
@@ -2200,8 +2415,8 @@ function initKeyboard() {
       return;
     }
     // In the Army panel a plain 1-4 picks the group size (2, 4, 8, All).
-    if (digit && UI.sheetKind === 'army' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && +digit[1] <= 4) {
-      const btn = $(['ar-n2', 'ar-n4', 'ar-n8', 'ar-nall'][+digit[1] - 1]);
+    if (digit && UI.sheetKind === 'army' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && ARMY_SIZE_KEYS[digit[1]]) {
+      const btn = $(ARMY_SIZE_KEYS[digit[1]]);
       e.preventDefault();
       if (btn && btn.offsetParent) btn.click();
       return;
@@ -2242,12 +2457,8 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
-    // Shift+F, from anywhere: the Bot Foundry's Order bots list (again: the next Foundry).
-    if (k === 'f' && e.shiftKey) { e.preventDefault(); openFoundryOrders(); return; }
-    // Shift+T, from anywhere (a panel's own T included): Paths with the Goods flow map (again: off).
-    if (e.shiftKey && k === 't') { e.preventDefault(); if (R.mode !== 'road') setMode('road'); setRoadMap(R.goodsMap ? '' : 'goods'); showRoadBanner(); sfx('click'); return; }
-    // Shift+V and Shift+Y, from anywhere (a panel's own V or Y included): Paths on Viaducts or Ropeways.
-    if (e.shiftKey && PATHS_SHIFT_KEYS[k]) { e.preventDefault(); openPaths(PATHS_SHIFT_KEYS[k]); return; }
+    const shifted = e.shiftKey && SHIFT_KEYS[k];
+    if (shifted) { e.preventDefault(); shifted.run(); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
     // Picking a bomber's target: B and N switch its payload (Bomb or Napalm).
@@ -2278,41 +2489,8 @@ function initKeyboard() {
     if (R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].lift && k === 'r') { e.preventDefault(); liftTurn(e.shiftKey ? -1 : 1); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
-    switch (k) {
-      case 'b': $('btn-build').click(); break;
-      case 'p': $('btn-road').click(); break;
-      // R opens and closes the Paths menu (like P); inside Paths it picks the Roads tool first.
-      // R always means the road drag tool: from anywhere it opens Paths on Roads (drawing, not Route to,
-      // whatever tool was used last); on that tool already, it closes Paths. (P opens the last tool used.)
-      case 'r': if (R.mode === 'road' && UI.roadMode === 'road' && !UI.route) $('btn-road').click(); else openRoadDraw(); break;
-      case 'o': openPaths('arrows'); break;
-      case 'g': openPaths('bridge'); break;
-      case 'v': openPaths('ramp'); break;
-      case 'e': openPaths('pave'); break;
-      case 't': if (R.mode !== 'road') setMode('road'); setRoadMap(R.traffic ? '' : 'traffic'); showRoadBanner(); sfx('click'); break;
-      case 'l': openPaths('lights'); break;
-      case 'x': if (warOn()) openPaths('wall'); break;
-      case 'n': openPaths('rail'); break;
-      case 'k': openPaths('pipe'); break;
-      case 'z': toggleRoute(); break;
-      case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
-      case 'h': case 'home': $('btn-home').click(); break;
-      case 'm': setMinimap(!MM.on); break;
-      case 'c': if (warOn()) recallAllWarbots(); break;
-      case 'f': selectBots(armyIds(ME), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
-      case 'i': if ($('screen-stats').hidden) openStats(); break;
-      case 'u': $('pop').click(); break;
-      case 'y': if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); } break;
-      case 'j': if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); } break;
-      case '[': stepSpeed(-1); break;
-      case ']': stepSpeed(1); break;
-      case '+': case '=': zoomBy(1.25); break;
-      case '-': case '_': zoomBy(0.8); break;
-      case '?': showHelp(); break;
-      // . pings the spot under the mouse for everyone running the colony (co-op: js/coop.js).
-      case '.': if (typeof coopPingHere !== 'function' || !coopPingHere(true)) return; break;
-      default: return;
-    }
+    const binding = MAP_KEYS.find(({ keys }) => keys.includes(k));
+    if (!binding || binding.run() === false) return;
     e.preventDefault();
   });
   window.addEventListener('keyup', (e) => R.keys.delete(e.key.toLowerCase()));
@@ -2908,6 +3086,7 @@ function toggleSpeedMenu(refresh) {
 
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
+  if (!$('screen-keys').hidden) { closeKeys(); return; }
   if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('screen-cloud').hidden) { closeCloud(); return; } // (cloud saves: over the pause menu, or a link's question)
@@ -3293,6 +3472,7 @@ function enterGame(unsaved) {
 }
 
 function toMenu() {
+  closeKeys();
   if (UI.photo) photoExit();
   if (UI.watch) watchEnd();
   if (MP.on || MPJ.on) mpQuit();
