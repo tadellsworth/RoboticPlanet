@@ -159,6 +159,17 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
       Averages: Railgunners +0.32 (the strongest pure army), the blob +0.13, warbots +0.05, Skirmishers +0.04, Arc Casters
       0.00, Torches −0.20, a mix of all −0.23. Open: is a pure mass of Railgunners too strong against a Bulwark-heavy
       blob (+0.74 is more than a soft counter)? Mixed armies come out a little behind pure ones in these brawls.
+    - *AI against AI* (40 two-player games, every pair of doctrines, Normal, Nuclear race on, 60 min at most; before →
+      after): undecided 0 → 0, a win in 20.0 → 20.0 min on average; wins by doctrine Steward 9 → 9, Warden 2 → 2,
+      Salvager 12 → 12, Herald 12 → 11, Architect 5 → 6 (of 16 each): none became dominant (the Salvager and Herald led
+      before, as now). The rivals' armies: 917 warbots, 125 Bulwarks, 139 Torches → 789, 125, 109 and 80 Skirmishers,
+      44 Arc Casters, 25 Railgunners. Reactors built 5 → 14, the Lance-or-nukes choice made 2 → 10 times (the Reactor
+      now goes first in a Nuclear race's late game, the choice from 18 minutes). Open: in these games the choice comes
+      but neither a Lance nor a nuke was finished before the game ended; on the Hollow (Small, 8 seeds) games stall
+      undecided when both colonies' ore runs out: 3 in 8 before, 4 in 8 after (different ones; seed 21, the old
+      "game that never ended" test, is among the new ones; without the Bulwark nerf, or without the rivals' answers, it
+      ends again). Worth a look at the Hollow's late economy.
+    - *Mission:* Siege Breakers has a Bulwark picket and a goal to break its shields (Arc Casters, Skirmishers).
   - **Suggested order:** first wave Skirmisher, Howitzer (rebalanced), Arc Caster (they close the main loops); then Rail
     Lancer and Mine Layer; later Interceptor and Gunboat. Design sheets for the new units could go through Gemini, as the
     megastructures did (handoff/ in the repo).
