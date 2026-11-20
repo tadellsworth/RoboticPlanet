@@ -219,6 +219,8 @@ const ORDERS = {
     settlePlans(); // pay for what we can now, oldest plans first; the rest waits for the goods
     return out;
   },
+  /** The road crew limit: at most v Workers lay planned road at once (one of ROAD_CREWS; 0: no limit). */
+  roadCrew(p, v) { if (ROAD_CREWS.includes(v)) S.players[p].roadCrew = v; },
   paveMark(p, i, j, on) { if (inMap(i, j)) setPaveMark(p, i, j, !!on); },
   /** Turn a road's arrow: v 1 two-way, 2-5 one-way (east, south, west, north). */
   roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); }, // (an Express lane stays one-way: setRoadDir)

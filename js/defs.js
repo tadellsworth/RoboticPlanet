@@ -178,7 +178,7 @@ const BOTS = {
   agribot: { name: 'Agribot', plural: 'Agribots', speed: WORKER_SPEED, hp: 5, crew: 'agribot', offroad: true,
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
-    desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
+    desc: 'A road crew bot. A Roadworks takes two: they lay your planned roads, twice as fast as a Worker, and surface roads with asphalt.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
@@ -446,6 +446,17 @@ const ROAD_CLEAR = 3;
  */
 const PAVE_TIME = 1.5;
 const PAVE_CLEAR_TIME = 3;
+/**
+ * Road crews. At most a colony's road crew limit of Workers (P.roadCrew: one of ROAD_CREWS, set on the Roads tool in
+ * Paths; ROAD_CREW unless set, 0 = no limit) lay planned road at once, so a long highway doesn't take every Worker
+ * off building. A Roadworks' Pavers lay planned road too, PAVER_LAY times as fast as a Worker, and don't count toward
+ * it. A Worker laying road goes to a construction site within PAVE_LEAVE tiles that is waiting for a builder (when no
+ * free Worker is as near): building comes first.
+ */
+const ROAD_CREWS = [2, 3, 5, 0];
+const ROAD_CREW = 3;
+const PAVER_LAY = 2;
+const PAVE_LEAVE = 10;
 /**
  * Safety net: a colony with less than SALVAGE_BELOW of Stone or Fiber and nothing able to make it
  * gets 1 every SALVAGE_EVERY seconds, salvaged from the Command Base, so it can always rebuild.
@@ -1002,7 +1013,8 @@ function playerName(p, the) {
  *   farm      plants energy crops on fertile soil within `radius` and harvests them into Fuel
  *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
  *   crew      only bots of this crew (see BOTS) can run it
- *   roadworks its Paver lays asphalt on any road joined to it, nearest first
+ *   roadworks its Pavers lay planned road (see ROAD_CREW), then asphalt on any road joined to it, nearest first
+ *   crews     how many bots of its crew it takes (1 if not given)
  *   ammoStock (Command Base, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
@@ -1112,8 +1124,8 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles. It also lays Express lanes (Paths, Express): 1 Asphalt and a quarter Alloy a tile.',
-    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, armor: 8, buildTime: 10,
+    name: 'Roadworks', desc: 'Takes two Pavers. They lay your planned roads, twice as fast as a Worker, then upgrade your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles. They also lay Express lanes (Paths, Express): 1 Asphalt and a quarter Alloy a tile.',
+    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', crews: 2, roadworks: true, armor: 8, buildTime: 10,
   },
   armory: {
     name: 'Ammo Plant', desc: 'Packs Alloy and Cement into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',

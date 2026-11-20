@@ -6121,11 +6121,12 @@ function showRoadBanner(problem, info) {
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track (build them first if you like, and drag from one to the other); Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
-      ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
+      ` After you tap Build, free Workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}: no more than your <b>Road crew</b> at once (${roadCrew(ME) || 'no limit'}), so the rest stay free for building, and a Worker on the road leaves it for a construction site nearby that needs a builder. A Roadworks' two <b>Pavers</b> lay road too, twice as fast, before they lay asphalt, and don't count. A long road grows from both ends where its far end touches your roads or a finished building. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
   // (The line is cut to three lines where the banner is docked across the bottom of a phone: what went wrong, or
   // what a tap just did, leads. How it works opens over the map there, and stays open while you read it.)
   const text = `<span class="rb-line">${problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : ''}${line}</span>` +
+    (mode === 'road' || mode === 'bridge' ? roadCrewRow() : '') +
     `<details class="how"${UI.howOpen === mode ? ' open' : ''}><summary>How it works</summary><div class="how-text">${how}</div></details>`;
   showBanner(text, null, 'Done');
   const det = $('banner-text').querySelector('details.how');
@@ -6151,6 +6152,7 @@ function showRoadBanner(problem, info) {
   }
   $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
   if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
+  for (const btn of $('banner-text').querySelectorAll('#road-crew [data-v]')) btn.onclick = (e) => { e.stopPropagation(); setRoadCrew(+btn.dataset.v); };
   if ($('x-single')) $('x-single').onclick = (e) => { e.stopPropagation(); UI.xSingle = !UI.xSingle; sfx('click'); showRoadBanner(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
@@ -6170,6 +6172,24 @@ function showRoadBanner(problem, info) {
   if (R.goodsMap) { UI.flowKey = goodsFlowKey(); $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key flow-key">${UI.flowKey}</span>`); }
   bannerMissionHint();
   toolFit();
+}
+
+/**
+ * The Roads and Bridges tools' road crew row: at most this many Workers lay planned road at once (ROAD_CREWS: 2, 3, 5 or
+ * no limit; ORDERS.roadCrew), and the Pavers a Roadworks adds, who don't count.
+ */
+function roadCrewRow() {
+  const v = roadCrew(ME), pavers = S.bots.filter((u) => !u.dead && u.owner === ME && u.type === 'paver' && u.task && u.task.type === 'staff').length;
+  return `<span class="keep-all road-crew" id="road-crew">Road crew <span class="seg">${ROAD_CREWS.map((n) => `<button data-v="${n}" class="${n === v ? 'on' : ''}">${n || 'No limit'}</button>`).join('')}</span>` +
+    `Workers at once${pavers ? `, plus ${pavers} Paver${pavers === 1 ? '' : 's'}` : ''}</span>`;
+}
+/** Set the road crew limit (see roadCrewRow). */
+function setRoadCrew(v) {
+  act('roadCrew', [v]);
+  sfx('click');
+  toast(v ? `At most ${v} Workers lay planned road at once now; the rest stay free for building. A Roadworks' Pavers lay road too.`
+    : 'No limit: every free Worker lays planned road.', 'info');
+  showRoadBanner();
 }
 
 /** How Express lanes work: the Express tool's How it works. */
@@ -6775,13 +6795,13 @@ function openBuildingSheet(b) {
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
         <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
-        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks (two each): they lay planned roads and asphalt.</p>`;
     }
     if (def.roadworks && b.built) {
       html += `<div class="section-label">Paves and maintains</div>
         <div class="seg" id="sh-pmode"><button data-v="marked">Marked roads</button><button data-v="all">Every joined road</button></div>
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
-        <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
+        <p class="hint">Its two Pavers lay your planned roads first, twice as fast as a Worker (they don't count toward the road crew in Paths). Then they surface: mark roads in Paths (Pave) and they keep just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
     if (def.pump && b.built && b.owner === ME && !feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'))) {
       const pr = pipeToRefinery(ME, b);
@@ -7078,7 +7098,12 @@ function refreshBuildingSheet(b) {
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
     if (mine && def.staff) {
       const op = getE(b.staff);
-      parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
+      if (def.crews > 1) {
+        // (A Roadworks takes two Pavers: how many it has, and how many are out working.)
+        const crew = S.bots.filter((u) => !u.dead && u.task && u.task.type === 'staff' && u.task.bld === b.id);
+        const out = crew.filter((u) => u.task.phase !== 'go' && u.inside !== b.id).length, coming = crew.filter((u) => u.task.phase === 'go').length;
+        parts.push(`<div class="kv"><span>${BOTS[def.crew].plural}</span><span>${b.paused ? 'Paused' : `${crew.length - coming} of ${def.crews}${out ? `, ${out} out working` : ''}${coming ? `, ${coming} on the way` : ''}`}</span></div>`);
+      } else parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
     }
     if (def.roadworks) {
       // Everything on the road network joined to the Roadworks is in reach (or just the marked roads).
@@ -7576,6 +7601,7 @@ function botActivity(u) {
     if (def.farm && (t.phase === 'toNode' || t.phase === 'work')) {
       return t.act === 'harvest' ? (t.phase === 'work' ? 'Harvesting an energy crop' : 'Heading out to harvest a crop') : (t.phase === 'work' ? 'Planting an energy crop' : 'Heading out to plant a crop');
     }
+    if (def.roadworks && t.lay >= 0 && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying new road' : 'Heading out to lay new road';
     if (def.roadworks && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying asphalt' : 'Heading to a path to surface';
     if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[t.gtype || def.gather].good].name : ''}`;
     if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[t.gtype || def.gather].name.toLowerCase() : ''}`;

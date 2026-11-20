@@ -170,7 +170,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
-| Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles), and lays Express lanes (1 Asphalt and a quarter Alloy a tile) |
+| Roadworks | Takes two Pavers. They lay planned road first (twice a Worker's rate, outside the road crew limit), then pave and maintain the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles), and lay Express lanes (1 Asphalt and a quarter Alloy a tile) |
 | Ammo Plant | Alloy + Cement → 3 **Ammo**; warbots reload it in the Command Base and Outposts, 5 shots per Ammo (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 22 tiles away; holds 2, reloads in 60 s (Versus; 25 s until Nov 2026, the owner's call) |
@@ -201,7 +201,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two at a time, and **only drive on roads**. A factory less than a Hauler's load short of an input, with more than
   its next batch in hand or on the way, waits to be topped up (`dispatch`), so Haulers carry full loads instead of one
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
-  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
+  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Interrupted deliveries.** Dispatch considers alternate suppliers and checks the carrier's network against both
   endpoints. Trains and ships pick up on a platform or dock that reaches the delivery point. The dispatcher reserves
@@ -270,15 +270,33 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   type being built is highlighted. The AI keeps the default order, taking turns.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
+  **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
+  2026): no more than a colony's road crew of Workers lay planned road at once, 3 unless set (`P.roadCrew`: 2, 3, 5 or
+  0 for no limit, the Roads and Bridges tools' **Road crew** row in Paths, order `roadCrew`; in `hashState` and saves,
+  an older save loading with 3), so a long road no longer takes twenty Workers off building to crawl along behind its
+  end in a blob. A Worker laying road goes to a construction site within `PAVE_LEAVE` (10) tiles that waits for a
+  builder, its materials in, unless a free Worker is as near (`roadToSites`): building beats roads. A Roadworks takes
+  two **Pavers** (`BDEFS.roadworks.crews`), and they lay planned road too, `PAVER_LAY` (2) times a Worker's rate (0.75 s
+  a tile, bridges and tunnels at half their time), outside the limit: from inside their Roadworks they take the tile
+  the paving order gives them (`nextPaveTile`), carry on along it while the next tile is within 12 and their charge
+  lasts (`paverGo`, `paverNext`, `paverLay`), and only then lay or resurface asphalt and Express lanes. New road comes
+  first because it's paid for already and no use until it's down, where asphalt only makes a working road faster; a
+  Paver's tile is never taken over by a Worker. Measured on a 30-tile road from home with 28 Workers (18 free), after
+  30 s: before, 18 Workers on it and 10 tiles down; with a crew of 3, 12 tiles down and 25 Workers free; with the
+  crew and a Roadworks' two Pavers, 23. Rivals have the same setting and build no Roadworks; they choose **No limit**
+  (`aiRoadCrew`): every road a rival plans is to a site waiting on it, and building-beats-roads still takes its Workers
+  to sites first. Held to 3 (or 5 while it had Workers to spare), a rival's planned road on Long haul stood two to five
+  times as long (an average 15 tiles waiting against 6) and Hollow games that used to end ran to 75 minutes.
   **Paving order** (`paveMap`, `nextPaveTile`): a planned road grows out from the network its workers belong to (home's,
   the roads joined to a Command Base on their ground; or, for workers posted on a foothold, the roads joined to its
   stores and garrisons), one joined tile after another, so each stretch is usable as soon as it's down. A tile joins
   beside road on that network (or on a road leaving a finished building on it) or beside such a building; a site at
-  the far end, or a building cut off from home, doesn't count. A bridge or tunnel is built from the road beside it on
-  that network: the home side. The tile goes to the free worker nearest it, and a worker still walking out from far
+  the far end doesn't count. A stretch whose far end touches the player's road or a finished building of its (off the
+  network too: paveMap's `tail`) grows from that end as well, so a crew works a long road from both ends, each end usable
+  as it grows. A bridge or tunnel is built from the road beside it on that network: the home side. The tile goes to the free worker nearest it, and a worker still walking out from far
   off hands its tile over to one `PAVE_TAKE` (8) tiles nearer. A tile being paved counts as down already, so a second
-  worker takes the next tile just past it (still growing outward, never past a bridge or tunnel going up) or another
-  road. Before it sets off, a worker reckons up the walk there (its route, by road and off-road speeds), the paving and
+  worker takes the next tile just past it (still growing outward, never past a bridge or tunnel going up), or another
+  end or another road up to `PAVE_QUEUE` (8) tiles further off, so a crew spreads out rather than queue behind one tile. Before it sets off, a worker reckons up the walk there (its route, by road and off-road speeds), the paving and
   the walk back to the nearest charger it can reach (`paveShort`); if that would take it below `BATTERY.critical`
   (+2), it charges first (unless it's charged to 95% already, or there's nowhere to charge). A stretch of plan that
   joins nothing (laid out on its own) is still built: from its end nearest home (an end of the stretch, or a tile
@@ -290,11 +308,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   spread from home to the far end (112 s against 92), who used to pave from both ends at once. A worker that just found no way somewhere (walled in on the Wall it built,
   say: `u.failUntil`) sits out the next building and paving rounds, and isn't counted as soon free (`nearSoon`), so
   the others still come; a tile nobody can reach is skipped for a while (`paveSkip`). Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
-  plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
-  upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
+  plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Pavers
+  upgrade roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
 - **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
   clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI builds no Roadworks). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
-  half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
+  half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` a Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
 - **Express highways** (`PAVE[3]`, `EXPRESS`, `laneSpeed` in `js/defs.js`; built Nov 2026 from the design sheet's
@@ -304,7 +322,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `expressLanes` in `js/ui.js`), Shift-drag or the banner's **Single lane** one lane. Over your own roads it upgrades in
   place; elsewhere the base is a planned road (Cement) with the lane's direction noted in `S.xdir` until Workers lay it
   (`layRoad`), when it turns one-way and marked `S.paveMark` 2 (1 is the asphalt mark; `paveWant`). The Roadworks'
-  Paver then surfaces it exactly as it paves asphalt, nearest first (`findPaveSpot`, `needsPaving`), paid from the
+  Pavers then surface it exactly as it paves asphalt, nearest first (`findPaveSpot`, `needsPaving`), paid from the
   Roadworks' stock as it reaches each tile: 1 Asphalt, and a quarter Alloy when it first goes up (`expressShort`,
   `expressPay`; Haulers bring the Roadworks Alloy once any lane is marked, `expressMarked`). Speeds (`expressSpeed`):
   Road Trains 5.5× (2× asphalt), Freight Trucks and Tankers 4.5×, warbots and the Paver at asphalt speed; Haulers,

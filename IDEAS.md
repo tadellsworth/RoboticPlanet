@@ -19,6 +19,14 @@ complete game-balance audit** (every unit and building has a defined, useful pur
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
 
 - **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
+- **Road crews (built Nov 20; open questions).** At most 3 Workers lay planned road at once (Road crew 2, 3, 5 or No
+  limit on the Roads tool), a Roadworks takes two Pavers that lay new road at twice a Worker's rate before any asphalt,
+  long roads grow from both ends where the far end touches road or a finished building, and a Worker on the road leaves
+  it for a site nearby. Still open: should the limit count per foothold (a Drop Outpost's island has its own Workers,
+  and today shares the colony's crew of 3)? Should the Roadworks build its own Pavers rather than the Foundry? Should
+  Pavers walk out to a far stretch on their own, or keep to the nearest work (today: nearest, by the paving order)?
+  Should rivals build a Roadworks for its Pavers (today they build none, and choose No limit: held to 3 or 5 their
+  roads fell behind and Hollow games stalled; see README)?
 
 **Quick fixes (small, cheap; do these first when usage is short)**
 - **Maglev pods are made only at a Maglev Terminal,** not in the Bot Foundry or any other yard (check the Foundry's order list
