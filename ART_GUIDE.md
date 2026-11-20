@@ -1818,6 +1818,37 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
 
+### Wind, water, sky and the planet view (drawn in code; no images)
+
+The owner's theme for these: the immense beauty of the planet, being torn apart by war. All of it is drawn in code
+(`js/nature.js`, `js/menuplanet.js`) and none of it takes art, but these are the looks to keep if any of it is ever
+redrawn as images:
+
+- **Wind.** One wind for the whole map, blowing the way the clouds drift. Up close the trees and plants lean a few
+  pixels downwind and shiver; gusts roll across them as waves. On the grass the gusts show as long crests of light
+  (`255,248,214`) with the darker side of the grass (`58,54,40`) just upwind, rolling with the wind at about three tiles
+  a second, faint enough that roads, buildings and robots read as before. A blast shoves the plants outward and sends a
+  ring of flattened grass out from it.
+- **Water.** By day: short horizontal flecks of sun on the ripples, warmer in the morning and evening, thickest toward
+  the top of the view. At night: Argos as a soft glow with a broken column of light under it, the Ring's band as a long
+  streak of glitter, a few stars; all of it fixed on the screen, as reflections are. On every shore a soft line of foam
+  runs up and slides back.
+- **Wet ground and frost.** After rain the land is a shade darker and cooler, roads glossy, puddles pale with the sky;
+  at night lamps and lit buildings leave long streaks of their colour on the wet ground. Frost is small white six-armed
+  crystals and pale patches over a cool tint, creeping in from the hollows of a noise field at dawn.
+- **The night sky on the land.** The Ring's light is silver and faint, a little stronger on one side of the map; its tint
+  and angle differ by planet (`NATFX.ring`). Auroras: green, sky blue and violet on the Polar Caps, violet and rose in the
+  Bloom, pale blue and teal on Argos.
+- **The planet view.** Past the map's edge, the map's own ground carries on, mirrored and faded into a haze in the biome's
+  colour (`NATFX.haze`: ochre for the Rust, grey-green for Greenreach, pale blue for the Polar Caps, near-black for Argos
+  and the Hollow), thickening outward; a soft dark line marks where the usable land ends. Zoomed right out the camera
+  tilts a little and the far side is a little lost in haze.
+- **The main menu.** Ithaca I as a coral world turning slowly in Corvane's light from the upper left: red deserts,
+  green forest, Emberwood's gold, ash, the violet Bloom, seas between and ice at the poles, a layer of cloud, a warm
+  band along the terminator, and the colonies' lights strung along the coasts on the night side, where now and then a
+  far-off fight flares orange. The Ring crosses in front of it in pale cream bands, Argos goes round, the sky has a
+  faint nebula and Corvane's glow in its corner.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

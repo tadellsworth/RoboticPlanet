@@ -1455,6 +1455,10 @@ canvas.chart.small { height: 110px; }
   --muted: #b9ad9f;
 }
 #screen-menu { background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.35), rgba(8, 12, 24, 0.86)); }
+/* The planet turning behind the main menu (js/menuplanet.js): its own canvas under the card. */
+#menu-planet { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; display: block; }
+#menu-planet[hidden] { display: none; }
+#screen-menu > .menu-card { position: relative; z-index: 1; }
 .menu-card, #screen-missions .card, #screen-help .card, #screen-lore .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
 .m-icon { display: block; width: 84px; height: 84px; margin: -4px auto 10px; border-radius: 20px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(241, 228, 211, 0.12); }
 #screen-menu .logo, .menu-card .m-head-logo { background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent; }

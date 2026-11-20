@@ -735,8 +735,11 @@ function clampCam() {
 function isWide() { return R.w >= 1000 && R.h >= 520; }
 
 function centerOn(x, y) { R.cam.x = x; R.cam.y = y; clampCam(); }
-function screenToWorld(sx, sy) { return { x: (sx - R.w / 2) / R.cam.z + R.cam.x, y: (sy - R.h / 2) / R.cam.z + R.cam.y }; }
-function worldToScreen(wx, wy) { return { x: (wx - R.cam.x) * R.cam.z + R.w / 2, y: (wy - R.cam.y) * R.cam.z + R.h / 2 }; }
+/** A point of the flat frame being drawn (css px) on the map: what the drawing code culls by. */
+function viewToWorld(sx, sy) { return { x: (sx - R.w / 2) / R.cam.z + R.cam.x, y: (sy - R.h / 2) / R.cam.z + R.cam.y }; }
+// (Screen points go through the planet view's tilt, zoomed far out: js/nature.js. Clicks, picking and sounds use these.)
+function screenToWorld(sx, sy) { if (typeof natureUnwarp === 'function') ({ x: sx, y: sy } = natureUnwarp(sx, sy)); return viewToWorld(sx, sy); }
+function worldToScreen(wx, wy) { const x = (wx - R.cam.x) * R.cam.z + R.w / 2, y = (wy - R.cam.y) * R.cam.z + R.h / 2; return typeof natureWarpPt === 'function' ? natureWarpPt(x, y) : { x, y }; }
 
 /* ------------------------------------------------------------------ baked map */
 
@@ -925,7 +928,7 @@ function drawBiomeGlow(ctx, ox, oy, z) {
 
 /** The decorative plants of tiles i0..i1 × j0..j1, drawn over the ground already baked there. */
 function drawPlants(ctx, i0, j0, i1, j1, glow) {
-  if (!S.decor) return;
+  if (!S.decor || ctx.noPlants) return; // (a sharp chunk whose plants are drawn live: natureGround)
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
   R.inMap = true;
@@ -971,6 +974,7 @@ function hdBake(level, cx, cy) {
   c.width = n; c.height = n;
   const ctx = c.getContext('2d');
   ctx.hdScale = k;
+  ctx.noPlants = typeof natureLivePlants === 'function' && natureLivePlants(); // (drawn live, swaying: js/nature.js)
   ctx.setTransform(k, 0, 0, k, -cx * n, -cy * n);
   const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
   // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
@@ -987,6 +991,7 @@ function hdBake(level, cx, cy) {
 function drawOffMap(ctx, ox, oy, z) {
   const mw = S.W * z, mh = S.H * z;
   if (ox <= 0 && oy <= 0 && ox + mw >= R.w && oy + mh >= R.h) return; // the map covers the screen
+  if (typeof natureOffMap === 'function' && natureOffMap(ctx, ox, oy, z)) return; // (the land carrying on, faded into haze: js/nature.js)
   const tex = R.tex && R.tex.ground;
   if (tex && tex.img && tex.img.width) {
     if (!R.offPat || R.offPat.img !== tex.img) R.offPat = { img: tex.img, pat: ctx.createPattern(tex.img, 'repeat') };
@@ -1015,7 +1020,7 @@ function drawMapLayer(ctx, ox, oy, z) {
   if (!R.hd) hdReset();
   const hd = R.hd, C = HD_CHUNK, d = R.dpr;
   hd.frame++;
-  const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
+  const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const nx = Math.ceil(S.W / C), ny = Math.ceil(S.H / C);
   const cx0 = Math.floor(v0.x / C), cx1 = Math.floor(v1.x / C), cy0 = Math.floor(v0.y / C), cy1 = Math.floor(v1.y / C);
   const key = (lv, cx, cy) => (lv * 4096 + cy) * 4096 + cx;
@@ -6408,11 +6413,12 @@ function render(dtReal) {
   // Big blasts near the middle of the screen shake it for a moment (a nuclear blast hardest; see fxShake).
   // (Not when the device is set to reduce motion.)
   if (!(LESS_MOTION && LESS_MOTION.matches)) { const a = fxShake(ox, oy, z); if (a > 0.2) { ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; } }
-  const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
+  const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
   drawOffMap(ctx, ox, oy, z);
   drawMapLayer(ctx, ox, oy, z);
+  if (typeof natureGround === 'function') natureGround(ctx, ox, oy, z, v0, v1); // (swaying plants, wind in the grass, wet ground, frost: js/nature.js)
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
@@ -6426,6 +6432,7 @@ function render(dtReal) {
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
+  if (typeof natureLight === 'function') natureLight(ctx, ox, oy, z, v0, v1); // (the Ring's light and the aurora, light on the water, wet roads at night: js/nature.js)
   drawWaterRipples(ctx, ox, oy, z, v0, v1);
   drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
@@ -6839,6 +6846,7 @@ function render(dtReal) {
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
   if (S.crew && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
+  if (typeof natureView === 'function') natureView(ctx, ox, oy, z); // (zoomed far out: the camera's tilt and the depth haze: js/nature.js)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -9006,7 +9014,7 @@ function renderMinimap() {
     ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
   if (S.crew && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
-  const a = screenToWorld(0, 0), c = screenToWorld(R.w, R.h);
+  const a = viewToWorld(0, 0), c = viewToWorld(R.w, R.h);
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(clamp(a.x, 0, S.W) * sx, clamp(a.y, 0, S.H) * sy,
