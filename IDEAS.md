@@ -12,6 +12,32 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## Sunsets per biome (built Nov 20 2026; open questions)
+
+Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's
+Sunsets and sunrises). Open:
+- A Sunsets switch of its own in Settings? For now it follows Time of day (none in Always day or Always night) and
+  Graphics (Saver keeps just the colour grade).
+- Real cast shadows: buildings' shadows are baked into their art (upper-left light), so only the robots' drop shadows
+  stretch at dusk. Re-lit "golden hour" sprite sets from the renderer would let buildings throw long shadows too.
+- The Ring as more than a faint arc: its shadow banding across the land, or ringshine lighting the night side.
+- A second map biome mixes palettes by the biome under the middle of the view; a smooth per-tile blend would be nicer.
+- On a device drawing the canvas without its graphics chip the sunset's full-screen blends cost about as much as the
+  rest of the frame (measured in a software-rendered browser); if that shows up on real phones, Saver's colour grade alone
+  could become Auto's too while frames are slow.
+
+## The war on the land: open questions (built Nov 20 2026)
+
+Smoke columns, creeping fires, ash and embers, shockwaves and the scars healing are in (`js/warfx.js`, looks only; see
+README, War scars). Open:
+- The healing is display-only, so it isn't shared: a loaded game starts healing afresh, and two devices in a multiplayer
+  game can show different stages. Making it game state (a per-tile healed-at time in `S`, saved and hashed) would fix
+  both, and would let the herds come back to healed ground. Worth it?
+- Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
+- Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
+  (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
+
 ## The owner's ideas, filed Nov 19 2026
 
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
@@ -33,6 +59,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   and the Air/Army menus: `BOTS.magpod` must not appear there).
 - **No "Pipe to Terminal" button on an Oil Pump with a Refinery right beside it:** the conveyor join to adjacent
   production buildings already feeds it (the button is noise). Show it only when no Refinery or Fuel Tank touches the pump.
+- **Night sounds in the wilds (built Nov 20; open questions).** A cricket chorus that rises at dusk, a tree cricket's
+  trill, katydids and the savanna's cicada, owls, night birds and leaves in the forests, peepers, frogs and splashes in
+  Blackwater, insects and a dry wind on the Long Grass and in the Rust (`nightSounds` in `js/audio.js`; README, Sound).
+  Open: the owner to listen and set the level (the crickets' peak is `0.016` in `nightSchedule`, the calls' rates in
+  `NIGHT_SET`); whether the Shoals and Steamwells want more than their few crickets; whether the Bloom gets a night
+  chorus of its own (stranger, not insects); whether a Murmur night should thin the insects out near their tunnels.
 - **Tone down the road trucks' smoke and brake noise** (the exhaust puffs on Freight Trucks and Road Trains, and the
   brake squeal in `js/audio.js`): a little quieter and less constant.
 - **Dropped goods from a dismantled building go first to Haulers:** crates left by Dismantle are picked up before other

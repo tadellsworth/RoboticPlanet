@@ -2513,8 +2513,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   furnaces, clanks, drills, pump thumps, beeps; the Smelter and the Bot Foundry also press, ratchet and machine), a train's diesel throb and rail clack that quickens with its speed,
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
-  Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
-  all, **the land's own sounds** (`natureBeds`, `biomeCall`; with the wind, crickets and the sea they go through a bus of
+  Islands, Tidal flats and Four Isles; softer on lakes and rivers) and bubbling lava. Under it
+  all, **the land's own sounds** (`natureBeds`, `biomeCall`, `nightSounds`; with the wind, the night and the sea they go through a bus of
   their own, `AUDIO.natureBus`, set by the Ambience volume apart from the effects, `NATURE_LEVEL` at full): each biome's bed (`NATURE`: leaves rustling as the wind
   gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
   savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
@@ -2524,6 +2524,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   sliding). Both are loudest out in the wilds and fade as the view fills with a town: `WORLD.wild` is the share of the
   land on screen that isn't built on, paved or laid with track (a third built up is all town), eased so it doesn't jump;
   the calls come every few seconds in the wilds, hardly ever in the streets, more at dawn and fewer in rain or fog.
+  **The night** (`nightSounds`, `NIGHT_SET`, Nov 2026): out in the wilds a cricket chorus comes in as dusk deepens (one or
+  two first, the rest joining by full night), each cricket its own pitch, pulse count, chirp rate and loudness, singing
+  in bouts and falling quiet, another taking its place, so it never loops; a tree cricket's soft trill under them, a
+  katydid's rasp far off on the green, warm maps (Greenreach, Blackwater, the Shoals), a cicada's buzz swelling on the
+  Long Grass. In the forests (Greenreach, Emberwood) and Blackwater, now and then an owl hooting, a far-off night bird
+  (a three-note whistle or a nightjar's churr) and the leaves stirring; in Blackwater peepers by the water, frogs and
+  the odd splash; on the Long Grass and in the Rust a few insects and a dry, gusting wind. It follows `WORLD.wild` like
+  the beds, goes quiet in a fight (`WORLD.fray`: robots fighting on screen, or a blast a moment ago) and comes back over
+  ten seconds or so, thins over War scars and near a nest; rain hushes the insects (the frogs call on), a sandstorm or
+  gale too, fog a little. The Hollow, Argos, the poles and the Bloom keep their own nights. It costs at most
+  `NIGHT_VOICES` steady voices (made when a night first comes, let go after half a minute of day, their gates
+  scheduled a moment ahead on the audio clock) and `NIGHT_SHOTS` calls at once; audio only, nothing in the sim.
   Water: surf breaking on a sea map's shore, little waves lapping at a lake's or a river's banks (quicker on a river
   delta). The ground rumbles near the volcano on a Volcano map, harder once it rumbles its warning and while it erupts,
   and over lava. The weather (`weatherSound`: `weatherAt` while weather is shown, or a planet event's dust storm) is
@@ -2670,6 +2682,19 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
+- **Sunsets and sunrises** (`js/sunset.js`, render only: no sim state, saves or randomness). From 75 s before the day
+  turns to evening until night is in (`DUSK_TIMES`, worked out from `TOD_CYCLE`), a golden-hour grade comes in, warms
+  through fire colours and deepens to magenta and violet; dawn runs the other way, gentler and cooler. Corvane sets in
+  the west and rises in the east, so the ground is lit from that side of the screen and falls into a cool long shade on
+  the far side, and robots' drop shadows stretch and turn violet (`duskShadowLength`, `duskShadowRgb`). Each biome has
+  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts,
+  plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
+  `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
+  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
+  Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
+  it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
+  `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
+  with reduce motion nothing drifts or twinkles.
 Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
 
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
@@ -2885,6 +2910,20 @@ the game's own blasts and the planet's hash; it is drawn into the baked ground (
   blast are killed (`faunaKilled`: gone at once), the ground the game counts as heavily scarred (`scarDead`) is no
   habitat (`faunaBusy`), and the birdsong and insects thin out as the view fills with battlefield (`faunaScarred`, read by
   `biomeCall` and the drone in `js/audio.js`).
+- **The land healing and the war in the air** (`js/warfx.js`, looks only: display state in `R.wfx`, never in `S`, saves
+  or the hash). Where no fighting has gone on in a 6-tile cell or the cells round it for `WARFX.heal.quiet` (150 s), its
+  scars green again over `WARFX.heal.grow` (480 s, in 6 baked steps, `wfxHeal`): the scorch and ash fade back into the
+  ground under them (glass less), churned mud partly, and grass and then flowers come up, thickest on old craters
+  (`paintScarHeal`, by biome: `WFX_BLOOM`). A new blast on a tile starts its healing again; fighting nearby only holds
+  it. The craters, stumps, scrap and graveyards stay; `S.ash` never changes (the herds still keep off it). A loaded game
+  starts healing afresh. Also drawn there, from the game's effects as they're added (`wfxScan`): **smoke columns** from
+  buildings burned down, burning wrecks and big blasts, leaning with the clouds' wind, joining when close, lasting a few
+  minutes (`WARFX.col`, at most 6/14/20/28 by Graphics step), thinner zoomed in and faint at their foot; **fires** that
+  creep up to 2.4 tiles from a wreck over grass already scorched (trees burn higher) and die out, lighting the ground
+  and buildings round them at night (`drawLightPool`); **ash and embers** drifting over a fight's 6-tile cells and
+  settling over about two minutes; **shockwaves** (a ring of dust and light along the ground, `WARFX.shock`) from blasts of
+  reach 1.5 or more (a Missile, Ringfall, a fuel blast, a nuclear blast) and along the Lance's line, with a flash over the
+  area (none with reduced motion, and a fainter, slower ring).
 - **Saves and lockstep.** `crater` and `ash` are saved sparse (`SPARSE_LAYERS`: tile and value pairs), the lists as they
   are; `checkSave` checks them all; `hashState` takes the blast count (`S.scarN`), every pile and the count of bones.
   `scarLevel()` is 0 for Off (no layers: `S.crater` and `S.ash` are null).
@@ -2916,6 +2955,8 @@ js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
 js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
+js/sunset.js              sunsets and sunrises: each biome's dusk palette, long light, glints, motes, shafts (looks only)
+js/warfx.js               the war on the land: smoke columns, creeping fires, ash and embers, shockwaves, the scars healing (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects

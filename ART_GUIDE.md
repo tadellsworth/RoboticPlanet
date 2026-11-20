@@ -73,6 +73,36 @@ re-lit), and `art/tod/shared/` holds the headlight overlays, the light pool and 
 new sprite: render its three versions, save them as WebP at the day file's size under the same path, and add its key to
 `art/tod/tod-keys.js`. Sprites without them are colour-graded in code, which works but has no lights.
 
+### Sunsets and sunrises (drawn in code; no images)
+
+The owner's ask (Nov 20 2026): lighting is a big part of the game's look, so the sunsets should be beautiful and a little
+different per biome. `js/sunset.js` lays a render-only layer over the day-and-night light: no new art, nothing to
+re-render. Corvane sets in the west and rises in the east (the evening shadows fall east), so the land is lit from that
+side of the screen and falls into a cool shade on the far side. The grade is soft light (the land keeps its contrast:
+nothing is washed pale), a colour-dodge glow brightens the lit side's light tones, a multiply deepens the far side, and
+over everything standing goes a lighter soft-light grade and the low sun's glare. The rules a new biome's palette
+should keep (`DUSK_BIOMES`: three stops, `sun`, `tint`, `shade`, for golden hour, fire and violet):
+
+| Biome | Sunset | Touches |
+|---|---|---|
+| The Rust (red desert) | deep amber to blood red, violet shade | glowing dust, heat haze easing off, glints on the pools |
+| The Long Grass (savanna) | amber to red, violet shade | acacias silhouetted, gold dust, heat haze easing off |
+| The Shoals (tropical) | blazing orange, then pink and magenta | the sea's sheen and a path of glints toward the sun, palms silhouetted |
+| The Bloom | teal on the sun's side, violet away from it: no warm light at all | its glow wakes before night, spores drift up catching the light, shafts |
+| Greenreach (forest) | soft gold to rose | gold light shafts through the trees, pollen |
+| Blackwater (swamp) | dusty pink to mauve | pink fog banks over the ground |
+| Emberwood (autumn) | rich copper to plum | shafts, pollen |
+| The Polar Caps | pastel peach and pink, long blue shade | ice glints in the air |
+| Cinderlands (volcanic) | ember red fused with the lava | the lava glows up early, embers rising |
+| Steamwells | gold to rose | steam plumes lit gold, shafts through the steam |
+| Argos (the moon) | none: no air to redden the light | the evening's warm cast taken out, a hard terminator sweeping east to west in a minute |
+| The Hollow | none: it's underground | |
+
+Dawn uses one cooler palette (violet, rose, pale gold) except the Bloom's own (violet, teal, mint), at about 60%
+strength. The Ring shows as a faint pale arc low over the top of the view when zoomed out, after the land has gone
+into shadow. Robots' drop shadows stretch and turn violet. Keep team colours, buildings and robots clear: the strong
+grade goes on the ground, under the buildings, and the one over them is light and eases off zoomed far in.
+
 ## 2. Style direction
 
 **Cyberpunk industrial realism.** A frontier mining colony on a dusty alien world, run entirely by
@@ -1250,6 +1280,18 @@ soon as it's in the manifest.
 | A missile lands | a big blast (flash, fireball, debris, smoke, scorch) |
 | A robot is destroyed | a small blast and a scorch mark |
 | A building is destroyed | it shakes, leans and **sinks into the ground**; a main blast, then two smaller blasts 0.35 s and 0.7 s later; a **dust cloud** billows out from its base; it leaves **rubble** and a scorch mark that fade over about a minute and a half |
+
+**The war on the land** (`js/warfx.js`, all drawn in code, no sheets): what a fight leaves in the air and on the
+ground after the effects above are over. The owner's theme: the immense beauty of the planet, torn apart by war, and
+healing.
+
+| What | Look |
+|---|---|
+| Smoke column (a building burned down, a burning wreck, a big blast) | Lumpy billows (`wfxSmoke`: sooty brown-black low down, pale grey up high, shaded at night) rising up to 9 tiles, spreading and leaning further downwind the higher they get; faint at the foot (the robots under it show), thinner zoomed in, lit orange from under while its fire burns. Columns within 1.8 tiles join. Lasts about 3½ minutes (a robot's wreck about 2), thinning over the last part |
+| Ground fire | Teardrop flames (`wfxFlame`) licking up from scorched grass round a wreck, a thin curl of smoke off each; a tree on it burns higher and longer. At dusk and night each throws the light pool, flickering, on the ground and buildings round it |
+| Ash and embers | Grey flakes drifting downwind and settling, orange embers floating up and winking out (glowing at night), over the 6-tile cells where things burned and blew up |
+| Shockwave | An ellipse racing out along the ground to 3.2 × the blast's reach: a dusty band behind a bright warm edge, and a fainter dusty ripple; a flash over the area and briefly the screen (brighter at night; a nuclear blast keeps its own). Reduced motion: no flash, a fainter, slower ring |
+| Healing ground | Baked into the ground with the scars (`paintScarHeal`): the scorch and ash drawn fainter step by step (glass less), grass tufts in the biome's colours, then small flowers (white, yellow, pink, violet by biome: `WFX_BLOOM`), thickest on crater rims. Craters, stumps and scrap stay as they are |
 
 The collapse uses each building's own art (sunk, tilted and clipped at ground level), so no "ruined" version of any
 building is needed. The white flash, laser beams and the Pulse Turret's glow stay drawn in code.

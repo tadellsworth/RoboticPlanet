@@ -842,7 +842,8 @@ const SPRING_PHASE = new Map(), SPRING_HEARD = { at: -99 }; // (render-only: eac
 /** Local steam and intermittent jets. Vent positions are the same as the baked mineral deposits. */
 function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
   if (z < 11 || (LESS_MOTION && LESS_MOTION.matches)) return;
-  const night = TOD.active ? TOD.state.lights : 0, cloud = wxCloud(night > 0.65 ? '139,174,188' : '235,242,225');
+  const night = TOD.active ? TOD.state.lights : 0, gold = night <= 0.65 && typeof duskSteamRgb === 'function' ? duskSteamRgb() : null; // (lit gold by the sunset: js/sunset.js)
+  const cloud = wxCloud(night > 0.65 ? '139,174,188' : gold || '235,242,225');
   const wind = ambWind(Math.floor(S.time / WEATHER.slot)).x, now = R.time;
   const saver = gfxStep() === 'saver', count = saver ? 3 : 7;
   let budget = saver ? 10 : 25;

@@ -709,11 +709,11 @@ function natWater(ctx, ox, oy, z, v0, v1, night) {
     if (qx1 > qx0 && qy1 > qy0) ctx.drawImage(NAT.buf, qx0, qy0, qx1 - qx0, qy1 - qy0, qx0 / k, qy0 / k, (qx1 - qx0) / k, (qy1 - qy0) / k); // (only where there's water)
     ctx.globalAlpha = 1;
     // stars on a clear night, twinkling slowly
-    if (clear > 0.3 && z >= 6) {
+    if (clear > 0.3 && z >= 6 && night > 0.5) { // (once it's properly dark)
       const P = new Path2D(), sr = Math.max(0.7, z * 0.025);
       for (let j = wj0 - (wj0 % step); j <= wj1; j += step) for (let i = wi0 - (wi0 % step); i <= wi1; i += step) {
         const t = j * S.W + i;
-        if (!natWaterTile(t) || hash2(i, j, seed + 4101) > 0.45) continue;
+        if (!natWaterTile(t) || hash2(i, j, seed + 4101) > 0.22) continue;
         const tw = still ? 0.7 : 0.5 + 0.5 * Math.sin(T * (0.8 + hash2(j, i, seed + 4102)) + i * 3.1 + j);
         if (tw < 0.35) continue;
         const x = ox + (i + hash2(j, i, seed + 4103)) * z, y = oy + (j + hash2(i, j, seed + 4104)) * z, s = sr * (0.6 + tw * 0.8);

@@ -545,7 +545,7 @@ function drawLavaGlow(ctx, ox, oy, z) {
     R.lavaGlow = { S, key, c: any ? c : null, surface, vents };
   }
   if (!R.lavaGlow.c) return;
-  const night = fxNight(), V = S.volcano, erupt = V && V.erupting ? 1 : 0;
+  const night = Math.max(fxNight(), typeof duskWake === 'function' ? duskWake() : 0), V = S.volcano, erupt = V && V.erupting ? 1 : 0;
   const flick = 0.85 + 0.1 * Math.sin(S.time * 1.7) + 0.05 * Math.sin(S.time * 5.3);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
