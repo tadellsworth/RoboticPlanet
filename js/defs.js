@@ -1357,7 +1357,7 @@ const ARC = { reload: 1.7, dmg: 2.6, jump: 1.7, jumps: 3, fall: 0.75, shieldMul:
  * tiles it can't bring the rail to bear and fires its sidearm (`side` every `sideReload` s). On a building: `bld`
  * (`fort` times that to a defence or Wall) from `bldReach` tiles. Ammo: BOTS.railgunner.mag slugs, ammoShots an Ammo.
  */
-const RAIL = { charge: 0.8, dmg: 10, width: 0.4, fall: 0.7, pierce: 4, through: 0.6, armor: 1.3, reload: 4, min: 1.6, side: 1, sideReload: 1.1,
+const RAIL = { charge: 0.8, dmg: 10, width: 0.4, fall: 0.6, pierce: 4, through: 0.8, armor: 1.7, reload: 5, min: 1.6, side: 1, sideReload: 1.1,
   bld: 4, fort: 1.5, bldReach: 4.5 };
 /** Shots a gun robot of kind k holds (a Railgunner's slugs: BOTS[k].mag; else a warbot's WARBOT_AMMO), and shots an Ammo gives it. */
 function botMag(k) { return (BOTS[k] && BOTS[k].mag) || WARBOT_AMMO; }

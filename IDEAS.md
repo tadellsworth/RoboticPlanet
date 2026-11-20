@@ -157,8 +157,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
       warbots and the blob, lose to Torches −0.42; Arc Casters beat Torches +0.78 and big blobs (above), lose to
       Skirmishers and Railgunners; Railgunners beat Torches and Arc Casters, lose to warbots −0.32 and Skirmishers −0.47.
       Averages: Railgunners +0.32 (the strongest pure army), the blob +0.13, warbots +0.05, Skirmishers +0.04, Arc Casters
-      0.00, Torches −0.20, a mix of all −0.23. Open: is a pure mass of Railgunners too strong against a Bulwark-heavy
-      blob (+0.74 is more than a soft counter)? Mixed armies come out a little behind pure ones in these brawls.
+      0.00, Torches −0.20, a mix of all −0.23. (The Railgunner was then the strongest pure army; see the
+      tuning below.)
+    - *Railgunner toned down* (the owner, Nov 2026; branch rail-tune): slugs lose 40% each robot they pass (was 30%),
+      reload 5 s (was 4), a Bulwark's shield lets 80% through (was 60%) and the Bulwark takes ×1.7 (was ×1.3): four
+      numbers; cost, health, reach and pierce count unchanged. Arena, before → after: a pure Railgunner army's average
+      +0.32 → +0.01 (no longer the strongest pure army: the blob +0.21, warbots +0.11, Skirmishers +0.08 lead now); a mix
+      of all six kinds (8 warbots, a Bulwark, a Torch, 4 Skirmishers, 2 Arc Casters, a Railgunner) against Railgunners
+      −0.64 → −0.01 (a match); Railgunners still beat Arc Casters (+0.97 → +0.89) and Torches (+0.95); against a blob
+      of 30 warbots and 6 Bulwarks at its cost +0.74 → +0.25 (still a win), 30 and 2 −0.07 → −0.35; holding a fort
+      against 30 + 6 they still kill all six Bulwarks (blob losses 22 → 23 of 48). The mix of all six against the
+      pure armies: Arc Casters +0.35, Torches +0.38, Railgunners −0.01, warbots and Torches +0.05, Skirmishers −0.14,
+      warbots −0.26, the blob −0.47: it matches or beats the specialists but not massed warbots (fewer bodies for the
+      price) or the blob. AI against AI (20 games, the same doctrine pairs, before → after): undecided 0 → 0, wins by
+      doctrine unchanged (Steward 5, Warden 1, Salvager 6, Herald 5, Architect 3 of 8).
     - *AI against AI* (40 two-player games, every pair of doctrines, Normal, Nuclear race on, 60 min at most; before →
       after): undecided 0 → 0, a win in 20.0 → 20.0 min on average; wins by doctrine Steward 9 → 9, Warden 2 → 2,
       Salvager 12 → 12, Herald 12 → 11, Architect 5 → 6 (of 16 each): none became dominant (the Salvager and Herald led
