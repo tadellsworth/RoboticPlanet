@@ -98,6 +98,29 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Polish and quality of life, to feel like a studio game** (the owner, Nov 2026: saved for later). The game already has
+  photo mode, cloud saves with a QR code, goals, records and achievements, undo, control groups, idle-robot explanations,
+  the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
+  code search found these gaps (no key rebinding, no chat in multiplayer, one save only, no credits screen, no gamepad,
+  no replays):
+  - **Controls and navigation:** a shortcut cheat sheet on `?` (nothing like it today); key rebinding; camera bookmarks
+    and a "jump to the last alert" key; an idle-army button beside the idle-Worker one; attack-move and shift-queued
+    orders if not complete.
+  - **Feedback and clarity:** income per minute beside each resource in the top bar; warnings for "storage nearly full"
+    and "robot cap reached"; range circles when hovering a defence; optional health bars; small "+N" popups for goods
+    delivered; a "?" on any panel that opens the matching page of the guide.
+  - **Audio:** short machine bleeps as unit acknowledgements on selecting and ordering, which give a game its character.
+  - **Menus and saves:** several save slots; a Continue card showing the map, the time and a small picture; a "What's
+    new" popup after an update; a credits screen; Surrender and Rematch buttons at the end of a game.
+  - **Multiplayer:** chat, ready-up, map pings for allies, reconnect, a team colour picker.
+  - **Accessibility:** subtitles for audio cues (alarms, the dusk warning); a high-contrast mode; colourblind-safe team
+    patterns (partly there); fuller screen-reader labels.
+  - **Meta:** a "Daily Planet", a shared seed of the day with your own best result, easy to run on the relay.
+  - **Bigger and optional:** gamepad support, translations, replays (already on the hold list).
+  - **Where to start (most polish for the effort):** the shortcut cheat sheet, camera bookmarks and last-alert jump,
+    unit acknowledgement sounds, income rates and warnings, multiple save slots.
+  - **A UX audit by Gemini:** the owner sends it screenshots of the main screens, and it lists confusing or unpolished
+    spots against studio standards: a cheap, prioritised list (see handoff/ for how the export and import work).
 - **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026: saved for later).
   The owner's observation: many games are won by huge bundles of warbots behind Bulwarks that are hard to stop; the game
   has grown lots of supply-chain buildings and vehicles but a thin military side. Do this before the megastructure
