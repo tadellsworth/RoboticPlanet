@@ -634,10 +634,10 @@ function generateMap(seed, W, H, cfg) {
     links = [[2, half], [W - 3, half]];
   };
   // Oases: a barren waste strewn with crags, where only round your base and in a few rich oases (three
-  // on each side, five at Immense, and one in the middle) is anything worth having; narrow passes wind between them.
+  // on each side, five at Immense or seven at Planetary, and one in the middle) is anything worth having; narrow passes wind between them.
   const oasesShape = () => {
     const cr = makeRng(seed ^ 0x4c5d23), sO2 = seed * 37 + 7, home = clamp(Math.round(W * 0.3), 9, 13); // less round the base on a small map
-    const pts = [], want = cfg.size === IMMENSE_SIZE ? 5 : 3;
+    const pts = [], want = cfg.size === PLANETARY_SIZE ? 7 : cfg.size === IMMENSE_SIZE ? 5 : 3;
     for (let tries = 0; pts.length < want && tries < 600; tries++) {
       const x = 4 + cr() * (W - 8), y = half + 4 + cr() * Math.max(1, H - half - 9);
       if (nearBase(x, y, home + 2) || dist2(x, y, ccx, ccy) < 100 || pts.some((q) => dist2(x, y, q.x, q.y) < 90)) continue;
@@ -2364,7 +2364,7 @@ function hollowMap(seed, W, H, cfg) {
     const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
     // The larger caverns have more distance to supply, while their authored Ore and Oil clusters stay few.
-    const reserves = sz === IMMENSE_SIZE && (res[t] === R_ORE || res[t] === R_OIL) ? 1.5 : 1;
+    const reserves = sz >= IMMENSE_SIZE && (res[t] === R_ORE || res[t] === R_OIL) ? 1.5 : 1;
     amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * reserves * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
   }
 
@@ -2428,6 +2428,11 @@ function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 /** How many players a game asking for `want` gets: as many as the map type has room for (Versus only). */
 function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape)) : minPlayers(shape); }
 
+/** Planetary is sized for a solo colony or a two-colony match. */
+function mapSizeForPlayers(size, players) {
+  return size === PLANETARY_SIZE && players > 2 ? IMMENSE_SIZE : size;
+}
+
 /**
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
@@ -2442,14 +2447,21 @@ function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; r
 
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
-  const sz = SIZE_PRESETS[st.size], sh = SHAPE_PRESETS[st.shape || 0];
+  const size = mapSizeForPlayers(st.size, st.players);
+  const sz = SIZE_PRESETS[size], sh = SHAPE_PRESETS[st.shape || 0];
   // Crossroads for three or four: a square map in four quarters, 80% more ground than for two.
   if (quadMap(st)) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.8) / 2); return { W: side, H: side }; }
   // Long Haul 2v2: its own proportions, the width even too (it is mirrored left to right).
   if (haul4Map(st)) return { W: 2 * Math.round((sz.w * sh.w) / 2), H: 2 * Math.round((sz.h * sh.h) / 2) };
   // Three players: a square map (the planet is the circle inside it), 40% more ground.
   if (st.players === 3) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.4) / 2); return { W: side, H: side }; }
-  return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
+  const W = Math.round(sz.w * sh.w), H = 2 * Math.round((sz.h * sh.h) / 2);
+  // Long and naval layouts preserve their proportions inside the Standard Planetary tile budget.
+  if (size === PLANETARY_SIZE && W * H > sz.w * sz.h) {
+    const scale = Math.sqrt((sz.w * sz.h) / (W * H));
+    return { W: Math.floor(W * scale), H: 2 * Math.floor(H * scale / 2) };
+  }
+  return { W, H };
 }
 
 /**
@@ -2560,6 +2572,7 @@ function newGame(opts) {
   // Free-for-all: three players (you and two rivals) on the map shapes that have room for three, or
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
+  settings.size = mapSizeForPlayers(settings.size, settings.players);
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
@@ -5364,6 +5377,10 @@ function checkSave(o) {
   }
   if (o.settings != null) {
     const st = o.settings;
+    if (st.size === PLANETARY_SIZE) {
+      const max = SIZE_PRESETS[PLANETARY_SIZE];
+      if (st.players > 2 || o.W * o.H > max.w * max.h) bad();
+    }
     if (st.biome2 != null && !secondBiomeAllowed(st.biome2, st.biome, st.size, st.shape)) bad();
     if (st.biomeBoundary != null && (!st.biome2 || !Number.isFinite(st.biomeBoundary) || Math.abs(st.biomeBoundary) > 1)) bad();
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();

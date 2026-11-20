@@ -75,3 +75,17 @@ To gauge headroom for a future larger two-player tier, three Standard seed 11 No
 | 120×168 | 20,160 | 1.07 ms | 2.78 ms | 33.4 ms |
 
 At 120×168 the p99 tick rose to 11.65 ms, compared with 6.15 ms at 84×118 and 5.77 ms at 112×156. These runs measure early and midgame on one Standard seed. A future desktop two-player tier could start near 112×156, with its dimensions checked by shape. The 120×168 candidate still needs late-game, long-map and mobile testing.
+
+## Planetary release checks
+
+Planetary is available for up to two colonies. Standard uses 120×168 tiles, and other shapes keep nearly the same proportions within the 20,160-tile Standard budget. If a setup requires more than two colonies, the size control offers Immense as its largest option.
+
+Headless Normal seed 11 runs used two balanced rivals, with Planetary events and Murmur off. The Island and Long haul runs reached the 30-minute check with both colonies still in play. Chromium rendered their checkpoints with The Rust and Greenreach scenery at 1280×800 with software graphics.
+
+| Planetary map | Dimensions | Game time observed | Mean / p95 simulation tick | Browser frame interval p95, zoomed out |
+| --- | ---: | ---: | ---: | ---: |
+| Standard | 120×168 | 28:47, Colony 2 won | 1.01 / 2.58 ms | 16.7 ms |
+| Islands | 106×188 | 30:00 | 0.81 / 1.92 ms | 33.4 ms |
+| Long haul | 79×252 | 30:00 | 1.23 / 2.67 ms | 33.4 ms |
+
+The automated checks cover 38 Planetary layouts across 19 compatible shapes, as well as the mixed biome split, save/load and a chunked lockstep snapshot.

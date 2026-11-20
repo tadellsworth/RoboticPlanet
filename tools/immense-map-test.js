@@ -70,12 +70,30 @@ const result = host(`
   }
 
   assert.equal(S.settings.biome2, undefined, 'single biome is the default');
+  assert.deepEqual(mapDims({ size: PLANETARY_SIZE, shape: 0, players: 2 }), { W: 120, H: 168 });
+  let planetary = 0;
+  for (let shape = 0; shape < SHAPE_PRESETS.length; shape++) {
+    if (minPlayers(shape) > 2) continue;
+    for (const seed of [11, 21]) {
+      newGame({ size: PLANETARY_SIZE, shape, players: 2, seed });
+      const immense = mapDims({ size: IMMENSE_SIZE, shape, players: 2 });
+      assert.equal(S.settings.size, PLANETARY_SIZE);
+      assert.equal(S.settings.players, 2);
+      assert.ok(S.W >= immense.W && S.H >= immense.H && S.W * S.H > immense.W * immense.H, SHAPE_PRESETS[shape].name);
+      assert.ok(S.W * S.H <= 120 * 168 && S.H % 2 === 0, 'tile budget and symmetry');
+      assert.ok(S.players.slice(0, 2).every(P => getE(P.lander)?.built));
+      if (S.hollow) assert.equal(S.hollow.nests.length, 20);
+      planetary++;
+    }
+  }
   assert.equal(secondBiomeAllowed('jungle', 'desert', IMMENSE_SIZE - 1, 0), false);
   assert.equal(secondBiomeAllowed('tropical', 'desert', IMMENSE_SIZE, 0), false);
   assert.equal(secondBiomeAllowed('jungle', 'lunar', IMMENSE_SIZE, 0), false);
   assert.equal(secondBiomeAllowed('jungle', 'desert', IMMENSE_SIZE, SHAPE_PRESETS.findIndex(s => s.hollow)), false);
   const opts = { seed: 37, shape: SHAPE_PRESETS.findIndex((s) => s.cross), size: IMMENSE_SIZE, players: 4, teams: true, humans: [0, 1], murmur: 'active', biome: 'desert', biome2: 'jungle' };
-  const locals = { opts, sent: [] };
+  const locals = { sent: [] };
+  newGame({ ...opts, size: PLANETARY_SIZE });
+  assert.equal(S.settings.size, IMMENSE_SIZE, 'four-colony games fall back to Immense');
   newGame(opts);
   mpStart({me: 0, humans: opts.humans, send: (msg) => locals.sent.push(msg)});
   const initial = hashState(), saved = serializeGame();
@@ -121,15 +139,25 @@ const result = host(`
     assert.equal(impacts[i].x + impacts[i + 1].x, S.W - 1);
     assert.equal(impacts[i].y + impacts[i + 1].y, S.H - 1);
   }
-  newGame(opts);
+  const planetOpts = { ...opts, shape: 0, size: PLANETARY_SIZE, players: 2, teams: false };
+  newGame(planetOpts);
+  assert.equal(S.settings.biome2, 'jungle');
+  checkCoverage();
+  const planetSaved = serializeGame();
+  const tooMany = JSON.parse(planetSaved);
+  tooMany.settings.players = 4;
+  assert.throws(() => checkSave(tooMany), /Unsupported save/);
   mpStart({me: 0, humans: opts.humans, send: (msg) => locals.sent.push(msg)});
+  const planetInitial = hashState();
+  deserializeGame(planetSaved);
+  assert.equal(hashState(), planetInitial, 'Planetary save round trip');
   mpFrame(SIM_STEP * 3 / GAME_PACE);
   mpSendSnapshot(MP.turn, [1], true, hashState());
   const snapshot = locals.sent.at(-1), parts = [];
   NET.ws = { readyState: 1, send: (part) => parts.push(part) };
   netSend(snapshot);
   assert.ok(parts.length > 1, 'large snapshot split into messages');
-  ({ layouts, opts, initial, parts, bytes: snapshot.data.length, after: hashState(), tick: S.tick });
+  ({ layouts, planetary, opts: planetOpts, initial: planetInitial, parts, bytes: snapshot.data.length, after: hashState(), tick: S.tick });
 `);
 
 const guest = client();
@@ -142,7 +170,7 @@ assert.equal(guest(`
   mpJoin({me: 1, send: () => {}});
   ${JSON.stringify(result.parts)}.forEach((part, i) => netIn(JSON.stringify({ ...JSON.parse(part), seq: i + 1 })));
   assert.equal(S.tick, ${result.tick});
-  assert.equal(S.settings.size, IMMENSE_SIZE);
+  assert.equal(S.settings.size, PLANETARY_SIZE);
   hashState();
 `), result.after, 'lockstep rejoin fingerprint');
-console.log(`Immense: ${result.layouts} layouts, save round trip and lockstep snapshot verified (${result.bytes} bytes).`);
+console.log(`Immense and Planetary: ${result.layouts + result.planetary} layouts, save round trip and lockstep snapshot verified (${result.bytes} bytes).`);

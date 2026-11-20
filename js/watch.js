@@ -92,6 +92,7 @@ function watchCount(w, shape) {
   return playerCount('versus', shape === undefined ? w.shape : shape, w.n);
 }
 /** Two against two (Teams, with four colonies)? */
+const watchSize = (w, n = watchCount(w)) => mapSizeForPlayers(w.size ?? DEFAULT_SIZE.versus, n);
 const watchTeams = (w, n = watchCount(w)) => !!w.teams && n === 4;
 /** The map type is the Hollow (no Uplinks there; it has its own look and Murmur). */
 const watchHollow = (w) => !w.shapeRnd && !!SHAPE_PRESETS[w.shape].hollow;
@@ -102,7 +103,7 @@ const watchMurmur = (w) => (watchMurmurOk(w) && murmurLevelOk(w.murmur) ? w.murm
 /** How the game is won: Capture with teams, and in the Hollow instead of Uplinks. */
 const watchVictory = (w) => (watchTeams(w) || (w.victory === 'uplinks' && watchHollow(w)) ? 'capture' : w.victory);
 /** The planet the setup makes, as Custom Game's saved planets keep one (seed: the saved planet's, when one is picked). */
-const watchPlanet = (w) => ({ seed: w.seed, shape: w.shape, size: w.size, rough: w.rough, rich: w.rich, biome: w.biome, biome2: chosenSecondBiome(w, w.size), players: watchCount(w) });
+const watchPlanet = (w) => ({ seed: w.seed, shape: w.shape, size: watchSize(w), rough: w.rough, rich: w.rich, biome: w.biome, biome2: chosenSecondBiome(w, watchSize(w)), players: watchCount(w) });
 /** A change to the map's settings: it's no longer the saved planet picked (a new planet each game again). */
 function watchMapChanged(w) { w.seed = null; }
 
@@ -110,9 +111,9 @@ function watchMapChanged(w) { w.seed = null; }
 function watchSummary(w) {
   const n = watchCount(w), vic = watchVictory(w), main = [watchTeams(w) ? 'Teams · 2 vs 2' : `${n} colonies`, `${DIFFICULTY[w.diff].label}`];
   if (vic !== 'capture') main.push(VICTORY[vic].name);
-  const otherBiome = chosenSecondBiome(w, w.size);
+  const size = watchSize(w, n), otherBiome = chosenSecondBiome(w, size);
   if (otherBiome) main.push(BIOMES[otherBiome].name);
-  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[w.size].name + ' size');
+  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');
@@ -145,7 +146,7 @@ function watchPickCtx() {
 /** Build the setup screen's controls (once): the choices that come from the game's own lists. */
 function buildWatch() {
   const w = () => WATCH.setup, set = (fn) => () => { fn(); watchKeepSetup(); syncWatch(); sfx('click'); };
-  segChoice($('w-size'), SIZE_PRESETS.map((p) => p.name), () => w().size, (v) => set(() => { w().size = v; watchMapChanged(w()); })());
+  segChoice($('w-size'), SIZE_PRESETS.map((p) => p.name), () => watchSize(w()), (v) => set(() => { w().size = v; watchMapChanged(w()); })());
   segChoice($('w-rough'), TERRAIN_PRESETS.map((p) => p.name), () => w().rough, (v) => set(() => { w().rough = v; watchMapChanged(w()); })(), terrainInfo, true);
   segChoice($('w-rich'), RESOURCE_PRESETS.map((p) => p.name), () => w().rich, (v) => set(() => { w().rich = v; watchMapChanged(w()); })(), resourceInfo, true);
   for (const b of $('w-diff').children) { b.dataset.info = WATCH_DIFF_INFO[b.dataset.v]; b.onclick = set(() => { w().diff = b.dataset.v; }); }
@@ -231,8 +232,8 @@ function syncWatch() {
   // Planet: map type and biome (the pickers' rows), size, terrain, resources, and a saved planet.
   watchPickRows();
   for (const id of ['w-size', 'w-rough', 'w-rich']) markSeg($(id));
-  const dShape = w.shapeRnd ? 0 : w.shape, dims = mapDims({ size: w.size, shape: dShape, players: n });
-  for (const b of $('w-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players: n }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${w.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${w.shapeRnd ? ' (map types differ a little)' : ''}.`; }
+  const dShape = w.shapeRnd ? 0 : w.shape, dims = mapDims({ size: watchSize(w, n), shape: dShape, players: n });
+  syncSizeChoices($('w-size'), dShape, n, w.shapeRnd);
   $('w-size-v').textContent = `${w.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('w-rough-v').textContent = TERRAIN_PRESETS[w.rough].name;
   $('w-rich-v').textContent = RESOURCE_PRESETS[w.rich].name;
@@ -259,7 +260,7 @@ function watchPickRows() {
   const w = WATCH.setup;
   shapePickRow($('w-shape'), w.shapeRnd, w.shape, watchCount(w), 'when the game starts');
   biomePickRow($('w-biome'), w.biomeRnd, w.biome, watchHollow(w), 'when the game starts');
-  syncSecondBiome('w', w, w.size);
+  syncSecondBiome('w', w, watchSize(w));
 }
 
 /** Each section's line: the option under the mouse or focused, or else what's chosen (as Custom Game's syncInfo). */
@@ -303,12 +304,12 @@ function watchStart(setup) {
   }
   // (Nobody's colony is in it, humans: [], so every colony is the computer's, with the level's head start and pace.)
   newGame({
-    seed: setup.seed ?? randomSeed(), difficulty: DIFFICULTY[setup.diff] ? setup.diff : 'normal', mode: 'versus', size: setup.size ?? DEFAULT_SIZE.versus,
+    seed: setup.seed ?? randomSeed(), difficulty: DIFFICULTY[setup.diff] ? setup.diff : 'normal', mode: 'versus', size: watchSize(setup, n),
     rough: setup.rough ?? DEFAULT_ROUGH, rich: setup.rich ?? DEFAULT_RICH, shape, players: n, humans: [], styles: docs, style: 'balanced',
     nuke: setup.nuke !== 0, mega: setup.mega !== 0, events: !!setup.events, victory: setup.victory || 'capture', teams: watchTeams(setup, n), mods: (setup.mods || []).filter((k) => WATCH_MODS.includes(k)),
     murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
     scars: scarsPref(), // (War scars: the Settings menu's)
-    biome2: chosenSecondBiome(setup, setup.size),
+    biome2: chosenSecondBiome(setup, watchSize(setup, n)),
     biome: setup.biomeRnd === 0 ? BIOME_ORDER[setup.biome] : randomBiomeFor(shape, !!setup.murmur && setup.murmur !== 'off'),
   });
   // (newGame gives the first colony the plain Steward when nobody plays it: it gets its doctrine here, before the

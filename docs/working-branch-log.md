@@ -217,3 +217,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Checked selection, play, save and reload, and Saved planets in Chromium. The automated Immense check covers mixed-biome save validation and multiplayer fingerprints.
 - Set new mixed-biome planets to about 65% primary and 35% secondary land, measured at the midpoint of the transition. Saved the boundary with the game so terrain changes cannot shift it.
 - Compared current Standard Immense with temporary 112×156 and 120×168 two-player maps. [Size probe results](immense-validation.md#optional-second-biome-and-two-player-size-probes)
+
+### Planetary maps
+
+- Added Planetary for solo and two-colony games in Custom Game and Observer, including multiplayer host settings. Standard is 120×168 and other shapes preserve their proportions within the same tile budget. For three or four colonies the largest available size is Immense.
+- Carried over the optional 65/35 mixed-biome setup, with the primary biome setting weather. Validated compatible map layouts, saves, Saved planets and multiplayer snapshot rejoin. [Planetary release checks](immense-validation.md#planetary-release-checks)

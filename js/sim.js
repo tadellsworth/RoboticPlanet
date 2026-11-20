@@ -10659,7 +10659,7 @@ function placePosts(seed) {
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
     if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
   }
-  if (!S.posts.length && S.settings.size === IMMENSE_SIZE &&
+  if (!S.posts.length && S.settings.size >= IMMENSE_SIZE &&
       SHAPE_PRESETS[S.settings.shape].islands && Ls.length === 2) {
     // If the open sea has no shared site, trade can start on the two home islands at mirrored posts.
     let best = null, score = -Infinity;

@@ -76,6 +76,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 - **Immense map size** (built): 84×118 on Standard and about 40% longer in each direction than Huge on every shape.
   Immense surface maps now offer an optional second biome, with a seeded transition between their scenery. The first
   biome covers about 65% of the land and supplies the planet-wide weather and rules.
+- **Planetary map size** (built): up to two colonies, 120×168 on Standard, and the same 65/35 second-biome option as Immense.
 
 **New content**
 - **Biome: Boiling Springs.** A geothermal basin: vibrant, mineral-hued hot springs and steaming geysers among

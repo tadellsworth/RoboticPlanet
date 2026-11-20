@@ -446,7 +446,9 @@ function saveSettings() {
   } catch (e) { /* storage unavailable */ }
 }
 
-const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
+const menuSizePlayers = () => UI.menu.mode === 'colony' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
+const menuSize = () => mapSizeForPlayers(UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], menuSizePlayers());
+
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 /**
  * Doctrines on the menu are numbers: 0 Random, then 1 to 5 in PERSONALITY_ORDER (the Steward first). UI.menu.style is
@@ -813,6 +815,21 @@ function sizeInfoLines() {
   }
 }
 
+/** Size buttons shared by Custom Game and Observer. */
+function syncSizeChoices(el, shape, players, random) {
+  for (const button of el.children) {
+    const size = +button.dataset.v, preset = SIZE_PRESETS[size];
+    button.disabled = mapSizeForPlayers(size, players) !== size;
+    if (button.disabled) {
+      button.dataset.info = button.title = 'Planetary supports up to two colonies.';
+      continue;
+    }
+    button.title = '';
+    const { W, H } = mapDims({ size, shape, players });
+    button.dataset.info = `${preset.name}: ${random ? 'about ' : ''}${W}×${H} tiles${random ? ' (map types differ a little)' : ''}.`;
+  }
+}
+
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
 function syncMenu() {
   if (typeof ensureBiomeArt === 'function') ensureBiomeArt(BIOME_ORDER[UI.menu.biome || 0]); // the chosen biome's swatch
@@ -872,8 +889,8 @@ function syncMenu() {
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) markSeg($(id));
   for (const b of $('m-style').children) b.classList.toggle('peek', UI.docPeek === +b.dataset.v);
   // (Random map type: sizes as on a Standard map; the others differ a little.)
-  const players = menuPlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
-  for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${m.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${m.shapeRnd ? ' (map types differ a little)' : ''}.`; }
+  const players = menuSizePlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
+  syncSizeChoices($('m-size'), dShape, players, m.shapeRnd);
   $('m-size-v').textContent = `${m.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
   $('m-rough-v').textContent = TERRAIN_PRESETS[m.rough].name;
@@ -2972,7 +2989,7 @@ const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.b
 function savePlanet(p) { if (planetOk(p)) writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
-  return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
+  return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich,
     biome: UI.menu.biome || 0, biome2: chosenSecondBiome(UI.menu, menuSize()), players: menuPlayers() };
 }
 /** The planet being played. */
@@ -3056,7 +3073,7 @@ function startNewGame() {
   const pick = resolveRandom();
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
-    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
+    size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),

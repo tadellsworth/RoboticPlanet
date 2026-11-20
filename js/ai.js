@@ -3180,9 +3180,9 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   return false;
 }
 
-/** Allow time for the slow units and detours on long Immense marches. */
+/** Allow time for the slow units and detours on long marches on Immense or Planetary. */
 function aiMarchTime(lander, flag, baseTime) {
-  if (S.settings.size !== IMMENSE_SIZE || !lander) return baseTime;
+  if (S.settings.size < IMMENSE_SIZE || !lander) return baseTime;
   const extraTiles = Math.max(0, dist(lander.x + 0.5, lander.y + 0.5, flag.x, flag.y) - 60);
   return baseTime + extraTiles * WARBOT_OFFROAD / BOTS.bulwark.speed;
 }
@@ -3192,7 +3192,7 @@ function aiMarchTime(lander, flag, baseTime) {
  * `n` sent, and `go` once it goes in). The band forms up under its flag, out of the guns' reach (aiStage); once three in
  * five of it stand within 5 tiles of the flag, the flag moves beside the base and the band goes in, at the gun that
  * covers the flag first (rally.first, see holdRally), then the next, then the base. It is called off when fewer than
- * two in five are left armed, or when the band hasn't formed up after five minutes plus any extra time for a long Immense march.
+ * two in five are left armed, or when the band hasn't formed up after five minutes plus any extra time for a long march on Immense or Planetary.
  */
 function aiStorm(p) {
   const P = S.players[p], T = P.stormOn, eb = getE(T.base), r = rallyById(T.id);
