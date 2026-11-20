@@ -2318,10 +2318,11 @@ function aiLiftSpot(p, lander) {
 }
 
 /** Does tile t lie on the fall line of rival p's own Orbital Lift (site or built)? Its other buildings keep off it. */
-let _aiLL = { S: null, tick: -1, p: -1, set: null };
+let _aiLL = { S: null, tick: -1, id: -1, p: -1, set: null };
 function aiOnLiftLine(p, t) {
-  if (_aiLL.S !== S || _aiLL.tick !== S.tick || _aiLL.p !== p) {
-    _aiLL = { S, tick: S.tick, p, set: null };
+  // (worked out again each tick, and whenever anything new is added: a Lift placed this tick counts at once)
+  if (_aiLL.S !== S || _aiLL.tick !== S.tick || _aiLL.id !== S.nextId || _aiLL.p !== p) {
+    _aiLL = { S, tick: S.tick, id: S.nextId, p, set: null };
     for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].lift) { _aiLL.set = _aiLL.set || new Set(); for (const u of liftLineTiles(b.x, b.y, b.lfDir || 0)) if (u >= 0) _aiLL.set.add(u); }
   }
   return !!(_aiLL.set && _aiLL.set.has(t));
