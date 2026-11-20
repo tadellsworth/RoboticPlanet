@@ -870,38 +870,73 @@ function generateMap(seed, W, H, cfg) {
   const grandCanyonShape = () => {
     const cr = makeRng(seed ^ 0x4c671f), bend = cr() < 0.5 ? -1 : 1, wave = 2 + cr();
     const narrow = Math.round(W * (0.32 + 0.04 * cr())), ford = Math.round(W * 0.42);
-    const river = (i) => {
-      const x = (i - ccx) / ccx, a = Math.abs(x);
-      return ccy + Math.sign(x) * Math.round(bend * (1.8 * dsin(a * wave) + 0.6 * dsin(a * 8)));
-    };
+    // Ease bends across columns so even the two-tile narrows have a connected channel.
+    const centerline = new Float32Array(W);
+    let offset = 0;
+    for (let i = Math.ceil(ccx); i < W; i++) {
+      const a = (i - ccx) / ccx;
+      const next = Math.round(bend * (3 * dsin(a * wave) + 0.9 * dsin(a * 8)));
+      if (i - ccx > 0.5) offset = clamp(next, offset - 1, offset + 1);
+      centerline[i] = ccy + offset;
+      centerline[W - 1 - i] = ccy - offset;
+    }
+    const river = (i) => centerline[i];
     const main = Math.floor(ccx) - 2, flank = Math.round(W * 0.14);
     const onMain = (i) => i >= main && i <= main + 4;
     const onFlank = (i) => i >= flank - 3 && i <= flank + 1;
     const fromNarrows = (i) => Math.min(Math.abs(i - narrow), Math.abs(i - (W - 1 - narrow)));
+    const basin = (i, center, radius) => Math.max(0, 1 - sq((i - center) / radius));
+    const islandX = Math.round(W * (0.16 + cr() * 0.025));
+    const islandR = clamp(W * (0.055 + cr() * 0.011), 2.4, 8);
+    const meadowX = Math.round(W * (0.41 + cr() * 0.035));
+    const widthAt = (i) => {
+      const left = Math.min(i, W - 1 - i);
+      return 6 * basin(left, islandX, W * 0.12) + 4 * basin(left, meadowX, W * 0.075);
+    };
     const floorEdge = (i) => {
-      if (fromNarrows(i) <= 1) return 3;
+      if (fromNarrows(i) <= 1) return 3.4;
       if (onMain(i)) return 7;
       if (onFlank(i)) return 11;
-      const bank = 7 + (fbm(i / 8, 0, sE, 2) - 0.5) * (1 + TPR.levels * 0.4);
+      const bank = 6 + widthAt(i) + (fbm(i / 8, 0, sE, 2) - 0.5) * (2 + TPR.levels * 0.4);
       const side = 6 * clamp(1 - i / (W * 0.24), 0, 1);
-      return Math.max(3, bank - Math.max(0, 5 - fromNarrows(i))) + side;
+      return Math.max(3.5, bank - Math.max(0, 5 - fromNarrows(i))) + side;
+    };
+    const isFord = (i) => i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford;
+    const waterWidth = (i) => {
+      if (fromNarrows(i) <= 1) return 1.5;
+      if (isFord(i)) return 2;
+      const left = Math.min(i, W - 1 - i);
+      return 2 + 4.4 * basin(left, islandX, islandR * 1.6) + 0.9 * basin(left, meadowX, W * 0.065);
     };
     for (let i = 0; i < W; i++) {
-      const mid = river(i), edge = floorEdge(i), n = fromNarrows(i);
+      const mid = river(i), n = fromNarrows(i), wet = waterWidth(i);
+      const edge = Math.max(floorEdge(i), wet + (n <= 1 ? 1.9 : 3));
+      const island = n <= 1 || isFord(i) ? 0 : 2.55 * Math.sqrt(basin(Math.min(i, W - 1 - i), islandX, islandR));
       const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
       for (let j = Math.ceil(mid); j < H; j++) {
         const t = id(i, j), depth = j - mid;
-        if (depth < (n <= 1 ? 1.5 : 2)) {
-          put(t, T_WATER, undefined, true);
-          flag(elev, t, 0);
-          if (i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford) flag(fordA, t);
+        if (depth < wet) {
+          if (depth < island) {
+            put(t, T_GROUND, 0);
+            if (depth + 0.8 < island && hash2(i, j, sO) < 0.83) putRes(t, F_FERTILE);
+          } else {
+            put(t, T_WATER, undefined, true);
+            flag(elev, t, 0);
+            if (isFord(i)) flag(fordA, t);
+          }
           continue;
         }
         const level = depth < edge ? 0 : depth < edge + step ? 1 : depth < edge + 2 * step ? 2 : 3;
-        // Keep the starter fields on the rim. Clear the river flats and terraces for roads, docks and ramps.
+        // Keep terraces clear near the two descents. Away from them, crags break up the high shelves.
+        const crag = level === 2 && Math.abs(i - main) > 7 && Math.abs(i - flank) > 7 && n > 3 &&
+          fbm(i / 4, j / 4, sB, 2) > 0.65;
         const abutment = n <= 1 && depth < edge + 2 * step + 1;
-        if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
+        if (crag) { put(t, T_ROCK, undefined, true); flag(elev, t, level); }
+        else if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
         else flag(elev, t, level);
+        // Patches follow the broad bends. Leave the first shoreline tile bare for docks and crossings.
+        if (level === 0 && n > 2 && !isFord(i) && depth > wet + 0.7 && depth < edge - 0.7 &&
+            fbm(i / 4, j / 3, sC, 2) + 0.045 * widthAt(i) > 0.67) putRes(t, F_FERTILE);
       }
     }
 
@@ -924,14 +959,14 @@ function generateMap(seed, W, H, cfg) {
     // Ore and Crystal on broad river flats, with stretches of bare shoreline for Ports.
     for (const [part, type, rad] of [[0.11, R_ORE, 1.8], [0.23, R_CRYSTAL, 1.5], [0.47, R_ORE, 1.8],
       [0.55, R_CRYSTAL, 1.5], [0.78, R_ORE, 1.9], [0.91, R_CRYSTAL, 1.6]]) {
-      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + 3.8);
+      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + waterWidth(i) + 1.1);
       stampRes(cr, i, j, rad, type, 0.85 * stampDens);
       putRes(id(i, j), type);
     }
     if (cfg.nuke) {
       const spots = [];
       for (let i = 2; i < W - 2; i++) {
-        for (let j = Math.ceil(river(i) + 2.5); j < river(i) + floorEdge(i); j++) {
+        for (let j = Math.ceil(river(i) + waterWidth(i)); j < river(i) + floorEdge(i); j++) {
           const t = id(i, j);
           if (!res[t] && !ramp[t]) spots.push(t);
         }
@@ -2761,6 +2796,14 @@ function breachAt(x, y, pad) {
   return null;
 }
 
+/** The fertile meadows and their grassy edges on the Grand Canyon's floor. */
+function canyonMeadow(t) {
+  if (S.elev[t] !== 0 || !S.fert) return false;
+  const i = t % S.W;
+  return !!(S.fert[t] || (i > 0 && S.fert[t - 1]) || (i < S.W - 1 && S.fert[t + 1]) ||
+    S.fert[t - S.W] || S.fert[t + S.W]);
+}
+
 /**
  * Decorative plants (scenery only): a plant variety 1..PLANT_KINDS on some open ground tiles, in
  * loose patches. Made from the seed with a hash, so the map itself is the same in every biome.
@@ -2768,6 +2811,7 @@ function breachAt(x, y, pad) {
 function makeDecor() {
   const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
   const primary = BIOMES[biome()], second = BIOMES[S.settings?.biome2];
+  const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
@@ -2775,7 +2819,7 @@ function makeDecor() {
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
     const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed, S.settings.biomeBoundary)) ? second : primary;
-    const dens0 = local.plants;
+    const dens0 = canyon && canyonMeadow(t) ? Math.max(0.38, local.plants) : local.plants;
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
     const r = hash2(i * 3 + 1, j * 5 + 2, sd + 733);

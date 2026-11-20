@@ -97,6 +97,10 @@ fields: your landing zone has a little of everything, and the rich fields beyond
 Trade Post's ground (its no-fire zone, where nothing but a Trade Terminal can be built): a deposit the map put there is
 moved just off it, the same kind and amount (`clearCalmGround`; see the Trade Terminal row).
 
+**Grand Canyon** has rocky shelves below the rims, then a canyon floor that opens into broad, fertile bends.
+The river splits around two low islands and rejoins at the ends. Switchbacks, side canyons and fords connect
+the rims by land, while Ports can use a continuous channel through the gorge.
+
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
 kept in the game's settings (`S.settings.mods`, cleaned by `modList`; newGame leaves out Rival head start in Colony), so

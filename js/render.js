@@ -793,7 +793,8 @@ function flushDirtyTiles() {
  * drawn again, clipped to those 9 tiles: no crown is cut off, and a cleared plant leaves nothing behind.
  */
 function redrawAround(ctx, i, j) {
-  if (!(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
+  const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
+  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
@@ -1217,6 +1218,11 @@ function paintTile(ctx, i, j, other, blend) {
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
+  if (terr === T_GROUND && !S.burnt?.[t] && SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon && canyonMeadow(t)) {
+    const green = (S.fert[t] ? 0.46 : 0.24) * (0.75 + fbm(i / 3, j / 3, S.seed % 100000, 2) * 0.5);
+    ctx.fillStyle = `rgba(101,153,57,${green})`;
+    ctx.fillRect(x, y, TP, TP);
+  }
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {

@@ -222,3 +222,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Added Planetary for solo and two-colony games in Custom Game and Observer, including multiplayer host settings. Standard is 120×168 and other shapes preserve their proportions within the same tile budget. For three or four colonies the largest available size is Immense.
 - Carried over the optional 65/35 mixed-biome setup, with the primary biome setting weather. Validated compatible map layouts, saves, Saved planets and multiplayer snapshot rejoin. [Planetary release checks](immense-validation.md#planetary-release-checks)
+
+### Grand Canyon river basins
+
+- Reworked the gorge into alternating narrow passages and broader river basins. The river branches around two fertile islands, with meadows on the banks and rocky outcrops on the higher shelves.
+- Tested 126 layouts across the six sizes and three terrain settings. Both rims have access by ramps and fords, and ships have a continuous river. Verified the map through Custom Game in Chromium.

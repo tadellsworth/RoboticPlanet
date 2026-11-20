@@ -662,7 +662,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
   - **Grand Canyon** (the owner's idea, Nov 2026). Two high rims, a colony on each, with a deep gorge between them and a
-    river along its floor, the walls cut into layered terraces and crossed by side canyons. Unlike Rift or Canyon maze,
+    river along its floor, the walls cut into layered terraces and crossed by side canyons. Built with rocky shelves,
+    fertile bends of varying width, and a river that splits around a mirrored pair of islands. Unlike Rift or Canyon maze,
     the middle is the richest ground (Crystal and Ore exposed in the rock layers, water, easy road building) but it is
     overlooked from both rims: guns and Howitzers on the edge rule the floor, so whoever holds the rim holds the
     canyon. A few switchback trails (Ramps) down each wall, narrow points for Viaducts, Ropeways, and Ports on the river
