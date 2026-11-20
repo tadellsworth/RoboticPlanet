@@ -218,11 +218,11 @@ const BOTS = {
     desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
   // The three answers to a Bulwark blob (see SKIRM, ARC and RAIL): they garrison, rally, attack, reload and get repaired like warbots.
   skirmisher: { name: 'Skirmisher', plural: 'Skirmishers', speed: WARBOT_SPEED * 1.55, hp: 10, war: true, army: true, flank: true, parts: 1, range: 1.3,
-    desc: 'A fast, light raider on a low chassis. It runs round a Bulwark\'s shield and shoots it in the side or the back, where its shots do more, and goes for Railgunners, Arc Casters, Howitzers and Workers before warbots. Now and then it dashes. It shoots Ammo like a warbot but has little armour: massed warbots and Minigun Nests cut it down.' },
-  arccaster: { name: 'Arc Caster', plural: 'Arc Casters', speed: WARBOT_SPEED * 0.85, hp: 12, war: true, army: true, arc: true, parts: 2, range: 2.1,
-    desc: 'Throws chain lightning: each bolt hits one enemy robot and jumps on to up to three more close by, weaker each jump, so it punishes robots packed together. Lightning eats a Bulwark\'s shield two and a half times as fast as gunfire. Its capacitors hold 10 bolts and refill with Crystal from your Command Base or a Depot. Short reach and thin armour: Skirmishers and Torches that get in close tear it apart.' },
-  railgunner: { name: 'Railgunner', plural: 'Railgunners', speed: WARBOT_SPEED * 0.7, hp: 15, war: true, army: true, rail: true, parts: 3, range: 5, mag: 4, ammoShots: 2,
-    desc: 'A slow, long-barrelled gun robot. It charges its rail for a second (a glint at the muzzle), then fires one heavy slug up to 5 tiles that goes straight through every enemy robot in its line, and through a Bulwark\'s shield, hurting the Bulwark behind it half again as much. Then a long reload. Each Ammo is two slugs; it holds four. Up close it has only a weak sidearm: Skirmishers that reach it win.' },
+    desc: 'A fast, light raider on four big tyres. It runs round a Bulwark\'s shield and shoots it in the side or the back (double damage), and hunts Railgunners, Arc Casters and Howitzers (half again) and Workers before warbots. Every few seconds it dashes. It shoots Ammo like a warbot but has little armour: massed warbots and Minigun Nests cut it down.' },
+  arccaster: { name: 'Arc Caster', plural: 'Arc Casters', speed: WARBOT_SPEED * 0.85, hp: 12, war: true, army: true, arc: true, parts: 2, range: 2.0,
+    desc: 'Throws chain lightning: each bolt hits one enemy robot and jumps on to up to three more close by, weaker each jump, so it punishes robots packed together. Lightning eats a Bulwark\'s shield three times as fast as gunfire. Its capacitors hold 10 bolts and recharge with Crystal (5 bolts each) at your Command Base or a Depot. Short reach and thin armour: Skirmishers that get in close tear it apart.' },
+  railgunner: { name: 'Railgunner', plural: 'Railgunners', speed: WARBOT_SPEED * 0.7, hp: 16, war: true, army: true, railgun: true, parts: 3, range: 5, mag: 4, ammoShots: 2,
+    desc: 'A slow, long-barrelled gun robot. It charges its rail (a glint at the muzzle), then fires one heavy slug up to 5 tiles at where its target was: it goes straight through every enemy robot in that line, and through a Bulwark\'s shield into the Bulwark. Then a long reload. A quick robot can dodge it. Each Ammo is two slugs; it holds four. Up close it has only a weak sidearm: Skirmishers that reach it win.' },
   // The Murmur (Colony, see WILD): creatures from nests (type 'nest'). Not built, never ordered.
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
@@ -1317,7 +1317,7 @@ const KEEP = { fire: 4, aura: 7, wallMul: 1.5, mend: 0.33, quiet: 8, range: 1, r
  * Disruptor Tower's pulse drains `drain` off it. It turns (`turn` rad/s) to face the nearest threat. Its twin
  * blasters: `dmg` a shot every `reload` s.
  */
-const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, turn: 2.6, dmg: 1, reload: 0.9, drain: 14, look: 6 };
+const BULWARK = { shield: 40, regen: 4, wait: 2.5, down: 8, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, turn: 1.8, dmg: 1, reload: 0.9, drain: 14, look: 6 };
 /**
  * The Torch (BOTS.torch): every `tick` s while it has a target in reach (BOTS.torch.range) it sprays a cone `cone`
  * radians either side of its aim: `bot` damage to each enemy robot in it and `bld` to the building it's burning
@@ -1347,7 +1347,7 @@ const SKIRM = { dmg: 2, reload: 0.75, bonus: { bulwark: 2, railgunner: 1.5, arcc
  * through). `bld` to a building (`fort` times that to defences and Walls). Its capacitors hold `cells` bolts; a Crystal
  * refills `perCrystal`, from its owner's Command Base or a Depot (refillPoint).
  */
-const ARC = { reload: 1.9, dmg: 2.2, jump: 1.5, jumps: 3, fall: 0.7, shieldMul: 2.5, bld: 1.5, fort: 1.2, cells: 10, perCrystal: 5 };
+const ARC = { reload: 1.7, dmg: 2.6, jump: 1.7, jumps: 3, fall: 0.75, shieldMul: 3, bld: 1.5, fort: 1.2, cells: 10, perCrystal: 5 };
 /**
  * The Railgunner (BOTS.railgunner): in reach (BOTS.railgunner.range) it charges `charge` s, then fires a slug at
  * where its target was when it began (a quick robot can be out of the line by then: a Skirmisher, dashing) straight
@@ -1357,7 +1357,7 @@ const ARC = { reload: 1.9, dmg: 2.2, jump: 1.5, jumps: 3, fall: 0.7, shieldMul: 
  * tiles it can't bring the rail to bear and fires its sidearm (`side` every `sideReload` s). On a building: `bld`
  * (`fort` times that to a defence or Wall) from `bldReach` tiles. Ammo: BOTS.railgunner.mag slugs, ammoShots an Ammo.
  */
-const RAIL = { charge: 1.0, dmg: 9, width: 0.4, fall: 0.7, pierce: 4, through: 0.6, armor: 1.5, reload: 4.5, min: 1.6, side: 1, sideReload: 1.1,
+const RAIL = { charge: 0.8, dmg: 10, width: 0.4, fall: 0.7, pierce: 4, through: 0.6, armor: 1.3, reload: 4, min: 1.6, side: 1, sideReload: 1.1,
   bld: 4, fort: 1.5, bldReach: 4.5 };
 /** Shots a gun robot of kind k holds (a Railgunner's slugs: BOTS[k].mag; else a warbot's WARBOT_AMMO), and shots an Ammo gives it. */
 function botMag(k) { return (BOTS[k] && BOTS[k].mag) || WARBOT_AMMO; }
@@ -1424,8 +1424,8 @@ const PERSONALITIES = {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
     tag: 'walls in, then comes late in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
-    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles.',
+    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
+    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
@@ -1437,8 +1437,8 @@ const PERSONALITIES = {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
     tag: 'raids your roads, again and again',
     quote: 'Nothing\'s coming from home. Everything on the road is supply.',
-    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home.',
-    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags; while its bands are out, its base is open.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
+    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags (massed warbots beat Skirmishers); while its bands are out, its base is open.',
     voice: {
       attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',
         'Don\'t mind us. Just taking inventory.', 'Your roads, our supply lines.'],
@@ -1465,7 +1465,7 @@ const PERSONALITIES = {
     name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
     tag: 'a big economy, then Missiles',
     quote: 'When the colonists come, they\'ll find a city. Mine.',
-    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base, and its army mixes Skirmishers, Arc Casters and Railgunners.',
     weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
     voice: {
       attack: ['I\'ve paved more road this year than your Sponsor did in a century.', 'When the colonists come, they\'ll find a city. Mine.',

@@ -1182,7 +1182,7 @@ function breachHit(u, b) {
   u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
   if (BOTS[u.type].flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; } // (a Torch burns it)
   if (BOTS[u.type].arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
-  if (BOTS[u.type].rail) { if (u.rc || u.cd <= 0) railAct(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
+  if (BOTS[u.type].railgun) { if (u.rc || u.cd <= 0) railAct(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
   if (u.cd > 0 || !useAmmo(u)) return;
   u.cd = 1.0;
   u.fought = 1;
@@ -4953,6 +4953,7 @@ function shieldFx(w, x, y, ang, dmg, u) {
 /** A Bulwark's shield worn right down: it collapses in a burst and is out for BULWARK.down seconds. */
 function shieldFail(w) {
   w.sh = 0; w.shDown = S.time + BULWARK.down;
+  const Q = S.players[w.owner]; if (Q) Q.stats.shieldsDown = (Q.stats.shieldsDown || 0) + 1; // (its shields worn down: Siege Breakers counts the rival's)
   addFx('shieldbreak', w.x, w.y, { aim: w.shAim ?? w.face ?? 0, life: 0.8, seed: S.tick + w.id });
   sfx('shieldbreak', w.x, w.y);
   if (isMe(w.owner)) postMsg(ME, 'A Bulwark\'s shield has failed: it comes back in ' + BULWARK.down + ' seconds.', Math.floor(w.x), Math.floor(w.y), 'warn');
@@ -5064,7 +5065,7 @@ function shieldTake(w, v, sx, sy, took, dmg) {
 /** How far army unit u reaches to hit a building (a Bulwark goes in closest; a Railgunner stands well off). */
 function armyBldReach(u) {
   const bt = BOTS[u.type];
-  return bt.shield ? 1.7 : bt.flame ? 2.05 : bt.arc ? BOTS.arccaster.range - 0.1 : bt.rail ? RAIL.bldReach : WARBOT_HIT.reach;
+  return bt.shield ? 1.7 : bt.flame ? 2.05 : bt.arc ? BOTS.arccaster.range - 0.1 : bt.railgun ? RAIL.bldReach : WARBOT_HIT.reach;
 }
 
 /**
@@ -5074,7 +5075,7 @@ function armyBldReach(u) {
  */
 function armyPick(u, foe) {
   const bt = BOTS[u.type];
-  if (!(bt.flank || bt.rail || bt.arc)) return foe;
+  if (!(bt.flank || bt.railgun || bt.arc)) return foe;
   const R = bt.flank ? SKIRM.huntR : bt.range + 0.3;
   let best = foe, bs = -Infinity;
   for (const v of S.bots) {
@@ -5083,7 +5084,7 @@ function armyPick(u, foe) {
     if (d2 > R * R || calmAt(v.x, v.y)) continue;
     let sc;
     if (bt.flank) { if (!SKIRM.hunt.includes(v.type)) continue; sc = -d2; }
-    else if (bt.rail) sc = (BOTS[v.type].shield ? 100 : 0) + v.hp - d2 * 0.05 - (d2 < RAIL.min * RAIL.min ? 200 : 0);
+    else if (bt.railgun) sc = (BOTS[v.type].shield ? 100 : 0) + v.hp - d2 * 0.05 - (d2 < RAIL.min * RAIL.min ? 200 : 0);
     else { sc = BOTS[v.type].shield ? 0.5 : 0; for (const o of S.bots) if (o !== v && !o.dead && !o.inside && o.owner === v.owner && dist2(o.x, o.y, v.x, v.y) <= ARC.jump * ARC.jump) sc++; sc -= d2 * 0.01; }
     if (sc > bs) { bs = sc; best = v; }
   }
@@ -5153,7 +5154,7 @@ function arcHit(v, sx, sy, dmg) {
 function arcFire(u, foe, power, bld) {
   u.cd = ARC.reload * (u.pinT > S.time ? MINIGUN_PIN.reload : 1);
   u.gel = Math.max(0, (u.gel ?? ARC.cells) - 1);
-  u.fought = 1;
+  u.fought = 1; u.arcT = S.time; // (when it last fired: its coil flares, see drawArmyLights)
   const pts = [[u.x, u.y]];
   if (bld) {
     const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
@@ -5177,7 +5178,7 @@ function arcFire(u, foe, power, bld) {
       cur = next;
     }
   }
-  addFx('arc', u.x, u.y, { pts, life: 0.32, seed: S.tick * 7 + u.id, owner: u.owner });
+  addFx('chain', u.x, u.y, { pts, life: 0.32, seed: S.tick * 7 + u.id, owner: u.owner });
   if (isMe(u.owner) || S.time - (u.arcSnd || 0) > 0.5) { u.arcSnd = S.time; sfx('arc', u.x, u.y); }
   if (u.gel <= 0 && isMe(u.owner)) {
     const P = S.players[ME];
@@ -5229,7 +5230,7 @@ function railFire(u, tx, ty, power, bld) {
       dmg *= RAIL.fall;
     }
   }
-  addFx('rail', u.x + ca * 0.5, u.y + sa * 0.5, { x2: ex, y2: ey, a: ang, life: 0.55, owner: u.owner });
+  addFx('railshot', u.x + ca * 0.5, u.y + sa * 0.5, { x2: ex, y2: ey, a: ang, life: 0.55, owner: u.owner });
   sfx('rail', u.x, u.y);
 }
 
@@ -6821,7 +6822,7 @@ function warbotAct(u, dt) {
   if (foe) {
     const bt = BOTS[u.type], range = bt.range || WARBOT_RANGE;
     if (bt.flank && skirmFlank(u, foe, dt, power)) return; // (round the shield first)
-    if (bt.rail && u.rc) { u.path = null; railAct(u, foe, power); return; } // (charging: it stands and fires)
+    if (bt.railgun && u.rc) { u.path = null; railAct(u, foe, power); return; } // (charging: it stands and fires)
     const covered = firingCover(u, foe.x, foe.y, range, dt);
     const inReach = armyInRange(u, foe);
     if (!inReach && !covered) {
@@ -6836,7 +6837,7 @@ function warbotAct(u, dt) {
       const pin = u.pinT > S.time ? MINIGUN_PIN.reload : 1; // (pinned by a minigun: slower to fire back)
       if (bt.flame) { if (botArmed(u)) torchFire(u, foe.x, foe.y, power); else u.cd = 0.5; }
       else if (bt.arc) { if (botArmed(u)) arcFire(u, foe, power); else u.cd = 0.5; }
-      else if (bt.rail) railAct(u, foe, power);
+      else if (bt.railgun) railAct(u, foe, power);
       else if (bt.flank) skirmShoot(u, foe, power);
       else if (bt.shield) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
@@ -7056,7 +7057,7 @@ function strikeBuilding(u, b, dt, power) {
     if (!bt.shield) u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (bt.flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, power, b); return true; }
     if (bt.arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, power, b); return true; }
-    if (bt.rail) { if (u.rc || u.cd <= 0) railAct(u, null, power, b); return true; }
+    if (bt.railgun) { if (u.rc || u.cd <= 0) railAct(u, null, power, b); return true; }
     if (bt.shield) {
       if (u.cd <= 0) {
         u.cd = BULWARK.reload; u.fought = 1;
@@ -7890,7 +7891,7 @@ function breachShots(u) {
   if (bt.shield) return Infinity;
   if (bt.flame) return Math.floor(((u.gel ?? TORCH.tank) / TORCH.tick) * TORCH.bld * TORCH.fort);
   if (bt.arc) return Math.floor((u.gel ?? ARC.cells) * ARC.bld * ARC.fort);
-  if (bt.rail) return Math.floor((u.ammo ?? botMag(u.type)) * RAIL.bld * RAIL.fort);
+  if (bt.railgun) return Math.floor((u.ammo ?? botMag(u.type)) * RAIL.bld * RAIL.fort);
   return (u.ammo ?? WARBOT_AMMO) * WARBOT_HIT.wall;
 }
 
@@ -7924,7 +7925,7 @@ function squadBreach(us, i, j, attack) {
     // (a second load for those that can fetch one near the wall: see startReload)
     const near = (b) => !b.dead && b.built && b.owner === us[0].owner && dist2(b.x, b.y, first.x, first.y) <= RELOAD_REACH * RELOAD_REACH;
     const ammo = S.buildings.some((b) => near(b) && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0), fuel = S.buildings.some((b) => near(b) && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) >= 1);
-    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && !BOTS[u.type].arc && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : BOTS[u.type].rail ? Math.floor(botMag(u.type) * RAIL.bld * RAIL.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
+    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && !BOTS[u.type].arc && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : BOTS[u.type].railgun ? Math.floor(botMag(u.type) * RAIL.bld * RAIL.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
   }
   return again ? { need: Math.ceil(need), shots, reload: true } : { need: Math.ceil(need), shots };
 }

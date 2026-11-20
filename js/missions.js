@@ -1475,13 +1475,13 @@ const MISSIONS = [
   },
   {
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
-    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through, and burn its farmland, with Torches; shield the push with a Bulwark and send in missiles.',
+    brief: 'A Warden (a turtle) hides behind Walls, turrets and a Bulwark picket. Break the shields, burn through with Torches and send in missiles.',
     intro: [
       'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
       '<b>Torches</b> burn through Walls and can <b>Scorch the earth</b>. Send them with a <b>Bulwark</b> and they can fire from behind its shield if the Wall is in reach.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
-      'Their base can wait: this is about breaking in.',
+      'Its picket stands behind <b>Bulwark</b> shields: <b>Arc Casters</b> wear them down, <b>Skirmishers</b> run round, <b>Railgunners</b> shoot through. Their base can wait: this is about breaking in.',
     ],
     mode: 'versus', seed: 2323, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 0, style: 'turtle',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 45],
@@ -1490,6 +1490,18 @@ const MISSIONS = [
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
       siegeWorks(S, diff);
+      // A picket out in front of its Wall: Bulwarks with warbots behind them, holding a flag (shields to break).
+      const R = getE(S.players[1].lander), dx = L.x - R.x, dy = L.y - R.y, d = Math.hypot(dx, dy) || 1;
+      // (14 tiles out, clear of its guns, or nearer if a Trade Post's no-fire ground would cover it)
+      const at = (k) => [Math.round(R.x + (dx / d) * k), Math.round(R.y + (dy / d) * k)];
+      let k0 = 14;
+      while (k0 > 10 && [-3, 0, 3].some((o) => calmAt(at(k0)[0] + o + 0.5, at(k0)[1] + 0.5) || calmAt(at(k0)[0] + 0.5, at(k0)[1] + o + 0.5))) k0--;
+      const [fx, fy] = at(k0);
+      const flag = { id: S.nextId++, owner: 1, x: fx + 0.5, y: fy + 0.5 };
+      S.rallies.push(flag);
+      const pick = [...Array([1, 2, 2][diff]).fill('bulwark'), ...Array([2, 3, 4][diff]).fill('warbot')];
+      pick.forEach((t, k) => { const u = addBot(1, t, fx - 1 + (k % 3), fy - 1 + Math.floor(k / 3)); u.task = { type: 'hold', rally: flag.id, slot: k }; });
+      S.players[1].stats.startBots = S.players[1].stats.bots;
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
@@ -1497,6 +1509,12 @@ const MISSIONS = [
         count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, [1, 2, 2][S.mission.diff]) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>, Bulwarks <b>+1</b>. Torches burn Fuel: keep some.',
         ui: "#sh-orders .order-row[data-k='torch'] [data-d='1'], #sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
+      // The answers to a Bulwark: an Arc Caster's lightning wears its shield down three times as fast, a Skirmisher runs
+      // round it, a Railgunner's slug goes through. (Shields its picket loses to anything count: S.players[1].stats.shieldsDown.)
+      { kind: 'shields', n: [1, 2, 3], text: 'Break {n} Bulwark shields', at: 'foundry',
+        count: (P, S) => (S.players[1].stats.shieldsDown || 0),
+        hint: 'Bot Foundry → Arc Casters <b>+1</b>, Skirmishers <b>+1</b>; then <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> their picket.',
+        ui: "#sh-orders .order-row[data-k='arccaster'] [data-d='1'], #sh-orders .order-row[data-k='skirmisher'] [data-d='1'], #btn-attack, #ar-attack" },
       { kind: 'scorch', n: [2, 3, 4], text: 'Scorch {n} patches of their farmland',
         count: (P) => P.stats.scorchedFoe || 0, // (fertile soil a rival farms, or on its land, burned for good: see scorchSoil)
         hint: 'Tap a Torch (or <b>Army</b> → <b>Select all warbots</b>) → <b>Scorch the earth</b> (<kbd>X</kbd>): their farmland.',

@@ -5253,7 +5253,12 @@ function drawBot(ctx, u, sx, sy, s) {
     // (a Bulwark's shield and a Torch's pilot flame light their way at night instead of headlights)
     if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
     else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
-    else drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
+    else {
+      // (the Skirmisher, Arc Caster and Railgunner light their way with the warbots' headlights, and have lights of their own)
+      const lamps = BOTS[u.type].flank || BOTS[u.type].arc || BOTS[u.type].railgun;
+      drawHeadlights(ctx, lamps ? 'warbot' : art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
+      if (lamps) drawArmyLights(ctx, u, sx, sy + bob, s, size);
+    }
   } else if (!isArmy(u)) {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
@@ -5299,13 +5304,14 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#ff8a2a';
     ctx.fillRect(x, y, (w * Math.max(0, u.gel ?? 0)) / TORCH.tank, h);
   }
-  if (u.owner === ME && !R.clean && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
-    // Low on ammo: a short brass bar under the bot (empty = grey outline only).
+  const gun = u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].railgun, mag = botMag(u.type);
+  if (u.owner === ME && !R.clean && ((gun && (u.ammo ?? mag) < mag * 0.3) || (BOTS[u.type].arc && (u.gel ?? ARC.cells) < ARC.cells * 0.3))) {
+    // Low on ammo: a short brass bar under the bot (empty = grey outline only). An Arc Caster's bolts: a blue one.
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = '#e8c39e';
-    ctx.fillRect(x, y, (w * (u.ammo || 0)) / WARBOT_AMMO, h);
+    ctx.fillStyle = gun ? '#e8c39e' : '#8fd8ff';
+    ctx.fillRect(x, y, gun ? (w * (u.ammo || 0)) / mag : (w * Math.max(0, u.gel || 0)) / ARC.cells, h);
   }
   if (u.owner === ME && !R.clean && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
@@ -8296,6 +8302,11 @@ function drawEffects(ctx, ox, oy, z) {
       case 'tracer': drawTracerFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
       case 'fire': drawFireFx(ctx, f, x, y, z, k); break;
       case 'flame': drawFlameFx(ctx, f, x, y, z, k); break;
+      case 'chain': drawChainFx(ctx, f, ox, oy, z, k); break;
+      case 'railshot': drawRailFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
+      case 'railhit': drawRailHitFx(ctx, f, x, y, z, k); break;
+      case 'railglint': drawRailGlintFx(ctx, f, x, y, z, k); break;
+      case 'dash': drawDashFx(ctx, f, x, y, z, k); break;
       case 'shieldhit': drawShieldHitFx(ctx, f, x, y, z, k, ox + f.cx * z, oy + f.cy * z); break;
       case 'shieldbreak': drawShieldBreakFx(ctx, f, x, y, z, k); break;
       case 'heat': drawHeatFx(ctx, f, x, y, z, k); break;

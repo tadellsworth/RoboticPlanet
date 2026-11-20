@@ -126,7 +126,7 @@ const ART_MANIFEST = {
   // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
-  ...driveSet('bulwark'), ...driveSet('torch'),
+  ...driveSet('bulwark'), ...driveSet('torch'), ...driveSet('skirmisher'), ...driveSet('arccaster'), ...driveSet('railgunner'),
   ground: 'tiles/ground.webp',
   // Fiber's Stalks (Reedcane, renderer/b/resources.js): full grown, then a quarter, half and three-quarters grown as
   // it comes back; the plumes' light at night. (Oil has no art: a seep is a puddle of crude made in code from its tiles,

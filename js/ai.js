@@ -680,6 +680,12 @@ function aiThink(p) {
   // Uplinks: the Bunker for an Uplink it holds goes first, past the usual limit on sites, once they're nearly online.
   const upFirst = !!(P.defWant && P.defWant.up && S.time < P.defWant.until && S.time >= UPLINK.online - 60 && (counts.bunker || 0) < P.defWant.n);
   if (upFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['bunker', P.defWant.n]].concat(plan); }
+  // The late game of a Nuclear race (AI_MEGA.reactorAt on): with Uranium in hand or a Mine on a deposit and no Reactor,
+  // the Reactor goes first, past the usual limit on sites (see aiUranium). Tenth in the plan it waited behind every
+  // Outpost, Mine and Harvester the colony wanted, with its price in hand, and in most games never went up.
+  const reactorFirst = nukeOn() && S.mode !== 'colony' && S.time >= AI_MEGA.reactorAt && !counts.reactor &&
+    (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0));
+  if (reactorFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['reactor', 1]].concat(plan); }
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0) || (type === 'tap' && tapsFirst);
@@ -722,6 +728,7 @@ function aiThink(p) {
       if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
+      if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -1998,7 +2005,7 @@ function aiFlood(p, from, seen, bottom, early) {
  * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 840, uReach: 3 };
+const AI_MEGA = { lanceAt: 1080, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3 };
 
 /**
  * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium

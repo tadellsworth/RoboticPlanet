@@ -900,3 +900,160 @@ function drawTorchPilot(ctx, u, x, y, z, size) {
   }
   if (hot > 0) fxGlow(ctx, nx, ny, z * 0.3, '#ff8a2a', 0.6 * hot);
 }
+
+/*
+ * The Skirmisher, the Arc Caster and the Railgunner (see SKIRM, ARC and RAIL).
+ */
+
+/** A jagged line from (x1, y1) to (x2, y2) on screen, `n` pieces, `jag` px off the straight line at most; [[x, y], ...]. */
+function fxBolt(x1, y1, x2, y2, n, jag, sd) {
+  const pts = [], nx = -(y2 - y1), ny = x2 - x1, nl = Math.hypot(nx, ny) || 1;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, off = i === 0 || i === n ? 0 : (hash2(sd, i, 5) - 0.5) * 2 * jag * Math.sin(t * Math.PI);
+    pts.push([x1 + (x2 - x1) * t + (nx / nl) * off, y1 + (y2 - y1) * t + (ny / nl) * off]);
+  }
+  return pts;
+}
+function fxStroke(ctx, pts) { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke(); }
+
+/**
+ * An Arc Caster's chain lightning ('chain', f.pts: the caster, then each robot it jumped to, in tiles): a jagged
+ * electric-blue bolt from one to the next that re-forms every few frames, forking little side branches, a white-hot
+ * core, a spark of light where it lands, and the ground lit blue round it at night.
+ */
+function drawChainFx(ctx, f, ox, oy, z, k) {
+  const P = (f.pts || []).map(([px, py]) => [ox + px * z, oy + py * z]);
+  if (P.length < 2) return;
+  const sd = (f.seed || 0) + Math.floor(f.t * 30) * 13, a = Math.max(0, 1 - k * k), night = fxNight();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (let s = 0; s < P.length - 1; s++) {
+    const [x1, y1] = P[s], [x2, y2] = P[s + 1], len = Math.hypot(x2 - x1, y2 - y1), n = Math.max(4, Math.round(len / (z * 0.22)));
+    const main = fxBolt(x1, y1, x2, y2, n, Math.min(z * 0.22, len * 0.18), sd + s * 101);
+    const branches = [];
+    for (let b = 0; b < 2; b++) {
+      const i = 1 + Math.floor(hash2(sd, s, 30 + b) * (n - 1)), [bx, by] = main[i];
+      const ang = Math.atan2(y2 - y1, x2 - x1) + (hash2(sd, s, 40 + b) - 0.5) * 2.2, bl = z * (0.18 + hash2(sd, s, 50 + b) * 0.3);
+      branches.push(fxBolt(bx, by, bx + Math.cos(ang) * bl, by + Math.sin(ang) * bl, 3, z * 0.06, sd + s * 7 + b));
+    }
+    ctx.strokeStyle = '#3aa8ff'; ctx.globalAlpha = 0.35 * a; ctx.lineWidth = Math.max(4, z * 0.2); fxStroke(ctx, main);
+    ctx.strokeStyle = '#8fd8ff'; ctx.globalAlpha = 0.8 * a; ctx.lineWidth = Math.max(2, z * 0.07); fxStroke(ctx, main);
+    ctx.lineWidth = Math.max(1, z * 0.035); for (const br of branches) fxStroke(ctx, br);
+    ctx.strokeStyle = '#f4fcff'; ctx.globalAlpha = a; ctx.lineWidth = Math.max(1, z * 0.025); fxStroke(ctx, main);
+    fxGlow(ctx, x2, y2, z * 0.32, '#8fd8ff', 0.9 * a);
+    fxGround(ctx, x2, y2 + z * 0.05, z * 0.7, '#6cc4ff', 0.7 * a);
+  }
+  ctx.restore();
+  fxGlow(ctx, P[0][0], P[0][1], z * (0.35 + 0.15 * night), '#bff0ff', a);
+  fxGround(ctx, P[0][0], P[0][1] + z * 0.05, z * 0.9, '#6cc4ff', 0.8 * a);
+}
+
+/**
+ * A Railgunner's shot ('railshot', from (x, y) to (x2, y2) in tiles): a bright straight streak, white-hot at the core in
+ * a glow of the shooter's colour, that flashes out at once and fades from the back; a ring of air punched out at the
+ * muzzle, and the line lit on the ground at night.
+ */
+function drawRailFx(ctx, f, x, y, x2, y2, z, k) {
+  const col = PLAYER_COLORS[f.owner] || '#8fd8ff', a = Math.pow(1 - k, 1.6), tail = Math.min(1, k * 1.8);
+  const sx = x + (x2 - x) * tail * 0.85, sy = y + (y2 - y) * tail * 0.85;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = col; ctx.globalAlpha = 0.45 * a; ctx.lineWidth = Math.max(4, z * 0.26 * (1 + k));
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.globalAlpha = 0.9 * a; ctx.lineWidth = Math.max(2, z * 0.09);
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = a; ctx.lineWidth = Math.max(1, z * 0.035);
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x2, y2); ctx.stroke();
+  // the ring of air at the muzzle, spreading
+  ctx.strokeStyle = '#e8f6ff'; ctx.globalAlpha = 0.6 * (1 - k); ctx.lineWidth = Math.max(1, z * 0.03);
+  ctx.beginPath(); ctx.ellipse(x, y, z * (0.12 + k * 0.5), z * (0.07 + k * 0.3), Math.atan2(y2 - y, x2 - x), 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  fxGlow(ctx, x, y, z * 0.45, col, a);
+  if (fxNight() > 0.05) for (let t = 0.2; t <= 1; t += 0.2) fxGround(ctx, x + (x2 - x) * t, y + (y2 - y) * t, z * 0.5, col, 0.5 * a);
+}
+
+/** Where a Railgunner's slug strikes ('railhit'): a white flash and a spray of sparks thrown on along its line. */
+function drawRailHitFx(ctx, f, x, y, z, k) {
+  const a = f.a || 0;
+  fxGlow(ctx, x, y, z * 0.4 * (1 - k * 0.5), '#fff3d6', 1 - k);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = '#ffd98a'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, z * 0.025);
+  for (let n = 0; n < 7; n++) {
+    const sa = a + (hash2(n, Math.floor(f.x * 31), 3) - 0.5) * 1.4, d0 = z * 0.1 * k, d1 = z * (0.2 + 0.5 * hash2(n, Math.floor(f.y * 29), 4)) * Math.min(1, k * 2.5);
+    ctx.globalAlpha = 1 - k;
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(sa) * d0, y + Math.sin(sa) * d0); ctx.lineTo(x + Math.cos(sa) * d1, y + Math.sin(sa) * d1); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A Railgunner charging ('railglint', at its muzzle): a star of light that swells and spins as the rail charges, then bursts. */
+function drawRailGlintFx(ctx, f, x, y, z, k) {
+  const col = PLAYER_COLORS[f.owner] || '#8fd8ff', s = z * (0.06 + 0.3 * k * k), rot = (f.a || 0) + k * 2.5;
+  fxGlow(ctx, x, y, z * (0.12 + 0.3 * k), col, 0.4 + 0.6 * k);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = '#ffffff'; ctx.lineCap = 'round'; ctx.globalAlpha = 0.5 + 0.5 * k;
+  for (let n = 0; n < 4; n++) {
+    const aa = rot + n * Math.PI / 2, l = n % 2 ? s * 0.55 : s;
+    ctx.lineWidth = Math.max(1, z * (n % 2 ? 0.015 : 0.025));
+    ctx.beginPath(); ctx.moveTo(x - Math.cos(aa) * l, y - Math.sin(aa) * l); ctx.lineTo(x + Math.cos(aa) * l, y + Math.sin(aa) * l); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A Skirmisher's dash ('dash', where it set off, f.a its heading): a kick of dust and a fading streak of thruster light. */
+function drawDashFx(ctx, f, x, y, z, k) {
+  const a = f.a || 0, col = PLAYER_COLORS[f.owner] || '#8fd8ff';
+  for (let n = 0; n < 3; n++) {
+    const s = z * (0.18 + k * 0.35 + n * 0.06) * 2;
+    ctx.globalAlpha = 0.45 * (1 - k) * (1 - 0.5 * fxNight());
+    ctx.drawImage(fxPuff(false), x - Math.cos(a) * z * (0.15 + n * 0.18) - s / 2, y - Math.sin(a) * z * (0.15 + n * 0.18) - s / 2 - k * z * 0.1, s, s);
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = col; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const px = -Math.sin(a) * z * 0.1 * side, py = Math.cos(a) * z * 0.1 * side, l = z * (0.3 + 0.9 * k);
+    ctx.globalAlpha = 0.7 * (1 - k); ctx.lineWidth = Math.max(1, z * 0.05 * (1 - k));
+    ctx.beginPath(); ctx.moveTo(x + px, y + py); ctx.lineTo(x + px + Math.cos(a) * l, y + py + Math.sin(a) * l); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The new robots' own lights on top of their sprite: a Skirmisher's tail thrusters, flaring while it dashes; an Arc
+ * Caster's coil, glowing with the bolts left in it and flaring as it fires; a Railgunner's coil clamps brightening as
+ * it charges. Each lights the ground round it at night. (x, y): the robot on screen; size: its sprite in px.
+ */
+function drawArmyLights(ctx, u, x, y, z, size) {
+  const bt = BOTS[u.type], a = u.face || 0, c = Math.cos(a), s = Math.sin(a), night = fxNight(), col = PLAYER_COLORS[u.owner] || '#8fd8ff';
+  if (bt.flank) {
+    const dash = clamp(((u.dashT ?? -9) - S.time) / SKIRM.dash, 0, 1), tx = x - c * size * 0.37, ty = y - s * size * 0.37;
+    if (dash > 0) {
+      fxGlow(ctx, tx, ty, size * (0.25 + 0.2 * dash), col, 0.9 * dash);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = col; ctx.lineCap = 'round';
+      for (const sd of [-1, 1]) {
+        const px = -s * size * 0.047 * sd, py = c * size * 0.047 * sd, l = size * 0.45 * dash * (0.8 + 0.2 * Math.sin(R.time * 40 + sd));
+        ctx.globalAlpha = 0.8 * dash; ctx.lineWidth = Math.max(1.5, size * 0.04);
+        ctx.beginPath(); ctx.moveTo(tx + px, ty + py); ctx.lineTo(tx + px - c * l, ty + py - s * l); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (night > 0.05) fxGround(ctx, tx, ty, size * 0.4, col, 0.3 + 0.5 * dash);
+  } else if (bt.arc) {
+    const full = clamp((u.gel ?? ARC.cells) / ARC.cells, 0, 1), hot = clamp(1 - (S.time - (u.arcT ?? -9)) / 0.4, 0, 1);
+    const cx = x + c * size * 0.025, cy = y + s * size * 0.025, fl = 0.85 + 0.15 * Math.sin(R.time * 31 + u.id) * Math.sin(R.time * 7 + u.id);
+    if (full > 0.05) fxGlow(ctx, cx, cy, size * (0.16 + 0.06 * full) * fl, '#9fe6ff', (0.35 + 0.4 * night) * full + 0.6 * hot);
+    fxGround(ctx, cx, cy + z * 0.05, z * 0.6, '#6cc4ff', (0.15 + 0.35 * full) * fl + 0.6 * hot);
+  } else if (bt.railgun) {
+    const ch = u.rc ? clamp(1 - (u.rc - S.time) / RAIL.charge, 0, 1) : 0;
+    if (ch > 0) for (let n = 0; n < 6; n++) {
+      const d = size * (0.07 + n * 0.07);
+      fxGlow(ctx, x + c * d, y + s * d, size * 0.07, col, ch * (0.3 + 0.7 * ((n + 1) / 6 <= ch + 0.15 ? 1 : 0.2)));
+    }
+    if (night > 0.05) fxGround(ctx, x + c * size * 0.25, y + s * size * 0.25, z * 0.5, col, 0.25 + 0.5 * ch);
+  }
+}

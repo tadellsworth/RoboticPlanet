@@ -1675,6 +1675,20 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 25: the Skirmisher, the Arc Caster and the Railgunner (installed)
+
+Three army robots in the Warbot's "Lancer" family (the shared `renderer/b/robkit.js`: seen straight down, facing east,
+the same armour paint, grime, team light strips, sensor slit, rear lights and brake lenses), modelled in
+`renderer/b/rob_skirmisher.js`, `rob_arccaster.js` and `rob_railgunner.js`, rendered at every time of day for both teams
+by `renderer/tools/render_units.sh` and written as WebP by `renderer/tools/install_units.py` (102 files, about 670 KB).
+Drawn like the Warbot (its size on the map, the warbots' headlights at night, the brake and dust overlays).
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `skirmisher@0-f0`…`@1-f3` (+ morning, evening, night), `-brake`, `-boost` | A lean arrowhead body slung low between four big all-terrain tyres on swing arms (the tread rolls a quarter block a frame), team strips along its flanks, swept tail fins, a swivel with twin short autoguns, two dash thrusters in the tail glowing team colour. Smaller than the Warbot in the same frame | `drawArmyLights`: its thrusters flare (a glow and two streaks of team light) while it dashes; `'dash'`: a kick of dust and twin light streaks where it sets off |
+| `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
+| `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
+
 ### War scars (drawn in code; no images)
 
 The owner's War scars (Nov 19 2026: README, "War scars"): a long war turns the land into a World War One battlefield.

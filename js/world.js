@@ -3160,7 +3160,7 @@ function addBot(owner, type, x, y) {
     task: null, carry: null, carryN: 0, hp: maxHp, maxHp,
     inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0, bat: 100,
   };
-  if (type === 'warbot' || BOTS[type].flank || BOTS[type].rail) bot.ammo = botMag(type);
+  if (type === 'warbot' || BOTS[type].flank || BOTS[type].railgun) bot.ammo = botMag(type);
   if (botTank(type)) bot.gel = botTank(type).cap;
   if (BOTS[type].shield) { bot.sh = BULWARK.shield; bot.shAim = 0; }
   S.bots.push(bot);
@@ -5375,7 +5375,7 @@ function deserializeGame(json) {
     for (const u of S.bots) {
       S.byId.set(u.id, u);
       if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
-      if (BOTS[u.type] && (BOTS[u.type].flank || BOTS[u.type].rail) && u.ammo === undefined) u.ammo = botMag(u.type);
+      if (BOTS[u.type] && (BOTS[u.type].flank || BOTS[u.type].railgun) && u.ammo === undefined) u.ammo = botMag(u.type);
       u.carryN = u.carry ? u.carryN || 1 : 0;
     }
     computeZones();

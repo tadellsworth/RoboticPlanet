@@ -98,7 +98,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
-- **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026: saved for later).
+- **Round out the military: counters to the Bulwark blob, and more combat units** (the owner, Nov 2026; the Skirmisher, Arc Caster and Railgunner built Nov 20 2026, see below).
   The owner's observation: many games are won by huge bundles of warbots behind Bulwarks that are hard to stop; the game
   has grown lots of supply-chain buildings and vehicles but a thin military side. Do this before the megastructure
   weapons, which would add power to a thin roster. First step: a measured arena test, not guesses (30 warbots and 6
@@ -138,6 +138,27 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     balanced in with the three ground units there now (Warbot, Bulwark, Torch). The owner's view: the Bulwark is too
     strong; two Bulwarks and a big blob of warbots win almost any game, which is too easy. So the pass includes
     toning the Bulwark down and a measured blob arena test before and after (with the Lance and the Dome in the game).
+  - **Built (Nov 20 2026): the Skirmisher, the Arc Caster and the Railgunner, and a Bulwark nerf.** (The Rail Lancer is
+    the *Railgunner*: the Warbot's art set is already the "Lancer".) Numbers in README (Skirmisher, Arc Caster, Railgunner
+    rows; `SKIRM`, `ARC`, `RAIL`). The Bulwark: shield 50 → 40, down 6 → 8 s, turning 2.6 → 1.8 rad/s (two attackers
+    from different sides get round it); cost unchanged (3 rounds). Rivals build the three by doctrine (`AI_ANSWERS`) and
+    answer what they face (`aiAnswers`). Measured in the headless arena (`lh/arena.js`; cost in Foundry rounds):
+    - *A blob marching on a fort* (two Pulse Turrets and a Minigun Nest; the answer is P1's, at a third of the blob's
+      cost): blob losses before → after. 30 warbots + 2 Bulwarks (36 rounds): nothing more 0 → 3; +16 warbots 8 → 14;
+      +8 Torches 16 → 18; +16 Skirmishers 17; +8 Arc Casters 17; +5 Railgunners 15. 30 + 6 Bulwarks (48): nothing more
+      0 → 0; +16 warbots 0 → 0 (the six shields still stop a defence a third its size); +8 Torches 6 → 9; +16
+      Skirmishers 16 (5 of the 6 Bulwarks killed); +8 Arc Casters 8; +5 Railgunners 22 (all 6 Bulwarks). Mortar Pits (4:
+      21 and 14) and Missiles (17 and 18) bleed a blob much as before; bombers barely touch it.
+    - *Equal cost in the open* (score: share of the enemy's cost destroyed less your own, averaged over 3 planets and
+      both sides; vs the blob at its cost): 30w+2B: warbots ±0, Torches +0.42, Skirmishers +0.15, Arc Casters +0.36,
+      Railgunners −0.07; 30w+6B: warbots −0.01, Torches +0.22, Skirmishers +0.37, Arc Casters +0.41, Railgunners +0.74
+      (before the pass: warbots −0.09, Torches +0.14, nothing else).
+    - *Who beats whom* (24 rounds a side): Skirmishers beat Arc Casters +0.46 and Railgunners +0.47, are even with
+      warbots and the blob, lose to Torches −0.42; Arc Casters beat Torches +0.78 and big blobs (above), lose to
+      Skirmishers and Railgunners; Railgunners beat Torches and Arc Casters, lose to warbots −0.32 and Skirmishers −0.47.
+      Averages: Railgunners +0.32 (the strongest pure army), the blob +0.13, warbots +0.05, Skirmishers +0.04, Arc Casters
+      0.00, Torches −0.20, a mix of all −0.23. Open: is a pure mass of Railgunners too strong against a Bulwark-heavy
+      blob (+0.74 is more than a soft counter)? Mixed armies come out a little behind pure ones in these brawls.
   - **Suggested order:** first wave Skirmisher, Howitzer (rebalanced), Arc Caster (they close the main loops); then Rail
     Lancer and Mine Layer; later Interceptor and Gunboat. Design sheets for the new units could go through Gemini, as the
     megastructures did (handoff/ in the repo).
