@@ -806,13 +806,14 @@ const MISSIONS = [
   },
   {
     id: 'maglev', name: 'Phase 2', chapter: 'Industry and Trade',
-    brief: 'The Crystal lies far to the north, across the river. Build the Accord\'s Phase 2 transit line at last: a Maglev between two Terminals, powered at both ends.',
+    brief: 'The Crystal lies far to the north, across the river. Build the Accord\'s Phase 2 transit line at last: a Maglev between two Terminals, powered at both ends, and a hub to carry it on.',
     intro: [
       'A <b>Maglev Terminal</b> is storage with a dock on its roof. A line runs straight between two, on pylons, over anything.',
       'Plan it in <b>Paths → Maglev</b>: tap a finished Terminal, then the far end. A Worker builds it out from the near end.',
       '<b>Maglev Pods</b> (ordered at a Terminal) carry 16 goods a trip at three times a Freight Train\'s speed, both ways.',
       'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
       'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
+      'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it, line by line.',
     ],
     mode: 'colony', seed: 7302, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     layout(m, W) {
@@ -827,7 +828,7 @@ const MISSIONS = [
       const L = getE(S.players[0].lander), P = S.players[0];
       P.stats.startBots = P.stats.bots;
       // (No Crystal near home, so no Chips of its own until the line runs: enough for the Terminals, the line and its pods.)
-      L.stock.cement += 50; L.stock.alloy += 40; L.stock.chip += 30; L.stock.fuel += 16;
+      L.stock.cement += 66; L.stock.alloy += 54; L.stock.chip += 38; L.stock.fuel += 16; // (and a second line on from a hub)
       for (let k = 0; k < 2; k++) enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel: the far one's comes by pod)
       P.stats.startBots = P.stats.bots;
     },
@@ -847,6 +848,10 @@ const MISSIONS = [
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && b.type === 'magterm' ? b.magGot || 0 : 0), 0),
         hint: 'A <b>Crystal Tap</b> (<kbd>C</kbd>) touching the far Terminal: its site\'s goods go out by pod, its Crystal comes home.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+      { kind: 'magHub', n: 1, text: 'Chain a second line on from a Terminal: a hub', at: 'magterm',
+        count: () => (S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'magterm' && magPartners(b).length >= 2) ? 1 : 0),
+        hint: 'Tap the far Terminal → <b>Add a line from here (hub)</b>, or <b>Paths</b> (<kbd>R</kbd>) → <b>Maglev</b> (<kbd>⇧M</kbd>).',
+        ui: "#sh-magline, #btn-road, #banner-seg [data-v='maglev'], #banner-ok" },
     ],
   },
   {

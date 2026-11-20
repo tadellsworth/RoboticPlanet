@@ -731,26 +731,22 @@ function railPlan(p) {
   }
 }
 
-/** Join touching Maglev lines with conveyors. Assign each served line one way back toward the Base. */
+/**
+ * Each Maglev network with pods, as a tree from its Terminal nearest the Command Base: every other Terminal's home is
+ * the one before it, joined by a line (pods carry goods along it) or touching it (a conveyor between two lines'
+ * Terminals, b.magRelay). Returns the Terminals in that order, so demand can roll up from the far ends.
+ */
 function magRelayPlan(stations, distanceFromBase) {
   const active = stations.filter((b) => BDEFS[b.type].magterm && magRunning(b));
   active.sort((a, b) => distanceFromBase(a) - distanceFromBase(b) || a.id - b.id);
   const left = new Set(active), route = [];
-  const addLine = (entry, parent) => {
-    const end = magPartner(entry);
-    left.delete(entry); left.delete(end);
-    entry.home = parent ? parent.id : entry.id;
-    if (parent) entry.magRelay = parent.id;
-    end.home = entry.id;
-    route.push(entry, end);
-  };
   for (const root of active) {
     if (!left.has(root)) continue;
-    let at = route.length;
-    addLine(root, null);
-    while (at < route.length) {
-      const parent = route[at++];
-      for (const entry of touching(parent)) if (left.has(entry)) addLine(entry, parent);
+    left.delete(root); root.home = root.id; route.push(root);
+    for (let at = route.length - 1; at < route.length; at++) {
+      const X = route[at];
+      for (const o of magPartners(X)) if (left.has(o)) { left.delete(o); o.home = X.id; route.push(o); }
+      for (const T of touching(X)) if (left.has(T)) { left.delete(T); T.home = X.id; T.magRelay = X.id; route.push(T); }
     }
   }
   return route;
@@ -776,7 +772,7 @@ function farStation(b) { return !!(b.home && b.home !== b.id); }
 /** Are a and b stations of one bulk line: Rail Stations on the same track, or the two Mooring Masts of an Airship line? */
 function bulkLinked(a, b) {
   const ma = !!BDEFS[a.type].mast, mb = !!BDEFS[b.type].mast, ga = !!BDEFS[a.type].magterm, gb = !!BDEFS[b.type].magterm;
-  if (ga || gb) return ga && gb && magPartner(a) === b; // (the two Terminals of a Maglev line)
+  if (ga || gb) return ga && gb && magLinked(a, b); // (two Terminals joined by a Maglev line)
   if (ma || mb) return ma && mb && mastPartner(a) === b;
   return railLinked(a, b);
 }
@@ -2129,7 +2125,7 @@ function dispatch(p) {
   for (const b of blds) {
     if (!idle.length) return;
     const F = b.magFix;
-    if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magPartner(b)) continue;
+    if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magKeyPartner(b)) continue;
     if (!F.paid) { const cost = magLineCost(MAGLEV.spacing); if (!canPay(p, cost)) continue; for (const g in cost) takeGood(p, g, cost[g]); F.paid = 1; }
     const E = magFixEnd(b), u = take(E.x, E.y, 'build');
     if (u) assignMagFix(u, b);
@@ -3561,10 +3557,7 @@ function completeBuilding(b) {
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
   if (b.magFrom) magLineDone(b); // (a Maglev line's site: the line opens)
-  else if (def.magterm) {
-    const other = S.buildings.find((c) => !c.dead && c.owner === b.owner && c.magMissing?.x === b.x && c.magMissing.y === b.y);
-    if (other) magReconnect(other, b);
-  }
+  else if (def.magterm) magRebuilt(b); // (built where a lost Terminal stood: its suspended lines join it again)
   b.status = ''; // (a site's "Under construction" mustn't outlive it)
   b.stock = {};
   b.inc = {};
@@ -12795,7 +12788,7 @@ function updateYard(b, def, dt) {
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
   if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
-  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The line has its ${MAGLEV.perLine} pods already` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
   const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0), rd = BOTS[kind].round || { alloy: 1, chip: 1 }; // (a round of parts: 1 Alloy, 1 Chip; a Maglev Pod's 2 Alloy, 1 Chip)
   if (free('alloy') < rd.alloy || free('chip') < rd.chip) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${free('alloy') < rd.alloy ? (free('chip') < rd.chip ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
@@ -15644,51 +15637,131 @@ function shipLost(u) {
 
 /*
  * A Maglev line (MAGLEV): two Maglev Terminals (BDEFS.magterm) joined by an elevated guideway on pylons (BDEFS.magpylon,
- * a building on every spot magSpots gives), b.line on both Terminals (b.magNear on the one the line was built from:
- * the pylons are counted from it, and it holds the repair job). Pods (BOTS.magpod) are inside a Terminal (u.inside,
- * u.home) or running: u.magFrom / u.magTo (Terminal ids), their place u.x, u.y on the straight line between the two
- * tile centres (drawn up at deck height), their load u.cargo promised to u.cargoTo (counted in its inc, as an
- * Airship's). A line goes up as a construction site with s.magFrom (the near Terminal): the far Terminal's site, or,
- * when the far Terminal stands already, a pylon site on the first pylon spot (s.magFar: that Terminal); the Worker
- * builds it standing at the near Terminal (siteWorkAt), the pylons go up as it gets along (magBuildStep) and
- * completeBuilding joins the two (magLineDone). A cut (magCut: a standing spot with no pylon on it) stops the pods;
- * the near Terminal's b.magFix is the repair under way.
+ * a building on every spot magSpots gives). A Terminal is on up to MAGLEV.hub lines (a hub: b.line, then b.magMore),
+ * so lines join into a network (magNet). One end of each line is its key (b.magNear on it, with the line's other end
+ * in its b.line): the pylons are counted from it and carry its id (p.line), it holds the pylons' layout (b.magLayout)
+ * and the repair job (b.magFix). A Terminal is the key of one line at most (magKeyBusy), so a pylon's p.line names its
+ * line; a line built from a Terminal that keys one already is keyed at its far end. Pods (BOTS.magpod) serve the whole
+ * network: inside a Terminal (u.inside, u.home) or running: u.magFrom / u.magTo (Terminal ids, two ends of one line),
+ * their place u.x, u.y on the straight line between the two tile centres (drawn up at deck height), their load u.cargo
+ * promised to u.cargoTo (counted in its inc, as an Airship's). At a hub a pod unloads and loads again for the next
+ * line, so goods cross the network hop by hop (the rail plan rolls each Terminal's demand up toward the Command Base:
+ * magRelayPlan). A line goes up as a construction site with s.magFrom (the Terminal it is planned from): the far
+ * Terminal's site, or, when the far Terminal stands already, a pylon site on the first pylon spot (s.magFar: that
+ * Terminal), s.magKey the key end's id when that is not s.magFrom; the Worker builds it standing at s.magFrom
+ * (siteWorkAt), the pylons go up as it gets along (magBuildStep) and completeBuilding joins the two (magLineDone). A
+ * new hub site may carry the next line on (s.magNext: its far end, planned when the hub is up: Route via a hub). A cut
+ * (magCut: a standing spot with no pylon on it) stops the pods; the key Terminal's b.magFix is the repair under way. A
+ * Terminal lost leaves its lines suspended (b.magMissing, then b.magMissMore, on each surviving end: the lost one's
+ * tile, whether it was the key, its id and its layout), the pylons standing, until a Terminal goes up on that tile.
  */
 
-/** The other Terminal of Maglev Terminal b's line (b.line on both, both built, both its owner's), or null. */
-function magPartner(b) {
-  if (!b || b.dead || !b.built || !b.line || !BDEFS[b.type].magterm) return null;
-  const o = getE(b.line);
-  return o && !o.dead && o.built && o.owner === b.owner && o.line === b.id && BDEFS[o.type].magterm ? o : null;
+/** The ids of the Terminals Maglev Terminal b is joined to: b.line, then a hub's other lines (b.magMore). */
+function magLinkIds(b) {
+  if (!b) return [];
+  const out = b.line ? [b.line] : [];
+  if (b.magMore) for (const id of b.magMore) if (id && !out.includes(id)) out.push(id);
+  return out;
 }
 
-/** The near Terminal of the line b is on (the one it was built from, holding its pylons' count and its repairs), or null. */
-function magNearEnd(b) {
-  const o = magPartner(b);
-  if (!o) return null;
-  return b.magNear ? b : o.magNear ? o : b.id < o.id ? b : o;
+/** Are a and b two built Maglev Terminals of one owner joined by a line (each names the other)? */
+function magLinked(a, b) {
+  return !!(a && b && a !== b && !a.dead && !b.dead && a.built && b.built && a.owner === b.owner && BDEFS[a.type].magterm && BDEFS[b.type].magterm &&
+    magLinkIds(a).includes(b.id) && magLinkIds(b).includes(a.id));
 }
 
-/** Every Maglev line of owner's, once: [near, far]. */
+/** The Terminals at the far ends of Maglev Terminal b's lines (built, its owner's), in a fixed order. */
+function magPartners(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].magterm) return [];
+  const out = [];
+  for (const id of magLinkIds(b)) { const o = getE(id); if (magLinked(b, o)) out.push(o); }
+  return out;
+}
+
+/** The other Terminal of Maglev Terminal b's (first) line, or null. */
+function magPartner(b) { return magPartners(b)[0] || null; }
+
+/** Of two joined Terminals a and b, the key end of their line (it holds the pylons' count, their layout and repairs). */
+function magKey(a, b) { return a.magNear && a.line === b.id ? a : b.magNear && b.line === a.id ? b : a.id < b.id ? a : b; } // (a save from before b.magNear: the older)
+
+/** The other end of the line Terminal A is the key of, or null. */
+function magKeyPartner(A) { for (const o of magPartners(A)) if (magKey(A, o) === A) return o; return null; }
+
+/** The key end of Terminal b's first line, or null. */
+function magNearEnd(b) { const o = magPartner(b); return o ? magKey(b, o) : null; }
+
+/** Every Maglev line of owner's, once: [key, other]. */
 function magLines(owner) {
   const out = [];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !b.line || !BDEFS[b.type].magterm) continue;
-    const o = magPartner(b);
-    if (o && magNearEnd(b) === b) out.push([b, o]);
+    if (b.dead || b.owner !== owner || !BDEFS[b.type].magterm) continue;
+    for (const o of magPartners(b)) if (magKey(b, o) === b) out.push([b, o]);
   }
   return out;
 }
 
-/** The line's two ends from any building on it: a Terminal (its partner) or a pylon (its near Terminal's line); [near, far] or null. */
+/** The line's two ends from any building on it: a Terminal (its first line) or a pylon (its key Terminal's line); [key, other] or null. */
 function magLineOf(b) {
   if (!b || b.dead) return null;
-  const A = BDEFS[b.type].pylon ? getE(b.line) : magNearEnd(b);
-  const B = A ? magPartner(A) : null;
-  return A && B ? [A, B] : null;
+  if (BDEFS[b.type].pylon) { const A = getE(b.line), B = A && BDEFS[A.type].magterm ? magKeyPartner(A) : null; return A && B ? [A, B] : null; }
+  const o = magPartner(b);
+  return o ? (magKey(b, o) === b ? [b, o] : [o, b]) : null;
 }
 
-/** The pylon spots of a line from tile centre (ax, ay) to (bx, by): [{ k, d, i, j, t }], d tiles from the near end. */
+/** Terminal b's suspended lines (their lost ends): [{ x, y, near, key, layout }]. */
+function magMiss(b) {
+  if (!b || !b.magMissing) return [];
+  return b.magMissMore ? [b.magMissing, ...b.magMissMore] : [b.magMissing];
+}
+function magMissSet(b, list) {
+  if (list.length) b.magMissing = list[0]; else delete b.magMissing;
+  if (list.length > 1) b.magMissMore = list.slice(1); else delete b.magMissMore;
+}
+
+/** How many lines Terminal b has, joined or suspended (a hub takes MAGLEV.hub). */
+function magSlots(b) { return magLinkIds(b).length + magMiss(b).length; }
+
+/**
+ * Does Terminal b key a line's pylons already: a line joined, or suspended with b the end holding them (the lost end
+ * was the other, or a save from before the lost end kept its own)? A line from it is then keyed at its far end.
+ */
+function magKeyBusy(b) {
+  if (!b) return false;
+  if (magKeyPartner(b)) return true;
+  return magMiss(b).some((m) => !m.near || m.key == null);
+}
+
+/** Join Terminals K (the key: its b.line, b.magNear) and O with a line. */
+function magJoin(K, O) {
+  if (K.line && K.line !== O.id) K.magMore = [K.line, ...(K.magMore || []).filter((id) => id !== O.id)];
+  else if (K.magMore) K.magMore = K.magMore.filter((id) => id !== O.id);
+  if (K.magMore && !K.magMore.length) delete K.magMore;
+  K.line = O.id; K.magNear = 1;
+  if (!O.line) O.line = K.id;
+  else if (O.line !== K.id && !(O.magMore || []).includes(K.id)) (O.magMore = O.magMore || []).push(K.id);
+}
+
+/** Terminal b's line to the Terminal with id `id` is gone (b.magNear goes with it if b was its key). */
+function magUnjoin(b, id) {
+  if (b.line === id) {
+    delete b.magNear;
+    const more = b.magMore || [];
+    b.line = more.shift() || 0;
+    if (!more.length) delete b.magMore;
+  } else if (b.magMore) {
+    b.magMore = b.magMore.filter((k) => k !== id);
+    if (!b.magMore.length) delete b.magMore;
+  }
+}
+
+/** The Terminals joined to b by lines, b first, in a fixed order: its network. */
+function magNet(b) {
+  const out = [b], seen = new Set([b.id]);
+  for (let k = 0; k < out.length; k++) for (const o of magPartners(out[k])) if (!seen.has(o.id)) { seen.add(o.id); out.push(o); }
+  return out;
+}
+
+/** The pylon spots of a line from tile centre (ax, ay) to (bx, by): [{ k, d, i, j, t }], d tiles from the key end. */
 function magSpotsAt(ax, ay, bx, by) {
   const L = dist(ax, ay, bx, by), ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1), out = [];
   for (let k = 1; k * MAGLEV.spacing <= L - 2; k++) {
@@ -15697,18 +15770,19 @@ function magSpotsAt(ax, ay, bx, by) {
   }
   return out;
 }
-/** The pylon spots of the line between Terminals A and B (A the near end). */
+/** The pylon spots of the line between Terminals A and B (A the key end). */
 function magSpots(A, B) { return magSpotsAt(A.x + 0.5, A.y + 0.5, B.x + 0.5, B.y + 0.5); }
 
 /**
  * What stands in the way of a pylon on tile t for owner ('' for nothing): a pylon of its own line may stand there
- * already (`own`: the near Terminal's id). 'skip' means no pylon can stand there (a chasm, rock) and the span goes over.
+ * already (`own`: the key Terminal's id). 'skip' means no pylon can stand there (a chasm, rock) and the span goes over.
+ * A road or track may run under it (its feet stand at the side: the way stays open).
  */
 function magSpotWhy(owner, t, own) {
   const tr = S.terrain[t];
   if (tr === T_CHASM || tr === T_ROCK) return 'skip';
   const b = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (b && !(BDEFS[b.type].pylon && b.owner === owner && b.line === own)) return `a ${BDEFS[b.type].name} stands where a pylon must go`;
+  if (b && !(BDEFS[b.type].pylon && b.owner === owner && own && b.line === own)) return BDEFS[b.type].pylon ? 'another line\'s pylon stands where a pylon must go' : `a ${BDEFS[b.type].name} stands where a pylon must go`;
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'a rival holds the ground where a pylon must go';
   if (S.ramp[t]) return 'a slope is where a pylon must go';
   if (S.res[t] === R_OIL && !b) return 'an oil seep is where a pylon must go';
@@ -15721,31 +15795,36 @@ function magSpotWhy(owner, t, own) {
   return '';
 }
 
+/** Does a road or track (or a plan for one) run on tile t (a pylon there stands at its side)? */
+function magOverWay(t) { return !!(S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))); }
+
 /**
  * The spots of a line from (ax, ay) to (bx, by) with each one's standing: `ok` (a pylon stands here), `skip` (the span
  * goes over: a chasm or rock, with a pylon either side) or `bad` with its `why`. Two skips in a row (a gap wider than
- * MAGLEV.gap) make the second bad.
+ * MAGLEV.gap) make the second bad. A blocked spot shifts to a free shoulder tile beside the guideway (`moved`: the
+ * tile it moved from) unless `layout` (a line ordered already) fixes the tiles; `road`: a road or track runs under it.
  */
 function magSpotsChecked(owner, ax, ay, bx, by, own, layout) {
-  const spots = magSpotsAt(ax, ay, bx, by), used = new Set();
+  const spots = magSpotsAt(ax, ay, bx, by), used = new Set(), L = dist(ax, ay, bx, by) || 1;
   let prevSkip = false;
   for (const sp of spots) {
     let t = layout?.[sp.k - 1] ?? sp.t;
     let why = t === -1 ? 'skip' : magSpotWhy(owner, t, own);
     if (!layout && (why || used.has(t))) {
       // Try a shoulder within one tile of the guideway. Fix that choice when the line is ordered.
-      const x = ax + (bx - ax) * sp.d / dist(ax, ay, bx, by), y = ay + (by - ay) * sp.d / dist(ax, ay, bx, by);
+      const x = ax + (bx - ax) * sp.d / L, y = ay + (by - ay) * sp.d / L;
       const options = FEED_NB.map(([di, dj]) => [sp.i + di, sp.j + dj])
         .filter(([i, j]) => inMap(i, j) && dist2(i + 0.5, j + 0.5, x, y) <= 2.25 &&
           tIdx(i, j) !== tIdx(Math.floor(bx), Math.floor(by)) && !used.has(tIdx(i, j)))
         .sort(([i, j], [k, l]) => dist2(i + 0.5, j + 0.5, x, y) - dist2(k + 0.5, l + 0.5, x, y));
       const shoulder = options.find(([i, j]) => !magSpotWhy(owner, tIdx(i, j), own));
-      if (shoulder) { t = tIdx(...shoulder); why = ''; }
+      if (shoulder) { sp.moved = t; t = tIdx(...shoulder); why = ''; }
       else if (!why) why = 'two pylons would need the same tile';
     }
     if (t >= 0) {
       sp.t = t; sp.i = t % S.W; sp.j = (t / S.W) | 0;
       used.add(t);
+      if (!why && magOverWay(t)) sp.road = 1;
     }
     if (why === 'skip') {
       if (prevSkip) { sp.kind = 'bad'; sp.why = `the gap there is wider than ${MAGLEV.gap} tiles`; }
@@ -15771,12 +15850,15 @@ function magPending(b) {
   return s && !s.dead && !s.built && s.magFrom === b.id ? s : null;
 }
 
+/** Is site s (planned from Terminal A) a replacement for a lost Terminal at the end of one of A's suspended lines? */
+function magRebuildSite(A, s) { return !!(A && s && s.type === 'magterm' && magMiss(A).some((m) => m.x === s.x && m.y === s.y)); }
+
 /** What's wrong with (bi, bj) as the clear spot for a new far Terminal ('' if nothing). */
 function magFarBlocked(owner, bi, bj) {
   const t = tIdx(bi, bj);
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground (or a Maglev Terminal of yours).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds the ground at the far end.';
-  if (S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))) return 'A road or track runs at the far end.';
+  if (S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])))) return 'A road or track runs at the far end: a Terminal stands beside the road, not on it.';
   if (S.tidal && S.tidal[t]) return 'Tidal flats at the far end: the sea covers it at high tide.';
   if ((typeof scorched === 'function' && scorched(t)) || (typeof runwayAt === 'function' && runwayAt(t)) || (typeof postAt === 'function' && postAt(t)) || (typeof uplinkAt === 'function' && uplinkAt(t))) return 'The far end is taken: scorched ground, a runway, a Trade Post or an Uplink.';
   if (typeof calmAt === 'function' && calmAt(bi + 0.5, bj + 0.5)) return 'Not on a Trade Post\'s ground.';
@@ -15788,38 +15870,51 @@ function magFarBlocked(owner, bi, bj) {
 }
 
 /**
- * Could owner's Terminal A run a Maglev line to (bi, bj)? { why, spots, far }: why '' if so (else the reason), the
- * spots checked (magSpotsChecked: the first bad one is the reason), far the Terminal (built, or a site of yours with no
- * line) standing at the far end, or null for a clear spot where one goes up.
+ * Could owner's Terminal A run a Maglev line to (bi, bj)? { why, spots, far, key, miss }: why '' if so (else the
+ * reason), the spots checked (magSpotsChecked from the key end, each with dA: tiles from A; the first bad one is the
+ * reason), far the Terminal (built, or a site of yours with no line) standing at the far end, or null for a clear spot
+ * where one goes up, key the key end's id (-1: the new far Terminal), miss the suspended line this rebuilds, if any.
  */
 function magLineCheck(owner, A, bi, bj) {
-  const out = { why: '', spots: [], far: null };
+  const out = { why: '', spots: [], far: null, key: 0, miss: null };
   if (!A || A.dead || A.owner !== owner || !BDEFS[A.type].magterm) { out.why = 'Tap one of your Maglev Terminals first.'; return out; }
   if (!A.built) { out.why = 'That Terminal is still going up: the line starts from a finished one.'; return out; }
-  if (magPartner(A) || A.line) { out.why = 'That Terminal is on a line already: a Terminal is on one line at most.'; return out; }
   if (magPending(A)) { out.why = 'That Terminal\'s line is still going up.'; return out; }
+  if (A.magFrom) { out.why = 'A line is still going up to that Terminal.'; return out; }
   if (!inMap(bi, bj)) { out.why = 'Outside the map.'; return out; }
-  if (bi === A.x && bj === A.y) { out.why = 'Tap the far end: another spot, 6 to 40 tiles away.'; return out; }
-  const L = dist(A.x, A.y, bi, bj);
-  if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
-  if (L > MAGLEV.max) { out.why = `Too far: a Maglev line reaches ${MAGLEV.max} tiles.`; return out; }
-  const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (A.magMissing && (A.magMissing.x !== bi || A.magMissing.y !== bj)) {
-    out.why = 'Rebuild the Terminal at the end of the surviving guideway.';
+  if (bi === A.x && bj === A.y) { out.why = `Tap the far end: another spot, ${MAGLEV.min} to ${MAGLEV.max} tiles away.`; return out; }
+  const miss = magMiss(A).find((m) => m.x === bi && m.y === bj) || null;
+  out.miss = miss;
+  if (!miss && magSlots(A) >= MAGLEV.hub) {
+    out.why = magMiss(A).length ? 'Rebuild the Terminal at the end of the surviving guideway (its panel: Rebuild the missing Terminal).' : `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.`;
     return out;
   }
+  const L = dist(A.x, A.y, bi, bj);
+  if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
+  if (L > MAGLEV.max) { out.why = `Too far: a Maglev line reaches ${MAGLEV.max} tiles (go on from a hub: a Terminal on the way).`; return out; }
+  const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (far) {
     if (far.owner !== owner || !BDEFS[far.type].magterm) { out.why = `There is ${aOrAn(BDEFS[far.type].name)} at the far end: pick a clear spot, or a Maglev Terminal of yours.`; return out; }
-    if (far.line || far.magMissing || magPending(far) || far.magFrom) { out.why = 'That Terminal is on a line already (or one is going up to it).'; return out; }
+    if (magPending(far) || far.magFrom) { out.why = 'A line is going up to or from that Terminal already.'; return out; }
+    if (magLinkIds(far).includes(A.id)) { out.why = 'Those two Terminals are joined already.'; return out; }
+    if (magSlots(far) >= MAGLEV.hub) { out.why = `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.`; return out; }
     out.far = far;
   } else {
     const why = magFarBlocked(owner, bi, bj);
     if (why) { out.why = why; return out; }
   }
-  if (A.magMissing) return out;
-  out.spots = magSpotsChecked(owner, A.x + 0.5, A.y + 0.5, bi + 0.5, bj + 0.5, 0);
-  const bad = out.spots.find((s) => s.kind === 'bad');
-  if (bad) out.why = `No line this way: ${bad.why} (${bad.d} tiles out).`;
+  if (miss) { // (the guideway stands: the far end is only the new Terminal)
+    if (miss.near && far && magKeyBusy(far)) out.why = 'That Terminal anchors another line\'s pylons: rebuild on a clear spot there.';
+    return out;
+  }
+  // The key end: A, unless A keys a line already (then the far end, if it can).
+  const keyA = !magKeyBusy(A);
+  if (!keyA && far && magKeyBusy(far)) { out.why = 'Both Terminals anchor another line\'s pylons already: join them through a new Terminal (a hub) instead.'; return out; }
+  out.key = keyA ? A.id : far ? far.id : -1;
+  out.spots = keyA ? magSpotsChecked(owner, A.x + 0.5, A.y + 0.5, bi + 0.5, bj + 0.5, 0) : magSpotsChecked(owner, bi + 0.5, bj + 0.5, A.x + 0.5, A.y + 0.5, 0);
+  for (const sp of out.spots) sp.dA = keyA ? sp.d : +(L - sp.d).toFixed(1);
+  const bad = out.spots.filter((s) => s.kind === 'bad').sort((p, q) => p.dA - q.dA)[0];
+  if (bad) out.why = `No line this way: ${bad.why} (${Math.round(bad.dA)} tiles out).`;
   else if (!out.spots.some((s) => s.kind === 'ok')) out.why = 'No line this way: nowhere for a pylon to stand.';
   return out;
 }
@@ -15833,16 +15928,19 @@ function magLineCost(n) {
 
 /**
  * Plan a Maglev line from Terminal A to (bi, bj): its site (the far Terminal's, or a pylon's when the far Terminal
- * stands), paid from storage as the goods come in, built from A. { ok, reason, id }.
+ * stands), paid from storage as the goods come in, built from A. { ok, reason, id }. At the end of one of A's
+ * suspended lines it rebuilds the lost Terminal there instead (the guideway stands: only the Terminal is paid for).
  */
 function placeMagLine(owner, A, bi, bj) {
   const chk = magLineCheck(owner, A, bi, bj);
   if (chk.why) return { ok: false, reason: chk.why };
-  if (A.magMissing) {
+  if (chk.miss) {
     if (chk.far?.built) {
-      magReconnect(A, chk.far);
+      magReconnect(A, chk.far, chk.miss);
+      magRebuilt(chk.far);
       return { ok: true, reason: '', id: chk.far.id };
     }
+    if (S.plan[tIdx(bi, bj)]) cancelPlan(tIdx(bi, bj));
     const site = chk.far || addBuilding(owner, 'magterm', bi, bj, false);
     site.fromStore = true;
     site.magFrom = A.id;
@@ -15855,11 +15953,11 @@ function placeMagLine(owner, A, bi, bj) {
   const n = Math.round(dist(A.x, A.y, bi, bj)), cost = magLineCost(n);
   let s;
   if (chk.far && chk.far.built) {
-    const sp = chk.spots.find((q) => q.kind === 'ok' && !S.bAt[q.t]);
+    const sp = chk.spots.filter((q) => q.kind === 'ok' && !S.bAt[q.t]).sort((p, q) => p.dA - q.dA)[0];
     if (!sp) return { ok: false, reason: 'No line this way: nowhere for a pylon to stand.' };
     magClearSpot(sp.t);
     s = addBuilding(owner, 'magpylon', sp.i, sp.j, false);
-    s.k = sp.k; s.line = A.id; s.magFar = chk.far.id;
+    s.k = sp.k; s.line = chk.key; s.magFar = chk.far.id;
     s.buildTime = MAGLEV.time * n;
     chk.far.magFrom = A.id; // (spoken for: no other line comes to it meanwhile)
   } else if (chk.far) {
@@ -15878,6 +15976,7 @@ function placeMagLine(owner, A, bi, bj) {
   }
   if (s.type === 'magpylon') s.cost = cost;
   s.magFrom = A.id; s.magN = n; s.magLayout = magLayout(chk.spots);
+  if (chk.key !== A.id) s.magKey = chk.key === -1 ? s.id : chk.key; // (keyed at the far end: A keys a line already)
   A.magSite = s.id;
   if (S.players[owner].ai) { if (!payInto(s)) queuePlan('b', s.id, owner); }
   else { queuePlan('b', s.id, owner); settlePlans(); }
@@ -15885,7 +15984,66 @@ function placeMagLine(owner, A, bi, bj) {
   return { ok: true, reason: '', id: s.id };
 }
 
-/** The building a Worker stands at to build site s: the near Terminal of a Maglev line going up, else the site itself. */
+/**
+ * A two-line route from Terminal A to (bi, bj) through a new hub Terminal at (hx, hy) (Route via a hub): the first line
+ * to the hub now, the second planned from the hub once it is up (s.magNext). { ok, reason, id } (the hub's site).
+ */
+function placeMagRoute(owner, A, bi, bj, hx, hy) {
+  const why = magRouteWhy(owner, A, bi, bj, hx, hy);
+  if (why) return { ok: false, reason: why };
+  const r = placeMagLine(owner, A, hx, hy);
+  if (!r.ok) return r;
+  const H = getE(r.id);
+  if (H) H.magNext = [bi, bj];
+  return r;
+}
+
+/** A stand-in for a Terminal at (x, y) not built yet, for checking a line from it (`keyed`: it will key a line). */
+function magGhost(owner, x, y, keyed) {
+  const g = { id: -1, type: 'magterm', owner, x, y, built: true, dead: false };
+  if (keyed) g.magMissing = { x: -1, y: -1, near: false }; // (magKeyBusy: the next line from it is keyed at its far end)
+  return g;
+}
+
+/** What's wrong with a route from A to (bi, bj) through a new hub at (hx, hy) ('' for nothing). */
+function magRouteWhy(owner, A, bi, bj, hx, hy) {
+  if (!inMap(hx, hy) || !inMap(bi, bj)) return 'Outside the map.';
+  const one = magLineCheck(owner, A, hx, hy);
+  if (one.why) return one.why;
+  if (one.far || one.miss) return 'The hub goes on a clear spot.';
+  const two = magLineCheck(owner, magGhost(owner, hx, hy, one.key === -1), bi, bj);
+  if (two.why) return two.why;
+  if (two.miss) return 'The hub goes on a clear spot.';
+  // the two lines' pylons can't share a tile
+  const t1 = new Set(one.spots.filter((s) => s.kind === 'ok').map((s) => s.t));
+  if (two.spots.some((s) => s.kind === 'ok' && t1.has(s.t))) return 'The two lines would need the same pylon tile.';
+  return '';
+}
+
+/**
+ * Route via a hub: where a new hub Terminal could stand so that two lines (A to it, it to (bi, bj)) go where one
+ * straight line can't (a blocked stretch, or further than MAGLEV.max): the shortest such route among spots beside the
+ * straight line, { i, j, n1, n2 }, or null. Deterministic (fixed candidates in a fixed order).
+ */
+function magRouteVia(owner, A, bi, bj) {
+  if (!A || !inMap(bi, bj)) return null;
+  const L = dist(A.x, A.y, bi, bj);
+  if (L < MAGLEV.min * 2 || L > MAGLEV.max * 2) return null;
+  const ux = (bi - A.x) / L, uy = (bj - A.y) / L, cands = [], seen = new Set();
+  for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74]) for (let o = -12; o <= 12; o++) {
+    const i = Math.round(A.x + (bi - A.x) * f - uy * o), j = Math.round(A.y + (bj - A.y) * f + ux * o), t = inMap(i, j) ? tIdx(i, j) : -1;
+    if (t < 0 || seen.has(t)) continue;
+    seen.add(t);
+    const n1 = dist(A.x, A.y, i, j), n2 = dist(i, j, bi, bj);
+    if (n1 < MAGLEV.min || n2 < MAGLEV.min || n1 > MAGLEV.max || n2 > MAGLEV.max) continue;
+    cands.push({ i, j, len: n1 + n2, t, n1: Math.round(n1), n2: Math.round(n2) });
+  }
+  cands.sort((p, q) => p.len - q.len || p.t - q.t);
+  for (const c of cands.slice(0, 120)) if (!magRouteWhy(owner, A, bi, bj, c.i, c.j)) return { i: c.i, j: c.j, n1: c.n1, n2: c.n2 };
+  return null;
+}
+
+/** The building a Worker stands at to build site s: the Terminal a Maglev line going up is planned from, else the site itself. */
 function siteWorkAt(s) {
   if (s.magFrom) { const A = getE(s.magFrom); if (A && !A.dead) return A; }
   return s;
@@ -15897,19 +16055,22 @@ function magSiteFar(s) {
   return f && !f.dead ? [f.x + 0.5, f.y + 0.5] : [s.x + 0.5, s.y + 0.5];
 }
 
-/** Line site s has got to `progress`: the pylons that far out go up (a pylon every MAGLEV.spacing tiles from the near end). */
+/** Line site s has got to `progress`: the pylons that far out from where it's built go up (a pylon every MAGLEV.spacing tiles from the key end). */
 function magBuildStep(s) {
   const A = getE(s.magFrom);
-  if (!A || A.dead || A.magMissing) return;
-  const [fx, fy] = magSiteFar(s), ax = A.x + 0.5, ay = A.y + 0.5;
-  const reach = s.progress * dist(ax, ay, fx, fy);
-  const layout = s.magLayout || magLayout(magSpotsAt(ax, ay, fx, fy));
+  if (!A || A.dead || magRebuildSite(A, s)) return;
+  const [fx, fy] = magSiteFar(s), ax = A.x + 0.5, ay = A.y + 0.5, L = dist(ax, ay, fx, fy);
+  const keyFar = !!s.magKey && s.magKey !== A.id, key = keyFar ? s.magKey : A.id;
+  const [kx, ky, ox, oy] = keyFar ? [fx, fy, ax, ay] : [ax, ay, fx, fy];
+  const reach = s.progress * L;
+  const layout = s.magLayout || magLayout(magSpotsAt(kx, ky, ox, oy));
   let any = false;
-  for (const sp of magSpotsChecked(A.owner, ax, ay, fx, fy, A.id, layout)) {
-    if (sp.kind !== 'ok' || sp.d > reach + 1e-9 || S.bAt[sp.t]) continue;
+  for (const sp of magSpotsChecked(A.owner, kx, ky, ox, oy, key, layout)) {
+    const dA = keyFar ? L - sp.d : sp.d;
+    if (sp.kind !== 'ok' || dA > reach + 1e-9 || S.bAt[sp.t]) continue;
     magClearSpot(sp.t);
     const p = addBuilding(A.owner, 'magpylon', sp.i, sp.j, true);
-    p.k = sp.k; p.line = A.id;
+    p.k = sp.k; p.line = key;
     addFx('ring', sp.i + 0.5, sp.j + 0.5, { color: PLAYER_COLORS[A.owner], r: 0.8 });
     any = true;
   }
@@ -15919,19 +16080,33 @@ function magBuildStep(s) {
 /** Line site s is finished: every pylon stands and the two Terminals are joined (or, with an end gone, the line is called off). */
 function magLineDone(s) {
   const A = getE(s.magFrom), B = s.type === 'magpylon' ? getE(s.magFar) : s;
-  if (!A || A.dead || !A.built || !B || B.dead || !B.built || A.owner !== B.owner || A.line || B.line) { magLineCancel(s); return; }
-  if (A.magMissing) { magReconnect(A, B); return; }
+  if (A && !A.dead && A.built && B && !B.dead && B.built && magRebuildSite(A, B)) { // (a lost Terminal rebuilt: its lines join again)
+    A.magSite = 0; delete B.magFrom;
+    magRebuilt(B);
+    return;
+  }
+  if (!A || A.dead || !A.built || !B || B.dead || !B.built || A.owner !== B.owner || magLinkIds(A).includes(B.id) || magSlots(A) >= MAGLEV.hub || magSlots(B) >= MAGLEV.hub) { magLineCancel(s); return; }
   s.progress = 1;
   magBuildStep(s);
-  A.magLayout = s.magLayout;
+  const K = s.magKey && s.magKey === B.id ? B : A, O = K === A ? B : A;
+  if (K === A && magKeyBusy(A)) { magLineCancel(s); return; } // (A came to key another line meanwhile: no room for this one's pylons)
+  const layout = s.magLayout;
   delete s.magLayout;
   delete s.cost;
-  A.line = B.id; B.line = A.id; A.magNear = 1; delete B.magNear;
-  A.magSite = 0; delete B.magFrom; delete s.magFrom;
-  if (s !== B) { s.line = A.id; delete s.magFar; }
+  K.magLayout = layout; // (s may be K itself: the new far Terminal keys the line)
+  magJoin(K, O);
+  A.magSite = 0; delete B.magFrom; delete s.magFrom; delete s.magKey;
+  if (s !== B) { s.line = K.id; delete s.magFar; }
   S.players[A.owner].railT = undefined; // (plan the line's stock now)
   computeZones();
-  postMsg(A.owner, 'The Maglev line is open. Order Maglev Pods on a Terminal\'s panel (4 Alloy, 2 Chips each) and keep a Generator within 4 tiles of each end.', B.x, B.y, 'good');
+  const hub = magPartners(A).length > 1 || magPartners(B).length > 1;
+  postMsg(A.owner, hub ? 'The Maglev line is open, and joins your network at a hub: pods carry goods on through it, line by line.' : 'The Maglev line is open. Order Maglev Pods on a Terminal\'s panel (4 Alloy, 2 Chips each) and keep a Generator within 4 tiles of each end.', B.x, B.y, 'good');
+  if (B.magNext) { // (Route via a hub: the next line goes on from it)
+    const [x, y] = B.magNext;
+    delete B.magNext;
+    const r = placeMagLine(B.owner, B, x, y);
+    postMsg(B.owner, r.ok ? 'The hub is up: the line goes on from it to the far end.' : `The line on from the hub can't go: ${r.reason}`, B.x, B.y, r.ok ? 'good' : 'warn');
+  }
 }
 
 /** A line going up is called off (its site cancelled or an end lost): the pylons built so far come down. */
@@ -15940,13 +16115,23 @@ function magLineCancel(s) {
   if (A && A.magSite === s.id) A.magSite = 0;
   const far = s.magFar ? getE(s.magFar) : null;
   if (far && far.magFrom === (A && A.id)) delete far.magFrom;
-  delete s.magFrom;
-  if (A && !A.magMissing) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === A.id && p.built && !magPartner(A)) destroyBuilding(p, false, true);
+  const key = s.magKey || (A && A.id), K = getE(key), rebuild = magRebuildSite(A, s);
+  delete s.magFrom; delete s.magKey;
+  if (key && !rebuild && !(K && magKeyPartner(K))) for (const p of S.buildings) if (!p.dead && p !== s && BDEFS[p.type].pylon && p.line === key && p.built && !magMissFor(key)) destroyBuilding(p, false, true);
 }
 
-/** The standing spots of the line A–B (A the near end) with no pylon on them: the breaks. [] on a whole line. */
+/** The Terminal holding a suspended line keyed `key` (its pylons carry that id), or null. */
+function magMissFor(key) {
+  for (const b of S.buildings) {
+    if (b.dead || !b.magMissing) continue;
+    for (const m of magMiss(b)) if ((m.near ? m.key ?? b.id : b.id) === key) return b;
+  }
+  return null;
+}
+
+/** The standing spots of the line A–B (A the key end) with no pylon on them: the breaks. [] on a whole line. */
 function magCut(A, B) {
-  B = B || magPartner(A);
+  B = B || magKeyPartner(A);
   if (!B) return [];
   const out = [];
   const ownerId = A.id, layout = A.magLayout;
@@ -15961,8 +16146,11 @@ function magCut(A, B) {
   return out;
 }
 
-/** Is Terminal b's line cut (a pylon down, not yet rebuilt)? */
-function magLineCut(b) { const A = magNearEnd(b); return !!A && magCut(A).length > 0; }
+/** Is the line between joined Terminals a and o cut (a pylon down, not yet rebuilt)? */
+function magPairCut(a, o) { const K = magKey(a, o); return magCut(K, K === a ? o : a).length > 0; }
+
+/** Is any of Terminal b's lines cut? */
+function magLineCut(b) { return magPartners(b).some((o) => magPairCut(b, o)); }
 
 /** A Generator of Terminal b's owner within its radius with Fuel to burn (not off, not cut by the Murmur): the Terminal has power. */
 function magPowered(b) {
@@ -15977,20 +16165,28 @@ function magPowered(b) {
 }
 /** Is a solar flare on (the pods crawl)? */
 function flareOn() { return !!(S.event && S.event.type === 'flare' && S.time >= S.event.t0); }
-/** Does the line Terminal b is on run at speed: both ends powered and no solar flare? */
-function magLinePowered(b) { const o = magPartner(b); return !!o && magPowered(b) && magPowered(o) && !flareOn(); }
+/** Does the line between joined Terminals a and o run at speed: both ends powered and no solar flare? */
+function magPairPowered(a, o) { return magPowered(a) && magPowered(o) && !flareOn(); }
+/** Do Terminal b's lines run at speed: b and every Terminal it is joined to powered, and no solar flare? */
+function magLinePowered(b) { const ps = magPartners(b); return ps.length > 0 && magPowered(b) && ps.every((o) => magPowered(o)) && !flareOn(); }
 
-/** The pods serving the line Terminal b is on (their home is b or the other Terminal). */
+/** The pods serving Terminal b's network (their home is one of its Terminals). */
 function linePods(b) {
-  const o = magPartner(b);
-  return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && (u.home === b.id || (o && u.home === o.id)));
+  const ids = new Set(magNet(b).map((t) => t.id));
+  return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].magpod && ids.has(u.home));
 }
-/** Does the line Terminal b is on have a pod (the rail plan counts it as served)? */
-function magRunning(b) { return !!magPartner(b) && linePods(b).length > 0; }
-/** Can Terminal b's pod bay build another pod: a line, under MAGLEV.perLine on it? */
-function magPodRoom(b) { return !!magPartner(b) && linePods(b).length < MAGLEV.perLine; }
+/** How many pods Terminal b's network may have: MAGLEV.perLine for each of its lines. */
+function magPodCap(b) {
+  let n = 0;
+  for (const t of magNet(b)) n += magPartners(t).length;
+  return MAGLEV.perLine * Math.max(1, n / 2);
+}
+/** Is Terminal b on a line with a pod in its network (the rail plan counts it as served)? */
+function magRunning(b) { return magPartners(b).length > 0 && linePods(b).length > 0; }
+/** Can Terminal b's pod bay build another pod: a line, under MAGLEV.perLine a line on its network? */
+function magPodRoom(b) { return magPartners(b).length > 0 && linePods(b).length < magPodCap(b); }
 
-/** Where pod u is along its line, in tiles from the near Terminal A. */
+/** Where pod u is along its line, in tiles from the key Terminal A. */
 function podDist(u, A, B) {
   const ax = A.x + 0.5, ay = A.y + 0.5, L = dist(ax, ay, B.x + 0.5, B.y + 0.5) || 1;
   return clamp(((u.x - ax) * (B.x + 0.5 - ax) + (u.y - ay) * (B.y + 0.5 - ay)) / L, 0, L);
@@ -16020,16 +16216,18 @@ function podReverse(u) {
   return true;
 }
 
+/** Is pod u running on the line between Terminals A and B (either way)? */
+function podOnLine(u, A, B) { return (u.magTo === A.id && u.magFrom === B.id) || (u.magTo === B.id && u.magFrom === A.id); }
+
 /** Pylon p has come down (shot, dismantled): its line is cut. Pods on the spans it carried are lost, the rest turn back. */
 function magPylonDown(p) {
   const A = p.line ? getE(p.line) : null;
-  if (!A || A.dead) return;
-  const B = magPartner(A);
+  if (!A || A.dead || !BDEFS[A.type].magterm) return;
+  const B = magKeyPartner(A);
   if (!B) return;
   const d = p.k * MAGLEV.spacing;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== A.owner || !BOTS[u.type].magpod || u.inside || !u.magTo) continue;
-    if (u.magTo !== A.id && u.magTo !== B.id) continue;
+    if (u.dead || u.owner !== A.owner || !BOTS[u.type].magpod || u.inside || !u.magTo || !podOnLine(u, A, B)) continue;
     const s = podDist(u, A, B);
     if (Math.abs(s - d) < MAGLEV.spacing) {
       // on a span that rested on it: it falls
@@ -16048,34 +16246,49 @@ function magPylonDown(p) {
   computeZones();
 }
 
-/** Restore a suspended guideway when its missing Terminal is rebuilt. */
-function magReconnect(survivor, replacement) {
-  const missing = survivor.magMissing;
-  const A = missing.near ? replacement : survivor, B = A === survivor ? replacement : survivor;
-  if (A !== survivor) {
-    A.magLayout = survivor.magLayout;
-    delete survivor.magLayout;
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === survivor.id) p.line = A.id;
-  }
-  A.magNear = 1; delete B.magNear;
-  A.line = B.id; B.line = A.id;
-  survivor.magSite = 0;
-  delete survivor.magMissing; delete replacement.magFrom;
-  S.players[A.owner].railT = undefined;
-  postMsg(A.owner, 'Maglev Terminal rebuilt. The guideway is connected again.', replacement.x, replacement.y, 'good');
+/** Survivor's suspended line m comes back: its lost end is rebuilt as Terminal R (the guideway joins them again). */
+function magReconnect(survivor, R, m) {
+  m = m || magMiss(survivor).find((q) => q.x === R.x && q.y === R.y);
+  if (!m) return;
+  if (m.near) { // (the lost Terminal held the pylons: the new one takes them over)
+    const key = m.key ?? survivor.id;
+    for (const p of S.buildings) if (!p.dead && BDEFS[p.type].pylon && p.line === key) p.line = R.id;
+    R.magLayout = m.layout || survivor.magLayout;
+    if (m.key == null) delete survivor.magLayout; // (a save from before: the survivor kept them)
+    magJoin(R, survivor);
+  } else magJoin(survivor, R);
+  magMissSet(survivor, magMiss(survivor).filter((q) => q !== m));
+  if (survivor.magSite === R.id) survivor.magSite = 0;
+  delete R.magFrom;
+  S.players[R.owner].railT = undefined;
+  postMsg(R.owner, 'Maglev Terminal rebuilt. The guideway is connected again.', R.x, R.y, 'good');
 }
 
-/** Lose one end, keeping the guideway for its surviving Terminal to reopen. */
+/** Terminal R stands where a lost one stood: every suspended line that ended there joins it again. */
+function magRebuilt(R) {
+  for (const c of S.buildings) {
+    if (c.dead || c === R || c.owner !== R.owner || !c.magMissing || !BDEFS[c.type].magterm || !c.built) continue;
+    for (const m of magMiss(c)) if (m.x === R.x && m.y === R.y && magSlots(R) < MAGLEV.hub && !(m.near && magKeyBusy(R))) magReconnect(c, R, m);
+  }
+  computeZones();
+}
+
+/**
+ * Lose Maglev Terminal b (destroyed or dismantled): each line it was on is suspended, the guideway and pylons kept for
+ * the Terminal at its other end to reopen (its panel: Rebuild the missing Terminal). Pods in it go to a Terminal it was
+ * joined to, pods heading for it turn back; lines whose other end was lost already come down.
+ */
 function magTermDown(b) {
-  const o = magPartner(b), A = o && magNearEnd(b);
+  const partners = magPartners(b);
   const pending = magPending(b);
   if (pending) { magLineCancel(pending); destroyBuilding(pending, false, true); }
   if (b.magFrom) {
     const from = getE(b.magFrom), site = magPending(from);
     if (site) { magLineCancel(site); if (site !== b) destroyBuilding(site, false, true); }
   }
-  for (const end of o ? [b, o] : [b]) {
-    if (!end.magFix) continue;
+  // repairs: b's own, and those of the lines it was on
+  for (const end of [b, ...partners]) {
+    if (!end.magFix || (end !== b && magKey(end, b) !== end)) continue;
     const w = getE(end.magFix.u);
     if (w && !w.dead && w.task?.type === 'magfix') cancelTask(w);
     end.magFix = null;
@@ -16083,26 +16296,29 @@ function magTermDown(b) {
   for (const u of S.bots) {
     if (u.dead || u.owner !== b.owner || !BOTS[u.type].magpod) continue;
     if (u.inside === b.id || (u.home === b.id && !u.magTo)) {
-      if (o) podArrive(u, o);
+      if (partners.length) podArrive(u, partners[0]);
       else { podLost(u); killBot(u, true); }
     } else if (u.magTo === b.id) {
-      if (!o || !podReverse(u)) { podLost(u); killBot(u, true); continue; }
-      u.home = o.id; u.magFrom = 0;
-    } else if (u.magFrom === b.id && o) {
-      u.home = o.id; u.magFrom = 0;
+      if (!podReverse(u)) { podLost(u); killBot(u, true); continue; }
+      u.home = u.magTo; u.magFrom = 0;
+    } else if (u.magFrom === b.id) {
+      u.home = u.magTo; u.magFrom = 0;
     }
   }
-  if (o) {
-    o.line = 0;
-    o.magMissing = { x: b.x, y: b.y, near: A === b };
-    if (A === b) o.magLayout = b.magLayout;
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === A.id) p.line = o.id;
+  for (const o of partners) {
+    const K = magKey(b, o), m = { x: b.x, y: b.y, near: K === b };
+    if (K === b) { m.key = b.id; if (b.magLayout) m.layout = b.magLayout.slice(); }
+    magUnjoin(o, b.id);
+    magMissSet(o, [...magMiss(o), m]);
     S.players[o.owner].railT = undefined;
-    postMsg(o.owner, 'Maglev service suspended. Rebuild the lost Terminal to reuse the guideway.', b.x, b.y, 'warn');
-  } else if (b.magMissing) {
-    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === b.id) destroyBuilding(p, false, true);
+    postMsg(o.owner, 'Maglev service suspended: a Terminal is down. Rebuild it on the same tile to reuse the guideway.', b.x, b.y, 'warn');
   }
-  b.line = 0;
+  // a line already suspended at b: both ends are gone now, and its pylons with them
+  for (const m of magMiss(b)) {
+    const key = m.near ? m.key ?? b.id : b.id;
+    for (const p of S.buildings) if (!p.dead && p.type === 'magpylon' && p.line === key) destroyBuilding(p, false, true);
+  }
+  b.line = 0; delete b.magMore; delete b.magNear; magMissSet(b, []);
 }
 
 /** Pod u sets out from Terminal T for O with `load` ({ goods, total }, or null to run across empty). */
@@ -16143,25 +16359,29 @@ function updatePod(u, dt) {
 }
 
 /**
- * Pod u docked at Terminal m: after MAGLEV.dwell s it loads what the other end wants (shipLoad: the rail plan's loads,
- * as an Airship's) and sets out when the trip is worth it, or runs across empty for a load waiting at the other end
- * (unless another pod is there or on its way), never while the line is cut.
+ * Pod u docked at Terminal m: after MAGLEV.dwell s it loads what the other end of one of m's lines wants (shipLoad:
+ * the rail plan's loads, as an Airship's; at a hub, the line with the biggest load, the first in m's order on a tie)
+ * and sets out when the trip is worth it, or runs across empty for a load waiting at the other end (unless another pod
+ * is there or on its way), never along a line that is cut.
  */
 function podAtTerminal(u, m, dt) {
   if (S.tick % 6 !== u.id % 6) return;
-  const other = magPartner(m);
-  if (!other || magLineCut(m)) return;
+  const ends = magPartners(m).filter((o) => !magPairCut(m, o));
+  if (!ends.length) return;
   if (S.time - (u.atT ?? -99) < MAGLEV.dwell) return;
   if (S.tick % 30 !== u.id % 30) return;
   const cap = BOTS[u.type].carry, waited = S.time - (u.atT ?? 0);
   const worth = (ld) => ld.total >= cap * MAGLEV.fill || (ld.low && ld.total >= 1) || (ld.total >= MAGLEV.least && waited >= MAGLEV.wait);
-  const load = shipLoad(u, m, other);
-  if (worth(load)) { podDepart(u, m, other, load); return; }
-  const mate = S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && BOTS[v.type].magpod && (v.magTo === other.id || v.inside === other.id));
-  if (!mate && worth(shipLoad(u, other, m))) podDepart(u, m, other, null);
+  let best = null, load = null;
+  for (const o of ends) { const ld = shipLoad(u, m, o); if (worth(ld) && (!load || ld.total > load.total)) { best = o; load = ld; } }
+  if (best) { podDepart(u, m, best, load); return; }
+  for (const o of ends) {
+    const mate = S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && BOTS[v.type].magpod && (v.magTo === o.id || v.inside === o.id));
+    if (!mate && worth(shipLoad(u, o, m))) { podDepart(u, m, o, null); return; }
+  }
 }
 
-/** One step of pod u's run: straight along the line, at speed with power (MAGLEV: accelerating and braking hard), crawling without. */
+/** One step of pod u's run: straight along its line, at speed with power (MAGLEV: accelerating and braking hard), crawling without. */
 function movePod(u, dt) {
   const to = getE(u.magTo), from = getE(u.magFrom), bt = BOTS[u.type];
   if (!to || to.dead || !to.built || to.owner !== u.owner || !BDEFS[to.type].magterm) {
@@ -16169,16 +16389,15 @@ function movePod(u, dt) {
     return;
   }
   // The line cut ahead of it: back to where it came from.
-  const L2 = magLineOf(to);
-  if (L2) {
-    const [A, B] = L2, cut = magCut(A, B);
+  if (from && magLinked(from, to)) {
+    const A = magKey(from, to), B = A === from ? to : from, cut = magCut(A, B);
     if (cut.length) {
       const s = podDist(u, A, B), toFar = to === B;
       if (cut.some((c) => (toFar ? c.d > s : c.d < s))) { if (!podReverse(u)) { podLost(u); killBot(u, true); } return; }
     }
   }
   const tx = to.x + 0.5, ty = to.y + 0.5, dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
-  const powered = magLinePowered(to) || (from && !from.dead && magPartner(from) === to && magLinePowered(from));
+  const powered = magPowered(to) && (!from || from.dead || magPowered(from)) && !flareOn();
   const vmax = powered ? bt.speed : WORKER_SPEED;
   const want = Math.min(vmax, Math.sqrt(2 * bt.brake * d) + 0.05);
   u.vel = want > (u.vel || 0) ? Math.min(want, (u.vel || 0) + bt.accel * dt) : Math.max(want, (u.vel || 0) - bt.brake * dt);
@@ -16191,38 +16410,40 @@ function movePod(u, dt) {
   u.crawl = powered ? 0 : 1;
 }
 
-/** Terminal b's own step (every second): its status, the repair job on a cut line, the power it draws. */
+/** Terminal b's own step (every second): its status, the repair job on the line it keys, the power it draws. */
 function updateMagTerm(b, dt) {
-  const o = magPartner(b);
+  const ps = magPartners(b);
   b.working = false;
-  if (!o) {
-    const s = magPending(b);
-    b.status = b.magMissing ? 'Maglev service suspended: rebuild the missing Terminal' : s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
+  if (!ps.length) {
+    const s = magPending(b), lost = magMiss(b).length;
+    b.status = lost ? 'Maglev service suspended: rebuild the missing Terminal' : s ? `Maglev line going up: ${Math.round(s.progress * 100)}% (a Worker builds it out from here)` : b.magFrom ? 'A Maglev line is coming to it' : 'Not on a line yet: Paths (Maglev), tap this Terminal, then the far end';
     return;
   }
-  const pods = linePods(b), running = pods.some((u) => u.magTo);
+  const pods = linePods(b), running = pods.some((u) => u.magTo && (u.magTo === b.id || u.magFrom === b.id));
   if (running) b.working = true; // (the Generator in reach burns Fuel for it)
-  const near = magNearEnd(b);
-  if (near === b && S.tick % 30 === b.id % 30) {
-    const cut = magCut(b, o);
+  const kp = magKeyPartner(b);
+  if (kp && S.tick % 30 === b.id % 30) {
+    const cut = magCut(b, kp);
     if (cut.length && !b.magFix) b.magFix = { k: cut[0].k, t: cut[0].t, u: 0, since: 0, paid: 0 };
     else if (!cut.length && b.magFix) { const w = getE(b.magFix.u); if (w && !w.dead && w.task && w.task.type === 'magfix') cancelTask(w); b.magFix = null; }
   }
-  if (magLineCut(b)) b.status = near.magFix && near.magFix.u ? 'Line cut: a Worker is rebuilding the pylon' : near.magFix && !near.magFix.paid ? `Line cut: waiting for ${costText(magLineCost(MAGLEV.spacing))} to rebuild the pylon` : 'Line cut: a pylon is down';
-  else if (!pods.length) b.status = 'On a line, no pods yet: order them below (4 Alloy, 2 Chips each)';
-  else if (!magLinePowered(b)) b.status = flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? 'No power: build a Generator (with Fuel) within 4 tiles; the pods crawl' : 'No power at the other end: the pods crawl';
-  else b.status = running ? `Line running: ${pods.filter((u) => u.magTo).length} pod${pods.filter((u) => u.magTo).length === 1 ? '' : 's'} on the way` : 'Line powered: pods loading';
+  const cutTo = ps.find((o) => magPairCut(b, o)), hub = ps.length > 1 ? `Hub of ${ps.length} lines. ` : '', lost = magMiss(b).length ? ' (a line suspended: rebuild its lost Terminal)' : '';
+  if (cutTo) { const K = magKey(b, cutTo); b.status = hub + (K.magFix && K.magFix.u ? 'Line cut: a Worker is rebuilding the pylon' : K.magFix && !K.magFix.paid ? `Line cut: waiting for ${costText(magLineCost(MAGLEV.spacing))} to rebuild the pylon` : 'Line cut: a pylon is down'); }
+  else if (!pods.length) b.status = hub + 'On a line, no pods yet: order them below (4 Alloy, 2 Chips each)';
+  else if (!magLinePowered(b)) b.status = hub + (flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? 'No power: build a Generator (with Fuel) within 4 tiles; the pods crawl' : 'No power at the other end: the pods crawl');
+  else { const n = pods.filter((u) => u.magTo).length; b.status = hub + (running || n ? `Line running: ${n} pod${n === 1 ? '' : 's'} on the way` : 'Line powered: pods loading'); }
+  b.status += lost;
 }
 
-/** The end of near Terminal A's line nearer its break (where the repair Worker goes). */
+/** The end of key Terminal A's line nearer its break (where the repair Worker goes). */
 function magFixEnd(A) {
-  const o = magPartner(A), F = A.magFix;
+  const o = magKeyPartner(A), F = A.magFix;
   if (!o || !F) return A;
   const d = F.k * MAGLEV.spacing, L = dist(A.x, A.y, o.x, o.y);
   return d <= L / 2 ? A : o;
 }
 
-/** Worker u takes the repair of near Terminal A's line: it goes to the nearer end and rides out to the break. */
+/** Worker u takes the repair of key Terminal A's line: it goes to the nearer end and rides out to the break. */
 function assignMagFix(u, A) {
   const E = magFixEnd(A);
   cancelTask(u);
@@ -16233,7 +16454,7 @@ function assignMagFix(u, A) {
 
 function doMagFix(u, t, dt) {
   const A = getE(t.bld), F = A && !A.dead ? A.magFix : null, E = getE(t.end);
-  if (!F || F.u !== u.id || !E || E.dead || !magPartner(A)) { cancelTask(u); return; }
+  if (!F || F.u !== u.id || !E || E.dead || !magKeyPartner(A)) { cancelTask(u); return; }
   if (t.phase === 'go') {
     if (!moveAlong(u, dt)) return;
     t.phase = 'ride'; F.since = S.time;
@@ -16257,6 +16478,25 @@ function doMagFix(u, t, dt) {
   u.x = E.x + 0.5; u.y = E.y + 0.5;
   u.task = null; u.idleT = 0;
   computeZones();
+}
+
+/**
+ * The two ends of the line pylon p carries (key end first, each { x, y }), whether it is joined or suspended (a lost
+ * end is its old tile), or null: for drawing (the band's height over the ground, the pylon's arm).
+ */
+function magPylonEnds(p) {
+  const K = getE(p.line);
+  if (K && !K.dead && BDEFS[K.type].magterm) {
+    const o = magKeyPartner(K);
+    if (o) return [K, o];
+    const m = magMiss(K).find((q) => !q.near || q.key == null);
+    if (m) return m.near ? [m, K] : [K, m];
+    return null;
+  }
+  const S0 = magMissFor(p.line);
+  if (!S0) return null;
+  const m = magMiss(S0).find((q) => q.near && q.key === p.line);
+  return m ? [m, S0] : null;
 }
 
 /* ------------------------------------------------------------------ flak */
@@ -16550,7 +16790,8 @@ function hashState() {
   for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); }
   for (const b of S.buildings) { if (b.magSite) { int(b.id); int(b.magSite); } if (b.magFrom) { int(b.id); int(b.magFrom); } if (b.magFix) { int(b.id); int(b.magFix.k); int(b.magFix.u); num(b.magFix.since); int(b.magFix.paid); } if (BDEFS[b.type].pylon) { int(b.id); int(b.k || 0); int(b.line || 0); } }
   for (const b of S.buildings) {
-    if (b.magMissing) { int(b.id); int(b.magMissing.x); int(b.magMissing.y); num(b.magMissing.near); }
+    for (const m of magMiss(b)) { int(b.id); int(m.x); int(m.y); num(m.near); int(m.key || 0); for (const t of m.layout || []) int(t); } // (suspended lines)
+    if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)

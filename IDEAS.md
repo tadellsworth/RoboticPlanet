@@ -49,16 +49,27 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   of recent restore points (say the last 5, one a minute) on the pause menu to undo a mistake and try again. Check
   what exists first (`autosave` in js/main.js or js/ui.js) and extend it to keep several slots.
 
-**Maglev follow-ups (medium)**
-- **Losing a Terminal doesn't lose the whole line:** today a destroyed Terminal takes the line, its pylons and its pods
-  with it (a lot of money in one blow). Instead the line, pylons and pods stay (the pods wait stopped; rebuild the
-  Terminal on the same tile and the line resumes), or at least the pylons stay and refund part.
-- **Maglev lines can be strung together** (a route of stops): a Terminal may join two lines (a hub), or a line may bend at
-  a relay pylon/Terminal, so a route can go round places a straight line can't reach (the owner: pylons can't always go
-  where they want). Pods carry on through a hub or change there. See "lines of more than two Terminals" in the Maglev notes.
-- **Easier line placement, and pylons over roads:** pylons may stand ON roads (and track), drawn at the side of the road
-  so no road has to be taken up and rebuilt; a clearer preview, and nudging a bad pylon spot a tile instead of failing
-  the whole line. (Currently a pylon never stands on a road or track: relax that rule; the road stays open.)
+**Maglev follow-ups (medium)** (BUILT, Nov 20 2026, all three; README "Maglev lines" has the detail)
+- **Losing a Terminal doesn't lose the whole line** (built): its lines stand broken (guideway and pylons kept, drawn
+  with an amber stripe and the lost Terminal's outline pulsing), pods heading for it turn back with their loads, pods
+  docked in it go to a Terminal it was joined to, and **Rebuild the missing Terminal** (or any Terminal built on that
+  tile) joins every line that ended there again. Decided: the rebuild costs a Terminal's ordinary price, the guideway
+  free; no cheaper "old foundation" rebuild, so losing a Terminal still costs one. *For the owner:* is that right, or
+  should the rebuild be cheaper (say half)?
+- **Maglev lines can be strung together** (built as hubs): a Terminal joins up to three lines (no new building: tap a
+  Terminal already on a line, or *Add a line from here (hub)* on its panel). Lines joined at hubs make a network: pods
+  serve all of it (four for each line), unloading at a hub and loading again for the next line, and the rail plan rolls
+  each far Terminal's demand up through the hubs to the Terminal nearest home. Chosen over a Hub building because the
+  Terminal already is the station, store, pod bay and conveyor point, so a hub is just "a Terminal with more lines": one
+  rule to learn, no new art. A pod changes line at every hub (it never runs through without stopping); goods are relayed
+  through the hub's store. *Open:* through-running pods (a load for two hops that stays aboard), a line that bends at a
+  relay pylon instead of a Terminal, more than three lines at a hub, and a route planner for goods across networks that
+  touch only by conveyor.
+- **Easier line placement, and pylons over roads** (built): pylons stand over roads and track (feet at the side, the way
+  open, Haulers drive under them); the preview colours each spot (pylon, over a road, shifted a tile, blocked with its
+  reason written beside it); a far end tapped on a road or building snaps to a tile beside it; and **Route via a hub**
+  offers two lines through a new hub Terminal where one straight line can't go (a blocked stretch, or more than 40
+  tiles). *Open:* routes of three or more lines, and dragging the hub's spot by hand.
 
 **Murmur: a bigger rework (after the megastructures and the audit, before the campaign)**
 - **Smarter Murmur:** they sometimes walk straight past robots that then shoot them; fix their threat and target choice
@@ -563,8 +574,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     running line draws the Murmur as a Generator does. Decided on the build: pylons clear a boulder or grove under
     their foot (the sheet's "open ground" would have blocked most lines on a rich map); the far end may also be a
     Terminal site or a finished Terminal (then the line's site is its first pylon); all water counts as shallow (a
-    pier), only chasms and rock are spanned. Open: the rival (below), riders (a Worker crew only, if ever), a line of
-    more than two Terminals, Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
+    pier), only chasms and rock are spanned. Open: the rival (below), riders (a Worker crew only, if ever), Flak at pods (they are not aircraft: nothing shoots a pod but the pylon under it), and
     whether 4× a train's acceleration is brisk enough on a short line (a 20-tile line takes about 5 s, not the sheet's 3).
     Lit up at night, it looks the part.
   - **Express highways** (built, Nov 19 2026: direction A, the Expressway, on B's mechanics, from the design sheet,
@@ -635,8 +645,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   warbots, Howitzers and bombers hit pylons and Terminals like any building. The sheet's answer stands: a Maglev joins
   the rival's list when its late game gets a transit tier, and then only the Architect and the Steward, with a line from
   their base to a far Depot cluster, once they have Chips to spare; and a rival should then learn to cut a line (guns
-  under a pylon). Also open from the build: riders (a Worker crew at most, never warbots), lines of more than two
-  Terminals, and a hand-driven pod.
+  under a pylon). Also open from the build: riders (a Worker crew at most, never warbots) and a hand-driven pod
+  (lines of more than two Terminals: built as hubs, Nov 20 2026). If a rival ever builds lines, hubs would let the
+  Architect chain a far Depot cluster home without a new rule.
 
 - **Room to grow in the single-file game** (owner's to-do, Nov 17; done Nov 18: every picture now lives in a bundle beside the page,
   `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,

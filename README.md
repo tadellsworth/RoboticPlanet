@@ -157,8 +157,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Railgunner (Foundry, 3 rounds) | Piercing long gun (`RAIL`, `railAct`, `railFire`): 16 health, speed 0.7, reach 5. Charges 0.8 s (`u.rc`, aim kept in `u.rcX/rcY`: it fires where the target was, so a quick robot can dodge), then a slug along that line out to its reach: 10 to the first enemy robot within 0.4 of it, ×0.6 each after, up to 4; a Bulwark's shield in the way takes the slug and passes 80% of it on, and a Bulwark takes ×1.7. Reload 5 s. Closer than 1.6 tiles: a sidearm, 1 every 1.1 s. Buildings from 4.5 tiles: 4 (×1.5 defences). Ammo: 4 slugs, 2 an Ammo (`botMag`, `botAmmoShots`). Picks Bulwarks, then the toughest in reach |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Maglev Terminal | 8 Cement, 6 Alloy, 3 Chips, one tile: storage at one end of a **Maglev line** (Paths → Maglev: see Maglev lines below); its Pod bay builds Maglev Pods; a Generator within 4 tiles powers it |
-| Maglev Pylon | Not built by hand: one every 3 tiles along a Maglev line, 24 armour like a Wall; shot down it cuts the line until a Worker rebuilds it |
+| Maglev Terminal | 8 Cement, 6 Alloy, 3 Chips, one tile: storage at the end of a **Maglev line**, or a hub of up to three (Paths → Maglev: see Maglev lines below); its Pod bay builds Maglev Pods; a Generator within 4 tiles powers it |
+| Maglev Pylon | Not built by hand: one every 3 tiles along a Maglev line (over a road or track too, its feet at the side: the way stays open), 24 armour like a Wall; shot down it cuts the line until a Worker rebuilds it |
 | Mass Driver | 10 Cement, 8 Alloy, 4 Chips, two tiles (east-west or north-south, R turns it as you place it): storage that throws canisters of 12 goods every 10 s in an arc over anything to its **Catcher** 12–30 tiles away; it fires only with a Generator within 4 tiles (see Mass Drivers below) |
 | Catcher | 6 Cement, 4 Alloy, 2 Chips, one tile: storage that catches a Mass Driver's canisters; its stock is shared out like a Depot's |
 | Mooring Mast | 6 Cement, 3 Alloy, one tile: storage at one end of an **Airship line** (Link two: see Airships and Mooring Masts below); keeps 8 Fuel for its Airships, by Tanker or pipeline |
@@ -533,47 +533,86 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Maglev lines** (every map, the Hollow too; `BDEFS.magterm`, `BDEFS.magpylon`, `BOTS.magpod`, `MAGLEV`). A **Maglev
   Terminal** (8 Cement, 6 Alloy, 3 Chips; Build → Move, key G) is a one-tile store whose conveyors join the buildings
   touching it (as a Rail Station's: `stationLinks`, `feedPreview`). The **line** is a Paths tool, **Maglev** (**Shift+M**,
-  or **Plan a line from here** on a Terminal's panel): two taps (`maglevTap`, the `magLine` order, `placeMagLine`), a
-  finished Terminal of yours and then the far end, `MAGLEV.min` (6) to `max` (40) tiles away in any direction: a clear
-  spot where the far Terminal goes up, a Terminal site of yours (the line's cost goes onto it) or a finished Terminal
-  (then the line's site is a pylon site on the first spot, `s.magFar`). The far end is previewed on hover and tap
-  (`maglevPreview`, `R.ropeEnd`: the band and every pylon spot ringed, the first bad one red). Pylon spots
-  (`magSpotsAt`, `magSpotsChecked`): every `spacing` (3) tiles from the near Terminal, none within 2 of the far end; a
-  spot may share a road or track, and can shift to a nearby tile around other obstructions. Its footing can't occupy a building, slope, oil seep, runway, Trade Post or
-  Uplink, scorched ground or a rival's land (`magSpotWhy`); a boulder or grove there is cleared when the pylon goes up
-  (`magClearSpot`); a chasm or rock under a spot is `skip` (the span goes over) unless the spot before it was skipped too,
-  so a line crosses a gap of at most `gap` (6) tiles. It costs `MAGLEV.cost` a tile (1 Alloy, ½ Chip, 1 Cement, Chips
-  rounded up: `magLineCost`), prepaid from storage like a Viaduct (`fromStore`, `queuePlan`); the Worker builds the site
-  standing at the near Terminal (`siteWorkAt`, `assignBuild`), `time` (3) s a tile plus the Terminal's own build time, and
-  the pylons go up one by one as it gets along (`magBuildStep`, buildings of type `magpylon` with `b.k` and `b.line` the
-  near Terminal's id); `completeBuilding` opens the line (`magLineDone`: `b.line` on both Terminals, `b.magNear` on the
-  near one; `magPartner`, `magNearEnd`, `magLines`). Each Terminal belongs to one line. Put a Terminal from each of two lines side by side for a conveyor transfer, with pods serving both lines (`magRelayPlan`, `magRelaySwap`). Cancelling a new line site takes its pylons down. Pylons claim no land (`civClaims`).
+  or **Plan a line from here** / **Add a line from here (hub)** on a Terminal's panel): two taps (`maglevTap`, the
+  `magLine` order, `placeMagLine`), a finished Terminal of yours with a line to spare and then the far end, `MAGLEV.min`
+  (6) to `max` (40) tiles away in any direction: a clear spot where the far Terminal goes up, a Terminal site of yours
+  (the line's cost goes onto it) or a finished Terminal (then the line's site is a pylon site on the first spot,
+  `s.magFar`). The far end is previewed on hover and tap (`maglevPreview`, `R.ropeEnd`, `drawMaglevPreview`): the band
+  (red and dashed past the first blocked spot) and every pylon spot ringed in its colour (`MAG_SPOT`: green a pylon, blue
+  one over a road or track, yellow one shifted a tile with a tick back to its spot, white dashed a gap spanned, red with a
+  cross where nothing can stand), the first blocked spot's reason written beside it (`magLabel`) and in the banner ("No
+  line this way: a Depot stands where a pylon must go (9 tiles out)."). A far end tapped on a road or building snaps to a
+  good tile beside it. **Route via a hub** (`magRouteVia`, `magRouteWhy`, `placeMagRoute`; the `magLine` order with the
+  hub's tile): where a straight line can't go (a blocked stretch, or more than `max` tiles, up to twice that), the tool
+  looks along and beside the straight line for the shortest pair of lines through a new hub Terminal and offers it; the
+  order plans the first line to the hub, and the hub's site carries the far end (`s.magNext`), planned from the hub by
+  `magLineDone` once it stands. Pylon spots (`magSpotsAt`, `magSpotsChecked`): every `spacing` (3) tiles from the line's
+  **key end**, none within 2 of the other; a spot over a road or track is kept there (`sp.road`, `magOverWay`: drawn as a portal over the
+  way, `drawMagPortal`, two legs on the kerb, `magPylonOffset`, either side of the deck and a striped crossbeam under
+  it; `passTile` lets every road user through, so the road works under it), and a blocked one shifts to a free shoulder tile (`sp.moved`). Its footing can't occupy a building,
+  another line's pylon, slope, oil seep, runway, Trade Post or Uplink, scorched ground or a rival's land (`magSpotWhy`);
+  a boulder or grove there is cleared when the pylon goes up (`magClearSpot`); a chasm or rock under a spot is `skip`
+  (the span goes over) unless the spot before it was skipped too, so a line crosses a gap of at most `gap` (6) tiles.
+  The far Terminal's tile must be clear ground, not a road or track (`magFarBlocked`). It costs `MAGLEV.cost` a tile (1
+  Alloy, ½ Chip, 1 Cement, Chips rounded up: `magLineCost`), prepaid from storage like a Viaduct (`fromStore`,
+  `queuePlan`); the Worker builds the site standing at the Terminal it was planned from (`siteWorkAt`, `assignBuild`),
+  `time` (3) s a tile plus the Terminal's own build time, and the pylons go up one by one as it gets along
+  (`magBuildStep`, buildings of type `magpylon` with `b.k` and `b.line` the key Terminal's id); `completeBuilding` opens
+  the line (`magLineDone`, `magJoin`).
+  **Hubs and networks.** A Terminal is on up to `MAGLEV.hub` (3) lines: `b.line`, then `b.magMore` (`magLinkIds`,
+  `magLinked`, `magPartners`; `magPartner` is the first). Each line has a **key end** (`magKey`: `b.magNear` on it, the
+  line's other end in its `b.line`) that numbers the pylons, carries their id (`p.line`), holds their layout
+  (`b.magLayout`) and the repair job (`b.magFix`; `magKeyPartner`, `magLines`). A Terminal keys one line at most
+  (`magKeyBusy`), so a pylon's `p.line` names its line: a line planned from a Terminal that keys one already is keyed at
+  its far end (`s.magKey`: the pylons are counted from there, and still go up from the near end as the Worker gets
+  along), and two finished Terminals that both key a line can't be joined ("join them through a new Terminal"). Lines
+  joined at hubs make a **network** (`magNet`). Its pods serve all of it (`linePods`: their home is any of its
+  Terminals; `magPodCap`: `perLine` for each line), built at any of its Terminals; a pod at a hub picks the line with
+  the biggest load worth taking (the first in the hub's order on a tie: `podAtTerminal`), so goods cross the network
+  hop by hop, unloading at each hub. The rail plan makes each network (and Terminals of two lines touching: a conveyor,
+  `b.magRelay`, `magRelaySwap`) a tree from its Terminal nearest the Command Base (`magRelayPlan`): every other
+  Terminal's home is the one before it, so `shipLoad` lends a parent's goods to its child and sends a child's spare goods
+  home to its parent, and each Terminal's demand rolls up to its parent (`railPlan`), so a hub keeps what the Terminals
+  beyond it want. Cancelling a new line site takes its pylons down (`magLineCancel`). Pylons claim no land (`civClaims`).
   **Pods** (`BOTS.magpod`: 16 goods, mixed, no riders; speed 3 × a Freight Train's, 4 × its acceleration and braking)
-  are built at either Terminal's **Pod bay** (its yard: two rounds of `BOTS.magpod.round`, 2 Alloy and 1 Chip, so 4 and
-  2 each), `perLine` (4) to a line (`magPodRoom`, `yardOpen`). Docked, a pod is inside its Terminal (`u.home`); running,
-  `u.magFrom` and `u.magTo` are the ends and `u.x, u.y` its place on the straight line between the tile centres
-  (`movePod`: accelerating and braking hard, arriving `podArrive`). Loads reuse the rail plan exactly as the Airship's do
-  (`railPlan` counts the Terminals as a line's stations, `bulkLinked`; the far Terminal stocks what the buildings round
-  it need, `magRunning` standing in for a train on the line; `shipLoad` picks the mixed load, `spareForHome` the backhaul;
-  a pod sets out at `fill` (half) of its hold, with anything once the far side runs low, with `least` (2) after `wait`
-  (60) s, or crosses empty to fetch a load waiting at the other end unless another pod is there or on its way:
-  `podAtTerminal`, dwelling `dwell` (2.5) s). Goods on a pod count in the destination's `inc` (`u.cargo`, `u.cargoTo`)
-  and are lost with it (`podLost`); `b.magGot` counts what arrived (the mission and the colony goal). Pods are never
-  haulers (`isIdleWorker`).
+  are built at a Terminal's **Pod bay** (its yard: two rounds of `BOTS.magpod.round`, 2 Alloy and 1 Chip, so 4 and
+  2 each), up to the network's cap (`magPodRoom`, `yardOpen`). Docked, a pod is inside its Terminal (`u.home`); running,
+  `u.magFrom` and `u.magTo` are the two ends of the line it's on and `u.x, u.y` its place on the straight line between
+  the tile centres (`movePod`: accelerating and braking hard, arriving `podArrive`). Loads reuse the rail plan exactly as
+  the Airship's do (`railPlan` counts the Terminals as a line's stations, `bulkLinked`; the far Terminal stocks what the
+  buildings round it need, `magRunning` standing in for a train on the line; `shipLoad` picks the mixed load,
+  `spareForHome` the backhaul; a pod sets out at `fill` (half) of its hold, with anything once the far side runs low,
+  with `least` (2) after `wait` (60) s, or crosses empty to fetch a load waiting at the other end unless another pod is
+  there or on its way: `podAtTerminal`, dwelling `dwell` (2.5) s). Goods on a pod count in the destination's `inc`
+  (`u.cargo`, `u.cargoTo`) and are lost with it (`podLost`); `b.magGot` counts what arrived (the mission and the colony
+  goal). Pods are never haulers (`isIdleWorker`).
   **Power** (`magPowered`): a Generator of the owner's within its radius (4) of the Terminal with Fuel in it (or energy
-  left), not turned off nor cut by the Murmur; `magLinePowered` wants both ends and no solar flare (`flareOn`). A
-  Terminal on a line counts as something in reach working to its Generator (`updateGenerator`; `b.working` while a pod
-  runs), so the Generator burns Fuel for the line. Without power the pods run at `WORKER_SPEED` (`u.crawl`) and the
-  guideway's night glow dims. The Murmur: a running Terminal is worth a Generator to their tunnels (`chargeWorth`) and
-  is on their cut list (`murmurPlan`); a cut Terminal is unpowered.
+  left), not turned off nor cut by the Murmur; a line runs at speed with both its ends powered and no solar flare
+  (`magPairPowered`, `flareOn`; `magLinePowered`: every line of a Terminal). A Terminal on a line counts as something in
+  reach working to its Generator (`updateGenerator`; `b.working` while a pod runs to or from it), so the Generator burns
+  Fuel for the line. Without power the pods run at `WORKER_SPEED` (`u.crawl`) and the guideway's night glow dims. The
+  Murmur: a running Terminal is worth a Generator to their tunnels (`chargeWorth`) and is on their cut list
+  (`murmurPlan`); a cut Terminal is unpowered.
   **Shot down**: a pylon is a building with a Wall's armour (24), so warbots, Howitzers, bombers, Missiles and the
-  rival's guns hit it as any building; the guideway can't be shot. `destroyBuilding` → `magPylonDown`: pods within
-  `spacing` tiles of the pylon along the line (the two spans it carried) are lost with their loads (a small blast),
+  rival's guns hit it as any building; the guideway can't be shot. `destroyBuilding` → `magPylonDown`: pods on its line
+  (`podOnLine`) within `spacing` tiles of the pylon (the two spans it carried) are lost with their loads (a small blast),
   pods heading across the break turn back (`podReverse`: their load goes back into the Terminal they left), and the cut
-  (`magCut`: standing spots with no pylon) stops the pods at the Terminals (`magLineCut`; the Terminals' status and
-  panel say so). **Repair**: the near Terminal's `b.magFix` (`updateMagTerm`): once `spacing` tiles' worth of goods is
-  paid from storage, a Worker from the end nearer the break (`magFixEnd`, `assignMagFix`, task `magfix`) walks there,
-  rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s. Losing one Terminal suspends the line. Pods regroup at the surviving Terminal, and its **Rebuild the missing Terminal** button puts a replacement on the same tile without charging for the original guideway (`magTermDown`, `magReconnect`).
+  (`magCut`: standing spots with no pylon; `magPairCut`, `magLineCut`) stops the pods using that line (the Terminals'
+  status and panel say so). **Repair**: the key Terminal's `b.magFix` (`updateMagTerm`): once `spacing` tiles' worth of
+  goods is paid from storage, a Worker from the end nearer the break (`magFixEnd`, `assignMagFix`, task `magfix`) walks
+  there, rides out of sight (`doMagFix`) and the pylon stands again after `repair` (20) s.
+  **A Terminal lost** (`destroyBuilding` → `magTermDown`): each of its lines is **suspended**, not lost: the guideway and
+  pylons stand, and the Terminal at the other end keeps it (`b.magMissing`, then `b.magMissMore`; `magMiss`): the lost
+  one's tile, whether it was the key (`near`), and then its id (`key`: the pylons keep carrying it) and their layout.
+  Pods heading for it turn back with their loads (`podReverse`), pods docked in it go to a Terminal it was joined to,
+  and none set out on a suspended line; a line whose other end was lost already comes down with it. It's drawn broken
+  (an amber dashed stripe down the deck, the lost Terminal's outline pulsing on its tile, no glow) and the survivor's
+  panel says so, with **Rebuild the missing Terminal**: the `magLine` order to the lost tile plans a Terminal site there
+  (`magRebuildSite`), at a Terminal's ordinary cost (the guideway is free; a cheaper rebuild "on the old foundation" was
+  left out: losing a Terminal should still cost one), and when it stands every line that ended on that tile joins it
+  again (`magRebuilt`, `magReconnect`: if the lost end was the key, the new Terminal takes the pylons and layout over).
+  A Terminal built there by hand does the same. A Terminal with a suspended line may still start another (it counts
+  among its three). A save from before kept the lost key's pylons on the survivor (`near` with no `key`): still read so.
   **Drawn** by `drawMaglevShadows` (the bands' shadows on the ground, `MAG_SHADOW` of the deck height down-sun, before
   the buildings) and `drawMaglevs` (after the buildings and robots, under the air): the pylon sprites (`magpylon@T`, a
   `B3D` building with no pad; squashed or stretched so its head stays under the band, `MAG_LEVEL` 0.3 a level of ground
@@ -581,10 +620,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`magdeck@T`, one tile running east, repeated: `magBand`) from dock to dock `MAGLEV.head` (0.464) tiles up the screen
   (the Terminal art's `head` mark; a pylon's head is `MAGLEV.deck`, 0.343, over its foot), split at every cut
   (`magSpans`), its night glow in the team colour (`magGlow`, dim unpowered), the pods (`magpod@T` loaded, `magpod-empty@T`
-  with the hatch shut) turned along the line at deck height with a shadow below (`drawMagPod`), one docked at each
-  Terminal, a repair pod riding out, a line going up as far as it's got with the rest dashed, and the placement preview.
-  Everything is in `S` and hashed (`hashState`: the lines, pods, sites and repairs); nothing is baked. The rival AI
-  builds no lines (IDEAS.md). The mission **Phase 2** (Industry and Trade) and the colony goal *Phase 2* teach it.
+  with the hatch shut) turned along their line at deck height with a shadow below (`drawMagPod`), one docked at each
+  Terminal, a repair pod riding out, a suspended line broken, a line going up as far as it's got with the rest dashed,
+  and the placement preview (`drawMaglevPreview`, both lines of a Route via a hub with the hub labelled). Everything is
+  in `S` and hashed (`hashState`: the lines and hubs, keys, pods, sites, repairs and suspended lines) and checked on
+  load (`checkSave`); nothing is baked. The rival AI builds no lines (IDEAS.md). The mission **Phase 2** (Industry and
+  Trade: its last goal a hub) and the colony goal *Phase 2* teach it.
 - **Mass Drivers** (every map but the Hollow; `BDEFS.mdriver`, `BDEFS.catcher`, `MASSDRIVER`; the owner's look A, "Coil
   Ramp"). A **Mass Driver** (10 Cement, 8 Alloy, 4 Chips; Build → Move, key V) and a **Catcher** (6 Cement, 4 Alloy, 2
   Chips; key C) are stores. The Driver is **two tiles** (`def.long`): its own tile and the one east (`b.mdAxis` 'ew') or
