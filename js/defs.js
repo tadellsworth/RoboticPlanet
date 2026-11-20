@@ -1501,14 +1501,14 @@ function docInfo(k) {
  *           Uranium, in a Nuclear race). Cratered roads are planned again straight away.
  *   flare   Solar flare: bot batteries drain FLARE_DRAIN times as fast.
  *   trader  The Wren (the trader ship, LORE.md): for 75 seconds it waits in orbit and offers each colony a swap at a good rate:
- *           some of a good it has plenty of for the raw good (Ore, Crystal, Stone or Crude) its
- *           land is closest to running out of.
+ *           a raw good it has plenty of for the finished good it's shortest of, or now and then (WREN_RAW_CHANCE) a good
+ *           it has plenty of for the raw good (Ore, Crystal, Stone or Crude) its land is closest to running out of.
  */
 const EVENTS = {
   dust:   { name: 'Dust storm',    color: '#d9a86a', dur: [60, 90], warn: true,  desc: 'Bots move at two-thirds speed and Missiles are grounded until it blows over.' },
   meteor: { name: 'Ringfall',      color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Pieces of the Ring crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
   flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Fuel Stations fuelled.' },
-  trader: { name: 'The Wren',      html: 'The <i>Wren</i>', color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'The Accord supply ship takes spare raw goods (Stone, Fiber, Ore, Crystal or Crude) for the finished goods you\'re shortest of: Cement, Alloy, Chips, Fuel or Ammo.' },
+  trader: { name: 'The Wren',      html: 'The <i>Wren</i>', color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'The Accord supply ship takes spare raw goods (Stone, Fiber, Ore, Crystal or Crude) for the finished goods you\'re shortest of: Cement, Alloy, Chips, Fuel or Ammo. Now and then it brings the raw good your land is running out of instead (Ore, Crystal, Stone or Crude), for a good you have plenty of.' },
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
@@ -1518,10 +1518,27 @@ const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
 const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a challenge modifier, MODS.dust): never
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
 /**
- * The trader (the Wren) takes raw goods only (WREN_TAKES: the one a colony has well over TRADE_KEEP of) and brings
- * finished goods only (WREN_BRINGS: the one it has least of against TRADE_KEEP; Ammo only with a war on). (TRADE_GET,
- * TRADE_LEFT and TRADE_GIVE were its old rule, the other way round, and the rival's trading still reads them.) It pays TRADE_BONUS times
- * the worth (TRADE_VALUE) of what it takes.
+ * The Ring drizzle (LORE.md: Ringfall keeps restocking the surface): in every game, Planetary events or not (and in a
+ * mission only if it asks for it: `drizzle`; never in the Hollow, underground), a lone piece of the Ring comes down every DRIZZLE_GAP seconds (the first
+ * DRIZZLE_FIRST in, once the opening is over) on each colony's share of the planet, the same spot mirrored or turned
+ * for every colony as Ringfall's (fairShare), DRIZZLE_NEAR tiles from player 0's Command Base. It does no harm: it lands only on open ground no one
+ * holds (no road, building, plan, Trade Post ground, water or rock), so a colony expands to claim it. Each leaves one
+ * small deposit of DRIZZLE_TILES tiles of Ore or Crystal (half and half), each DRIZZLE_RICH times a Ringfall deposit's
+ * amount; in a Nuclear race now and then (DRIZZLE_URANIUM) a single tile of Uranium instead. None falls while
+ * DRIZZLE_CAP of its deposits lie unclaimed. DRIZZLE_FALL: seconds from the streak in the sky to the impact. (Tuned so
+ * computer-vs-computer games end as often as without it: every 120-200 s from minute 3, a cap of 8 and half a Ringfall
+ * deposit left more of them undecided at an hour.)
+ */
+const DRIZZLE_FIRST = [710, 740], DRIZZLE_GAP = [160, 240], DRIZZLE_NEAR = [10, 30], DRIZZLE_TILES = 2, DRIZZLE_RICH = 0.4;
+const DRIZZLE_CAP = 6, DRIZZLE_URANIUM = 0.1, DRIZZLE_FALL = 1.4, DRIZZLE_TRIES = 60;
+/**
+ * The trader (the Wren) as a rule takes raw goods only (WREN_TAKES: the one a colony has well over TRADE_KEEP of) and
+ * brings finished goods only (WREN_BRINGS: the one it has least of against TRADE_KEEP; Ammo only with a war on). On
+ * about one visit in four (WREN_RAW_CHANCE, decided for each colony from the visit's seed) it makes the older offer
+ * instead: the raw good the colony's land is closest to running out of (TRADE_GET; TRADE_LEFT: stock plus what's in the
+ * ground on its land) for a good it has well over TRADE_KEEP of (TRADE_GIVE: never Chips, Ammo or Missiles). The rival's
+ * trading reads TRADE_GET, TRADE_LEFT and TRADE_GIVE too. It pays TRADE_BONUS times the worth (TRADE_VALUE) of what it
+ * takes.
  */
 const TRADE_GET = { ore: R_ORE, crystal: R_CRYSTAL, stone: R_BOULDER, crude: R_OIL };
 const TRADE_LEFT = { ore: 80, crystal: 50, stone: 80, crude: 60, alloy: 40, ammo: 30, chip: 12 };
@@ -1530,6 +1547,7 @@ const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, ce
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10, ammo: 10, chip: 4 };
 const TRADE_BONUS = 1.3;
 const WREN_TAKES = ['stone', 'fiber', 'ore', 'crystal', 'crude'], WREN_BRINGS = ['cement', 'alloy', 'chip', 'fuel', 'ammo'];
+const WREN_RAW_CHANCE = 0.25;
 /**
  * The Trade Terminal (BDEFS.terminal) runs one standing trade route, "send this good, bring back that one", set on its
  * panel and kept until it's changed. The Trade Post's ledger takes one delivery from each Terminal every `every`

@@ -233,7 +233,7 @@ function _noise(dur, vol, o) {
 
 const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
-  launch: 0.3, mdcharge: 0.8, mdlaunch: 0.4, mdcatch: 0.3, mdburst: 0.2, mdthud: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, drizzle: 0.8, mdcharge: 0.8, mdlaunch: 0.4, mdcatch: 0.3, mdburst: 0.2, mdthud: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
@@ -254,6 +254,7 @@ const BLAST_SIZE = {
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
   flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, arc: 0.5, rail: 0.6, railcharge: 0.4, // (heard only on screen)
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
+  drizzle: 0.4, // (the Ring drizzle: a soft whoosh, heard only on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
 };
 
@@ -694,6 +695,12 @@ function sfx(name, dest, y, dur) {
       _tone(520, 0.6, 'triangle', 0.08, 500, 0, D); _tone(1310, 0.45, 'sine', 0.05, 1290, 0, D); _tone(2090, 0.3, 'sine', 0.025, null, 0, D);
       _noise(0.12, 0.14, { freq: 700, to: 300, attack: 0.001, dest: D });
       _tone(90, 0.3, 'sine', 0.12, 50, 0, D);
+      break;
+    // The Ring drizzle (updateDrizzle): a soft whoosh falling across the sky and a muffled thud as it lands.
+    case 'drizzle':
+      _noise(1.3, 0.05, { type: 'bandpass', freq: 2600, to: 500, q: 1.2, attack: 0.5, dest: D });
+      _tone(70, 0.3, 'sine', 0.05, 40, 1.35, D);
+      _noise(0.3, 0.04, { freq: 500, to: 160, attack: 0.01, delay: 1.35, dest: D });
       break;
     case 'mdburst': blast(D, { size: 0.45, far: Math.max(far, 0.3), gain: 0.8, air: true }); _tone(1800, 0.3, 'triangle', 0.04, 600, 0, D); break;
     case 'mdthud': _tone(80, 0.3, 'sine', 0.15, 45, 0, D); _noise(0.25, 0.12, { freq: 500, to: 150, attack: 0.002, dest: D }); _tone(700, 0.25, 'triangle', 0.03, 400, 0.02, D); break;

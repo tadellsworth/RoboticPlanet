@@ -5258,6 +5258,14 @@ function checkSave(o) {
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
     Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
     [m.x0, m.x1].every((x) => Number.isFinite(x) && x >= 0 && x <= o.W) && [m.y0, m.y1].every((y) => Number.isFinite(y) && y >= 0 && y <= o.H)))) bad();
+  // The Ring drizzle (S.drizzle, see updateDrizzle): its clock, its deposits and the pieces in the sky, numbers and tiles.
+  if (o.drizzle != null) {
+    const D = o.drizzle, rk = (r) => r === R_ORE || r === R_CRYSTAL || r === R_URANIUM, tile2 = (t) => t === -1 || tileOk(t);
+    if (!obj(D) || !Number.isFinite(D.next) || !Number.isInteger(D.n) || !Array.isArray(D.spots) || D.spots.length > 64 ||
+      !D.spots.every((z) => obj(z) && tileOk(z.t) && tile2(z.u) && rk(z.r) && Number.isFinite(z.at)) ||
+      (D.fall != null && !(obj(D.fall) && Number.isFinite(D.fall.at) && rk(D.fall.r) && Number.isInteger(D.fall.amt) && D.fall.amt > 0 && D.fall.amt < 256 &&
+        Array.isArray(D.fall.tiles) && D.fall.tiles.length <= 8 && D.fall.tiles.every((pr) => Array.isArray(pr) && pr.length === 2 && pr.every(tile2))))) bad();
+  }
   if (o.event) {
     const E = o.event;
     if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
