@@ -35,5 +35,27 @@ The smaller storm is now reserved for light gun cover. A fortified base requires
 | Crossroads Small, seed 1, four-colony free for all | 34:33, Colony 4 | 34:33, Colony 4 |
 | Crossroads Small, seed 3, 2v2 | 20:07, Team 1 | 20:07, Team 1 |
 | Long haul Medium, seed 11 | 30:56, Colony 2 | 30:56, Colony 2 |
+| Hollow Small, seed 25, historical `d947f83` | Open at 75:00 | Open at 75:00 |
 
-On the historical revision, replaying with the narrower rule withheld the 24-unit storm at minute 32. Neither historical replay had a winner at the minute-45 comparison point. A separate trial that also tightened assembly at the staging flag introduced a new 55-minute stall on the current seed, so the committed change leaves assembly alone.
+On the historical revision, replaying with the narrower rule withheld the 24-unit storm at minute 32. The old game still reached its test cap. A separate trial that also tightened assembly at the staging flag introduced a new 55-minute stall on the current seed, so the committed change leaves assembly alone.
+
+## 3. Islands crossings
+
+Medium seed 21 opened with six Ore deposits per home island, compared with 11 to 18 in the other three test seeds. The baseline reached 55 minutes without a Ferry or a landing on either side. Colony 1 had made only 16 Ore and had no Port. Colony 2 had made 44 Ore and had two Ports and 16 military units, but its Foundry and other jobs competed with the shipyard for scarce parts. The AI's two-deposit Mine rule stranded reachable Ore. Allowing a lone deposit restored Ore production, but that trial still had no Ferries at the cap.
+
+An Ore-starved island colony can now put a Mine within walking distance of one deposit if there is no valid site with two. When all enemies are separated by water and the home island has at most the six deposits normally needed by three Mines, the AI can give its first Port an extra build slot and prioritize parts for its Ferry. A bomber Airfield waits for that crossing. I reviewed air supply as well. The AI's Airfield plan orders a bomber, so it would not open a freight route across the gap. In seed 21 the Ferry made four landing runs and Colony 1 captured the enemy Command Base. Existing landing and air-supply rules were sufficient for these tests and were left in place.
+
+A trial that gave first-Ferry priority to every island colony opened seed 21 but left seeds 5 and 17 past their usual finish times. The Ore-reserve check limits that trade-off.
+
+| Match | Before | After |
+| --- | --- | --- |
+| Islands Medium, seed 21 | Open at 55:00 | 20:53, Colony 1 |
+| Islands Medium, seed 2 | 18:38, Colony 2 | 18:38, Colony 2 |
+| Islands Medium, seed 5 | 17:38, Colony 1 | 17:38, Colony 1 |
+| Islands Medium, seed 17 | 22:37, Colony 1 | 22:37, Colony 1 |
+| Standard Medium, seed 64 | 15:58, Colony 1 | 15:58, Colony 1 |
+| Crossroads Small, seed 1, four-colony free for all | 34:33, Colony 4 | 34:33, Colony 4 |
+| Crossroads Small, seed 3, 2v2 | 20:07, Team 1 | 20:07, Team 1 |
+| Long haul Medium, seed 11 | 30:56, Colony 2 | 30:56, Colony 2 |
+
+A seed 21 checkpoint saved at tick 13,800 passed save validation. Running 900 more ticks from the checkpoint and reloading it gave the same state hash at tick 14,700.

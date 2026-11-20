@@ -700,7 +700,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
-  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Against a rival across the water
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). An island colony that has
+  run out of working Mines can use a single reachable Ore deposit. When its home island is short on Ore and its
+  enemies are across the water, the first Port can use an extra build slot and its first Ferry gets priority for
+  parts before the rival starts a bomber Airfield. Against a rival across the water
   (Medium and up, in missions too), once it has a decisive lead (half as many warbots again and four more) or a landing
   is held back by the guns over the beach, it lands a band instead (`aiBeach`, `P.beach`, `AI_BEACH`): it picks the
   rival's Command Base if it has the warbots to take it, or else the fort it takes fewest to take, and a beach out of

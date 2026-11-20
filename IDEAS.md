@@ -621,9 +621,10 @@ or drop.
 - **Island maps still stall now and then.** With a decisive lead (or a landing held back by guns) the rival now gathers
   a band on a beach out of the guns, with a second Ferry, and goes in when it's strong enough (`aiBeach`); in 12
   Islands test games 4 still ran to 50 minutes (6 before). Left: a rival dug in behind several Mortar Pits, turrets and
-  a Keep, where the leader's bands keep taking Outposts that are lost again (seeds 2, 5, 17); a colony whose home
-  island has no Ore left makes no Alloy, so no army and no Ferry, and nobody lands at all (seed 21); and a staging
-  island it takes first, which isn't tried.
+  a Keep, where the leader's bands keep taking Outposts that are lost again (historical seeds 2, 5, 17); and a staging
+  island it takes first, which isn't tried. The Ore trap in Medium seed 21 was fixed on the working branch: use a
+  lone deposit if that is all that is reachable and give the first crossing priority on Ore-poor islands. The
+  current seed 21 ends at 20:53 after four landing runs. See [the seeded replay notes](docs/ai-stalemate-fixes.md#3-islands-crossings).
 - **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
   (One cause fixed, Nov 17: in the last fight the winner of the earlier ones couldn't gather a storm, every fort,

@@ -354,17 +354,30 @@ function aiThink(p) {
   const kinds = {};
   for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
   workers = kinds.worker || 0;
+  const islandWar = S.mode !== 'colony' && navalMap() && SHAPE_PRESETS[S.settings.shape].islands;
+  const hz = islandWar ? homeZone(p) : 0;
+  // A first sea crossing needs its ships before the small home fields can run dry.
+  const seaCrossing = islandWar && !kinds.ferry && !botBanned(p, 'ferry') && !S.players.some((q) => {
+    const base = foes(q.id, p) && !isWild(q.id) && !q.out && !q.absent && getE(q.lander);
+    return base && S.zone[tIdx(base.x, base.y)] === hz;
+  });
   for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew && !aiShut(b)) staffed++;
   // Keep a few workers free to build: a colony with every worker staffed stalls.
   const canStaffMore = staffed + Math.max(3, Math.round(workers * 0.2)) <= workers;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
   // more of it comes before anything else.
   const inLand = {};
-  let crGround = 0;
-  for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) {
-    inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
-    if (S.res[t] === R_CRYSTAL) crGround += S.amt[t];
+  let crGround = 0, homeOre = 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    const r = S.res[t];
+    if (!r) continue;
+    if (seaCrossing && r === R_ORE && S.amt[t] && S.zone[t] === hz && (S.owner[t] < 0 || S.owner[t] === p)) homeOre++;
+    if (S.owner[t] !== p) continue;
+    inLand[r] = (inLand[r] || 0) + 1;
+    if (r === R_CRYSTAL) crGround += S.amt[t];
   }
+  // At most the six deposits the usual three Mines need, even with all the home island Ore in reach.
+  const firstFerry = seaCrossing && homeOre <= 3 * 2;
   // Crystal is judged by how long what's left would last at the rate the Chip Fabs burn it (see AI_CRYSTAL_MINS), not
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
@@ -418,7 +431,8 @@ function aiThink(p) {
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
-  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
+  // On an isolated, Ore-poor island, the first Ferry gets the construction budget before a bomber.
+  if (S.mode !== 'colony' && !firstFerry && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
   // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
   // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
@@ -725,7 +739,7 @@ function aiThink(p) {
         }
         continue;
       }
-      const spot = aiFindSpot(p, type, lander);
+      const spot = aiFindSpot(p, type, lander, islandWar && type === 'mine' && starved.includes(type));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -1067,7 +1081,11 @@ function aiThink(p) {
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
-  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, !few && sites < maxSites);
+  // A colony short on home-island Ore can use an extra site for its first Port.
+  if (S.mode !== 'colony' && navalMap()) {
+    const portRoom = firstFerry && !counts.port && siteCount(p) <= maxSites;
+    aiNaval(p, me, kinds, lvl, lander, !few && (sites < maxSites || portRoom), firstFerry);
+  }
 
   // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
@@ -1348,7 +1366,7 @@ function aiMurmurStrike(p, e, need, send, all, rear) {
  * a Ferry for it; and every few minutes, with warbots to spare, a beach landing of up to six of them on
  * the shore beside the enemy building the Ferry can reach that's least covered by turrets and garrisons.
  */
-function aiNaval(p, me, kinds, lvl, lander, canBuild) {
+function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
   const P = S.players[p];
   // Warbots it landed march on from the beach once there's nothing left to fight round the flag: the
   // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
@@ -1391,7 +1409,10 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferries = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].ferry), ferry = ferries[0];
-  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) orderAtYard(yard, 'ferry', 1);
+  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) {
+    orderAtYard(yard, 'ferry', 1);
+    if (firstFerry) yard.prio = 'high';
+  }
   // Later on, a second Port out toward the enemy, kept stocked from home by a Container Ship (Cement for
   // building at the front, Ammo for the warbots there).
   if (ports.length === 1 && ports[0].built && S.time > 900 && canBuild && aiAffordable(p, 'port')) {
@@ -3112,13 +3133,14 @@ function resourceSums(type) {
 /** Buildings the AI likes to put beside their suppliers or customers, for feed links. */
 const AI_FEED = new Set(['smelter', 'fab', 'foundry', 'armory', 'munitions', 'tarworks', 'roadworks', 'refinery', 'kiln', 'charger', 'generator', 'repair', 'fueltank']);
 
-function aiFindSpot(p, type, lander) {
+function aiFindSpot(p, type, lander, singleOre) {
   // A search that found nothing isn't repeated until the territory changes or 20 s pass.
   const P = S.players[p];
   P.noSpot = P.noSpot || {};
   const miss = P.noSpot[type];
   if (miss && miss.ver === S.territoryVer && S.time < miss.until) return null;
-  const spot = aiSearchSpot(p, type, lander);
+  // A stranded colony can use an isolated Ore deposit once its mines have run dry.
+  const spot = aiSearchSpot(p, type, lander) || (singleOre ? aiSearchSpot(p, type, lander, 1) : null);
   if (!spot) P.noSpot[type] = { ver: S.territoryVer, until: S.time + 20 };
   return spot;
 }
@@ -3174,7 +3196,7 @@ function aiFarmSoil(p, cx, cy, claimed) {
   return n;
 }
 
-function aiSearchSpot(p, type, lander) {
+function aiSearchSpot(p, type, lander, minDeposits = 2) {
   const def = BDEFS[type], P = S.players[p];
   const fib = gatherRes('harvester'), sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, fib, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
@@ -3246,7 +3268,7 @@ function aiSearchSpot(p, type, lander) {
         const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, gatherRes(type)); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < 2 && !u) {
+        if (n < minDeposits && !u) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
           if (!def.bedrock) continue;
           const f = rockFacesIn(i, j, def.radius);
@@ -3398,9 +3420,9 @@ function aiSearchSpot(p, type, lander) {
     for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
       const c = cands[k];
       let s = c.s;
-      if (c.gn >= 2) {
+      if (c.gn >= minDeposits) {
         const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, gatherRes(type))); // (a Mine counts only the Ore no Mine of ours works: never more)
-        if (w < 2 && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
+        if (w < minDeposits && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
         s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
       }
       if ((best && s <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;
