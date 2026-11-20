@@ -5234,7 +5234,7 @@ function checkSave(o) {
     // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
-    for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }

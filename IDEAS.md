@@ -18,6 +18,8 @@ Roadmap order the owner set: finish the new transit items, **add all the new meg
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
 
+- **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
+
 **Quick fixes (small, cheap; do these first when usage is short)**
 - **Maglev pods are made only at a Maglev Terminal,** not in the Bot Foundry or any other yard (check the Foundry's order list
   and the Air/Army menus: `BOTS.magpod` must not appear there).
@@ -171,6 +173,18 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
       warbots −0.26, the blob −0.47: it matches or beats the specialists but not massed warbots (fewer bodies for the
       price) or the blob. AI against AI (20 games, the same doctrine pairs, before → after): undecided 0 → 0, wins by
       doctrine unchanged (Steward 5, Warden 1, Salvager 6, Herald 5, Architect 3 of 8).
+    - *Blob counters* (the owner, Nov 2026; branch blob-counter): a Torch's flame half wraps round a Bulwark's shield
+      (`TORCH.shieldPass` 0.5) and what the shield takes burns it twice as fast (`shieldMul` 2); one Bulwark shelters
+      at most 6 robots behind it, the nearest, ties by id (`BULWARK.coverMax`, `shieldCovers`; selected, it rings them);
+      a rival facing a blob (2 Bulwarks, 12 in the army: `aiBlob`) puts Mortar Pits toward it (up to 2) and wants a
+      Howitzer more (they're switched off). Mortar and Howitzer shells and napalm already came down over shields.
+      Arena, before → after: blob of 30 + 6 at a fort with 8 Torches defending: blob losses 9 → 22 of 48 (Bulwarks left
+      4 → 2); 30 + 2: Torches 18 → 24 of 36, 4 Mortar Pits 19 → 22; Torches against a Bulwark squad at its cost: 6w+2B
+      −0.37 → +0.42, 18w+2B +0.21 → +0.48, 30w+6B +0.22 → +0.30; Torches vs the blob in the brawl table +0.21 → +0.48;
+      the blob's average +0.21 → +0.18 (in open fights a Bulwark's lee seldom holds more than six anyway, so the cap
+      bites mostly at forts and on the march); small escorts unchanged (6w+1B against warbots of its cost +0.54 → +0.54,
+      6w+2B +0.35 → +0.38, 4w+2B +0.48 → +0.48). AI against AI (20 games): undecided 0 → 0, a win in 19.5 → 22.4 min,
+      Salvager 6 → 5 and Herald 5 → 6 wins of 8, the rest unchanged.
     - *AI against AI* (40 two-player games, every pair of doctrines, Normal, Nuclear race on, 60 min at most; before →
       after): undecided 0 → 0, a win in 20.0 → 20.0 min on average; wins by doctrine Steward 9 → 9, Warden 2 → 2,
       Salvager 12 → 12, Herald 12 → 11, Architect 5 → 6 (of 16 each): none became dominant (the Salvager and Herald led
@@ -417,7 +431,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
     *Aimed the Other Way*). The owner's look A (a 3 × 3 gun pit, a long barrel on a turntable), the beam across the whole
     map, killing robots of every side too, 2 Generators or a Reactor, 90 s charge, 4 min reload, allowed on Argos; the
-    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). Still open: power lines
+    rival AI builds it late in a Nuclear race and chooses between it and the nukes (`aiMegaPick`). On Reactor power
+    (the owner, Nov 20): a 45 s charge and a 3 min reload (Generators 90 s and 4 min), 2 Uranium or an Enriched Uranium a
+    shot; with both in reach, the Generators unless Use Reactor is switched on in its panel (the rival switches it on
+    once it has chosen the Lance). Still open: power lines
     to carry its power from further off (below). The notes as filed: (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
     power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
     Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim

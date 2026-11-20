@@ -5281,6 +5281,11 @@ function drawBot(ctx, u, sx, sy, s) {
     drawArt(ctx, art, sx, sy + bob, size, u.face);
     if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
     // (a Bulwark's shield and a Torch's pilot flame light their way at night instead of headlights)
+    // Sheltered by a Bulwark you have selected (one of the BULWARK.coverMax it covers: shieldCovers): a faint violet ring.
+    if (u.owner === ME && !R.clean && UI.sel.length && UI.sel.length <= 40 && UI.sel.some((id) => { const w = getE(id); return w && w !== u && w.covIds && w.covIds.has(u.id); })) {
+      ctx.save(); ctx.strokeStyle = '#c89bff'; ctx.globalAlpha = 0.55; ctx.lineWidth = Math.max(1, s * 0.03); ctx.setLineDash([s * 0.06, s * 0.05]);
+      ctx.beginPath(); ctx.ellipse(sx, sy + bob + s * 0.05, size * 0.5, size * 0.36, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
     if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
     else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
     else {
@@ -9977,7 +9982,7 @@ function lanceMarks(b) {
 /** Lance b's charge as it shows: rings lit one by one with the charge, white-hot at full; cooling after a shot. */
 function drawLanceCharge(ctx, b, cx, cy, s) {
   const since = b.lShot ? S.time - b.lShot : 99;
-  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / LANCE.charge) : 0, cool = since < 8 ? 1 - since / 8 : 0;
+  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = since < 8 ? 1 - since / 8 : 0;
   if (!k && !cool) return;
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
   ctx.save();
