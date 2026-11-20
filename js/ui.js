@@ -4686,7 +4686,7 @@ function showAimBanner(problem) {
   if (problem) html = `<span class="err">${problem}</span> `;
   if (BDEFS[silo.type].lance) {
     html += R.aim
-      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(LANCE.charge - silo.lCharge)}.` : `It charges for ${LANCE.charge} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
+      ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything on the red line is destroyed, yours too.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
     return;
@@ -4731,7 +4731,7 @@ function fireAimed() {
   if (BDEFS[silo.type].lance) {
     const was = silo.lOn;
     act('lanceAim', [sid, i, j], (why) => {
-      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${LANCE.charge} seconds.`, 'info'); return; }
+      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${lanceTime(silo)} seconds.`, 'info'); return; }
       sfx('error'); showAimBanner(why);
     });
     return;
@@ -6799,7 +6799,8 @@ function openBuildingSheet(b) {
     }
     if (def.lance && b.built && b.owner === ME) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim the Lance</button>
-        <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>`;
+        <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>
+        <button class="btn" id="sh-luser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-luser-hint"></p>`;
     }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
@@ -6865,6 +6866,7 @@ function openBuildingSheet(b) {
     });
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-lstop')) $('sh-lstop').onclick = () => { sfx('click'); act('lanceStop', [b.id], () => { toast('The Lance stands down: its charge is lost.', 'info'); refreshSheet(); }); };
+    if ($('sh-luser')) $('sh-luser').onclick = () => { sfx('click'); const on = !b.lUseR; act('lanceReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Lance charges on it (${LANCE.reactorCharge} s, ${LANCE.uranium} Uranium or an Enriched Uranium a shot).` : 'Use Reactor off: with Generators in reach the Lance charges on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
     for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
       const to = +btn.dataset.to;
       act('ferryLine', [b.id, to], (why) => {
@@ -7214,11 +7216,15 @@ function refreshBuildingSheet(b) {
     }
     if (def.lance) {
       const pw = lancePower(b), gens = megaGens(b, LANCE.reach).length, rx = lanceReactor(b);
-      if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / LANCE.charge) * 100)}%${b.lCharge >= LANCE.charge ? ' (ready to fire)' : `, fires in ${fmtSecs(LANCE.charge - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / LANCE.charge) * 100)}%;background:#ff6a3a"></div></div>`);
+      const T = lanceTime(b);
+      if (b.lOn) parts.push(`<div class="kv"><span>Charge</span><span>${Math.floor((b.lCharge / T) * 100)}%${b.lCharge >= T ? ' (ready to fire)' : `, fires in ${fmtSecs(T - b.lCharge)}`}</span></div><div class="bar"><div style="width:${Math.round((b.lCharge / T) * 100)}%;background:#ff6a3a"></div></div>`);
       if (mine) {
-        parts.push(`<div class="kv"><span>Power</span><span>${b.lOn ? (b.lSrc === 'reactor' ? 'Nuclear Reactor' : `${gens} Generator${gens === 1 ? '' : 's'}, burning Fuel fast`) : pw === 'gen' ? `${gens} Generators with Fuel in reach` : pw === 'reactor' ? 'Nuclear Reactor in reach' : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium and no Enriched Uranium` : ''}`}</span></div>`);
+        // Which power the next (or this) charge uses and what a shot costs: "Reactor, 2 Uranium a shot, 45 s charge".
+        const src = b.lOn ? b.lSrc : pw, cost = rx && (rx.stock.uranium || 0) >= LANCE.uranium ? `${LANCE.uranium} Uranium` : 'an Enriched Uranium';
+        parts.push(`<div class="kv"><span>Power</span><span>${src === 'reactor' ? `Reactor, ${b.lOn ? 'its Uranium in' : `${cost} a shot`}, ${LANCE.reactorCharge} s charge, ${Math.round(LANCE.reactorReload / 60)} min reload`
+          : src === 'gen' ? `${gens} Generator${gens === 1 ? '' : 's'}, extra Fuel while charging, ${LANCE.charge} s charge, ${Math.round(LANCE.reload / 60)} min reload`
+          : `<b>None</b>: ${gens} of ${LANCE.gens} Generators with Fuel${rx ? `, a Reactor with ${rx.stock.uranium || 0} of ${LANCE.uranium} Uranium and no Enriched Uranium` : ''}`}</span></div>`);
         parts.push(`<div class="kv"><span>Reload</span><span>${b.lReload > 0 ? fmtSecs(b.lReload) : 'Ready'}</span></div>`);
-        parts.push(`<div class="kv"><span>Charge · reload</span><span>${LANCE.charge} s · ${Math.round(LANCE.reload / 60)} min</span></div>`);
       }
     }
     if (def.dome) {
@@ -7272,8 +7278,12 @@ function refreshBuildingSheet(b) {
     const why = b.lOn ? '' : lanceBlocked(b);
     $('sh-aim').disabled = !!why;
     $('sh-aim').textContent = b.lOn ? 'Change the aim' : 'Aim the Lance';
-    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${LANCE.charge} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
+    $('sh-aim-hint').textContent = why || (b.lOn ? 'Charging: tap Change the aim to turn it onto another line before it fires.' : `Tap Aim, then any spot: it charges for ${lanceTime(b)} s, then fires a beam from the gun through that spot right across the map. Everything on the line is destroyed, yours too.`);
     if ($('sh-lstop')) $('sh-lstop').hidden = !b.lOn;
+    if ($('sh-luser')) {
+      $('sh-luser').textContent = `Use Reactor: ${b.lUseR ? 'On' : 'Off'}`; $('sh-luser').setAttribute('aria-pressed', b.lUseR ? 'true' : 'false'); $('sh-luser').classList.toggle('on', !!b.lUseR);
+      $('sh-luser-hint').textContent = `With Generators and a Reactor both in reach: On charges on the Reactor (${LANCE.reactorCharge} s, reload ${Math.round(LANCE.reactorReload / 60)} min, ${LANCE.uranium} Uranium or an Enriched Uranium a shot); Off uses the Generators (${LANCE.charge} s, reload ${Math.round(LANCE.reload / 60)} min) and saves the Uranium for a nuke. A Reactor alone is always used.`;
+    }
   } else if ($('sh-aim') && def.nukeSilo) {
     $('sh-aim').disabled = !b.armed;
     $('sh-aim-hint').textContent = b.armed ? `Shows its ${NUKE.range}-tile range: tap a spot inside it to see the ${NUKE.radius}-tile blast, then launch.` : 'Builds a nuclear missile once its parts are in.';

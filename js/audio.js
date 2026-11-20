@@ -1125,7 +1125,7 @@ function audioTick(dt) {
     sirenTick(live);
     // The Lance of Corvane charging anywhere: its hum, by the fullest charge (louder with one on screen).
     let hk = 0, near = 0;
-    if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / LANCE.charge); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
+    if (live) for (const b of S.buildings) if (!b.dead && b.lOn && BDEFS[b.type].lance) { const k = Math.min(1, b.lCharge / lanceTime(b)); if (k > hk) hk = k; const p = worldToScreen(b.x + 1.5, b.y + 1.5); if (p.x > -50 && p.y > -50 && p.x < R.w + 50 && p.y < R.h + 50) near = 1; }
     lanceHum(live ? Math.max(hk, 0.02 * (hk > 0)) : 0, near);
     // Arrival City on screen, lit: its hum, and now and then its clock striking.
     let ck = 0, cb = null;
