@@ -3613,6 +3613,7 @@ function findPlantSpot(b, radius) {
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
+      if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -3637,7 +3638,7 @@ function findCropSpot(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue;
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -3911,7 +3912,7 @@ function doStaff(u, t, dt) {
           u.carry = RES[R_CROP].good;
           u.carryN = 1;
           madeGood(u.owner, u.carry, 1);
-        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
@@ -3936,7 +3937,7 @@ function doStaff(u, t, dt) {
         // Keep going along the paths while there's asphalt left in the hopper (or Express tiles the stock can pay for).
         const next = findPaveSpot(b, ni, nj);
         if (next >= 0 && (paveWant(next) === 3 ? !expressShort(b, next) : b.charges > 0) && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
-      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
+      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
         S.res[node] = def.plant;
         S.amt[node] = RES[def.plant].amount;
         S.grow[node] = 0;
@@ -9533,7 +9534,7 @@ function rockfall(r) {
   if (hit.has(ME) || S.owner[tIdx(r.x, r.y)] === ME) sfx('boom', cx, cy);
   // What came down lies there: a boulder (Stone for a Quarry), where the ground is clear.
   const t = tIdx(r.x, r.y);
-  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !postAt(t) && !uplinkAt(t)) {
+  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !calmAt(r.x + 0.5, r.y + 0.5) && !uplinkAt(t)) {
     const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
     S.res[t] = R_BOULDER; S.amt[t] = clamp(Math.round(RES[R_BOULDER].amount * pr.amount), 1, 255); S.grow[t] = 1;
     clearDecor(t);
@@ -9936,9 +9937,12 @@ function meteorImpact(E, h) {
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
   let placed = 0;
-  for (const [, i, j] of spots) {
-    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i, j)) continue;
-    const t = tIdx(i, j);
+  for (const [, i0, j0] of spots) {
+    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
+    // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
+    let t = tIdx(i0, j0);
+    if (calmAt(i0 + 0.5, j0 + 0.5)) { if (S.terrain[t] !== T_GROUND || (t = calmSpill(t)) < 0) continue; }
+    const i = t % S.W, j = (t / S.W) | 0;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
     if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
     S.res[t] = r; S.amt[t] = amt;
@@ -13073,6 +13077,100 @@ function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
  * warbots used to fire at one for ever). Bombs, shells and Missiles still spare everything there.
  */
 function calmShield(b) { return b.built && calmB(b); }
+
+/**
+ * No deposits lie on a Trade Post's ground: only a Trade Terminal or a Ramp goes there (canPlace), so nothing could
+ * ever mine them (the owner's call, Nov 2026). Can a deposit moved off it from tile `from` lie on tile t? Open, bare
+ * ground off every post's ground, with nothing on it or planned for it (on the same land as `from`, with `sameZone`).
+ */
+function calmSpillOk(t, from, sameZone) {
+  if (!(t >= 0 && t < S.W * S.H) || S.terrain[t] !== T_GROUND) return false;
+  if (S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) return false;
+  for (const L of [S.rail, S.railPlan, S.pipe, S.pipePlan, S.lava, S.ford, S.tidal, S.fault]) if (L && L[t]) return false;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (calmAt(i + 0.5, j + 0.5)) return false;
+  if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
+  if (S.wrecks && S.wrecks.some((w) => w.tiles && w.tiles.includes(t))) return false;
+  if (sameZone && S.zone && S.zone[t] !== S.zone[from]) return false;
+  return true;
+}
+
+/**
+ * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk),
+ * on the same land if there is one near, else anywhere near (a tie goes to the tile further out from the posts' ground);
+ * -1 if there's nowhere. The same answer on every device.
+ */
+function calmSpill(from) {
+  const fi = from % S.W, fj = (from / S.W) | 0;
+  for (const same of [true, false]) {
+    for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) {
+      let best = -1, bd = Infinity, bo = -1;
+      for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
+        const t = j * S.W + i, d = dist2(i, j, fi, fj);
+        if (d > bd || !calmSpillOk(t, from, same)) continue;
+        let out = Infinity;
+        for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
+        if (d < bd || out > bo) { best = t; bd = d; bo = out; }
+      }
+      if (best >= 0) return best;
+    }
+  }
+  return -1;
+}
+
+/** Move the deposit on tile `from` to tile `to` (the same kind and amount). */
+function moveDeposit(from, to) {
+  S.res[to] = S.res[from]; S.amt[to] = S.amt[from];
+  if (S.grow) S.grow[to] = S.grow[from];
+  S.res[from] = R_NONE; S.amt[from] = 0;
+  if (S.grow) S.grow[from] = 1;
+  if (S.resRes) S.resRes[from] = 0;
+  clearDecor(to);
+  S.dirtyTiles.push(from, to);
+}
+
+/**
+ * Clear the Trade Posts' ground of deposits (see calmSpillOk): each moves, the same kind and amount, to the nearest open
+ * tile just off it (calmSpill), the ones at the edge of the ground first; an Energy crop is a planting, and just goes.
+ * At the start of a game (once the posts, the Uplinks and a mission's own setup are in) and as a save loads (one from
+ * before this rule). A post's half-turn twin (Teams and Long Haul 2v2 pair them) has its deposits moved to the twins of
+ * the first one's tiles, so both sides stay alike. No dice: every device does the same. Returns how many moved.
+ */
+function clearCalmGround() {
+  if (!S.posts || !S.posts.length) return 0;
+  const R = TRADE_POST.calm, N = S.W * S.H, half = (t) => N - 1 - t;
+  const done = new Map(); // post -> its moves [{ f, t, r, a }]
+  let moved = 0;
+  for (const p of S.posts) {
+    const src = [];
+    for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+      const i = p.x + di, j = p.y + dj;
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!S.res[t]) continue;
+      if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.dirtyTiles.push(t); continue; }
+      src.push([Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
+    }
+    // The twin's moves, turned half round, if they all still fit.
+    const twin = S.posts.find((q) => q !== p && done.has(q) && q.x === S.W - 1 - p.x && q.y === S.H - 1 - p.y);
+    if (twin && src.length) {
+      const plan = done.get(twin).map((m) => ({ f: half(m.f), t: half(m.t), r: m.r, a: m.a }));
+      const same = plan.length === src.length && plan.every((m, k) => S.res[m.f] === m.r && S.amt[m.f] === m.a && src.some((s) => s[2] === m.f) && plan.findIndex((x) => x.t === m.t) === k && calmSpillOk(m.t, m.f, false));
+      if (same) { for (const m of plan) { moveDeposit(m.f, m.t); moved++; } done.set(p, plan); continue; }
+    }
+    src.sort((a, b) => b[0] - a[0] || b[1] - a[1] || a[2] - b[2]);
+    const moves = [];
+    for (const [, , f] of src) {
+      const t = calmSpill(f);
+      if (t < 0) continue;
+      moves.push({ f, t, r: S.res[f], a: S.amt[f] });
+      moveDeposit(f, t);
+      moved++;
+    }
+    done.set(p, moves);
+  }
+  return moved;
+}
 
 /* ------------------------------------------------------------------ crawlers */
 
