@@ -15,5 +15,7 @@ for (const t of [0, 1]) TOD_KEYS.push(`lance@${t}`, `dome@${t}`);
 for (let k = 0; k < 16; k++) TOD_KEYS.push(`lance-head-${k}`);
 // Arrival City (renderer/tools/install_city.py): whole and battle-damaged (its light layers serve every time of day).
 for (const t of [0, 1]) TOD_KEYS.push(`city@${t}`, `city-down@${t}`);
+// The Orbital Lift (renderer/tools/install_lift.py): its anchor pad, whole and battle-damaged.
+for (const t of [0, 1]) TOD_KEYS.push(`lift@${t}`, `lift-down@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);

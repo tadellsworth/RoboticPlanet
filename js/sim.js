@@ -43,6 +43,7 @@ function simStep(dt) {
   if (S.flak && S.flak.length) updateFlakShells();
   if (S.missiles.length) updateMissiles(dt);
   if (S.cans && S.cans.length) updateCans(dt);
+  if (S.liftFalls && S.liftFalls.length) updateLiftFalls(dt); // (an Orbital Lift's cable coming down)
   if (S.fires && S.fires.length) updateFires();
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
@@ -231,6 +232,9 @@ function needsOf(b) {
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
     if (expressMarked(b.owner)) out.push(['alloy', 2 - (b.stock.alloy || 0) - (b.inc.alloy || 0)]); // (an Express lane's barrier and lamps: a quarter a tile)
+  } else if (def.lift && b.lfSend) {
+    // An Orbital Lift's goods to send up: what the colony holds beyond each reserve, up to a climber's load (see liftWant).
+    for (const g in b.lfSend) out.push([g, liftWant(b, g), true]);
   } else if (def.mdriver && b.mdSend) {
     // A Mass Driver's goods list: what the colony holds beyond each reserve, up to its hopper (see mdWant).
     for (const g in b.mdSend) out.push([g, mdWant(b, g), true]);
@@ -1693,6 +1697,7 @@ function moveAlong(u, dt) {
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+    if (liftWreckAt(here)) speed *= LIFT.slow; // (climbing over a fallen Lift's cable)
     if (S.ford && S.ford[here] && S.terrain[here] === T_WATER) speed *= FORD_SLOW; // wading a ford
     if (!S.bAt[here]) {
       const fleeing = u.task && u.task.type === 'flee'; // running from a nuclear blast: no time to keep to the roads
@@ -4014,6 +4019,7 @@ function updateBuilding(b, dt) {
   if (def.lance) updateLance(b, dt);
   else if (def.dome) updateDome(b, dt);
   else if (def.city) updateCity(b, dt);
+  else if (def.lift) updateLift(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -11181,6 +11187,7 @@ function murmurPower(e) {
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
+    else if (BDEFS[b.type].lift && b.working) charge += 2; // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
   }
@@ -11193,6 +11200,7 @@ function chargeWorth(e) {
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
+  if (def.lift && e.working) return 3; // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
@@ -16306,7 +16314,11 @@ function hashState() {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
+    if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
+  // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
+  for (const f of S.liftFalls || []) { int(f.id); int(f.d); num(f.t); int(f.k); int(f.n); int(f.by); int(f.hit.length); }
+  if (!S.crater) for (const s of S.scrap || []) if (s.cb) { int(s.id); num(s.x); num(s.y); num(s.n); }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
   if (S.drizzle) { // (the Ring drizzle: its clock, its deposits, the pieces in the sky)
@@ -17041,6 +17053,335 @@ function cityDown(b, by) {
   logEvent({ t: S.time, k: 'cityDown', p: b.owner, q: by });
 }
 
+/* ------------------------------------------------------------------ the Orbital Lift */
+
+/*
+ * The Orbital Lift (LIFT; BDEFS.lift). b.lfDir: its fall line (LIFT_DIRS); b.lfRes: drops left in the Carrier; b.lfBoost:
+ * restocks since the last call (the next drop is LIFT.boost bigger for each); b.lfCd: s until it can call again; the
+ * climber: b.lfMove (0 at the bottom, 1 coming down, 2 going up), b.lfT how far (s of LIFT.climb), b.lfPaid whether this
+ * climb's Fuel is burned (without it, it waits), b.lfLoad and b.lfMul what's coming down and how much of it; b.lfSend
+ * the goods it sends up ({good: the reserve kept home}); b.lfUps, b.lfDrops: climbs made; b.lfWarn: the cable is weak.
+ * A fallen one's cable comes down along S.liftFalls (liftFall, updateLiftFalls).
+ */
+
+/** Generators of b's owner within LIFT.reach of its pad with Fuel in stock (the climb's LIFT.fuel comes from them). */
+function liftGens(b) { return megaGens(b, LIFT.reach).filter((g) => (g.stock.fuel || 0) > 0); }
+/** Fuel in stock at the Generators that power Lift b's climbs. */
+function liftFuel(b) { let n = 0; for (const g of liftGens(b)) n += g.stock.fuel || 0; return n; }
+/** The goods Lift b has gathered to send up (whole units of its lfSend goods, not what a drop left for Haulers). */
+function liftLoaded(b) {
+  let n = 0;
+  for (const g in b.lfSend || {}) n += Math.max(0, Math.floor((b.stock[g] || 0) - ((b.loot && b.loot[g]) || 0)));
+  return n;
+}
+/** How big Lift b's next drop is: 1, and LIFT.boost more for every restock since the last (up to LIFT.boostMax of them). */
+function liftMul(b) { return 1 + LIFT.boost * Math.min(LIFT.boostMax, b.lfBoost || 0); }
+/** What a drop of `load` brings at size `mul` ({ bots: {type: n}, goods: {good: n} }). */
+function liftDropOf(load, mul) {
+  const D = LIFT.drops[load], out = { bots: {}, goods: {} };
+  for (const k in D.bots || {}) out.bots[k] = Math.round(D.bots[k] * mul);
+  for (const g in D.goods || {}) out.goods[g] = Math.round(D.goods[g] * mul);
+  return out;
+}
+/** Why Lift b can't call a climber down with `load` now ('' if it can). */
+function liftCallWhy(b, load) {
+  if (!b || b.dead || !BDEFS[b.type].lift) return 'That Orbital Lift is gone.';
+  if (!b.built) return 'The Orbital Lift is still going up.';
+  if (!ownKey(LIFT.drops, load)) return 'Pick a load: a Security detail, a Work crew, Alloy or Chips.';
+  if (b.lfMove === 1) return 'A climber is already on its way down.';
+  if (b.lfMove === 2) return 'The climber is on its way up to the Carrier: call it once it is back.';
+  if ((b.lfCd || 0) > 0) return `The next call is ready in ${fmtSecs(b.lfCd)}.`;
+  if ((b.lfRes ?? LIFT.reserve) < 1) return 'The Carrier\'s reserve is empty: send goods up to put a drop back.';
+  return '';
+}
+/** Call Lift b's climber down with `load` (an order: liftCall). '' or why not. */
+function liftCall(b, load) {
+  const why = liftCallWhy(b, load);
+  if (why) return why;
+  b.lfRes = (b.lfRes ?? LIFT.reserve) - 1;
+  b.lfMul = liftMul(b); b.lfBoost = 0;
+  b.lfMove = 1; b.lfT = 0; b.lfPaid = 0; b.lfLoad = load;
+  return '';
+}
+/** Turn Lift site b's fall line to d (an order: liftDir): only while it's a site, and only onto a line that will do. '' or why not. */
+function setLiftDir(b, d) {
+  if (b.built) return 'Its fall line was set when it was placed: the cable is up now.';
+  const why = liftLineWhy(b.owner, b.x, b.y, d);
+  if (why) return why;
+  b.lfDir = d;
+  return '';
+}
+/** Send good g up from Lift b (on), or stop sending it. '' or why not. */
+function setLiftSend(b, g, on) {
+  if (!LIFT_GOODS.includes(g)) return 'The Lift sends up made goods and Crystal.';
+  const list = b.lfSend || {};
+  if (on) {
+    if (list[g] !== undefined) return '';
+    if (Object.keys(list).length >= LIFT.goods) return `The Lift sends up to ${LIFT.goods} goods: take one off its list first.`;
+    list[g] = LIFT.sendReserve;
+  } else delete list[g];
+  if (Object.keys(list).length) b.lfSend = list; else delete b.lfSend;
+  return '';
+}
+/** The reserve of good g Lift b leaves at home: d more (or less). */
+function setLiftReserve(b, g, d) {
+  if (!b.lfSend || b.lfSend[g] === undefined) return;
+  b.lfSend[g] = clamp(Math.round(b.lfSend[g] + d), 0, LIFT.sendMax);
+}
+/** How much more of good g Haulers (or Tankers) should bring Lift b: up to a climber's load, from what the colony holds beyond the reserve. */
+function liftWant(b, g) {
+  if (!b.built || !b.lfSend || b.lfSend[g] === undefined || b.lfMove === 2) return 0;
+  let inc = 0;
+  for (const k in b.inc || {}) inc += b.inc[k] || 0;
+  const room = LIFT.load - liftLoaded(b) - inc;
+  const spare = Math.floor(tickTotal(b.owner, g) - b.lfSend[g]);
+  return Math.max(0, Math.min(room, spare));
+}
+/** Lift b's conveyors, every LIFT.feed s: a unit of a good it sends from each store or factory touching its pad. */
+function liftConveyor(b, dt) {
+  b.lfFeed = (b.lfFeed || 0) - dt;
+  if (b.lfFeed > 0) return;
+  b.lfFeed = LIFT.feed;
+  if (!b.lfSend || b.lfMove === 2) return;
+  for (const c of touching(b)) {
+    if (!c.built) continue;
+    const cd = BDEFS[c.type];
+    for (const g in b.lfSend) {
+      if (isLiquid(g) || liftWant(b, g) < 1) continue;
+      const store = c.type === 'lander' || c.type === 'depot';
+      if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); break; }
+    }
+  }
+}
+
+/** The Orbital Lift, each tick: its conveyors, its climber (down with a drop, up with a load), its cooldown and status. */
+function updateLift(b, dt) {
+  if (b.lfRes === undefined) b.lfRes = LIFT.reserve;
+  if (b.lfDir === undefined) b.lfDir = 0;
+  if ((b.lfCd || 0) > 0) b.lfCd = Math.max(0, b.lfCd - dt);
+  liftWeak(b);
+  liftConveyor(b, dt);
+  b.working = false;
+  // A full load gathered and the climber at the bottom: it goes up.
+  if (!b.lfMove && liftLoaded(b) >= LIFT.load) {
+    let n = LIFT.load;
+    for (const g in b.lfSend) {
+      const have = Math.max(0, Math.floor((b.stock[g] || 0) - ((b.loot && b.loot[g]) || 0))), k = Math.min(have, n);
+      if (k > 0) { bump(b.stock, g, -k); usedGood(b.owner, g, k); n -= k; }
+      if (!n) break;
+    }
+    b.lfMove = 2; b.lfT = 0; b.lfPaid = 0; b.lfLoad = '';
+  }
+  if (!b.lfMove) {
+    const why = liftCallWhy(b, 'alloy');
+    b.status = !why ? `Ready: call a climber down (${b.lfRes} of ${LIFT.reserve} drops in the Carrier)` : (b.lfCd || 0) > 0 ? `Next call in ${fmtSecs(b.lfCd)}` : 'The Carrier\'s reserve is empty: send goods up to put a drop back';
+    if (b.lfSend) b.status += `; loading ${liftLoaded(b)} of ${LIFT.load} goods to send up`;
+    return;
+  }
+  const down = b.lfMove === 1;
+  // Each climb burns LIFT.fuel Fuel from the Generators in reach; without it the climber waits where it is.
+  if (!b.lfPaid) {
+    if (murmurCutOn(b) || liftFuel(b) < LIFT.fuel) {
+      b.status = `${down ? 'Climber waiting at the top' : 'Climber waiting at the bottom'}: no power (a Generator with ${LIFT.fuel} Fuel within ${LIFT.reach} tiles)`;
+      return;
+    }
+    let n = LIFT.fuel;
+    for (const g of liftGens(b)) { const k = Math.min(n, Math.floor(g.stock.fuel || 0)); if (k > 0) { bump(g.stock, 'fuel', -k); usedGood(b.owner, 'fuel', k); n -= k; } if (!n) break; }
+    b.lfPaid = 1;
+    const c = bCentre(b);
+    if (down) {
+      // Everyone hears a climber start down (a rival has LIFT.climb s to be waiting at the bottom).
+      for (const P of S.players) {
+        if (P.absent || P.out || isWild(P.id)) continue;
+        postMsg(P.id, P.id === b.owner ? `Climber descending with ${LIFT.drops[b.lfLoad].name.toLowerCase()}: it lands in ${LIFT.climb} seconds.` : `Climber descending at ${playerName(b.owner)}'s Lift: it lands in ${LIFT.climb} seconds.`, Math.floor(c.x), Math.floor(c.y), P.id === b.owner ? 'info' : 'warn');
+      }
+      logEvent({ t: S.time, k: 'liftCall', p: b.owner, g: b.lfLoad });
+    }
+    sfx('liftclimb', c.x, c.y);
+  }
+  if (eventNow('flare')) { b.status = `Climber held ${down ? 'on its way down' : 'on its way up'}: a solar flare (it goes on when it passes)`; return; }
+  b.working = true; // (charge running up the cable: the Murmur see it, and its Generator works)
+  b.lfT = (b.lfT || 0) + dt;
+  const left = LIFT.climb - b.lfT;
+  if (left > 0) { b.status = down ? `Climber coming down with ${LIFT.drops[b.lfLoad].name.toLowerCase()}: lands in ${fmtSecs(left)}` : `Climber going up with ${LIFT.load} goods: at the Carrier in ${fmtSecs(left)}`; return; }
+  if (down) liftLand(b);
+  else liftArrive(b);
+}
+
+/** Lift b's climber is down: its robots step out round the pad, its goods wait for Haulers; the cooldown starts. */
+function liftLand(b) {
+  const load = b.lfLoad, drop = liftDropOf(load, b.lfMul || 1), P = S.players[b.owner], c = bCentre(b);
+  b.lfMove = 0; b.lfT = 0; b.lfPaid = 0; b.lfLoad = ''; b.lfMul = 1;
+  b.lfCd = LIFT.cooldown;
+  b.lfDrops = (b.lfDrops || 0) + 1;
+  if (P) P.stats.liftDrops = (P.stats.liftDrops || 0) + 1;
+  const spots = liftSpots(b);
+  let k = 0, n = 0;
+  for (const type in drop.bots) for (let q = 0; q < drop.bots[type]; q++) {
+    const t = spots.length ? spots[k++ % spots.length] : tIdx(b.x, b.y);
+    addBot(b.owner, type, t % S.W, (t / S.W) | 0);
+    n++;
+  }
+  for (const g in drop.goods) { bump(b.stock, g, drop.goods[g]); b.loot = b.loot || {}; b.loot[g] = (b.loot[g] || 0) + drop.goods[g]; n += drop.goods[g]; }
+  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[b.owner], r: 2.2 });
+  addFx('smoke', c.x, c.y, { r: 1.2, life: 1.4 });
+  sfx('liftland', c.x, c.y);
+  const what = Object.keys(drop.bots).map((t) => `${drop.bots[t]} ${drop.bots[t] === 1 ? BOTS[t].name : BOTS[t].plural}`).concat(Object.keys(drop.goods).map((g) => `${drop.goods[g]} ${goodN(g, drop.goods[g])}`)).join(' and ');
+  postMsg(b.owner, `The climber is down: ${what}${Object.keys(drop.goods).length ? ' (Haulers take them to storage)' : ''}. The next call is ready in ${Math.round(LIFT.cooldown / 60)} minutes.`, b.x + 1, b.y + 1, 'good');
+  logEvent({ t: S.time, k: 'liftDrop', p: b.owner, g: load, n });
+}
+
+/** Lift b's climber reaches the Carrier with its load: a drop goes back into the reserve and the next one grows. */
+function liftArrive(b) {
+  const P = S.players[b.owner];
+  b.lfMove = 0; b.lfT = 0; b.lfPaid = 0;
+  b.lfRes = Math.min(LIFT.reserve, (b.lfRes ?? LIFT.reserve) + 1);
+  b.lfBoost = Math.min(LIFT.boostMax, (b.lfBoost || 0) + 1);
+  b.lfUps = (b.lfUps || 0) + 1;
+  if (P) P.stats.liftUps = (P.stats.liftUps || 0) + 1;
+  postMsg(b.owner, `The Carrier took ${LIFT.load} goods: ${b.lfRes} of ${LIFT.reserve} drops in reserve, and the next drop is ${Math.round((liftMul(b) - 1) * 100)}% bigger.`, b.x + 1, b.y + 1, 'good');
+}
+
+/** Free tiles round Lift b's pad for its robots to step out on, nearest the pad first (open, walkable, no building). */
+function liftSpots(b) {
+  const out = [];
+  for (let r = 1; r <= 3 && out.length < 16; r++) {
+    for (let j = b.y - r; j <= b.y + 2 + r; j++) for (let i = b.x - r; i <= b.x + 2 + r; i++) {
+      if (Math.max(Math.max(b.x - i, i - (b.x + 2)), Math.max(b.y - j, j - (b.y + 2))) !== r || !inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.ramp[t]) continue;
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/** Lift b's cable below LIFT.weak of its armor: it sways, and whoever has land or robots on its line is told (once, until it's mended). */
+function liftWeak(b) {
+  const weak = b.armor < BDEFS[b.type].armor * LIFT.weak;
+  if (!weak) { b.lfWarn = 0; return; }
+  if (b.lfWarn) return;
+  b.lfWarn = 1;
+  const L = liftLineTiles(b.x, b.y, b.lfDir || 0), set = new Set(L), told = new Set();
+  for (const t of L) if (t >= 0 && S.owner[t] >= 0) told.add(S.owner[t]);
+  for (const u of S.bots) if (!u.dead && u.owner >= 0 && set.has(tIdx(Math.floor(u.x), Math.floor(u.y)))) told.add(u.owner);
+  told.add(b.owner);
+  for (const p of told) if (S.players[p] && !isWild(p)) { postMsg(p, `Lift cable unstable: ${p === b.owner ? 'your' : `${playerName(b.owner)}'s`} Orbital Lift is badly hurt, and if it is destroyed its cable falls along the line flashing red.`, b.x + 1, b.y + 1, 'warn'); if (isMe(p)) sfx('liftgroan', b.x + 1.5, b.y + 1.5); }
+}
+
+/** Who brought Lift b down: the foe who hit its colony last, just now (-1: none; its own side's doing, or the ground's). */
+function liftKiller(b) {
+  const P = S.players[b.owner], H = (P && P.hitBy) || {};
+  let by = -1, at = -Infinity;
+  for (const k in H) { const q = +k; if (H[k] >= S.time - 2 && H[k] > at && foes(q, b.owner)) { at = H[k]; by = q; } }
+  return by;
+}
+
+/**
+ * Lift b is being removed (destroyBuilding, built). A climber on the cable is lost with its load. Destroyed by force by a
+ * foe (liftKiller), its cable falls along its line (liftFall); dismantled, moved, or brought down by its own side or
+ * the ground, the cable is reeled in safely.
+ */
+function liftDown(b, burn) {
+  if (b.lfMove) postMsg(b.owner, `The climber on your Orbital Lift's cable was lost${b.lfMove === 1 ? `, with its ${LIFT.drops[b.lfLoad] ? LIFT.drops[b.lfLoad].name.toLowerCase() : 'load'}` : ' with its load'}.`, b.x + 1, b.y + 1, 'lost');
+  b.lfMove = 0;
+  const by = burn ? liftKiller(b) : -1;
+  if (by >= 0) liftFall(b, by);
+  else if (burn) postMsg(b.owner, 'Your Orbital Lift is gone; its cable was reeled in safely.', b.x + 1, b.y + 1, 'lost');
+}
+
+/** Lift b, destroyed by `by`, lets its cable go: LIFT.creak s of creaking, then it comes down along its line (updateLiftFalls). */
+function liftFall(b, by) {
+  const d = b.lfDir || 0, n = liftLineTiles(b.x, b.y, d).length;
+  S.liftFalls = S.liftFalls || [];
+  S.liftFalls.push({ id: b.id, o: b.owner, by, ax: b.x, ay: b.y, d, n, t: 0, k: 0, sp: LIFT.sweep * (biome() === 'lunar' ? LIFT.lunar : 1), hit: [] });
+  const P = S.players[by];
+  if (P) P.stats.liftsFelled = (P.stats.liftsFelled || 0) + 1;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    postMsg(Q.id, Q.id === b.owner ? `Your Orbital Lift is destroyed: its cable is coming down ${LIFT_DIR_NAMES[d]} along its fall line in ${LIFT.creak} seconds! Get clear.` : `${playerName(b.owner, true)}'s Orbital Lift is destroyed: its cable comes down ${LIFT_DIR_NAMES[d]} along its fall line in ${LIFT.creak} seconds.`, b.x + 1, b.y + 1, Q.id === b.owner ? 'lost' : 'bad');
+  }
+  sfx('liftgroan', b.x + 1.5, b.y + 1.5);
+  logEvent({ t: S.time, k: 'liftFall', p: b.owner, q: by });
+}
+
+/** The tile k of fall f's line (its index on the map, -1 off it). */
+function liftFallTile(f, k) {
+  const [dx, dy] = LIFT_DIRS[f.d], x = f.ax + 1 + dx * (k + 2), y = f.ay + 1 + dy * (k + 2);
+  return inMap(x, y) ? tIdx(x, y) : -1;
+}
+
+/** Cables coming down: after LIFT.creak s each sweeps out from its anchor at f.sp tiles a second, crushing as it goes (liftCrush). */
+function updateLiftFalls(dt) {
+  for (const f of S.liftFalls) {
+    const was = f.t;
+    f.t += dt;
+    if (f.t < LIFT.creak) continue;
+    if (was < LIFT.creak) sfx('liftsnap', f.ax + 1.5, f.ay + 1.5);
+    const upto = Math.min(f.n, Math.floor((f.t - LIFT.creak) * f.sp) + 1);
+    while (f.k < upto) liftCrush(f, f.k++);
+  }
+  S.liftFalls = S.liftFalls.filter((f) => f.k < f.n);
+}
+
+/**
+ * The falling cable lands on tile k of fall f's line: a building there takes LIFT.crush (a Keep is left at half, a
+ * Command Base at its Missile floor, a megastructure badly hurt but standing; a Wall, Gate, Viaduct, Ropeway or Maglev
+ * pylon is broken), robots on it are destroyed and those beside it take LIFT.side (aircraft aren't hit), a road or track
+ * on it is broken, and the cable lies there as wreckage (liftWreckPile). Each thing is hit once a fall (f.hit).
+ */
+function liftCrush(f, k) {
+  const t = liftFallTile(f, k);
+  if (t < 0) return;
+  const i = t % S.W, j = (t / S.W) | 0, by = f.by, hit = new Set(f.hit);
+  const e = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (e && !e.dead && !hit.has(e.id) && !calmB(e)) {
+    hit.add(e.id); f.hit.push(e.id);
+    const def = BDEFS[e.type];
+    if (e.owner >= 0 && e.owner !== by) hitByNow(e.owner, by);
+    e.lastHit = S.time;
+    if (def.wild) { if (e.armor <= LIFT.crush) captureBuilding(e, by); else e.armor -= LIFT.crush; }
+    else if (!e.built || def.barrier || def.viaduct || def.ropeway || def.pylon) { fortTaken(e, by); destroyBuilding(e, true); }
+    else if (def.city) { e.armor = Math.max(0, e.armor - LIFT.crush); if (e.armor <= 0) cityDown(e, by); }
+    else if (e.type === 'lander') e.armor = Math.min(e.armor, Math.max(missileFloor(e), e.armor - LIFT.crush));
+    else if (def.keep) e.armor = Math.min(e.armor, def.armor / 2);
+    else if (def.mega) e.armor = Math.max(1, Math.min(e.armor - LIFT.crush, Math.round(def.armor * 0.35)));
+    else {
+      e.armor -= LIFT.crush;
+      if (e.armor <= 0) {
+        postMsg(e.owner, `The falling cable flattened your ${def.name}!`, i, j, 'lost');
+        fortTaken(e, by);
+        destroyBuilding(e, true);
+      }
+    }
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || aloft(u) || hit.has(u.id) || BOTS[u.type].sea) continue;
+    const ui = Math.floor(u.x), uj = Math.floor(u.y);
+    if (Math.max(Math.abs(ui - i), Math.abs(uj - j)) > 1) continue;
+    hit.add(u.id); f.hit.push(u.id);
+    if (u.owner >= 0 && u.owner !== by) hitByNow(u.owner, by);
+    if (ui === i && uj === j) killBot(u); else damageBot(u, LIFT.side);
+  }
+  if (S.plan[t]) cancelPlan(t);
+  if (S.road[t]) wreckRoad(t, S.owner[t], 'The falling cable broke your road');
+  if (S.rail && S.rail[t]) setRail(t, false);
+  if (S.terrain[t] === T_GROUND && !(S.lava && S.lava[t])) liftWreckPile(t, f.o, f.d);
+  scarBlast(i + 0.5, j + 0.5, 0.45, { crater: false });
+  addFx('smoke', i + 0.5, j + 0.5, { r: 0.7, life: 1.6 });
+  if (k % 3 === 0) sfx('liftimpact', i + 0.5, j + 0.5);
+}
+
+/** The fallen cable's wreckage on tile t: scrap of kind 4 (s.cb), a tile of it, worth LIFT.cut Alloy to the Haulers who cut it up. */
+function liftWreckPile(t, owner, d) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  S.scrap = S.scrap || [];
+  if (S.scrap.some((s) => s.cb && Math.floor(s.x) === i && Math.floor(s.y) === j)) return;
+  S.scrap.push({ id: S.nextId++, x: i + 0.5, y: j + 0.5, n: LIFT.cut, k: 4, c: 1, o: owner, a: Math.floor(hash2(i, j, 4391) * 64), cb: 1, d, ft: Math.round(S.time) }); // (d: which way it lies, for its art)
+  S.scrapVer = (S.scrapVer || 0) + 1;
+  markDirty(i, j);
+}
+
 /* ------------------------------------------------------------------ war scars */
 
 /*
@@ -17268,7 +17609,7 @@ function scrapAdd(x, y, v, k, owner, w) {
   }
   S.scrap = S.scrap || [];
   if (!w) for (const s of S.scrap) {
-    if (s.w || dist2(s.x, s.y, x, y) > 0.36) continue;
+    if (s.w || s.cb || dist2(s.x, s.y, x, y) > 0.36) continue;
     s.n = Math.min(SCARS.pileMax, Math.round((s.n + v) * 100) / 100); s.k = Math.max(s.k, k); s.c = Math.min(12, s.c + 1);
     scrapDirty(s);
     return s;
@@ -17287,11 +17628,11 @@ function scrapDirty(s) { scarDirty(Math.floor(s.x), Math.floor(s.y), s.k >= 2 ||
 function scrapSqueeze() {
   const L = S.scrap;
   let k = -1;
-  for (let q = 0; q < Math.min(40, L.length); q++) if (!L[q].w && (k < 0 || L[q].n < L[k].n)) k = q;
-  if (k < 0) k = 0;
+  for (let q = 0; q < Math.min(40, L.length); q++) if (!L[q].w && !L[q].cb && (k < 0 || L[q].n < L[k].n)) k = q;
+  if (k < 0) { k = L.findIndex((s) => !s.cb); if (k < 0) return; } // (a fallen Lift's cable is never squeezed out)
   const s = L[k];
   let best = null, bd = 9;
-  for (const o of L) { if (o === s || o.w) continue; const d = dist2(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = o; } }
+  for (const o of L) { if (o === s || o.w || o.cb) continue; const d = dist2(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = o; } }
   L.splice(k, 1);
   scrapDirty(s);
   if (best && !s.w) { best.n = Math.min(SCARS.pileMax, Math.round((best.n + s.n) * 100) / 100); best.k = Math.max(best.k, s.k); best.c = Math.min(12, best.c + s.c); scrapDirty(best); }
@@ -17299,10 +17640,10 @@ function scrapSqueeze() {
 
 /** Scrap and bones built over (a building or site, a road, track or pipe) are gone; so is an aircraft wreck's salvage once its wreck is. */
 function scrapTidy() {
-  const n = S.scrap.length, nb = S.bones.length;
-  S.scrap = S.scrap.filter((s) => scrapGround(tIdx(Math.floor(s.x), Math.floor(s.y))) && (!s.w || (S.wrecks || []).some((w) => w.id === s.w)));
-  S.bones = S.bones.filter((b) => scrapGround(tIdx(Math.floor(b.x), Math.floor(b.y))));
-  if (S.scrap.length !== n || S.bones.length !== nb) S.scrapVer = (S.scrapVer || 0) + 1;
+  const n = S.scrap.length, nb = S.bones ? S.bones.length : 0; // (no bones with War scars off: only a fallen Lift's cable)
+  S.scrap = S.scrap.filter((s) => (s.cb ? S.terrain[tIdx(Math.floor(s.x), Math.floor(s.y))] === T_GROUND : scrapGround(tIdx(Math.floor(s.x), Math.floor(s.y)))) && (!s.w || (S.wrecks || []).some((w) => w.id === s.w))); // (a fallen Lift's cable lies where it fell: nothing is built on it)
+  if (S.bones) S.bones = S.bones.filter((b) => scrapGround(tIdx(Math.floor(b.x), Math.floor(b.y))));
+  if (S.scrap.length !== n || (S.bones ? S.bones.length : 0) !== nb) S.scrapVer = (S.scrapVer || 0) + 1;
 }
 
 function scrapById(id) { for (const s of S.scrap || []) if (s.id === id) return s; return null; }
@@ -17340,7 +17681,8 @@ function scrapHeaps() {
  * rivals too. Once every few rounds.
  */
 function salvageRun(p, idle) {
-  if (!scarLevel() || !S.scrap || !S.scrap.length || !idle.length || S.tick % 32 >= 8) return;
+  if (!S.scrap || !S.scrap.length || !idle.length || S.tick % 32 >= 8) return;
+  const scars = scarLevel(); // (with War scars off, only a fallen Lift's cable is salvaged)
   let haulers = idle.filter((u) => u.type === 'hauler' && !(u.failUntil > S.time));
   if (!haulers.length) return;
   const taken = new Map();
@@ -17348,9 +17690,9 @@ function salvageRun(p, idle) {
   const net = roadNet(p), R = Math.ceil(SALVAGE.reach), nets = haulers.map((u) => botNets(u));
   for (const s of S.scrap) {
     if (!haulers.length) return;
-    if (s.n - (taken.get(s.id) || 0) < 1) continue;
-    const si = Math.floor(s.x), sj = Math.floor(s.y);
-    if (S.owner[sj * S.W + si] !== p || foesNear(p, s.x, s.y, CRATE_SAFE)) continue;
+    if ((!scars && !s.cb) || s.n - (taken.get(s.id) || 0) < 1) continue;
+    const si = Math.floor(s.x), sj = Math.floor(s.y), so = S.owner[sj * S.W + si];
+    if ((so !== p && !(s.cb && so < 0)) || foesNear(p, s.x, s.y, CRATE_SAFE)) continue; // (a fallen cable on no one's ground too)
     let best = -1, stand = -1, bd = Infinity;
     for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
       const i = si + di, j = sj + dj;
@@ -17395,6 +17737,7 @@ function doSalvage(u, t, dt) {
   if (!dst) { u.task = null; return; }
   s.n = Math.round((s.n - got) * 100) / 100; s.cut = 1;
   if (s.n < 1 && s.w) { S.wrecks = (S.wrecks || []).filter((w) => w.id !== s.w); S.scrap.splice(S.scrap.indexOf(s), 1); } // (an aircraft's wreck, cut up and carried off)
+  else if (s.n < 1 && s.cb) S.scrap.splice(S.scrap.indexOf(s), 1); // (a tile of fallen cable, cut up: the ground is clear again)
   scrapDirty(s);
   const P = S.players[u.owner];
   P.stats.salvaged = (P.stats.salvaged || 0) + got;

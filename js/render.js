@@ -2997,6 +2997,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   }
   if (type === 'magpylon' && b && b.id) return;
   if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6364,6 +6365,7 @@ function render(dtReal) {
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
   drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
+  drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
@@ -6474,6 +6476,7 @@ function render(dtReal) {
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
       const pc = F ? bCentre(e) : { x: e.x + 0.5, y: e.y + 0.5 };
+      if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
       if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
@@ -6568,6 +6571,7 @@ function render(dtReal) {
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
+  drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
@@ -7763,6 +7767,14 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
+  if (def.lift) { // (the Orbital Lift: the Generators' reach round its pad, and its fall line: the site's, or the one being placed)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]);
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (LIFT.reach + 1.5) * z, 0, Math.PI * 2); ctx.stroke();
+    const placed = b && !b.dead && BDEFS[b.type].lift && b.x === x && b.y === y;
+    const d = placed ? b.lfDir || 0 : typeof UI !== 'undefined' ? liftDirOf(UI.liftDir) : 0;
+    drawLiftLine(ctx, ox, oy, z, x, y, d, placed || !R.ghost || !!R.ghost.ok);
+    return;
+  }
   if (def.city) { // (Arrival City: its bonus's reach round its middle, and the land it holds)
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
     ctx.fillStyle = 'rgba(255,214,140,0.08)'; ctx.strokeStyle = 'rgba(255,214,140,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]);
@@ -8714,6 +8726,18 @@ function renderMinimap() {
     const b = getE(u.trade), hit = b && b.convoyHit !== undefined && S.time - b.convoyHit < 6 && (R.time * 4) % 2 < 1;
     ctx.fillStyle = hit ? '#ff5a6e' : '#ffcf4a'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(u.x * sx, u.y * sy, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // An Orbital Lift's fall line: its owner's colour, faint; flashing red while the cable is weak or coming down.
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+    const weak = b.armor < BDEFS.lift.armor * LIFT.weak, [dx, dy] = LIFT_DIRS[b.lfDir || 0], n = liftLineTiles(b.x, b.y, b.lfDir || 0).length + 1.5;
+    ctx.strokeStyle = weak && (R.time * 3) % 2 < 1 ? '#ff4a4a' : PLAYER_COLORS[b.owner] || '#fff'; ctx.globalAlpha = weak ? 0.95 : 0.4; ctx.lineWidth = weak ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo((b.x + 1.5 + dx * 1.5) * sx, (b.y + 1.5 + dy * 1.5) * sy); ctx.lineTo((b.x + 1.5 + dx * n) * sx, (b.y + 1.5 + dy * n) * sy); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  for (const f of S.liftFalls || []) {
+    const [dx, dy] = LIFT_DIRS[f.d], n = f.n + 1.5;
+    ctx.strokeStyle = (R.time * 4) % 2 < 1 ? '#ff4a4a' : '#ffd0a0'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo((f.ax + 1.5 + dx * 1.5) * sx, (f.ay + 1.5 + dy * 1.5) * sy); ctx.lineTo((f.ax + 1.5 + dx * n) * sx, (f.ay + 1.5 + dy * n) * sy); ctx.stroke();
   }
   // Murmur tunnel exits: violet rings round a dark hole.
   for (const b of S.buildings) {
@@ -10132,6 +10156,229 @@ function drawCityTaking(ctx, b, cx, cy, z) {
   ctx.restore();
 }
 
+/*
+ * The Orbital Lift (the owner's look A, the Beacon Cable): its pad (lift@T, battle-damaged below LIFT.weak: lift-down@T),
+ * and in code the cable: a bright line rising up the screen from the anchor and fading out inside a soft column of light
+ * tinted its owner's colour, red warning lights stepping up it, climber pods riding it (the higher, the smaller; amber
+ * windows at night), and the real climber coming down or going up. Its shadow lies along the ground the way it would fall
+ * (drawLiftLines), flashing red while it's weak for whoever has land or robots on it. A cable coming down (S.liftFalls)
+ * sways and creaks, then lands from the anchor out; its wreckage is baked into the ground (drawCableWreck), sparking a
+ * minute after it falls.
+ */
+function drawLift(ctx, cx, cy, s, owner, b) {
+  const weak = !!(b && b.built && b.armor < BDEFS.lift.armor * LIFT.weak);
+  const art = (weak && artFor('lift-down', owner)) || artFor('lift', owner);
+  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  drawMegaPlain(ctx, 'lift', cx, cy, s, owner, b);
+}
+
+/** How tall a Lift's cable is drawn (px up the screen from its collar), at zoom z. */
+function liftBeamH(z) { return Math.max(z * 9, Math.min(z * 16, (R.h || 900) * 0.6)); }
+/** Where Lift b's cable's foot is on the screen (LIFT_MARKS.foot: tools/install_lift.py prints it). */
+const LIFT_MARKS = { foot: [0, -0.642], dock: [0, -0.266] };
+function liftFoot(b, ox, oy, z) { const c = bCentre(b); return { x: ox + (c.x + LIFT_MARKS.foot[0]) * z, y: oy + (c.y + LIFT_MARKS.foot[1]) * z }; }
+
+/** Every Lift's cable on the screen, over the buildings and robots (see drawLift), and the cables coming down. */
+function drawLiftCables(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].lift) continue;
+    const f = liftFoot(b, ox, oy, z), H = liftBeamH(z);
+    if (f.x < -z * 2 || f.x > R.w + z * 2 || f.y < -z || f.y - H > R.h + z) continue;
+    const weak = b.armor < BDEFS.lift.armor * LIFT.weak;
+    drawLiftBeam(ctx, f.x, f.y, H, z, b.owner, weak ? 0.12 + 0.1 * Math.sin(R.time * 1.7) : 0, b);
+  }
+  for (const f of S.liftFalls || []) drawLiftFalling(ctx, ox, oy, z, f);
+}
+
+/**
+ * A Lift's cable from (x, y) up H px: its column of light and core line, the warning lights and climbers. `sway` bends it
+ * (a weak or falling cable: the fraction of a tile its top swings). `b`: the Lift (its climber); null for a falling one.
+ */
+function drawLiftBeam(ctx, x, y, H, z, owner, sway, b) {
+  const night = TOD.active ? TOD.state.lights || 0 : 0, col = PLAYER_COLORS[owner] || '#ffffff';
+  const top = (h) => x + Math.sin(R.time * 1.3) * sway * z * 3 * h * h; // (the cable's x at height fraction h)
+  ctx.save();
+  // The soft column of light round it: its owner's colour, brighter at night, fading out up the screen.
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(0, y, 0, y - H);
+  g.addColorStop(0, hexA(col, 0.22 + 0.25 * night)); g.addColorStop(0.5, hexA(col, 0.08 + 0.12 * night)); g.addColorStop(1, hexA(col, 0));
+  ctx.fillStyle = g;
+  const w0 = z * 0.42;
+  ctx.beginPath(); ctx.moveTo(x - w0, y); ctx.lineTo(top(1) - w0 * 0.35, y - H); ctx.lineTo(top(1) + w0 * 0.35, y - H); ctx.lineTo(x + w0, y); ctx.closePath(); ctx.fill();
+  // The cable: a bright core, white, going faint as it goes up.
+  const gc = ctx.createLinearGradient(0, y, 0, y - H);
+  gc.addColorStop(0, `rgba(255,255,255,${0.85 + 0.15 * night})`); gc.addColorStop(0.7, `rgba(235,245,255,${0.35 + 0.3 * night})`); gc.addColorStop(1, 'rgba(235,245,255,0)');
+  ctx.strokeStyle = gc; ctx.lineWidth = Math.max(1.5, z * 0.07); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y);
+  for (let k = 1; k <= 8; k++) ctx.lineTo(top(k / 8), y - H * k / 8);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+  // Red warning lights stepping up it, blinking in turn (bright by night).
+  for (let k = 1; k <= 6; k++) {
+    const h = k / 7, on = (Math.floor(R.time * 1.5) + k) % 3 === 0 ? 1 : 0.35;
+    const a = (0.35 + 0.65 * night) * on * (1 - h * 0.6), r = Math.max(1.4, z * 0.07 * (1 - h * 0.5));
+    ctx.fillStyle = `rgba(255,60,50,${a})`; ctx.beginPath(); ctx.arc(top(h), y - H * h, r, 0, Math.PI * 2); ctx.fill();
+    if (night > 0.2 && on > 0.5) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,70,50,${0.25 * night})`; ctx.beginPath(); ctx.arc(top(h), y - H * h, r * 3, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+  }
+  // Climber pods riding it (the higher, the smaller): two going about their business, and the climber with a drop or a load.
+  if (b) {
+    for (let k = 0; k < 2; k++) { const h = 0.25 + ((R.time * 0.018 + k * 0.5 + (b.id % 7) * 0.13) % 1) * 0.7; drawLiftPod(ctx, top(h), y - H * h, z * 0.3 * (1 - h * 0.75), night, 0.55 * (1 - h)); }
+    if (b.lfMove && b.lfPaid) {
+      const f = Math.min(1, (b.lfT || 0) / LIFT.climb), h = b.lfMove === 1 ? 1 - f : f;
+      drawLiftPod(ctx, top(h), y - H * h * 0.95, z * 0.55 * (1 - h * 0.8), night, 1, b.lfMove === 1 ? col : null);
+    } else if (b.lfMove) drawLiftPod(ctx, top(b.lfMove === 1 ? 0.95 : 0), y - H * (b.lfMove === 1 ? 0.9 : 0), z * 0.5 * (b.lfMove === 1 ? 0.25 : 1), night, 0.8);
+  }
+  ctx.restore();
+}
+
+/** A climber pod at (x, y), s px tall: a capsule with a band of windows (amber at night), `tint` its owner's stripe when it carries a drop. */
+function drawLiftPod(ctx, x, y, s, night, a, tint) {
+  if (s < 1.2 || a <= 0.02) return;
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx, x - s * 0.42 + 1, y - s * 0.5 + 1, s * 0.84, s, s * 0.22); ctx.fill();
+  ctx.fillStyle = '#d9dde2'; roundRect(ctx, x - s * 0.42, y - s * 0.5, s * 0.84, s, s * 0.22); ctx.fill();
+  ctx.fillStyle = '#7d858e'; ctx.fillRect(x - s * 0.42, y + s * 0.18, s * 0.84, s * 0.12);
+  if (tint) { ctx.fillStyle = tint; ctx.fillRect(x - s * 0.42, y - s * 0.38, s * 0.84, s * 0.08); }
+  ctx.fillStyle = night > 0.2 ? `rgba(255,190,90,${0.6 + 0.4 * night})` : '#3c4a58';
+  ctx.fillRect(x - s * 0.3, y - s * 0.22, s * 0.6, s * 0.22);
+  if (night > 0.3) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,180,80,${0.3 * night})`; ctx.beginPath(); ctx.arc(x, y - s * 0.1, s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+  ctx.globalAlpha /= a;
+}
+
+/** A colour from '#rrggbb' at alpha a. */
+function hexA(hex, a) { const n = parseInt(String(hex).slice(1, 7), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+
+/** The screen points of the fall line of a Lift with its corner at (i, j), falling d: its start (beside the pad) and its end. */
+function liftLineEnds(i, j, d, ox, oy, z) {
+  const L = liftLineTiles(i, j, d), [dx, dy] = LIFT_DIRS[liftDirOf(d)], cx = i + 1.5, cy = j + 1.5, n = L.length + 1.5;
+  const k0 = 1.5;
+  return { x0: ox + (cx + dx * k0) * z, y0: oy + (cy + dy * k0) * z, x1: ox + (cx + dx * n) * z, y1: oy + (cy + dy * n) * z, tiles: L };
+}
+
+/**
+ * Every Lift's shadow on the ground, along its fall line (a site's too); flashing red while it's weak for whoever has land
+ * or robots on it; a falling cable's line flashing red while it creaks; and the sparks on a cable just fallen.
+ */
+function drawLiftLines(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].lift) continue;
+    const weak = b.built && b.armor < BDEFS.lift.armor * LIFT.weak;
+    const E = liftLineEnds(b.x, b.y, b.lfDir || 0, ox, oy, z);
+    const mine = weak && (b.owner === ME || E.tiles.some((t) => t >= 0 && S.owner[t] === ME) || S.bots.some((u) => !u.dead && u.owner === ME && E.tiles.includes(tIdx(Math.floor(u.x), Math.floor(u.y)))));
+    drawLiftShadow(ctx, E, z, b.built ? 0.2 : 0.12, mine ? 0.45 + 0.4 * Math.sin(R.time * 7) : 0);
+  }
+  for (const f of S.liftFalls || []) {
+    if (f.t >= LIFT.creak) continue;
+    const E = liftLineEnds(f.ax, f.ay, f.d, ox, oy, z);
+    drawLiftShadow(ctx, E, z, 0.2, 0.5 + 0.45 * Math.sin(R.time * 10));
+  }
+  // A cable just fallen: sparks scattered along it for a minute (the Murmur's violet glimmer where they feed on it by night).
+  const night = TOD.active ? TOD.state.lights || 0 : 0;
+  for (const s of S.scrap || []) {
+    if (!s.cb) continue;
+    const age = S.time - (s.ft || 0), x = ox + s.x * z, y = oy + s.y * z;
+    if (x < -z || y < -z || x > R.w + z || y > R.h + z) continue;
+    if (age < LIFT.sparks) {
+      const k = 1 - age / LIFT.sparks;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let q = 0; q < 2; q++) {
+        const h = hash2(s.id, Math.floor(R.time * 6) + q * 13, 557);
+        if (h > 0.55 * k + 0.2) continue;
+        const px = x + (hash2(s.id, q, Math.floor(R.time * 6)) - 0.5) * z * 0.8, py = y + (hash2(q, s.id, Math.floor(R.time * 6)) - 0.5) * z * 0.5;
+        ctx.fillStyle = `rgba(255,${190 + 60 * h | 0},120,${0.6 * k + 0.3 * night})`; ctx.beginPath(); ctx.arc(px, py, Math.max(1.2, z * 0.05), 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    } else if (night > 0.3 && S.wildlife && hash2(s.id, Math.floor(R.time * 0.5), 559) < 0.12) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(164,108,255,${0.35 * night})`;
+      ctx.beginPath(); ctx.arc(x, y, z * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+  }
+}
+
+/** A fall line's shadow on the ground (E: liftLineEnds): dark, soft, `a` strong; `red` > 0 flashing red over it. */
+function drawLiftShadow(ctx, E, z, a, red) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(10,12,18,${a})`; ctx.lineWidth = z * 0.34;
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke();
+  ctx.strokeStyle = `rgba(10,12,18,${a * 1.4})`; ctx.lineWidth = Math.max(1, z * 0.08);
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke();
+  if (red > 0) {
+    ctx.strokeStyle = `rgba(255,60,60,${Math.max(0, red)})`; ctx.lineWidth = z * 0.28; ctx.setLineDash([z * 0.5, z * 0.3]); ctx.lineDashOffset = -R.time * z * 2;
+    ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+/** A Lift's fall line picked out (selected, or the ghost while placing: `ok` green, else red): the line, its tiles and its end. */
+function drawLiftLine(ctx, ox, oy, z, i, j, d, ok) {
+  const E = liftLineEnds(i, j, d, ox, oy, z), col = ok ? '157,255,184' : '255,107,107';
+  ctx.save();
+  ctx.fillStyle = `rgba(${col},0.10)`;
+  for (const t of E.tiles) if (t >= 0) ctx.fillRect(ox + (t % S.W) * z + 1, oy + ((t / S.W) | 0) * z + 1, z - 2, z - 2);
+  ctx.strokeStyle = `rgba(${col},0.85)`; ctx.lineWidth = 2; ctx.setLineDash([z * 0.35, z * 0.2]); ctx.lineDashOffset = -R.time * z * 0.8;
+  ctx.beginPath(); ctx.moveTo(E.x0, E.y0); ctx.lineTo(E.x1, E.y1); ctx.stroke(); ctx.setLineDash([]);
+  // its end: a small cross where the cable's top would land
+  ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(E.x1 - z * 0.25, E.y1 - z * 0.25); ctx.lineTo(E.x1 + z * 0.25, E.y1 + z * 0.25); ctx.moveTo(E.x1 + z * 0.25, E.y1 - z * 0.25); ctx.lineTo(E.x1 - z * 0.25, E.y1 + z * 0.25); ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * A Lift's cable coming down (fall f): while it creaks (LIFT.creak s) the cable stands over the gone anchor, swaying
+ * harder and harder; then it comes down from the anchor out: the part still falling hangs from where it has landed up to
+ * its top, which drops as the line fills, dust where it strikes.
+ */
+function drawLiftFalling(ctx, ox, oy, z, f) {
+  const cx = ox + (f.ax + 1.5) * z, cy = oy + (f.ay + 1.5 + LIFT_MARKS.foot[1]) * z, H = liftBeamH(z);
+  if (f.t < LIFT.creak) { drawLiftBeam(ctx, cx, cy, H, z, f.o, 0.15 + 0.35 * (f.t / LIFT.creak), null); return; }
+  const [dx, dy] = LIFT_DIRS[f.d], n = f.n + 1.5, done = Math.min(1, (f.t - LIFT.creak) * f.sp / f.n);
+  const fx = ox + (f.ax + 1.5 + dx * (1.5 + (n - 1.5) * done)) * z, fy = oy + (f.ay + 1.5 + dy * (1.5 + (n - 1.5) * done)) * z;
+  // (the part still in the air: from where it strikes, bowed up and over toward where its top will land, lower and
+  // shorter as it comes down; its shadow on the ground under it)
+  const rest = (n - 1.5) * (1 - done), h = Math.min(H * 0.35, rest * z * 0.4), tx = fx + dx * rest * z * 0.5, ty = fy + dy * rest * z * 0.5;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(10,12,18,0.25)'; ctx.lineWidth = Math.max(3, z * 0.22);
+  ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
+  for (const [col, w] of [['rgba(30,34,40,0.9)', Math.max(3, z * 0.16)], ['rgba(232,238,245,0.95)', Math.max(1.5, z * 0.07)]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.quadraticCurveTo(fx + (tx - fx) * 0.25, fy + (ty - fy) * 0.25 - h * 0.9, tx, ty - h); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(255,220,160,0.5)'; ctx.beginPath(); ctx.arc(fx, fy, z * 0.45, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * A tile of fallen cable (scrap s, s.cb; baked into the ground, clipped to the tile it's painted in): the braided cable
+ * lying along its line through the tile and on into the next, its climber track's plates torn off beside it.
+ */
+function drawCableWreck(ctx, s) {
+  const [dx, dy] = LIFT_DIRS[liftDirOf(s.d)], l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l, x = s.x * TP, y = s.y * TP, L = TP * 0.85;
+  const h = (k) => hash2(s.id % 4096, k, 913), cut = s.cut && s.n < 1;
+  ctx.save();
+  if (cut) ctx.globalAlpha = 0.45;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(20,14,10,0.45)'; ctx.lineWidth = TP * 0.36;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L); ctx.lineTo(x + ux * L, y + uy * L); ctx.stroke();
+  ctx.strokeStyle = '#2b2f35'; ctx.lineWidth = TP * 0.17;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L + TP * 0.02); ctx.lineTo(x + ux * L, y + uy * L + TP * 0.02); ctx.stroke();
+  ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = TP * 0.05;
+  ctx.beginPath(); ctx.moveTo(x - ux * L, y - uy * L - TP * 0.03); ctx.lineTo(x + ux * L, y + uy * L - TP * 0.03); ctx.stroke();
+  // the braid: short bright strokes across it
+  ctx.strokeStyle = 'rgba(200,210,220,0.55)'; ctx.lineWidth = Math.max(1, TP * 0.02);
+  for (let k = -4; k <= 4; k++) { const px = x + ux * k * TP * 0.2, py = y + uy * k * TP * 0.2; ctx.beginPath(); ctx.moveTo(px - uy * TP * 0.07 - ux * TP * 0.04, py + ux * TP * 0.07 - uy * TP * 0.04); ctx.lineTo(px + uy * TP * 0.07 + ux * TP * 0.04, py - ux * TP * 0.07 + uy * TP * 0.04); ctx.stroke(); }
+  // a torn plate of the climber track off to one side
+  if (h(1) < 0.6) {
+    const side = h(2) < 0.5 ? -1 : 1, px = x - uy * side * TP * 0.28 + ux * (h(3) - 0.5) * TP * 0.4, py = y + ux * side * TP * 0.28 + uy * (h(3) - 0.5) * TP * 0.4;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(h(4) * Math.PI);
+    ctx.fillStyle = '#4b5057'; ctx.fillRect(-TP * 0.1, -TP * 0.05, TP * 0.2, TP * 0.1);
+    ctx.fillStyle = PLAYER_COLORS[s.o] || '#9aa2ab'; ctx.fillRect(-TP * 0.1, -TP * 0.05, TP * 0.2, TP * 0.025);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 /** A Lance or a Shield Dome before its art has loaded (or with none): a plain pit and barrel, a plain emitter. */
 function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   const F = BDEFS[type].foot, w = F * s * 0.92, color = PLAYER_COLORS[owner];
@@ -10141,6 +10388,9 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   if (type === 'city') { // (three stepped terraces, a lit atrium)
     for (let k = 1; k <= 3; k++) { const ww = w * (1 - k * 0.22); ctx.fillStyle = k % 2 ? THEME.hullHi : THEME.hull; roundRect(ctx, cx - ww / 2, cy - ww / 2 - k * s * 0.15, ww, ww, s * 0.12); ctx.fill(); }
     ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'lift') { // (an eight-sided collar where the cable is clamped)
+    ctx.fillStyle = THEME.hullHi; ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2; ctx.lineTo(cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.7); } ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e8eef5'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();
   } else if (type === 'lance') {
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); ctx.arc(cx, cy, s * 0.95, 0, Math.PI * 2); ctx.fill();
     const a = b ? b.aim || 0 : 0;
@@ -10641,7 +10891,7 @@ function paintScrapTile(ctx, i, j) {
     const list = I.get(tIdx(i + di, j + dj));
     if (!list) continue;
     if (!clip) { ctx.save(); ctx.beginPath(); ctx.rect(i * TP, j * TP, TP, TP); ctx.clip(); clip = true; }
-    for (const e of list) { if (e.n !== undefined) drawScrap(ctx, e); else drawBones(ctx, e); }
+    for (const e of list) { if (e.cb) drawCableWreck(ctx, e); else if (e.n !== undefined) drawScrap(ctx, e); else drawBones(ctx, e); }
   }
   if (clip) ctx.restore();
 }
