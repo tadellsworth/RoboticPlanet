@@ -1117,5 +1117,9 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - **AI stalemate: the Hollow, Medium, seed 11** (fixed Nov 19): fully planned roads kept disconnected sites from
   expiring, tying up build slots needed to replace depleted pumps. The AI now retires idle sites in that case.
   Seed 11 finished at 35:29 in the [retest](docs/ai-stalemate-fixes.md).
+  With the ground army (Skirmishers, Arc Casters, Railgunners) the same rule flips it the other way: Medium seed 11,
+  both Balanced, ends at 32.7 without the rule and runs to 75 minutes with it; giving a site waiting on a planned
+  road 8 minutes instead of 4 ends it (27.0) but leaves Medium seed 12 open on main. Medium 12 and Small 21 stay open
+  on the ground-army branch either way (to decide with the ground army).
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
