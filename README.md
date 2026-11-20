@@ -2853,6 +2853,20 @@ the game's own blasts and the planet's hash; it is drawn into the baked ground (
   blast are killed (`faunaKilled`: gone at once), the ground the game counts as heavily scarred (`scarDead`) is no
   habitat (`faunaBusy`), and the birdsong and insects thin out as the view fills with battlefield (`faunaScarred`, read by
   `biomeCall` and the drone in `js/audio.js`).
+- **The land healing and the war in the air** (`js/warfx.js`, looks only: display state in `R.wfx`, never in `S`, saves
+  or the hash). Where no fighting has gone on in a 6-tile cell or the cells round it for `WARFX.heal.quiet` (150 s), its
+  scars green again over `WARFX.heal.grow` (480 s, in 6 baked steps, `wfxHeal`): the scorch and ash fade back into the
+  ground under them (glass less), churned mud partly, and grass and then flowers come up, thickest on old craters
+  (`paintScarHeal`, by biome: `WFX_BLOOM`). A new blast on a tile starts its healing again; fighting nearby only holds
+  it. The craters, stumps, scrap and graveyards stay; `S.ash` never changes (the herds still keep off it). A loaded game
+  starts healing afresh. Also drawn there, from the game's effects as they're added (`wfxScan`): **smoke columns** from
+  buildings burned down, burning wrecks and big blasts, leaning with the clouds' wind, joining when close, lasting a few
+  minutes (`WARFX.col`, at most 6/14/20/28 by Graphics step), thinner zoomed in and faint at their foot; **fires** that
+  creep up to 2.4 tiles from a wreck over grass already scorched (trees burn higher) and die out, lighting the ground
+  and buildings round them at night (`drawLightPool`); **ash and embers** drifting over a fight's 6-tile cells and
+  settling over about two minutes; **shockwaves** (a ring of dust and light along the ground, `WARFX.shock`) from blasts of
+  reach 1.5 or more (a Missile, Ringfall, a fuel blast, a nuclear blast) and along the Lance's line, with a flash over the
+  area (none with reduced motion, and a fainter, slower ring).
 - **Saves and lockstep.** `crater` and `ash` are saved sparse (`SPARSE_LAYERS`: tile and value pairs), the lists as they
   are; `checkSave` checks them all; `hashState` takes the blast count (`S.scarN`), every pile and the count of bones.
   `scarLevel()` is 0 for Off (no layers: `S.crater` and `S.ash` are null).
@@ -2884,6 +2898,7 @@ js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
 js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
+js/warfx.js               the war on the land: smoke columns, creeping fires, ash and embers, shockwaves, the scars healing (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
