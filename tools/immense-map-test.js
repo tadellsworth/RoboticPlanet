@@ -88,11 +88,29 @@ const result = host(`
   assert.equal(S.settings.size, IMMENSE_SIZE);
   assert.equal(S.W, 146);
   assert.equal(S.settings.biome2, 'jungle');
-  const mix = (seed) => S.terrain.map((_, t) => Math.round(biomeMixAt(t % S.W, (t / S.W) | 0, S.W, S.H, seed) * 100));
-  const coverage = mix(S.seed);
-  for (const region of [0, 100]) assert.ok(coverage.filter(value => value === region).length > coverage.length / 4);
-  assert.ok(coverage.some(value => value > 0 && value < 100));
-  assert.notDeepEqual(coverage, mix(S.seed + 1));
+  const mix = (seed, offset) => Float32Array.from(S.terrain, (_, t) =>
+    biomeMixAt(t % S.W, (t / S.W) | 0, S.W, S.H, seed, offset));
+  const checkCoverage = () => {
+    const coverage = mix(S.seed, S.settings.biomeBoundary);
+    let land = 0, primary = 0;
+    for (let t = 0; t < coverage.length; t++) {
+      if (S.terrain[t] !== T_GROUND && S.terrain[t] !== T_ROCK) continue;
+      land++;
+      if (coverage[t] < 0.5) primary++;
+    }
+    assert.ok(Math.abs(primary / land - 0.65) < 0.002, '65% of the land is primary');
+    assert.ok(coverage.some(value => value > 0 && value < 1), 'smooth transition');
+    assert.notDeepEqual(coverage, mix(S.seed + 1, S.settings.biomeBoundary));
+  };
+  checkCoverage();
+  const legacy = JSON.parse(saved);
+  delete legacy.settings.biomeBoundary;
+  deserializeGame(JSON.stringify(legacy));
+  assert.equal(S.settings.biomeBoundary, undefined, 'old games use their original centered boundary');
+  for (const [name, seed] of [['Standard', 11], ['Islands', 21], ['Grand Canyon', 37]]) {
+    newGame({ ...opts, shape: SHAPE_PRESETS.findIndex(s => s.name === name), players: 2, teams: false, seed });
+    checkCoverage();
+  }
   assert.equal(aiMarchTime({ x: 0, y: 0 }, { x: 0.5, y: 60.5 }, 150), 150);
   assert.ok(aiMarchTime({ x: 0, y: 0 }, { x: 0.5, y: 180.5 }, 150) > 300);
   // Ringfall mirrors every site even in a game with a Murmur slot.

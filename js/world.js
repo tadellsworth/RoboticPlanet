@@ -2577,6 +2577,7 @@ function newGame(opts) {
   // (Four Isles joins allies' islands with a sandbar in a team game.)
   const m = generateMap(seed, W, H, opts.teams && mode === 'versus' && settings.players === 4 ? { ...settings, teams: true } : settings);
   if (opts.layout) opts.layout(m, W, H); // missions hand-place features on their planet
+  if (settings.biome2) settings.biomeBoundary = biomeBoundary(m.terrain, W, H, seed);
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
@@ -2687,12 +2688,29 @@ function newGame(opts) {
 /** The biome of the current game. */
 function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
 
-/** A seed picks the direction of a winding boundary, with a band of mixed terrain on either side. */
-function biomeMixAt(x, y, w, h, seed) {
+/** Signed distance along the seed’s winding biome frontier. */
+function biomeFrontierAt(x, y, w, h, seed) {
   const a = Math.floor(hash2(0, 0, seed ^ 0x4145) * 8) * Math.PI / 4;
   const nx = (x + 0.5) / w - 0.5, ny = (y + 0.5) / h - 0.5;
   const bend = (fbm(nx * 5, ny * 5, (seed % 100000) + 117, 2) - 0.5) * 0.35;
-  const v = clamp(0.5 + (nx * dcos(a) + ny * dsin(a) + bend) / 0.2, 0, 1);
+  return nx * dcos(a) + ny * dsin(a) + bend;
+}
+
+/** Place the middle of the transition so the primary biome covers 65% of the original land. */
+function biomeBoundary(terrain, w, h, seed) {
+  const land = [];
+  for (let t = 0; t < terrain.length; t++) {
+    if (terrain[t] === T_GROUND || terrain[t] === T_ROCK) land.push(biomeFrontierAt(t % w, (t / w) | 0, w, h, seed));
+  }
+  const primary = Math.round(land.length * 0.65);
+  if (primary < 1 || primary === land.length) return 0;
+  land.sort((a, b) => a - b);
+  return (land[primary - 1] + land[primary]) * 0.5;
+}
+
+/** The seed supplies the direction and bends; the boundary is saved even if terrain changes. */
+function biomeMixAt(x, y, w, h, seed, boundary = 0) {
+  const v = clamp(0.5 + (biomeFrontierAt(x, y, w, h, seed) - boundary) / 0.2, 0, 1);
   return Math.fround(v * v * (3 - 2 * v));
 }
 
@@ -2743,7 +2761,7 @@ function makeDecor() {
     const t = j * W + i;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
-    const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed)) ? second : primary;
+    const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed, S.settings.biomeBoundary)) ? second : primary;
     const dens0 = local.plants;
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
@@ -5347,6 +5365,7 @@ function checkSave(o) {
   if (o.settings != null) {
     const st = o.settings;
     if (st.biome2 != null && !secondBiomeAllowed(st.biome2, st.biome, st.size, st.shape)) bad();
+    if (st.biomeBoundary != null && (!st.biome2 || !Number.isFinite(st.biomeBoundary) || Math.abs(st.biomeBoundary) > 1)) bad();
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();

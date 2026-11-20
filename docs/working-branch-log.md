@@ -215,4 +215,5 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Added the Second biome control to Custom Game and Observer setup, including multiplayer host settings. Single-biome play is the default. A seeded transition blends terrain, mixes plant varieties and appears on the planet preview and minimap.
 - Checked selection, play, save and reload, and Saved planets in Chromium. The automated Immense check covers mixed-biome save validation and multiplayer fingerprints.
+- Set new mixed-biome planets to about 65% primary and 35% secondary land, measured at the midpoint of the transition. Saved the boundary with the game so terrain changes cannot shift it.
 - Compared current Standard Immense with temporary 112×156 and 120×168 two-player maps. [Size probe results](immense-validation.md#optional-second-biome-and-two-player-size-probes)

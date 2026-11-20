@@ -64,7 +64,7 @@ Before the travel allowance, Colony 2 took 52:26 to win the Crossroads game. Sta
 
 ## Optional second biome and two-player size probes
 
-On an Immense surface map, choose a specific map shape and primary biome to enable Second biome. The seed sets the orientation and bends of the transition. Terrain textures, decorations and overview colors show both regions. The primary biome supplies the world rules and weather. The choice round-trips through saves and Saved planets, and the lockstep test uses a mixed-biome game on both peers.
+On an Immense surface map, choose a specific map shape and primary biome to enable Second biome. The seed sets the orientation and bends of the transition. Terrain textures, decorations and overview colors show both regions. The center of the transition divides the original ground and rock tiles about 65/35. Water and chasms do not count toward the split. The primary biome supplies the world rules and weather. The choice round-trips through saves and Saved planets, and the lockstep test uses a mixed-biome game on both peers.
 
 To gauge headroom for a future larger two-player tier, three Standard seed 11 Normal observer simulations ran for 20 game minutes on an Apple M1. The two larger dimensions were temporary test presets. All three games were still in play at minute 20. The browser resumed each checkpoint with Rust and Greenreach scenery at 1280×800 in software Chromium with Auto graphics.
 

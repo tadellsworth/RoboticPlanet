@@ -75,7 +75,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
 - **Immense map size** (built): 84×118 on Standard and about 40% longer in each direction than Huge on every shape.
   Immense surface maps now offer an optional second biome, with a seeded transition between their scenery. The first
-  biome supplies the planet-wide weather and rules.
+  biome covers about 65% of the land and supplies the planet-wide weather and rules.
 
 **New content**
 - **Biome: Boiling Springs.** A geothermal basin: vibrant, mineral-hued hot springs and steaming geysers among

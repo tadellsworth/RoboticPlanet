@@ -16576,7 +16576,7 @@ function hashState() {
   const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
   int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); num(S.settings?.size);
-  if (S.settings?.biome2) str(S.settings.biome2);
+  if (S.settings?.biome2) { str(S.settings.biome2); num(S.settings.biomeBoundary); }
   if (S.mission?.workerDrop) int(1);
   if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {

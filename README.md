@@ -77,7 +77,7 @@ twice the ground. Other shapes keep their own proportions and supported player c
 events enabled, Immense Ringfall targets up to nine sites per colony's share (six at smaller sizes). On Immense,
 rivals allow more travel time for distant marches. With a fixed map type and surface biome, the optional **Second biome**
 blends two terrain palettes and mixes their plants along a winding transition set by the planet seed. The primary
-biome controls weather and world rules. Argos and the Hollow use their own scenery. The second biome also travels with
+biome covers about 65% of the land and controls weather and world rules. Argos and the Hollow use their own scenery. The second biome also travels with
 saved planets and multiplayer setups. Oases has five oases per side, Four Isles has larger home and
 central islands, and the Hollow has richer Ore and Oil deposits and up to nine nest sites per side. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the

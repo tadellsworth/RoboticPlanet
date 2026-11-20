@@ -1584,6 +1584,7 @@ function renderPreview(cv, m, p) {
     chasm: [18, 12, 10], fertile: [92, 98, 40] };
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
+  const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -1603,7 +1604,7 @@ function renderPreview(cv, m, p) {
     else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
     if (other) {
       const key = terr === T_GROUND && c === C.ground ? 'ground' : terr === T_WATER ? 'water' : terr === T_ROCK ? 'rock' : null;
-      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed));
+      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed, boundary));
     }
     const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
     // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.

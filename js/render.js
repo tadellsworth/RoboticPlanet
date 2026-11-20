@@ -216,7 +216,7 @@ function applyBiome() {
   R.lavaGlow = null;
   R.biomeMix = second ? new Float32Array(S.W * S.H) : null;
   if (second) for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
-    R.biomeMix[tIdx(i, j)] = biomeMixAt(i, j, S.W, S.H, S.seed);
+    R.biomeMix[tIdx(i, j)] = biomeMixAt(i, j, S.W, S.H, S.seed, S.settings.biomeBoundary);
   }
 }
 
