@@ -134,3 +134,15 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Ran 16 seeded AI matches. All ten Standard matches finished, including two with no water. Chokepoint Wardens kept making some goods after Warbot and trade counts flattened from minute 42 to 45, then one side won before minute 48.
 - On Islands seed 21, both AIs could afford a replacement Mine and still had Ore deposits, but their placement rule required two deposits near one candidate. An isolated experiment allowing one deposit from minute 45 restored Alloy and military production. The match still lacked ferries and was open at minute 55. On Islands seed 17, the leader's Foundry idled while saving for a crossing. Recorded the baselines and experiment in the [late-game stalemate audit](ai-stalemate-audit.md).
+
+### Seeded stalemate and fairness fixes
+
+- Updated `codex/working-branch` to `d56b30e` before fixing the seeded AI stalls. Hollow Medium seed 11 finished at 35:29 after the AI learned to retire disconnected sites waiting indefinitely for planned roads. [Tests and rationale](ai-stalemate-fixes.md)
+- Restricted the smaller finishing storm to bases with light gun cover. Reproduced the undersized storms on the earlier revision. The current Hollow Small seed 25 retained its Colony 2 win at 24:04. [Tests and rationale](ai-stalemate-fixes.md#2-hollow-small-seed-25)
+- Restored isolated Ore mining and prioritized the first naval crossing for Ore-poor island colonies. Islands Medium seed 21 finished in 20:53 after four landings. Seeds 2, 5 and 17 kept their finish times and winners. [Tests and rationale](ai-stalemate-fixes.md#3-islands-crossings)
+- Removed attacks aimed at allies, added AI defense for allied territory, rotated 2v2 turn priority, and balanced neutral Trade Post access across 60 starts. In 12 paired games Team 1 wins moved from 9 to 6. [Tests and rationale](ai-stalemate-fixes.md#4-2v2-fairness)
+
+### Mission text and curriculum
+
+- Shortened six goal hints, preserved Harbour and Airlift's step-by-step highlights, and moved King of the Hill into War before Final Descent. The mission data check covers the 110-character limit, building targets, affected controls, and saved mission IDs.
+

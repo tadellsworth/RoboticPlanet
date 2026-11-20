@@ -3529,9 +3529,9 @@ function missionCoach() {
     if (now >= 0) {
       // (Its site already going up: nothing to press but the goal's own buttons on the site's panel, if any; with no
       // road to it, its Lay road. See missionHint.)
-      // (A goal whose `at` is a function names the very thing to tap, a building or a robot, or { e, ui }: its buttons too.)
-      const g0 = def.goals[now], pick = typeof g0.at === 'function' && g0.at(S);
-      const g = pick ? { ...g0, at: undefined, site: pick.e || pick, ui: pick.ui || g0.ui, one: true } : g0;
+      // (A goal's `focus` can name the exact building or robot and the buttons for its current step.)
+      const g0 = def.goals[now], pick = g0.focus?.(S);
+      const g = pick ? { ...g0, site: pick.e || pick, ui: pick.ui || g0.ui, one: true } : g0;
       const sites = goalSites(g, M.diff), lone = sites.find(siteNeedsRoad);
       const onSite = (g.ui || '').split(',').filter((p) => /#sh-/.test(p) && !/#sh-layroad/.test(p)).join(',');
       const c = lone ? coachTarget({ ui: '#sh-layroad', site: lone }) : sites.length ? coachTarget({ ...g, ui: onSite, site: sites[0] }) : coachTarget(g);
