@@ -140,7 +140,7 @@ function siegeWorks(S, diff) {
 
 /**
  * Mooring Lines: a foothold on the nearest mesa with Crystal, 14 to 30 tiles from the Command Base L across the canyon
- * (another area, with room round it): a Drop Outpost as a Cargo Plane drops one (holding the Cement and
+ * (another area, with room round it): a Drop Outpost as a Cargo Plane drops one (supplied by air, holding the Cement and
  * Alloy for a Mooring Mast, Fuel for its chargers), with two Workers who build there by hand.
  */
 function mooringFoothold(S, L) {
@@ -161,7 +161,7 @@ function mooringFoothold(S, L) {
   }
   if (best === null) return null;
   const b = addBuilding(0, 'dropost', best % S.W, (best / S.W) | 0, true);
-  b.keep = { fuel: 3 }; b.deployedAt = S.time;
+  b.airSupply = true; b.keep = { fuel: 3 }; b.deployedAt = S.time;
   b.stock.cement = 10; b.stock.alloy = 6; b.stock.fuel = 6;
   computeTerritory(); computeZones();
   for (let k = 0; k < 2; k++) { const w = addBot(0, 'worker', b.x, b.y); enterBuilding(w, b); }
@@ -1121,7 +1121,7 @@ const MISSIONS = [
       'A <b>Crawler</b> is a base on tracks: where it stops it unfolds into a Depot, Fuel Station and Outpost.',
       'An <b>Airfield</b>\'s Cargo Plane flies over anything and drops its load by parachute.',
       'It drops a Drop Outpost on open ground nobody else holds, or two Workers on any open ground.',
-      'Freight parachutes land at <b>Trade Terminals</b> with Supply by air turned on.',
+      'Places no road reaches, switched to <b>Supply by air</b>, get what they are short of, 8 goods a flight.',
       'In Versus, planes also drop warbots, and Vulcan Bombers fly from the Airfield.',
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
@@ -1158,10 +1158,16 @@ const MISSIONS = [
       { kind: 'built', type: 'dropost', n: 1, text: 'Drop an Outpost by parachute', at: 'airfield',
         hint: 'Tap the Airfield → <b>Hangar</b>: Cargo Planes <b>+1</b>. Then <b>Drop Outpost</b>, and tap open ground.',
         ui: "#sh-yard .order-row[data-k='cargoplane'] [data-d='1'], #sh-air [data-k='outpost']" },
-      { kind: 'airWorkers', n: 1, text: 'Land Workers by parachute', at: 'airfield',
-        count: (P, S) => S.mission.workerDrop ? 1 : 0,
-        hint: 'Tap the Airfield → <b>Drop 2 Workers</b> → tap open ground near your Drop Outpost.',
-        ui: "#sh-air [data-k='worker']" },
+      { kind: 'airSupplied', n: 1, text: 'Supply a building by air', at: 'crawlerbase',
+        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before. Only a place
+        // switched to Supply by air gets crates, so a road reaching it afterwards, which switches that off, doesn't undo
+        // this. A site in the Drop Outpost's land, supplied by air, counts too.)
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airIn !== undefined).length,
+        // (Off the plateau no road reaches the Crawler unless you lay one, so its supply orders come by plane only, once
+        // one is based. With a road from home to it On does nothing, as Haulers supply it, and its panel says so: pack it
+        // up and drive it on past the roads, hence "out past your roads".)
+        hint: 'Tap deployed Crawler beyond roads → <b>Supply by air</b>: <b>On</b>. <b>Supply orders</b>: Cement <b>+5</b> for an air drop.',
+        ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },
 

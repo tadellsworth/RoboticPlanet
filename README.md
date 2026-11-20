@@ -478,11 +478,22 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`S.drops`, `AIR_DROP_FALL` s to come down): a **Drop Outpost** kit (6 Cement, 3 Alloy, paid from storage: a small
   outpost on any open ground nobody else holds; `terr` 4, garrison 2, `ammoStock` 4, storage, a 2-slot Fuel charger),
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
-  `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 outgoing trade goods for a finished **Trade Terminal**
-  (`u.cargo`). Set a trade route and enable **Supply by air** on the Terminal. Its nearest Airfield with a Cargo Plane
-  stocks what the route needs (`airWant`), then drops it on the Terminal pad. The plane takes its cargo home if the
-  recipient is lost before release. Once a road reaches the Terminal, supply switches back to ground transport.
-  Use roads, a local source of goods, or another freight link to supply a Drop Outpost and nearby construction.
+  `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
+  air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`), until a
+  road from home reaches the place (`onHomeNet`: a road, not a ferry line, the sea or a Rail Station's conveyor): then
+  it switches itself off in `dispatch`, Drop Outposts and sites in their land too, and Haulers supply it (a finished
+  building's owner is told; a site goes over quietly). Where a road from home already reaches, the `airSupply` order
+  can't switch it on (its On button is greyed out, `airSupplyRoad`). A building that changes hands loses it (it was its
+  old owner's choice), a Drop Outpost apart. Only the places switched to it are looked at. The
+  places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
+  is when crates last landed there). A
+  supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
+  the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
+  art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
+  Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
+  short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` (12) Fuel for its planes (`airKeep`), and haulers
+  (Tankers, for the Fuel) bring it.
   A flight (`flyStep`): it rolls down the runway from its head gathering speed (`ROLL_ACCEL`), lifts off at the far end,
   climbs (`PLANE_CLIMB` s) and turns at up to `PLANE_TURN` (never circling a spot it can't turn onto: `steerPlane`), drops
   over the spot, flies a circuit round to line up with the runway (`headHome`), comes down on final, touches down at the

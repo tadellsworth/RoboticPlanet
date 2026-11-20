@@ -1929,11 +1929,9 @@ function dispatch(p) {
   // the sea or a conveyor): Haulers supply it from then on. Only places switched to it are looked at. A finished
   // building's owner hears of it; a site goes over quietly.
   for (const b of S.buildings) {
-    if (!b.airSupply || b.dead || b.owner !== p) continue;
-    const road = onHomeNet(b);
-    if (airSuppliable(b) && !road) continue;
+    if (!b.airSupply || b.dead || b.owner !== p || !onHomeNet(b)) continue;
     b.airSupply = false;
-    if (road && airSuppliable(b)) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
+    if (b.built) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
   }
   // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
   // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
@@ -5821,7 +5819,7 @@ function captureBuilding(b, by) {
   }
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
-  delete b.airSupply; // (Supply by air was its old owner's choice)
+  if (!BDEFS[b.type].airdrop) delete b.airSupply; // (Supply by air was its old owner's choice; a Drop Outpost keeps it)
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
@@ -6633,7 +6631,7 @@ function eliminate(old, by, how) {
     if (!e.built) { destroyBuilding(e, true); continue; }
     releaseBotsFrom(e, true);
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
-    delete e.airSupply; // (as in captureBuilding)
+    if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
     e.owner = by; e.tgt = 0;
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
@@ -14553,22 +14551,48 @@ function airWant(b) {
       if (!base) continue;
       let w = m.get(base.id);
       if (!w) m.set(base.id, (w = {}));
-      for (const [g, n] of needsOf(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
+      for (const [g, n] of airNeeds(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
     }
     AIRW = { S, tick: S.tick, m };
   }
   return AIRW.m.get(b.id) || null;
 }
 
-/** Only a finished Trade Terminal can receive plane freight. */
-function airSuppliable(b) {
-  return !!(b && !b.dead && b.built && BDEFS[b.type].terminal);
+/**
+ * What place c, supplied by air, is short of: its own needs and, if it's storage off the road network (a Drop
+ * Outpost, say), those of the buildings round it that Workers serve from it by hand (FOOT_CARRY, same ground, not
+ * supplied by air themselves or reachable from home), less what it already holds beyond its own supply orders.
+ */
+function airNeeds(c) {
+  const own = needsOf(c);
+  if (!BDEFS[c.type].store || onHomeNet(c)) return own;
+  const extra = {}, zc = S.zone[tIdx(c.x, c.y)];
+  for (const d of S.buildings) {
+    if (d === c || d.dead || d.owner !== c.owner || d.airSupply || BDEFS[d.type].store || !needsRoad(d)) continue;
+    if (dist2(d.x, d.y, c.x, c.y) > FOOT_CARRY * FOOT_CARRY || S.zone[tIdx(d.x, d.y)] !== zc || onHomeGroup(d)) continue;
+    for (const [g, n] of needsOf(d)) if (n >= 1) extra[g] = (extra[g] || 0) + n;
+  }
+  const k = keepOf(c) || {}, out = own.map((o) => o.slice());
+  for (const g in extra) {
+    const spare = Math.max(0, supplyOf(c, g) + (c.inc[g] || 0) - (k[g] || 0));
+    const n = Math.ceil(extra[g] - spare);
+    if (n < 1) continue;
+    const e = out.find((o) => o[0] === g);
+    if (e) e[1] = Math.max(0, e[1]) + n; else out.push([g, n]);
+  }
+  return out;
 }
 
-/** Validate the same owned Terminal and pad when freight is released and when it lands. */
-function airFreightTarget(owner, id, i, j) {
-  const b = getE(id);
-  return airSuppliable(b) && b.owner === owner && b.x === i && b.y === j ? b : null;
+/**
+ * Can place b be supplied by air: a construction site (not one paid from storage), or a building that
+ * keeps goods (storage, a garrison's Ammo, a factory's inputs, a Silo's missiles, a Fuel Station's Fuel...)?
+ * Not an Airfield, the Command Base, or anything wild.
+ */
+function airSuppliable(b) {
+  const def = b && BDEFS[b.type];
+  if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
+  if (!b.built) return !storeFunded(b);
+  return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }
 
 /**
@@ -14844,7 +14868,7 @@ function airSupplyRun(u, b) {
     if (S.bots.some((v) => v !== u && !v.dead && v.mission && v.mission.to === c.id)) continue; // one plane at a time
     const load = {};
     let n = 0, short = 0;
-    for (const [g, k] of needsOf(c)) {
+    for (const [g, k] of airNeeds(c)) {
       const want = Math.floor(k);
       if (want < 1) continue;
       short += want;
@@ -14914,11 +14938,6 @@ function updatePlane(u, dt) {
     return;
   }
   if (M.phase !== 'load') return;
-  if (M.kind === 'supply' && !airFreightTarget(u.owner, M.to, M.x, M.y)) {
-    cancelAirFreight(u);
-    landed(u, base);
-    return;
-  }
   // Loading: robots come aboard (it goes with whoever's aboard once nobody else is coming, or after PLANE_GATHER s).
   if (M.kind === 'warbot' || M.kind === 'worker') {
     for (const v of S.bots) {
@@ -14946,29 +14965,17 @@ function updatePlane(u, dt) {
   if (isMe(u.owner)) sfx('takeoff');
 }
 
-/** Release a failed freight delivery; its goods stay on the plane for the return trip. */
-function cancelAirFreight(u) {
-  const M = u.mission, b = getE(M.to), load = u.cargo || M.load || {};
-  if (b && !b.dead && b.owner === u.owner) for (const g in load) bump(b.inc, g, -load[g]);
-  u.mission = null;
-}
-
 /** Plane u is over its drop point: the load goes out on parachutes, and it turns for home. */
 function airDrop(u) {
   const M = u.mission;
-  if (M.kind === 'supply' && !airFreightTarget(u.owner, M.to, M.x, M.y)) {
-    cancelAirFreight(u);
-    headHome(u);
-    return;
-  }
   S.drops = S.drops || [];
   const d = { id: S.nextId++, owner: u.owner, kind: M.kind, x: u.x, y: u.y, i: M.x, j: M.y, t0: S.time };
   if (M.kind === 'supply') {
     d.to = M.to; d.goods = u.cargo || {}; u.cargo = null;
-    // A crate for every four goods or so, out of the door a moment apart, landing on the Terminal pad.
+    // A crate for every four goods or so, out of the door a moment apart, landing just in front of the building.
     const n = Math.max(1, Math.min(3, Math.ceil(sumValues(d.goods) / 4)));
     d.crates = [];
-    for (let k = 0; k < n; k++) d.crates.push({ dx: n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.62, dy: 0.24 + 0.08 * (k % 2), lag: k * 0.32 });
+    for (let k = 0; k < n; k++) d.crates.push({ dx: n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.62, dy: 0.62 + 0.08 * (k % 2), lag: k * 0.32 });
     d.dur = AIR_DROP_FALL + (n - 1) * 0.32;
   }
   else if (M.kind === 'warbot' || M.kind === 'worker') {
@@ -15314,15 +15321,14 @@ function landDrop(d) {
   const t = tIdx(d.i, d.j);
   if (d.kind === 'wreck') { crashLand(d); return; }
   if (d.kind === 'supply') {
-    const reserved = getE(d.to), c = airFreightTarget(d.owner, d.to, d.i, d.j);
-    for (const g in d.goods) {
-      if (reserved && !reserved.dead && reserved.owner === d.owner) bump(reserved.inc, g, -d.goods[g]);
-      if (c) bump(c.stock, g, d.goods[g]);
-    }
-    if (!c) return; // legacy or interrupted drop: nothing appears on open ground
-    c.airIn = S.time;
-    addFx('crateland', c.x + 0.5, c.y + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.24, lag: 0 }], seed: d.id % 97 });
+    const c = getE(d.to);
+    let n = 0;
+    for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
+    if (c && !c.dead && c.owner === d.owner) c.airIn = S.time; // (when crates last landed there; `airAt` is when a plane loaded for it)
+    // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
+    addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
     if (isMe(d.owner)) sfx('thump');
+    void n;
     return;
   }
   if (d.kind === 'outpost') {
@@ -15332,12 +15338,13 @@ function landDrop(d) {
     if (at < 0) { refundRoad(d.owner, BDEFS.dropost.cost, d.i, d.j); postMsg(d.owner, 'The Drop Outpost came down where it couldn\'t stand: its goods went back into storage.', d.i, d.j, 'warn'); return; }
     if (S.plan[at]) cancelPlan(at);
     const b = addBuilding(d.owner, 'dropost', at % S.W, (at / S.W) | 0, true);
+    b.airSupply = true;
     b.keep = { fuel: 3 };
     b.deployedAt = S.time;
     computeTerritory();
     computeZones();
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2 });
-    postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it. Drop Workers nearby to establish a foothold.', b.x, b.y, 'good');
+    postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
     if (isMe(b.owner)) sfx('complete');
     const foe = S.owner[at];
     if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, `${playerName(b.owner)} dropped an Outpost nearby!`, b.x, b.y, 'bad');
@@ -15369,7 +15376,6 @@ function landDrop(d) {
     } else cancelTask(v); // (an older save's worker given a job in mid-air: its claim on the job is let go)
   }
   if (bots.length) {
-    if (d.kind === 'worker' && S.mission?.id === 'airlift' && d.owner === 0) S.mission.workerDrop = true;
     postMsg(d.owner, `${bots.length} ${bots.length === 1 ? BOTS[bots[0].type].name : BOTS[bots[0].type].plural} parachuted in.`, d.i, d.j, 'good');
     const foe = S.owner[t];
     if (foe >= 0 && foes(foe, d.owner) && bots.some((v) => isArmy(v))) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
@@ -16822,7 +16828,6 @@ function hashState() {
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
   int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); num(S.settings?.size);
   if (S.settings?.biome2) { str(S.settings.biome2); num(S.settings.biomeBoundary); }
-  if (S.mission?.workerDrop) int(1);
   if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);

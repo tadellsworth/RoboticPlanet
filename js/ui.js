@@ -4322,7 +4322,7 @@ function airfieldSection(b) {
     html += `<div class="air-drops" id="sh-air">
       <button class="btn primary" data-k="outpost">Drop Outpost ${costInline(BDEFS.dropost.cost)}</button>
       ${warOn() ? '<button class="btn" data-k="warbot">Drop 2 Warbots</button>' : ''}<button class="btn" data-k="worker">Drop 2 Workers</button></div>
-      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and can be stocked from a freight link or local storage. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
+      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air until a road from home reaches it. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
   } else html += `<p class="hint">${planes.some((u) => !BOTS[u.type].bomber) ? 'Its Cargo Plane is out on a flight.' : 'No Cargo Plane is based here yet: order one in the hangar below.'}</p>`;
   html += '<div class="section-label">Supplied by air</div><p class="hint" id="sh-air-places"></p>';
   // Airships built here wait in the hangar (in no spot of it) until there's a line for them.
@@ -4335,8 +4335,8 @@ function airfieldSection(b) {
 function airPlacesText(b) {
   const list = S.buildings.filter((c) => !c.dead && c.built && c.owner === b.owner && c.airSupply && airSuppliable(c) && airBaseNear(c.owner, c.x, c.y) === b);
   const keep = airKeep(b), short = Object.keys(keep).filter((g) => keep[g] > 0).map((g) => `${keep[g]} ${GOOD[g].name}`);
-  return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: set a trade route and switch on Supply by air at its Trade Terminal. ') +
-    `A plane flies them what their trade routes send out, ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
+  return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: switch on Supply by air in a Depot\'s or Outpost\'s panel (a Drop Outpost has it on). ') +
+    `A plane flies them what they're short of (their supply orders, Ammo for their warbots, a site's materials), ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
 }
 
 
@@ -4806,7 +4806,7 @@ function mastLinkTap(i, j, wx, wy) {
   });
 }
 
-/** The Trade Terminal's "Supply by air" switch, once you have an Airfield. */
+/** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
 function airSupplySection(b) {
   if (!airSuppliable(b) || !b.built || b.owner !== ME || !S.buildings.some((o) => !o.dead && o.built && o.owner === ME && BDEFS[o.type].airfield)) return '';
   return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
@@ -4818,7 +4818,7 @@ function airSupplyRoad(b) { return !b.airSupply && onHomeNet(b); }
 function airSupplyHint(b) {
   const base = airBaseNear(b.owner, b.x, b.y);
   if (airSupplyRoad(b)) return 'A road from home reaches this place: Haulers supply it. Supply by air is for places no road reaches.';
-  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield delivers this Terminal\'s outgoing trade goods. For a place no road reaches: it switches off by itself once a road from home reaches it.';
+  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches: it switches off by itself once a road from home reaches it.';
   if (!base) return 'Waiting for a Cargo Plane: none is based at an Airfield yet (order one in an Airfield\'s hangar).';
   const coming = S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id);
   return `Supplied from the Airfield ${dirText(b, base)}, ${BOTS.cargoplane.carry} goods a flight.` + (coming ? ' A plane is on its way.' : '');
@@ -8393,7 +8393,7 @@ function refreshAirTab() {
   h += cargo.length ? cargo.map((u) => {
     const free = u.inside && !u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id;
     return `<div class="kv army-row"><span>${planeStatus(u)}</span><span>${free ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="outpost">Drop Outpost</button>${warOn() ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="warbot">2 Warbots</button>` : ''}<button class="btn small" data-act="drop" data-id="${u.id}" data-k="worker">2 Workers</button>` : ''}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
-  }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies freight to Trade Terminals set to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
+  }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies goods to places you switch to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
   h += '<div class="section-label">Airships <span class="label-note">on lines between Mooring Masts</span></div>';
   h += ships.length ? ships.map((u) => `<div class="kv army-row"><span>${shipStatus(u)}</span><span><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
     : `<p class="hint">None yet: order one in an Airfield's hangar (+ Airship above). It carries ${BOTS.airship.carry} goods and ${BOTS.airship.seats} Workers or Warbots a trip, both ways, between two Mooring Masts you link (a Mast's panel: Link).</p>`;
