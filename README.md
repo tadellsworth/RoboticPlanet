@@ -2714,6 +2714,13 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   go out one by one in the lull before a surge, stay dark near the Murmur through it, and the crawlers hide.
 - **Night lights** (`faunaLights`, `faunaGlows`): moths (ember moths on the ashlands, glowing motes over the Bloom)
   circle streetlamps, buildings' lights and the Command Bases.
+- **Fireflies** (the Forest and Blackwater: `faunaFireflies`, `faunaSwarms`): each cell holds up to three swarms (four
+  in Blackwater) of 7 to 16 lights, seeded over its lake shores, tree edges, trees or grass, never within 3 tiles of a
+  road, track, pipe or building (`faunaFlyBuilt`). A warm yellow-green core and a soft halo (`faunaFlySprites`), each
+  on its own slow blink, the swarm drifting about its spot. They come out one by one from dusk (`lights` 0.2) and are
+  all out at night, go in again at dawn, and rain puts them out. At most `FLY_CAP` (560) lit at Auto (scaled like
+  `FAUNA_CAP`; about half on a phone); past that whole swarms go dark, so they stay swarms. Drawn in batches: eight
+  alpha steps, all the halos then all the cores.
 - **Drawn** from two hooks in `render`: `faunaGround`, before the buildings and robots (walkers and waders seen side on,
   as the three-quarter view shows them, birds perched, tracks in the snow), and `faunaAir`, after the smoke and under
   the aircraft (fliers seen from above with their shadows, and the glows). Colours follow the light (`faunaCol`, from

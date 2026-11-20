@@ -98,7 +98,7 @@ const FAUNA_LIFE = {
   alien: { kinds: ['hinge', 'switchtail', 'sailwing'], trees: [] },
   hollow: { kinds: ['crawler', 'hinge', 'sailwing'], glows: ['glowworm'], trees: [] },
 };
-const FAUNA_GLOW = { firefly: '#d4ff6a', eyes: '#d8ff8a', glowworm: '#7fe8ff', moth: '#fff0d0', embermoth: '#ff8a30' };
+const FAUNA_GLOW = { eyes: '#d8ff8a', glowworm: '#7fe8ff', moth: '#fff0d0', embermoth: '#ff8a30' };
 /** How far (tiles) each kind of effect in S.fx is heard: gunfire, blasts, fire. */
 const FAUNA_FEAR = { muzzle: 7, flash: 10, boom: 10, nuke: 40, fuelblast: 14, flak: 8, pulsebeam: 7, flame: 6, arc: 5, collapse: 9, quake: 9 };
 
@@ -1224,17 +1224,120 @@ function faunaWorms(c) {
   }
   return c.worms;
 }
-/** Cell c's fireflies: where each one hovers (over the trees, the shore or open ground). */
-function faunaFlies(c) {
-  if (c.flies && c.fliesAt === c.habAt) return c.flies;
-  c.fliesAt = c.habAt; c.flies = [];
-  for (let k = 0; k < 21; k++) {
-    const pool = k % 2 ? c.hab.tree : c.hab.shore.length ? c.hab.shore : c.hab.open;
+/*
+ * The fireflies (the Forest and Blackwater): loose swarms over the water's edge, the tree edges and the grass, each a
+ * cloud of slow warm lights drifting about its spot. They come out one by one at dusk, are thickest at night and go out
+ * one by one at dawn; rain puts them out. A cell's swarms come from its habitat (faunaHab: never on a road, a building
+ * or ground the colony has built up round), so they keep away from the colony as the other animals do. At most
+ * FLY_CAP lit at once at Auto (FAUNA_STEP), fewer on a phone; past that whole swarms go dark, so what's left still
+ * reads as swarms. Drawn in batches: all the halos, then all the cores, a few alpha steps each.
+ */
+const FLY_CAP = 560;
+const FLY_STEPS = 8; // (alpha steps the lights are batched in)
+const FLY_BATCH = { steps: [], shown: [] }; // (kept from frame to frame: no garbage)
+/** Cell c's firefly swarms: where each hangs (a shore, a tree edge, a tree or open ground), how wide, and its flies. */
+function faunaSwarms(c) {
+  if (c.swarms && c.swarmsAt === c.habAt) return c.swarms;
+  c.swarmsAt = c.habAt; c.swarms = [];
+  const H = c.hab, wet = biome() === 'swamp', most = wet ? 4 : 3;
+  if (H.tree.length + H.open.length + H.shore.length < 6) return c.swarms;
+  for (let k = 0; k < most; k++) {
+    if (hash2(c.key, k, 200) > (wet ? 0.72 : 0.7)) continue; // (some cells have none: clusters, not an even sprinkle)
+    const r = hash2(c.key, k, 201);
+    const pool = H.shore.length > 1 && r < 0.45 ? H.shore : H.edge.length > 1 && r < 0.75 ? H.edge : H.tree.length > 2 && r < 0.9 ? H.tree : H.open.length ? H.open : H.tree;
     if (!pool.length) continue;
-    const tt = pool[(hash2(c.key, k, 91) * pool.length) | 0];
-    c.flies.push({ k, h: hash2(c.key, k, 92), x: (tt % S.W) + 0.5, y: ((tt / S.W) | 0) + 0.5 });
+    const tt = pool[(hash2(c.key, k, 202) * pool.length) | 0], rad = 0.8 + hash2(c.key, k, 203) * 1.0;
+    if (faunaFlyBuilt(tt % S.W, (tt / S.W) | 0)) continue;
+    const sw = { x: (tt % S.W) + 0.5, y: ((tt / S.W) | 0) + 0.5, rad, rank: hash2(c.key, k, 204), p: hash2(c.key, k, 205) * 40, flies: [] };
+    const n = (wet ? 9 : 7) + Math.floor(hash2(c.key, k, 206) * 8);
+    for (let f = 0; f < n; f++) {
+      const h = hash2(c.key * 17 + k, f, 207), a = hash2(c.key * 17 + k, f, 208) * Math.PI * 2, d = rad * Math.sqrt(hash2(c.key * 17 + k, f, 209));
+      // (each blinks at its own slow pace, out of step with the rest: per seconds round, off where in it)
+      sw.flies.push({ dx: Math.cos(a) * d, dy: Math.sin(a) * d * 0.75, h, per: 2.6 + h * 3.4, off: hash2(c.key * 17 + k, f, 210) * 10, come: hash2(c.key * 17 + k, f, 211) });
+    }
+    c.swarms.push(sw);
   }
-  return c.flies;
+  return c.swarms;
+}
+/** Is there a road, track or building within 3 tiles of tile (i, j)? (A swarm and its drift keep clear of the colony.) */
+function faunaFlyBuilt(i, j) {
+  for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+    const x = i + di, y = j + dj;
+    if (!inMap(x, y)) continue;
+    const t = y * S.W + x;
+    if (S.road[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t])) return true;
+    if (S.bAt[t]) { const b = getE(S.bAt[t]); if (b && !isWild(b.owner)) return true; }
+  }
+  return false;
+}
+/** The fireflies' two sprites (made once): a warm yellow-green core, and the soft halo round it. */
+function faunaFlySprites() {
+  if (FAUNA.flySpr) return FAUNA.flySpr;
+  const make = (stops) => {
+    const n = 64, cv = document.createElement('canvas');
+    cv.width = cv.height = n;
+    const g = cv.getContext('2d'), gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+    for (const [at, col] of stops) gr.addColorStop(at, col);
+    g.fillStyle = gr; g.fillRect(0, 0, n, n);
+    return cv;
+  };
+  return (FAUNA.flySpr = {
+    core: make([[0, 'rgba(255,252,206,1)'], [0.22, 'rgba(240,255,140,0.95)'], [0.55, 'rgba(206,242,84,0.35)'], [1, 'rgba(180,230,60,0)']]),
+    halo: make([[0, 'rgba(226,255,120,0.6)'], [0.3, 'rgba(200,240,90,0.26)'], [0.65, 'rgba(170,226,70,0.08)'], [1, 'rgba(150,215,60,0)']]),
+  });
+}
+/** The night's fireflies (faunaGlows, lighter): every swarm on screen, batched. */
+function faunaFireflies(ctx, ox, oy, z, hidden) {
+  const F = FAUNA, t = F.t;
+  const rain = clamp(1 - F.rain * 3.3, 0, 1); // (rain puts them out: gone by a steady shower)
+  const dusk = clamp((F.L - 0.2) / 0.55, 0, 1) * rain; // (out one by one at dusk, all of them by night, in again at dawn)
+  if (dusk <= 0) return;
+  // The swarms on screen, and how many of them can be lit (whole swarms go dark past the cap, the same ones each frame).
+  const pad = Math.max(12, z * 2.5), shown = FLY_BATCH.shown;
+  shown.length = 0;
+  let total = 0;
+  for (const c of F.cells.values()) {
+    if (c.since < 0 || !faunaQuiet(c)) continue;
+    for (const sw of faunaSwarms(c)) {
+      const x = ox + sw.x * z, y = oy + sw.y * z;
+      if (x < -pad || y < -pad || x > R.w + pad || y > R.h + pad) continue;
+      shown.push(sw); total += sw.flies.length;
+    }
+  }
+  if (!shown.length) return;
+  const cap = FLY_CAP * Math.min(1.5, F.k) * (onTouch() && Math.min(R.w, R.h) < 600 ? 0.55 : 1);
+  const keep = total > cap ? cap / total : 1;
+  const B = FLY_BATCH.steps;
+  for (let q = 0; q < FLY_STEPS; q++) (B[q] = B[q] || []).length = 0;
+  const lift = z * 0.22;
+  for (const sw of shown) {
+    if (sw.rank >= keep) continue;
+    // (the swarm drifts slowly about its spot, a tile or so)
+    const cx = sw.x + Math.sin(t * 0.07 + sw.p) * 0.6, cy = sw.y + Math.cos(t * 0.055 + sw.p * 1.3) * 0.45;
+    if (hidden(cx, cy)) continue;
+    for (const fl of sw.flies) {
+      const out = clamp((dusk * 1.15 - fl.come) * 4, 0, 1);
+      if (out <= 0) continue;
+      // A slow flash (a soft rise and fall, a third of its time) over a dimmer glow between.
+      const ph = ((t + fl.off) / fl.per) % 1, fl1 = ph < 0.34 ? Math.sin((ph / 0.34) * Math.PI) : 0;
+      const b = (0.3 + 0.7 * fl1) * out;
+      const wx = cx + fl.dx + Math.sin(t * (0.28 + 0.3 * fl.h) + fl.off) * 0.3, wy = cy + fl.dy + Math.cos(t * (0.22 + 0.25 * fl.h) + fl.off * 2) * 0.24;
+      const x = ox + wx * z, y = oy + wy * z - lift + Math.sin(t * 0.9 + fl.off) * z * 0.04;
+      if (x < -20 || y < -20 || x > R.w + 20 || y > R.h + 20) continue;
+      B[Math.min(FLY_STEPS - 1, Math.floor(b * FLY_STEPS))].push(x, y);
+    }
+  }
+  // Drawn in batches: one alpha for each step, halos first.
+  const spr = faunaFlySprites(), hr = Math.max(11, z * 0.7), cr = Math.max(3, z * 0.1);
+  for (const [img, r, k] of [[spr.halo, hr, 0.9], [spr.core, cr, 1]]) {
+    for (let q = 0; q < FLY_STEPS; q++) {
+      const L = B[q];
+      if (!L.length) continue;
+      ctx.globalAlpha = Math.min(1, ((q + 0.5) / FLY_STEPS) * k);
+      for (let i = 0; i < L.length; i += 2) ctx.drawImage(img, L[i] - r, L[i + 1] - r, r * 2, r * 2);
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** A soft glow dot (lighter): glowSprite, the battle effects' own. */
@@ -1252,6 +1355,7 @@ function faunaGlows(ctx, ox, oy, z) {
   for (const c of F.cells.values()) {
     if (c.since < 0) continue;
     for (const g of F.life.glows || []) {
+      if (g === 'firefly') continue; // (drawn after, all at once: faunaFireflies)
       if (g === 'glowworm') {
         // On the cavern walls (rock faces beside the floor): tiny blue-green points, twinkling. The lull before a surge puts
         // them out one by one; while it lasts they stay dark near the nests, the exits and the packs.
@@ -1271,17 +1375,7 @@ function faunaGlows(ctx, ox, oy, z) {
       if (L < 0.45) continue;
       const night = clamp((L - 0.45) / 0.4, 0, 1);
       if (!faunaQuiet(c)) continue;
-      if (g === 'firefly') {
-        if (F.rain > 0.3) continue;
-        const n = Math.round((biome() === 'swamp' ? 14 : 10) * Math.min(1.5, F.k));
-        for (const fl of faunaFlies(c)) {
-          if (fl.k >= n) continue;
-          const wx = fl.x + Math.sin(t * (0.3 + 0.2 * fl.h) + fl.k) * 0.6, wy = fl.y + Math.cos(t * (0.25 + 0.2 * fl.h) + fl.k * 2) * 0.5;
-          const blink = Math.max(0, Math.sin(t * (1.1 + fl.h * 1.5) + fl.h * 30));
-          if (blink < 0.3 || hidden(wx, wy)) continue;
-          faunaDot(ctx, ox + wx * z, oy + wy * z - z * 0.2, Math.max(3, z * 0.13), FAUNA_GLOW.firefly, 0.9 * blink * night);
-        }
-      } else if (g === 'eyes') {
+      if (g === 'eyes') {
         // Eyes in the grass: a pair here and there, catching the light, blinking, gone and somewhere else.
         const pool = c.hab.edge.length ? c.hab.edge : c.hab.open;
         if (!pool.length || z < 12) continue;
@@ -1298,6 +1392,7 @@ function faunaGlows(ctx, ox, oy, z) {
       }
     }
   }
+  if ((F.life.glows || []).includes('firefly')) faunaFireflies(ctx, ox, oy, z, hidden);
   // Owls' eyes, ember moths.
   for (const a of F.list) {
     if (a.done || a.vis <= 0) continue;
