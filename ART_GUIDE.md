@@ -1675,6 +1675,25 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 28: the Great Uplink (installed)
+
+The owner's look **A** from the design sheet (Nov 20 2026), the "Dish Array". Rendered with `renderer/b/gup.js` at every
+time of day for both teams, whole and below 30% of its armor, by `renderer/tools/render_gup.sh`;
+`renderer/tools/install_gup.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Great Uplink").
+Framed like the Lance and the Lift (`GUP_FRAME`). The transmission is drawn in code, in its owner's colour, so it reads
+at any zoom: the dish's glow, the beam, the ping and the jammed flicker. Flavor: "Landing beacon for the arks.
+Transmitting on all channels. Listening on all channels."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `gup@0`, `gup@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad with a painted ring; a round concrete plinth and a turntable with a team-colour band, a yoke holding the elevation bearings and a counterweight; one huge white dish, its bowl seamed in rings and spokes with a team-colour band near the rim, ribbed truss at the back, tilted a little north to the sky; ten red lights round its rim (lit at dusk and night); a feed tripod of three struts to a feed horn with a team cap; three small dishes on posts at the north-west, north-east and south-west corners, each looking at a different part of the sky; a control hut at the south-east with an amber window band and a team stripe, a mast on its roof; a power cabinet, cable trays and a red Fuel line on the west; four floodlights at the dish's foot aimed up at it (white at dusk and night) | `drawGup` over the middle of its square |
+| `gup-down@0`, `gup-down@1` (+ times of day) | Below 30%: the bowl holed and scorched, one feed strut snapped and the horn fallen to the pad, the north-east small dish toppled, scorch, rubble and torn white panels strewn over the pad, floods and windows dark | `drawGup` while `b.armor < 30%` |
+| (code) | Rim lights | `drawGupSignals`: red glows blinking in turn at the rim's four marks (`GUP_MARKS`) at night |
+| (code) | Transmitting | a glow in its owner's colour swelling in the bowl with each pulse (`GUP.pulse` 2.4 s, `gupPhase`); a pale beam rising straight up the screen from the feed horn, its white core fading out, a bright band climbing it each pulse; a ring spreading over the ground from the dish (the ping) |
+| (code) | Jammed | the glow and the beam turned red, flickering a dozen times a second, the beam jittering and its pulse broken into pieces; no ring |
+| (code) | No power | the glow down to a slow red blink, no beam |
+| (code) | Minimap | rings in its owner's colour pulsing out from it while it transmits, red while it stalls |
+
 ### Batch 27: the Orbital Lift (installed)
 
 The owner's look **A** from the design sheet (Nov 20 2026), the "Beacon Cable". The anchor pad is rendered with

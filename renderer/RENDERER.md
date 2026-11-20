@@ -639,3 +639,21 @@ python3 tools/install_lift.py     # writes the WebP files into ../art, prints LI
 
 The Lift composes like a building (`compose.py`). The game draws it by `LIFT_FRAME` (art-manifest.js) over the middle of
 its square, and its cable from `LIFT_MARKS.foot` (`liftFoot` in `js/render.js`).
+
+## The Great Uplink
+
+The owner's look A, the Dish Array (Nov 2026; IDEAS.md, "Megastructures"). `b/gup.js` is the 3 x 3 dish array on its
+own 30 x 30 pad, framed like the Lift (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12, width: 0.62, cy: 0.6 })`):
+the dish (a lathed paraboloid with a seam texture, ribs at the back, tilted a little north on an alt-az mount), its feed
+tripod and horn, three small dishes, the control hut and the floodlights. `state=down` is the Uplink below 30% of its
+armor. Marks `feed` (the horn, where the game's beam starts), `dish` (the bowl's middle) and `rim`, `rimL`, `rimR`,
+`rimS` (its rim lights). The transmission (the glow, the beam, the ping and the jammed flicker) is drawn in code
+(`drawGupSignals` in `js/render.js`). Run from this folder:
+
+```
+bash tools/render_gup.sh [out]    # the dish array and the damaged one for both teams at every time of day (~3 min)
+python3 tools/install_gup.py      # writes the WebP files into ../art, prints GUP_FRAME and GUP_MARKS
+```
+
+The Uplink composes like a building (`compose.py`). The game draws it by `GUP_FRAME` (art-manifest.js) over the middle
+of its square, and its signal from `GUP_MARKS` (`gupAt` in `js/render.js`).

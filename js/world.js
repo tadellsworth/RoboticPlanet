@@ -2457,10 +2457,17 @@ function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission
 /** Why owner can't build megastructure `type` now ('' if it can): the setting, one per colony, Arrival City's hour (cityOpen). */
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
+  if (BDEFS[type].gup && !gupWinOn()) return S && S.mission ? 'No Great Uplink in this mission.' : S && S.settings && S.settings.upWin ? 'No Great Uplink here: no sky to transmit to.' : 'The Great Uplink win is off in this game (game setup, beside Victory).';
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
 }
+
+/**
+ * Is the Great Uplink win in this game (GUP)? The game-setup switch (off unless it was turned on; a save from before it:
+ * off), with Megastructures on, in a Versus game (never Colony), and never in the Hollow, which has no sky.
+ */
+function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow; }
 
 /** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
 function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
@@ -2558,6 +2565,8 @@ function newGame(opts) {
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
+  // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
+  if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow) settings.upWin = true;
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
@@ -2693,6 +2702,7 @@ function hollowOn() { return !!(S && S.hollow); }
 function worldBan(type) {
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].gup) return 'No Great Uplink in the Hollow: there is no sky down here to transmit to.';
   if (BDEFS[type] && BDEFS[type].lift) return 'No Orbital Lift in the Hollow: the cavern roof stands between the anchor and the sky.';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && (BDEFS[type].airfield || BDEFS[type].mast)) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
@@ -5303,6 +5313,8 @@ function checkSave(o) {
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
     for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // the Orbital Lift (see updateLift): its fall line, the Carrier's reserve, the climber and the goods it sends up
+    // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
+    for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
@@ -5319,6 +5331,7 @@ function checkSave(o) {
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();
     if (st.mega != null && typeof st.mega !== 'boolean') bad();
+    if (st.upWin != null && typeof st.upWin !== 'boolean') bad();
   }
   if (o.mission) {
     const M = o.mission;

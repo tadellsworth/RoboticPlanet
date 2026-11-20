@@ -2998,6 +2998,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (type === 'magpylon' && b && b.id) return;
   if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6577,6 +6578,7 @@ function render(dtReal) {
   drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
   drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
+  drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
@@ -8744,6 +8746,14 @@ function renderMinimap() {
     ctx.strokeStyle = (R.time * 4) % 2 < 1 ? '#ff4a4a' : '#ffd0a0'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo((f.ax + 1.5 + dx * 1.5) * sx, (f.ay + 1.5 + dy * 1.5) * sy); ctx.lineTo((f.ax + 1.5 + dx * n) * sx, (f.ay + 1.5 + dy * n) * sy); ctx.stroke();
   }
+  // A Great Uplink transmitting: rings pulsing out from it in its owner's colour (red while jammed or without power).
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.gOn || !BDEFS[b.type].gup) continue;
+    const c = bCentre(b), x = c.x * sx, y = c.y * sy, ph = gupPhase(), bad = b.gJam || !b.gPow;
+    ctx.strokeStyle = bad && (R.time * 4) % 2 < 1 ? '#ff4030' : PLAYER_COLORS[b.owner] || '#fff'; ctx.lineWidth = 1.6;
+    for (const k of [0, 0.5]) { const f = (ph + k) % 1; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, 3 + f * 12, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
   // Murmur tunnel exits: violet rings round a dark hole.
   for (const b of S.buildings) {
     if (b.dead || b.type !== 'burrow') continue;
@@ -10193,6 +10203,91 @@ function drawLift(ctx, cx, cy, s, owner, b) {
   drawMegaPlain(ctx, 'lift', cx, cy, s, owner, b);
 }
 
+/*
+ * The Great Uplink (the owner's look A, the Dish Array): its pad (gup@T, battle-damaged below 30%: gup-down@T), and in
+ * code (drawGupSignals) its signal: red lights blinking round the dish's rim at night; while it transmits, a glow in its
+ * owner's colour swelling in the bowl with each pulse (GUP.pulse s), a pale beam rising straight up the screen from the
+ * feed horn with a bright band climbing it each pulse, and a ring spreading over the ground (the ping every colony sees,
+ * the minimap's too: renderMinimap). Jammed, the beam and the glow flicker and break up, tinged red; without power they
+ * die down to a slow red blink.
+ */
+/** Where the dish's parts are on screen, in tiles from its square's middle (tools/install_gup.py prints them). */
+const GUP_MARKS = { feed: [0, -0.664], dish: [0, -0.458], rim: [0, -1.268], rimL: [-0.989, -0.66], rimR: [0.989, -0.66], rimS: [0, 0.016] };
+function drawGup(ctx, cx, cy, s, owner, b) {
+  const weak = !!(b && b.built && b.armor < BDEFS.gup.armor * 0.3);
+  const art = (weak && artFor('gup-down', owner)) || artFor('gup', owner);
+  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  drawMegaPlain(ctx, 'gup', cx, cy, s, owner, b);
+}
+
+/** Where mark k (GUP_MARKS) of Great Uplink b is on the screen. */
+function gupAt(b, k, ox, oy, z) { const c = bCentre(b), m = GUP_MARKS[k]; return { x: ox + (c.x + m[0]) * z, y: oy + (c.y + m[1]) * z }; }
+
+/** How far into its pulse a transmission is (0..1), on the game's clock, as the sound has it (see js/audio.js). */
+function gupPhase() { return ((S.time % GUP.pulse) + GUP.pulse) % GUP.pulse / GUP.pulse; }
+
+/** Every Great Uplink's signal on the screen (see drawGup). */
+function drawGupSignals(ctx, ox, oy, z) {
+  const night = TOD.active ? TOD.state.lights || 0 : 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].gup) continue;
+    const c = bCentre(b), X = ox + c.x * z, Y = oy + c.y * z;
+    if (X < -z * 8 || X > R.w + z * 8 || Y < -z * 4 || Y - z * 20 > R.h + z * 4) continue;
+    const col = PLAYER_COLORS[b.owner] || '#ffffff', weak = b.armor < BDEFS.gup.armor * 0.3;
+    ctx.save();
+    // Red lights round the rim, blinking in turn (bright by night).
+    if (night > 0.15 && !weak) {
+      ctx.globalCompositeOperation = 'lighter';
+      const pts = ['rim', 'rimR', 'rimS', 'rimL'];
+      for (let k = 0; k < 4; k++) {
+        if ((Math.floor(R.time * 1.4) + k) % 2) continue;
+        const p = gupAt(b, pts[k], ox, oy, z);
+        ctx.fillStyle = `rgba(255,60,40,${0.5 * night})`; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, z * 0.18), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (b.gOn) {
+      const ph = gupPhase(), env = Math.pow(1 - ph, 3), feed = gupAt(b, 'feed', ox, oy, z), dish = gupAt(b, 'dish', ox, oy, z);
+      const jam = !!b.gJam, dead = !jam && !b.gPow;
+      // (jammed: an uneven flicker, stepped a dozen times a second; no power: a slow red blink)
+      const fl = jam ? (hash2(b.id, Math.floor(R.time * 12), 641) < 0.45 ? 0.15 : 0.6 + 0.4 * hash2(b.id, Math.floor(R.time * 12), 643)) : dead ? 0.25 * ((R.time % 1.6) < 0.4 ? 1 : 0) : 1;
+      const tint = jam || dead ? '#ff4030' : col;
+      ctx.globalCompositeOperation = 'lighter';
+      // The bowl's glow, swelling with each pulse.
+      const gr = z * 1.7, gg = ctx.createRadialGradient(dish.x, dish.y, 0, dish.x, dish.y, gr);
+      gg.addColorStop(0, hexA(tint, (0.25 + 0.45 * env) * fl)); gg.addColorStop(0.6, hexA(tint, (0.1 + 0.2 * env) * fl)); gg.addColorStop(1, hexA(tint, 0));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(dish.x, dish.y, gr, gr * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      if (!dead) {
+        // The beam: a pale column rising up the screen from the feed horn, a bright band climbing it each pulse.
+        const H = Math.max(z * 10, Math.min(z * 18, (R.h || 900) * 0.7)), w0 = z * 0.38;
+        const g = ctx.createLinearGradient(0, feed.y, 0, feed.y - H);
+        g.addColorStop(0, hexA(tint, (0.35 + 0.25 * night) * fl)); g.addColorStop(0.6, hexA(tint, (0.12 + 0.1 * night) * fl)); g.addColorStop(1, hexA(tint, 0));
+        ctx.fillStyle = g;
+        const jx = jam ? (hash2(b.id, Math.floor(R.time * 12), 647) - 0.5) * z * 0.3 : 0;
+        ctx.beginPath(); ctx.moveTo(feed.x - w0, feed.y); ctx.lineTo(feed.x - w0 * 0.4 + jx, feed.y - H); ctx.lineTo(feed.x + w0 * 0.4 + jx, feed.y - H); ctx.lineTo(feed.x + w0, feed.y); ctx.closePath(); ctx.fill();
+        const gc = ctx.createLinearGradient(0, feed.y, 0, feed.y - H);
+        gc.addColorStop(0, `rgba(255,255,255,${0.8 * fl})`); gc.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = gc; ctx.lineWidth = Math.max(1.2, z * 0.06);
+        ctx.beginPath(); ctx.moveTo(feed.x, feed.y); ctx.lineTo(feed.x + jx, feed.y - H); ctx.stroke();
+        // the pulse climbing it (jammed: broken into pieces)
+        for (let q = 0; q < (jam ? 3 : 1); q++) {
+          const h = jam ? hash2(b.id + q, Math.floor(R.time * 8), 653) : ph, y = feed.y - H * h, a = (jam ? 0.6 : 0.9) * (1 - h) * fl;
+          const bg = ctx.createRadialGradient(feed.x, y, 0, feed.x, y, z * 0.9);
+          bg.addColorStop(0, `rgba(255,255,255,${a})`); bg.addColorStop(0.4, hexA(tint, a * 0.6)); bg.addColorStop(1, hexA(tint, 0));
+          ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(feed.x, y, z * 0.9, z * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        // The ping: a ring spreading over the ground from the dish with each pulse.
+        if (!jam) {
+          const r = z * (1.6 + ph * 6);
+          ctx.strokeStyle = hexA(col, 0.55 * (1 - ph)); ctx.lineWidth = Math.max(1.5, z * 0.1);
+          ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+}
+
 /** How tall a Lift's cable is drawn (px up the screen from its collar), at zoom z. */
 function liftBeamH(z) { return Math.max(z * 9, Math.min(z * 16, (R.h || 900) * 0.6)); }
 /** Where Lift b's cable's foot is on the screen (LIFT_MARKS.foot: tools/install_lift.py prints it). */
@@ -10409,6 +10504,10 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   if (type === 'city') { // (three stepped terraces, a lit atrium)
     for (let k = 1; k <= 3; k++) { const ww = w * (1 - k * 0.22); ctx.fillStyle = k % 2 ? THEME.hullHi : THEME.hull; roundRect(ctx, cx - ww / 2, cy - ww / 2 - k * s * 0.15, ww, ww, s * 0.12); ctx.fill(); }
     ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'gup') { // (a big white dish, tilted to the sky)
+    ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#41464c'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.35, s * 0.15, 0, Math.PI * 2); ctx.fill();
   } else if (type === 'lift') { // (an eight-sided collar where the cable is clamped)
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2; ctx.lineTo(cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.7); } ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#e8eef5'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();

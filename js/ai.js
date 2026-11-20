@@ -1152,6 +1152,7 @@ function aiThink(p) {
         const s = (rain ? aiMissileWorth(p, e, lvl) : e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
           (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0) + // (Uplinks: knock out the forts that hold them)
+          (e.gOn && BDEFS[e.type].gup ? 40 : 0) + // (a Great Uplink transmitting: the first target there is)
           (soft && aiDefReach(e) && dist2(e.x, e.y, soft.x, soft.y) <= 64 ? 6 : 0); // (the guns holding back an attack: see step 5)
         if (aiDomed(p, e.x + 0.5, e.y + 0.5)) continue; // (under a Shield Dome: the Missile would only wear it down)
         if (s > bs && !(rain && s < 1)) { bs = s; best = e; } // (an Architect's: nothing worth less, such as a Wall)
@@ -1195,6 +1196,10 @@ function aiThink(p) {
     (S.uplinks || []).some((u) => u.owner >= 0 && u.owner !== p);
   if ((domFoe >= 0 || upFoe >= 0 || upWant) && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
   if (upFoe >= 0 && S.time >= lvl.grace) aiJamUplink(p, upFoe);
+  // The Great Uplink win: a foe transmitting is everyone's first target (rivalOf): warbots go to jam it now, and the
+  // marches, Missiles, bombers and the Lance go for it (see aiMarch, aiBomber, aiLanceWorth).
+  const gupFoe = gupFoeLive(p);
+  if (gupFoe) { P.nextAttack = Math.min(P.nextAttack, S.time); aiJamGup(p, gupFoe); }
   // Medium, Normal and Hard rivals (`smart`) remember where their attacks were beaten (aiBattles), choose their marches
   // by what it takes to win there, mass before they march and storm the base with a decisive lead (aiMarch, aiStorm).
   if (P.stormOn) aiStorm(p);
@@ -2060,7 +2065,8 @@ function aiFlood(p, from, seen, bottom, early) {
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
 const AI_MEGA = { lanceAt: 1080, domeAt: 1200, cityAt: 900, liftAt: 1080, heraldLift: 1320, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3,
-  liftSpare: 60, liftKeep: 40, liftShort: { alloy: 15, chip: 8 }, liftWorth: 4, ambush: 6 };
+  liftSpare: 60, liftKeep: 40, liftShort: { alloy: 15, chip: 8 }, liftWorth: 4, ambush: 6,
+  gupAt: 1320, gupGuard: 6, gupJam: 45 };
 
 /*
  * How many megastructures a rival builds (the owner's rule, Nov 2026): at most AI_MEGA_CAP.weapons weapon and
@@ -2073,7 +2079,7 @@ const AI_MEGA = { lanceAt: 1080, domeAt: 1200, cityAt: 900, liftAt: 1080, herald
  * under the cap.
  */
 const AI_MEGA_CAP = { weapons: 1, total: 2 };
-const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main' };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
 const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'lift', balanced: 'city', raider: null, rusher: 'lift' };
 
 /** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
@@ -2093,8 +2099,11 @@ function aiMegaRoom(p, kind) {
   const n = aiMegaProjects(p);
   return n.total < AI_MEGA_CAP.total && (kind !== 'weapon' || n.weapons < AI_MEGA_CAP.weapons);
 }
-/** Rival p's main megastructure project ('city', 'lift' or null): its doctrine's, or Arrival City for anyone in Domination. */
-function aiMegaMain(p) { return S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[S.players[p].style] || null; }
+/**
+ * Rival p's main megastructure project ('city', 'lift', 'gup' or null): its doctrine's, or Arrival City for anyone in
+ * Domination; with the Great Uplink win on (gupWinOn) the Steward's is the Great Uplink (it believes the arks are only late).
+ */
+function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[st] || null; }
 
 /**
  * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
@@ -2181,6 +2190,7 @@ function aiMega(p, me, lander, canBuild) {
   aiCity(p, me, lander, canBuild);
   aiLift(p, me, lander, canBuild);
   aiLiftAmbush(p);
+  aiGup(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2420,7 +2430,7 @@ function aiLanceWorth(p, b, L) {
   for (const [n, e] of tg.core.concat(tg.edge).entries()) {
     if (isWild(e.owner)) continue;
     const d = BDEFS[e.type], k = n < tg.core.length ? 1 : 0.3;
-    const w = e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
+    const w = d.gup && e.gOn ? 14 : d.gup ? 5 : e.type === 'lander' ? 4 : d.lance || d.dome || d.nukeSilo || d.missile || e.type === 'reactor' ? 6 : d.keep ? 3 : d.mil || DEFENCE_TYPES.has(e.type) ? 3 : d.staff || d.store ? 2 : 1;
     s += k * (foes(e.owner, p) ? (e.built ? w : w / 2) : -6 * w);
   }
   for (const u of S.bots) {
@@ -2930,6 +2940,7 @@ function aiBomber(p, me) {
   for (const b of S.buildings) {
     let v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
     if (soft && aiDefReach(b) && dist2(b.x, b.y, soft.x, soft.y) <= 64) v = Math.max(v || 0, 9);
+    if (b.gOn && BDEFS[b.type].gup) v = 30; // (a Great Uplink transmitting: the first target there is)
     if (!v || b.dead || !b.built || !foes(b.owner, p) || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
     const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = b; }
@@ -3123,13 +3134,13 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   if (!storm || tgt) P.stormT = 0;
   if (!storm) for (const b of S.buildings) {
     // (Its forts, and the enemy's Arrival City: knocked down and held, it's theirs, land, bonus and all: see cityCapture.)
-    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth)) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
+    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth)) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
     const at = !aiBeaten(P, b, 22) && spotBy(b);
     if (!at) continue;
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -3141,7 +3152,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
-      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
@@ -4077,4 +4088,70 @@ function aiArmorTrains(p) {
   const have = playerGoods(p), spare = trains.some((u) => u.hp < u.maxHp) ? 1 : 3;
   for (const g in TRAIN_ARMOR.cost) if ((have[g] || 0) < TRAIN_ARMOR.cost[g] * spare + (g === 'alloy' ? 10 : 4)) return;
   orderTrainArmor(p, t);
+}
+
+/*
+ * The Great Uplink (GUP), with its win on: the Steward's main project (aiMegaMain), from AI_MEGA.gupAt s once its economy
+ * runs (a Bot Foundry, and aiGupFunds; its site then has its goods first), near its Command Base on the side away from its
+ * rival (the safe choice), its GUP.gens Generators going down beside its site at once. It begins the transmission once it may
+ * (gupBlocked: 25 minutes in, all three Generators fed) with an army of AI_MEGA.gupGuard at home to guard it.
+ */
+function aiGup(p, me, lander, canBuild) {
+  if (!gupWinOn() || !lander) return;
+  const P = S.players[p], g = me.find((b) => BDEFS[b.type].gup);
+  if (g) {
+    if (!g.built && !g.prio) { g.prio = 'high'; g.sitePrio = 1; }
+    // Its Generators go down with it, all three at once, their goods first (a Generator is cheap: it waits only for those),
+    // and again as any is lost.
+    const gens = me.filter((b) => b.type === 'generator' && footDist(g, b.x + 0.5, b.y + 0.5) <= GUP.reach + 0.5), have = playerGoods(p), c = BDEFS.generator.cost;
+    if (gens.length < GUP.gens && canBuild && have.cement >= c.cement && have.alloy >= c.alloy && S.time - (P.gupLook ?? -999) >= AI_MEGA.look / 4) {
+      P.gupLook = S.time;
+      const spot = aiMegaSpot(p, 'generator', [g], GUP.reach, lander, 0);
+      const r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    if (g.built && !g.gOn && !gupBlocked(g) && aiArmyNear(p, g, 14) >= AI_MEGA.gupGuard) gupBegin(g);
+    return;
+  }
+  if (aiMegaMain(p) !== 'gup' || !canBuild || S.time < AI_MEGA.gupAt) return;
+  if (megaBlocked(p, 'gup') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiGupFunds(p)) return;
+  if (S.time - (P.gupLook ?? -999) < AI_MEGA.look) return;
+  P.gupLook = S.time;
+  const spot = aiMegaSpot(p, 'gup', [lander], 10, lander, -1);
+  const r = spot && placeSite(p, 'gup', spot[0], spot[1]);
+  if (r && r.ok) { P.gupAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+
+/** Has rival p the bulk goods for the Great Uplink in hand (half its Cement and Crystal; its Alloy and Chips come as made, first)? */
+function aiGupFunds(p) { const have = playerGoods(p), c = BDEFS.gup.cost; return have.cement >= c.cement / 2 && have.crystal >= c.crystal / 2 && have.alloy >= 2; }
+
+/** How many of p's armed warbots stand (or are garrisoned) within r tiles of building b. */
+function aiArmyNear(p, b, r) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && footDist(b, u.x, u.y) <= r) n++;
+  return n;
+}
+
+/**
+ * A foe's Great Uplink b is transmitting: rival p sends everything it can spare, its garrisons too (as for a storm), up
+ * to 30, to a flag within GUP.jam tiles of its square (on the side toward p's base) to jam it, every AI_MEGA.gupJam s
+ * while none of its bands is there or on the way.
+ */
+function aiJamGup(p, b) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!L || S.time - (P.gupJamT || -999) < AI_MEGA.gupJam || (P.gupRally && rallyById(P.gupRally))) return;
+  let spot = null, bd = Infinity;
+  const F = BDEFS[b.type].foot || 1;
+  for (let j = b.y - 2; j < b.y + F + 2; j++) for (let i = b.x - 2; i < b.x + F + 2; i++) {
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || footDist(b, i + 0.5, j + 0.5) > GUP.jam - 0.6) continue;
+    const d = dist2(i, j, L.x, L.y);
+    if (d < bd) { bd = d; spot = { i, j }; }
+  }
+  if (!spot) return;
+  // (All in: a transmission ends the game, so every garrison sends what it can, as for a storm; a band at a time
+  // only fed the guard round it.)
+  const sp = aiSpare(p, { x: spot.i, y: spot.j }, 'storm'), avail = sp.n;
+  if (avail < 4) return;
+  const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(30, avail), 'all', false, true);
+  if (sent) { rally.first = aiFirstGun(b.owner, spot.i, spot.j) || b.id; P.gupRally = rally.id; P.gupJamT = S.time; }
 }

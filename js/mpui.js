@@ -193,7 +193,7 @@ function mpMenuSettings(final, people) {
     mode, coop: mpCoopSeats(), // (co-op: the seats sharing the host's colony; in Colony everyone does)
     seed: m.seed, diff: m.diff, size: m.size[mode] ?? DEFAULT_SIZE[mode], rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
-    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, events: !!m.events, victory: m.victory || 'capture',
+    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, upWin: !colony && menuUpWin(), events: !!m.events, victory: m.victory || 'capture',
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
     scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
     teams: !colony && !!m.teams && total === 4, teamOf: !colony && m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
@@ -240,6 +240,7 @@ function mpSummary() {
   if (!colony && m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
   if (m.mega !== 0 && m.mega !== false) bits.push('Megastructures');
+  if (!colony && menuUpWin()) bits.push('Great Uplink win');
   if (m.events) bits.push('Planetary events');
   bits.push(menuMurmurLevel() === 'off' ? 'no Murmur' : `Murmur: ${MURMUR_NAMES[menuMurmurLevel()]}`);
   const mods = modList(m.mods, mode);
@@ -481,6 +482,7 @@ function mpGameOpts(s, humans) {
   const total = Math.max(s.players, humans.length), cpus = Array.from({ length: total }, (_, p) => p).filter((p) => !humans.includes(p));
   return {
     seed: s.seed, difficulty: s.diff, mode: s.mode === 'colony' ? 'colony' : 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke, mega: !!s.mega, // (Megastructures: a host from before them sent none, and had none)
+    upWin: !!s.upWin, // (the Great Uplink win: a host from before it sent none, and had it off)
    
     biome: s.biome, players: total, style: docKeyOf(s.style),
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,

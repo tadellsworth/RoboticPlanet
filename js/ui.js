@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, upwin: 0, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -422,7 +422,7 @@ function checkMenuSettings() {
   // is how an earlier build kept them, for players 1 to 3.)
   const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
   m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
-  for (const k of ['nuke', 'events', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  for (const k of ['nuke', 'upwin', 'events', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
   if (!murmurLevelOk(m.murmur)) m.murmur = 'active';
   m.mods = modList(m.mods); // the challenge modifiers picked (MODS), Rival head start kept for Versus in Colony too
   // (Teams isn't remembered: on a map made for 2 vs 2 it starts on.)
@@ -433,11 +433,15 @@ function checkMenuSettings() {
 function saveSettings() {
   const m = UI.menu;
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, biome: m.biome, players: m.players,
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, players: m.players,
       diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
 
+/** Can the Great Uplink win be on with the menu as it is (Megastructures on, not the Hollow)? */
+function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && (SHAPE_PRESETS[m.shape || 0] || {}).hollow); }
+/** Is the Great Uplink win on for the game the menu would start (Versus)? */
+function menuUpWin() { return UI.menu.mode !== 'colony' && !!UI.menu.upwin && menuUpWinOk(); }
 const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 /**
@@ -551,6 +555,7 @@ function menuSummary() {
   const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
+  if (menuUpWin()) main.push('Great Uplink win');
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony) {
@@ -676,6 +681,12 @@ function initMenu() {
   for (const btn of $('m-murmur').children) btn.onclick = () => {
     if (!menuMurmur()) { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
     UI.menu.murmur = btn.dataset.v; UI.menuHover['m-sec-rules'] = btn; syncMenu(); saveSettings(); sfx('click');
+  };
+  // The Great Uplink win (beside Victory): it needs Megastructures, and there is no sky in the Hollow; a tap then says why.
+  $('m-upwin-row').dataset.base = $('m-upwin-row').dataset.info;
+  $('m-upwin').onchange = () => {
+    if (!menuUpWinOk()) { $('m-upwin').checked = !!UI.menu.upwin; UI.menuHover['m-sec-match'] = $('m-upwin-row'); syncInfo(); sfx('error'); return; }
+    UI.menu.upwin = $('m-upwin').checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click');
   };
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-mega', 'mega'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
@@ -835,6 +846,15 @@ function syncMenu() {
   for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
   $('m-victory-field').hidden = colony || teams;
   $('m-victory-note').hidden = colony || teams;
+  // The Great Uplink win: Versus only, any Victory (teams too); greyed out without Megastructures or in the Hollow.
+  const upOk = menuUpWinOk();
+  $('m-upwin-field').hidden = colony;
+  $('m-upwin').checked = !!m.upwin && upOk;
+  $('m-upwin-row').classList.toggle('on', !!m.upwin && upOk);
+  $('m-upwin-row').classList.toggle('na', !upOk);
+  $('m-upwin').setAttribute('aria-disabled', upOk ? 'false' : 'true');
+  $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
+    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow, which has no sky to transmit to.';
   $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? 'No Uplinks in the Hollow (the Pathfinder never mapped it): this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
@@ -1973,7 +1993,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o' },
+  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', gup: 'u' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
@@ -2005,6 +2025,8 @@ const SHEET_KEYS = {
   'sh-mlink': 'l', 'sh-munlink': 'l', 'sh-magline': 'l', 'sh-magrebuild': 'l',
   // An Orbital Lift's four loads to call down.
   'sh-lf-security': 'z', 'sh-lf-crew': 'x', 'sh-lf-alloy': 'c', 'sh-lf-chips': 'v',
+  // A Great Uplink's Begin transmission.
+  'sh-gup-begin': 't',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -2992,7 +3014,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
+    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });
@@ -3360,20 +3382,26 @@ function showGameOver() {
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
   // (lost while the colony stands: on the Uplinks another colony speaks for the planet; else, settlement priority)
-  $('o-log').textContent = won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
+  // (Contact, the Great Uplink win: what answered, the same for every colony; see GUP_ANSWER.)
+  $('o-log').textContent = how === 'contact' ? GUP_ANSWER : won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
   $('o-log').hidden = false;
-  sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
+  // (Contact: silence, then one answering tone, the same for everyone: see gupSilence.)
+  if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
+  $('o-title').textContent = won ? (how === 'contact' ? 'Contact!' : how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
-    ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
+    ? (how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
+      : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
       : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
         : many ? `${nColonies() > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
+    : how === 'contact' ? `${The} held its Great Uplink's transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
-  if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
+  if (S.teams && how === 'contact') $('o-text').textContent = won ? `${S.winner === ME ? 'Your' : `${playerName(S.winner)}'s`} Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact: your team wins.`
+    : `The rival team's Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`;
+  else if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
     : `The rival team ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
@@ -4522,6 +4550,34 @@ function renderLiftSection(b) {
     if (btn.dataset.x) act('liftSend', [b.id, g, false], done); else act('liftReserve', [b.id, g, +btn.dataset.d], done);
   };
   if ($('sh-lfadd')) for (const btn of $('sh-lfadd').querySelectorAll('button')) btn.onclick = () => act('liftSend', [b.id, btn.dataset.g, true], done);
+}
+
+/**
+ * A Great Uplink's Transmission section (GUP): its clock, its power and jamming, and (its owner's) Begin transmission.
+ * Anyone tapping it sees how its transmission stands.
+ */
+function renderGupSection(b) {
+  const el = $('sh-gup');
+  if (!el) return;
+  const mine = b.owner === ME, why = gupBlocked(b), gens = megaGens(b, GUP.reach).length, T = b.gT || 0;
+  const sig = JSON.stringify([b.gOn || 0, Math.floor(T), b.gJam || 0, b.gPow || 0, gens, why, mine]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  const col = PLAYER_COLORS[b.owner] || '#ffffff';
+  let h = '';
+  if (b.gOn) {
+    const st = b.gJam ? `<b class="err">Jammed</b> by ${playerName(b.gJam - 1, true)}: its clock runs back at half speed` : !b.gPow ? '<b class="err">No power</b>: its clock runs back at half speed' : 'Transmitting';
+    h += `<div class="kv"><span>Contact in</span><span>${fmtClock(GUP.hold - T)} of ${fmtClock(GUP.hold)}</span></div><div class="bar"><div style="width:${Math.round((T / GUP.hold) * 100)}%;background:${col}"></div></div>`;
+    h += `<div class="kv"><span>Signal</span><span>${st}</span></div>`;
+  } else h += `<div class="kv"><span>Signal</span><span>${gupWinOn() ? 'Silent' : 'Silent: the Great Uplink win is off in this game'}</span></div>`;
+  if (mine) {
+    h += `<div class="kv"><span>Power</span><span>${gens >= GUP.gens ? `${gens} Generators with Fuel` : `<b>Not enough</b>: ${gens} of ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles`}; each burns a Fuel every ${GUP.genFuel} s while it transmits</span></div>`;
+    if (!b.gOn) h += `<button class="btn primary big danger-glow" id="sh-gup-begin"${why ? ' disabled' : ''}>Begin transmission</button>`;
+    h += `<p class="hint">${!b.gOn && why ? why + ' ' : ''}Hold the transmission for ${GUP.hold / 60} minutes and you make contact: your colony${S.teams ? ' and your team' : ''} win${S.teams ? '' : 's'}. Every colony sees the countdown and where it is. An enemy warbot within ${GUP.jam} tiles jams it; jammed or without power its clock runs back at half speed. Destroyed, the transmission is lost.</p>`;
+  } else if (b.gOn) h += `<p class="hint">${allies(b.owner, ME) ? 'Your team wins when it makes contact: guard it.' : `Warbots within ${GUP.jam} tiles of it jam it and wind its clock back; destroy it and the transmission is lost.`}</p>`;
+  el.innerHTML = h;
+  markSheetKeys();
+  if ($('sh-gup-begin')) $('sh-gup-begin').onclick = () => act('gupBegin', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('order'); el.dataset.sig = ''; refreshSheet(); });
 }
 
 /** Aim at a Catcher: pick it on the map (a tap on it aims the Driver). */
@@ -6546,7 +6602,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
@@ -6788,6 +6844,7 @@ function openBuildingSheet(b) {
     if (def.magterm && b.built && mine) html += magSection();
     if ((def.mdriver || def.catcher) && b.built && mine) html += mdSection(b);
     if (def.lift && b.built && mine) html += '<div class="section-label">Orbital Lift</div><div id="sh-lift"></div>';
+    if (def.gup && b.built) html += '<div class="section-label">Transmission</div><div id="sh-gup"></div>';
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
@@ -7494,6 +7551,7 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-md')) renderMdSection(b);
   if ($('sh-lift')) renderLiftSection(b);
+  if ($('sh-gup')) renderGupSection(b);
   if ($('sh-mag')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     renderMagSection(b);
@@ -8645,6 +8703,7 @@ function updateHUD() {
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
+  updateGupCard(); // (the Great Uplink win: a transmission's countdown, for every colony)
   goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
@@ -8743,6 +8802,28 @@ function updateWinCard() {
   // Folded under the Goal chip (tap it): the card hides, and the chip shows your share (and the count, if one runs).
   UI.winMini = ` <span class="win-mini"><i style="background:${PLAYER_COLORS[ME]}"></i>${Math.round(pct(ME) * 100)}%${D.lead >= 0 ? ` <i style="background:${col}"></i>${clock}` : ''}</span>`;
   el.hidden = !!UI.objCollapsed;
+}
+
+/**
+ * The Great Uplink win: while any colony transmits, a banner under the top bar in the sender's colour, for every colony
+ * (and in Observer mode): "VERMILION transmitting · contact in 6:12", a bar filling, and JAMMED or NO POWER while it
+ * stalls; a second line for a second colony transmitting at once. Tap it to look at the one furthest along.
+ */
+function updateGupCard() {
+  const el = $('gup-card'), live = S.winner < 0 && typeof gupLive === 'function' ? gupLive() : [];
+  if (!live.length) { el.hidden = true; el.dataset.key = ''; return; }
+  const g = live[0], col = PLAYER_COLORS[g.owner] || '#7fc8ff';
+  el.style.setProperty('--c', col);
+  const who = (b) => (b.owner === ME && !S.watch ? 'You are' : `${esc(callsign(b.owner))}${S.players[b.owner] && S.players[b.owner].name ? ` (${esc(S.players[b.owner].name)})` : ''}`);
+  const html = live.slice(0, 2).map((b) => {
+    const left = fmtClock(GUP.hold - (b.gT || 0)), tag = b.gJam ? '<span class="gup-tag">JAMMED</span>' : !b.gPow ? '<span class="gup-tag">NO POWER</span>' : '';
+    return `<div class="gup-row" style="--c:${PLAYER_COLORS[b.owner]}"><span class="ev-dot" style="background:${PLAYER_COLORS[b.owner]};color:${PLAYER_COLORS[b.owner]}"></span><span><b>${who(b)}</b> transmitting · contact in</span><span class="ev-time">${left}</span>${tag}</div>` +
+      `<div class="gup-bar" style="--c:${PLAYER_COLORS[b.owner]}"><i style="width:${Math.min(100, ((b.gT || 0) / GUP.hold) * 100).toFixed(1)}%"></i></div>`;
+  }).join('');
+  if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; }
+  el.setAttribute('aria-label', `${callsign(g.owner)} transmitting from its Great Uplink: contact in ${fmtClock(GUP.hold - (g.gT || 0))}${g.gJam ? ', jammed' : !g.gPow ? ', no power' : ''}`);
+  el.onclick = () => { const c = bCentre(g); centerOn(c.x, c.y); };
+  el.hidden = false;
 }
 
 /**

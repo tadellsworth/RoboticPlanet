@@ -240,6 +240,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
+  gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -259,6 +260,7 @@ const BLAST_SIZE = {
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
   citychime: 1.6, cityclock: 0.5, // (Arrival City's station chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
+  gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
 /**
@@ -922,6 +924,31 @@ function sfx(name, dest, y, dur) {
       _tone(55 + Math.random() * 20, 0.6, 'sine', 0.08, 30, 0, D);
       _noise(0.5, 0.07, { type: 'lowpass', freq: 380, to: 80, dest: D });
       break;
+    // A Great Uplink begins transmitting: relays closing, the carrier sweeping up from nothing to its note, the first pulse.
+    case 'gupbegin':
+      _noise(0.1, 0.1, { type: 'lowpass', freq: 600, dest: D }); _tone(64, 0.3, 'square', 0.02, 44, 0, D);
+      _tone(110, 2.4, 'sine', 0.05, 440, 0.2, D); _tone(220, 2.4, 'triangle', 0.012, 880, 0.2, D);
+      _noise(1.8, 0.03, { type: 'bandpass', freq: 2400, to: 900, q: 4, delay: 0.3, dest: D });
+      _tone(880, 1.2, 'sine', 0.05, null, 2.6, D);
+      break;
+    // Its signal's slow pulse (one every GUP.pulse s while it transmits): a soft deep throb and a clear high ping fading,
+    // with a breath of static under it.
+    case 'guppulse':
+      _tone(110, 0.9, 'sine', 0.07, 98, 0, D); _tone(880, 1.4, 'sine', 0.035, null, 0.02, D); _tone(1320, 0.7, 'sine', 0.008, null, 0.02, D);
+      _noise(0.6, 0.012, { type: 'bandpass', freq: 3000, q: 1.5, dest: D });
+      break;
+    // In the last seconds, the Murmur repeating the pulse back from the ground: the same shape, low, muffled and a little
+    // off, as if through rock.
+    case 'gupecho': {
+      const lp = AUDIO.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.connect(D);
+      _tone(55, 1.1, 'sine', 0.09, 50, 0, lp); _tone(437, 1.3, 'triangle', 0.04, 431, 0.03, lp);
+      _noise(0.9, 0.04, { type: 'lowpass', freq: 240, to: 120, dest: lp });
+      break;
+    }
+    // Contact: after the silence, one answering tone, pure and long, from nowhere in particular.
+    case 'gupanswer':
+      _tone(587.3, 5.5, 'sine', 0.06, null, 0, D); _tone(880, 4.2, 'sine', 0.012, null, 0.6, D); _tone(293.7, 5, 'sine', 0.02, null, 0.2, D);
+      break;
     // The Arrival clock striking: two slow, low bell notes from the atrium, the second a little lower, fading long.
     case 'cityclock':
       for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
@@ -1035,6 +1062,12 @@ function liftHum(k, w) {
   LIFTHUM.o.g.gain.setTargetAtTime(0.03 * k, t, 0.8);
   LIFTHUM.o.gw.gain.setTargetAtTime(0.05 * (w || 0), t, 0.4);
   LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
+}
+
+/** Contact (the Great Uplink win): the music falls away to silence, and after it one answering tone (sfx 'gupanswer'). */
+function gupSilence() {
+  duckMusic(0.0001, 14);
+  setTimeout(() => sfx('gupanswer'), 2200);
 }
 
 /** Duck the music for `secs`, down to `to` of its level. */
@@ -1206,6 +1239,19 @@ function audioTick(dt) {
       if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
     }
     liftHum(lk, lw);
+    // A Great Uplink transmitting on screen: its slow pulse, in time with the beam (gupPhase); in the last GUP.echo s, with
+    // the Murmur in the game, the ground repeating it back. Jammed or without power, silence.
+    if (live) {
+      const ph = gupPhase(), wrap = ph < (WORLD.gupPh ?? 1);
+      WORLD.gupPh = ph;
+      if (wrap) for (const b of S.buildings) {
+        if (b.dead || !b.built || !b.gOn || !BDEFS[b.type].gup || b.gJam || !b.gPow) continue;
+        const m = bCentre(b);
+        sfx('guppulse', m.x, m.y);
+        if (S.wildlife && GUP.hold - (b.gT || 0) <= GUP.echo) setTimeout(() => sfx('gupecho', m.x, m.y + 2), 700);
+        break;
+      }
+    }
     WORLD.cityT = (WORLD.cityT ?? 20) - 0.25;
     if (cb && WORLD.cityT <= 0) { WORLD.cityT = 50 + Math.random() * 20; sfx('cityclock', cb.x, cb.y); }
     WORLD.bt = 0.25;

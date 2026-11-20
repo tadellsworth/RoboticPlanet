@@ -1586,7 +1586,7 @@ const MISSIONS = [
   },
   {
     id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
-    brief: 'The archive\'s last pages hold an orbital defence, a city for the colonists and a lift to the Carrier. Build them, and fire along their depots.',
+    brief: 'The archive\'s last pages hold an orbital defence, a city, a lift to the Carrier and a dish aimed home. Build them, and fire along their depots.',
     intro: [
       'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
       'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
@@ -1594,14 +1594,16 @@ const MISSIONS = [
       'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',
       '<b>Arrival City</b>, built for colonists who never came: your work within 8 tiles of it goes 20% faster.',
       'The <b>Orbital Lift</b> calls robots or goods down from your Carrier, and sends your surplus up to restock it.',
-      'Their supply depots stand in a row. In free play, Custom Game → Rules switches Megastructures on or off.',
+      'The <b>Great Uplink</b> transmits home on 3 Generators. In free play, 8 minutes held wins; enemy warbots near it jam it.',
+      'Their supply depots stand in a row. In free play, Custom Game switches Megastructures and the Great Uplink win.',
     ],
-    mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true,
+    mode: 'versus', seed: 6607, size: 1, rough: 0, rich: 3, biome: 'savanna', shape: 0, style: 'tycoon', mega: true, upWin: true,
     rival: ['easy', 'easy', 'normal'], passive: [true, true, false], limit: [0, 0, 35],
     setup(S) {
       kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander), P = S.players[0];
       L.stock.cement += 300; L.stock.alloy += 160; L.stock.chip += 85; L.stock.crystal += 75; L.stock.fuel += 44; L.stock.fiber = (L.stock.fiber || 0) + 30; // (with Arrival City's, and the Orbital Lift's and a load of Cement to send up)
+      L.stock.cement += 60; L.stock.alloy += 48; L.stock.chip += 30; L.stock.crystal += 24; L.stock.fuel += 12; // (the Great Uplink's, and its three Generators')
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
       // Their depots, strung out in a row from their base toward ours: one line of fire from by our base takes most of them.
       const dx = L.x - E.x, dy = L.y - E.y, d = Math.hypot(dx, dy) || 1;
@@ -1641,6 +1643,13 @@ const MISSIONS = [
         count: (P) => P.stats.liftUps || 0,
         hint: 'On the Lift\'s panel, <b>Restock the Carrier</b>: tick <b>Cement</b>. At 30 goods the climber goes up.',
         ui: "#sh-lfadd [data-g='cement'], #sh-lflist" },
+      { kind: 'built', type: 'gup', n: 1,
+        hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Great Uplink</b> (<kbd>U</kbd>), then 3 <b>Generators</b> by it.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='gup'], .bcard[data-t='generator']" },
+      { kind: 'gupTx', n: 1, text: 'Begin a transmission from the Great Uplink', at: 'gup',
+        count: (P) => P.stats.gupTx || 0,
+        hint: 'Tap the Great Uplink → <b>Begin transmission</b> (<kbd>T</kbd>). It needs 3 Generators with Fuel.',
+        ui: '#sh-gup-begin' },
       { kind: 'built', type: 'lance', n: 1,
         hint: '<b>Mega</b> (<kbd>B</kbd> <kbd>6</kbd>) → <b>Lance of Corvane</b> (<kbd>L</kbd>), with 2 <b>Generators</b> within 4 tiles of its pit.',
         ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='lance'], .bcard[data-t='generator']" },
@@ -1844,7 +1853,7 @@ function missionOptions(k, diff) {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
-    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega,
+    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, upWin: !!def.upWin,
     layout: def.layout,
     setup(S) {
       // Easy starts with more in the Command Base, Hard with less.

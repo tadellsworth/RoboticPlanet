@@ -410,9 +410,32 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
     tunnel networks map-wide and shakes nests; aimed at a rival it cracks roads and foundations in a radius. The Murmur
     hear it, and come for it.
-  - **Great Uplink.** A giant dish array to talk to home, and a new way to win: power it and hold it through a long
-    transmission window to "make contact", while rivals try to wreck or jam it. Ties into the campaign's last mission
-    ("No further instructions"); in free play a last-stage victory, with a lore twist on what answers.
+  - **Great Uplink: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures and Rivals, teams and
+    victory; the War mission *Aimed the Other Way*). The owner's look A (the Dish Array: one huge white dish, ribbed and
+    tilted to the sky on a turning mount, a feed tripod, three small dishes at the corners, a control hut, floodlights
+    from below and red rim lights at night) and the sheet's numbers: 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 300 s,
+    armor 120; Begin transmission from 25 minutes in, on 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each);
+    8 minutes make contact; an enemy warbot within 3 tiles jams it, and jammed or unpowered the clock runs back at half
+    speed; destroyed, the transmission is lost. The owner's answers: an on/off **Great Uplink win** beside Victory (off by
+    default) that works alongside any Victory; buildable only with it on and Megastructures on; not in the Hollow (nor
+    Colony, as the sheet has it); a banner in the sender's colour and a ping for everyone; contact wins for that colony
+    and its team; the end screen shows answer (c), "Signal acknowledged. Source unidentified. Further instructions to
+    follow."; the sound: a slow pulse, the Murmur repeating it back in the last seconds (with the Murmur on), then
+    silence and one answering tone. Rivals: the Steward builds it as its main project when the win is on (else Arrival
+    City); every rival makes a foe's transmission its first target (warbots to jam it, Missiles, bombers and the Lance).
+    Still open, for the owner:
+    - Power is 3 Generators only. The sheet also offered "a Reactor and 1 Generator (the Reactor taking 1 Uranium a
+      minute)"; not built, as the owner's choice named 3 Generators. Add it?
+    - Once begun a transmission can't be called off (it runs back while stalled, down to 0, and stays on). A Stand down
+      button, to save Fuel, would be easy.
+    - The dish doesn't turn to follow the sky (the sprite is one still frame); the sheet's "the colony's street lights
+      flicker in time" isn't in. Both are looks only.
+    - "Alerts at half, 2 minutes and 30 s" come once each: a clock pushed back past them doesn't repeat them.
+    - The Steward builds no Arrival City in a game with the win on, Domination included (the Uplink is its main project).
+    - The campaign's last mission ("No further instructions") and whether its ending should answer differently from free
+      play: not done; the mission that teaches it only asks to begin a transmission.
+    The notes as filed: A giant dish array to talk to home, and a new way to win: power it and hold it through a long
+    transmission window to "make contact", while rivals try to wreck or jam it.
   - **Arrival City: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
     *Aimed the Other Way*). The owner's look A from the design sheet (the Terraced Arcology, 4 × 4: three terraces of
     homes stepping back to the north, a school and running track, a park and pond, allotments and two grazing deer, a

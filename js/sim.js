@@ -4119,6 +4119,7 @@ function updateBuilding(b, dt) {
     return;
   }
   repairHint(b);
+  if (def.gup) updateGup(b, dt); // (first: cut off or paused, its transmission runs back as without power)
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
@@ -6749,6 +6750,8 @@ function rivalOf(p) {
   // Domination: a colony about to win on land is everyone's rival (Uplinks: one whose clock is running).
   if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
   if (S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p && !S.players[S.upLead].out) return S.upLead;
+  // (The Great Uplink win: a foe transmitting is everyone's rival, the furthest along first.)
+  { const g = gupFoeLive(p); if (g && !S.players[g.owner].out) return g.owner; }
   const P = S.players[p];
   const keep = P.rival >= 0 && S.players[P.rival] && !S.players[P.rival].out && S.time < (P.rivalUntil || 0);
   if (keep) return P.rival;
@@ -11335,7 +11338,8 @@ function murmurPower(e) {
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
-    else if (BDEFS[b.type].lift && b.working) charge += 2; // (an Orbital Lift's climber: charge running up the cable)
+    else if (BDEFS[b.type].lift && b.working) charge += 2;
+    else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
   }
@@ -11348,7 +11352,8 @@ function chargeWorth(e) {
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
-  if (def.lift && e.working) return 3; // (an Orbital Lift's climber on the move, like a working Generator)
+  if (def.lift && e.working) return 3;
+  if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
@@ -16556,6 +16561,7 @@ function hashState() {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
+    if (BDEFS[b.type].gup) { int(b.id); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
   // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
@@ -18054,3 +18060,118 @@ function doSalvage(u, t, dt) {
   bump(dst.inc, 'alloy', got);
   if (!goTo(u, dst.x, dst.y)) cancelTask(u, true);
 }
+
+/* ------------------------------------------------------------------ megastructures: the Great Uplink */
+
+/*
+ * The Great Uplink (GUP; BDEFS.gup), a second way to win with the Great Uplink win on (gupWinOn). b.gOn: transmitting
+ * (once begun it stays on until contact, or until the building is lost or changes hands); b.gT: s of transmission so far
+ * (0 .. GUP.hold); b.gBy: the colony that began it (taken by another, it's lost); b.gJam: the colony + 1 whose warbot jams
+ * it (0: none); b.gPow: 1 while it has its Generators; b.gWarn: the last alert given (s left); b.gBest: the most it held.
+ */
+
+/** Can Great Uplink transmissions begin yet (GUP.at s into a game; at once in a mission that teaches it)? */
+function gupOpen() { return !!S && (!!S.mission || S.time >= GUP.at); }
+
+/** Has Great Uplink b its power: GUP.gens Generators with Fuel within GUP.reach tiles (and not cut by the Murmur)? */
+function gupPowered(b) { return !murmurCutOn(b) && megaGens(b, GUP.reach).length >= GUP.gens; }
+
+/** The colony + 1 one of whose armed warbots stands within GUP.jam tiles of Great Uplink b's square, jamming it; or 0. */
+function gupJammer(b) {
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner < 0 || isWild(u.owner) || !isArmy(u) || aloft(u) || !foes(u.owner, b.owner) || !botArmed(u)) continue;
+    if (footDist(b, u.x, u.y) <= GUP.jam) return u.owner + 1;
+  }
+  return 0;
+}
+
+/** Why Great Uplink b can't begin a transmission now ('' if it can). */
+function gupBlocked(b) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].gup) return 'The Great Uplink is not built yet.';
+  if (b.gOn) return 'It is transmitting already.';
+  if (!gupWinOn()) return 'The Great Uplink win is off in this game.';
+  if (S.endless || S.winner >= 0) return 'This game is already won: nothing more is won by contact.';
+  if (!gupOpen()) return `Transmissions open ${GUP.at / 60} minutes into a game: in ${fmtSecs(GUP.at - S.time)}.`;
+  if (!gupPowered(b)) return `No power: it needs ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles.`;
+  return '';
+}
+
+/** Begin Great Uplink b's transmission (an order: gupBegin). Every colony is told where it is. '' or why not. */
+function gupBegin(b) {
+  const why = gupBlocked(b);
+  if (why) return why;
+  b.gOn = 1; b.gT = 0; b.gBy = b.owner; b.gJam = 0; b.gPow = 1; b.gWarn = GUP.hold; b.gBest = 0;
+  const P = S.players[b.owner], c = bCentre(b), left = fmtClock(GUP.hold);
+  if (P) P.stats.gupTx = (P.stats.gupTx || 0) + 1;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    if (Q.id === b.owner) postMsg(Q.id, `Your Great Uplink is transmitting: hold it for ${left} to make contact. Every colony can see where it is.`, c.x, c.y, 'good');
+    else if (allies(Q.id, b.owner)) postMsg(Q.id, `${playerName(b.owner)} (your team) is transmitting from its Great Uplink: guard it for ${left} and your team wins.`, c.x, c.y, 'good');
+    else postMsg(Q.id, `${playerName(b.owner)} is transmitting from its Great Uplink! Jam it or destroy it within ${left}, or it makes contact and wins.`, c.x, c.y, 'bad');
+  }
+  logEvent({ t: S.time, k: 'gup', p: b.owner });
+  sfx('gupbegin', c.x, c.y);
+  return '';
+}
+
+/** Tell every colony how Great Uplink b's transmission stands (an alert at `w` s left). */
+function gupAlert(b, w) {
+  const c = bCentre(b), when = w >= GUP.hold / 2 ? 'halfway' : w >= 60 ? `${w / 60} minutes from contact` : `${w} seconds from contact`;
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    if (Q.id === b.owner) postMsg(Q.id, `Your Great Uplink's transmission is ${when}: hold on!`, c.x, c.y, 'good');
+    else if (allies(Q.id, b.owner)) postMsg(Q.id, `${playerName(b.owner)}'s transmission is ${when}.`, c.x, c.y, 'good');
+    else postMsg(Q.id, `${playerName(b.owner)}'s Great Uplink is ${when}: jam it or destroy it!`, c.x, c.y, 'bad');
+  }
+}
+
+/** The Great Uplink, each tick: its transmission's clock (on, or running back while jammed or unpowered), and contact. */
+function updateGup(b, dt) {
+  if (b.gOn && (b.gBy !== b.owner || S.endless)) { b.gOn = 0; b.gT = 0; b.gJam = 0; b.gWarn = 0; } // (taken by another colony: the transmission is lost; played on past a victory, nothing is won by contact)
+  if (!b.gOn) {
+    b.working = false;
+    b.status = !gupWinOn() ? 'Silent: the Great Uplink win is off in this game' : S.endless ? 'Silent: this game is already won'
+      : !gupOpen() ? `Transmissions open in ${fmtSecs(GUP.at - S.time)}` : gupPowered(b) ? 'Ready: Begin transmission on its panel'
+      : `No power: ${GUP.gens} Generators with Fuel within ${GUP.reach} tiles`;
+    return;
+  }
+  const jam = gupJammer(b), pow = gupPowered(b) && !b.cut && !b.paused ? 1 : 0, c = bCentre(b);
+  if (jam && !b.gJam) {
+    postMsg(b.owner, `${playerName(jam - 1)}'s warbots are jamming your Great Uplink: drive them off! Its clock is running back.`, c.x, c.y, 'bad');
+    postMsg(jam - 1, `Your warbots are jamming ${playerName(b.owner, true)}'s Great Uplink: its clock is running back.`, c.x, c.y, 'good');
+  }
+  if (!pow && b.gPow && !jam) postMsg(b.owner, 'Your Great Uplink lost its power (its Generators are wrecked or out of Fuel): its clock is running back.', c.x, c.y, 'bad');
+  b.gJam = jam; b.gPow = pow;
+  if (jam || !pow) {
+    b.gT = Math.max(0, (b.gT || 0) - dt * GUP.back);
+    b.working = false;
+    b.status = `${jam ? `Jammed by ${playerName(jam - 1)}` : 'No power'}: its clock runs back (contact in ${fmtClock(GUP.hold - b.gT)})`;
+    return;
+  }
+  b.working = true;
+  // Its Generators burn a Fuel every GUP.genFuel s each while it transmits (against BDEFS.generator's own rate).
+  const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / GUP.genFuel - 1);
+  for (const g of megaGens(b, GUP.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
+  b.gT = Math.min(GUP.hold, (b.gT || 0) + dt);
+  b.gBest = Math.max(b.gBest || 0, b.gT);
+  const left = GUP.hold - b.gT;
+  for (const w of GUP.alerts) if (left <= w && (b.gWarn ?? GUP.hold) > w) { b.gWarn = w; gupAlert(b, w); }
+  b.status = `Transmitting: contact in ${fmtClock(left)}`;
+  if (left <= 0) gupContact(b);
+}
+
+/** Great Uplink b has made contact: its colony (and its team) wins. */
+function gupContact(b) {
+  if (S.endless || S.winner >= 0) return;
+  const P = S.players[b.owner];
+  if (P) P.stats.contact = (P.stats.contact || 0) + 1;
+  b.gOn = 0; b.working = false;
+  logEvent({ t: S.time, k: 'contact', p: b.owner });
+  S.winner = b.owner; S.endHow = 'contact';
+}
+
+/** The Great Uplinks transmitting now, the furthest along first. */
+function gupLive() { return S.buildings.filter((b) => !b.dead && b.built && b.gOn && b.gBy === b.owner && BDEFS[b.type].gup).sort((a, c) => (c.gT || 0) - (a.gT || 0) || a.id - c.id); }
+
+/** The furthest-along Great Uplink transmitting that belongs to a foe of p's, or null. */
+function gupFoeLive(p) { return gupLive().find((b) => b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner)) || null; }

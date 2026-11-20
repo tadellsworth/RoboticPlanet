@@ -984,6 +984,22 @@ const LIFT_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], 
 const LIFT_DIR_NAMES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 /** What a Lift can send up: the made goods and Crystal. */
 const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'fissile'];
+/*
+ * The Great Uplink (BDEFS.gup; the owner's look A, the Dish Array, Nov 2026): a 3 x 3 dish array built to talk to home,
+ * and a second way to win. Only in a game with the Great Uplink win on (a game-setup switch beside Victory, off by
+ * default; it works alongside whichever Victory was picked) and Megastructures on; never in Colony games or the Hollow
+ * (no sky): gupWinOn. Its panel's Begin transmission opens `at` s into a game (at once in a mission that teaches it) and
+ * needs `gens` Generators with Fuel within `reach` tiles of its square, each burning a Fuel every `genFuel` s while it
+ * transmits. `hold` s of transmission make contact, and that colony (and its team) wins (S.endHow 'contact'). An armed
+ * warbot of another colony within `jam` tiles of its square jams it; jammed or unpowered, the clock stops and runs back
+ * at `back` speed (down to 0). Destroyed, the transmission is lost: a rebuilt one starts from 0. While it transmits every
+ * colony sees a banner in the sender's colour and a ping on the map; alerts when it starts, at half, at 2 minutes and at
+ * 30 s left (`alerts`). Its signal pulses every `pulse` s (looks and sound only). In the last `echo` s the Murmur repeat the pulse back (the sound). It draws the Murmur like a
+ * working Generator while it transmits. One per colony; two colonies may transmit at once, and the first to finish wins.
+ */
+const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, jam: 3, back: 0.5, alerts: [240, 120, 30], echo: 20, pulse: 2.4 };
+/** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
+const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1310,6 +1326,11 @@ const BDEFS = {
     desc: 'A space elevator: a 3 by 3 anchor pad and a lit cable up to your Carrier in orbit. As you place it, press R to turn its fall line (half the map\'s width, shown on the map), which must not cross another colony\'s land. On its panel, Call down a climber with one of four loads: a Security detail (6 Warbots, 2 Bulwarks), a Work crew (6 Workers, 2 Freight Trucks), 30 Alloy or 18 Chips. It takes 45 seconds and every colony hears it coming; then 6 minutes before the next. The Carrier holds 6 drops. Restock the Carrier: tick goods to send up (Haulers bring what you hold beyond the reserve you set); every 30 that go up put a drop back and make the next drop half again bigger (up to double). Each climb burns 2 Fuel from a Generator within 4 tiles. If an enemy destroys it, the cable comes down along its fall line, crushing what lies there and leaving wreckage Haulers cut up for Alloy. One per colony. Not in the Hollow; on Argos it falls slowly.',
     cost: { cement: 60, alloy: 44, chip: 26, crystal: 20 }, lift: true, mega: true, foot: 3, armor: 90, buildTime: 330,
   },
+  gup: {
+    name: 'Great Uplink',
+    desc: 'A 3 by 3 dish array built to talk to home, and a second way to win. Only in a game with the Great Uplink win switched on (game setup, beside Victory) and Megastructures on. Its panel\'s Begin transmission opens 25 minutes into a game and needs 3 Generators with Fuel within 4 tiles, each burning a Fuel every 30 seconds while it transmits. Hold the transmission for 8 minutes and you make contact: your colony (and your team) wins. Any armed warbot of another colony within 3 tiles jams it; jammed or without power its clock stops and runs back at half speed. Destroyed, the transmission is lost and a rebuilt one starts from zero. Every colony sees the countdown and where it is. One per colony. Not in the Hollow.',
+    cost: { cement: 50, alloy: 40, chip: 30, crystal: 24 }, gup: true, mega: true, foot: 3, armor: 120, buildTime: 300,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1341,7 +1362,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'gup', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -1349,7 +1370,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift'], late: true },
+  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'gup'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1951,6 +1972,7 @@ const FLAVOR = {
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
   city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
   lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
+  gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',

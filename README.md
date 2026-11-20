@@ -80,7 +80,7 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
 and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Shield
-Dome, Arrival City and the Orbital Lift; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+Dome, Arrival City, the Orbital Lift and the Great Uplink; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), the **Great Uplink win** (beside Victory, off by default, Versus only: a second way to win alongside any Victory, teams too; greyed out without Megastructures or on the Hollow; `UI.menu.upwin`, `S.settings.upWin`, `gupWinOn`; carried in the lobby's and lockstep's settings and in Observer mode; a mission's `upWin`; a save from before it loads with it off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -182,6 +182,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
+| Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits); 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
@@ -2021,7 +2022,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
-  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift), all bigger than a tile: `def.foot` (3, 2, 4 or 3)
+  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -2122,6 +2123,32 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`drawCableWreck`), sparking for `sparks` (60) s. Sound (`js/audio.js`): `liftHum` (the cable's held note, a whine
     while a climber moves), `liftclimb`, `liftland`, `liftgroan`, `liftsnap`, `liftimpact`. Its panel: `renderLiftSection`
     (the six lamps, Call down on Z X C V, Restock the Carrier).
+  - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 300 s; 3 × 3; armor 120;
+    the owner's look A, the Dish Array, Nov 2026). Only in a game with the **Great Uplink win** on (`gupWinOn`:
+    `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu
+    leaves it out otherwise). Its panel's **Begin transmission** (`gupBegin` order and function; `gupBlocked` why not;
+    key T: `renderGupSection`) from `GUP.at` (25 min; at once in a mission: `gupOpen`), with `gens` (3) Generators with
+    Fuel within `reach` (4) tiles (`megaGens`, `gupPowered`), each burning a Fuel every `genFuel` (30) s while it
+    transmits. `updateGup`: `b.gT` counts up to `hold` (480) s and `gupContact` wins (`S.winner` its owner, `S.endHow`
+    `'contact'`; with teams its side). An armed warbot of a foe within `jam` (3) tiles of its square (`gupJammer`,
+    `b.gJam`), or no power (`b.gPow`), stops it and runs the clock back at `back` (half) speed, down to 0. Once begun it
+    stays on (`b.gOn`) until contact; destroyed, the transmission is lost; taken by another colony (`b.gBy`), or played on
+    past a victory (`S.endless`), it stops. Everyone is told as it begins and at `alerts` (4, 2 minutes and 30 s left:
+    `gupAlert`, `b.gWarn`); `logEvent` `gup` and `contact`; `P.stats.gupTx`. Working while it transmits: it draws the
+    Murmur (`murmurPower`, `chargeWorth` 3). Saved with the building (`gOn`, `gT`, `gBy`, `gJam`, `gPow`, `gWarn`,
+    `gBest`), checked by `checkSave`; `hashState` covers them. **The banner** (`updateGupCard`, `#gup-card`): for every
+    colony and in Observer mode, the sender's callsign and colour, "transmitting · contact in m:ss", a bar, JAMMED or NO
+    POWER; tap to look at it (`gupLive` orders them). **The end screen**: *Contact!*, and under it what answered,
+    `GUP_ANSWER` ("Signal acknowledged. Source unidentified. Further instructions to follow."), for winner and loser
+    alike; Observer mode's end and the game report (the deciding moment) say so too. Art: `renderer/b/gup.js`
+    (`tools/render_gup.sh`, `tools/install_gup.py`): `gup@T` and `gup-down@T` (below 30%) at every time of day, framed
+    as the Lance (`GUP_FRAME`); in code (`drawGupSignals`, from `GUP_MARKS`): red rim lights blinking at night; while it
+    transmits a glow in its owner's colour swelling in the bowl each `GUP.pulse` (2.4) s (`gupPhase`, on the game's
+    clock), a pale beam rising up the screen from the feed horn with the pulse climbing it, a ring spreading over the
+    ground; jammed, all of it flickering and broken in red; without power a slow red blink. On the minimap, rings pulsing
+    out from it. Sound (`js/audio.js`): `gupbegin` (heard by all), `guppulse` (its slow pulse, with it on screen), in the
+    last `echo` (20) s with the Murmur in the game `gupecho` (the ground repeating it back), and at contact `gupSilence`:
+    the music falls silent, then one answering tone (`gupanswer`).
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
@@ -2132,7 +2159,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`aiOnLiftLine`, in `canPlace`). Built, `aiLiftUse` calls a Security detail when attacked or before a push, Alloy or
     Chips when short (`liftShort`), keeping the last drop for an attack, and sends up what it holds more than `liftSpare`
     (60) of. The Salvager (`aiLiftAmbush`) sends `ambush` warbots to wait at a foe's anchor once a climber starts down.
-    `aiMarch` goes for a foe's Lift when its fall would crush enough of the foe's (`aiLiftWorth` ≥ `liftWorth`). `aiCity`
+    `aiMarch` goes for a foe's Lift when its fall would crush enough of the foe's (`aiLiftWorth` ≥ `liftWorth`). With the
+    Great Uplink win on, the Steward's main project is the Great Uplink (`aiMegaMain`, `AI_MEGA_KIND.gup` 'main'): `aiGup`
+    places it from `AI_MEGA.gupAt` (22 min) once it has a Bot Foundry and half its Cement and Crystal (`aiGupFunds`), near
+    its Command Base on the side away from its rival (`aiMegaSpot`), its 3 Generators beside the site at once (their goods first, again as any is lost), and begins
+    transmitting once it may with `gupGuard` (6) armed warbots within 14 tiles (`aiArmyNear`). A foe's transmission is
+    every rival's first target: `rivalOf` returns the colony furthest along (`gupFoeLive`), `aiJamGup` sends all it can spare,
+    garrisons too as for a storm (up to 30), to a flag within 3 tiles of it every `gupJam` (45) s while none is there or on the way (its first target the nearest gun,
+    then the Uplink), `aiMarch` takes it as a march target scored 30 better, Missiles score it 40 more, a bomber 30, and
+    the Lance weighs a line through it at 14 (`aiLanceWorth`). `aiCity`
     places it from `AI_MEGA.cityAt` (15 min) once it has a Bot Foundry and half the City's Cement and Fiber
     (`aiCityFunds`: its Alloy and Chips never pile up), where its reach covers the most of its factories and gatherers
     near its Command Base (`aiCitySpot`), its site first for goods (`prio` 'high'), never given up. `aiMarch` treats a
