@@ -12,6 +12,20 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## Sunsets per biome (built Nov 20 2026; open questions)
+
+Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's
+Sunsets and sunrises). Open:
+- A Sunsets switch of its own in Settings? For now it follows Time of day (none in Always day or Always night) and
+  Graphics (Saver keeps just the colour grade).
+- Real cast shadows: buildings' shadows are baked into their art (upper-left light), so only the robots' drop shadows
+  stretch at dusk. Re-lit "golden hour" sprite sets from the renderer would let buildings throw long shadows too.
+- The Ring as more than a faint arc: its shadow banding across the land, or ringshine lighting the night side.
+- A second map biome mixes palettes by the biome under the middle of the view; a smooth per-tile blend would be nicer.
+- On a device drawing the canvas without its graphics chip the sunset's full-screen blends cost about as much as the
+  rest of the frame (measured in a software-rendered browser); if that shows up on real phones, Saver's colour grade alone
+  could become Auto's too while frames are slow.
+
 ## The owner's ideas, filed Nov 19 2026
 
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a

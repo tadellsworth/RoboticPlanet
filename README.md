@@ -2669,6 +2669,19 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
+- **Sunsets and sunrises** (`js/sunset.js`, render only: no sim state, saves or randomness). From 75 s before the day
+  turns to evening until night is in (`DUSK_TIMES`, worked out from `TOD_CYCLE`), a golden-hour grade comes in, warms
+  through fire colours and deepens to magenta and violet; dawn runs the other way, gentler and cooler. Corvane sets in
+  the west and rises in the east, so the ground is lit from that side of the screen and falls into a cool long shade on
+  the far side, and robots' drop shadows stretch and turn violet (`duskShadowLength`, `duskShadowRgb`). Each biome has
+  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts,
+  plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
+  `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
+  Steamwells' steam is lit gold (`duskSteamRgb`), Argos has a hard terminator sweeping east to west instead, and the
+  Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
+  it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
+  `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
+  with reduce motion nothing drifts or twinkles.
 Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
 
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
@@ -2872,6 +2885,7 @@ js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
 js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
+js/sunset.js              sunsets and sunrises: each biome's dusk palette, long light, glints, motes, shafts (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects

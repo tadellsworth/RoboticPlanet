@@ -763,6 +763,7 @@ function bakeMap() {
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
+  if (typeof duskSilReset === 'function') duskSilReset(); // (the plants' sunset silhouettes are made again for the new map)
   if (!R.terr) R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
   R.terrCtx = R.terr.getContext('2d');
@@ -782,6 +783,7 @@ function flushDirtyTiles() {
     const i = t % S.W, j = (t / S.W) | 0;
     redrawAround(R.mapCtx, i, j);
     if (R.glowMap) glowTiles(i - 1, j - 1, i + 1, j + 1);
+    if (typeof duskSilTiles === 'function') duskSilTiles(i - 1, j - 1, i + 1, j + 1); // (the plants' sunset silhouettes)
     for (const ch of chunks) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
   }
   S.dirtyTiles.length = 0;
@@ -821,6 +823,7 @@ function redrawRegion(i0, j0, i1, j1) {
     ctx.restore();
   }
   if (R.glowMap) glowTiles(i0, j0, i1, j1);
+  if (typeof duskSilTiles === 'function') duskSilTiles(i0, j0, i1, j1);
   MM.dirty = true;
 }
 
@@ -910,7 +913,7 @@ function veinGlow(ctx, i, j, grow) {
 /** Add the biome's night glow over the ground (after it's graded for the time of day), stronger the darker it is. */
 function drawBiomeGlow(ctx, ox, oy, z) {
   if (!R.glowMap) return;
-  const n = fxNight();
+  const n = Math.max(fxNight(), typeof duskWake === 'function' ? duskWake() : 0); // (the Bloom's glow wakes as the light fades: js/sunset.js)
   if (n < 0.02) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -5468,7 +5471,7 @@ function drawTruckBrakes(ctx, art, x, y, size, face) {
 function drawBotShadow(ctx, u, x, y, along, across) {
   // It leans and softens with the light (see todShadow): left in the morning, right in the evening, faint at night.
   const sh = todShadow();
-  ctx.fillStyle = `rgba(20,10,5,${(sh.alpha / sh.grow).toFixed(3)})`;
+  ctx.fillStyle = `rgba(${typeof duskShadowRgb === 'function' ? duskShadowRgb() : '20,10,5'},${(sh.alpha / sh.grow).toFixed(3)})`; // (violet in the sunset's long light)
   ctx.beginPath();
   ctx.ellipse(x + along * sh.kx, y + along * sh.ky, along * sh.grow, across * sh.grow, u.face, 0, Math.PI * 2);
   ctx.fill();
@@ -6415,6 +6418,7 @@ function render(dtReal) {
   if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, false); // (and a Sapper's fresh ridge, where the colony can see it)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
@@ -6748,6 +6752,7 @@ function render(dtReal) {
   drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
+  if (typeof duskSky === 'function') duskSky(ctx, ox, oy, z); // (the sunset's grade, glare, shafts, the Ring and the motes over everything standing: js/sunset.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
