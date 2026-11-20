@@ -12,6 +12,9 @@ CFG = {  # brake lens centres and dust sources (rear end of each track / rear wh
   'warbot':  {'brake': [(12.5, 101.5), (12.5, 154.5)], 'dust': [(28, 68), (28, 188)]},
   'bulwark': {'brake': [(23, 97), (23, 158)],         'dust': [(30, 52), (30, 204)]},
   'torch':   {'brake': [(19, 105), (19, 150)],        'dust': [(24, 75), (24, 180)]},
+  'skirmisher': {'brake': [(46, 103), (46, 153)],     'dust': [(52, 78), (52, 178)]},
+  'arccaster':  {'brake': [(27.5, 105.5), (27.5, 150.5)], 'dust': [(42, 72), (42, 184)]},
+  'railgunner': {'brake': [(12.5, 97), (12.5, 159)],  'dust': [(24, 72), (24, 184)]},
 }
 if len(sys.argv) > 3: CFG = {k: v for k, v in CFG.items() if k in sys.argv[3:]}  # (only these robots)
 def noise(seed, size):

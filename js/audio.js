@@ -237,7 +237,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
-  flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
+  flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1,
 };
 
@@ -252,7 +252,7 @@ const BLAST_SIZE = {
   flak: 0.4, shellhit: 0.55, botboom: 0.6, collapse: 0.9, boom: 1, howitzerhit: 1.1, fireball: 1.3, bombhit: 1.35, missilehit: 1.8, nuke: 3.2,
   bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
-  flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
+  flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, arc: 0.5, rail: 0.6, railcharge: 0.4, // (heard only on screen)
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
 };
@@ -740,6 +740,22 @@ function sfx(name, dest, y, dur) {
       _tone(950, 0.65, 'sawtooth', 0.03, 70, 0, D);
       _noise(0.45, 0.08, { type: 'bandpass', freq: 3200, to: 700, q: 0.9, attack: 0.003, dest: D });
       for (let k = 0; k < 8; k++) _tone(2400 + Math.random() * 2600, 0.06, 'sine', 0.018, null, Math.random() * 0.3, D);
+      break;
+    // An Arc Caster's bolt: a hard electric snap, a buzzing crackle as it jumps, and a thin high zap falling away.
+    case 'arc':
+      _noise(0.03, 0.09, { type: 'highpass', freq: 2600, attack: 0.001, dest: D });
+      for (let k = 0; k < 4; k++) _noise(0.035, 0.05, { type: 'bandpass', freq: 1800 + k * 700, q: 2, attack: 0.002, delay: 0.03 + k * 0.045, dest: D });
+      _tone(3200, 0.2, 'sawtooth', 0.016, 700, 0.01, D);
+      _tone(120, 0.16, 'square', 0.02, 80, 0, D);
+      break;
+    // A Railgunner's rail charging: a rising whine.
+    case 'railcharge': _tone(400, 0.9, 'sine', 0.022, 3400, 0, D); _tone(800, 0.9, 'triangle', 0.008, 5200, 0.1, D); break;
+    // ...and firing: a sharp supersonic crack with a ringing metal tail.
+    case 'rail':
+      _noise(0.05, 0.16, { type: 'highpass', freq: 1500, attack: 0.001, dest: D });
+      _tone(1250, 0.5, 'sine', 0.03, 1180, 0.01, D);
+      _tone(170, 0.25, 'triangle', 0.06, 60, 0, D);
+      _noise(0.4, 0.03, { type: 'bandpass', freq: 4200, to: 2000, q: 1.4, attack: 0.01, delay: 0.03, dest: D });
       break;
     // Parachutes opening: a cloth crack and the rush of air.
     case 'chute':

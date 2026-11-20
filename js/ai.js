@@ -95,6 +95,42 @@ const AI_FARM_TILES = 5, AI_FARM_MIN = 3;
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
 /** Player q's army: its warbots, Bulwarks and Torches (none for no player). */
+/** The whole army in a count of robots by kind (warbots and every specialist). */
+function aiArmyKinds(kinds) { let n = 0; for (const k in kinds) if (BOTS[k] && BOTS[k].army) n += kinds[k]; return n; }
+
+/**
+ * How many of the three answers to a Bulwark blob (Skirmishers, Arc Casters, Railgunners) rival p wants with `wb`
+ * warbots and `army` in all, and how many Bulwarks at most (bulwarkMax). Its doctrine's own mix first (AI_ANSWERS:
+ * for each, one for every `per` warbots, `max` at most): the Salvager runs Skirmishers, the Warden Railgunners, the
+ * Herald masses warbots, the Architect and the Steward a mix. Then what the rival fields: Bulwarks or a big army call
+ * for Arc Casters and Railgunners, the rival's Railgunners and Arc Casters for Skirmishers, its Skirmishers for warbots
+ * (no more of them). The answers are half the army at most.
+ */
+const AI_ANSWERS = {
+  balanced: { skirmisher: [6, 2], arccaster: [8, 1], railgunner: [8, 1] },
+  turtle: { skirmisher: [12, 1], arccaster: [8, 1], railgunner: [4, 3] },
+  raider: { skirmisher: [2, 7], arccaster: [12, 1], railgunner: [0, 0] },
+  rusher: { skirmisher: [8, 2], arccaster: [12, 1], railgunner: [0, 0] },
+  tycoon: { skirmisher: [6, 2], arccaster: [5, 2], railgunner: [5, 2] },
+};
+function aiAnswers(p, wb, army) {
+  const mix = AI_ANSWERS[S.players[p].style] || AI_ANSWERS.balanced, want = {};
+  for (const k in mix) want[k] = mix[k][0] ? Math.min(mix[k][1], Math.floor(wb / mix[k][0])) : 0;
+  const foe = rivalOf(p), them = {};
+  for (const u of S.bots) if (!u.dead && u.owner === foe && isArmy(u)) them[u.type] = (them[u.type] || 0) + 1;
+  const theirArmy = aiArmyKinds(them);
+  if ((them.bulwark || 0) >= 2 || theirArmy >= 18) {
+    want.arccaster += Math.min(3, Math.ceil(((them.bulwark || 0) + theirArmy / 8) / 2));
+    want.railgunner += Math.min(2, them.bulwark || 0);
+  }
+  if ((them.railgunner || 0) + (them.arccaster || 0) >= 2) want.skirmisher += Math.min(4, (them.railgunner || 0) + (them.arccaster || 0));
+  if ((them.skirmisher || 0) >= 4) want.skirmisher = Math.min(want.skirmisher, 1);
+  let room = Math.floor(army / 2);
+  for (const k of ['arccaster', 'railgunner', 'skirmisher']) { want[k] = Math.max(0, Math.min(want[k], room)); room -= want[k]; }
+  want.bulwarkMax = them.skirmisher >= 4 ? 1 : 3; // (Skirmishers about: a Bulwark only leads them to it)
+  return want;
+}
+
 function aiArmyOf(q) { let n = 0; if (q >= 0) for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) n++; return n; }
 
 /**
@@ -850,7 +886,7 @@ function aiThink(p) {
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
   // A forward Depot with supply orders gets a Freight Truck to keep it stocked (and one more for every 35 buildings).
   const wantTrucks = me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) ? 1 + Math.floor(me.length / 35) : 0;
-  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
+  const army = aiArmyKinds(kinds); // (the whole army, specialists too)
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
   const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
@@ -947,8 +983,15 @@ function aiThink(p) {
       const foe = rivalOf(p), wb = kinds.warbot || 0;
       const dug = !!P.gunTarget || S.buildings.some((e) => !e.dead && e.built && e.owner === foe && (BDEFS[e.type].barrier || e.type === 'turret' || e.type === 'bunker' || e.type === 'minigun'));
       const wantB = Math.min(dug ? 3 : 2, Math.floor(wb / 5)), wantT = Math.min(dug ? 4 : 3, Math.floor(wb / 4) + (dug && wb >= 3 ? 1 : 0));
-      if ((kinds.bulwark || 0) < wantB && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
-      else if ((kinds.torch || 0) < wantT && !(b.orders.torch > 0) && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
+      // The three answers to a Bulwark blob (aiAnswers): by doctrine, and more of each against what the rival fields.
+      const want = aiAnswers(p, wb, army);
+      const ordered = (k) => b.orders[k] > 0;
+      const can = { skirmisher: () => true, arccaster: () => goodTotal(p, 'crystal') >= 3, railgunner: () => goodTotal(p, 'ammo') >= 4 };
+      const next = ['arccaster', 'railgunner', 'skirmisher'].filter((k) => (kinds[k] || 0) < want[k] && !ordered(k) && !botBanned(p, k) && can[k]())
+        .sort((a, c) => (kinds[a] || 0) / Math.max(1, want[a]) - (kinds[c] || 0) / Math.max(1, want[c]))[0];
+      if ((kinds.bulwark || 0) < Math.min(wantB, want.bulwarkMax) && !ordered('bulwark') && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
+      else if (next && !['skirmisher', 'arccaster', 'railgunner'].some(ordered)) b.orders[next] = 1;
+      else if ((kinds.torch || 0) < wantT && !ordered('torch') && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
     }
     // An attack held back by enemy guns (P.shieldWant, in the last minute): a Bulwark to lead the next one, if it has
     // none, whatever the size of its army.
@@ -1068,6 +1111,7 @@ function aiThink(p) {
   if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
   // 4b) Megastructures: the Lance of Corvane (or the nukes), and a Shield Dome when threatened (late in the game).
+  aiUranium(p, me, lander, !few && sites < maxSites + 1);
   aiMega(p, me, lander, !few && sites < maxSites + 1);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
@@ -1391,7 +1435,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (canBuild && aiAffordable(p, 'port')) { const spot = aiFindSpot(p, 'port', lander); if (spot) placeSite(p, 'port', spot.x, spot.y); }
     return;
   }
-  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
+  const army = aiArmyKinds(kinds); // (the whole army, specialists too)
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferries = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].ferry), ferry = ferries[0];
@@ -1954,7 +1998,43 @@ function aiFlood(p, from, seen, bottom, early) {
  * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20 };
+const AI_MEGA = { lanceAt: 1500, domeAt: 1200, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 840, uReach: 3 };
+
+/**
+ * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
+ * deposit and none in hand puts one on the deposit nearest its Command Base that it can build by (its own land, or
+ * within AI_MEGA.uReach tiles of it: an Outpost goes up first to claim it), every AI_MEGA.look s while it finds none.
+ * The Mine digs the Uranium first; the Reactor then comes in its plan (in a Nuclear race a key building), and with it
+ * the late choice of the Lance or the nukes (aiMegaPick). Before, a rival only got a Reactor when an early Mine
+ * happened to reach a deposit, and in most games none did: the choice almost never came up.
+ */
+function aiUranium(p, me, lander, canBuild) {
+  if (!nukeOn() || S.mode === 'colony' || S.time < AI_MEGA.reactorAt || !lander) return;
+  const P = S.players[p];
+  if (me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0) || goodTotal(p, 'uranium') + goodTotal(p, 'fissile') >= 2) return;
+  if (!canBuild || S.time - (P.uLook ?? -999) < AI_MEGA.look) return;
+  P.uLook = S.time;
+  const zone = S.zone[tIdx(lander.x, lander.y)], R = BDEFS.mine.radius;
+  let best = null, bd = Infinity, claim = null, cd = Infinity;
+  for (let t = 0, N = S.W * S.H; t < N; t++) {
+    if (S.res[t] !== R_URANIUM || !(S.amt[t] > 0)) continue;
+    const ui = t % S.W, uj = (t / S.W) | 0;
+    for (let j = uj - R; j <= uj + R; j++) for (let i = ui - R; i <= ui + R; i++) {
+      if (!inMap(i, j) || S.zone[tIdx(i, j)] !== zone) continue;
+      const d = dist2(i, j, lander.x, lander.y);
+      if (S.owner[tIdx(i, j)] === p) { if (d < bd && canPlace(p, 'mine', i, j).ok && reachableRes(i, j, R, R_URANIUM) > 0) { bd = d; best = [i, j]; } }
+      else if (S.owner[tIdx(i, j)] < 0 && d < cd) { cd = d; claim = [i, j]; }
+    }
+  }
+  if (best) { if (aiAffordable(p, 'mine')) placeSite(p, 'mine', best[0], best[1]); return; }
+  // None on its land: an Outpost by the nearest deposit no one holds, when its land comes close (a short walk).
+  if (!claim || !aiAffordable(p, 'outpost') || me.some((b) => !b.built && b.type === 'outpost')) return;
+  for (let r = 1; r <= AI_MEGA.uReach + 3; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+    const i = claim[0] + di, j = claim[1] + dj;
+    if (inMap(i, j) && canPlace(p, 'outpost', i, j).ok) { placeSite(p, 'outpost', i, j); return; }
+  }
+}
 /** How each doctrine leans between the Lance (more) and the nukes (less): the Architect builds, the Herald strikes. */
 const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2 };
 

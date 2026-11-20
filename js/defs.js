@@ -216,6 +216,13 @@ const BOTS = {
     desc: 'A heavy shield robot. A purple energy shield stands across its front and stops fire coming from ahead, for it and for the robots sheltering behind it, until the shield is worn down (it comes back after a rest). Shells, bombs and missiles come down over it, and fire from the side or behind gets round it. Its own twin blasters are weak: it leads warbots in, it doesn\'t fight alone.' },
   torch:   { name: 'Torch', plural: 'Torches', speed: WARBOT_SPEED * 0.9, hp: 18, war: true, army: true, flame: true, parts: 2, range: 1.9,
     desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
+  // The three answers to a Bulwark blob (see SKIRM, ARC and RAIL): they garrison, rally, attack, reload and get repaired like warbots.
+  skirmisher: { name: 'Skirmisher', plural: 'Skirmishers', speed: WARBOT_SPEED * 1.55, hp: 10, war: true, army: true, flank: true, parts: 1, range: 1.3,
+    desc: 'A fast, light raider on a low chassis. It runs round a Bulwark\'s shield and shoots it in the side or the back, where its shots do more, and goes for Railgunners, Arc Casters, Howitzers and Workers before warbots. Now and then it dashes. It shoots Ammo like a warbot but has little armour: massed warbots and Minigun Nests cut it down.' },
+  arccaster: { name: 'Arc Caster', plural: 'Arc Casters', speed: WARBOT_SPEED * 0.85, hp: 12, war: true, army: true, arc: true, parts: 2, range: 2.1,
+    desc: 'Throws chain lightning: each bolt hits one enemy robot and jumps on to up to three more close by, weaker each jump, so it punishes robots packed together. Lightning eats a Bulwark\'s shield two and a half times as fast as gunfire. Its capacitors hold 10 bolts and refill with Crystal from your Command Base or a Depot. Short reach and thin armour: Skirmishers and Torches that get in close tear it apart.' },
+  railgunner: { name: 'Railgunner', plural: 'Railgunners', speed: WARBOT_SPEED * 0.7, hp: 15, war: true, army: true, rail: true, parts: 3, range: 5, mag: 4, ammoShots: 2,
+    desc: 'A slow, long-barrelled gun robot. It charges its rail for a second (a glint at the muzzle), then fires one heavy slug up to 5 tiles that goes straight through every enemy robot in its line, and through a Bulwark\'s shield, hurting the Bulwark behind it half again as much. Then a long reload. Each Ammo is two slugs; it holds four. Up close it has only a weak sidearm: Skirmishers that reach it win.' },
   // The Murmur (Colony, see WILD): creatures from nests (type 'nest'). Not built, never ordered.
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
@@ -229,7 +236,7 @@ const BOTS = {
   sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
     desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -932,7 +939,7 @@ const BOOST = {
  * The unit types the hidden menu can stop every rival making for the rest of a game (S.ban): their Bot
  * Foundry, shipyard and hangar skip them, and the computer stops planning round them. Ones they have carry on.
  */
-const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
+const BANNABLE = ['warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket', 'bomber', 'ferry'];
 
 /**
  * The Accord's callsigns for the four colours (LORE.md): a colony is named by its callsign, with its colour beside it
@@ -1322,6 +1329,47 @@ const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1
  * takes a patch each, the tapped one and the nearest round it within `scorchSpread` tiles.
  */
 const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
+/**
+ * The Skirmisher (BOTS.skirmisher): `dmg` a shot every `reload` s (Ammo, as a warbot), `bonus` times that against the
+ * kinds it hunts (twice against a Bulwark, half again against a Railgunner, an Arc Caster or a Howitzer) and `soft`
+ * times against robots that aren't army (Workers, haulers). A foe behind an enemy
+ * Bulwark's shield it runs round: to a spot `spot` of its reach off the foe, `round` radians past the edge of the
+ * shield's arc, the side it's nearer. It hunts the `hunt` kinds within `huntR` tiles before anything else. Off its
+ * cooldown (`dashEvery` s) it dashes at `dashMul` its speed for `dash` s, when it starts a run round a shield or
+ * closes on a foe more than `dashFar` tiles off.
+ */
+const SKIRM = { dmg: 2, reload: 0.75, bonus: { bulwark: 2, railgunner: 1.5, arccaster: 1.5, rocket: 1.5 }, soft: 1.5, spot: 0.8, round: 0.6, huntR: 4.5, hunt: ['bulwark', 'railgunner', 'arccaster', 'rocket', 'worker'],
+  dash: 0.9, dashMul: 2.2, dashEvery: 6, dashFar: 2.5 };
+/**
+ * The Arc Caster (BOTS.arccaster): every `reload` s a bolt: `dmg` to the robot it aims at, then it jumps to the nearest
+ * enemy robot within `jump` tiles of the last one hit (not one already hit), up to `jumps` times, `fall` times weaker
+ * each jump. A Bulwark's shield in the way takes `shieldMul` times the bolt (what's left of the bolt once it fails gets
+ * through). `bld` to a building (`fort` times that to defences and Walls). Its capacitors hold `cells` bolts; a Crystal
+ * refills `perCrystal`, from its owner's Command Base or a Depot (refillPoint).
+ */
+const ARC = { reload: 1.9, dmg: 2.2, jump: 1.5, jumps: 3, fall: 0.7, shieldMul: 2.5, bld: 1.5, fort: 1.2, cells: 10, perCrystal: 5 };
+/**
+ * The Railgunner (BOTS.railgunner): in reach (BOTS.railgunner.range) it charges `charge` s, then fires a slug at
+ * where its target was when it began (a quick robot can be out of the line by then: a Skirmisher, dashing) straight
+ * through: `dmg` to the first enemy robot within `width` of the line and `fall` times less to each one after it (up to
+ * `pierce` of them), out to its reach. A Bulwark's shield in the way takes the slug's damage (up to what it has left)
+ * and lets `through` of it on; a Bulwark itself takes `armor` times as much. `reload` s between shots. Closer than `min`
+ * tiles it can't bring the rail to bear and fires its sidearm (`side` every `sideReload` s). On a building: `bld`
+ * (`fort` times that to a defence or Wall) from `bldReach` tiles. Ammo: BOTS.railgunner.mag slugs, ammoShots an Ammo.
+ */
+const RAIL = { charge: 1.0, dmg: 9, width: 0.4, fall: 0.7, pierce: 4, through: 0.6, armor: 1.5, reload: 4.5, min: 1.6, side: 1, sideReload: 1.1,
+  bld: 4, fort: 1.5, bldReach: 4.5 };
+/** Shots a gun robot of kind k holds (a Railgunner's slugs: BOTS[k].mag; else a warbot's WARBOT_AMMO), and shots an Ammo gives it. */
+function botMag(k) { return (BOTS[k] && BOTS[k].mag) || WARBOT_AMMO; }
+function botAmmoShots(k) { return (BOTS[k] && BOTS[k].ammoShots) || AMMO_SHOTS; }
+/**
+ * The tank of a robot of kind k, kept in u.gel: a Torch's seconds of fire (Fuel), an Arc Caster's bolts (Crystal).
+ * { good, cap, per (filled by one of the good), min (what it takes to fire) }, or null for one that has none.
+ */
+function botTank(k) {
+  const bt = BOTS[k];
+  return !bt ? null : bt.flame ? { good: 'fuel', cap: TORCH.tank, per: TORCH.perFuel, min: 0.05 } : bt.arc ? { good: 'crystal', cap: ARC.cells, per: ARC.perCrystal, min: 0.99 } : null;
+}
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
@@ -1833,6 +1881,9 @@ const FLAVOR = {
   warbot: 'Designed to protect colonists. Reassigned by the contingency orders.',
   bulwark: 'Rated for dust storms. Rifles turned out to be easier.',
   torch: 'Built to clear the Bloom. The Bloom grows back. So do enemies.',
+  skirmisher: 'Survey runner, rated for crossing the Rust in a day. It still makes good time.',
+  arccaster: 'Grid-fault tester. Every fault it finds now is on purpose.',
+  railgunner: 'Mass-driver test rig, cut down to carry. The range card still lists ore.',
   scuttler: 'No robot has ever logged one alone.',
   brute: 'Drawn to charge. Batteries, power lines and Crystal all read as food.',
   leech: 'The lights dim as it drinks. Logged as a fault, three times, before anyone looked.',

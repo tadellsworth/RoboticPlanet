@@ -1181,6 +1181,8 @@ function breachHit(u, b) {
   u.vel = 0;
   u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
   if (BOTS[u.type].flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; } // (a Torch burns it)
+  if (BOTS[u.type].arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
+  if (BOTS[u.type].rail) { if (u.rc || u.cd <= 0) railAct(u, null, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; }
   if (u.cd > 0 || !useAmmo(u)) return;
   u.cd = 1.0;
   u.fought = 1;
@@ -4892,12 +4894,13 @@ function wrapAngle(a) { return datan2(dsin(a), dcos(a)); }
 /** An army robot (a warbot, Bulwark or Torch): it garrisons, rallies, attacks, reloads and is repaired like a warbot. */
 function isArmy(u) { return !!(u && BOTS[u.type] && BOTS[u.type].army); }
 
-/** Can it fire now: a warbot with Ammo, a Torch with fuel in its tank (a Bulwark's blasters need neither). */
+/** Can it fire now: a warbot (Skirmisher, Railgunner) with Ammo, a Torch with fuel in its tank, an Arc Caster with a bolt in its capacitors (a Bulwark's blasters need none). */
 function botArmed(u) {
   const bt = BOTS[u.type];
   if (bt && bt.shield) return true;
-  if (bt && bt.flame) return (u.gel ?? TORCH.tank) > 0.05;
-  return (u.ammo ?? WARBOT_AMMO) > 0;
+  const tk = bt && botTank(u.type);
+  if (tk) return (u.gel ?? tk.cap) > tk.min;
+  return (u.ammo ?? botMag(u.type)) > 0;
 }
 
 /** The Bulwarks out on the map this step (see simStep), for shieldBlock. */
@@ -5030,15 +5033,233 @@ function torchFire(u, tx, ty, power, bld) {
  * TORCH.perFuel seconds of fire). A Bulwark needs neither. True if it got any.
  */
 function reloadArmy(u, b) {
-  const bt = BOTS[u.type];
+  const bt = BOTS[u.type], tk = botTank(u.type);
   if (bt.shield) return false;
-  if (bt.flame) {
-    if ((u.gel ?? TORCH.tank) > TORCH.tank - 1 || !((b.stock.fuel || 0) >= 1)) return false;
-    bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
-    u.gel = Math.min(TORCH.tank, (u.gel ?? 0) + TORCH.perFuel);
+  if (tk) {
+    // (an Arc Caster's Crystal only from storage: a Fuel Station keeps Fuel, a garrison Ammo)
+    if ((u.gel ?? tk.cap) > tk.cap - Math.min(1, tk.per) || !((b.stock[tk.good] || 0) >= 1) || (tk.good !== 'fuel' && !BDEFS[b.type].store)) return false;
+    bump(b.stock, tk.good, -1); usedGood(b.owner, tk.good, 1);
+    u.gel = Math.min(tk.cap, (u.gel ?? 0) + tk.per);
     return true;
   }
-  return (u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS ? reloadAmmo(u, b) : false;
+  return (u.ammo ?? botMag(u.type)) <= botMag(u.type) - botAmmoShots(u.type) ? reloadAmmo(u, b) : false;
+}
+
+/* ------------------------------------------------------------------ the Skirmisher, the Arc Caster and the Railgunner */
+
+/** The enemy Bulwark (of v's owner) whose shield would stop a shot from (sx, sy) at robot v, or null. */
+function shieldAt(v, sx, sy) {
+  for (const w of SHIELDS) if (shieldProtects(w, v, sx, sy)) return w;
+  return null;
+}
+
+/** A shield `w` takes `took` from a hit coming from (sx, sy) at robot v: its flash and ripple, and it fails worn right down. */
+function shieldTake(w, v, sx, sy, took, dmg) {
+  const ang = datan2(sy - w.y, sx - w.x);
+  w.sh -= took; w.shHit = S.time; w.shAbs = (w.shAbs || 0) + took;
+  shieldFx(w, w.x + dcos(ang) * BULWARK.r, w.y + dsin(ang) * BULWARK.r, ang, dmg, v);
+  if (w.sh <= 0.01) shieldFail(w);
+}
+
+/** How far army unit u reaches to hit a building (a Bulwark goes in closest; a Railgunner stands well off). */
+function armyBldReach(u) {
+  const bt = BOTS[u.type];
+  return bt.shield ? 1.7 : bt.flame ? 2.05 : bt.arc ? BOTS.arccaster.range - 0.1 : bt.rail ? RAIL.bldReach : WARBOT_HIT.reach;
+}
+
+/**
+ * Which enemy robot army unit u goes for, given the one its scan found (`foe`): a Skirmisher hunts SKIRM.hunt kinds
+ * near it first, a Railgunner the toughest in its reach (Bulwarks first), an Arc Caster the one with most others packed
+ * round it (shields first among equals). Others keep `foe`.
+ */
+function armyPick(u, foe) {
+  const bt = BOTS[u.type];
+  if (!(bt.flank || bt.rail || bt.arc)) return foe;
+  const R = bt.flank ? SKIRM.huntR : bt.range + 0.3;
+  let best = foe, bs = -Infinity;
+  for (const v of S.bots) {
+    if (v.dead || v.inside || v.dropping || v.under || BOTS[v.type].air || BOTS[v.type].sea || !foes(v.owner, u.owner) || v.owner < 0) continue;
+    const d2 = dist2(u.x, u.y, v.x, v.y);
+    if (d2 > R * R || calmAt(v.x, v.y)) continue;
+    let sc;
+    if (bt.flank) { if (!SKIRM.hunt.includes(v.type)) continue; sc = -d2; }
+    else if (bt.rail) sc = (BOTS[v.type].shield ? 100 : 0) + v.hp - d2 * 0.05 - (d2 < RAIL.min * RAIL.min ? 200 : 0);
+    else { sc = BOTS[v.type].shield ? 0.5 : 0; for (const o of S.bots) if (o !== v && !o.dead && !o.inside && o.owner === v.owner && dist2(o.x, o.y, v.x, v.y) <= ARC.jump * ARC.jump) sc++; sc -= d2 * 0.01; }
+    if (sc > bs) { bs = sc; best = v; }
+  }
+  return best;
+}
+
+/**
+ * A Skirmisher whose foe is behind an enemy Bulwark's shield runs round it: to a spot SKIRM.spot of its reach off the
+ * foe, SKIRM.round past the edge of the shield's arc (the side it is on; a pack splits both ways by id), dashing as
+ * it sets off. On the way it shoots anything in reach that no shield covers. True while it's running round.
+ */
+function skirmFlank(u, foe, dt, power) {
+  const w = shieldAt(foe, u.x, u.y);
+  if (!w) return false;
+  const aim = w.shAim ?? w.face ?? 0, rel = wrapAngle(datan2(u.y - w.y, u.x - w.x) - aim);
+  const side0 = Math.abs(rel) > 0.15 ? (rel > 0 ? 1 : -1) : (u.id % 2 ? 1 : -1), R = BOTS[u.type].range * SKIRM.spot;
+  for (const sd of [side0, -side0]) {
+    const a = aim + sd * (BULWARK.arc + SKIRM.round), tx = foe.x + dcos(a) * R, ty = foe.y + dsin(a) * R;
+    const i = Math.floor(tx), j = Math.floor(ty);
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || (S.bAt[tIdx(i, j)] && !passTile(tIdx(i, j), u.owner))) continue;
+    if (dist2(u.x, u.y, tx, ty) < 0.09) return false; // there, and still covered (another shield): fight as usual
+    if (!(u.dashCd > S.time)) { u.dashT = S.time + SKIRM.dash; u.dashCd = S.time + SKIRM.dashEvery; addFx('dash', u.x, u.y, { a: datan2(ty - u.y, tx - u.x), owner: u.owner, life: 0.5 }); }
+    if (!(clearLine(u.x, u.y, tx, ty) && moveDirect(u, tx, ty, dt)) && travel(u, i, j, dt) === null) return false;
+    u.moved = 1;
+    // a shot on the way at whatever is open to it
+    if (u.cd <= 0) {
+      const v = nearestEnemyBot(u.owner, u.x, u.y, BOTS[u.type].range, true, false, true, (o) => !shieldAt(o, u.x, u.y));
+      if (v) skirmShoot(u, v, power);
+    }
+    return true;
+  }
+  return false;
+}
+
+/** A Skirmisher's shot at robot v: SKIRM.dmg (SKIRM.bonus times on the kinds it hunts, SKIRM.soft on a robot that isn't army). */
+function skirmShoot(u, v, power) {
+  u.cd = SKIRM.reload * (u.pinT > S.time ? MINIGUN_PIN.reload : 1);
+  u.fought = 1;
+  u.face = datan2(v.y - u.y, v.x - u.x);
+  if (isMe(u.owner) || isMe(v.owner)) sfx('hit');
+  if (!useAmmo(u)) { addFx('spark', (u.x + v.x) / 2, (u.y + v.y) / 2, { color: PLAYER_COLORS[u.owner] }); return; }
+  const mul = SKIRM.bonus[v.type] || (!isArmy(v) ? SKIRM.soft : 1);
+  damageBot(v, Math.max(1, SKIRM.dmg * mul * power), u.x, u.y);
+  shotFx(u.x, u.y, v.x, v.y, { color: PLAYER_COLORS[u.owner] });
+}
+
+/**
+ * One robot `v` hit by an Arc Caster's bolt coming from (sx, sy): a Bulwark's shield in the way takes ARC.shieldMul
+ * times the bolt, and what's left of the bolt once the shield is gone gets through.
+ */
+function arcHit(v, sx, sy, dmg) {
+  const w = SHIELDS.length ? shieldAt(v, sx, sy) : null;
+  if (w) {
+    const want = dmg * ARC.shieldMul, took = Math.min(w.sh, want);
+    shieldTake(w, v, sx, sy, took, want);
+    dmg *= 1 - took / want;
+    if (dmg <= 0.01) return;
+  }
+  damageBot(v, dmg);
+}
+
+/**
+ * An Arc Caster's bolt at robot `foe` (`bld`: at a building instead): ARC.dmg to it, then on to the nearest enemy robot
+ * within ARC.jump of the last one hit, up to ARC.jumps times, ARC.fall weaker each jump. One bolt from its capacitors.
+ * The bolt's path is drawn from 'arc' (its points, a seed for its branches).
+ */
+function arcFire(u, foe, power, bld) {
+  u.cd = ARC.reload * (u.pinT > S.time ? MINIGUN_PIN.reload : 1);
+  u.gel = Math.max(0, (u.gel ?? ARC.cells) - 1);
+  u.fought = 1;
+  const pts = [[u.x, u.y]];
+  if (bld) {
+    const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
+    u.face = datan2(bld.y + 0.5 - u.y, bld.x + 0.5 - u.x);
+    pts.push([bld.x + 0.5, bld.y + 0.5]);
+    hitBuilding(bld, ARC.bld * power * (fort ? ARC.fort : 1), u.owner);
+  } else {
+    u.face = datan2(foe.y - u.y, foe.x - u.x);
+    const hit = new Set();
+    let cur = foe, dmg = ARC.dmg * power, sx = u.x, sy = u.y;
+    for (let k = 0; k <= ARC.jumps && cur; k++) {
+      hit.add(cur.id); pts.push([cur.x, cur.y]);
+      arcHit(cur, sx, sy, dmg);
+      sx = cur.x; sy = cur.y; dmg *= ARC.fall;
+      let next = null, nd = ARC.jump * ARC.jump;
+      for (const v of S.bots) {
+        if (v.dead || v.inside || v.dropping || v.under || hit.has(v.id) || !foes(v.owner, u.owner) || v.owner < 0 || BOTS[v.type].air || BOTS[v.type].sea || calmAt(v.x, v.y)) continue;
+        const d = dist2(v.x, v.y, sx, sy);
+        if (d < nd) { nd = d; next = v; }
+      }
+      cur = next;
+    }
+  }
+  addFx('arc', u.x, u.y, { pts, life: 0.32, seed: S.tick * 7 + u.id, owner: u.owner });
+  if (isMe(u.owner) || S.time - (u.arcSnd || 0) > 0.5) { u.arcSnd = S.time; sfx('arc', u.x, u.y); }
+  if (u.gel <= 0 && isMe(u.owner)) {
+    const P = S.players[ME];
+    if (S.time - (P.lastArcMsg || -999) > 90) { P.lastArcMsg = S.time; postMsg(ME, 'An Arc Caster has spent all its bolts: it goes back to recharge them (Crystal from your Command Base or a Depot).', Math.floor(u.x), Math.floor(u.y), 'warn'); }
+  }
+}
+
+/**
+ * A Railgunner's slug toward (tx, ty) (`bld`: a building it's shooting): along the line out to its reach, every enemy
+ * robot within RAIL.width of it in turn, nearest first (up to RAIL.pierce): RAIL.dmg to the first, RAIL.fall less to
+ * each after. A Bulwark's shield in the way takes the slug (what it has left) and lets RAIL.through of that on; a
+ * Bulwark takes RAIL.armor times as much. Drawn from 'rail' (a bright streak) and 'railhit'.
+ */
+function railFire(u, tx, ty, power, bld) {
+  u.cd = RAIL.reload; u.rc = 0; u.rcTo = 0;
+  u.fought = 1;
+  const ang = datan2(ty - u.y, tx - u.x), ca = dcos(ang), sa = dsin(ang), reach = BOTS.railgunner.range + 0.4;
+  u.face = ang;
+  if (!useAmmo(u)) return;
+  let ex = u.x + ca * reach, ey = u.y + sa * reach;
+  if (bld) {
+    const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
+    hitBuilding(bld, RAIL.bld * power * (fort ? RAIL.fort : 1), u.owner);
+    ex = bld.x + 0.5; ey = bld.y + 0.5;
+    addFx('railhit', ex, ey, { a: ang, life: 0.5, structure: true });
+  } else {
+    const line = [];
+    for (const v of S.bots) {
+      if (v.dead || v.inside || v.dropping || v.under || !foes(v.owner, u.owner) || v.owner < 0 || BOTS[v.type].air || BOTS[v.type].sea || calmAt(v.x, v.y)) continue;
+      const dx = v.x - u.x, dy = v.y - u.y, along = dx * ca + dy * sa;
+      if (along < 0.2 || along > reach) continue;
+      if (Math.abs(dx * sa - dy * ca) > RAIL.width) continue;
+      line.push({ v, along });
+    }
+    line.sort((a, b) => a.along - b.along || a.v.id - b.v.id);
+    let dmg = RAIL.dmg * power;
+    const shields = new Set();
+    for (const { v } of line.slice(0, RAIL.pierce)) {
+      const w = SHIELDS.length ? shieldAt(v, u.x, u.y) : null;
+      let got = dmg;
+      if (w && !shields.has(w.id)) {
+        shields.add(w.id);
+        const took = Math.min(w.sh, dmg);
+        shieldTake(w, v, u.x, u.y, took, dmg);
+        got = dmg - took + took * RAIL.through;
+      }
+      damageBot(v, got * (BOTS[v.type].shield ? RAIL.armor : 1));
+      addFx('railhit', v.x, v.y, { a: ang, life: 0.45 });
+      dmg *= RAIL.fall;
+    }
+  }
+  addFx('rail', u.x + ca * 0.5, u.y + sa * 0.5, { x2: ex, y2: ey, a: ang, life: 0.55, owner: u.owner });
+  sfx('rail', u.x, u.y);
+}
+
+/**
+ * A Railgunner on a foe (a robot, or a building `bld`) in reach: it stands, charges its rail RAIL.charge s (the glint:
+ * u.rc, when it fires) and fires. A robot closer than RAIL.min gets its sidearm instead. False if it can't fire now.
+ */
+function railAct(u, foe, power, bld) {
+  const tx = bld ? bld.x + 0.5 : foe.x, ty = bld ? bld.y + 0.5 : foe.y, id = bld ? bld.id : foe.id;
+  u.face = datan2(ty - u.y, tx - u.x);
+  if (!bld && dist2(u.x, u.y, tx, ty) < RAIL.min * RAIL.min) {
+    u.rc = 0;
+    if (u.cd > 0) return true;
+    u.cd = RAIL.sideReload; u.fought = 1;
+    damageBot(foe, RAIL.side * power, u.x, u.y);
+    shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
+    if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
+    return true;
+  }
+  if (u.rc && u.rcTo !== id) u.rc = 0; // (its target changed: charge again)
+  if (!u.rc) {
+    if (u.cd > 0 || !botArmed(u)) return false;
+    u.rc = S.time + RAIL.charge; u.rcTo = id; u.rcX = tx; u.rcY = ty; // (it fires where the target was now)
+    addFx('railglint', u.x + dcos(u.face) * 0.42, u.y + dsin(u.face) * 0.42, { life: RAIL.charge + 0.1, a: u.face, owner: u.owner, id: u.id });
+    if (isMe(u.owner)) sfx('railcharge', u.x, u.y);
+    return true;
+  }
+  u.fought = 1;
+  if (S.time >= u.rc) railFire(u, u.rcX ?? tx, u.rcY ?? ty, power, bld);
+  return true;
 }
 
 /* ------------------------------------------------------------------ scorched earth */
@@ -5194,14 +5415,17 @@ function scorchDone(u) {
   u.resume = null;
 }
 
-/** Where a Torch with an empty tank can fill it: the nearest building of its owner's holding Fuel (storage or a Fuel Station) it can reach. */
+/**
+ * Where a Torch with an empty tank can fill it: the nearest building of its owner's holding Fuel (storage or a Fuel
+ * Station) it can reach. An Arc Caster's capacitors: storage holding Crystal (see botTank).
+ */
 function fuelPoint(u) {
-  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], g = (botTank(u.type) || { good: 'fuel' }).good;
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || !b.built || b.owner !== u.owner || !((b.stock.fuel || 0) >= 1)) continue;
+    if (b.dead || !b.built || b.owner !== u.owner || !((b.stock[g] || 0) >= 1)) continue;
     const def = BDEFS[b.type];
-    if (!(def.store || def.charger) || S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (!(def.store || (def.charger && g === 'fuel')) || S.zone[tIdx(b.x, b.y)] !== zone) continue;
     const d = dist2(b.x, b.y, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -5240,7 +5464,7 @@ function escortMove(u, gx, gy, key, dt) {
   const job = key.attack ? 'a' + key.attack : 'r' + key.rally;
   if (lead.formJob !== job || dl < lead.formD - 1) { lead.formJob = job; lead.formD = dl; lead.formT = S.time; }
   if (lead.fight || S.time - lead.formT > FORM.stuck) return false; // it's fighting, or held up: come round and join in
-  const bt = BOTS[u.type], reach = bt.flame ? 2.05 : WARBOT_HIT.reach;
+  const reach = armyBldReach(u);
   if (key.attack && dist(u.x, u.y, gx, gy) <= reach) return false; // already in reach of the target: shoot
   const at = formPlace(u, lead, gx, gy, dl, key);
   if (S.time - (u.hurtT ?? -99) < 1.5 && dist2(at.x, at.y, gx, gy) > dist2(u.x, u.y, gx, gy) + 1) return false;
@@ -6401,13 +6625,14 @@ function updateWarbot(u, dt) {
     }
     if (home) reloadArmy(u, home);
     // A Torch with an empty tank in a garrison with no Fuel: off to the nearest Fuel to fill it (then back on guard).
-    if (home && BOTS[u.type].flame && !botArmed(u) && S.tick % 45 === u.id % 45) {
+    // (An Arc Caster's capacitors the same, with Crystal from storage.)
+    if (home && botTank(u.type) && !botArmed(u) && S.tick % 45 === u.id % 45) {
       const f = fuelPoint(u);
       if (f && f !== home) { exitBuilding(u); u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
     }
     // A rival's warbot out of Ammo in a garrison with none, and none on the way (an Outpost no road
     // reaches yet): it goes to reload where there is some, and stays away from here for a while.
-    if (home && !BOTS[u.type].flame && !botArmed(u) && !usesPosts(u.owner) && !(home.stock.ammo > 0) && !(home.inc.ammo > 0) &&
+    if (home && !botTank(u.type) && !botArmed(u) && !usesPosts(u.owner) && !(home.stock.ammo > 0) && !(home.inc.ammo > 0) &&
       S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8) {
       const c = rechargePoint(u, true);
       if (c && c !== home) {
@@ -6446,7 +6671,7 @@ function startReload(u, t) {
   if (t.trips || BOTS[u.type].shield) return false;
   const b = getE(t.target);
   if (!b || b.dead || !foes(b.owner, u.owner)) return false;
-  const home = BOTS[u.type].flame ? fuelPoint(u) : rechargePoint(u, true);
+  const home = botTank(u.type) ? fuelPoint(u) : rechargePoint(u, true);
   if (!home || dist2(home.x + 0.5, home.y + 0.5, u.x, u.y) > RELOAD_REACH * RELOAD_REACH) return false;
   if (!S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && v.task && v.task.type === 'attack' && v.task.target === t.target)) return false; // (not alone)
   t.reload = home.id; t.trips = 1;
@@ -6570,7 +6795,7 @@ function warbotAct(u, dt) {
     u.scanT -= dt;
     if (u.scanT <= 0) {
       u.scanT = 0.3;
-      const immediate = nearestEnemyBot(u.owner, u.x, u.y, WARBOT_RANGE_GAP, true, defending, true,
+      const immediate = nearestEnemyBot(u.owner, u.x, u.y, Math.max(WARBOT_RANGE_GAP, BOTS[u.type].range || 0), true, defending, true,
         (v) => armedThreat(v) && armyInRange(u, v));
       if (immediate) foe = immediate;
       const accepts = (v) => v.id !== u.ignoreFoe || S.time >= u.ignoreUntil || armyInRange(u, v);
@@ -6588,20 +6813,31 @@ function warbotAct(u, dt) {
       if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && !accepts(foe)) foe = null;
+      // (A Skirmisher, Arc Caster or Railgunner picks its own kind of target among those near: armyPick.)
+      if (foe && !(rally && rally.follow === foe.id)) { const pick = armyPick(u, foe); if (pick !== foe && accepts(pick) && (!defending || isArmy(pick) || armyInRange(u, pick))) foe = pick; }
       if (foe) u.fight = foe.id;
     }
   }
   if (foe) {
     const bt = BOTS[u.type], range = bt.range || WARBOT_RANGE;
+    if (bt.flank && skirmFlank(u, foe, dt, power)) return; // (round the shield first)
+    if (bt.rail && u.rc) { u.path = null; railAct(u, foe, power); return; } // (charging: it stands and fires)
     const covered = firingCover(u, foe.x, foe.y, range, dt);
     const inReach = armyInRange(u, foe);
-    if (!inReach && !covered) { advanceOnBot(u, foe, dt); return; }
+    if (!inReach && !covered) {
+      // (a Skirmisher closing on a foe well off dashes in, off its cooldown)
+      if (bt.flank && !(u.dashCd > S.time) && dist2(u.x, u.y, foe.x, foe.y) > SKIRM.dashFar * SKIRM.dashFar) { u.dashT = S.time + SKIRM.dash; u.dashCd = S.time + SKIRM.dashEvery; addFx('dash', u.x, u.y, { a: datan2(foe.y - u.y, foe.x - u.x), owner: u.owner, life: 0.5 }); }
+      advanceOnBot(u, foe, dt); return;
+    }
     u.path = null; u.viaFoe = 0;
     if (inReach && !covered && dist2(u.x, u.y, foe.x, foe.y) < sq(range - 0.04)) spreadOut(u, dt);
     if (!bt.shield) u.face = datan2(foe.y - u.y, foe.x - u.x);
     if (inReach && u.cd <= 0) {
       const pin = u.pinT > S.time ? MINIGUN_PIN.reload : 1; // (pinned by a minigun: slower to fire back)
       if (bt.flame) { if (botArmed(u)) torchFire(u, foe.x, foe.y, power); else u.cd = 0.5; }
+      else if (bt.arc) { if (botArmed(u)) arcFire(u, foe, power); else u.cd = 0.5; }
+      else if (bt.rail) railAct(u, foe, power);
+      else if (bt.flank) skirmShoot(u, foe, power);
       else if (bt.shield) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
         u.cd = BULWARK.reload * pin;
@@ -6641,8 +6877,8 @@ function warbotAct(u, dt) {
   if (t.type === 'escort') { doEscort(u, t, dt); return; }
   if (t.type === 'refill') {
     // A Torch going to fill its tank where Fuel is kept, then back to what it was doing (or a garrison).
-    const c = getE(t.bld);
-    if (!c || c.dead || c.owner !== u.owner || !((c.stock.fuel || 0) >= 1)) { u.task = null; return; }
+    const c = getE(t.bld), g = (botTank(u.type) || { good: 'fuel' }).good;
+    if (!c || c.dead || c.owner !== u.owner || !((c.stock[g] || 0) >= 1)) { u.task = null; return; }
     if (dist2(u.x, u.y, c.x + 0.5, c.y + 0.5) <= 2.2) {
       u.path = null;
       while (reloadArmy(u, c)) { /* fill up */ }
@@ -6812,13 +7048,15 @@ function overGap(a, b) {
 /** Walk up to an enemy building and hit it. Returns null if it can't be reached (or can't be hurt: on a Trade Post's ground). */
 function strikeBuilding(u, b, dt, power) {
   if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
-  const bt = BOTS[u.type], reach = bt.shield ? 1.7 : bt.flame ? 2.05 : WARBOT_HIT.reach; // (a Bulwark goes in closest, in front of its group)
+  const bt = BOTS[u.type], reach = armyBldReach(u); // (a Bulwark goes in closest, in front of its group)
   const covered = firingCover(u, b.x + 0.5, b.y + 0.5, reach, dt);
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
     if (!covered && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) < sq(reach - 0.04)) spreadOut(u, dt);
     if (!bt.shield) u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (bt.flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, power, b); return true; }
+    if (bt.arc) { if (u.cd <= 0 && botArmed(u)) arcFire(u, null, power, b); return true; }
+    if (bt.rail) { if (u.rc || u.cd <= 0) railAct(u, null, power, b); return true; }
     if (bt.shield) {
       if (u.cd <= 0) {
         u.cd = BULWARK.reload; u.fought = 1;
@@ -6842,9 +7080,9 @@ function strikeBuilding(u, b, dt, power) {
 /** Fire one shot: true if the warbot had ammo (one is used), false if it has none left. */
 function useAmmo(u) {
   if (BOTS[u.type].shield) return true; // (a Bulwark's blasters need no Ammo)
-  if (BOTS[u.type].flame) return false; // (a Torch only has its flame: it can't shoot out of a Bunker's slit)
+  if (botTank(u.type)) return false; // (a Torch only has its flame, an Arc Caster its bolts: they can't shoot out of a Bunker's slit)
   if (botArmed(u)) {
-    u.ammo = (u.ammo ?? WARBOT_AMMO) - 1;
+    u.ammo = (u.ammo ?? botMag(u.type)) - 1;
     if (u.ammo === 0) {
       const P = S.players[u.owner];
       if (S.time - (P.lastAmmoMsg || -999) > 90) {
@@ -7027,7 +7265,7 @@ function reloadAmmo(u, b) {
   if (!b || b.owner !== u.owner || !BDEFS[b.type].mil || !((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
   bump(b.stock, 'ammo', -1);
   usedGood(b.owner, 'ammo', 1);
-  u.ammo = Math.min(WARBOT_AMMO, (u.ammo ?? 0) + AMMO_SHOTS);
+  u.ammo = Math.min(botMag(u.type), (u.ammo ?? 0) + botAmmoShots(u.type));
   return true;
 }
 
@@ -7456,8 +7694,8 @@ function holdRally(u, t, r, dt, power) {
     } else if (travel(u, home.x, home.y, dt) === null) t.phase = null;
     return;
   }
-  // A Torch on a flag with an empty tank: off to fill it, then back to the flag.
-  if (BOTS[u.type].flame && !botArmed(u) && S.tick % 30 === u.id % 30) {
+  // A Torch on a flag with an empty tank: off to fill it, then back to the flag. (An Arc Caster out of bolts too.)
+  if (botTank(u.type) && !botArmed(u) && S.tick % 30 === u.id % 30) {
     const f = fuelPoint(u);
     if (f) { u.resume = { type: 'hold', rally: t.rally, slot: t.slot }; u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
   }
@@ -7651,6 +7889,8 @@ function breachShots(u) {
   const bt = BOTS[u.type];
   if (bt.shield) return Infinity;
   if (bt.flame) return Math.floor(((u.gel ?? TORCH.tank) / TORCH.tick) * TORCH.bld * TORCH.fort);
+  if (bt.arc) return Math.floor((u.gel ?? ARC.cells) * ARC.bld * ARC.fort);
+  if (bt.rail) return Math.floor((u.ammo ?? botMag(u.type)) * RAIL.bld * RAIL.fort);
   return (u.ammo ?? WARBOT_AMMO) * WARBOT_HIT.wall;
 }
 
@@ -7684,7 +7924,7 @@ function squadBreach(us, i, j, attack) {
     // (a second load for those that can fetch one near the wall: see startReload)
     const near = (b) => !b.dead && b.built && b.owner === us[0].owner && dist2(b.x, b.y, first.x, first.y) <= RELOAD_REACH * RELOAD_REACH;
     const ammo = S.buildings.some((b) => near(b) && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0), fuel = S.buildings.some((b) => near(b) && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) >= 1);
-    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
+    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && !BOTS[u.type].arc && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : BOTS[u.type].rail ? Math.floor(botMag(u.type) * RAIL.bld * RAIL.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
   }
   return again ? { need: Math.ceil(need), shots, reload: true } : { need: Math.ceil(need), shots };
 }
@@ -9697,7 +9937,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1); }
+function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -15821,6 +16061,7 @@ function hashState() {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
+    if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }

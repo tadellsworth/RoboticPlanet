@@ -7997,7 +7997,7 @@ function refreshArmySheet() {
 function refreshArmyTab() {
   const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === ME);
   const wb = mine.filter(isArmy), noAmmo = wb.filter((u) => !botArmed(u)).length;
-  const nB = wb.filter((u) => u.type === 'bulwark').length, nT = wb.filter((u) => u.type === 'torch').length;
+  const spec = BOT_ORDER.filter((k) => BOTS[k].army && k !== 'warbot').map((k) => [k, wb.filter((u) => u.type === k).length]).filter(([, n]) => n), nT = wb.filter((u) => botTank(u.type)).length;
   const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
   const rockets = mine.filter((u) => BOTS[u.type].siege);
   // The groups out in the field: each rally flag, and each building under attack.
@@ -8009,7 +8009,7 @@ function refreshArmyTab() {
   UI.armySig = sig;
   const L = getE(S.players[ME].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
   const k = S.players[ME].keepW ?? 0;
-  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${nB || nT ? ` (${[nB ? `${nB} ${nB > 1 ? 'Bulwarks' : 'Bulwark'}` : '', nT ? `${nT} ${nT > 1 ? 'Torches' : 'Torch'}` : ''].filter(Boolean).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ' or Fuel' : ''}</span>` : ''}</span></div>`;
+  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${spec.length ? ` (${spec.map(([k, n]) => `${n} ${n > 1 ? BOTS[k].plural : BOTS[k].name}`).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ', Fuel or bolts' : ''}</span>` : ''}</span></div>`;
   if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
   h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
     <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
@@ -8019,7 +8019,7 @@ function refreshArmyTab() {
       <button class="btn" id="ar-station" data-act="cmd" data-c="station">Station</button>
       <button class="btn${field && recallArmed() ? ' danger' : ''}" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>${field && recallArmed() ? `Tap again: ${field} come home` : 'Recall all'}</button>
       <button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>
-    </div>
+    </div>${spec.length ? `<div class="army-cmds" id="ar-kinds"><span class="label-note">Select only</span>${['warbot', ...spec.map(([k]) => k)].filter((k) => wb.some((u) => u.type === k)).map((k) => `<button class="btn small ghost" id="ar-sel-${k}" data-act="selectkind" data-k="${k}">${BOTS[k].plural}</button>`).join('')}</div>` : ''}
     <p class="hint"><b>Attack</b>: tap a rival building and a group of ${armyNText()} goes for it. <b>Hold ground</b>: tap open ground and they plant a rally flag and hold it. <b>Station</b>: tap an Outpost, Keep or Bunker of yours and they move in for good. Each tap sends another group, until you tap Done. Warbots come from your garrisons in reach (each keeps its own).</p>`;
   if (flags.length || atk.size) {
     h += '<div class="section-label">In the field</div>';
@@ -8082,6 +8082,7 @@ function armyButton(btn) {
     case 'cmd': armyCmd(btn.dataset.c); return;
     case 'recall': recallAllTap(); return;
     case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return;
+    case 'selectkind': { const k = btn.dataset.k, ids = armyIds(ME).filter((i) => { const u = getE(i); return u && u.type === k; }); selectBots(ids, false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} ${UI.sel.length > 1 ? BOTS[k].plural : BOTS[k].name} selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return; }
     case 'keep': setKeepAll(+btn.dataset.k); UI.armySig = ''; refreshArmySheet(); return;
     case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
     case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
@@ -8229,14 +8230,14 @@ function refreshPopSheet() {
   const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = BOTS[k].army
-      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
+      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : BOTS[k].arc ? 'out of bolts' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
       : [part(o, 'running', 'running buildings'), part(o, 'carrying', 'carrying goods'), part(o, 'building', 'building or paving'),
         part(o, 'charging', 'recharging'), part(o, 'repairing', 'being repaired'), part(o, 'recycling', 'going to be recycled'), part(o, 'free', 'free')];
     return `<div class="kv pop-row"><span><b>${o.total}</b> ${o.total === 1 ? BOTS[k].name : BOTS[k].plural}</span><span>${bits.filter(Boolean).join(' · ') || '–'}</span></div>`;
   });
   const cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
   let wb = '';
-  if (warOn() && (n.warbot || n.bulwark || n.torch)) {
+  if (warOn() && BOT_ORDER.some((k) => BOTS[k].army && n[k])) {
     const g = warbotGroups();
     wb = '<div class="section-label">Where your warbots are</div>' + WARBOT_PLACES.filter(([k]) => g[k].length).map(([k, label]) =>
       `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
@@ -8340,7 +8341,10 @@ function refreshSheet() {
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
-      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].arc ? `<div class="kv"><span>Capacitors</span><span>${Math.floor(u.gel ?? ARC.cells)} / ${ARC.cells} bolts${(u.gel ?? ARC.cells) < 1 ? ' (empty: going to recharge with Crystal)' : ''}</span></div>` +
+        `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? ARC.cells) / ARC.cells)}%;background:#8fd8ff"></div></div>` : '') +
+      (u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].rail ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? botMag(u.type)} / ${botMag(u.type)} ${BOTS[u.type].rail ? 'slugs' : 'shots'}${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].rail && u.rc > S.time ? '<div class="kv"><span>Rail</span><span>charging</span></div>' : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
