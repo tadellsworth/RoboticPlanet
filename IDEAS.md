@@ -49,27 +49,32 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   of recent restore points (say the last 5, one a minute) on the pause menu to undo a mistake and try again. Check
   what exists first (`autosave` in js/main.js or js/ui.js) and extend it to keep several slots.
 
-**Maglev follow-ups (medium)** (BUILT, Nov 20 2026, all three; README "Maglev lines" has the detail)
+**Maglev follow-ups (medium)** (BUILT, Nov 20 2026, in two rounds; README "Maglev lines" has the detail)
 - **Losing a Terminal doesn't lose the whole line** (built): its lines stand broken (guideway and pylons kept, drawn
-  with an amber stripe and the lost Terminal's outline pulsing), pods heading for it turn back with their loads, pods
-  docked in it go to a Terminal it was joined to, and **Rebuild the missing Terminal** (or any Terminal built on that
-  tile) joins every line that ended there again. Decided: the rebuild costs a Terminal's ordinary price, the guideway
-  free; no cheaper "old foundation" rebuild, so losing a Terminal still costs one. *For the owner:* is that right, or
-  should the rebuild be cheaper (say half)?
-- **Maglev lines can be strung together** (built as hubs): a Terminal joins up to three lines (no new building: tap a
-  Terminal already on a line, or *Add a line from here (hub)* on its panel). Lines joined at hubs make a network: pods
-  serve all of it (four for each line), unloading at a hub and loading again for the next line, and the rail plan rolls
-  each far Terminal's demand up through the hubs to the Terminal nearest home. Chosen over a Hub building because the
-  Terminal already is the station, store, pod bay and conveyor point, so a hub is just "a Terminal with more lines": one
-  rule to learn, no new art. A pod changes line at every hub (it never runs through without stopping); goods are relayed
-  through the hub's store. *Open:* through-running pods (a load for two hops that stays aboard), a line that bends at a
-  relay pylon instead of a Terminal, more than three lines at a hub, and a route planner for goods across networks that
-  touch only by conveyor.
-- **Easier line placement, and pylons over roads** (built): pylons stand over roads and track (feet at the side, the way
-  open, Haulers drive under them); the preview colours each spot (pylon, over a road, shifted a tile, blocked with its
-  reason written beside it); a far end tapped on a road or building snaps to a tile beside it; and **Route via a hub**
-  offers two lines through a new hub Terminal where one straight line can't go (a blocked stretch, or more than 40
-  tiles). *Open:* routes of three or more lines, and dragging the hub's spot by hand.
+  with an amber stripe and the lost Terminal's outline), pods heading for it turn back with their loads, pods docked in
+  it go to a Terminal it was joined to; **Rebuild the missing Terminal** joins every line that ended there again. The
+  owner's call: a rebuild on the old foundation costs **half** a Terminal (rounded up: 4 Cement, 3 Alloy, 2 Chips); one
+  built there by hand costs the whole price.
+- **Maglev lines strung together** (built as hubs, up to three lines a Terminal, the owner's call to keep three): pods
+  serve the whole network (four a line) and **carry on through a hub without stopping**: what the Terminals beyond it
+  want stays aboard, the rest is unloaded there, and they top up as they pass (decided 4 tiles out, so a pod never waits
+  at a hub for a line). *Open:* more than one hub in a single pass is fine (each is decided as it comes); a route planner
+  for goods across networks that touch only by conveyor.
+- **Bends** (built): a line bends at up to 4 pylons (Bend here while placing; each stretch 3 to 40 tiles, 60 in all,
+  120° at most a bend), Route with a bend (or a jog of two) round a blocked stretch or past 40 tiles, before Route via a
+  hub; pods follow the bends at 0.6 of top speed round 30° and 0.35 round 75° or more. *Open:* dragging a bend by hand
+  after it's placed; bends on a line that is already built (today: rebuild it).
+- **Easier line placement, and pylons over roads** (built): pylons over roads and track as a portal frame with the way
+  open, the preview's colours and reasons, a far end snapping a tile over.
+- **The rival and the Maglev** (built, Nov 20 2026, the owner's call: the Architect first, others only if it pays).
+  The Architect builds one line, from its twelfth minute on Normal and up, to a far working cluster of its own (24+
+  tiles out, three working buildings round it, no Rail Station there) once it holds the line's goods and 30 Alloy and
+  15 Chips besides. Measured: eight 40-minute Architect-vs-Balanced games (2 players, size 2, seeds 3 7 11 17 23 29
+  31 41), before and after, came out identical (Balanced won six, two undecided both times): the Architect never held
+  the goods to spare with a busy cluster 24+ tiles out, so it built no line. It does build and run one when it has them
+  (a scripted test: lh/maglev-ai-test.js). So it doesn't pay in today's games and stays rare on purpose; undecided games
+  did not go up. The other doctrines build none. *For the owner:* loosen the spare-goods rule (it would then compete with
+  the Architect's army and Missiles) or leave it as a late-game flourish?
 
 **Murmur: a bigger rework (after the megastructures and the audit, before the campaign)**
 - **Smarter Murmur:** they sometimes walk straight past robots that then shoot them; fix their threat and target choice
@@ -650,8 +655,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   the rival's list when its late game gets a transit tier, and then only the Architect and the Steward, with a line from
   their base to a far Depot cluster, once they have Chips to spare; and a rival should then learn to cut a line (guns
   under a pylon). Also open from the build: riders (a Worker crew at most, never warbots) and a hand-driven pod
-  (lines of more than two Terminals: built as hubs, Nov 20 2026). If a rival ever builds lines, hubs would let the
-  Architect chain a far Depot cluster home without a new rule.
+  (lines of more than two Terminals: built as hubs, Nov 20 2026). The Architect builds a line since Nov 20 2026 (see
+  the Maglev follow-ups above); a rival cutting a line on purpose (guns under a pylon) is still open.
 
 - **Room to grow in the single-file game** (owner's to-do, Nov 17; done Nov 18: every picture now lives in a bundle beside the page,
   `dist/art-{buildings,bots,effects,other}.js`, loaded as the page starts (`loadArt`), and the page is about 3.9 MB of code,

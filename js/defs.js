@@ -350,9 +350,13 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
  * solar flare, the pods crawl at WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short
  * and go back, one on the spans that rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it
  * in `repair` s at `spacing` tiles' cost. A Terminal lost suspends its lines (the guideway and pylons stand) until one
- * is built on its tile again, at a Terminal's ordinary cost. The rival builds none (IDEAS.md).
+ * is built on its tile again (half a Terminal's cost, rounded up, from the panel: magRebuildCost). A line may bend at up
+ * to `bends` pylons (each straight stretch `seg` to `max` tiles, `maxBent` in all, turning at most `turn` degrees at a
+ * bend); a pod slows to `corner` of its top speed round a sharp bend, and through a hub, where it keeps the goods for the
+ * Terminals beyond aboard and carries on (podThrough). The Architect builds a line to a far cluster of its own when the
+ * haul is long and it has the Alloy and Chips (aiMaglev).
  */
-const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
+const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, bends: 4, maxBent: 60, seg: 3, turn: 120, corner: 0.35, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
  * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods

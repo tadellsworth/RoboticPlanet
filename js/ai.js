@@ -396,6 +396,7 @@ function aiThink(p) {
     aiFortWalls(p);
     aiBridge(p, maxSites);
     aiRopeway(p, maxSites);
+    aiMaglev(p, me, lander);
   }
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -1876,6 +1877,89 @@ function aiRopeway(p, maxSites) {
   if (!canPay(p, cost)) { if (P.crLow || cry < 60 || S.time > 480) { P.bridgeWant = S.time; P.bridgeNeed = cost; } return; }
   if (P.bridgeNeed === cost) { P.bridgeWant = 0; P.bridgeNeed = null; }
   placeRopeway(p, best.i, best.j, best.ei, best.ej);
+}
+
+/**
+ * The Architect's Maglev line (AI_MAGLEV): from its twelfth minute (Normal and up), one line from a Terminal by its
+ * Command Base to its far working cluster (a Depot or Outpost `far` tiles out or more with `works` working buildings
+ * round it and no Rail Station of its own there), when the haul is long and it has the line's goods with `spare` Alloy
+ * and Chips besides: the home Terminal's site first, then the line (straight, else with bends round what's in the way),
+ * a Generator by each end (the far one touching its Terminal, so the pods bring its Fuel) and `pods` pods. Once a line
+ * runs it builds no other. Checked every `every` s. Measured in AI-vs-AI games (IDEAS.md).
+ */
+const AI_MAGLEV = { from: 720, every: 20, far: 24, works: 3, spare: { alloy: 30, chip: 15 }, pods: 2 };
+function aiMaglev(p, me, lander) {
+  const P = S.players[p], M = AI_MAGLEV;
+  if (P.style !== 'tycoon' || S.difficulty === 'easy' || S.time < M.from || worldBan('magterm') || S.time - (P.lastMag || -999) < M.every) return;
+  P.lastMag = S.time;
+  const terms = me.filter((b) => b.type === 'magterm');
+  // A line up: Generators by its ends and its pods.
+  for (const [A, B] of magLines(p)) {
+    for (const [T, r] of [[A, 3], [B, 1.5]]) {
+      if (me.some((g) => g.type === 'generator' && dist(g.x, g.y, T.x, T.y) <= (g.built ? BDEFS.generator.burner.radius : r))) continue;
+      let best = null, bd = Infinity;
+      for (let j = T.y - 3; j <= T.y + 3; j++) for (let i = T.x - 3; i <= T.x + 3; i++) { const d = dist(i, j, T.x, T.y); if (d > r || d >= bd || !inMap(i, j) || !canPlace(p, 'generator', i, j, true).ok || wouldBlock(tIdx(i, j))) continue; bd = d; best = [i, j]; }
+      if (best) placeSite(p, 'generator', best[0], best[1]);
+    }
+    const H = dist(A.x, A.y, lander.x, lander.y) <= dist(B.x, B.y, lander.x, lander.y) ? A : B; // (the pod bay at home)
+    if (linePods(H).length + ((H.yard && H.yard.magpod) || 0) < M.pods) orderAtYard(H, 'magpod', M.pods - linePods(H).length);
+  }
+  if (magLines(p).length) return;
+  const plan = P.magPlan, have = playerGoods(p);
+  // The home Terminal stands: plan the line.
+  if (plan) {
+    const A = getE(plan.home);
+    if (!A || A.dead || A.owner !== p) { P.magPlan = null; return; }
+    if (!A.built || magPending(A) || A.magFrom) return;
+    P.magPlan = null;
+    if (placeMagLine(p, A, plan.far[0], plan.far[1], plan.bends || []).ok) return;
+    // (something's in the way now: look again from this Terminal, below)
+  }
+  // A Terminal of its own with no line (its line couldn't go where it was planned): a line from it, if one will do.
+  const idle = terms.find((t) => t.built && !magPartners(t).length && !magPending(t) && !t.magFrom && !t.magMissing);
+  if (terms.length && !idle) return; // (one line: a Terminal of its own already stands or goes up)
+  // The far cluster, and whether the haul pays: far enough, busy enough, no rail there, and the goods in hand.
+  let best = null, bs = -Infinity;
+  for (const d of me) {
+    if (!d.built || (d.type !== 'depot' && d.type !== 'outpost')) continue;
+    const dl = dist(d.x, d.y, lander.x, lander.y);
+    if (dl < M.far || dl > MAGLEV.maxBent - 2) continue;
+    const works = me.filter((c) => c.built && BDEFS[c.type].out && !BDEFS[c.type].store && dist(c.x, c.y, d.x, d.y) <= 8).length;
+    if (works < M.works || me.some((s) => s.built && BDEFS[s.type].station && dist(s.x, s.y, d.x, d.y) <= 8)) continue;
+    const sc = works * 4 + dl;
+    if (sc > bs) { bs = sc; best = d; }
+  }
+  if (!best) return;
+  const n = Math.ceil(dist(best.x, best.y, lander.x, lander.y)) + 4, need = magLineCost(n), T = BDEFS.magterm.cost;
+  if (have.alloy < need.alloy + 2 * T.alloy + 2 * 4 + M.spare.alloy || have.chip < need.chip + 2 * T.chip + 2 * 2 + M.spare.chip || have.cement < need.cement + 2 * T.cement) return;
+  // The home Terminal's spot (3 to 7 tiles from the Command Base, toward the cluster) and the far end's (by the cluster).
+  const fars = [];
+  for (let j = best.y - 4; j <= best.y + 4; j++) for (let i = best.x - 4; i <= best.x + 4; i++) if (inMap(i, j) && !magFarBlocked(p, i, j) && canPlace(p, 'magterm', i, j, true).ok && !wouldBlock(tIdx(i, j))) fars.push([i, j]);
+  fars.sort((a, b) => dist(a[0], a[1], best.x, best.y) - dist(b[0], b[1], best.x, best.y) || a[1] - b[1] || a[0] - b[0]);
+  const homes = [];
+  for (let j = lander.y - 7; j <= lander.y + 7; j++) for (let i = lander.x - 7; i <= lander.x + 7; i++) {
+    const dl = dist(i, j, lander.x, lander.y);
+    if (dl < 3 || dl > 7 || !inMap(i, j) || !canPlace(p, 'magterm', i, j, true).ok || wouldBlock(tIdx(i, j))) continue;
+    homes.push([i, j, dist(i, j, best.x, best.y)]);
+  }
+  homes.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
+  if (idle) {
+    for (const [fi, fj] of fars.slice(0, 10)) {
+      const bends = !magLineCheck(p, idle, fi, fj).why ? [] : magRouteBend(p, idle, fi, fj);
+      if (bends && placeMagLine(p, idle, fi, fj, bends).ok) return;
+    }
+    return;
+  }
+  for (const [hi, hj] of homes.slice(0, 6)) {
+    const G = magGhost(p, hi, hj);
+    for (const [fi, fj] of fars.slice(0, 8)) {
+      const bends = !magLineCheck(p, G, fi, fj).why ? [] : magRouteBend(p, G, fi, fj);
+      if (!bends) continue;
+      const r = placeSite(p, 'magterm', hi, hj);
+      if (r && r.ok !== false) P.magPlan = { home: S.bAt[tIdx(hi, hj)], far: [fi, fj], bends };
+      return;
+    }
+  }
 }
 
 /** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */

@@ -565,7 +565,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   one over a road or track, yellow one shifted a tile with a tick back to its spot, white dashed a gap spanned, red with a
   cross where nothing can stand), the first blocked spot's reason written beside it (`magLabel`) and in the banner ("No
   line this way: a Depot stands where a pylon must go (9 tiles out)."). A far end tapped on a road or building snaps to a
-  good tile beside it. **Route via a hub** (`magRouteVia`, `magRouteWhy`, `placeMagRoute`; the `magLine` order with the
+  good tile beside it. **Bends** (`MAGLEV.bends` 4, the `magLine` order's `bends`, `b.magBends` on the line's key end,
+  in order from it; `magPathOf`, `magSpotsPath`, `magBendsWhy`, `magBendTry`): tap a spot on the way and **Bend here** in
+  the banner (`maglevBendButtons`, `UI.ropeBends`; **Undo bend**); each straight stretch `seg` (3) to `max` tiles,
+  `maxBent` (60) in all, turning at most `turn` (120°) at a bend; a bend is a pylon spot of its own on the bend tile
+  (never shifted: blocked there, the line can't bend there); the line's cost and build time go by its length along the
+  bends. **Route with bends** (`magRouteBend`): a bend beside the straight way, or a jog of two, the shortest that
+  works, offered first when a straight line can't go (blocked, or 40 to 60 tiles). **Route via a hub** (`magRouteVia`, `magRouteWhy`, `placeMagRoute`; the `magLine` order with the
   hub's tile): where a straight line can't go (a blocked stretch, or more than `max` tiles, up to twice that), the tool
   looks along and beside the straight line for the shortest pair of lines through a new hub Terminal and offers it; the
   order plans the first line to the hub, and the hub's site carries the far end (`s.magNext`), planned from the hub by
@@ -592,7 +598,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   joined at hubs make a **network** (`magNet`). Its pods serve all of it (`linePods`: their home is any of its
   Terminals; `magPodCap`: `perLine` for each line), built at any of its Terminals; a pod at a hub picks the line with
   the biggest load worth taking (the first in the hub's order on a tie: `podAtTerminal`), so goods cross the network
-  hop by hop, unloading at each hub. The rail plan makes each network (and Terminals of two lines touching: a conveyor,
+  in one run: nearing a hub (`u.thruTo`, planned 4 tiles out: `podThroughPlan`) a pod that holds goods a Terminal
+  beyond it is short of (by the rail plan's tree), or, heading home, goods the hub doesn't keep, passes through without
+  stopping (`podThrough`, at `corner` of its top speed): those stay aboard, the rest is unloaded there, it tops up with
+  what the hub holds for the next line, and `b.magThrough` counts it; with nothing to carry on it docks as before. It
+  never waits at a hub for a line. The rail plan makes each network (and Terminals of two lines touching: a conveyor,
   `b.magRelay`, `magRelaySwap`) a tree from its Terminal nearest the Command Base (`magRelayPlan`): every other
   Terminal's home is the one before it, so `shipLoad` lends a parent's goods to its child and sends a child's spare goods
   home to its parent, and each Terminal's demand rolls up to its parent (`railPlan`), so a hub keeps what the Terminals
@@ -600,8 +610,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Pods** (`BOTS.magpod`: 16 goods, mixed, no riders; speed 3 × a Freight Train's, 4 × its acceleration and braking)
   are built at a Terminal's **Pod bay** (its yard: two rounds of `BOTS.magpod.round`, 2 Alloy and 1 Chip, so 4 and
   2 each), up to the network's cap (`magPodRoom`, `yardOpen`). Docked, a pod is inside its Terminal (`u.home`); running,
-  `u.magFrom` and `u.magTo` are the two ends of the line it's on and `u.x, u.y` its place on the straight line between
-  the tile centres (`movePod`: accelerating and braking hard, arriving `podArrive`). Loads reuse the rail plan exactly as
+  `u.magFrom` and `u.magTo` are the two ends of the line it's on, `u.magS` how far along the line's path it is from
+  `magFrom` and `u.x, u.y` its place there (`movePod`, `magLinePts`, `magPathAt`: accelerating and braking hard, slowing
+  to 0.6 of its top speed round a bend of 30° or more and to `corner` (0.35) round one of 75° or more, arriving
+  `podArrive`; a save from before `magS` places it by its position, `magPathProject`). Loads reuse the rail plan exactly as
   the Airship's do (`railPlan` counts the Terminals as a line's stations, `bulkLinked`; the far Terminal stocks what the
   buildings round it need, `magRunning` standing in for a train on the line; `shipLoad` picks the mixed load,
   `spareForHome` the backhaul; a pod sets out at `fill` (half) of its hold, with anything once the far side runs low,
@@ -631,8 +643,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and none set out on a suspended line; a line whose other end was lost already comes down with it. It's drawn broken
   (an amber dashed stripe down the deck, the lost Terminal's outline pulsing on its tile, no glow) and the survivor's
   panel says so, with **Rebuild the missing Terminal**: the `magLine` order to the lost tile plans a Terminal site there
-  (`magRebuildSite`), at a Terminal's ordinary cost (the guideway is free; a cheaper rebuild "on the old foundation" was
-  left out: losing a Terminal should still cost one), and when it stands every line that ended on that tile joins it
+  (`magRebuildSite`), at a Terminal's ordinary cost (on its old foundation at half a Terminal's cost, rounded up:
+  `magRebuildCost`, the owner's call; the guideway is free; a Terminal built there by hand costs the whole price), and when it stands every line that ended on that tile joins it
   again (`magRebuilt`, `magReconnect`: if the lost end was the key, the new Terminal takes the pylons and layout over).
   A Terminal built there by hand does the same. A Terminal with a suspended line may still start another (it counts
   among its three). A save from before kept the lost key's pylons on the survivor (`near` with no `key`): still read so.
@@ -647,7 +659,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Terminal, a repair pod riding out, a suspended line broken, a line going up as far as it's got with the rest dashed,
   and the placement preview (`drawMaglevPreview`, both lines of a Route via a hub with the hub labelled). Everything is
   in `S` and hashed (`hashState`: the lines and hubs, keys, pods, sites, repairs and suspended lines) and checked on
-  load (`checkSave`); nothing is baked. The rival AI builds no lines (IDEAS.md). The mission **Phase 2** (Industry and
+  load (`checkSave`); nothing is baked. The Architect (`aiMaglev`, `AI_MAGLEV`) builds one line from its twelfth minute on Normal and up: from a Terminal by
+  its Command Base to its far working cluster (a Depot or Outpost 24 tiles out or more with three working buildings round
+  it, no Rail Station there), straight or with bends, once it holds the line's goods and 30 Alloy and 15 Chips besides
+  (rare: it spends them as it makes them), then a Generator by each end and two pods; the other doctrines build none
+  (IDEAS.md has the measurements). The mission **Phase 2** (Industry and
   Trade: its last goal a hub) and the colony goal *Phase 2* teach it.
 - **Mass Drivers** (every map but the Hollow; `BDEFS.mdriver`, `BDEFS.catcher`, `MASSDRIVER`; the owner's look A, "Coil
   Ramp"). A **Mass Driver** (10 Cement, 8 Alloy, 4 Chips; Build → Move, key V) and a **Catcher** (6 Cement, 4 Alloy, 2

@@ -5394,6 +5394,9 @@ function checkSave(o) {
   // badges (b.by) that point at them.
   if (o.crew != null && !(Array.isArray(o.crew) && o.crew.length <= 8 && o.crew.every((c) => c === null || (obj(c) && typeof c.n === 'string' && c.n.length <= 16 && owner(c.c) && c.c >= 0)))) bad();
   const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
+  // a Maglev line's pylon layout (every spot of a bent line and its bends) and its bends' tiles
+  const layoutOk = (l) => Array.isArray(l) && l.length <= Math.ceil(MAGLEV.maxBent / MAGLEV.spacing) + MAGLEV.bends + 1 && l.every((t) => t === -1 || tileOk(t));
+  const bendsOk = (l) => Array.isArray(l) && l.length <= MAGLEV.bends && l.every((q) => Array.isArray(q) && q.length === 2 && Number.isInteger(q[0]) && Number.isInteger(q[1]) && q[0] >= 0 && q[0] < o.W && q[1] >= 0 && q[1] < o.H);
   for (const b of o.buildings) {
     if (b.by != null && !(Number.isInteger(b.by) && o.crew && o.crew[b.by])) bad();
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
@@ -5402,15 +5405,15 @@ function checkSave(o) {
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
     // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)
     const missOk = (m) => obj(m) && Number.isInteger(m.x) && Number.isInteger(m.y) && m.x >= 0 && m.x < o.W && m.y >= 0 && m.y < o.H && typeof m.near === 'boolean' &&
-      (m.key == null || (Number.isSafeInteger(m.key) && m.key > 0)) && (m.layout == null || (Array.isArray(m.layout) && m.layout.length <= Math.floor(MAGLEV.max / MAGLEV.spacing) && m.layout.every((t) => t === -1 || tileOk(t))));
+      (m.key == null || (Number.isSafeInteger(m.key) && m.key > 0)) && (m.layout == null || layoutOk(m.layout)) && (m.bends == null || bendsOk(m.bends));
     if (b.magMissing != null && (b.type !== 'magterm' || !missOk(b.magMissing))) bad();
     if (b.magMissMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMissMore) || b.magMissMore.length >= MAGLEV.hub || !b.magMissMore.every(missOk))) bad();
     // a hub's other lines (Terminal ids), a line site's key end, and the next line a hub's site carries on to
     if (b.magMore != null && (b.type !== 'magterm' || !Array.isArray(b.magMore) || b.magMore.length >= MAGLEV.hub || !b.magMore.every((id) => Number.isSafeInteger(id) && id > 0))) bad();
     if (b.magKey != null && !(Number.isSafeInteger(b.magKey) && b.magKey > 0)) bad();
     if (b.magNext != null && !(b.type === 'magterm' && Array.isArray(b.magNext) && b.magNext.length === 2 && Number.isInteger(b.magNext[0]) && Number.isInteger(b.magNext[1]) && b.magNext[0] >= 0 && b.magNext[0] < o.W && b.magNext[1] >= 0 && b.magNext[1] < o.H)) bad();
-    if (b.magLayout != null && (!Array.isArray(b.magLayout) || b.magLayout.length > Math.floor(MAGLEV.max / MAGLEV.spacing) ||
-      !b.magLayout.every((t) => t === -1 || tileOk(t)))) bad();
+    if (b.magLayout != null && !layoutOk(b.magLayout)) bad();
+    if (b.magBends != null && !(BDEFS[b.type] && (BDEFS[b.type].magterm || BDEFS[b.type].pylon) && bendsOk(b.magBends))) bad(); // (a line's bends: on its key Terminal, or its site)
     // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves
     if (b.mdTo != null && !(Number.isSafeInteger(b.mdTo) && b.mdTo >= 0)) bad();
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();

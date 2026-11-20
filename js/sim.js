@@ -15843,17 +15843,72 @@ function magNet(b) {
   return out;
 }
 
-/** The pylon spots of a line from tile centre (ax, ay) to (bx, by): [{ k, d, i, j, t }], d tiles from the key end. */
-function magSpotsAt(ax, ay, bx, by) {
-  const L = dist(ax, ay, bx, by), ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1), out = [];
-  for (let k = 1; k * MAGLEV.spacing <= L - 2; k++) {
-    const d = k * MAGLEV.spacing, i = Math.floor(ax + ux * d), j = Math.floor(ay + uy * d);
-    if (inMap(i, j)) out.push({ k, d, i, j, t: tIdx(i, j) });
+/*
+ * A line's path: the tile centres of its key end, its bends (b.magBends on the key Terminal, tiles in order from it)
+ * and its other end, [[x, y], ...]; straight stretches between them. A bend is a pylon of its own.
+ */
+/** The path of the line from Terminal (or stand-in) A, its key end, to B: A's bends between. */
+function magPathOf(A, B) { return [[A.x + 0.5, A.y + 0.5], ...(A.magBends || []).map(([i, j]) => [i + 0.5, j + 0.5]), [B.x + 0.5, B.y + 0.5]]; }
+/** The length of path pts in tiles. */
+function magPathLen(pts) { let L = 0; for (let k = 1; k < pts.length; k++) L += dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); return L; }
+/** The point d tiles along path pts: [x, y, ux, uy, seg] (the stretch's direction and index). */
+function magPathAt(pts, d) {
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by) || 1e-9;
+    if (d <= L || k === pts.length - 1) { const f = clamp(d / L, 0, 1), ux = (bx - ax) / L, uy = (by - ay) / L; return [ax + (bx - ax) * f, ay + (by - ay) * f, ux, uy, k - 1]; }
+    d -= L;
+  }
+  return [pts[0][0], pts[0][1], 1, 0, 0];
+}
+/** How far along path pts the nearest point to (x, y) is, in tiles. */
+function magPathProject(pts, x, y) {
+  let best = 0, bd = Infinity, base = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = dist(ax, ay, bx, by) || 1e-9;
+    const f = clamp(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (L * L), 0, 1), d2 = dist2(ax + (bx - ax) * f, ay + (by - ay) * f, x, y);
+    if (d2 < bd) { bd = d2; best = base + f * L; }
+    base += L;
+  }
+  return best;
+}
+/** The turn at each bend of path pts, in degrees: [{ d, deg }] (d: tiles along it). */
+function magPathTurns(pts) {
+  const out = [];
+  let base = 0;
+  for (let k = 1; k + 1 < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], [cx, cy] = pts[k + 1];
+    base += dist(ax, ay, bx, by);
+    const a1 = datan2(by - ay, bx - ax), a2 = datan2(cy - by, cx - bx);
+    let t = Math.abs(a2 - a1) * 180 / Math.PI; if (t > 180) t = 360 - t;
+    out.push({ d: base, deg: t });
   }
   return out;
 }
-/** The pylon spots of the line between Terminals A and B (A the key end). */
-function magSpots(A, B) { return magSpotsAt(A.x + 0.5, A.y + 0.5, B.x + 0.5, B.y + 0.5); }
+/**
+ * The pylon spots of path pts: [{ k, d, i, j, t, bend }], d tiles along it from the key end: every MAGLEV.spacing tiles
+ * along each stretch, none within 2 of its end, and one on every bend (`bend`: its index).
+ */
+function magSpotsPath(pts) {
+  const out = [];
+  let k = 0, base = 0;
+  for (let s = 1; s < pts.length; s++) {
+    const [ax, ay] = pts[s - 1], [bx, by] = pts[s], L = dist(ax, ay, bx, by), ux = (bx - ax) / (L || 1), uy = (by - ay) / (L || 1);
+    for (let q = 1; q * MAGLEV.spacing <= L - 2; q++) {
+      const d = q * MAGLEV.spacing, i = Math.floor(ax + ux * d), j = Math.floor(ay + uy * d);
+      k++;
+      if (inMap(i, j)) out.push({ k, d: base + d, i, j, t: tIdx(i, j) });
+    }
+    base += L;
+    if (s < pts.length - 1) { const i = Math.floor(bx), j = Math.floor(by); k++; if (inMap(i, j)) out.push({ k, d: base, i, j, t: tIdx(i, j), bend: s }); }
+  }
+  return out;
+}
+/** The pylon spots of a straight line from tile centre (ax, ay) to (bx, by) (see magSpotsPath). */
+function magSpotsAt(ax, ay, bx, by) { return magSpotsPath([[ax, ay], [bx, by]]); }
+/** The pylon spots of the line between Terminals A and B (A the key end, its bends between). */
+function magSpots(A, B) { return magSpotsPath(magPathOf(A, B)); }
+/** The path of the line between joined Terminals `from` and `to`, from `from`. */
+function magLinePts(from, to) { const K = magKey(from, to), pts = magPathOf(K, K === from ? to : from); return K === from ? pts : pts.reverse(); }
 
 /**
  * What stands in the way of a pylon on tile t for owner ('' for nothing): a pylon of its own line may stand there
@@ -15886,18 +15941,24 @@ function magOverWay(t) { return !!(S.road[t] || S.plan[t] || (S.rail && (S.rail[
  * MAGLEV.gap) make the second bad. A blocked spot shifts to a free shoulder tile beside the guideway (`moved`: the
  * tile it moved from) unless `layout` (a line ordered already) fixes the tiles; `road`: a road or track runs under it.
  */
-function magSpotsChecked(owner, ax, ay, bx, by, own, layout) {
-  const spots = magSpotsAt(ax, ay, bx, by), used = new Set(), L = dist(ax, ay, bx, by) || 1;
+function magSpotsChecked(owner, ax, ay, bx, by, own, layout) { return magSpotsCheckedPath(owner, [[ax, ay], [bx, by]], own, layout); }
+/** magSpotsChecked along path pts (its bends' spots never shift: a bend's pylon stands on the bend or the line can't bend there). */
+function magSpotsCheckedPath(owner, pts, own, layout) {
+  const spots = magSpotsPath(pts), used = new Set();
+  const ends = new Set(pts.map(([x, y]) => tIdx(Math.floor(x), Math.floor(y))));
   let prevSkip = false;
   for (const sp of spots) {
     let t = layout?.[sp.k - 1] ?? sp.t;
     let why = t === -1 ? 'skip' : magSpotWhy(owner, t, own);
-    if (!layout && (why || used.has(t))) {
+    if (sp.bend) {
+      if (why === 'skip') why = 'a bend needs ground for its pylon, not a chasm or rock';
+      else if (why) why = `a bend can't go there: ${why}`;
+    } else if (!layout && (why || used.has(t))) {
       // Try a shoulder within one tile of the guideway. Fix that choice when the line is ordered.
-      const x = ax + (bx - ax) * sp.d / L, y = ay + (by - ay) * sp.d / L;
+      const [x, y] = magPathAt(pts, sp.d);
       const options = FEED_NB.map(([di, dj]) => [sp.i + di, sp.j + dj])
         .filter(([i, j]) => inMap(i, j) && dist2(i + 0.5, j + 0.5, x, y) <= 2.25 &&
-          tIdx(i, j) !== tIdx(Math.floor(bx), Math.floor(by)) && !used.has(tIdx(i, j)))
+          !ends.has(tIdx(i, j)) && !used.has(tIdx(i, j)))
         .sort(([i, j], [k, l]) => dist2(i + 0.5, j + 0.5, x, y) - dist2(k + 0.5, l + 0.5, x, y));
       const shoulder = options.find(([i, j]) => !magSpotWhy(owner, tIdx(i, j), own));
       if (shoulder) { sp.moved = t; t = tIdx(...shoulder); why = ''; }
@@ -15952,13 +16013,32 @@ function magFarBlocked(owner, bi, bj) {
 }
 
 /**
+ * What's wrong with `bends` (tiles, in order from Terminal A) on a line from A to (bi, bj) ('' for nothing): at most
+ * MAGLEV.bends, on the map, each stretch MAGLEV.seg to MAGLEV.max tiles, turning at most MAGLEV.turn degrees.
+ */
+function magBendsWhy(A, bi, bj, bends) {
+  if (!bends.length) return '';
+  if (!Array.isArray(bends) || bends.length > MAGLEV.bends) return `A line bends at ${MAGLEV.bends} pylons at most.`;
+  const pts = [[A.x, A.y], ...bends, [bi, bj]];
+  for (let k = 1; k < pts.length; k++) {
+    const [x, y] = pts[k];
+    if (k < pts.length - 1 && !inMap(x, y)) return 'A bend is outside the map.';
+    const d = dist(pts[k - 1][0], pts[k - 1][1], x, y);
+    if (d < MAGLEV.seg) return `Too sharp: each straight stretch of a line runs ${MAGLEV.seg} tiles at least between bends.`;
+    if (d > MAGLEV.max) return `Too long a stretch: ${MAGLEV.max} tiles at most between bends.`;
+  }
+  for (const tr of magPathTurns(pts)) if (tr.deg > MAGLEV.turn + 1e-6) return `Too sharp a bend: a line turns ${MAGLEV.turn}° at most at a bend.`;
+  return '';
+}
+
+/**
  * Could owner's Terminal A run a Maglev line to (bi, bj)? { why, spots, far, key, miss }: why '' if so (else the
  * reason), the spots checked (magSpotsChecked from the key end, each with dA: tiles from A; the first bad one is the
  * reason), far the Terminal (built, or a site of yours with no line) standing at the far end, or null for a clear spot
  * where one goes up, key the key end's id (-1: the new far Terminal), miss the suspended line this rebuilds, if any.
  */
-function magLineCheck(owner, A, bi, bj) {
-  const out = { why: '', spots: [], far: null, key: 0, miss: null };
+function magLineCheck(owner, A, bi, bj, bends) {
+  const out = { why: '', spots: [], far: null, key: 0, miss: null, bends: [], L: 0 };
   if (!A || A.dead || A.owner !== owner || !BDEFS[A.type].magterm) { out.why = 'Tap one of your Maglev Terminals first.'; return out; }
   if (!A.built) { out.why = 'That Terminal is still going up: the line starts from a finished one.'; return out; }
   if (magPending(A)) { out.why = 'That Terminal\'s line is still going up.'; return out; }
@@ -15971,9 +16051,15 @@ function magLineCheck(owner, A, bi, bj) {
     out.why = magMiss(A).length ? 'Rebuild the Terminal at the end of the surviving guideway (its panel: Rebuild the missing Terminal).' : `That Terminal is on ${MAGLEV.hub} lines already: a hub joins ${MAGLEV.hub} at most.`;
     return out;
   }
-  const L = dist(A.x, A.y, bi, bj);
+  bends = miss ? [] : (bends || []);
+  const bwhy = magBendsWhy(A, bi, bj, bends);
+  if (bwhy) { out.why = bwhy; return out; }
+  out.bends = bends.map(([i, j]) => [i, j]);
+  const pts = [[A.x + 0.5, A.y + 0.5], ...bends.map(([i, j]) => [i + 0.5, j + 0.5]), [bi + 0.5, bj + 0.5]], L = magPathLen(pts);
+  out.L = L;
   if (L < MAGLEV.min) { out.why = `Too close: a Maglev line runs ${MAGLEV.min} to ${MAGLEV.max} tiles.`; return out; }
-  if (L > MAGLEV.max) { out.why = `Too far: a Maglev line reaches ${MAGLEV.max} tiles (go on from a hub: a Terminal on the way).`; return out; }
+  if (!bends.length && L > MAGLEV.max) { out.why = `Too far: a straight Maglev line reaches ${MAGLEV.max} tiles (bend it, ${MAGLEV.maxBent} in all, or go on from a hub).`; return out; }
+  if (L > MAGLEV.maxBent) { out.why = `Too far: a bent Maglev line reaches ${MAGLEV.maxBent} tiles in all (go on from a hub: a Terminal on the way).`; return out; }
   const t = tIdx(bi, bj), far = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (far) {
     if (far.owner !== owner || !BDEFS[far.type].magterm) { out.why = `There is ${aOrAn(BDEFS[far.type].name)} at the far end: pick a clear spot, or a Maglev Terminal of yours.`; return out; }
@@ -15993,7 +16079,7 @@ function magLineCheck(owner, A, bi, bj) {
   const keyA = !magKeyBusy(A);
   if (!keyA && far && magKeyBusy(far)) { out.why = 'Both Terminals anchor another line\'s pylons already: join them through a new Terminal (a hub) instead.'; return out; }
   out.key = keyA ? A.id : far ? far.id : -1;
-  out.spots = keyA ? magSpotsChecked(owner, A.x + 0.5, A.y + 0.5, bi + 0.5, bj + 0.5, 0) : magSpotsChecked(owner, bi + 0.5, bj + 0.5, A.x + 0.5, A.y + 0.5, 0);
+  out.spots = magSpotsCheckedPath(owner, keyA ? pts : pts.slice().reverse(), 0);
   for (const sp of out.spots) sp.dA = keyA ? sp.d : +(L - sp.d).toFixed(1);
   const bad = out.spots.filter((s) => s.kind === 'bad').sort((p, q) => p.dA - q.dA)[0];
   if (bad) out.why = `No line this way: ${bad.why} (${Math.round(bad.dA)} tiles out).`;
@@ -16013,8 +16099,11 @@ function magLineCost(n) {
  * stands), paid from storage as the goods come in, built from A. { ok, reason, id }. At the end of one of A's
  * suspended lines it rebuilds the lost Terminal there instead (the guideway stands: only the Terminal is paid for).
  */
-function placeMagLine(owner, A, bi, bj) {
-  const chk = magLineCheck(owner, A, bi, bj);
+/** What rebuilding a lost Terminal on its old foundation costs (the panel's Rebuild): half a Terminal's, rounded up. */
+function magRebuildCost() { const c = {}; for (const g in BDEFS.magterm.cost) c[g] = Math.ceil(BDEFS.magterm.cost[g] / 2); return c; }
+
+function placeMagLine(owner, A, bi, bj, bends) {
+  const chk = magLineCheck(owner, A, bi, bj, bends);
   if (chk.why) return { ok: false, reason: chk.why };
   if (chk.miss) {
     if (chk.far?.built) {
@@ -16024,6 +16113,7 @@ function placeMagLine(owner, A, bi, bj) {
     }
     if (S.plan[tIdx(bi, bj)]) cancelPlan(tIdx(bi, bj));
     const site = chk.far || addBuilding(owner, 'magterm', bi, bj, false);
+    if (!chk.far) site.cost = magRebuildCost(); // (on the old foundation: half price)
     site.fromStore = true;
     site.magFrom = A.id;
     A.magSite = site.id;
@@ -16032,7 +16122,7 @@ function placeMagLine(owner, A, bi, bj) {
     markDirty(bi, bj);
     return { ok: true, reason: '', id: site.id };
   }
-  const n = Math.round(dist(A.x, A.y, bi, bj)), cost = magLineCost(n);
+  const n = Math.round(chk.L), cost = magLineCost(n);
   let s;
   if (chk.far && chk.far.built) {
     const sp = chk.spots.filter((q) => q.kind === 'ok' && !S.bAt[q.t]).sort((p, q) => p.dA - q.dA)[0];
@@ -16059,6 +16149,7 @@ function placeMagLine(owner, A, bi, bj) {
   if (s.type === 'magpylon') s.cost = cost;
   s.magFrom = A.id; s.magN = n; s.magLayout = magLayout(chk.spots);
   if (chk.key !== A.id) s.magKey = chk.key === -1 ? s.id : chk.key; // (keyed at the far end: A keys a line already)
+  if (chk.bends.length) s.magBends = chk.key === A.id ? chk.bends : chk.bends.slice().reverse(); // (in order from the key end)
   A.magSite = s.id;
   if (S.players[owner].ai) { if (!payInto(s)) queuePlan('b', s.id, owner); }
   else { queuePlan('b', s.id, owner); settlePlans(); }
@@ -16125,6 +16216,59 @@ function magRouteVia(owner, A, bi, bj) {
   return null;
 }
 
+/**
+ * Route with bends: one bend beside the straight line, or a jog of two (round something in the way), that makes a line
+ * from A to (bi, bj) work where the straight one can't (a blocked stretch, or more than MAGLEV.max tiles): the shortest
+ * such, as a list of bend tiles from A, or null. Deterministic (fixed candidates in a fixed order).
+ */
+function magRouteBend(owner, A, bi, bj) {
+  if (!A || !inMap(bi, bj)) return null;
+  const L = dist(A.x, A.y, bi, bj);
+  if (L < MAGLEV.seg * 2 || L > MAGLEV.maxBent) return null;
+  const ux = (bi - A.x) / L, uy = (bj - A.y) / L, at = (f, o) => [Math.round(A.x + (bi - A.x) * f - uy * o), Math.round(A.y + (bj - A.y) * f + ux * o)];
+  const cands = [], seen = new Set();
+  const add = (bends) => {
+    const key = bends.map((b) => b.join(',')).join(';');
+    if (seen.has(key) || bends.some(([i, j]) => !inMap(i, j))) return;
+    seen.add(key);
+    const pts = [[A.x, A.y], ...bends, [bi, bj]];
+    let len = 0; for (let k = 1; k < pts.length; k++) len += dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]);
+    cands.push({ bends, len });
+  };
+  for (let o = 1; o <= 10; o++) for (const sg of [1, -1]) {
+    for (const f of [0.5, 0.4, 0.6, 0.3, 0.7]) add([at(f, o * sg)]);
+    for (const [f1, f2] of [[0.3, 0.7], [0.2, 0.8], [0.35, 0.55], [0.45, 0.65]]) add([at(f1, o * sg), at(f2, o * sg)]);
+  }
+  cands.sort((p, q) => p.len - q.len || p.bends.length - q.bends.length);
+  for (const c of cands.slice(0, 160)) if (!magLineCheck(owner, A, bi, bj, c.bends).why) return c.bends;
+  return null;
+}
+
+/**
+ * Could the line being placed from Terminal A (its bends so far, `bends`) bend at (i, j) next? '' if so, else why: a
+ * pylon stands there, the stretch to it is MAGLEV.seg to MAGLEV.max tiles with nothing in the way, the turn at the bend
+ * before is sharp enough, and there's a bend to spare.
+ */
+function magBendTry(owner, A, bends, i, j) {
+  if (!A || !inMap(i, j)) return 'Outside the map.';
+  if (bends.length >= MAGLEV.bends) return `A line bends at ${MAGLEV.bends} pylons at most.`;
+  const pts = [[A.x, A.y], ...bends, [i, j]];
+  for (let k = 1; k < pts.length; k++) {
+    const d = dist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]);
+    if (d < MAGLEV.seg) return `Too close: a bend goes ${MAGLEV.seg} tiles at least from the last.`;
+    if (d > MAGLEV.max) return `Too far: ${MAGLEV.max} tiles at most between bends.`;
+  }
+  for (const tr of magPathTurns(pts)) if (tr.deg > MAGLEV.turn + 1e-6) return `Too sharp a bend: a line turns ${MAGLEV.turn}° at most.`;
+  if (magPathLen(pts) > MAGLEV.maxBent - MAGLEV.seg) return `Too far: a bent line runs ${MAGLEV.maxBent} tiles in all.`;
+  const t = tIdx(i, j), why = magSpotWhy(owner, t, 0);
+  if (why === 'skip') return 'A bend needs ground for its pylon, not a chasm or rock.';
+  if (why) return `No bend there: ${why}.`;
+  // the stretch up to it, checked as a line ending there (its spots from A, the bend as a stand-in end)
+  const c = pts.map(([x, y]) => [x + 0.5, y + 0.5]);
+  const bad = magSpotsCheckedPath(owner, c, 0).find((q) => q.kind === 'bad');
+  return bad ? `No line that way: ${bad.why}.` : '';
+}
+
 /** The building a Worker stands at to build site s: the Terminal a Maglev line going up is planned from, else the site itself. */
 function siteWorkAt(s) {
   if (s.magFrom) { const A = getE(s.magFrom); if (A && !A.dead) return A; }
@@ -16137,17 +16281,22 @@ function magSiteFar(s) {
   return f && !f.dead ? [f.x + 0.5, f.y + 0.5] : [s.x + 0.5, s.y + 0.5];
 }
 
+/** The path of the line site s is building from Terminal A, from its key end (A, or the far end: s.magKey), its bends between. */
+function magSitePath(s, A) {
+  const [fx, fy] = magSiteFar(s), keyFar = !!s.magKey && s.magKey !== A.id, b = (s.magBends || []).map(([i, j]) => [i + 0.5, j + 0.5]);
+  return keyFar ? [[fx, fy], ...b, [A.x + 0.5, A.y + 0.5]] : [[A.x + 0.5, A.y + 0.5], ...b, [fx, fy]];
+}
+
 /** Line site s has got to `progress`: the pylons that far out from where it's built go up (a pylon every MAGLEV.spacing tiles from the key end). */
 function magBuildStep(s) {
   const A = getE(s.magFrom);
   if (!A || A.dead || magRebuildSite(A, s)) return;
-  const [fx, fy] = magSiteFar(s), ax = A.x + 0.5, ay = A.y + 0.5, L = dist(ax, ay, fx, fy);
+  const kpts = magSitePath(s, A), L = magPathLen(kpts);
   const keyFar = !!s.magKey && s.magKey !== A.id, key = keyFar ? s.magKey : A.id;
-  const [kx, ky, ox, oy] = keyFar ? [fx, fy, ax, ay] : [ax, ay, fx, fy];
   const reach = s.progress * L;
-  const layout = s.magLayout || magLayout(magSpotsAt(kx, ky, ox, oy));
+  const layout = s.magLayout || magLayout(magSpotsPath(kpts));
   let any = false;
-  for (const sp of magSpotsChecked(A.owner, kx, ky, ox, oy, key, layout)) {
+  for (const sp of magSpotsCheckedPath(A.owner, kpts, key, layout)) {
     const dA = keyFar ? L - sp.d : sp.d;
     if (sp.kind !== 'ok' || dA > reach + 1e-9 || S.bAt[sp.t]) continue;
     magClearSpot(sp.t);
@@ -16172,10 +16321,11 @@ function magLineDone(s) {
   magBuildStep(s);
   const K = s.magKey && s.magKey === B.id ? B : A, O = K === A ? B : A;
   if (K === A && magKeyBusy(A)) { magLineCancel(s); return; } // (A came to key another line meanwhile: no room for this one's pylons)
-  const layout = s.magLayout;
-  delete s.magLayout;
+  const layout = s.magLayout, bends = s.magBends;
+  delete s.magLayout; delete s.magBends;
   delete s.cost;
   K.magLayout = layout; // (s may be K itself: the new far Terminal keys the line)
+  if (bends && bends.length) K.magBends = bends; else delete K.magBends;
   magJoin(K, O);
   A.magSite = 0; delete B.magFrom; delete s.magFrom; delete s.magKey;
   if (s !== B) { s.line = K.id; delete s.magFar; }
@@ -16269,9 +16419,15 @@ function magRunning(b) { return magPartners(b).length > 0 && linePods(b).length 
 function magPodRoom(b) { return magPartners(b).length > 0 && linePods(b).length < magPodCap(b); }
 
 /** Where pod u is along its line, in tiles from the key Terminal A. */
-function podDist(u, A, B) {
-  const ax = A.x + 0.5, ay = A.y + 0.5, L = dist(ax, ay, B.x + 0.5, B.y + 0.5) || 1;
-  return clamp(((u.x - ax) * (B.x + 0.5 - ax) + (u.y - ay) * (B.y + 0.5 - ay)) / L, 0, L);
+function podDist(u, A, B) { return magPathProject(magPathOf(A, B), u.x, u.y); }
+
+/** How far along the line A–B (A the key end) pylon spot k stands, in tiles. */
+function magSpotD(A, B, k) { const sp = magSpots(A, B).find((q) => q.k === k); return sp ? sp.d : k * MAGLEV.spacing; }
+
+/** The path of survivor S0's suspended line m (to its lost end), from the lost end to S0. */
+function magMissPts(S0, m) {
+  if (m.near) return magPathOf({ x: m.x, y: m.y, magBends: m.bends || (m.key == null ? S0.magBends : null) }, S0);
+  return magPathOf(S0, m).reverse();
 }
 
 /** Pod u's load is lost (shot down with its span, or with its Terminal): what it was bringing isn't on its way any more. */
@@ -16293,8 +16449,9 @@ function podReverse(u) {
     for (const g in u.cargo) bump(from.inc, g, u.cargo[g]);
     u.cargoTo = from.id;
   }
+  if (u.magS != null && to && !to.dead && magLinked(from, to)) u.magS = Math.max(0, magPathLen(magLinePts(from, to)) - u.magS); else delete u.magS;
   u.magTo = from.id; u.magFrom = to && !to.dead ? to.id : 0;
-  u.vel = 0;
+  u.vel = 0; u.thruTo = 0;
   return true;
 }
 
@@ -16307,7 +16464,7 @@ function magPylonDown(p) {
   if (!A || A.dead || !BDEFS[A.type].magterm) return;
   const B = magKeyPartner(A);
   if (!B) return;
-  const d = p.k * MAGLEV.spacing;
+  const d = magSpotD(A, B, p.k);
   for (const u of S.bots) {
     if (u.dead || u.owner !== A.owner || !BOTS[u.type].magpod || u.inside || !u.magTo || !podOnLine(u, A, B)) continue;
     const s = podDist(u, A, B);
@@ -16336,7 +16493,8 @@ function magReconnect(survivor, R, m) {
     const key = m.key ?? survivor.id;
     for (const p of S.buildings) if (!p.dead && BDEFS[p.type].pylon && p.line === key) p.line = R.id;
     R.magLayout = m.layout || survivor.magLayout;
-    if (m.key == null) delete survivor.magLayout; // (a save from before: the survivor kept them)
+    if (m.bends) R.magBends = m.bends; else if (m.key == null && survivor.magBends) R.magBends = survivor.magBends; else delete R.magBends;
+    if (m.key == null) { delete survivor.magLayout; delete survivor.magBends; } // (a save from before: the survivor kept them)
     magJoin(R, survivor);
   } else magJoin(survivor, R);
   magMissSet(survivor, magMiss(survivor).filter((q) => q !== m));
@@ -16389,7 +16547,7 @@ function magTermDown(b) {
   }
   for (const o of partners) {
     const K = magKey(b, o), m = { x: b.x, y: b.y, near: K === b };
-    if (K === b) { m.key = b.id; if (b.magLayout) m.layout = b.magLayout.slice(); }
+    if (K === b) { m.key = b.id; if (b.magLayout) m.layout = b.magLayout.slice(); if (b.magBends) m.bends = b.magBends.map((q) => q.slice()); }
     magUnjoin(o, b.id);
     magMissSet(o, [...magMiss(o), m]);
     S.players[o.owner].railT = undefined;
@@ -16407,7 +16565,8 @@ function magTermDown(b) {
 function podDepart(u, T, O, load) {
   exitBuilding(u);
   u.x = T.x + 0.5; u.y = T.y + 0.5;
-  u.magFrom = T.id; u.magTo = O.id; u.vel = 0; u.face = datan2(O.y - T.y, O.x - T.x);
+  u.magFrom = T.id; u.magTo = O.id; u.vel = 0; u.magS = 0; u.thruTo = 0;
+  const pts = magLinePts(T, O); u.face = datan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]);
   if (load && load.total) {
     for (const g in load.goods) { bump(T.stock, g, -load.goods[g]); bump(O.inc, g, load.goods[g]); }
     u.cargo = load.goods; u.cargoTo = O.id;
@@ -16416,7 +16575,7 @@ function podDepart(u, T, O, load) {
 
 /** Pod u docks at Terminal m: its goods go into m's stock. */
 function podArrive(u, m) {
-  u.magTo = 0; u.magFrom = 0; u.vel = 0;
+  u.magTo = 0; u.magFrom = 0; u.vel = 0; delete u.magS; delete u.thruTo;
   enterBuilding(u, m);
   u.home = m.id; u.atT = S.time;
   if (u.cargo) {
@@ -16463,30 +16622,111 @@ function podAtTerminal(u, m, dt) {
   }
 }
 
-/** One step of pod u's run: straight along its line, at speed with power (MAGLEV: accelerating and braking hard), crawling without. */
+/**
+ * Pod u, nearing hub m along its line from `from` with a load: where it carries on to without stopping, { o, keep }
+ * (the first other line of m's, in m's order, not cut, whose far end wants goods it holds: a Terminal further from
+ * home, by the rail plan's tree, still short of them; or, heading home, goods m doesn't keep itself), or null to unload
+ * at m. Deterministic; it never waits at m for a line.
+ */
+function podThroughPlan(u, m, from) {
+  if (!u.cargo || !m || m.dead || !from) return null;
+  const ps = magPartners(m);
+  if (ps.length < 2) return null;
+  for (const o of ps) {
+    if (o === from || magPairCut(m, o)) continue;
+    const keep = {};
+    let n = 0;
+    if (o.home === m.id) { // on, away from home: what o (and the Terminals beyond it, whose wants roll into o's) is short of
+      const k = keepOf(o) || {};
+      for (const g in u.cargo) { const c = Math.min(u.cargo[g], Math.floor((k[g] || 0) - supplyOf(o, g) - (o.inc[g] || 0))); if (c >= 1) { keep[g] = c; n += c; } }
+    } else if (m.home === o.id && from.home === m.id) { // on toward home: what m doesn't keep itself
+      const k = keepOf(m) || {};
+      for (const g in u.cargo) if (!(k[g] > 0)) { keep[g] = u.cargo[g]; n += u.cargo[g]; }
+    }
+    if (n >= 1) return { o, keep };
+  }
+  return null;
+}
+
+/** Pod u passes through hub m (plan: podThroughPlan): what m wants is unloaded, the rest stays aboard for o, topped up from m. */
+function podThrough(u, m, plan) {
+  const { o, keep } = plan;
+  let dropped = 0;
+  for (const g in u.cargo) {
+    bump(m.inc, g, -u.cargo[g]); // (it was coming to m)
+    const left = u.cargo[g] - (keep[g] || 0);
+    if (left > 0) { bump(m.stock, g, left); dropped += left; }
+  }
+  if (dropped) { m.magGot = (m.magGot || 0) + dropped; m.airIn = S.time; }
+  u.cargo = {}; u.cargoTo = o.id;
+  for (const g in keep) { u.cargo[g] = keep[g]; bump(o.inc, g, keep[g]); }
+  let room = BOTS[u.type].carry - sumValues(u.cargo);
+  if (room >= 1) { // topped up with what o wants from m, as a load from m would be
+    const ld = shipLoad(u, m, o);
+    for (const g in ld.goods) {
+      const n = Math.min(ld.goods[g], room, Math.floor(supplyOf(m, g)));
+      if (n < 1) continue;
+      bump(m.stock, g, -n); bump(o.inc, g, n); u.cargo[g] = (u.cargo[g] || 0) + n; room -= n;
+    }
+  }
+  u.home = m.id; u.magFrom = m.id; u.magTo = o.id; u.magS = 0; u.thruTo = 0;
+  m.magThrough = (m.magThrough || 0) + 1; // (pods that went through without stopping: the panel and the tests)
+}
+
+/**
+ * One step of pod u's run along its line's path (its bends included), at speed with power (MAGLEV: accelerating and
+ * braking hard), crawling without; slower round a sharp bend (MAGLEV.corner of its top speed at 75° or more, 0.6 from
+ * 30°) and through a hub it carries on through (planned as it nears it: u.thruTo, so it needn't stop).
+ */
 function movePod(u, dt) {
   const to = getE(u.magTo), from = getE(u.magFrom), bt = BOTS[u.type];
   if (!to || to.dead || !to.built || to.owner !== u.owner || !BDEFS[to.type].magterm) {
     if (!podReverse(u)) { podLost(u); killBot(u, true); }
     return;
   }
-  // The line cut ahead of it: back to where it came from.
-  if (from && magLinked(from, to)) {
+  const linked = !!from && magLinked(from, to);
+  let pts = null;
+  if (linked) {
+    pts = magLinePts(from, to);
+    if (u.magS == null) u.magS = magPathProject(pts, u.x, u.y);
+    // The line cut ahead of it: back to where it came from.
     const A = magKey(from, to), B = A === from ? to : from, cut = magCut(A, B);
     if (cut.length) {
-      const s = podDist(u, A, B), toFar = to === B;
+      const L = magPathLen(pts), s = A === from ? u.magS : L - u.magS, toFar = to === B;
       if (cut.some((c) => (toFar ? c.d > s : c.d < s))) { if (!podReverse(u)) { podLost(u); killBot(u, true); } return; }
     }
+  } else {
+    // Its line suspended under it (the end it came from lost): on along the guideway to the Terminal still standing.
+    for (const m of magMiss(to)) { const q = magMissPts(to, m), d = magPathProject(q, u.x, u.y), [x, y] = magPathAt(q, d); if (dist2(x, y, u.x, u.y) < 0.36) { pts = q; break; } }
+    if (!pts) pts = [[u.x, u.y], [to.x + 0.5, to.y + 0.5]];
+    u.magS = magPathProject(pts, u.x, u.y);
   }
-  const tx = to.x + 0.5, ty = to.y + 0.5, dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
+  const L = magPathLen(pts), left = Math.max(0, L - u.magS);
   const powered = magPowered(to) && (!from || from.dead || magPowered(from)) && !flareOn();
   const vmax = powered ? bt.speed : WORKER_SPEED;
-  const want = Math.min(vmax, Math.sqrt(2 * bt.brake * d) + 0.05);
+  if (linked && !u.thruTo && left < 4) { const pl = podThroughPlan(u, to, from); u.thruTo = pl ? pl.o.id : -1; }
+  const endV = u.thruTo > 0 ? vmax * MAGLEV.corner : 0;
+  let want = Math.min(vmax, Math.sqrt(endV * endV + 2 * bt.brake * left) + 0.05);
+  for (const tr of magPathTurns(pts)) {
+    const ahead = tr.d - u.magS;
+    if (ahead < -0.3 || tr.deg < 30) continue;
+    const cv = vmax * (tr.deg >= 75 ? MAGLEV.corner : 0.6);
+    want = Math.min(want, Math.sqrt(cv * cv + 2 * bt.brake * Math.max(0, ahead)) + 0.05);
+  }
   u.vel = want > (u.vel || 0) ? Math.min(want, (u.vel || 0) + bt.accel * dt) : Math.max(want, (u.vel || 0) - bt.brake * dt);
-  u.face = datan2(dy, dx);
   const step = u.vel * dt;
-  if (step >= d - 0.01) { u.x = tx; u.y = ty; podArrive(u, to); return; }
-  u.x += (dx / d) * step; u.y += (dy / d) * step;
+  if (step >= left - 0.01) {
+    u.x = to.x + 0.5; u.y = to.y + 0.5;
+    if (u.thruTo > 0) {
+      const pl = podThroughPlan(u, to, from);
+      if (pl) { podThrough(u, to, pl); u.vel = Math.min(u.vel, vmax * MAGLEV.corner); return; }
+    }
+    podArrive(u, to);
+    return;
+  }
+  u.magS += step;
+  const [x, y, ux, uy] = magPathAt(pts, u.magS);
+  u.x = x; u.y = y; u.face = datan2(uy, ux);
   u.moved = 1; u.busy = 1;
   u.odo = ((u.odo || 0) + step) % 1000;
   u.crawl = powered ? 0 : 1;
@@ -16521,7 +16761,7 @@ function updateMagTerm(b, dt) {
 function magFixEnd(A) {
   const o = magKeyPartner(A), F = A.magFix;
   if (!o || !F) return A;
-  const d = F.k * MAGLEV.spacing, L = dist(A.x, A.y, o.x, o.y);
+  const d = magSpotD(A, o, F.k), L = magPathLen(magPathOf(A, o));
   return d <= L / 2 ? A : o;
 }
 
@@ -16563,22 +16803,22 @@ function doMagFix(u, t, dt) {
 }
 
 /**
- * The two ends of the line pylon p carries (key end first, each { x, y }), whether it is joined or suspended (a lost
- * end is its old tile), or null: for drawing (the band's height over the ground, the pylon's arm).
+ * The path of the line pylon p carries (key end first: magPathOf), whether it is joined or suspended (a lost end is its
+ * old tile), or null: for drawing (the band's height over the ground, the pylon's arm or portal).
  */
-function magPylonEnds(p) {
+function magPylonPath(p) {
   const K = getE(p.line);
   if (K && !K.dead && BDEFS[K.type].magterm) {
     const o = magKeyPartner(K);
-    if (o) return [K, o];
+    if (o) return magPathOf(K, o);
     const m = magMiss(K).find((q) => !q.near || q.key == null);
-    if (m) return m.near ? [m, K] : [K, m];
+    if (m) return m.near ? magPathOf({ x: m.x, y: m.y, magBends: K.magBends }, K) : magPathOf(K, m);
     return null;
   }
   const S0 = magMissFor(p.line);
   if (!S0) return null;
   const m = magMiss(S0).find((q) => q.near && q.key === p.line);
-  return m ? [m, S0] : null;
+  return m ? magPathOf({ x: m.x, y: m.y, magBends: m.bends }, S0) : null;
 }
 
 /* ------------------------------------------------------------------ flak */
@@ -16873,10 +17113,11 @@ function hashState() {
   for (const b of S.buildings) if (b.line) { int(b.id); int(b.line); } // (Airship lines)
   for (const u of S.bots) if (BOTS[u.type].airship) { int(u.id); int(u.home || 0); num(u.alt || 0); int(u.flight ? u.flight.to : 0); obj(u.cargo); int((u.aboard || []).length); }
   // Maglev lines: the pods (their ends and load), the lines going up and the repairs.
-  for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); }
+  for (const u of S.bots) if (BOTS[u.type].magpod) { int(u.id); int(u.home || 0); int(u.magTo || 0); int(u.magFrom || 0); num(u.vel || 0); obj(u.cargo); num(u.magS ?? -1); int(u.thruTo || 0); }
   for (const b of S.buildings) { if (b.magSite) { int(b.id); int(b.magSite); } if (b.magFrom) { int(b.id); int(b.magFrom); } if (b.magFix) { int(b.id); int(b.magFix.k); int(b.magFix.u); num(b.magFix.since); int(b.magFix.paid); } if (BDEFS[b.type].pylon) { int(b.id); int(b.k || 0); int(b.line || 0); } }
   for (const b of S.buildings) {
-    for (const m of magMiss(b)) { int(b.id); int(m.x); int(m.y); num(m.near); int(m.key || 0); for (const t of m.layout || []) int(t); } // (suspended lines)
+    for (const m of magMiss(b)) { int(b.id); int(m.x); int(m.y); num(m.near); int(m.key || 0); for (const t of m.layout || []) int(t); for (const q of m.bends || []) { int(q[0]); int(q[1]); } } // (suspended lines)
+    if (b.magBends) { int(b.id); for (const q of b.magBends) { int(q[0]); int(q[1]); } } // (a line's bends, on its key end or its site)
     if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
