@@ -5241,6 +5241,7 @@ function checkSave(o) {
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag)) ||
     (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
   for (const u of o.bots) {
+    if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
@@ -5256,6 +5257,7 @@ function checkSave(o) {
   if (o.mission) {
     const M = o.mission;
     if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
+    if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
   // The Hollow's places (S.hollow) and its tremors (S.tremor): plain numbers, every place on the map.

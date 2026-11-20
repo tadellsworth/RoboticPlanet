@@ -100,6 +100,23 @@ function preBuild(owner, type, x, y, opts) {
   return null;
 }
 
+// Arterial's two prepared strips, with a parallel ordinary service road.
+function arterialRoute(base) {
+  return { x: base.x + 5, north: base.y - 20, south: base.y - 5 };
+}
+
+function arterialPairs(P, S, surfaced) {
+  const { x, north, south } = arterialRoute(getE(P.lander));
+  let pairs = 0;
+  for (let y = north; y <= south; y++) {
+    const out = tIdx(x, y), back = tIdx(x - 1, y);
+    const lane = (t, dir) => S.road[t] === dir && wayOwner(t) === P.id &&
+      (S.pave[t] === 3 || (!surfaced && S.paveMark[t] === 2));
+    if (lane(out, 5) && lane(back, 3)) pairs++;
+  }
+  return pairs;
+}
+
 /**
  * Siege Breakers: the Warden's outer works, there from the start whatever it goes on to build itself (since the rival
  * AI got thriftier, the Easy Warden built two turrets and no Wall, its army was gone by minute 8, and "Take out 3 Walls
@@ -625,6 +642,70 @@ const MISSIONS = [
       { kind: 'paths', tier: 2, n: [8, 14, 20],
         hint: '<b>Paths</b> → <b>Pave</b> (<kbd>E</kbd>): drag along busy roads to mark them. Or Roadworks → <b>Every joined road</b>.',
         ui: "#btn-road, #banner-seg [data-v='pave'], #sh-pmode [data-v='all']" },
+    ],
+  },
+
+  {
+    id: 'arterial', name: 'Arterial', chapter: 'Roads and Traffic',
+    brief: 'Accord road standard, arterial class. Open the freight corridor to the survey depot.',
+    intro: [
+      'Zoom out to see both concrete strips and the survey depot. Drag north along the <b>eastern strip</b> with Express to mark both lanes.',
+      'Join both ends to the service road on the east. Close the gap beside each short road stub with <b>Roads</b> to make the ramps.',
+      'A stocked <b>Roadworks</b> and its Paver are ready at the south end. Keep the ordinary service road for Haulers.',
+      'Freight Trucks reach 4½ times off-road speed on Express. Sign gantries rise along the straight pair.',
+      'Survey depot reception board lit. Destinations pending.',
+    ],
+    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 2, biome: 'desert', shape: 0, limit: [0, 0, 14],
+    layout(m, W) {
+      const base = m.bases[0], { x, north, south } = arterialRoute(base);
+      for (let y = north - 1; y <= south + 2; y++) for (let i = base.x; i <= x + 4; i++) {
+        const t = y * W + i;
+        m.terrain[t] = T_GROUND; m.elev[t] = 0; m.ramp[t] = 0;
+        m.res[t] = 0; m.amt[t] = 0; m.grow[t] = 0; m.fert[t] = 0;
+      }
+    },
+    setup(S) {
+      const L = getE(S.players[0].lander), { x, north, south } = arterialRoute(L);
+      const road = (i, j) => { if (!S.bAt[tIdx(i, j)]) setRoad(i, j, true, 0); };
+      for (let y = north; y <= south + 2; y++) road(x + 3, y);
+      road(x + 2, north); road(x + 2, south);
+      for (let y = north - 1; y <= south + 1; y++) { road(x, y); road(x - 1, y); }
+      for (let i = L.x; i <= x + 3; i++) road(i, south + 2);
+      for (let y = south + 3; y < L.y; y++) road(L.x, y);
+      const depot = addBuilding(0, 'depot', x + 4, north, true);
+      S.mission.arterialDepot = depot.id;
+      S.mission.arterialRuns = 0;
+      const works = addBuilding(0, 'roadworks', x + 4, south + 2, true);
+      works.stock.asphalt = 40; works.stock.alloy = 12;
+      addBot(0, 'paver', works.x, works.y);
+      addBot(0, 'truck', L.x, L.y);
+      L.stock.cement += 60;
+      L.stock.fuel += 16;
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'arterialPair', n: 16, text: 'Plan the Express pair along both prepared strips',
+        count: (P, S) => arterialPairs(P, S, false),
+        hint: '<b>Paths</b> → <b>Express</b> (<kbd>Shift</kbd>+<kbd>E</kbd>). Drag north along the east strip, then <b>Build</b>.',
+        ui: "#banner-seg [data-v='express'], #banner-ok" },
+      { kind: 'arterialRamps', n: 2, text: 'Link both ends to the service road',
+        count: (P, S) => {
+          const { x, north, south } = arterialRoute(getE(P.lander));
+          return [north, south].filter((y) => {
+            const t = tIdx(x + 1, y);
+            return S.road[t] && S.pave[t] !== 3 && wayOwner(t) === 0 && S.road[t + 1] && S.road[t - 1];
+          }).length;
+        },
+        hint: '<b>Paths</b> → <b>Roads</b> (<kbd>R</kbd>). Fill the gaps by the two side stubs, then <b>Build</b>.',
+        ui: "#banner-seg [data-v='road'], #banner-ok" },
+      { kind: 'arterialSurface', n: 16, text: 'Surface the full Express pair', at: 'roadworks',
+        count: (P, S) => arterialPairs(P, S, true),
+        hint: 'Tap the stocked Roadworks → <b>Marked roads</b>. Its Paver lays the Express surface.',
+        ui: "#sh-pmode [data-v='marked']" },
+      { kind: 'arterialRuns', n: [2, 3, 4], text: 'Complete {n} Express Freight Truck deliveries to the Depot', at: 'depot',
+        count: (P, S) => S.mission.arterialRuns || 0,
+        hint: 'Tap the far Depot → <b>Supply orders</b>. Press Cement <b>+5</b> until the order reaches 35.',
+        ui: "#sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },
 

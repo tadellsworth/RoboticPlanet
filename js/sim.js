@@ -1784,7 +1784,15 @@ function moveAlong(u, dt) {
     }
     const dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
     if (d > 1e-4) u.face = datan2(dy, dx);
-    if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; }
+    if (d <= step) {
+      if (S.mission?.id === 'arterial' && u.type === 'truck' && u.task?.type === 'haul' && u.task.phase === 'toDst' &&
+        u.task.dst === S.mission.arterialDepot && u.pi > 0 && S.pave[t] === 3) {
+        const from = u.path[u.pi - 1], dir = ROAD_DIRS[S.road[from]];
+        if (S.pave[from] === 3 && dir && t === from + dir[0] + dir[1] * S.W)
+          u.task.arterialTiles = (u.task.arterialTiles || 0) + 1;
+      }
+      u.x = tx; u.y = ty; step -= d; u.pi++;
+    }
     else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
   }
   if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
@@ -3449,6 +3457,8 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (S.mission?.id === 'arterial' && u.owner === 0 && u.type === 'truck' && dst.id === S.mission.arterialDepot &&
+    t.arterialTiles >= EXPRESS.minLen - 1) S.mission.arterialRuns++;
   if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
   if (u.mix) { for (const k in u.mix) { bump(dst.inc, k, -u.mix[k]); bump(dst.stock, k, u.mix[k]); } delete u.mix; }
   u.carry = null;
@@ -16327,6 +16337,7 @@ function hashState() {
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
   int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty);
   if (S.mission?.workerDrop) int(1);
+  if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
@@ -16334,6 +16345,7 @@ function hashState() {
     if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
     if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
+    if (u.task?.arterialTiles) int(u.task.arterialTiles);
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {

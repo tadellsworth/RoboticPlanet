@@ -29,7 +29,7 @@ how goods move.
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
-  Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
+  Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
@@ -326,7 +326,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   js/render.js): one every `GANTRY_GAP` (14) tiles along a straight stretch of a pair, never over an overpass or a bend, a
   steel lattice beam across both carriageways with a blank green board over each lane on its oncoming side, lit at night. Under
   `EXPRESS.minLen` (8) tiles the tool says it's too short to pay. Rivals build none yet; raiders tear lanes up like roads.
-  Allowed in the Hollow. `hashState` covers `S.pave`, `S.paveMark` and `S.xdir`.
+  Allowed in the Hollow. **Arterial** in Roads and Traffic has two prepared strips, a stocked Roadworks and a survey
+  Depot. Mark the pair, close both side gaps, let the Paver surface it, then use the Depot’s Cement supply order.
+  The mission counts completed Freight Truck deliveries that actually travelled along Express. `hashState` covers
+  `S.pave`, `S.paveMark`, `S.xdir` and Arterial’s delivery progress.
 - **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, and through
   rocky crags as a tunnel, so there's no need to switch tools. The **Bridges** tool in Paths plans them too:
   a bridge costs 2 Cement and half an Alloy a tile (cheaper than a Viaduct span: Islands live on bridges), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;

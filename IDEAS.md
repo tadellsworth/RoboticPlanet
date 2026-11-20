@@ -494,9 +494,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the cat's-eyes are drawn live rather than baked, so the Murmur's dark puts them out tile by tile. Open: the rival
     (the Architect lays a pair base to Depot cluster once its late game has a Roadworks; raiders already tear lanes up
     like roads); C's flyover as a later piece over a second lane; the sign gantries (built Nov 19 2026, drawn in code, blank boards); nicer one-way
-    arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
-    a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
-    (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
+    arrows (below) so a lane's arrow fits its markings. **Tutorial done:** Arterial follows Blacktop in Roads and Traffic. It has a stocked
+    Roadworks, a 16-tile Express pair, two side ramps, and Freight Truck deliveries to a survey Depot.
   - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
     shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in

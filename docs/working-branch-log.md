@@ -177,3 +177,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Recycle orders choose the nearest Foundry the unit can reach. Refunds still go into the Foundry and are available for production, spending or pickup. Maglev Pods use their guides and are excluded from the recycle action.
 - Rivals wait for genuinely idle Workers and keep their staffing and builder reserve. Starting a recycle order releases the old job, freight reservations, and any Ammo delivery or convoy escort assigned to that unit.
 - Added `tools/recycle-test.js` for ownership, routing, refunds, AI limits, job cleanup, exact timing, save continuation and lockstep. Help coverage, mission data and lint passed. A Chromium game verified the button, cancellation and refund.
+
+### Arterial Express tutorial
+
+- Added Arterial after Blacktop in Roads and Traffic. The colony has a stocked Roadworks, a Paver, a Freight Truck, and a survey Depot. The goals mark a 16-tile Express pair, connect both side ramps, surface the lanes, and complete 2, 3, or 4 Freight Truck deliveries by difficulty.
+- The delivery goal counts actual loaded travel along Express. The headless Hard run also verified that an earlier delivery along the ordinary service road earns no credit.
+- Played Normal in Chromium from the mission picker and briefing through the recorded campaign victory. Verified the sign gantry and the three qualifying deliveries. The mission data, help coverage and lint checks passed.
