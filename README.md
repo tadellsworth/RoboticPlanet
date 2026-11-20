@@ -1673,7 +1673,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Route to does in Paths, when that way (each Ramp counted as 6 tiles) is at most 60% of the long road and 6 tiles
   shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
-  tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to.
+  tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to. A site waiting four minutes
+  with no construction or incoming deliveries can be abandoned even when the missing road is already on the books.
+  That frees a build slot for work the colony can reach.
 - **The rival's opening** (Medium, Normal and Hard, a mission's rival too: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`):
   its Bot Foundry goes up straight after its first Fuel Station (it lands with what the Foundry costs), and the rest of
   the plan's opening (two Harvesters, a Quarry, a Cement Works, a Mine, a Crystal Tap, a Smelter, a Chip Fab) comes

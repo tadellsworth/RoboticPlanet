@@ -2963,9 +2963,9 @@ function aiRoads(p, me) {
       }
       continue;
     }
-    // Linked by road as far as the planner can tell, yet the Haulers still can't get there after four minutes (the
-    // two disagree, whatever the reason): give the site up rather than let it hold a place for good.
-    if (!route.length && !route.pending && !b.built && b.unlinked && S.time - b.born > 240) {
+    // A road on paper can still leave a site with no deliveries. Give up an idle site after four minutes
+    // even when its road is entirely planned: workers may never be able to lay those tiles.
+    if (!route.length && !b.built && b.unlinked && !b.progress && !sumValues(b.inc) && S.time - b.born > 240) {
       P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + 240 }]);
       demolish(b);
       continue;

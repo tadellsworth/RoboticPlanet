@@ -134,3 +134,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Ran 16 seeded AI matches. All ten Standard matches finished, including two with no water. Chokepoint Wardens kept making some goods after Warbot and trade counts flattened from minute 42 to 45, then one side won before minute 48.
 - On Islands seed 21, both AIs could afford a replacement Mine and still had Ore deposits, but their placement rule required two deposits near one candidate. An isolated experiment allowing one deposit from minute 45 restored Alloy and military production. The match still lacked ferries and was open at minute 55. On Islands seed 17, the leader's Foundry idled while saving for a crossing. Recorded the baselines and experiment in the [late-game stalemate audit](ai-stalemate-audit.md).
+
+### Seeded stalemate and fairness fixes
+
+- Updated `codex/working-branch` to `d56b30e` before fixing the seeded AI stalls. Hollow Medium seed 11 finished at 35:29 after the AI learned to retire disconnected sites waiting indefinitely for planned roads. [Tests and rationale](ai-stalemate-fixes.md)

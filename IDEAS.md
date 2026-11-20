@@ -1067,8 +1067,8 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   should skip one the player can't see; the regional variants (`v=rust|white|bloom` in murmur_moles.js) aren't rendered
   for the game yet; and whether the Murmur's light should show on the minimap at night.
 
-- **AI stalemate: the Hollow, Medium, seed 11** (found Nov 19 2026 merging the codex branch and Express highways): a
-  computer-against-computer game there passes on the codex branch with the rival AI fixes but runs past 45 minutes once
-  the Express highway code is in, though rivals never build Express lanes; these single-seed AI games flip with almost
-  any change. Look at it with the other stalemates (Hollow Small seed 25, Islands). Also: the oil seep shimmer timing
-  check measures a full redraw when the seep is on screen (it passes only when it isn't): rewrite that test's timing.
+- **AI stalemate: the Hollow, Medium, seed 11** (fixed Nov 19): fully planned roads kept disconnected sites from
+  expiring, tying up build slots needed to replace depleted pumps. The AI now retires idle sites in that case.
+  Seed 11 finished at 35:29 in the [retest](docs/ai-stalemate-fixes.md).
+- **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
+  from the shimmer timing.
