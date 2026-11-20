@@ -6527,6 +6527,7 @@ function render(dtReal) {
   drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
+  if (typeof drawWarGround === 'function') drawWarGround(ctx, ox, oy, z, v0, v1); // (shockwaves and fires creeping over scorched grass: js/warfx.js)
   drawCalmGround(ctx, ox, oy, z, inView);
   if (typeof faunaGround === 'function') faunaGround(ctx, ox, oy, z, v0, v1); // the wildlife on the ground and in the trees (looks only: js/wildlife.js)
   drawPlans(ctx, ox, oy, z, inView);
@@ -6828,6 +6829,7 @@ function render(dtReal) {
   if (R.workerView) drawWorkerView(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
+  if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
@@ -11281,6 +11283,9 @@ function scarCrater(t) {
 function paintScars(ctx, i, j, x, y, t) {
   const a = S.ash[t], c = S.crater[t], lo = c & 15;
   const near = (di, dj, f) => inMap(i + di, j + dj) && f(tIdx(i + di, j + dj));
+  // Healing where nobody has fought for a while (js/warfx.js): the scorch and ash fade back into the ground, the mud a little.
+  const heal = typeof warHeal === 'function' ? warHeal(t) : 0, ga = ctx.globalAlpha;
+  if (heal) ctx.globalAlpha = ga * (1 - heal * (a >= SCARS.glass ? 0.45 : 0.82));
   // The grass dying back round the fighting: khaki, dead ground, deeper the more scarred tiles there are round it.
   const bl = scarBlight(i, j);
   if (bl >= 2) scarPatch(ctx, i, j, x, y, (u) => scarBlight(u % S.W, (u / S.W) | 0) >= 2, '#5e4d36', Math.min(0.85, 0.2 * bl));
@@ -11305,6 +11310,7 @@ function paintScars(ctx, i, j, x, y, t) {
   }
   // Torn earth round shell holes, browner with each, churned into mud with its ridges where they overlap (or big
   // craters crowd round).
+  if (heal) ctx.globalAlpha = ga * (1 - heal * 0.7);
   let churn = lo >= 4 ? 1 : 0;
   if (!churn && lo >= 2) { let m = 0; for (const [di, dj] of ARM_DIRS) if (near(di, dj, (u) => S.crater[u])) m++; churn = m >= 3 ? 1 : 0; }
   if (lo && !churn) scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) > 0 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.85, 0.32 + lo * 0.16));
@@ -11317,6 +11323,7 @@ function paintScars(ctx, i, j, x, y, t) {
       ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + w / 2, py - 2 + 4 * hash2(i, j, 590 + n), px + w, py + 1); ctx.stroke();
     }
   }
+  if (heal) ctx.globalAlpha = ga; // (the holes and craters themselves stay)
   // Shell holes: each a dark bowl with a lighter lip of thrown earth (light from the upper left).
   for (let n = 0, m = Math.min(lo, 7); n < m; n++) {
     const r = TP * (0.09 + 0.07 * hash2(i, j, 600 + n)), px = x + r + 2 + hash2(i, j, 610 + n) * (TP - 2 * r - 4), py = y + r + 2 + hash2(i, j, 620 + n) * (TP - 2 * r - 4);
@@ -11334,6 +11341,7 @@ function paintScars(ctx, i, j, x, y, t) {
     scarBigCrater(ctx, C.x * TP, C.y * TP, C.r * TP, u);
   }
   if (clip) ctx.restore();
+  if (heal) { ctx.globalAlpha = ga; paintScarHeal(ctx, i, j, x, y, t, heal); } // (grass and flowers coming up, on the old craters too)
 }
 
 /**

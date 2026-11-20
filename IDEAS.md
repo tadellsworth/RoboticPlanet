@@ -12,6 +12,18 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## The war on the land: open questions (built Nov 20 2026)
+
+Smoke columns, creeping fires, ash and embers, shockwaves and the scars healing are in (`js/warfx.js`, looks only; see
+README, War scars). Open:
+- The healing is display-only, so it isn't shared: a loaded game starts healing afresh, and two devices in a multiplayer
+  game can show different stages. Making it game state (a per-tile healed-at time in `S`, saved and hashed) would fix
+  both, and would let the herds come back to healed ground. Worth it?
+- Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
+- Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
+  (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
+
 ## The owner's ideas, filed Nov 19 2026
 
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
