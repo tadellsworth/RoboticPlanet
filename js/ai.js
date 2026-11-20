@@ -339,7 +339,7 @@ function aiThink(p) {
     if (!aiShut(b)) counts[b.type] = (counts[b.type] || 0) + 1;
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
-  const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
+  const maxSites = p === 0 && P.ai && !S.teams ? 2 : lvl.maxSites;
   if (!few) {
     aiWalls(p);
     aiTurtleWalls(p);
@@ -1046,7 +1046,7 @@ function aiThink(p) {
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
   //    two rivals, the one it's up against is the nearest still in the game.)
   const enemy = rivalOf(p);
-  const rival = (o) => o >= 0 && o !== p && !S.players[o].out && !S.players[o].absent;
+  const rival = (o) => o >= 0 && foes(o, p) && !S.players[o].out && !S.players[o].absent;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
     // missile can knock no lower (see captureOnly).
@@ -1442,7 +1442,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
   let weak = -1, wa = 4;
   for (let o = 0; o < S.players.length; o++) {
     const eL = getE(S.players[o].lander);
-    if (o === p || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
+    if (!foes(o, p) || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
     const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && isArmy(u) ? 1 : 0), 0);
     if (n < wa) { wa = n; weak = o; }
   }
@@ -2839,9 +2839,9 @@ function aiSiege(p) {
 }
 
 /**
- * Answer raids: an enemy rally flag inside our land with warbots at it gets twice as many of ours
- * sent to the same spot (they fight whatever is there), called home once the raiders are gone; none
- * when it can't spare a third more than the flag has.
+ * Answer a hostile rally flag on our land, or cover an ally who hasn't responded yet.
+ * Send up to twice as many warbots and call them back when the raiders are gone. Only commit
+ * if we can spare a third more than the raiders, and keep defenders home under a home alert.
  */
 function aiCounterRaid(p) {
   const P = S.players[p];
@@ -2854,7 +2854,13 @@ function aiCounterRaid(p) {
   for (const r of S.rallies) {
     if (!foes(r.owner, p) || P.counters.some((c) => c.enemy === r.id)) continue;
     const i = Math.floor(r.x), j = Math.floor(r.y);
-    if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
+    if (!inMap(i, j)) continue;
+    const owner = S.owner[tIdx(i, j)];
+    if (owner !== p) {
+      if (owner < 0 || !allies(owner, p) || P.homeCall > S.time) continue;
+      const ally = S.players[owner];
+      if (ally.out || ally.absent || ally.counters?.some((c) => c.enemy === r.id && rallyById(c.mine))) continue;
+    }
     const raiders = rallyMembers(r.id).length;
     // (Only with a third more warbots than the flag has, at least: fewer stay behind their walls. It used to send
     // whatever it had, one warbot as often as not.)

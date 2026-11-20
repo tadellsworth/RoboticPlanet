@@ -2567,8 +2567,11 @@ two western colonies (south-west and north-west) play the two eastern ones (on L
 Teams on, the two southern colonies play the two northern ones). The lobby shows the two teams, people
 first and then computer players, and the host taps a person to move them to the other team (never more than two a
 side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
-computer only ever goes after the other team, and a team game is won by **Capture**: take both enemy Command Bases
-and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+computer only goes after the other team. A computer ally can send spare Warbots against a raid on your land when its
+own base is safe, using a garrison that can reach the raid. Teams get mirrored neutral Trade Posts where the terrain
+allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
+Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
+won by **Capture**: take both enemy Command Bases and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 

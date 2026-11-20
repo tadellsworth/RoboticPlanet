@@ -502,14 +502,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   moving the Port and the trade above that line would let a passive rival on an island map, or short of Crystal, still
   grow. It changes the early missions' rivals, so their mission runs would want checking.
 
-- **The first pair wins most 2 vs 2 games, on every map** (to decide). Computer-only 2 vs 2 games, every rival
-  Balanced and none held back: players 0 and 1 won 10 of 12 (Long Haul 2v2 4 of 4, Twin Valleys 3 of 4, Crossroads 3
-  of 4); by chance on fair maps, about a 2% outcome. The maps are fair (Long Haul 2v2 checked tile for tile against
-  each tile's twins, its Trade Posts in fair pairs), so it's the order of play: players 0 and 1 think first each tick
-  (only one rival AI thinks in a step, ties going to the lowest number), and their robots, made first, move and shoot
-  first. In single player that quietly helps the person's side (player 0 and the ally, player 1). A fix would take turns
-  (start each tick's robots and AIs from a different player, or run them forward one tick and backward the next); it
-  changes every game's course, so seed-pinned tests would need new seeds.
+- **2 vs 2 seat order and ally support.** In the earlier computer-only sample, players 0 and 1 won 10 of 12
+  games. The working branch now rotates tied AI turns across teams and alternates the unit and building update order.
+  It also fixes computer orders aimed at allied buildings, adds help against raiders on an ally's land, and pairs
+  neutral Trade Posts where the terrain allows. See [the replay and map checks](docs/ai-stalemate-fixes.md#4-2v2-fairness).
 
 - **Co-op scenarios** (the owner's idea, Nov 17; decided: the single-player campaign is built first, then these; to
   brainstorm then). Two players together against the computer, as
@@ -622,8 +618,8 @@ or drop.
   a band on a beach out of the guns, with a second Ferry, and goes in when it's strong enough (`aiBeach`); in 12
   Islands test games 4 still ran to 50 minutes (6 before). Left: a rival dug in behind several Mortar Pits, turrets and
   a Keep, where the leader's bands keep taking Outposts that are lost again (historical seeds 2, 5, 17); and a staging
-  island it takes first, which isn't tried. The Ore trap in Medium seed 21 was fixed on the working branch: use a
-  lone deposit if that is all that is reachable and give the first crossing priority on Ore-poor islands. The
+  island it takes first, which isn't tried. The working branch fixes the Ore trap in Medium seed 21 by using a lone deposit when that is all that is reachable
+  and giving the first crossing priority on Ore-poor islands. The
   current seed 21 ends at 20:53 after four landing runs. See [the seeded replay notes](docs/ai-stalemate-fixes.md#3-islands-crossings).
 - **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
