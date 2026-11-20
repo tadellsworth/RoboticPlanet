@@ -100,6 +100,23 @@ function preBuild(owner, type, x, y, opts) {
   return null;
 }
 
+// Arterial's two prepared strips, with a parallel ordinary service road.
+function arterialRoute(base) {
+  return { x: base.x + 5, north: base.y - 20, south: base.y - 5 };
+}
+
+function arterialPairs(P, S, surfaced) {
+  const { x, north, south } = arterialRoute(getE(P.lander));
+  let pairs = 0;
+  for (let y = north; y <= south; y++) {
+    const out = tIdx(x, y), back = tIdx(x - 1, y);
+    const lane = (t, dir) => S.road[t] === dir && wayOwner(t) === P.id &&
+      (S.pave[t] === 3 || (!surfaced && S.paveMark[t] === 2));
+    if (lane(out, 5) && lane(back, 3)) pairs++;
+  }
+  return pairs;
+}
+
 /**
  * Siege Breakers: the Warden's outer works, there from the start whatever it goes on to build itself (since the rival
  * AI got thriftier, the Easy Warden built two turrets and no Wall, its army was gone by minute 8, and "Take out 3 Walls
@@ -123,7 +140,7 @@ function siegeWorks(S, diff) {
 
 /**
  * Mooring Lines: a foothold on the nearest mesa with Crystal, 14 to 30 tiles from the Command Base L across the canyon
- * (another area, with room round it): a Drop Outpost as a Cargo Plane drops one (supplied by air, holding the Cement and
+ * (another area, with room round it): a Drop Outpost as a Cargo Plane drops one (holding the Cement and
  * Alloy for a Mooring Mast, Fuel for its chargers), with two Workers who build there by hand.
  */
 function mooringFoothold(S, L) {
@@ -144,7 +161,7 @@ function mooringFoothold(S, L) {
   }
   if (best === null) return null;
   const b = addBuilding(0, 'dropost', best % S.W, (best / S.W) | 0, true);
-  b.airSupply = true; b.keep = { fuel: 3 }; b.deployedAt = S.time;
+  b.keep = { fuel: 3 }; b.deployedAt = S.time;
   b.stock.cement = 10; b.stock.alloy = 6; b.stock.fuel = 6;
   computeTerritory(); computeZones();
   for (let k = 0; k < 2; k++) { const w = addBot(0, 'worker', b.x, b.y); enterBuilding(w, b); }
@@ -635,6 +652,70 @@ const MISSIONS = [
     ],
   },
 
+  {
+    id: 'arterial', name: 'Arterial', chapter: 'Roads and Traffic',
+    brief: 'Accord road standard, arterial class. Open the freight corridor to the survey depot.',
+    intro: [
+      'Zoom out to see both concrete strips and the survey depot. Drag north along the <b>eastern strip</b> with Express to mark both lanes.',
+      'Join both ends to the service road on the east. Close the gap beside each short road stub with <b>Roads</b> to make the ramps.',
+      'A stocked <b>Roadworks</b> and its Paver are ready at the south end. Keep the ordinary service road for Haulers.',
+      'Freight Trucks reach 4½ times off-road speed on Express. Sign gantries rise along the straight pair.',
+      'Survey depot reception board lit. Destinations pending.',
+    ],
+    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 2, biome: 'desert', shape: 0, limit: [0, 0, 14],
+    layout(m, W) {
+      const base = m.bases[0], { x, north, south } = arterialRoute(base);
+      for (let y = north - 1; y <= south + 2; y++) for (let i = base.x; i <= x + 4; i++) {
+        const t = y * W + i;
+        m.terrain[t] = T_GROUND; m.elev[t] = 0; m.ramp[t] = 0;
+        m.res[t] = 0; m.amt[t] = 0; m.grow[t] = 0; m.fert[t] = 0;
+      }
+    },
+    setup(S) {
+      const L = getE(S.players[0].lander), { x, north, south } = arterialRoute(L);
+      const road = (i, j) => { if (!S.bAt[tIdx(i, j)]) setRoad(i, j, true, 0); };
+      for (let y = north; y <= south + 2; y++) road(x + 3, y);
+      road(x + 2, north); road(x + 2, south);
+      for (let y = north - 1; y <= south + 1; y++) { road(x, y); road(x - 1, y); }
+      for (let i = L.x; i <= x + 3; i++) road(i, south + 2);
+      for (let y = south + 3; y < L.y; y++) road(L.x, y);
+      const depot = addBuilding(0, 'depot', x + 4, north, true);
+      S.mission.arterialDepot = depot.id;
+      S.mission.arterialRuns = 0;
+      const works = addBuilding(0, 'roadworks', x + 4, south + 2, true);
+      works.stock.asphalt = 40; works.stock.alloy = 12;
+      addBot(0, 'paver', works.x, works.y);
+      addBot(0, 'truck', L.x, L.y);
+      L.stock.cement += 60;
+      L.stock.fuel += 16;
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'arterialPair', n: 16, text: 'Plan the Express pair along both prepared strips',
+        count: (P, S) => arterialPairs(P, S, false),
+        hint: '<b>Paths</b> → <b>Express</b> (<kbd>Shift</kbd>+<kbd>E</kbd>). Drag north along the east strip, then <b>Build</b>.',
+        ui: "#banner-seg [data-v='express'], #banner-ok" },
+      { kind: 'arterialRamps', n: 2, text: 'Link both ends to the service road',
+        count: (P, S) => {
+          const { x, north, south } = arterialRoute(getE(P.lander));
+          return [north, south].filter((y) => {
+            const t = tIdx(x + 1, y);
+            return S.road[t] && S.pave[t] !== 3 && wayOwner(t) === 0 && S.road[t + 1] && S.road[t - 1];
+          }).length;
+        },
+        hint: '<b>Paths</b> → <b>Roads</b> (<kbd>R</kbd>). Fill the gaps by the two side stubs, then <b>Build</b>.',
+        ui: "#banner-seg [data-v='road'], #banner-ok" },
+      { kind: 'arterialSurface', n: 16, text: 'Surface the full Express pair', at: 'roadworks',
+        count: (P, S) => arterialPairs(P, S, true),
+        hint: 'Tap the stocked Roadworks → <b>Marked roads</b>. Its Paver lays the Express surface.',
+        ui: "#sh-pmode [data-v='marked']" },
+      { kind: 'arterialRuns', n: [2, 3, 4], text: 'Complete {n} Express Freight Truck deliveries to the Depot', at: 'depot',
+        count: (P, S) => S.mission.arterialRuns || 0,
+        hint: 'Tap the far Depot → <b>Supply orders</b>. Press Cement <b>+5</b> until the order reaches 35.',
+        ui: "#sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
+    ],
+  },
+
   // Chapter 4, Industry and Trade. Pipelines and power, research, far Depots and trucks, railways, Road Trains, trade and planet events.
   {
     id: 'pipeline', name: 'Pipe Dreams', chapter: 'Industry and Trade',
@@ -1035,7 +1116,7 @@ const MISSIONS = [
       'A <b>Crawler</b> is a base on tracks: where it stops it unfolds into a Depot, Fuel Station and Outpost.',
       'An <b>Airfield</b>\'s Cargo Plane flies over anything and drops its load by parachute.',
       'It drops a Drop Outpost on open ground nobody else holds, or two Workers on any open ground.',
-      'Places no road reaches, switched to <b>Supply by air</b>, get what they are short of, 8 goods a flight.',
+      'Freight parachutes land at <b>Trade Terminals</b> with Supply by air turned on.',
       'In Versus, planes also drop warbots, and Vulcan Bombers fly from the Airfield.',
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
@@ -1072,16 +1153,10 @@ const MISSIONS = [
       { kind: 'built', type: 'dropost', n: 1, text: 'Drop an Outpost by parachute', at: 'airfield',
         hint: 'Tap the Airfield → <b>Hangar</b>: Cargo Planes <b>+1</b>. Then <b>Drop Outpost</b>, and tap open ground.',
         ui: "#sh-yard .order-row[data-k='cargoplane'] [data-d='1'], #sh-air [data-k='outpost']" },
-      { kind: 'airSupplied', n: 1, text: 'Supply a building by air', at: 'crawlerbase',
-        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before. Only a place
-        // switched to Supply by air gets crates, so a road reaching it afterwards, which switches that off, doesn't undo
-        // this. A site in the Drop Outpost's land, supplied by air, counts too.)
-        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airIn !== undefined).length,
-        // (Off the plateau no road reaches the Crawler unless you lay one, so its supply orders come by plane only, once
-        // one is based. With a road from home to it On does nothing, as Haulers supply it, and its panel says so: pack it
-        // up and drive it on past the roads, hence "out past your roads".)
-        hint: 'Tap deployed Crawler beyond roads → <b>Supply by air</b>: <b>On</b>. <b>Supply orders</b>: Cement <b>+5</b> for an air drop.',
-        ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
+      { kind: 'airWorkers', n: 1, text: 'Land Workers by parachute', at: 'airfield',
+        count: (P, S) => S.mission.workerDrop ? 1 : 0,
+        hint: 'Tap the Airfield → <b>Drop 2 Workers</b> → tap open ground near your Drop Outpost.',
+        ui: "#sh-air [data-k='worker']" },
     ],
   },
 

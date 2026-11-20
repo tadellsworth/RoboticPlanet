@@ -29,7 +29,7 @@ how goods move.
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
-  Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
+  Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
@@ -71,8 +71,17 @@ how goods move.
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
 Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
-Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
-Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
+Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
+Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
+two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
+Planetary budget. Matches with three or four colonies can use Immense.
+With Planetary events enabled, Immense Ringfall targets up to nine sites per colony's share, and Planetary up to
+eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
+type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
+The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
+scenery. The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
+and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
 Rust (red desert), Greenreach (forest), the Polar Caps (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, Steamwells (geothermal basin), the Shoals (tropical islands), the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
@@ -87,6 +96,11 @@ Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar;
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for. None lie on a
 Trade Post's ground (its no-fire zone, where nothing but a Trade Terminal can be built): a deposit the map put there is
 moved just off it, the same kind and amount (`clearCalmGround`; see the Trade Terminal row).
+
+**Grand Canyon** has rocky shelves below the rims, then a canyon floor that opens into broad, fertile bends.
+The river splits around two low islands and rejoins at the ends. Each rim has two single-lane natural descents,
+a switchback and a side-canyon trail. Fords link the banks on foot, and Ports can use the continuous channel.
+Players can cut additional ramps or build crossings through Paths.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
@@ -124,7 +138,12 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-Single-player progress auto-saves every in-game minute. **Restore checkpoint** in the pause menu, on the game-over screen, or on the main menu lists recent solo checkpoints on this device. **Continue** also saves when you leave. With computer rivals in a custom game, **Rival AI difficulty** in the pause menu changes their level. In multiplayer the host sets it for everyone.
+In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Easy, Medium, Normal and Hard
+apply to all computer colonies from that point in the match. In multiplayer only the host can send the
+`rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
+and production without changing stock already on the map. Missions keep their selected difficulty.
+
+Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 
 ## How to play
 
@@ -253,7 +272,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   panel has **Recycle this unit** (**Delete**), a selection of warbots **Recycle these N units** on the selection bar
   (a second tap to confirm; Undo), and Your robots **Recycle spare Workers** (orders `recycle`, `unrecycle`,
   `recycleSpare`). The robot drops what it was doing (a load goes down in crates), heads for the nearest finished Bot
-  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and there stands
+  Foundry it can reach (road vehicles need a connected road route: `recycleFoundry`) with task `recycle`, and there stands
   at the Foundry while it is taken apart: `RECYCLE_TIME` (2 s) for each round of parts (`recycleTime`; `task.t` counts
   them, `recyclingNow`; a Worker or Warbot 2 s, a Crawler 12 s), sparks flying and the robot fading as it goes, the
   Foundry carrying on with its own work and taking apart any number at once. It can be shot meanwhile, and a damaged
@@ -265,8 +284,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`stopRecycle`) or any other order calls it off; its Foundry wrecked, captured or dismantled on the way, it stops
   where it is (`releaseBotsFrom`). A Worker or Hauler that takes cover from enemy warbots on the way (`takeCover`) sets
   off again once they've gone (`u.recycleTo`), and isn't given other work meanwhile. Robots on their way don't count in
-  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, trains and the Murmur
-  can't be recycled (`recyclable`). Spare Workers: past one for each building that takes a Worker (sites too) and
+  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, Freight Trains, Maglev Pods and the Murmur can't be recycled
+  (`recyclable`). The refund can be used at the Foundry or carried to the rest of the colony. Spare Workers: past
+  one for each building that takes a Worker (sites too) and
   `MIN_FREE_WORKERS` + `RECYCLE_KEEP` (4) free for building; picked idle first, never one running a building.
 - **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
@@ -342,7 +362,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   js/render.js): one every `GANTRY_GAP` (14) tiles along a straight stretch of a pair, never over an overpass or a bend, a
   steel lattice beam across both carriageways with a blank green board over each lane on its oncoming side, lit at night. Under
   `EXPRESS.minLen` (8) tiles the tool says it's too short to pay. Rivals build none yet; raiders tear lanes up like roads.
-  Allowed in the Hollow. `hashState` covers `S.pave`, `S.paveMark` and `S.xdir`.
+  Allowed in the Hollow. **Arterial** in Roads and Traffic has two prepared strips, a stocked Roadworks and a survey
+  Depot. Mark the pair, close both side gaps, let the Paver surface it, then use the Depot’s Cement supply order.
+  The mission counts completed Freight Truck deliveries that actually travelled along Express. `hashState` covers
+  `S.pave`, `S.paveMark`, `S.xdir` and Arterial’s delivery progress.
 - **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, and through
   rocky crags as a tunnel, so there's no need to switch tools. The **Bridges** tool in Paths plans them too:
   a bridge costs 2 Cement and half an Alloy a tile (cheaper than a Viaduct span: Islands live on bridges), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
@@ -455,22 +478,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`S.drops`, `AIR_DROP_FALL` s to come down): a **Drop Outpost** kit (6 Cement, 3 Alloy, paid from storage: a small
   outpost on any open ground nobody else holds; `terr` 4, garrison 2, `ammoStock` 4, storage, a 2-slot Fuel charger),
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
-  `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
-  air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`), until a
-  road from home reaches the place (`onHomeNet`: a road, not a ferry line, the sea or a Rail Station's conveyor): then
-  it switches itself off in `dispatch`, Drop Outposts and sites in their land too, and Haulers supply it (a finished
-  building's owner is told; a site goes over quietly). Where a road from home already reaches, the `airSupply` order
-  can't switch it on (its On button is greyed out, `airSupplyRoad`). A building that changes hands loses it (it was its
-  old owner's choice), a Drop Outpost apart. Only the places switched to it are looked at. The
-  places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
-  is when crates last landed there). A
-  supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
-  the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
-  art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
-  Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
-  short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` (12) Fuel for its planes (`airKeep`), and haulers
-  (Tankers, for the Fuel) bring it.
+  `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 outgoing trade goods for a finished **Trade Terminal**
+  (`u.cargo`). Set a trade route and enable **Supply by air** on the Terminal. Its nearest Airfield with a Cargo Plane
+  stocks what the route needs (`airWant`), then drops it on the Terminal pad. The plane takes its cargo home if the
+  recipient is lost before release. Once a road reaches the Terminal, supply switches back to ground transport.
+  Use roads, a local source of goods, or another freight link to supply a Drop Outpost and nearby construction.
   A flight (`flyStep`): it rolls down the runway from its head gathering speed (`ROLL_ACCEL`), lifts off at the far end,
   climbs (`PLANE_CLIMB` s) and turns at up to `PLANE_TURN` (never circling a spot it can't turn onto: `steerPlane`), drops
   over the spot, flies a circuit round to line up with the runway (`headHome`), comes down on final, touches down at the
@@ -773,6 +785,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Crawlers** (`updateCrawler`, `deployCrawler`, `packCrawler`): a slow tracked bot that drives off-road and deploys
   into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
   turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.
+- **Dismantled crates:** idle Haulers take reachable crates before their regular jobs. Workers can carry the remainder
+  when Haulers cannot take it, after construction, staffing and other local Worker jobs.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
@@ -904,9 +918,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
     menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
-    mound as a nest everywhere), the night windows are surges (the only time packs come, as everywhere; once the Deep's mound has lost a quarter of its
-    armor it also sends packs of its own, bigger and more often as the armor falls: every 32, 20 then 10 seconds at
-    25%, 50% and 80% lost, `deepSurgeAt`/`deepSurgeTier`), and
+    mound as a nest everywhere), the night windows are surges. The Deep also sends local packs of its own: two every 32 seconds below
+    75% armor, three every 24 seconds below two-thirds, and four every 16 seconds below one-third (while under its
+    live guard cap). Its violet pulses grow stronger and each burst rumbles deeper (`deepSurgeAt`/`deepSurgeTier`), and
     `veinLure` still pulls packs and tunnels toward a lured colony's veins (`murmurPrey`, `murmurGoals`). In Colony,
     `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
     night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,
@@ -921,6 +935,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore. A fifth to four fifths of a map's
     Ore, and up to half its oil, lies within that many tiles of a nest (more on Small maps), so once its own run low it
     clears the nests sitting on them first (`aiNestRiches`, see The Murmur).
+    With parts scarce and a clear lead, a rival can gather a smaller armed force for the final push if it can
+    beat the guns and garrison. At low Fuel, key industry Workers keep working if the available charge would not
+    repay the trip. An Ore-starved rival can mine a single accessible vein and ignores distant, unclaimed veins
+    when judging which nests to clear.
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
     Refinery, the Refinery comes first after the opening and is started as soon as the Cement is there, its Alloy
     delivered first (as a turret's is: `oilFirst` in `aiThink`). Its Oil Pumps go to the seeps nearest home: a tile
@@ -1176,7 +1194,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Fuel Tank** (`fueltank`: `tank: 120`, `store`, `explodes`; Gather tab, T; 5 Cement, 2 Alloy): the hub of an **oil
   bloc**. Storage for Crude and Fuel only (`storeTakes`: liquids, never past its cap, counting what's on the way:
   `tankRoom`; `storeAccepts` leaves it out, so no other good is ever sent there, and it takes no supply orders). A pump's
-  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank (both `explodes`). A line with a Fuel Tank
+  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank. It appears when there are new pipe tiles to plan and no adjacent Refinery or Fuel Tank to take Crude directly. A line with a Fuel Tank
   on it moves `PIPE_RATE_TANK` (8) Crude and 8 Fuel a second instead of 4, and fills its Fuel Tanks before other storage
   (`updatePipes`). It takes part in feed links (below): it feeds Crude, and Fuel, to up to `FEED_MAX_TANK` (4) neighbours
   that use them, and takes in by conveyor only what a neighbour makes (an Oil Pump's Crude, a Refinery's Fuel; a
@@ -1206,8 +1224,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Placing a building shows the links it would make as green arrows (`feedPreview`); a building's panel lists what it
   feeds and what feeds it; the belts are drawn over the gap between buildings, a crate riding across with each good
   (`drawFeeds`, `drawFeedLink`). The AI puts its factories beside their suppliers (`AI_FEED` in `aiSearchSpot`).
-  **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
-  away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
+  **Smoke:** trucks emit faint diesel puffs, with at most 48 active at once, and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
   `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).
   Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
   Fuel Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
@@ -1242,9 +1259,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
-- **Saving:** the game saves single-player progress every in-game minute and keeps the latest five checkpoints.
-  Use **Restore checkpoint** in the pause menu or on the game-over screen. The main menu opens the latest saved solo
-  checkpoint history, even after a reload following defeat. Switching away or closing the tab also
+- **Saving:** solo games keep up to five restore points about a game minute apart in localStorage. Pick one by
+  its age and choose **Restore** in the pause menu or on the game-over screen, then confirm. The main menu opens the
+  latest solo history after a reload, and **Continue** still opens older single autosaves. If storage is tight, the
+  game keeps fewer points. Multiplayer hides restore points. Switching away or closing the tab also
   updates the save used by **Continue**. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
@@ -1532,7 +1550,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   its farms and Grove Planters, sites too, and one more) that have stood idle two minutes (or any with nothing to do
   while it has three or more past those), then Workers past the ones its buildings call for and 4 more, then Haulers
   past the ones it wants and 2 more (4 at least), go to its Foundry to be recycled, at most 4 on their way at once and
-  never one at work or carrying goods, until the room is there; its Foundry fills it with warbots. It scraps the same
+  never one at work, carrying goods, fighting, or in transit on another vehicle. Spare Workers must be idle
+  for two minutes, or one minute during a parts shortage. Its Foundry fills the freed places with warbots. It scraps the same
   spares when it's starved (no Alloy or no Chips for a minute and a half, `P.dry`, with under one a minute being made;
   short of Chips, only vehicles, which give Chips back), on every level, Easy too (the owner's call), and on
   Medium and up one vehicle, Agribot or Hauler idle five
@@ -1999,7 +2018,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Argos), then a puff and a glow, with a soft whoosh (`sfx('drizzle')`, heard on screen only) and a ring pulsing on the
   minimap for 12 s; no message. None falls while `DRIZZLE_CAP` (6) of its deposits lie unclaimed. (Tuned so computer-vs-computer games end as often as without it: the first version, every 120–200 s from minute 3, cap 8, half a Ringfall deposit, left more of them undecided at an hour.) State: `S.drizzle`
   (`next`, `n`, `spots`, `fall`), saved, checked (`checkSave`) and in `hashState`; a save without it starts the clock
-  from when it loads. The rival finds the deposits as any other (`aiSearchSpot` reads `S.res`).
+  from when it loads. Rivals give active drizzle deposits extra weight for Outposts, Ore Mines and Crystal Taps when
+  that mineral runs low. Outposts prefer neutral drops they can bring inside their border. Gatherers can use a
+  single surviving drop tile if their workers have a short walk to it. Existing coverage, enemy fire and road
+  access still matter (`aiDrizzleTargets`, `aiSearchSpot`).
+  In 12 matched Normal Versus games on Medium Long haul, Lakes and Standard (seeds 11, 21, 25 and 37 on each,
+  60-minute cap), rivals mined 158 drizzle Ore and 108 drizzle Crystal, up from 38 and 46. Undecided games stayed at
+  1/12 and the mean game length was 22:36 before and 22:56 after, counting the capped game at 60 minutes.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
@@ -2559,6 +2584,8 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
+Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
+
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
   drives), including the 3D Pulse Turret and its heads, every Wall and Gate piece, the Viaduct's abutments and the
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
@@ -2671,7 +2698,7 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   (`faunaCarrion`), as any wreck's do.
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
-  it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light
+  it, shines a short beam from its mast, up to four tiles or 16% of the view height, a hint of its owner's colour in it, with a soft halo, light
   on its pad, and a slow pulse every beacon keeps in time (`AMB.pulse`). In the Hollow it goes up its breach (`breachAt`);
   a base under rock would only light the roof. When your own base's beacon comes on in view, a soft low hum
   (`ambHum`, through `sfx('beacon')` and `mapVoice`).

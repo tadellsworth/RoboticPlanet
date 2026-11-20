@@ -36,6 +36,7 @@ function simStep(dt) {
   for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
+    if (u.idleSince !== undefined && aiBusy(u)) u.idleSince = undefined;
     if (u.ferryWait) { ferryPassenger(u); continue; }
     if (u.dropping) continue; // coming down by parachute (see updateDrops)
     if (isArmy(u)) updateWarbot(u, dt); else if (BOTS[u.type].siege) updateRocket(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
@@ -971,8 +972,9 @@ function standingBy(b) {
  * out of Fuel with more on its way, the wait for it. So a busy Fuel Station at home beats a long walk out to an
  * empty one (a queue there costs seconds; a walk across the map, much longer and half the charge). One an enemy
  * gun covers (or with enemy warbots about) only as a last resort. maxWalk: seconds; none further (a top-up).
+ * With workTrip, a staffed Worker stays at work if a charger has too little Fuel for a useful round trip.
  */
-function findCharger(u, maxWalk) {
+function findCharger(u, maxWalk, workTrip) {
   let best = null, bs = Infinity, queue = null;
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   const spd = (BOTS[u.type].speed || WORKER_SPEED) * batFactor(u), need = Math.max(10, 100 - (u.bat ?? 100));
@@ -987,6 +989,13 @@ function findCharger(u, maxWalk) {
     const wait = murmurCutOn(b) ? b.murCut - S.time : chargerDry(b) ? fuelEta(b) : 0; // (one the Murmur cut: dark till dawn)
     if (wait === Infinity) continue;
     if (!queue) queue = chargeQueue(u);
+    // A staffed building can work slowly. Don't leave it for a trip whose share of the remaining
+    // Fuel won't get the worker back with enough charge to do any better.
+    if (workTrip && ch.fuel) {
+      const energy = (b.energy || 0) + (b.stock.fuel || 0) * FUEL_ENERGY;
+      const useful = Math.max(0, BATTERY.low - (u.bat ?? 100)) + 2 * walk * BATTERY.workerMove;
+      if (energy < useful * ((queue.get(b.id) || 0) + 1)) continue;
+    }
     const rate = ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / ((queue.get(b.id) || 0) + 1));
     const s = Math.max(walk, wait) + need / rate + (gunShy(u) && shunned(b) ? 600 : 0);
     if (s < bs) { bs = s; best = b; }
@@ -1168,7 +1177,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
+  const o = { who: u.owner, breach: isArmy(u) && botArmed(u) && u.task?.type !== 'recycle', noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
@@ -1780,7 +1789,15 @@ function moveAlong(u, dt) {
     }
     const dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
     if (d > 1e-4) u.face = datan2(dy, dx);
-    if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; }
+    if (d <= step) {
+      if (S.mission?.id === 'arterial' && u.type === 'truck' && u.task?.type === 'haul' && u.task.phase === 'toDst' &&
+        u.task.dst === S.mission.arterialDepot && u.pi > 0 && S.pave[t] === 3) {
+        const from = u.path[u.pi - 1], dir = ROAD_DIRS[S.road[from]];
+        if (S.pave[from] === 3 && dir && t === from + dir[0] + dir[1] * S.W)
+          u.task.arterialTiles = (u.task.arterialTiles || 0) + 1;
+      }
+      u.x = tx; u.y = ty; step -= d; u.pi++;
+    }
     else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
   }
   if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
@@ -1916,9 +1933,11 @@ function dispatch(p) {
   // the sea or a conveyor): Haulers supply it from then on. Only places switched to it are looked at. A finished
   // building's owner hears of it; a site goes over quietly.
   for (const b of S.buildings) {
-    if (!b.airSupply || b.dead || b.owner !== p || !onHomeNet(b)) continue;
+    if (!b.airSupply || b.dead || b.owner !== p) continue;
+    const road = onHomeNet(b);
+    if (airSuppliable(b) && !road) continue;
     b.airSupply = false;
-    if (b.built) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
+    if (road && airSuppliable(b)) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
   }
   // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
   // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
@@ -2048,13 +2067,11 @@ function dispatch(p) {
   }
   const tankerReach = (src, dst) => fleetReaches(tankNets, src, dst);
 
-  // Dismantled buildings' crates get first call on the colony's idle haulers. (Not a rival's: it dismantles every
-  // gatherer that runs dry and every stuck site, and its haulers then fetched those crates before the Fiber and Alloy
-  // its new sites were waiting for: a colony on Crossroads stalled from minute 4 and fell at 13.)
-  function collectCrates(priority) {
+  // Dismantled buildings get first call on idle Haulers. Workers help with what's left after their normal work.
+  function collectCrates(priority, workersOnly = false) {
     for (const l of S.loot || []) {
       if (!idle.length) return;
-      if ((l.dismantled === p && !P.ai) !== priority) continue;
+      if ((l.dismantled === p) !== priority) continue;
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
@@ -2066,15 +2083,20 @@ function dispatch(p) {
           .filter(({left}) => left > 0).sort((a, b) => b.left - a.left);
         let chosen = -1, good, amount;
         for (const {g, left} of goods) {
-          const liq = isLiquid(g), wants = liq ? [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul']
+          const liq = isLiquid(g);
+          const wants = workersOnly ? ['worker'] : liq ? (priority ? ['haul', 'tanker'] : [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul'])
             : left >= TRUCK_MIN_LOAD * 2 ? (priority ? ['haul', 'truck'] : ['truck', 'haul']) : ['haul'];
           let bd = Infinity;
           for (const want of wants) {
             for (let k = 0; k < idle.length; k++) {
               const u = idle[k], bt = BOTS[u.type];
               if (u.failGoal === tIdx(l.x, l.y) && u.failUntil > S.time) continue;
-              if (bt.rail || bt.sea || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
-              if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
+              if (want === 'worker') {
+                if (u.type !== 'worker' || zoneAt(u.x, u.y) !== zoneAt(l.x, l.y) || !crateStore(u, g, l, 1)) continue;
+              } else {
+                if (bt.rail || bt.sea || bt.train || !(bt.haul || (!priority && P.noHaulers && bt.build))) continue;
+                if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
+              }
               if (roadBound(u) && !botNets(u).some((n) => (bt.truck ? netsT : nets).includes(n))) continue;
               const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
               if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u)) continue;
@@ -2503,6 +2525,7 @@ function dispatch(p) {
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
+  collectCrates(true, true);
   // 7) Haulers with nothing else to do salvage scrap near a road on the colony's land (War scars: see salvageRun).
   salvageRun(p, idle);
 }
@@ -3280,7 +3303,7 @@ function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
   if (BOTS[u.type].airship) { updateAirship(u, dt); return; }
-  if (BOTS[u.type].magpod) { updatePod(u, dt); return; }
+  if (BOTS[u.type].magpod) { if (recycling(u)) stopRecycle(u); updatePod(u, dt); return; }
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   if (BOTS[u.type].rail) { if (u.armorOrder) fitTrainArmor(u, dt); if (u.armored) trainGuns(u, dt); }
@@ -3473,7 +3496,7 @@ function doHaul(u, t, dt) {
         const want = t.mix[k], m = Math.min(want, Math.floor(src.stock[k] || 0));
         bump(src.res, k, -want);
         if (m < want) bump(dst.inc, k, m - want);
-        if (m > 0) { bump(src.stock, k, -m); t.mix[k] = m; mixGot += m; } else delete t.mix[k];
+        if (m > 0) { bump(src.stock, k, -m); if (src.loot?.[k]) bump(src.loot, k, -m); t.mix[k] = m; mixGot += m; } else delete t.mix[k];
       }
       if (Object.keys(t.mix).length) u.mix = Object.assign({}, t.mix); else delete t.mix;
     }
@@ -3500,6 +3523,8 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (S.mission?.id === 'arterial' && u.owner === 0 && u.type === 'truck' && dst.id === S.mission.arterialDepot &&
+    t.arterialTiles >= EXPRESS.minLen - 1) S.mission.arterialRuns++;
   if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
   if (u.mix) { for (const k in u.mix) { bump(dst.inc, k, -u.mix[k]); bump(dst.stock, k, u.mix[k]); } delete u.mix; }
   u.carry = null;
@@ -3890,7 +3915,8 @@ function doStaff(u, t, dt) {
       if (t.wait > 0) return;
       if ((u.bat ?? 100) < BATTERY.low || ((u.bat ?? 100) < IDLE_TOP && standingBy(b))) {
         // Step out to recharge, then come back to this job (early, while there is nothing to do here: see standingBy).
-        const c = findCharger(u);
+        const essential = def.pump || b.type === 'refinery' || b.type === 'smelter' || b.type === 'fab';
+        const c = findCharger(u, undefined, essential && hollowOn() && S.players[u.owner].ai);
         t.trip = false;
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;
@@ -4285,7 +4311,7 @@ function produce(b, def, dt) {
   b.limitT = 0;
   dt *= batFactor(op);
   for (const g in def.inp) {
-    if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name + (b.type === 'smelter' && g === 'ore' ? ': it smelts 8 Ore a minute, so two or three Ore Mines keep one busy' : ''); return; }
+    if ((b.stock[g] || 0) - (def.bots ? b.res[g] || 0 : 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name + (b.type === 'smelter' && g === 'ore' ? ': it smelts 8 Ore a minute, so two or three Ore Mines keep one busy' : ''); return; }
   }
   if (def.make) {
     for (const g in def.make) {
@@ -4299,7 +4325,14 @@ function produce(b, def, dt) {
   b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city; // (a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
-  for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
+  for (const g in def.inp) {
+    if (def.bots && b.loot?.[g]) {
+      const ordinary = Math.max(0, (b.stock[g] || 0) - b.loot[g]);
+      bump(b.loot, g, -Math.max(0, def.inp[g] - ordinary));
+    }
+    bump(b.stock, g, -def.inp[g]);
+    usedGood(b.owner, g, def.inp[g]);
+  }
   if (def.pump) {
     const seep = pumpSeep(b);
     if (--S.amt[seep] <= 0) { S.amt[seep] = 0; S.res[seep] = R_NONE; markDirty(seep % S.W, (seep / S.W) | 0); }
@@ -4423,7 +4456,7 @@ function spawnFromFoundry(b) {
 /** Could robot u be taken to a Bot Foundry and recycled? Not planes, ships, trains or the Murmur: nothing that can't get there. */
 function recyclable(u) {
   const bt = u && BOTS[u.type];
-  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
+  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
 }
 
 /** Is robot u on its way to be recycled (or waiting to set off again once it's safe)? */
@@ -4453,26 +4486,27 @@ function recycleText(kind) { const got = recycleYield(kind); return Object.keys(
 
 /** The nearest finished Bot Foundry of u's owner that robot u can get to (on its ground; a road vehicle, by road), or null. */
 function recycleFoundry(u) {
-  const here = u.inside ? getE(u.inside) : null, x = here ? here.x + 0.5 : u.x, y = here ? here.y + 0.5 : u.y;
-  const zone = S.zone[tIdx(Math.floor(x), Math.floor(y))], road = roadBound(u);
-  let best = null, bd = Infinity;
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].bots || evacuated(b)) continue;
-    if (S.zone[tIdx(b.x, b.y)] !== zone || (road && !botLinked(u, b))) continue;
-    const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
-    if (d < bd) { bd = d; best = b; }
-  }
-  return best;
+  const here = u.inside ? getE(u.inside) : null;
+  const x = here ? here.x : Math.floor(u.x), y = here ? here.y : Math.floor(u.y);
+  const deckStart = u.deck ? deckEnds({ ...u })?.[0] : undefined;
+  const start = u.ride >= 0 ? u.ride : deckStart ?? tIdx(x, y);
+  const road = roadBound(u), opts = routeOpts(u);
+  opts.breach = false;
+  delete opts.cover; // this preview only checks access, including when called from a unit panel
+  return S.buildings.filter((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots &&
+    !evacuated(b) && (!road || botLinked(u, b)))
+    .sort((a, b) => dist2(a.x, a.y, x, y) - dist2(b.x, b.y, x, y) || a.id - b.id)
+    .find((b) => findPath(start % S.W, (start / S.W) | 0, b.x, b.y, undefined, opts)) || null;
 }
 
 /** Why robot u can't be sent to be recycled now ('' if it can). */
-function recycleWhy(u) {
+function recycleWhy(u, foundry) {
   if (!u || u.dead) return 'That robot is gone.';
   const bt = BOTS[u.type];
-  if (bt.air || bt.sea || bt.rail) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
+  if (bt.air || bt.sea || bt.rail || bt.magpod) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
   if (!recyclable(u)) return 'It can\'t be recycled right now.';
   if (u.task && u.task.type === 'recycle') return 'It\'s already on its way to be recycled.';
-  if (recycleFoundry(u)) return '';
+  if (foundry === undefined ? recycleFoundry(u) : foundry) return '';
   return S.buildings.some((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots)
     ? (roadBound(u) ? 'No road leads from it to a Bot Foundry.' : 'It can\'t get to a Bot Foundry from where it is.')
     : 'Robots are recycled at a Bot Foundry: build one first.';
@@ -4480,21 +4514,30 @@ function recycleWhy(u) {
 
 /** Robot u drops what it was doing (a load it carries is put down in crates) and sets off for Foundry f to be recycled. */
 function startRecycle(u, f) {
+  const ridePath = u.ride >= 0 ? u.path : null;
   if (u.ferryWait && !u.ferryWait.ferry) leaveFerryQueue(u); // (waiting at a Port for a ferry: it stops waiting)
   if (isArmy(u)) readyForOrder(u);
   else { cancelTask(u); exitBuilding(u); u.march = 0; }
-  if (u.carry) dropCarried(u);
+  if (u.carry || u.mix) dropCarried(u);
+  for (const v of S.bots) {
+    if (v.dead || !v.task) continue;
+    if ((v.task.type === 'arty' && v.task.gun === u.id) || (v.task.type === 'escort' && v.task.bot === u.id)) cancelTask(v);
+  }
+  u.trade = 0;
   u.salvo = null;
   u.recycleTo = 0;
   u.task = { type: 'recycle', bld: f.id };
-  u.path = null; u.vel = 0; u.idleT = 0;
+  u.path = ridePath;
+  u.vel = 0; u.idleT = 0; u.idleSince = undefined;
+  if (u.failGoal === tIdx(f.x, f.y)) u.failGoal = -1;
 }
 
 /** Send robot u to the nearest Bot Foundry it can get to, to be recycled. '' if it's on its way, otherwise why not. */
 function goRecycle(u) {
-  const why = recycleWhy(u);
+  const foundry = recyclable(u) ? recycleFoundry(u) : null;
+  const why = recycleWhy(u, foundry);
   if (why) return why;
-  startRecycle(u, recycleFoundry(u));
+  startRecycle(u, foundry);
   return '';
 }
 
@@ -4504,7 +4547,7 @@ function orderRecycle(owner, ids) {
   for (const id of ids) {
     const u = getE(id);
     if (!u || u.dead || u.owner !== owner || !BOTS[u.type]) continue;
-    if (u.task && u.task.type === 'recycle') { n++; continue; } // (on its way already)
+    if (recycling(u)) { n++; continue; } // (on its way already)
     const w = goRecycle(u);
     if (w) why = why || w; else n++;
   }
@@ -4513,7 +4556,7 @@ function orderRecycle(owner, ids) {
 
 /** Call off robot u's trip to be recycled: it stops where it is (a warbot heads back to a garrison, a Worker finds a job). */
 function stopRecycle(u) {
-  if (u.task && u.task.type === 'recycle') { u.task = null; u.path = null; u.vel = 0; }
+  if (u.task && u.task.type === 'recycle') { u.task = null; if (!(u.ride >= 0)) u.path = null; u.vel = 0; }
   u.recycleTo = 0;
 }
 
@@ -4523,13 +4566,13 @@ function stopRecycle(u) {
  */
 function doRecycle(u, t, dt) {
   const f = getE(t.bld);
-  if (!f || f.dead || f.owner !== u.owner || !f.built) { stopRecycle(u); return; }
+  if (!f || f.dead || f.owner !== u.owner || !f.built || !BDEFS[f.type].bots) { stopRecycle(u); return; }
   if (t.t !== undefined) {
     u.vel = 0;
     const was = t.t;
     t.t += dt;
     if (Math.floor(t.t / 0.6) !== Math.floor(was / 0.6)) addFx('spark', u.x - 0.25 + 0.5 * hash2(u.id, S.tick, 41), u.y - 0.3 + 0.4 * hash2(u.id, S.tick, 43), { color: '#ffd98a' });
-    if (t.t >= recycleTime(u.type)) recycleBot(u, f);
+    if (t.t + 1e-9 >= recycleTime(u.type)) recycleBot(u, f);
     return;
   }
   const r = travel(u, f.x, f.y, dt);
@@ -4545,15 +4588,18 @@ function doRecycle(u, t, dt) {
  */
 function recycleBot(u, f) {
   const got = recycleYield(u.type), P = S.players[u.owner];
-  for (const g in got) bump(f.stock, g, got[g]);
+  for (const g in got) {
+    bump(f.stock, g, got[g]);
+    bump(f.loot = f.loot || {}, g, got[g]); // finished goods available to the rest of the colony
+  }
   if (u.carry) dropCarried(u);
   if (u.loot) { addLoot(f.x, f.y, { [u.loot]: 1 }); u.loot = null; }
   if (u.cargo && Object.keys(u.cargo).length) { addLoot(f.x, f.y, u.cargo); u.cargo = null; }
-  u.task = null;
   for (const b of S.buildings) {
     if (b.staff === u.id) b.staff = 0;
     if (b.staffInc === u.id) b.staffInc = 0;
     if (b.builder === u.id) b.builder = 0;
+    if (b.fixer === u.id) b.fixer = 0;
   }
   removeBot(u);
   P.stats.recycled = (P.stats.recycled || 0) + 1;
@@ -5782,7 +5828,7 @@ function captureBuilding(b, by) {
   }
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
-  if (!BDEFS[b.type].airdrop) delete b.airSupply; // (Supply by air was its old owner's choice; a Drop Outpost keeps it)
+  delete b.airSupply; // (Supply by air was its old owner's choice)
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
@@ -6361,6 +6407,7 @@ function crateStore(u, g, l, n) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || tankRoom(b) < n || evacuated(b) || shunned(b)) continue;
     if (nets && !buildingNets(b, !!bt.truck).some((k) => nets.indexOf(k) >= 0)) continue;
+    if (u.type === 'worker' && S.zone[tIdx(b.x, b.y)] !== S.zone[tIdx(l.x, l.y)]) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, l.x + 0.5, l.y + 0.5);
     if (d < bd) { bd = d; best = b; }
   }
@@ -6593,7 +6640,7 @@ function eliminate(old, by, how) {
     if (!e.built) { destroyBuilding(e, true); continue; }
     releaseBotsFrom(e, true);
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
-    if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
+    delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
     e.owner = by; e.tgt = 0;
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
@@ -8978,6 +9025,7 @@ function takeGood(owner, g, n) {
     }
     if (!best) return false;
     bump(best.stock, g, -1);
+    if (best.loot?.[g]) bump(best.loot, g, -1);
     usedGood(owner, g, 1);
     n--;
   }
@@ -9964,7 +10012,7 @@ function endEvent(E) {
  * ways on Long Haul 2v2). Copies can fall off the map (a turn on a map that isn't square): callers check.
  */
 function fairShare() {
-  const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
+  const W = S.W, H = S.H, np = nColonies(), alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
@@ -9984,15 +10032,18 @@ function fairShare() {
   return { mine, copies };
 }
 
+function ringfallHits(alone) {
+  return (SIZE_PRESETS[S.settings?.size]?.ringfallHits ?? METEOR_HITS) * (alone ? 2 : 1);
+}
+
 /**
- * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
- * of them near its landing site), each copied to the same spot on every other colony's share (fairShare),
- * so the shower is fair.
+ * Half the sites are sought near the starting base, the others across its share of the planet. Sites
+ * are copied onto every colony's share (fairShare).
  */
 function meteorPlan(rng, t0, dur) {
   if (S.hollow) return hollowRingfall(rng, t0, dur);
   const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
-  const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  const L = getE(S.players[0].lander), hits = [], n = ringfallHits(alone);
   for (let k = 0; k < n; k++) {
     let x = -1, y = -1;
     for (let tries = 0; tries < 40 && x < 0; tries++) {
@@ -10008,13 +10059,13 @@ function meteorPlan(rng, t0, dur) {
 }
 
 /**
- * Ringfall in the Hollow falls only through the breaches, concentrated and rich: METEOR_HITS strikes on each colony's
+ * Ringfall in the Hollow falls only through the breaches, concentrated and rich: the usual number of strikes on each colony's
  * share as anywhere, HOLLOW.ringfall.contested of them through the contested breaches on its side and the rest through
  * its own (each strike with its twin, through the twin breach, on the other colony's side); in Colony twice as many,
  * over every breach. Richer where they land: see meteorImpact.
  */
 function hollowRingfall(rng, t0, dur) {
-  const alone = S.mode === 'colony', B = S.hollow.breaches, W = S.W, H = S.H, hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  const alone = S.mode === 'colony', B = S.hollow.breaches, W = S.W, H = S.H, hits = [], n = ringfallHits(alone);
   const own = alone ? B : B.filter((b, k) => k % 2 === 0); // (player 0's: its own and the contested ones on its side; each one's twin follows it)
   const home = own.filter((b) => b.home), open = own.filter((b) => !b.home);
   for (let k = 0; k < n; k++) {
@@ -10611,6 +10662,18 @@ function placePosts(seed) {
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
     if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
   }
+  if (!S.posts.length && S.settings.size >= IMMENSE_SIZE &&
+      SHAPE_PRESETS[S.settings.shape].islands && Ls.length === 2) {
+    // If the open sea has no shared site, trade can start on the two home islands at mirrored posts.
+    let best = null, score = -Infinity;
+    for (const c of cands) {
+      const twin = twinOf(c);
+      if (!c.home || !twin?.home || dist(c.i, c.j, twin.i, twin.j) < TRADE_POST.apart) continue;
+      const s = -c.d[0] + c.h * 0.5;
+      if (s > score) { best = c; score = s; }
+    }
+    if (best) for (const c of [best, twinOf(best)]) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
+  }
   // A small central island or pass may only have room for one post. Use one both teams can
   // reach for the same effort, to within one tile of walking.
   if (teamPairs && !S.posts.length && cands.length) {
@@ -10695,7 +10758,9 @@ function placeUplinks(seed) {
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const canyonZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
   const reachableSite = (t) => !SH.grandCanyon || S.zone[t] === canyonZone;
-  const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
+  const span = dhypot(W, H), immenseIsles = SH.isles4 && S.settings.size === IMMENSE_SIZE;
+  // The sea grows faster than the usable land on each home island. Keep a shore relay in range.
+  const minBase = immenseIsles ? 10 : Math.max(10, span * 0.12);
   const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
   for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
     const t = tIdx(i, j);
@@ -10892,6 +10957,14 @@ function veinFull() {
   return clamp(Math.round(RES[R_VEIN].amount * pr.amount), 1, 255);
 }
 
+/** Local burst tier from the Deep's remaining health (zero until its first cracks). */
+function deepSurgeTier(b) {
+  if (!b || b.dead || b.type !== 'mound') return 0;
+  const health = b.armor / BDEFS.mound.armor;
+  for (let i = DEEP_SURGES.length - 1; i >= 0; i--) if (health < DEEP_SURGES[i].health) return i + 1;
+  return 0;
+}
+
 /**
  * A nest: keeps its guards up and grows. Runs once a second. It sends no packs of its own, in Colony as in Versus (the
  * owner's decision): its Murmur come up through the tunnels at night (murmurTick). Days are for striking the nests,
@@ -10909,19 +10982,22 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  if (b.type === 'mound' && b.armor < BDEFS.mound.armor * 0.75) {
-    const lost = 1 - b.armor / BDEFS.mound.armor;
-    const tier = lost >= 0.8 ? 3 : lost >= 0.5 ? 2 : 1;
-    if (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0)) {
-      b.deepSurgeAt = S.time + [0, 32, 20, 10][tier];
-      b.deepSurgeTier = tier;
-      const guardsNow = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+  const tier = deepSurgeTier(b);
+  if (tier && (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0))) {
+    const surge = DEEP_SURGES[tier - 1];
+    b.deepSurgeAt = S.time + surge.every;
+    b.deepSurgeTier = tier;
+    const live = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+    const count = Math.min(surge.size, surge.cap - live);
+    if (count > 0) {
       const target = wildPrey(b.x + 0.5, b.y + 0.5, 18);
-      for (let k = 0; k < Math.min(tier * 2, tier * 5 - guardsNow); k++) {
+      for (let k = 0; k < count; k++) {
         const task = target ? { type: 'raid', x: Math.floor(target.x), y: Math.floor(target.y), until: S.time + 28 } : null;
         const u = spawnCritter(b, tier >= 2 && k % 3 === 0 ? 'brute' : 'scuttler', task);
         u.deepGuard = true;
       }
+      addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d797ff', r: 1.5 + 0.65 * tier, life: 0.8 + 0.2 * tier });
+      sfx('deepsurge', b.x + 0.5, b.y + 0.5, tier);
     }
   }
   b.status = `Level ${b.level} nest · ${guards} on guard`;
@@ -13643,11 +13719,17 @@ function refineryPipes(owner) {
   return out;
 }
 
+/** A touching Refinery or Fuel Tank can take the pump's Crude directly once built. */
+function pumpFeedsNextDoor(b) {
+  return touching(b).some((c) => c.type === 'refinery' || BDEFS[c.type].tank);
+}
+
 /**
  * Pipe for building b (an Oil Pump) to the nearest Refinery: to a tile beside one, or to pipe already
  * joined to one. Returns { tiles (the new pipe to lay), cost } or { why } when there's no way (or no Refinery).
  */
 function pipeToRefinery(owner, b) {
+  if (pumpFeedsNextDoor(b)) return { why: 'A neighbouring Refinery or Fuel Tank takes Crude directly.' };
   const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
   if (!refs.length) return { why: 'Build a Refinery or a Fuel Tank first: the pipe runs from the pump to it.' };
   return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery or Fuel Tank.', 'No way to run pipe from here to a Refinery or Fuel Tank (water, rock or a rival\'s land in the way?).');
@@ -13687,9 +13769,11 @@ function pipeToward(owner, b, ends, joined, already, noWay) {
   const route = pipeRoute(owner, start, (t) => beside.has(t) || (S.pipe[t] === owner + 1 && joined.has(net.comp[t])), 80);
   if (!route) return { why: noWay };
   // No pipe under b itself unless it stands right beside the line's end, nor under the building it runs to.
-  const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(k === route.length - 1 && route.length > 1 && endAt.has(t)));
+  let tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(k === route.length - 1 && route.length > 1 && endAt.has(t)));
   // b right beside where it's going: one tile of pipe under it joins them.
   if (!tiles.length && !route.some((t) => S.pipe[t])) tiles.push(start);
+  tiles = tiles.filter((t) => S.pipePlan[t] !== owner + 1);
+  if (!tiles.length) return { why: 'This pipe route is already laid or planned.' };
   const cost = {};
   for (const t of tiles) { const c = pipeCost(t); for (const g in c) cost[g] = (cost[g] || 0) + c[g]; }
   for (const g in cost) cost[g] = Math.round(cost[g] * 100) / 100;
@@ -14476,48 +14560,22 @@ function airWant(b) {
       if (!base) continue;
       let w = m.get(base.id);
       if (!w) m.set(base.id, (w = {}));
-      for (const [g, n] of airNeeds(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
+      for (const [g, n] of needsOf(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
     }
     AIRW = { S, tick: S.tick, m };
   }
   return AIRW.m.get(b.id) || null;
 }
 
-/**
- * What place c, supplied by air, is short of: its own needs and, if it's storage off the road network (a Drop
- * Outpost, say), those of the buildings round it that Workers serve from it by hand (FOOT_CARRY, same ground, not
- * supplied by air themselves or reachable from home), less what it already holds beyond its own supply orders.
- */
-function airNeeds(c) {
-  const own = needsOf(c);
-  if (!BDEFS[c.type].store || onHomeNet(c)) return own;
-  const extra = {}, zc = S.zone[tIdx(c.x, c.y)];
-  for (const d of S.buildings) {
-    if (d === c || d.dead || d.owner !== c.owner || d.airSupply || BDEFS[d.type].store || !needsRoad(d)) continue;
-    if (dist2(d.x, d.y, c.x, c.y) > FOOT_CARRY * FOOT_CARRY || S.zone[tIdx(d.x, d.y)] !== zc || onHomeGroup(d)) continue;
-    for (const [g, n] of needsOf(d)) if (n >= 1) extra[g] = (extra[g] || 0) + n;
-  }
-  const k = keepOf(c) || {}, out = own.map((o) => o.slice());
-  for (const g in extra) {
-    const spare = Math.max(0, supplyOf(c, g) + (c.inc[g] || 0) - (k[g] || 0));
-    const n = Math.ceil(extra[g] - spare);
-    if (n < 1) continue;
-    const e = out.find((o) => o[0] === g);
-    if (e) e[1] = Math.max(0, e[1]) + n; else out.push([g, n]);
-  }
-  return out;
+/** Only a finished Trade Terminal can receive plane freight. */
+function airSuppliable(b) {
+  return !!(b && !b.dead && b.built && BDEFS[b.type].terminal);
 }
 
-/**
- * Can place b be supplied by air: a construction site (not one paid from storage), or a building that
- * keeps goods (storage, a garrison's Ammo, a factory's inputs, a Silo's missiles, a Fuel Station's Fuel...)?
- * Not an Airfield, the Command Base, or anything wild.
- */
-function airSuppliable(b) {
-  const def = b && BDEFS[b.type];
-  if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
-  if (!b.built) return !storeFunded(b);
-  return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
+/** Validate the same owned Terminal and pad when freight is released and when it lands. */
+function airFreightTarget(owner, id, i, j) {
+  const b = getE(id);
+  return airSuppliable(b) && b.owner === owner && b.x === i && b.y === j ? b : null;
 }
 
 /**
@@ -14793,7 +14851,7 @@ function airSupplyRun(u, b) {
     if (S.bots.some((v) => v !== u && !v.dead && v.mission && v.mission.to === c.id)) continue; // one plane at a time
     const load = {};
     let n = 0, short = 0;
-    for (const [g, k] of airNeeds(c)) {
+    for (const [g, k] of needsOf(c)) {
       const want = Math.floor(k);
       if (want < 1) continue;
       short += want;
@@ -14863,6 +14921,11 @@ function updatePlane(u, dt) {
     return;
   }
   if (M.phase !== 'load') return;
+  if (M.kind === 'supply' && !airFreightTarget(u.owner, M.to, M.x, M.y)) {
+    cancelAirFreight(u);
+    landed(u, base);
+    return;
+  }
   // Loading: robots come aboard (it goes with whoever's aboard once nobody else is coming, or after PLANE_GATHER s).
   if (M.kind === 'warbot' || M.kind === 'worker') {
     for (const v of S.bots) {
@@ -14890,17 +14953,29 @@ function updatePlane(u, dt) {
   if (isMe(u.owner)) sfx('takeoff');
 }
 
+/** Release a failed freight delivery; its goods stay on the plane for the return trip. */
+function cancelAirFreight(u) {
+  const M = u.mission, b = getE(M.to), load = u.cargo || M.load || {};
+  if (b && !b.dead && b.owner === u.owner) for (const g in load) bump(b.inc, g, -load[g]);
+  u.mission = null;
+}
+
 /** Plane u is over its drop point: the load goes out on parachutes, and it turns for home. */
 function airDrop(u) {
   const M = u.mission;
+  if (M.kind === 'supply' && !airFreightTarget(u.owner, M.to, M.x, M.y)) {
+    cancelAirFreight(u);
+    headHome(u);
+    return;
+  }
   S.drops = S.drops || [];
   const d = { id: S.nextId++, owner: u.owner, kind: M.kind, x: u.x, y: u.y, i: M.x, j: M.y, t0: S.time };
   if (M.kind === 'supply') {
     d.to = M.to; d.goods = u.cargo || {}; u.cargo = null;
-    // A crate for every four goods or so, out of the door a moment apart, landing just in front of the building.
+    // A crate for every four goods or so, out of the door a moment apart, landing on the Terminal pad.
     const n = Math.max(1, Math.min(3, Math.ceil(sumValues(d.goods) / 4)));
     d.crates = [];
-    for (let k = 0; k < n; k++) d.crates.push({ dx: n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.62, dy: 0.62 + 0.08 * (k % 2), lag: k * 0.32 });
+    for (let k = 0; k < n; k++) d.crates.push({ dx: n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.62, dy: 0.24 + 0.08 * (k % 2), lag: k * 0.32 });
     d.dur = AIR_DROP_FALL + (n - 1) * 0.32;
   }
   else if (M.kind === 'warbot' || M.kind === 'worker') {
@@ -15246,14 +15321,15 @@ function landDrop(d) {
   const t = tIdx(d.i, d.j);
   if (d.kind === 'wreck') { crashLand(d); return; }
   if (d.kind === 'supply') {
-    const c = getE(d.to);
-    let n = 0;
-    for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
-    if (c && !c.dead && c.owner === d.owner) c.airIn = S.time; // (when crates last landed there; `airAt` is when a plane loaded for it)
-    // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
-    addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
+    const reserved = getE(d.to), c = airFreightTarget(d.owner, d.to, d.i, d.j);
+    for (const g in d.goods) {
+      if (reserved && !reserved.dead && reserved.owner === d.owner) bump(reserved.inc, g, -d.goods[g]);
+      if (c) bump(c.stock, g, d.goods[g]);
+    }
+    if (!c) return; // legacy or interrupted drop: nothing appears on open ground
+    c.airIn = S.time;
+    addFx('crateland', c.x + 0.5, c.y + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.24, lag: 0 }], seed: d.id % 97 });
     if (isMe(d.owner)) sfx('thump');
-    void n;
     return;
   }
   if (d.kind === 'outpost') {
@@ -15263,13 +15339,12 @@ function landDrop(d) {
     if (at < 0) { refundRoad(d.owner, BDEFS.dropost.cost, d.i, d.j); postMsg(d.owner, 'The Drop Outpost came down where it couldn\'t stand: its goods went back into storage.', d.i, d.j, 'warn'); return; }
     if (S.plan[at]) cancelPlan(at);
     const b = addBuilding(d.owner, 'dropost', at % S.W, (at / S.W) | 0, true);
-    b.airSupply = true;
     b.keep = { fuel: 3 };
     b.deployedAt = S.time;
     computeTerritory();
     computeZones();
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2 });
-    postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
+    postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it. Drop Workers nearby to establish a foothold.', b.x, b.y, 'good');
     if (isMe(b.owner)) sfx('complete');
     const foe = S.owner[at];
     if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, `${playerName(b.owner)} dropped an Outpost nearby!`, b.x, b.y, 'bad');
@@ -15301,6 +15376,7 @@ function landDrop(d) {
     } else cancelTask(v); // (an older save's worker given a job in mid-air: its claim on the job is let go)
   }
   if (bots.length) {
+    if (d.kind === 'worker' && S.mission?.id === 'airlift' && d.owner === 0) S.mission.workerDrop = true;
     postMsg(d.owner, `${bots.length} ${bots.length === 1 ? BOTS[bots[0].type].name : BOTS[bots[0].type].plural} parachuted in.`, d.i, d.j, 'good');
     const foe = S.owner[t];
     if (foe >= 0 && foes(foe, d.owner) && bots.some((v) => isArmy(v))) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
@@ -16504,18 +16580,23 @@ function hashState() {
   const num = (v) => { if (typeof v !== 'number') { int(v === undefined ? -7 : v === null ? -8 : v === true ? -9 : v === false ? -10 : -11); return; } _hv[0] = v; int(_hu[0]); int(_hu[1]); };
   const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
-  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty);
+  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); num(S.settings?.size);
+  if (S.settings?.biome2) { str(S.settings.biome2); num(S.settings.biomeBoundary); }
+  if (S.mission?.workerDrop) int(1);
+  if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
     if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
+    if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
+    if (u.task?.arterialTiles) int(u.task.arterialTiles);
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
-    obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+    obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }

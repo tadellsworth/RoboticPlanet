@@ -509,7 +509,7 @@ function drawWaterRipples(ctx, ox, oy, z, v0, v1) {
 /* ------------------------------------------------------------------ lava */
 
 function lavaSurface(t) {
-  return S.terrain[t] === T_WATER && (S.lava?.[t] || R.biome === 'volcanic');
+  return S.terrain[t] === T_WATER && (S.lava?.[t] || renderBiomeAt(t) === 'volcanic');
 }
 
 /**
@@ -518,8 +518,8 @@ function lavaSurface(t) {
  * one pixel a tile, drawn scaled up so it's soft (rebuilt when land and water change).
  */
 function drawLavaGlow(ctx, ox, oy, z) {
-  if (!S.lava && R.biome !== 'volcanic') return;
-  const key = [S.roadVer, S.railVer, S.tide?.high, R.biome].join(':');
+  if (!S.lava && R.biome !== 'volcanic' && R.secondRegion?.biome !== 'volcanic') return;
+  const key = [S.roadVer, S.railVer, S.tide?.high, R.biome, R.secondRegion?.biome].join(':');
   if (!R.lavaGlow || R.lavaGlow.S !== S || R.lavaGlow.key !== key) {
     const c = document.createElement('canvas');
     c.width = S.W; c.height = S.H;

@@ -1,5 +1,5 @@
 // Runs a full AI-vs-AI game in Node without graphics, to sanity-check the simulation.
-// Usage: node tools/headless-sim.js [seed] [difficulty] [maxMinutes] [versus|colony] [size 0-3] [terrain 0-4] [resources 0-4] [shape 0-1]
+// Usage: node tools/headless-sim.js [seed] [difficulty] [maxMinutes] [versus|colony] [size 0-5] [terrain 0-4] [resources 0-4] [shape index]
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');

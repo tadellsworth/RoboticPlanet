@@ -2,6 +2,14 @@
 
 This log covers the chat that started November 18, 2026, with a GitHub access check. Work from the chat is saved on `codex/working-branch` for review before any integration into `main`. Add dated entries as work is completed, with commit links, verification, and any open follow-up.
 
+## Session summary
+
+- **Transport and logistics.** Made Maglev lines recoverable after terminal loss, kept pods at terminals, enabled road-sharing pylons and transfers between lines, prioritized dismantle crates, and audited freight, Worker assignments, and military movement. Added the Arterial Express tutorial and tightened unit recycling and refunds. See [gameplay fixes](#maglev-recovery-and-gameplay-fixes), [freight assignments](#freight-and-worker-assignments), and [Arterial](#arterial-express-tutorial).
+- **Biomes and presentation.** Added geothermal and tropical scenery, naval wildlife, waves, animated lava, and more varied land animals that move away from development. Reduced truck effects and night-light clutter. Generated radio dialogue was disabled in play. See [scenery](#new-biomes-and-scenery), [wildlife](#wildlife-and-concept-art), and [night lighting](#freight-salvage-and-night-lighting).
+- **Rival and Murmur behavior.** Improved Murmur sabotage and ambush tactics, scaled the Deep's waves with damage, addressed seeded AI stalls and naval crossings, improved 2v2 support and fairness, and taught rivals to mine Ring drizzle deposits. See [seeded fixes](ai-stalemate-fixes.md), [Hollow retest](hollow-ground-army-retest.md), and [drizzle results](#rival-mining-of-ring-drizzle).
+- **Saves, multiplayer, and controls.** Added solo restore points and host-controlled midgame rival difficulty. Audited reconnects, stalled orders, save recovery, opening usability, input, and late-game performance. See [audit synthesis](audit-synthesis.md) and [pause and restore changes](#pause-menu-the-deep-and-restore-points).
+- **Maps.** Added Immense and the two-colony Planetary size, both with optional 65/35 mixed biomes. Reworked Grand Canyon with fertile basins, river islands, and two single-lane natural descents per rim. See [size and compatibility results](immense-validation.md) and [Grand Canyon](#grand-canyon-river-basins).
+
 ## November 18, 2026
 
 ### Repository and workflow
@@ -146,3 +154,85 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Shortened six goal hints, preserved Harbour and Airlift's step-by-step highlights, and moved King of the Hill into War before Final Descent. The mission data check covers the 110-character limit, building targets, affected controls, and saved mission IDs.
 
+
+### Freight, salvage, and night lighting
+
+- Restricted Cargo Plane freight to a finished, owned Trade Terminal. Old or interrupted drops cannot spawn freight on open ground. Airlift now teaches a Worker parachute drop in its final goal.
+- Hid redundant Oil Pump pipe shortcuts beside a Refinery or Fuel Tank and when the route was already planned.
+- Softened road-vehicle exhaust, brake lights, and air brakes. Exhaust tops out at 48 active puffs and the air-brake audio has a global 1.8-second gap.
+- Gave idle Haulers first call on their colony’s dismantled crates, with idle Workers handling reachable leftovers after their regular tasks.
+- Reduced the Command Base beacon’s height limit from 33% to 16% of the view. Always day still uses the illuminated mast without a sky beam.
+- Checked the night rendering of the building and vehicle catalog. Centered multi-tile light pools, drew Mass Driver coil effects at building depth, tightened darkness and destruction checks, and added local structure, vehicle, and gantry markers.
+
+### Pause menu, the Deep, and restore points
+
+- **Rival difficulty** applies to every computer rival in a custom game and shows a toast. Multiplayer checks the host's player seat when the order runs, including when two people share a colony or the host changes. Verified that both peers reached the same simulation hash, non-host orders were rejected, and a disconnected player's colony was left alone.
+- The Deep's local packs escalate below 75%, two-thirds, and one-third armor. Its pulse strengthens and its rumble drops in pitch with each tier. All five Hollow matches ended before and after the change. Medium 11, 12 and 25 finished with identical results. Small 21 finished 23 seconds sooner with the same winner and Small 25 finished at 40:26 with the opposite winner. [Match results](deep-surge-retest.md)
+- Solo games keep up to five minute-by-minute restore points in browser storage. The menu labels them by age, asks for confirmation, and hides them in multiplayer. **Continue** still opens older single autosaves. Chromium play confirmed the difficulty toast, restore confirmation and cancellation, quota trimming, and legacy Continue.
+- Updated the README, in-game help, and illustrated guide for each feature. The existing mission goals still cover their authored challenges.
+
+
+### Hollow ground-army stalemates
+
+- Compared the ground-army revisions with the current working branch. The traces found depleted local Ore, trips for too little Fuel to help production, and a march minimum that could keep a smaller winning army at home.
+- Hollow rivals can mine a lone accessible Ore vein, keep key Workers on the job when useful charge is unavailable, and launch a smaller final push when the force can beat the defenders. The four-minute road-site release remains in effect.
+- All six named Hollow and Islands games finished within an hour. The report records the times and winners and the Normal Standard seed 11 comparison for every ordered pair of doctrines. [Ground-army retest](hollow-ground-army-retest.md)
+- The Standard matrix exposed an Architect trying to launch a warhead from its Command Base while under siege. The AI now requires a ready Missile Silo for that order. All 25 Standard matchups finished after the fix.
+
+### Unit recycling and spare Workers
+
+- Synced the upstream Arrival City changes and kept both its lighting and the working branch's night-light fixes.
+- Recycle orders choose the nearest Foundry the unit can reach. Refunds still go into the Foundry and are available for production, spending or pickup. Maglev Pods use their guides and are excluded from the recycle action.
+- Rivals wait for genuinely idle Workers and keep their staffing and builder reserve. Starting a recycle order releases the old job, freight reservations, and any Ammo delivery or convoy escort assigned to that unit.
+- Added `tools/recycle-test.js` for ownership, routing, refunds, AI limits, job cleanup, exact timing, save continuation and lockstep. Help coverage, mission data and lint passed. A Chromium game verified the button, cancellation and refund.
+
+### Arterial Express tutorial
+
+- Added Arterial after Blacktop in Roads and Traffic. The colony has a stocked Roadworks, a Paver, a Freight Truck, and a survey Depot. The goals mark a 16-tile Express pair, connect both side ramps, surface the lanes, and complete 2, 3, or 4 Freight Truck deliveries by difficulty.
+- The delivery goal counts actual loaded travel along Express. The headless Hard run also verified that an earlier delivery along the ordinary service road earns no credit.
+- Played Normal in Chromium from the mission picker and briefing through the recorded campaign victory. Verified the sign gantry and the three qualifying deliveries. The mission data, help coverage and lint checks passed.
+
+### Immense maps
+
+- Added Immense to Custom Game and the shared size preset used by Observer and multiplayer. Standard is 84×118. Existing shape and seat limits still apply.
+- Scaled Ringfall and the Hollow's nests and reserves. Added more Oases resource sites, larger Four Isles land pads, and paired fallback Trade Posts on two-player island maps. The whole-map canvas uses a smaller backing buffer on the largest layouts while close views still use HD chunks.
+- Allowed more travel time before rivals recall long marches. Verified all 117 sampled layouts, saved planets, and save/load and split-snapshot multiplayer rejoin. [Performance and match results](immense-validation.md)
+
+### Rival mining of Ring drizzle
+
+- Outposts score scarce neutral drops they can claim. Ore Mines and Crystal Taps score unworked deposits they can reach on foot and accept a single surviving tile. Site affordability, roads and enemy fire still constrain placement.
+- Tested 12 paired Medium, Normal Versus games with two balanced rivals, a 60-minute cap, the Murmur and Planetary events off, and the Ring drizzle on. The benchmark counted only units removed by gatherers from tagged drizzle tiles.
+- Ore mined rose from 38/810 landed to 158/960, and Crystal rose from 46/288 to 108/336. Mean duration went from 22:36 to 22:56, including each capped game at 60 minutes. Undecided games stayed at 1/12.
+
+| Map | Seed | Before | After | Drizzle Ore | Drizzle Crystal |
+| --- | ---: | --- | --- | ---: | ---: |
+| Long haul | 11 | 28:09, Colony 2 | 28:09, Colony 2 | 0 → 0 | 3 → 3 |
+| Long haul | 21 | 13:10, Colony 2 | 13:10, Colony 2 | 0 → 0 | 0 → 0 |
+| Long haul | 25 | 60:00, undecided | 60:00, undecided | 34 → 30 | 35 → 59 |
+| Long haul | 37 | 38:51, Colony 1 | 26:24, Colony 1 | 0 → 15 | 8 → 0 |
+| Lakes | 11 | 15:00, Colony 1 | 15:00, Colony 1 | 0 → 0 | 0 → 0 |
+| Lakes | 21 | 17:15, Colony 1 | 17:15, Colony 1 | 0 → 0 | 0 → 0 |
+| Lakes | 25 | 13:52, Colony 2 | 13:52, Colony 2 | 4 → 4 | 0 → 0 |
+| Lakes | 37 | 12:51, Colony 1 | 12:51, Colony 1 | 0 → 0 | 0 → 0 |
+| Standard | 11 | 16:46, Colony 2 | 16:46, Colony 2 | 0 → 0 | 0 → 0 |
+| Standard | 21 | 19:23, Colony 1 | 34:29, Colony 1 | 0 → 79 | 0 → 46 |
+| Standard | 25 | 17:34, Colony 1 | 19:11, Colony 1 | 0 → 30 | 0 → 0 |
+| Standard | 37 | 18:20, Colony 1 | 18:05, Colony 1 | 0 → 0 | 0 → 0 |
+
+### Optional second biome on Immense
+
+- Added the Second biome control to Custom Game and Observer setup, including multiplayer host settings. Single-biome play is the default. A seeded transition blends terrain, mixes plant varieties and appears on the planet preview and minimap.
+- Checked selection, play, save and reload, and Saved planets in Chromium. The automated Immense check covers mixed-biome save validation and multiplayer fingerprints.
+- Set new mixed-biome planets to about 65% primary and 35% secondary land, measured at the midpoint of the transition. Saved the boundary with the game so terrain changes cannot shift it.
+- Compared current Standard Immense with temporary 112×156 and 120×168 two-player maps. [Size probe results](immense-validation.md#optional-second-biome-and-two-player-size-probes)
+
+### Planetary maps
+
+- Added Planetary for solo and two-colony games in Custom Game and Observer, including multiplayer host settings. Standard is 120×168 and other shapes preserve their proportions within the same tile budget. For three or four colonies the largest available size is Immense.
+- Carried over the optional 65/35 mixed-biome setup, with the primary biome setting weather. Validated compatible map layouts, saves, Saved planets and multiplayer snapshot rejoin. [Planetary release checks](immense-validation.md#planetary-release-checks)
+
+### Grand Canyon river basins
+
+- Reworked the gorge into alternating narrow passages and broader river basins. The river branches around two fertile islands, with meadows on the banks and rocky outcrops on the higher shelves.
+- Tested 126 layouts across the six sizes and three terrain settings. Both rims have access by ramps and fords, and ships have a continuous river. Verified the map through Custom Game in Chromium.
+- Narrowed the two natural descents on each rim to one ramp per terrace. The switchback and side-canyon trail each work with the other closed. Kept a continuous footpath along the banks where the wide bends meet the narrows. The committed regression test covers 126 layouts, and a second 576-layout sweep also passed.

@@ -189,15 +189,17 @@ function mpMenuSettings(final, people) {
   m.players = total;
   const pick = final ? resolveRandom() : { shape: m.shape || 0, biome: m.biome || 0 };
   m.players = keep;
+  const cols = !final && m.shapeRnd ? (colony ? 2 : total) : playerCount(mode, pick.shape, total);
+  const size = mapSizeForPlayers(m.size[mode] ?? DEFAULT_SIZE[mode], cols);
   return {
     mode, coop: mpCoopSeats(), // (co-op: the seats sharing the host's colony; in Colony everyone does)
-    seed: m.seed, diff: m.diff, size: m.size[mode] ?? DEFAULT_SIZE[mode], rough: m.rough, rich: m.rich,
-    shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
+    seed: m.seed, diff: m.diff, size, rough: m.rough, rich: m.rich,
+    shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(m, size), biomeRnd: !final && !!m.biomeRnd,
     players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, upWin: !colony && menuUpWin(), events: !!m.events, victory: m.victory || 'capture',
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
     scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
     teams: !colony && !!m.teams && total === 4, teamOf: !colony && m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
-    sum: mpSummary(),
+    sum: mpSummary(size),
   };
 }
 
@@ -229,14 +231,16 @@ function mpCoopSeats() {
 function mpHostName() { return (NET.seats.find((s) => s.seat === NET.host) || {}).name || 'the host'; }
 
 /** The game in a line, for the lobby. */
-function mpSummary() {
+function mpSummary(size = menuSize()) {
   const m = UI.menu, bits = [];
   if (m.mode === 'colony') bits.push('Colony, co-op');
   else if (mpCoopSeats().length) bits.push('Co-op');
   // (four colonies: as many as asked for, or as the map type is made for: Twin Valleys and Long Haul 2v2 take four)
   const colony = m.mode === 'colony', mode = colony ? 'colony' : 'versus';
   if (!colony && m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) bits.push('Teams, 2 vs 2');
-  bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size[mode] ?? DEFAULT_SIZE[mode]].name.toLowerCase());
+  const otherBiome = chosenSecondBiome(m, size);
+  bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[size].name.toLowerCase());
+  if (otherBiome) bits.push(BIOMES[otherBiome].name);
   if (!colony && m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
   if (m.mega !== 0 && m.mega !== false) bits.push('Megastructures');
@@ -484,7 +488,7 @@ function mpGameOpts(s, humans) {
     seed: s.seed, difficulty: s.diff, mode: s.mode === 'colony' ? 'colony' : 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke, mega: !!s.mega, // (Megastructures: a host from before them sent none, and had none)
     upWin: !!s.upWin, // (the Great Uplink win: a host from before it sent none, and had it off)
    
-    biome: s.biome, players: total, style: docKeyOf(s.style),
+    biome: s.biome, biome2: s.biome2, players: total, style: docKeyOf(s.style),
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
     // (The Murmur: as the host set them; a host from before the setting sent none, and had none.)
     events: !!s.events, murmur: murmurLevelOk(s.murmur) ? s.murmur : 'off', victory: s.victory, humans, teams: !!s.teams, mods: s.mods,

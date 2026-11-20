@@ -23,22 +23,33 @@ function liveE(id) { return liveB(id) || liveU(id); }
 /** How many warbots an order sends: `want` of the `avail` that can go (-1: all of them). */
 function armyN(want, avail) { return want < 0 ? avail : Math.min(avail, want | 0); }
 
+/** The computer colonies affected by the shared rival difficulty. Human seats can reconnect. */
+function rivalDifficultyTargets() {
+  const multiplayer = typeof MP !== 'undefined' && MP.on;
+  const humanColonies = multiplayer ? new Set(MP.humans.map(mpCol)) : null;
+  return S.players.filter((r) => r.ai && !r.out && !r.absent && !isWild(r.id) && !humanColonies?.has(r.id));
+}
+
 const ORDERS = {
   rivalDifficulty(p, diff) {
-    if (S.mission || !human(p) || !ownKey(DIFFICULTY, diff) || !S.players.some((r) => r.ai && !r.out)) return false;
-    // The first active human is the host, using simulation state at the order's tick.
-    if (p !== S.players.findIndex((r) => !r.ai && !r.out && !r.absent)) return false;
+    if (S.mission || S.watch || S.winner >= 0 || !human(p) || !ownKey(DIFFICULTY, diff)) return false;
+    if (typeof MP !== 'undefined' && MP.on) {
+      // Check the sender's person seat, including co-op. Current connection status can be ahead of this turn.
+      const host = MP.humans.find((seat) => !mpAI(seat, MP.turn));
+      if (ORDER_BY < 0 || ORDER_BY !== host || mpCol(ORDER_BY) !== p) return false;
+    } else if (p !== 0) return false;
+    const rivals = rivalDifficultyTargets();
+    if (!rivals.length) return false;
     if (S.difficulty === diff) return true;
     const after = DIFFICULTY[diff];
     S.difficulty = diff;
-    for (const r of S.players) {
-      if (!r.ai) continue;
+    for (const r of rivals) {
       // (keeping its personality's economy bonus, as newGame gives it, and the Tools tech's)
       const econ = (r.style && PERSONALITIES[r.style] && PERSONALITIES[r.style].econ) || 1;
       r.mult = after.mult * econ * (tech(r.id, 'tools') ? 1.15 : 1);
       r.aiT = Math.min(r.aiT || 0, after.think);
     }
-    for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival AI difficulty is now ${after.label}.`, undefined, undefined, 'info');
+    for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival difficulty is now ${after.label}.`, undefined, undefined, 'info');
     return true;
   },
   /* ---------------------------------------------------------------- building settings (its panel) */
@@ -81,7 +92,7 @@ const ORDERS = {
   magLine(p, id, bi, bj) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That Maglev Terminal is gone.' }; return placeMagLine(p, b, bi | 0, bj | 0); },
   /** Link Mooring Mast `id` to Mast `to` (an Airship line), or (to 0) unlink it. '' or why not. */
   mastLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Mooring Mast is gone.'; const o = to ? ownB(p, to) : null; if (to && !o) return 'Tap another of your Mooring Masts.'; return setMastLine(p, b, o); },
-  airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
+  airSupply(p, id, on) { const b = ownB(p, id); if (b && (!on || (airSuppliable(b) && !onHomeNet(b)))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
   pipeToRefinery(p, id) {
     const b = ownB(p, id); if (!b || !BDEFS[b.type].pump) return { why: 'That Oil Pump is gone.' };
     const r = pipeToRefinery(p, b);

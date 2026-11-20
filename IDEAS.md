@@ -73,8 +73,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Corvane and the Shield Dome, and Arrival City since: the owner chose **on by default**; Custom Game, Observer mode and the multiplayer host's
   settings; missions keep their own; a save from before it loads with them off), so games without them stay as
   now. (Applies to the whole megastructure list; the Maglev and Express highway are ordinary buildings, not gated.)
-- **A truly global map, a size above Huge,** for those who want an enormous battle, maybe with TWO biomes in it that slowly
-  crossfade into each other across the map (a new map type; mind generation time and the 16 MB-free bundle design).
+- **Immense map size** (built): 84×118 on Standard and about 40% longer in each direction than Huge on every shape.
+  Immense surface maps now offer an optional second biome, with a seeded transition between their scenery. The first
+  biome covers about 65% of the land and supplies the planet-wide weather and rules.
+- **Planetary map size** (built): up to two colonies, 120×168 on Standard, and the same 65/35 second-biome option as Immense.
 
 **New content**
 - **Biome: Boiling Springs.** A geothermal basin: vibrant, mineral-hued hot springs and steaming geysers among
@@ -388,7 +390,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     upgrade lets a Mine, Quarry or Crystal Tap keep drawing a trickle from a spent field for good. (Harvesters already
     have the Grove Planter to regrow their groves.) Partly answered (Nov 20 2026): the Ring drizzle drops a small Ore or
     Crystal deposit on every colony's share every three to four minutes from minute 12 in every game, and the *Wren* brings a raw good
-    the land is running out of on about one visit in four. Still open: whether long games on Huge maps need more.
+    the land is running out of on about one visit in four. Rivals now favor usable drizzle deposits during shortages.
+    In 12 matched Normal games, drizzle Ore mined rose from 38 to 158 and Crystal from 46 to 108. One game reached the
+    60-minute cap on each build and the mean time moved from 22:36 to 22:56. Still open: whether long games on Huge maps
+    need more.
   - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
     faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
     The owner, Nov 20 2026: circle back to this later (a Research Lab for Versus; today it is Colony only). It came up
@@ -565,9 +570,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     the cat's-eyes are drawn live rather than baked, so the Murmur's dark puts them out tile by tile. Open: the rival
     (the Architect lays a pair base to Depot cluster once its late game has a Roadworks; raiders already tear lanes up
     like roads); C's flyover as a later piece over a second lane; the sign gantries (built Nov 19 2026, drawn in code, blank boards); nicer one-way
-    arrows (below) so a lane's arrow fits its markings. **To do: a tutorial mission** in the Roads chapter ("Arterial":
-    a Roadworks, an Express pair of 12+ tiles, a Road Train on it, N goods moved), with hints naming Paths → Express
-    (Shift+E) and the Roadworks; the How to play section and the tool exist, the mission does not.
+    arrows (below) so a lane's arrow fits its markings. **Tutorial done:** Arterial follows Blacktop in Roads and Traffic. It has a stocked
+    Roadworks, a 16-tile Express pair, two side ramps, and Freight Truck deliveries to a survey Depot.
   - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
     shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
@@ -687,7 +691,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
   - **Grand Canyon** (the owner's idea, Nov 2026). Two high rims, a colony on each, with a deep gorge between them and a
-    river along its floor, the walls cut into layered terraces and crossed by side canyons. Unlike Rift or Canyon maze,
+    river along its floor, the walls cut into layered terraces and crossed by side canyons. Built with rocky shelves,
+    fertile bends of varying width, and a river that splits around a mirrored pair of islands. Unlike Rift or Canyon maze,
     the middle is the richest ground (Crystal and Ore exposed in the rock layers, water, easy road building) but it is
     overlooked from both rims: guns and Howitzers on the edge rule the floor, so whoever holds the rim holds the
     canyon. A few switchback trails (Ramps) down each wall, narrow points for Viaducts, Ropeways, and Ports on the river
@@ -1245,6 +1250,11 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   With the ground army (Skirmishers, Arc Casters, Railgunners) the same rule flips it the other way: Medium seed 11,
   both Balanced, ends at 32.7 without the rule and runs to 75 minutes with it; giving a site waiting on a planned
   road 8 minutes instead of 4 ends it (27.0) but leaves Medium seed 12 open on main. Medium 12 and Small 21 stay open
-  on the ground-army branch either way (to decide with the ground army).
+  on that ground-army revision either way.
+  **Working-branch retest (Nov 20):** the four-minute road rule stays. The Hollow AI now works isolated Ore veins
+  when starved, keeps essential Workers at their jobs when a charging trip would gain too little, and can storm
+  with a smaller armed force if parts have dried up and its opponent is clearly beaten. All six named Hollow and
+  Islands matches finished within an hour. See the [ground-army retest](docs/hollow-ground-army-retest.md) for
+  the upstream comparison and every Standard doctrine matchup.
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.

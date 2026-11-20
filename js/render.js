@@ -43,7 +43,7 @@ const LEVEL_GROUND = [
   ['#e3b781', '#f5d3a0'],
 ];
 
-const THEME = {
+let THEME = {
   ground1: '#ad6f47', ground2: '#c99a66',
   cliffTop: '#62402c', cliffBottom: '#3a2418', slope: '#d9b98a',
   water: '#1c4b5d', waterEdge: '#2e7684', foam: '#9fd9d0',
@@ -177,24 +177,47 @@ const BIOME_LOOK = {
 const THEME_DESERT = {};
 const MM_DESERT = {};
 
+/** The textures, palette and overview colours for one region of a mixed planet. */
+function biomeRegion(key) {
+  const biome = artBiome(key), look = BIOME_LOOK[biome] || BIOME_LOOK.desert;
+  ensureBiomeArt(biome);
+  const tex = { lava: ART.lava || null, cliff: biome === 'desert' ? ART.cliff || null : ART['cliff-' + biome] || null };
+  const mm = { ...MM_DESERT, ...look.mm };
+  for (const k of ['ground', 'water', 'rock']) {
+    tex[k] = biomeTexture(biome, k);
+    const rgb = tex[k] && avgColor(tex[k]);
+    if (rgb) mm[k] = rgb;
+  }
+  return { biome, look, tex, mm, theme: { ...THEME_DESERT, ...look.theme } };
+}
+
+/** Which region draws terrain effects on this tile. */
+function renderBiomeAt(t) {
+  return R.biomeMix?.[t] >= 0.5 ? R.secondRegion.biome : R.biome;
+}
+
+function mixBiomeRGB(a, b, weight) {
+  if (weight <= 0) return a;
+  if (weight >= 1) return b;
+  return a.map((value, channel) => value + (b[channel] - value) * weight);
+}
+
 /** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
 function applyBiome() {
-  const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (a biome without art of its own wears another's: BIOME_ART)
-  ensureBiomeArt(b); // (the map is baked again as it arrives)
-  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt(); // (a game with the Murmur: their art, now)
-  const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
+  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt();
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
-  Object.assign(THEME, THEME_DESERT, look.theme);
-  Object.assign(MM_COLORS, MM_DESERT, look.mm);
-  R.biome = b;
-  R.look = look;
-  R.tex = {};
-  for (const k of ['ground', 'water', 'rock']) R.tex[k] = biomeTexture(b, k);
-  R.tex.cliff = b === 'desert' ? ART.cliff || null : ART['cliff-' + b] || null;
-  R.tex.lava = ART.lava || null; // lava (Volcano maps; the volcanic biome's lakes): the volcanic biome's molten water
+  const primary = R.primaryRegion = biomeRegion(biome());
+  const second = R.secondRegion = S.settings?.biome2 ? biomeRegion(S.settings.biome2) : null;
+  THEME = primary.theme;
+  R.biome = primary.biome;
+  R.look = primary.look;
+  R.tex = primary.tex;
+  Object.assign(MM_COLORS, primary.mm);
   R.lavaGlow = null;
-  // The minimap takes its ground, water and rock colours from the textures themselves.
-  for (const k of ['ground', 'water', 'rock']) { const c = R.tex[k] && avgColor(R.tex[k]); if (c) MM_COLORS[k] = c; }
+  R.biomeMix = second ? new Float32Array(S.W * S.H) : null;
+  if (second) for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
+    R.biomeMix[tIdx(i, j)] = biomeMixAt(i, j, S.W, S.H, S.seed, S.settings.biomeBoundary);
+  }
 }
 
 /** The average colour of an art image, [r, g, b] (or null if it can't be read). */
@@ -727,10 +750,14 @@ function bakeMap() {
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
   // image, tens of megabytes of it, waiting to be collected, and a phone has only so much canvas memory.
   if (!R.map) R.map = document.createElement('canvas');
-  R.map.width = S.W * TP;
-  R.map.height = S.H * TP;
+  // Keep the whole-map canvas within 4096 pixels on each side. Close views still use HD chunks.
+  const px = R.mapPx = Math.min(TP, Math.floor(4096 / Math.max(S.W, S.H)));
+  R.map.width = S.W * px;
+  R.map.height = S.H * px;
   R.mapCtx = R.map.getContext('2d');
-  R.mapCtx.hdScale = 1;
+  const scale = px / TP;
+  R.mapCtx.setTransform(scale, 0, 0, scale, 0, 0);
+  R.mapCtx.hdScale = scale;
   hdReset();
   seepIndexBuild(); // (the oil seeps' puddles, drawn with the ground: js/seep.js)
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
@@ -766,7 +793,8 @@ function flushDirtyTiles() {
  * drawn again, clipped to those 9 tiles: no crown is cut off, and a cleared plant leaves nothing behind.
  */
 function redrawAround(ctx, i, j) {
-  if (!(R.look && R.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
+  const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
+  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
@@ -805,9 +833,9 @@ const GLOW_PX = 16;
 function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
-  const b = R.biome;
-  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
-  for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
+  const biomes = R.secondRegion ? [R.biome, R.secondRegion.biome] : [R.biome];
+  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
+  for (let k = 1; k <= PLANT_KINDS && !any; k++) if (biomes.some((b) => ART[`plant-${b}-${k}-glow`])) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
   c.width = S.W * GLOW_PX; c.height = S.H * GLOW_PX;
@@ -822,12 +850,13 @@ function bakeGlow() {
 function glowTiles(i0, j0, i1, j1) {
   const G = R.glowMap;
   if (!G) return;
-  const ctx = G.ctx, b = R.biome, gArt = ART['ground-glow-' + b], wArt = ART['water-glow-' + b];
+  const ctx = G.ctx;
   i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(S.W - 1, i1); j1 = Math.min(S.H - 1, j1);
   ctx.clearRect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP);
   R.inMap = true;
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-    const t = tIdx(i, j);
+    const t = tIdx(i, j), b = renderBiomeAt(t);
+    const gArt = ART['ground-glow-' + b], wArt = ART['water-glow-' + b];
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
@@ -1015,7 +1044,8 @@ function drawMapLayer(ctx, ox, oy, z) {
       if (!bare) continue;
       const i0 = cx * C, j0 = cy * C, w = Math.min(C, S.W - i0), h = Math.min(C, S.H - j0);
       const x0 = edge(ox + i0 * z), y0 = edge(oy + j0 * z);
-      ctx.drawImage(R.map, i0 * TP, j0 * TP, w * TP, h * TP, x0, y0, edge(ox + (i0 + w) * z) - x0, edge(oy + (j0 + h) * z) - y0);
+      const px = R.mapPx;
+      ctx.drawImage(R.map, i0 * px, j0 * px, w * px, h * px, x0, y0, edge(ox + (i0 + w) * z) - x0, edge(oy + (j0 + h) * z) - y0);
       continue;
     }
     const ch = hdBake(level, cx, cy);
@@ -1063,11 +1093,31 @@ function drawTile(i, j, ctx = R.mapCtx) {
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
   R.inMap = true; // the baked map is day art: it's graded as a whole when drawn (see todGradeGround)
-  try { paintTile(ctx, i, j); if (S.scrap) paintScrapTile(ctx, i, j); } finally { R.inMap = false; }
-  R.drawScale = prev;
+  const primary = R.primaryRegion, second = R.secondRegion;
+  const mix = R.biomeMix?.[tIdx(i, j)] || 0;
+  const local = mix >= 0.5 ? second : primary, other = mix >= 0.5 ? primary : second;
+  if (local !== primary) {
+    R.biome = local.biome; R.look = local.look; R.tex = local.tex; THEME = local.theme;
+  }
+  try {
+    paintTile(ctx, i, j, other, Math.min(mix, 1 - mix));
+    if (S.scrap) paintScrapTile(ctx, i, j);
+  } finally {
+    if (local !== primary) {
+      R.biome = primary.biome; R.look = primary.look; R.tex = primary.tex; THEME = primary.theme;
+    }
+    R.inMap = false; R.drawScale = prev;
+  }
 }
 
-function paintTile(ctx, i, j) {
+function blendTexture(ctx, art, weight, i, j, x, y) {
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * weight;
+  drawTexture(ctx, art, i, j, x, y);
+  ctx.globalAlpha = alpha;
+}
+
+function paintTile(ctx, i, j, other, blend) {
   const x = i * TP, y = j * TP, t = tIdx(i, j);
   const terr = pillarAt(t) ? T_GROUND : S.terrain[t]; // (a pillar of the Hollow stands on the cavern floor: see drawPillar)
   const n = fbm(i / 6, j / 6, 991, 3);
@@ -1076,6 +1126,7 @@ function paintTile(ctx, i, j) {
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
   if (tex.ground) {
     drawTexture(ctx, tex.ground, i, j, x, y);
+    if (blend && terr === T_GROUND && other.tex.ground) blendTexture(ctx, other.tex.ground, blend, i, j, x, y);
     // Keep elevation readable on top of the texture: higher ground is lighter, canyons darker.
     const d = S.elev[t] + (R.levelOffset || 0) - 1;
     if (d > 0) { ctx.fillStyle = `rgba(${look.hi},${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
@@ -1094,6 +1145,7 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
+      if (blend && other.biome !== 'volcanic' && other.tex.water) blendTexture(ctx, other.tex.water, blend, i, j, x, y);
       if (plainShore(t)) {
         if (R.biome === 'springs') drawMineralBanks(ctx, i, j, x, y);
         if (R.biome === 'tropical') drawReefShallows(ctx, i, j, x, y);
@@ -1126,6 +1178,7 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_ROCK) {
     if (tex.rock) {
       drawTexture(ctx, tex.rock, i, j, x, y);
+      if (blend && other.tex.rock) blendTexture(ctx, other.tex.rock, blend, i, j, x, y);
       ctx.fillStyle = 'rgba(255,225,190,0.22)';
       if (terrAt(i, j - 1) !== T_ROCK) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_ROCK) ctx.fillRect(x, y, 2, TP);
@@ -1165,6 +1218,11 @@ function paintTile(ctx, i, j) {
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
+  if (terr === T_GROUND && !S.burnt?.[t] && SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon && canyonMeadow(t)) {
+    const green = (S.fert[t] ? 0.46 : 0.24) * (0.75 + fbm(i / 3, j / 3, S.seed % 100000, 2) * 0.5);
+    ctx.fillStyle = `rgba(101,153,57,${green})`;
+    ctx.fillRect(x, y, TP, TP);
+  }
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
@@ -1199,14 +1257,16 @@ function paintTile(ctx, i, j) {
  * `plantScale` (one per variety) lets big plants, the Forest's trees, spread a little past their tile.
  */
 function drawPlant(ctx, v, i, j, x, y, glow) {
-  const b = R.biome || 'desert', sd = 911;
+  const mix = R.biomeMix?.[tIdx(i, j)] || 0;
+  const local = secondBiomePlant(i, j, S.seed, mix) ? R.secondRegion : R.primaryRegion;
+  const b = local?.biome || R.biome || 'desert', sd = 911;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
   if (glow && !n) return;
   if (n) {
     // The art is centred with its shadow baked in: a small nudge and size change per tile (plants
     // are drawn after all the ground, so one that leans over a neighbour isn't cut off).
-    const k = ((v - 1) % n) + 1, ps = (R.look && R.look.plantScale && R.look.plantScale[k - 1]) || 1;
+    const k = ((v - 1) % n) + 1, ps = local?.look.plantScale?.[k - 1] || 1;
     const ax = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.1, ay = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.1;
     const art = ART[`plant-${b}-${k}${glow ? '-glow' : ''}`]; // (glow: just the parts of it that glow at night, if any)
     if (art) drawArt(ctx, art, ax, ay, TP * ps * (0.84 + hash2(i, j, sd + 2) * 0.14));
@@ -1876,13 +1936,17 @@ function expressGantries(v0, v1) {
 }
 function z0Gantry() { return R.cam.z < 10; } // (too far out to see one)
 
+/** The fixture above one lane can go dark independently of the other. */
+function gantryLamp(e, lane) {
+  return TOD.active && !murmurDarkAt(e.i + (e.ew ? 0 : lane), e.j + (e.ew ? lane : 0)) ? TOD.state.lights : 0;
+}
+
 /** A sign gantry: two grey steel posts on the verges, a lattice beam across both carriageways, and a blank green board
  * over each lane (white border); at night a small lamp under each board lights it. */
 function drawGantry(ctx, e, ox, oy, z) {
   // Seen from nearly straight above: a steel beam across both carriageways (lifted a little, its shadow on the road),
   // a post at each end on the verge, and a blank green board over each lane hanging from the beam.
   const lift = z * 0.22, steel = '#9aa1a8', dark = '#4f555b', green = '#1f6b3e', rim = '#eef3ef';
-  const on = TOD.active && !murmurDarkAt(e.i, e.j) ? TOD.state.lights : 0;
   // Along u (0..1 across both lanes) and v (thickness across the beam), mapped to the screen for either direction.
   const P = e.ew ? (u, v) => [ox + (e.i + 0.5 + v) * z, oy + (e.j - 0.04 + u * 2.08) * z - lift]
     : (u, v) => [ox + (e.i - 0.04 + u * 2.08) * z, oy + (e.j + 0.5 + v) * z - lift];
@@ -1897,6 +1961,7 @@ function drawGantry(ctx, e, ox, oy, z) {
     const sg = e.sides ? e.sides[k] : 1, V = (a) => a * sg;
     rect(c - 0.2, c + 0.2, V(0.06), V(0.34), rim);
     rect(c - 0.19, c + 0.19, V(0.075), V(0.325), green);
+    const on = gantryLamp(e, k);
     if (on > 0.02) { ctx.globalAlpha = on * 0.85; rect(c - 0.16, c + 0.16, V(0.335), V(0.36), '#fff3c8'); ctx.globalAlpha = 1; }
   });
   ctx.restore();
@@ -4785,14 +4850,16 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
  * (wider than a Hauler, LORE.md) rising out of its top and stirring.
  */
 function drawMound(ctx, cx, cy, s, b) {
-  const t = R.time, S2 = s * 1.6;
+  const t = R.time, S2 = s * 1.6, tier = deepSurgeTier(b);
+  const pulse = 0.5 + 0.5 * Math.sin(t * (2.2 + 0.55 * tier) + (b ? b.id : 0));
+  if (tier) fxGround(ctx, cx, cy, s * (1.8 + 0.3 * tier), '#cf75ff', (0.12 + 0.07 * tier) * pulse);
   // The art (renderer/b/murmur_moles.js, the Burrow's level 4: a night render, drawn as it is since it's always night in
   // the Hollow): drawn at the nests' size (see drawNest), with their danger ring.
   const art = ART['deep-mound-hollow'];
   if (art) {
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + (b ? b.id : 0)), r = s * 2.4;
+    const r = s * (2.4 + 0.12 * tier);
     ctx.save();
-    ctx.strokeStyle = `rgba(255,70,90,${0.25 + 0.35 * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.06);
+    ctx.strokeStyle = `rgba(255,70,90,${0.25 + (0.35 + 0.08 * tier) * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.06);
     ctx.setLineDash([s * 0.24, s * 0.16]);
     ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.1, r * (0.92 + 0.05 * pulse), r * 0.72 * (0.92 + 0.05 * pulse), 0, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
@@ -5222,10 +5289,32 @@ function drawShip(ctx, u, sx, sy, s) {
     ctx.fillRect(-L * 0.95, -B * 0.6, L * 0.3, B * 1.2);
     ctx.restore();
   }
+  // Port and starboard markers are attached to the hull, including while docked.
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night > 0.02) {
+    const c = Math.cos(f), si = Math.sin(f);
+    for (const side of [-1, 1]) {
+      fxGlow(ctx, sx + c * L * 0.5 - si * B * side, sy + si * L * 0.5 + c * B * side,
+        s * 0.13, side < 0 ? '#ff6960' : '#68f5c0', night * 0.65);
+    }
+  }
   if (u.hp < u.maxHp && R.clean < 2) {
     const w = s * 0.6;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.42, w, Math.max(2, s * 0.05));
     ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.42, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+  }
+}
+
+/** Short headlamps fitted to the three specialists' front corners. */
+function drawSpecialistHeadlights(ctx, u, x, y, size) {
+  const night = TOD.active ? TOD.state.headlights : 0;
+  if (night <= 0.02) return;
+  const a = u.face || 0, c = Math.cos(a), s = Math.sin(a);
+  const front = (u.type === 'railgunner' ? 0.16 : 0.29) * size;
+  const halfWidth = (u.type === 'skirmisher' ? 0.11 : 0.16) * size;
+  for (const side of [-halfWidth, halfWidth]) {
+    const px = x + c * front - s * side, py = y + s * front + c * side;
+    fxGlow(ctx, px, py, size * 0.16, '#f0f5ff', night * 0.85);
   }
 }
 
@@ -5262,10 +5351,12 @@ function drawBot(ctx, u, sx, sy, s) {
     if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
     else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
     else {
-      // (the Skirmisher, Arc Caster and Railgunner light their way with the warbots' headlights, and have lights of their own)
+      // The newer units use lamps placed on their own silhouettes.
       const lamps = BOTS[u.type].flank || BOTS[u.type].arc || BOTS[u.type].railgun;
-      drawHeadlights(ctx, lamps ? 'warbot' : art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
-      if (lamps) drawArmyLights(ctx, u, sx, sy + bob, s, size);
+      if (lamps) {
+        drawSpecialistHeadlights(ctx, u, sx, sy + bob, size);
+        drawArmyLights(ctx, u, sx, sy + bob, s, size);
+      } else drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
     }
   } else if (!isArmy(u)) {
     const r = s * 0.16;
@@ -5355,12 +5446,22 @@ function driveFrame(u) {
 
 /** Brake lights while it slows or waits, a puff of dust while it speeds up (fading towards full speed). */
 function drawDriveOverlays(ctx, u, x, y, size) {
-  if (u.drive < 0 && ART[u.type + '-brake']) drawArt(ctx, ART[u.type + '-brake'], x, y, size, u.face);
-  else if (u.drive > 0 && ART[u.type + '-boost']) {
+  if (u.drive < 0 && ART[u.type + '-brake']) {
+    if (BOTS[u.type].truck) drawTruckBrakes(ctx, ART[u.type + '-brake'], x, y, size, u.face);
+    else drawArt(ctx, ART[u.type + '-brake'], x, y, size, u.face);
+  } else if (u.drive > 0 && ART[u.type + '-boost']) {
     ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.2, 1);
     drawArt(ctx, ART[u.type + '-boost'], x, y, size, u.face);
     ctx.globalAlpha = 1;
   }
+}
+
+/** Keep road brake lamps legible without lighting up a whole queue. */
+function drawTruckBrakes(ctx, art, x, y, size, face) {
+  ctx.save();
+  ctx.globalAlpha *= 0.55;
+  drawArt(ctx, art, x, y, size, face);
+  ctx.restore();
 }
 
 /** A soft shadow under a bot, cast down-right whichever way the bot faces (for art without one). */
@@ -5938,18 +6039,17 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
 
 /*
  * Smoke (cosmetic, kept in world tiles and game time, so it freezes while paused). Trucks, Tankers and
- * Road Trains puff diesel exhaust from their stacks (EXHAUST_POINTS): a light puff every 0.4 s idling and
- * 0.25 s cruising, thick black smoke every 0.08 s pulling away. Working buildings smoke and steam from
+ * Road Trains puff diesel exhaust from their stacks (EXHAUST_POINTS): smaller, spaced-out puffs with a separate on-screen cap. When pulling away, they puff more often. Working buildings smoke and steam from
  * their chimneys and vents (BUILDING_EMITTERS), a puff every 0.4 s. A puff stays where it was let out (a
  * moving truck leaves a trail), drifting a little downwind; chimney smoke rises. Flame, sparks and dust
  * points wait for their own effect sheets.
  */
-const SMOKE = { puffs: [], next: new Map(), of: null };
-const SMOKE_MAX = 700, SMOKE_WIND = [0.1, -0.03];
+const SMOKE = { puffs: [], exhaust: [], next: new Map(), of: null };
+const SMOKE_MAX = 700, EXHAUST_MAX = 48, SMOKE_WIND = [0.1, -0.03];
 const SMOKE_SHEET = { smoke: 'smoke-exhaust', black: 'smoke-exhaust-heavy', steam: 'smoke-exhaust' };
 
 function smokeReady(key, every) {
-  if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.next.clear(); }
+  if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.exhaust = []; SMOKE.next.clear(); }
   const now = S.time, n = SMOKE.next.get(key);
   every /= gfx().fx; // (Graphics: half as often on Saver, more often on High and Ultra)
   if (n !== undefined && now < n && n - now <= every * 2) return false;
@@ -5957,11 +6057,12 @@ function smokeReady(key, every) {
   return true;
 }
 
-function addPuff(x, y, sheet, size, life, rise, steam) {
+function addPuff(x, y, sheet, size, life, rise, steam, exhaust = false) {
   if (!ART[sheet]) return;
-  SMOKE.puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
-  const most = Math.round(SMOKE_MAX * gfx().fx);
-  if (SMOKE.puffs.length > most) SMOKE.puffs.splice(0, SMOKE.puffs.length - most);
+  const puffs = exhaust ? SMOKE.exhaust : SMOKE.puffs;
+  puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
+  const most = exhaust ? EXHAUST_MAX : Math.round(SMOKE_MAX * gfx().fx);
+  if (puffs.length > most) puffs.splice(0, puffs.length - most);
 }
 
 /** Exhaust from a truck drawn at (x, y) tiles facing `face`. */
@@ -5969,11 +6070,11 @@ function vehicleSmoke(u, x, y, face) {
   const P = typeof EXHAUST_POINTS !== 'undefined' && EXHAUST_POINTS[BOTS[u.type].train ? 'roadtrain' : u.type];
   if (!P || u.inside || !driveFrame(u)) return;
   const v = u.vel || 0, heavy = !!u.path && u.drive > 0 && v < (u.vtop || 1) * 0.8;
-  if (!smokeReady(u.id, heavy ? 0.12 : v > 0.05 ? 0.32 : 0.52)) return;
+  if (!smokeReady(u.id, heavy ? 0.3 : v > 0.05 ? 0.65 : 1.05)) return;
   const k = 0.9 / P.canvas, c = Math.cos(face), s = Math.sin(face);
   for (const [px, py] of P.tips) {
     const ax = (px - P.canvas / 2) * k, ay = (py - P.canvas / 2) * k;
-    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.8 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
+    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.24, 0.72, 0, false, true);
   }
 }
 
@@ -5992,13 +6093,21 @@ function buildingSmoke(b) {
 }
 
 function drawSmoke(ctx, ox, oy, z, inView) {
-  if (!SMOKE.puffs.length || SMOKE.of !== S) return;
+  if (SMOKE.of !== S) return;
+  drawSmokePuffs(ctx, ox, oy, z, inView, SMOKE.puffs, 1);
+  drawSmokePuffs(ctx, ox, oy, z, inView, SMOKE.exhaust, 0.54);
+}
+
+function drawSmokePuffs(ctx, ox, oy, z, inView, puffs, opacity) {
+  if (!puffs.length) return;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
   const now = S.time, tod = TOD.active ? TOD.state.a : 'day';
   let keep = 0;
-  for (const p of SMOKE.puffs) {
+  for (const p of puffs) {
     const age = now - p.t0;
     if (age >= p.life || age < 0) continue;
-    SMOKE.puffs[keep++] = p;
+    puffs[keep++] = p;
     const x = p.x + SMOKE_WIND[0] * age, y = p.y + SMOKE_WIND[1] * age - p.rise * age;
     if (!inView(Math.floor(x), Math.floor(y), 1)) continue;
     const art = ART[p.sheet], A = tod === 'day' || p.steam ? art : todVariant(art, tod);
@@ -6006,7 +6115,8 @@ function drawSmoke(ctx, ox, oy, z, inView) {
     drawSheetFrame(ctx, { img: A.img, frames: art.frames, cols: art.cols }, Math.floor((age / p.life) * art.frames), ox + x * z, oy + y * z, p.sz * z);
     if (p.steam) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
   }
-  SMOKE.puffs.length = keep;
+  puffs.length = keep;
+  ctx.restore();
 }
 
 /**
@@ -6103,7 +6213,7 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
     });
     // Brake lights on the last trailer (the tractor's own are hidden under the first).
     const last = cars[2];
-    if (u.drive < 0 && ART['roadtrain-brake']) drawArt(ctx, ART['roadtrain-brake'], last.x + Math.cos(last.ang) * (35.8 / 256) * size, last.y + Math.sin(last.ang) * (35.8 / 256) * size, size, last.ang);
+    if (u.drive < 0 && ART['roadtrain-brake']) drawTruckBrakes(ctx, ART['roadtrain-brake'], last.x + Math.cos(last.ang) * (35.8 / 256) * size, last.y + Math.sin(last.ang) * (35.8 / 256) * size, size, last.ang);
     return;
   }
   for (const [d, load] of [[1.22, t2], [0.66, t1]]) {
@@ -6228,6 +6338,49 @@ function refreshOverlay(type) {
 }
 
 /* ------------------------------------------------------------------ main draw */
+
+/** Night pools fade when their source is lost, disabled or in a Murmur blackout. */
+function buildingNightOn(b) {
+  if (b.ent !== 'b' || !b.built || b.dead || murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y)) return false;
+  const def = BDEFS[b.type];
+  return !def.viaduct && !def.pylon && !def.ramp;
+}
+/** A structure's own lamps (Arrival City's, a Lift's, a Great Uplink's) are out: the Murmur cut its power, it's shorted, or it stands in a blackout. */
+function nightDark(b) { return !!b && (murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y)); }
+
+function drawCityGlow(ctx, ox, oy, z, items) {
+  const night = gfx().night;
+  if (!TOD.active || !(TOD.state.pools > 0.01) || !night) return;
+  // The haze is soft, so it's built at an eighth of the screen's size (a quarter on Ultra) and laid over it in one draw (cheap).
+  const k = night > 1 ? 1 / 4 : 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
+  let buf = TOD.cityBuf;
+  if (!buf) buf = TOD.cityBuf = document.createElement('canvas');
+  if (buf.width !== w || buf.height !== h) { buf.width = w; buf.height = h; }
+  const c = buf.getContext('2d');
+  c.clearRect(0, 0, w, h);
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = 0.085 * TOD.state.pools;
+  let any = false;
+  for (const e of items) {
+    if (!buildingNightOn(e) || BDEFS[e.type].wild || BDEFS[e.type].barrier) continue;
+    const col = PLAYER_COLORS[e.owner];
+    if (!col) continue;
+    if (e.type === 'city') { // (Arrival City: the warmest light on the map, a soft glow round it seen from far off; dark while it's down)
+      const on = !e.cDown && !e.cDry ? cityLightLevel(1) : 0;
+      if (on > 0.01) { const m = bCentre(e), r = z * 8 * k, ga = c.globalAlpha; c.globalAlpha = ga * 2.2 * on; c.drawImage(glowDisc('#ffcf8a'), (ox + m.x * z) * k - r, (oy + m.y * z) * k - r, r * 2, r * 2); c.globalAlpha = ga; any = true; }
+      continue;
+    }
+    const center = bCentre(e), r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
+    c.drawImage(glowDisc(col), (ox + center.x * z) * k - r, (oy + center.y * z) * k - r, r * 2, r * 2);
+    any = true;
+  }
+  if (!any) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(buf, 0, 0, w / k, h / k);
+  ctx.restore();
+}
 
 function render(dtReal) {
   R.time += dtReal;
@@ -6475,22 +6628,34 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || BDEFS[e.type].pylon || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power; a Maglev pylon lights the line, not the ground)
-      const F = BDEFS[e.type].foot, size = F ? F * 1.05 : e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
+      if (e.ent === 'gantry') {
+        for (const lane of [0, 1]) {
+          const on = gantryLamp(e, lane);
+          if (on <= 0.02) continue;
+          const x = e.i + 0.5 + (e.ew ? 0 : lane), y = e.j + 0.5 + (e.ew ? lane : 0);
+          const startAlpha = ctx.globalAlpha;
+          ctx.globalAlpha = startAlpha * on * 0.28;
+          pool(ox + x * z, oy + y * z, z * 0.55, '#fff0c5');
+          ctx.globalAlpha = startAlpha;
+        }
+        continue;
+      }
+      if (!buildingNightOn(e)) continue;
+      const def = BDEFS[e.type], pc = bCentre(e);
+      const size = def.foot ? def.foot * 1.05 : def.long ? 1.55 : e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       // (a Leech drinking from it: its lights dim; so do a colony's while its Lance charges, flickering)
-      let dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1;
+      let dim = S.wildlife ? drunkLight(pc.x, pc.y) : 1;
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
-      const pc = F ? bCentre(e) : { x: e.x + 0.5, y: e.y + 0.5 };
       if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
       if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
     drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
-    if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
+    if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items.filter((e) => e.ent === 'u' && !BOTS[e.type].sea)); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
-    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused && !shorted(e)) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if ((e.type === 'turret' || e.type === 'minigun') && buildingNightOn(e) && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
@@ -6503,6 +6668,8 @@ function render(dtReal) {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
+      if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
+      if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
       if (e.type === 'city' && e.cCap > 0 && e.cBy >= 0 && R.clean < 2) drawCityTaking(ctx, e, cx, cy, z);
       buildingSmoke(e);
       const def = BDEFS[e.type];
@@ -6573,7 +6740,7 @@ function render(dtReal) {
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawLavaVents(ctx, ox, oy, z, v0, v1);
-  if (R.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
+  if (R.biome === 'springs' || R.secondRegion?.biome === 'springs') drawSpringSteam(ctx, ox, oy, z, v0, v1);
   if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawDomes(ctx, ox, oy, z, inView); // (Shield Domes over their bases)
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
@@ -8642,8 +8809,13 @@ function rebuildMinimapBase() {
     const terr = S.terrain[t];
     let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : (S.burnt && S.burnt[t]) || (S.ash && S.ash[t] > SCARS.light) ? MM_COLORS.burnt : S.crater && S.crater[t] >= 3 ? [70, 56, 40] : MM_COLORS.ground;
+    const blend = R.biomeMix?.[t] || 0;
+    if (blend) {
+      const key = c === MM_COLORS.ground ? 'ground' : c === MM_COLORS.water ? 'water' : c === MM_COLORS.rock ? 'rock' : null;
+      if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
+    }
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
-    if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) c = [236, 104, 34];
+    if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
     else if (S.tidal && S.tidal[t]) c = terr === T_WATER ? [Math.min(255, c[0] + 40), Math.min(255, c[1] + 50), Math.min(255, c[2] + 45)] : [184, 164, 120];
     else if (S.fault && S.fault[t] && terr === T_GROUND && !S.res[t]) c = [c[0] * 0.62, c[1] * 0.6, c[2] * 0.58];
@@ -9646,7 +9818,7 @@ function drawCrateLanding(ctx, f, ox, oy, z) {
   for (const c of f.crates) {
     const t = f.t - c.lag * 0.4;
     if (t < 0) continue;
-    const x = ox + (f.x + c.dx) * z, y = oy + (f.y + c.dy) * z;
+    const x = ox + (f.x + clamp(c.dx, -0.32, 0.32)) * z, y = oy + (f.y + clamp(c.dy, -0.32, 0.32)) * z;
     // the dust kicked up
     if (t < 0.7) {
       const q = t / 0.7;
@@ -9667,6 +9839,90 @@ function drawCrateLanding(ctx, f, ox, oy, z) {
   }
 }
 
+/** '#rrggbb' as [r, g, b]. */
+function ambRGB(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); }
+/** A pale light with share `k` of colour `hex` in it, as 'r,g,b'. */
+function ambTint(hex, k) {
+  const c = ambRGB(hex || '#dfe9ff'), p = [222, 233, 255];
+  return p.map((v, i) => Math.round(v + (c[i] - v) * k)).join(',');
+}
+
+/**
+ * From evening until dawn, the Command Bases' beacons: each standing, finished one (whoever holds it) shines a short, pale beam
+ * straight up from the top of its mast into the sky, its owner's colour faintly in it, with a soft halo at its foot,
+ * light on its pad and a slow pulse that every beacon on the planet keeps in time. Your own base hums as its beacon
+ * comes on, if it's in view. In the Hollow the beam goes up its breach (a base under rock would light only the roof).
+ */
+function drawBeacons(ctx, ox, oy, z) {
+  if (!S || !S.buildings) return;
+  const A = ambState(), k = ambLight(AMB.beam), on = k > 0.45;
+  const pulse = 0.86 + 0.14 * Math.sin((R.time * Math.PI * 2) / AMB.pulse), wx = S.hollow ? 0 : ambWeather();
+  let drew = false;
+  for (const b of S.buildings) {
+    if (b.type !== 'lander' || !buildingNightOn(b)) continue;
+    const was = A.beacons.get(b.id);
+    A.beacons.set(b.id, on);
+    if (on && was === false && isMe(b.owner) && R.time - A.humAt > 8 && typeof mapVoice === 'function' && typeof sfxReady === 'function' && sfxReady()) {
+      const D = mapVoice(b.x + 0.5, b.y + 0.5, 1);
+      if (D) { A.humAt = R.time; sfx('beacon', D); }
+    }
+    if (k < 0.01) continue;
+    // The top of the mast (the art's light, at 0.537, 0.098 of the image), else a little over the middle.
+    const art = ART['lander@' + Math.min(1, b.owner)], sc = art && art.scale, an = art && art.anchor;
+    const fx = ox + (b.x + 0.5) * z + (Array.isArray(an) && sc ? (0.537 - an[0]) * sc * z : 0);
+    const fy = oy + (b.y + 0.5) * z + (Array.isArray(an) && sc ? (0.098 - an[1]) * sc * z : -0.9 * z);
+    const under = !S.hollow || breachAt(b.x + 0.5, b.y + 0.5, 1.5);
+    const L = under ? Math.min(z * 4, R.h * 0.16) * (1 - 0.35 * wx) : z * 1.4;
+    if (fx < -z * 3 || fx > R.w + z * 3 || fy - L > R.h || fy > R.h + z * 4) continue;
+    if (!drew) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; drew = true; }
+    ambBeam(ctx, fx, fy, L, z, PLAYER_COLORS[b.owner] || '#dfe9ff', k * pulse * 0.8, wx, !under, b.id);
+  }
+  if (drew) ctx.restore();
+}
+
+/** One beam (adding light): its foot at (x, y), `L` px tall, strength `a`; `wx` the weather (it scatters the light); `roof`: under rock. */
+function ambBeam(ctx, x, y, L, z, hex, a, wx, roof, id) {
+  const beam = ambTint(hex, 0.22), halo = ambTint(hex, 0.45), top = y - L;
+  // The light on the pad round the base.
+  const pr = Math.max(14, z * 1.9), pg = ctx.createRadialGradient(x, y + z, 0, x, y + z, pr);
+  pg.addColorStop(0, `rgba(${halo},${0.18 * a})`); pg.addColorStop(1, `rgba(${halo},0)`);
+  ctx.fillStyle = pg;
+  ctx.beginPath(); ctx.ellipse(x, y + z, pr, pr * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+  // Three columns one inside another (soft edges, brightest down the middle), each widening a little as it climbs and
+  // fading into the sky: a wide faint haze (wider and stronger in weather, which scatters the light), the glow, the core.
+  const col = (w0, w1, a0, a1, mid, white) => {
+    const g = ctx.createLinearGradient(0, y, 0, top);
+    g.addColorStop(0, white ? `rgba(248,250,255,${a0})` : `rgba(${beam},${a0})`); g.addColorStop(mid, `rgba(${beam},${a1})`); g.addColorStop(1, `rgba(${beam},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x - w0 / 2, y); ctx.lineTo(x - w1 / 2, top); ctx.lineTo(x + w1 / 2, top); ctx.lineTo(x + w0 / 2, y); ctx.closePath(); ctx.fill();
+  };
+  const hw = Math.max(26, z * 1.5) * (1 + wx);
+  col(hw, hw * 2.2, (0.07 + 0.08 * wx) * a, 0.025 * a, 0.45);
+  const gw = Math.max(11, z * 0.55);
+  col(gw, gw * 1.9, 0.22 * a, 0.09 * a, 0.35);
+  const cw = Math.max(2, z * 0.09);
+  col(cw, cw * 1.6, 0.9 * a, 0.4 * a, 0.2, true);
+  // The halo at its foot.
+  const hr = Math.max(11, z * 0.7) * (1 + 0.5 * wx), hg = ctx.createRadialGradient(x, y, 0, x, y, hr);
+  hg.addColorStop(0, `rgba(255,255,255,${0.8 * a})`); hg.addColorStop(0.25, `rgba(${halo},${0.45 * a})`); hg.addColorStop(1, `rgba(${halo},0)`);
+  ctx.fillStyle = hg;
+  ctx.fillRect(x - hr, y - hr, hr * 2, hr * 2);
+  if (roof) { // under the Hollow's rock: a pale splash where it meets the roof
+    const rg = ctx.createRadialGradient(x, top, 0, x, top, z * 0.9);
+    rg.addColorStop(0, `rgba(${beam},${0.3 * a})`); rg.addColorStop(1, `rgba(${beam},0)`);
+    ctx.fillStyle = rg; ctx.fillRect(x - z * 0.9, top - z * 0.9, z * 1.8, z * 1.8);
+    return;
+  }
+  // Up close, motes drifting slowly up through the light.
+  if (z < 22) return;
+  const m = Math.max(1, z * 0.04);
+  for (let n = 0; n < 10; n++) {
+    const h1 = hash2(id, n, 751), h2 = hash2(n, id, 752), f = (R.time * (0.02 + 0.03 * h2) + h1) % 1;
+    ctx.fillStyle = `rgba(${beam},${0.5 * a * Math.sin(f * Math.PI)})`;
+    ctx.fillRect(x + (h2 - 0.5) * gw * (0.6 + 0.4 * f), y - f * L * 0.6, m, m);
+  }
+}
+
 /** Cargo Planes in the air, parachutes and wrecks coming down, flak bursting: drawn over everything on the ground. */
 function drawAirLayer(ctx, ox, oy, z, inView) {
   for (const f of S.fx) if (f.type === 'crateland' && f.t >= 0 && inView(f.x, f.y, 2)) drawCrateLanding(ctx, f, ox, oy, z);
@@ -9674,11 +9930,11 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
   for (const d of S.drops || []) {
     if (d.kind === 'wreck') { drawWreck(ctx, d, ox, oy, z, inView); continue; }
     if (d.kind === 'supply') {
-      if (!inView(d.i, d.j, 4)) continue;
-      for (const c of d.crates || [{ dx: 0, dy: 0.62, lag: 0 }]) {
+      if (!inView(d.i, d.j, 4) || !airFreightTarget(d.owner, d.to, d.i, d.j)) continue;
+      for (const c of d.crates || [{ dx: 0, dy: 0.24, lag: 0 }]) {
         const p = clamp((S.time - d.t0 - c.lag) / AIR_DROP_FALL, 0, 1);
         if (S.time - d.t0 - c.lag < 0) continue;
-        const tx = d.i + 0.5 + c.dx, ty = d.j + 0.5 + c.dy, x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p;
+        const tx = d.i + 0.5 + clamp(c.dx, -0.32, 0.32), ty = d.j + 0.5 + clamp(c.dy, -0.32, 0.32), x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p;
         const h = (1 - p) * (1 - p * 0.3) * 1.5 * z, sway = Math.sin((S.time - d.t0) * 2.6 + c.lag * 5) * 0.16 * (1 - p * 0.7);
         if (p < 1) drawFallingCrate(ctx, d.owner, ox + x * z, oy + y * z, h, z, sway, p);
       }
@@ -9835,7 +10091,6 @@ function drawLanceCharge(ctx, b, cx, cy, s) {
   const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = since < 8 ? 1 - since / 8 : 0;
   if (!k && !cool) return;
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
-  if (b.lOn && TOD.active) { const m = M.r[4]; ctx.save(); ctx.globalAlpha = 0.4 + 0.6 * k; drawLightPool(ctx, cx + m[0] * s, cy + m[1] * s + s * 0.5, s * (0.8 + k), '#ff8a3a'); ctx.restore(); } // (the barrel's glow on the pit at night)
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   // the barrel warming along its length: a faint heat line from the breech end to as far as the charge has climbed
@@ -10153,7 +10408,7 @@ function drawCity(ctx, cx, cy, s, owner, b) {
   const art = (down && artFor('city-down', owner)) || artFor('city', owner);
   if (!art) { drawMegaPlain(ctx, 'city', cx, cy, s, owner, b); return; }
   drawArt(ctx, art, cx, cy, s);
-  if (b && b.id && b.built && !down && !b.cDry) cityLights(ctx, cx, cy, s);
+  if (b && b.id && b.built && !down && !b.cDry && !nightDark(b)) cityLights(ctx, cx, cy, s);
 }
 /**
  * How far each of Arrival City's four tiers of lights is on (0..1) at the light now (TOD.state.lights): the street lamps
@@ -10235,8 +10490,8 @@ function drawGupSignals(ctx, ox, oy, z) {
     if (X < -z * 8 || X > R.w + z * 8 || Y < -z * 4 || Y - z * 20 > R.h + z * 4) continue;
     const col = PLAYER_COLORS[b.owner] || '#ffffff', weak = b.armor < BDEFS.gup.armor * 0.3;
     ctx.save();
-    // Red lights round the rim, blinking in turn (bright by night).
-    if (night > 0.15 && !weak) {
+    // Red lights round the rim, blinking in turn (bright by night; out with its power cut, shorted or blacked out).
+    if (night > 0.15 && !weak && !nightDark(b)) {
       ctx.globalCompositeOperation = 'lighter';
       const pts = ['rim', 'rimR', 'rimS', 'rimL'];
       for (let k = 0; k < 4; k++) {
@@ -10311,7 +10566,7 @@ function drawLiftCables(ctx, ox, oy, z) {
  * (a weak or falling cable: the fraction of a tile its top swings). `b`: the Lift (its climber); null for a falling one.
  */
 function drawLiftBeam(ctx, x, y, H, z, owner, sway, b) {
-  const night = TOD.active ? TOD.state.lights || 0 : 0, col = PLAYER_COLORS[owner] || '#ffffff';
+  const night = TOD.active && !nightDark(b) ? TOD.state.lights || 0 : 0, col = PLAYER_COLORS[owner] || '#ffffff';
   const top = (h) => x + Math.sin(R.time * 1.3) * sway * z * 3 * h * h; // (the cable's x at height fraction h)
   ctx.save();
   // The soft column of light round it: its owner's colour, brighter at night, fading out up the screen.
@@ -10521,6 +10776,59 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   }
 }
 
+function drawMassDriverLamps(ctx, b, cx, cy, z) {
+  const A = MD_ART[mdDir(b)], P = (q) => [cx + q[0] * z, cy + q[1] * z];
+  const dark = TOD.active ? TOD.state.lights : 0, BLUE = 'rgba(191,227,255,A)';
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
+  if (charging) {
+    // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
+    const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
+    for (let k = 0; k < NC; k++) {
+      const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
+      mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
+    }
+    const [bx, by] = P(A.b), [tx, ty] = P(A.c[Math.max(0, lit - 1)]);
+    if (lit > 0) for (let n = 0; n < 1 + Math.floor(p * 2); n++) mdBolt(ctx, bx, by - z * 0.04, tx, ty - z * 0.04, Math.max(1, z * 0.01), 6 + lit, z * 0.07, 'rgba(120,195,255,1)');
+    for (let k = 1; k < lit; k++) if (Math.random() < 0.5) { const [x0, y0] = P(A.c[k - 1]), [x1, y1] = P(A.c[k]); mdBolt(ctx, x0, y0 - z * 0.09, x1, y1 - z * 0.09, Math.max(1, z * 0.008), 3, z * 0.06, 'rgba(120,195,255,1)'); }
+    // a ray of light along the whole rail, breech to muzzle, gathering as it charges
+    const [mx, my] = P(A.m), g = ctx.createLinearGradient(bx, by, mx, my);
+    g.addColorStop(0, `rgba(150,210,255,${0.35 * p})`); g.addColorStop(1, `rgba(150,210,255,${0.12 * p})`);
+    ctx.strokeStyle = g; ctx.lineWidth = Math.max(1.5, z * 0.035 * p); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+  }
+  if (since < 0.5) {
+    // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
+    const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
+    for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
+    mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
+    ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+  } else if (!charging && dark > 0.3 && buildingNightOn(b)) {
+    // after dark the coils glow faintly between shots
+    for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
+  }
+  ctx.restore();
+}
+
+function drawStructureMarkers(ctx, b, x, y, s) {
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night <= 0.02) return;
+  let points, color, intensity = 0.55;
+  switch (b.type) {
+    case 'mdriver': points = [MD_ART[mdDir(b)].b]; color = '#8ecfff'; break;
+    case 'catcher':
+      points = [[-0.25, MD_ART.cradle[1]], [0.25, MD_ART.cradle[1]]];
+      color = '#7adfff'; intensity = mdArmsIn(b) ? 0.95 : 0.60; break;
+    case 'lance': points = [[-0.60, 0.72], [0.60, 0.72]]; color = b.lOn ? '#ffd39c' : '#ffc17a'; break;
+    case 'dome':
+      points = [[-0.37, 0.18], [0.37, 0.18]]; color = b.dUp ? '#8ee6ff' : '#d5a27a'; break;
+    default: return;
+  }
+  for (const [dx, dy] of points) fxGlow(ctx, x + dx * s, y + dy * s, s * 0.13, color, night * intensity);
+}
+
 function drawMassDrivers(ctx, ox, oy, z, inView) {
   const ui = typeof UI !== 'undefined' ? UI : {}, BLUE = 'rgba(191,227,255,A)';
   ctx.save();
@@ -10547,44 +10855,11 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     }
   } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
   ctx.globalCompositeOperation = 'lighter';
-  const dark = typeof TOD !== 'undefined' && TOD.active && TOD.state ? TOD.state.lights || 0 : 0;
-  for (const b of S.buildings) {
-    if (b.dead || !b.built || !BDEFS[b.type].mdriver || !inView(b.x, b.y, 3)) continue;
-    const A = MD_ART[mdDir(b)], bc = bCentre(b), cx = ox + bc.x * z, cy = oy + bc.y * z, P = (q) => [cx + q[0] * z, cy + q[1] * z];
-    const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
-    if (charging) {
-      // the coils fire in sequence, breech to muzzle, faster and brighter as the charge builds; arcs crackle between them
-      const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1), NC = A.c.length, lit = Math.min(NC, Math.floor(p * (NC + 2))), run = (R.time * (6 + 16 * p)) % NC;
-      for (let k = 0; k < NC; k++) {
-        const [x, y] = P(A.c[k]), on = k < lit ? 0.45 + 0.4 * p : 0, chase = Math.max(0, 1 - Math.abs(run - k) * 0.8) * (0.4 + 0.6 * p);
-        mdGlow(ctx, x, y, z * (0.11 + 0.07 * p), BLUE, Math.min(0.75, 0.6 * (on + chase)));
-      }
-      const [bx, by] = P(A.b), [tx, ty] = P(A.c[Math.max(0, lit - 1)]);
-      if (lit > 0) for (let n = 0; n < 1 + Math.floor(p * 2); n++) mdBolt(ctx, bx, by - z * 0.04, tx, ty - z * 0.04, Math.max(1, z * 0.01), 6 + lit, z * 0.07, 'rgba(120,195,255,1)');
-      for (let k = 1; k < lit; k++) if (Math.random() < 0.5) { const [x0, y0] = P(A.c[k - 1]), [x1, y1] = P(A.c[k]); mdBolt(ctx, x0, y0 - z * 0.09, x1, y1 - z * 0.09, Math.max(1, z * 0.008), 3, z * 0.06, 'rgba(120,195,255,1)'); }
-      // a ray of light along the whole rail, breech to muzzle, gathering as it charges
-      const [mx, my] = P(A.m), g = ctx.createLinearGradient(bx, by, mx, my);
-      g.addColorStop(0, `rgba(150,210,255,${0.35 * p})`); g.addColorStop(1, `rgba(150,210,255,${0.12 * p})`);
-      ctx.strokeStyle = g; ctx.lineWidth = Math.max(1.5, z * 0.035 * p); ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
-    }
-    if (since < 0.5) {
-      // the shot: every coil blazes and dies away, a flash at the muzzle, a ray up the rail
-      const f = 1 - since / 0.5, [mx, my] = P(A.m), [bx, by] = P(A.b);
-      for (let k = 0; k < A.c.length; k++) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.18, BLUE, f * 0.6); }
-      mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
-      ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
-      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
-    } else if (!charging && dark > 0.3) {
-      // after dark the coils glow faintly between shots
-      for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
-    }
-  }
   // canisters in flight: the guidance beam from the muzzle toward the Catcher, the canister and its glowing streak
   for (const m of S.cans || []) {
-    const from = getE(m.from), p = canScreen(m, ox, oy, z, m.t);
+    const from = getE(m.from), to = getE(m.to), p = canScreen(m, ox, oy, z, m.t);
     if (!inView(m.x0 + (m.x1 - m.x0) * p.k, m.y0 + (m.y1 - m.y0) * p.k, 6) && !inView(m.x1, m.y1, 2)) continue;
-    if (from && !from.dead && from.built) {
+    if (from && !from.dead && from.built && to && !to.dead && to.built) {
       const A = MD_ART[mdDir(from)], fc = bCentre(from), mx = ox + (fc.x + A.m[0]) * z, my = oy + (fc.y + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
       const fade = Math.min(1, p.k * 6, (1 - p.k) * 6) * 0.3, g = ctx.createLinearGradient(mx, my, tx, ty);
       g.addColorStop(0, `rgba(191,227,255,${fade})`); g.addColorStop(0.5, `rgba(191,227,255,${fade * 0.35})`); g.addColorStop(1, `rgba(191,227,255,${fade * 0.8})`);
@@ -10593,7 +10868,6 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
       ctx.lineWidth = Math.max(1.5, z * 0.05);
       ctx.setLineDash([z * 0.5, z * 0.35]); ctx.lineDashOffset = -(R.time * z * 4) % (z * 0.85);
       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
-      mdGlow(ctx, tx, ty, z * 0.45, BLUE, fade * 1.6); // (the Catcher's cradle lit, waiting)
     }
     // the streak: where it was over the last moment
     const N = 10, tail = 0.24;

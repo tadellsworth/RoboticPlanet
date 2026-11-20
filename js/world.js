@@ -116,7 +116,9 @@ function generateMap(seed, W, H, cfg) {
       // the sea round it) an islet on the line between each pair of neighbours. Only the bottom-left quarter is
       // cut (it holds the islet below the middle and its twin to the left); the turn lays it on the others.
       const qb = Math.max(10, Math.round(hw * 0.42)), hx = qb, hy = H - 1 - qb;
-      const hr = clamp(hw * 0.29, 8.5, 11), cR = clamp(hw * 0.2, 4.5, 7.5), mR = clamp(hw * 0.1, 2.6, 4), gap = ISLE_GAP + 1.5;
+      const immense = cfg.size === IMMENSE_SIZE;
+      const hr = clamp(hw * 0.29, 8.5, immense ? 14 : 11), cR = clamp(hw * 0.2, 4.5, immense ? 9.5 : 7.5);
+      const mR = clamp(hw * 0.1, 2.6, 4), gap = ISLE_GAP + 1.5;
       isles = [{ x: hx, y: hy, rx: hr, ry: hr }, { x: ccx, y: ccy, rx: cR, ry: cR }];
       for (let d = cR + mR + gap; d < hw - mR - 1; d += 0.5) {
         if (dist(hx, hy, ccx, ccy + d) - hr - mR < gap) continue;
@@ -632,11 +634,11 @@ function generateMap(seed, W, H, cfg) {
     links = [[2, half], [W - 3, half]];
   };
   // Oases: a barren waste strewn with crags, where only round your base and in a few rich oases (three
-  // on each side, one in the middle) is anything worth having; narrow passes wind between them.
+  // on each side, five at Immense or seven at Planetary, and one in the middle) is anything worth having; narrow passes wind between them.
   const oasesShape = () => {
     const cr = makeRng(seed ^ 0x4c5d23), sO2 = seed * 37 + 7, home = clamp(Math.round(W * 0.3), 9, 13); // less round the base on a small map
-    const pts = [];
-    for (let tries = 0; pts.length < 3 && tries < 600; tries++) {
+    const pts = [], want = cfg.size === PLANETARY_SIZE ? 7 : cfg.size === IMMENSE_SIZE ? 5 : 3;
+    for (let tries = 0; pts.length < want && tries < 600; tries++) {
       const x = 4 + cr() * (W - 8), y = half + 4 + cr() * Math.max(1, H - half - 9);
       if (nearBase(x, y, home + 2) || dist2(x, y, ccx, ccy) < 100 || pts.some((q) => dist2(x, y, q.x, q.y) < 90)) continue;
       pts.push({ x, y });
@@ -868,53 +870,89 @@ function generateMap(seed, W, H, cfg) {
   const grandCanyonShape = () => {
     const cr = makeRng(seed ^ 0x4c671f), bend = cr() < 0.5 ? -1 : 1, wave = 2 + cr();
     const narrow = Math.round(W * (0.32 + 0.04 * cr())), ford = Math.round(W * 0.42);
-    const river = (i) => {
-      const x = (i - ccx) / ccx, a = Math.abs(x);
-      return ccy + Math.sign(x) * Math.round(bend * (1.8 * dsin(a * wave) + 0.6 * dsin(a * 8)));
-    };
+    // Ease bends across columns so even the two-tile narrows have a connected channel.
+    const centerline = new Float32Array(W);
+    let offset = 0;
+    for (let i = Math.ceil(ccx); i < W; i++) {
+      const a = (i - ccx) / ccx;
+      const next = Math.round(bend * (3 * dsin(a * wave) + 0.9 * dsin(a * 8)));
+      if (i - ccx > 0.5) offset = clamp(next, offset - 1, offset + 1);
+      centerline[i] = ccy + offset;
+      centerline[W - 1 - i] = ccy - offset;
+    }
+    const river = (i) => centerline[i];
     const main = Math.floor(ccx) - 2, flank = Math.round(W * 0.14);
     const onMain = (i) => i >= main && i <= main + 4;
     const onFlank = (i) => i >= flank - 3 && i <= flank + 1;
     const fromNarrows = (i) => Math.min(Math.abs(i - narrow), Math.abs(i - (W - 1 - narrow)));
+    const basin = (i, center, radius) => Math.max(0, 1 - sq((i - center) / radius));
+    const islandX = Math.round(W * (0.16 + cr() * 0.025));
+    const islandR = clamp(W * (0.055 + cr() * 0.011), 2.4, 8);
+    const meadowX = Math.round(W * (0.41 + cr() * 0.035));
+    const widthAt = (i) => {
+      const left = Math.min(i, W - 1 - i);
+      return 6 * basin(left, islandX, W * 0.12) + 4 * basin(left, meadowX, W * 0.075);
+    };
     const floorEdge = (i) => {
-      if (fromNarrows(i) <= 1) return 3;
+      if (fromNarrows(i) <= 1) return 3.4;
       if (onMain(i)) return 7;
       if (onFlank(i)) return 11;
-      const bank = 7 + (fbm(i / 8, 0, sE, 2) - 0.5) * (1 + TPR.levels * 0.4);
+      const bank = 6 + widthAt(i) + (fbm(i / 8, 0, sE, 2) - 0.5) * (2 + TPR.levels * 0.4);
       const side = 6 * clamp(1 - i / (W * 0.24), 0, 1);
-      return Math.max(3, bank - Math.max(0, 5 - fromNarrows(i))) + side;
+      return Math.max(3.5, bank - Math.max(0, 5 - fromNarrows(i))) + side;
     };
+    const isFord = (i) => i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford;
+    const waterWidth = (i) => {
+      if (fromNarrows(i) <= 1) return 1.5;
+      if (isFord(i)) return 2;
+      const left = Math.min(i, W - 1 - i);
+      return 2 + 4.4 * basin(left, islandX, islandR * 1.6) + 0.9 * basin(left, meadowX, W * 0.065);
+    };
+    const bankRow = (i) => Math.ceil(river(i) + waterWidth(i));
     for (let i = 0; i < W; i++) {
-      const mid = river(i), edge = floorEdge(i), n = fromNarrows(i);
+      const mid = river(i), n = fromNarrows(i), wet = waterWidth(i);
+      // Keep neighboring stretches of the riverbank joined, even where a wide bend meets the narrows.
+      const bank = Math.max(bankRow(Math.max(0, i - 1)), bankRow(Math.min(W - 1, i + 1)));
+      const edge = Math.max(floorEdge(i), wet + (n <= 1 ? 1.9 : 3), bank - mid + 1);
+      const island = n <= 1 || isFord(i) ? 0 : 2.55 * Math.sqrt(basin(Math.min(i, W - 1 - i), islandX, islandR));
       const step = onMain(i) || onFlank(i) ? 3 : 1 + clamp((n - 1) * 0.65, 0, 2);
       for (let j = Math.ceil(mid); j < H; j++) {
         const t = id(i, j), depth = j - mid;
-        if (depth < (n <= 1 ? 1.5 : 2)) {
-          put(t, T_WATER, undefined, true);
-          flag(elev, t, 0);
-          if (i === ford || i === ford + 1 || i === W - 1 - ford || i === W - 2 - ford) flag(fordA, t);
+        if (depth < wet) {
+          if (depth < island) {
+            put(t, T_GROUND, 0);
+            if (depth + 0.8 < island && hash2(i, j, sO) < 0.83) putRes(t, F_FERTILE);
+          } else {
+            put(t, T_WATER, undefined, true);
+            flag(elev, t, 0);
+            if (isFord(i)) flag(fordA, t);
+          }
           continue;
         }
         const level = depth < edge ? 0 : depth < edge + step ? 1 : depth < edge + 2 * step ? 2 : 3;
-        // Keep the starter fields on the rim. Clear the river flats and terraces for roads, docks and ramps.
+        // Keep terraces clear near the two descents. Away from them, crags break up the high shelves.
+        const crag = level === 2 && Math.abs(i - main) > 7 && Math.abs(i - flank) > 7 && n > 3 &&
+          fbm(i / 4, j / 4, sB, 2) > 0.65;
         const abutment = n <= 1 && depth < edge + 2 * step + 1;
-        if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
+        if (crag) { put(t, T_ROCK, undefined, true); flag(elev, t, level); }
+        else if (level < 3 || abutment || terrain[t] !== T_GROUND) put(t, T_GROUND, level);
         else flag(elev, t, level);
+        // Patches follow the broad bends. Leave the first shoreline tile bare for docks and crossings.
+        if (level === 0 && n > 2 && !isFord(i) && depth > wet + 0.7 && depth < edge - 0.7 &&
+            fbm(i / 4, j / 3, sC, 2) + 0.045 * widthAt(i) > 0.67) putRes(t, F_FERTILE);
       }
     }
 
-    // Two descents per rim. Shift the middle ramp sideways so there is a switchback on the terrace.
+    // One natural ramp at each terrace of two single-lane descents. Stagger the middle ramp for a switchback.
     for (const [x, dir] of [[main, 1], [flank, -1]]) {
       for (let level = 0; level < 3; level++) {
-        const start = x + (level === 1 ? 3 * dir : 0);
-        for (let i = start; i < start + 2; i++) {
-          for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
-            const t = id(i, j);
-            if (elev[t] !== level || elev[t + W] !== level + 1) continue;
-            put(t, T_GROUND, level);
-            flag(ramp, t);
-            break;
-          }
+        const i = x + (level === 1 ? 3 * dir : 0);
+        for (let j = Math.ceil(river(i)) + 2; j < H - 1; j++) {
+          const t = id(i, j);
+          if (terrain[t] !== T_GROUND || terrain[t + W] !== T_GROUND ||
+              elev[t] !== level || elev[t + W] !== level + 1) continue;
+          flag(ramp, t);
+          break;
         }
       }
     }
@@ -922,14 +960,14 @@ function generateMap(seed, W, H, cfg) {
     // Ore and Crystal on broad river flats, with stretches of bare shoreline for Ports.
     for (const [part, type, rad] of [[0.11, R_ORE, 1.8], [0.23, R_CRYSTAL, 1.5], [0.47, R_ORE, 1.8],
       [0.55, R_CRYSTAL, 1.5], [0.78, R_ORE, 1.9], [0.91, R_CRYSTAL, 1.6]]) {
-      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + 3.8);
+      const i = Math.round((W - 1) * part), j = Math.ceil(river(i) + waterWidth(i) + 1.1);
       stampRes(cr, i, j, rad, type, 0.85 * stampDens);
       putRes(id(i, j), type);
     }
     if (cfg.nuke) {
       const spots = [];
       for (let i = 2; i < W - 2; i++) {
-        for (let j = Math.ceil(river(i) + 2.5); j < river(i) + floorEdge(i); j++) {
+        for (let j = Math.ceil(river(i) + waterWidth(i)); j < river(i) + floorEdge(i); j++) {
           const t = id(i, j);
           if (!res[t] && !ramp[t]) spots.push(t);
         }
@@ -2082,7 +2120,7 @@ function hollowMap(seed, W, H, cfg) {
   const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
   const cr = makeRng((seed ^ 0x4011a3) >>> 0), sW = seed * 67 + 5, sV = seed * 71 + 13;
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, bx = Math.floor(W / 2), by = H - 8, Dy = by - ccy;
-  const sz = clamp(cfg.size ?? 1, 0, 3);
+  const sz = clamp(cfg.size ?? 1, 0, HOLLOW.nests.length - 1);
   const P = (u, v) => [u * (W - 1), ccy + v * Dy]; // a place on player 0's side: u across (0 west, 1 east), v from the middle line (0) to the base (1)
   // Every change to a tile is made to its twin too (the same spot turned half round, on player 1's side).
   const put = (t, terr, lv, k) => {
@@ -2361,7 +2399,9 @@ function hollowMap(seed, W, H, cfg) {
     if (!res[t]) continue;
     const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
-    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
+    // The larger caverns have more distance to supply, while their authored Ore and Oil clusters stay few.
+    const reserves = sz >= IMMENSE_SIZE && (res[t] === R_ORE || res[t] === R_OIL) ? 1.5 : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * reserves * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
   }
 
   // 9) The Murmur's nest sites (the nests themselves go down with the Murmur: see placeNests): the Deep's mound in the
@@ -2424,6 +2464,11 @@ function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 /** How many players a game asking for `want` gets: as many as the map type has room for (Versus only). */
 function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape)) : minPlayers(shape); }
 
+/** Planetary is sized for a solo colony or a two-colony match. */
+function mapSizeForPlayers(size, players) {
+  return size === PLANETARY_SIZE && players > 2 ? IMMENSE_SIZE : size;
+}
+
 /**
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
@@ -2438,14 +2483,21 @@ function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; r
 
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
-  const sz = SIZE_PRESETS[st.size], sh = SHAPE_PRESETS[st.shape || 0];
+  const size = mapSizeForPlayers(st.size, st.players);
+  const sz = SIZE_PRESETS[size], sh = SHAPE_PRESETS[st.shape || 0];
   // Crossroads for three or four: a square map in four quarters, 80% more ground than for two.
   if (quadMap(st)) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.8) / 2); return { W: side, H: side }; }
   // Long Haul 2v2: its own proportions, the width even too (it is mirrored left to right).
   if (haul4Map(st)) return { W: 2 * Math.round((sz.w * sh.w) / 2), H: 2 * Math.round((sz.h * sh.h) / 2) };
   // Three players: a square map (the planet is the circle inside it), 40% more ground.
   if (st.players === 3) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.4) / 2); return { W: side, H: side }; }
-  return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
+  const W = Math.round(sz.w * sh.w), H = 2 * Math.round((sz.h * sh.h) / 2);
+  // Long and naval layouts preserve their proportions inside the Standard Planetary tile budget.
+  if (size === PLANETARY_SIZE && W * H > sz.w * sz.h) {
+    const scale = Math.sqrt((sz.w * sz.h) / (W * H));
+    return { W: Math.floor(W * scale), H: 2 * Math.floor(H * scale / 2) };
+  }
+  return { W, H };
 }
 
 /**
@@ -2563,11 +2615,13 @@ function newGame(opts) {
   // Free-for-all: three players (you and two rivals) on the map shapes that have room for three, or
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
+  settings.size = mapSizeForPlayers(settings.size, settings.players);
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
   if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow) settings.upWin = true;
   settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
+  if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
@@ -2581,6 +2635,7 @@ function newGame(opts) {
   // (Four Isles joins allies' islands with a sandbar in a team game.)
   const m = generateMap(seed, W, H, opts.teams && mode === 'versus' && settings.players === 4 ? { ...settings, teams: true } : settings);
   if (opts.layout) opts.layout(m, W, H); // missions hand-place features on their planet
+  if (settings.biome2) settings.biomeBoundary = biomeBoundary(m.terrain, W, H, seed);
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
@@ -2691,6 +2746,37 @@ function newGame(opts) {
 /** The biome of the current game. */
 function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
 
+/** Signed distance along the seed’s winding biome frontier. */
+function biomeFrontierAt(x, y, w, h, seed) {
+  const a = Math.floor(hash2(0, 0, seed ^ 0x4145) * 8) * Math.PI / 4;
+  const nx = (x + 0.5) / w - 0.5, ny = (y + 0.5) / h - 0.5;
+  const bend = (fbm(nx * 5, ny * 5, (seed % 100000) + 117, 2) - 0.5) * 0.35;
+  return nx * dcos(a) + ny * dsin(a) + bend;
+}
+
+/** Place the middle of the transition so the primary biome covers 65% of the original land. */
+function biomeBoundary(terrain, w, h, seed) {
+  const land = [];
+  for (let t = 0; t < terrain.length; t++) {
+    if (terrain[t] === T_GROUND || terrain[t] === T_ROCK) land.push(biomeFrontierAt(t % w, (t / w) | 0, w, h, seed));
+  }
+  const primary = Math.round(land.length * 0.65);
+  if (primary < 1 || primary === land.length) return 0;
+  land.sort((a, b) => a - b);
+  return (land[primary - 1] + land[primary]) * 0.5;
+}
+
+/** The seed supplies the direction and bends; the boundary is saved even if terrain changes. */
+function biomeMixAt(x, y, w, h, seed, boundary = 0) {
+  const v = clamp(0.5 + (biomeFrontierAt(x, y, w, h, seed) - boundary) / 0.2, 0, 1);
+  return Math.fround(v * v * (3 - 2 * v));
+}
+
+/** Plant variants from both regions intermingle in the transition. */
+function secondBiomePlant(x, y, seed, mix) {
+  return mix > 0 && (mix >= 1 || hash2(x, y, seed ^ 0x5a95) < mix);
+}
+
 /** Is this game in the Hollow (the Murmur's cavern lair: see hollowMap)? */
 function hollowOn() { return !!(S && S.hollow); }
 
@@ -2721,29 +2807,41 @@ function breachAt(x, y, pad) {
   return null;
 }
 
+/** The fertile meadows and their grassy edges on the Grand Canyon's floor. */
+function canyonMeadow(t) {
+  if (S.elev[t] !== 0 || !S.fert) return false;
+  const i = t % S.W;
+  return !!(S.fert[t] || (i > 0 && S.fert[t - 1]) || (i < S.W - 1 && S.fert[t + 1]) ||
+    S.fert[t - S.W] || S.fert[t + S.W]);
+}
+
 /**
  * Decorative plants (scenery only): a plant variety 1..PLANT_KINDS on some open ground tiles, in
  * loose patches. Made from the seed with a hash, so the map itself is the same in every biome.
  */
 function makeDecor() {
-  const W = S.W, H = S.H, d = new Uint8Array(W * H), dens0 = BIOMES[biome()].plants, sd = S.seed % 100000;
+  const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
+  const primary = BIOMES[biome()], second = BIOMES[S.settings?.biome2];
+  const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const t = j * W + i;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
+    const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed, S.settings.biomeBoundary)) ? second : primary;
+    const dens0 = canyon && canyonMeadow(t) ? Math.max(0.38, local.plants) : local.plants;
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
     const r = hash2(i * 3 + 1, j * 5 + 2, sd + 733);
-    if (BIOMES[biome()].groves) {
+    if (local.groves) {
       // Stands of conifers (1, 2) and of leafy trees (3, 4), mixed where they meet, with fallen
       // logs (5) and ferns (6) in the undergrowth.
       const g = fbm(i / 7, j / 7, sd + 91, 2), u = hash2(i * 5 + 3, j * 7 + 1, sd + 919);
       d[t] = u < 0.07 ? 5 : u < 0.17 ? 6 : g > 0.53 ? (r < 0.62 ? 1 : 2) : g < 0.47 ? (r < 0.6 ? 3 : 4) : 1 + Math.floor(r * 4);
       continue;
     }
-    const wts = BIOMES[biome()].weights;
+    const wts = local.weights;
     if (wts) { // some varieties rarer than others
       let x = r * wts.reduce((a, w) => a + w, 0), k = 0;
       while (k < wts.length - 1 && x >= wts[k]) x -= wts[k++];
@@ -3067,9 +3165,9 @@ const _walk = { n: 0, seen: null, q: null, gen: 0 };
  * Nodes in reach of (cx, cy) that are a short walk away too: no more than REACH_WALK times the radius in steps,
  * round cliffs and buildings (reachableRes counts the whole walkable area, so groves on a clifftop two tiles off
  * count as much as those beside the building, when the only way up is fifty tiles round). For the AI's choice of
- * a spot for a gatherer (aiSearchSpot).
+ * a spot for a gatherer (aiSearchSpot). If supplied, visit receives each matching tile once.
  */
-function walkRes(cx, cy, radius, type) {
+function walkRes(cx, cy, radius, type, visit) {
   const start = tIdx(cx, cy), n = reachableRes(cx, cy, radius, type);
   if (!n) return 0;
   const W = S.W, N = W * S.H, r2 = radius * radius + 0.3;
@@ -3081,7 +3179,10 @@ function walkRes(cx, cy, radius, type) {
   for (let steps = radius * REACH_WALK; steps >= 0 && head < tail && found < n; steps--) {
     for (const end = tail; head < end; head++) {
       const t = q[head], i = t % W;
-      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) found++;
+      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) {
+        found++;
+        if (visit) visit(t);
+      }
       if (!steps) continue;
       for (let d = 0; d < 4; d++) {
         const u = d === 0 ? (i + 1 < W ? t + 1 : -1) : d === 1 ? (i > 0 ? t - 1 : -1) : d === 2 ? (t + W < N ? t + W : -1) : t - W;
@@ -3866,9 +3967,6 @@ function placeSite(owner, type, i, j, cost, fromStore, axis) {
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
   if (fromStore) b.fromStore = true;
-  // A site in the land of a place supplied by air (a Drop Outpost, or an Outpost you set to it) that no road or
-  // ferry line from home reaches is supplied by air too.
-  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].terr && dist2(d.x, d.y, i, j) <= sq(BDEFS[d.type].terr + 1) && !onHomeGroup(d))) b.airSupply = true;
   if (storeFunded(b)) {
     if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
     else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
@@ -5260,6 +5358,8 @@ function checkSave(o) {
   const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
   if (!obj(o) || o.v !== 1) bad();
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
+  if (o.settings?.size != null && (!Number.isInteger(o.settings.size) || !SIZE_PRESETS[o.settings.size])) bad();
+  if (o.mission?.workerDrop !== undefined && typeof o.mission.workerDrop !== 'boolean') bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
@@ -5325,8 +5425,21 @@ function checkSave(o) {
   }
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag)) ||
     (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
+  for (const u of o.bots) {
+    if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
+    if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
+    if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
+    if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
+      (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
+  }
   if (o.settings != null) {
     const st = o.settings;
+    if (st.size === PLANETARY_SIZE) {
+      const max = SIZE_PRESETS[PLANETARY_SIZE];
+      if (st.players > 2 || o.W * o.H > max.w * max.h) bad();
+    }
+    if (st.biome2 != null && !secondBiomeAllowed(st.biome2, st.biome, st.size, st.shape)) bad();
+    if (st.biomeBoundary != null && (!st.biome2 || !Number.isFinite(st.biomeBoundary) || Math.abs(st.biomeBoundary) > 1)) bad();
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
     if (st.murmur != null && !murmurLevelOk(st.murmur)) bad();
     if (st.scars != null && !scarsOk(st.scars)) bad();
@@ -5336,6 +5449,7 @@ function checkSave(o) {
   if (o.mission) {
     const M = o.mission;
     if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
+    if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
   // The Hollow's places (S.hollow) and its tremors (S.tremor): plain numbers, every place on the map.

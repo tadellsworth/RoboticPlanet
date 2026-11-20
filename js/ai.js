@@ -285,7 +285,8 @@ function aiScrapHeld(P, kind) { return !!(P.scrapT && S.time - (P.scrapT[kind] ?
 /** Has robot u something to do (a job, a load aboard, taking cover)? Going home, charging, filling up or being mended isn't. */
 function aiBusy(u) {
   const tt = u.task && u.task.type;
-  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') || !!u.carry || !!u.mix;
+  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') ||
+    !!(u.carry || u.mix || u.cargo || u.fight || u.fought || u.ferryWait || u.dropping || u.ride >= 0);
 }
 
 /**
@@ -300,13 +301,14 @@ function aiScrap(p, c) {
   for (const u of S.bots) {
     if (u.owner !== p || u.dead || !(u.type in AI_SCRAPPABLE)) continue;
     if (recycling(u)) { away++; continue; }
-    have[u.type] = (have[u.type] || 0) + 1;
     if (aiBusy(u)) { if (u.idleSince !== undefined) u.idleSince = undefined; } // (not deleted: that slows every use of the robot)
     else if (u.idleSince === undefined) u.idleSince = S.time;
+    if (u.type === 'worker' && (u.ferryWait || u.dropping || u.ride >= 0)) continue;
+    have[u.type] = (have[u.type] || 0) + 1;
   }
   if (away >= AI_SCRAP.batch) return;
   const U = c.use, keep = {
-    worker: U.worker + AI_SCRAP.workers, hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
+    worker: Math.max(U.worker + AI_SCRAP.workers, workersWanted(p)), hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
     truck: U.truck, roadtrain: U.roadtrain, agribot: (U.agribot || 0) + 1, paver: (U.paver || 0) + 1,
   };
   if (!AI_SCRAP_KINDS.some((k) => have[k] > keep[k])) return; // (nothing spare)
@@ -315,7 +317,7 @@ function aiScrap(p, c) {
   let sent = 0;
   // Up to `max` robots past `keep` with nothing to do, of the kinds that give back `gives` (any: null), each to the nearest
   // Foundry it can get to, the vehicles first, then the longest idle: ones idle `idleFor` seconds, and with `plain` any
-  // Worker or Hauler, and any of a kind while there are AI_SCRAP.far or more past `keep`.
+  // Hauler, and vehicles while there are AI_SCRAP.far or more past `keep`.
   const send = (max, idleFor, plain, gives, kinds) => {
     if (max <= 0) return 0;
     const ok = {}, list = [];
@@ -323,7 +325,7 @@ function aiScrap(p, c) {
     for (const u of S.bots) {
       if (u.dead || u.owner !== p || !ok[u.type] || recycling(u)) continue;
       if (u.idleSince === undefined || aiBusy(u) || u.shyUntil > S.time || !recyclable(u)) continue;
-      if (S.time - u.idleSince < idleFor && !(plain && (u.type === 'worker' || u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
+      if (S.time - u.idleSince < idleFor && !(plain && u.type !== 'worker' && (u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
       list.push(u);
     }
     list.sort((a, b) => AI_SCRAP_KINDS.indexOf(a.type) - AI_SCRAP_KINDS.indexOf(b.type) || a.idleSince - b.idleSince || a.id - b.id);
@@ -430,7 +432,7 @@ function aiThink(p) {
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
   // or when the Taps bring in less than the Fabs use with little in stock: then more Taps, and Crystal by trade.
-  const crRate = goodRates(p).crystal, crHave = playerGoods(p).crystal || 0;
+  const rates = goodRates(p), crRate = rates.crystal, crHave = playerGoods(p).crystal || 0;
   const crBurn = Math.max(crRate.used, counts.foundry ? AI_CRYSTAL_BURN : 0);
   const crShort = S.mode !== 'colony' && crBurn > 0 && crGround + crHave < crBurn * AI_CRYSTAL_MINS;
   const crLow = P.crLow = crShort || (S.mode !== 'colony' && crHave < 10 && crRate.made < crBurn);
@@ -815,7 +817,7 @@ function aiThink(p) {
         }
         continue;
       }
-      const spot = aiFindSpot(p, type, lander, islandWar && type === 'mine' && starved.includes(type));
+      const spot = aiFindSpot(p, type, lander, (islandWar || hollowOn()) && type === 'mine' && starved.includes(type));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -1139,7 +1141,11 @@ function aiThink(p) {
     // An Architect on Normal or Hard rains them on what its rival lives on (aiMissileWorth), and under siege into the
     // army at its gates (aiMissileKnot).
     const rain = !!st.missiles && (S.difficulty === 'normal' || S.difficulty === 'hard');
-    if (rain && P.homeCall > S.time) for (const silo of me) { const k = siloReady(silo) && aiMissileKnot(p, lander, silo); if (k) fireMissileAt(silo, k.i, k.j); }
+    if (rain && P.homeCall > S.time) for (const silo of me) {
+      if (silo.type !== 'silo' || !siloReady(silo)) continue;
+      const k = aiMissileKnot(p, lander, silo);
+      if (k) fireMissileAt(silo, k.i, k.j);
+    }
     for (const silo of me) {
       if (!siloReady(silo)) continue;
       let best = null, bs = -Infinity;
@@ -1267,11 +1273,19 @@ function aiThink(p) {
   // masses first; with a decisive lead, a storm of the enemy Command Base (aiMarch). An Easy rival marches on the
   // nearest, and with twice the enemy's army on the enemy Command Base itself.
   const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
-  const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
+  // A stranded Foundry cannot supply the usual march. A clear advantage still counts with a
+  // smaller army, provided it can actually beat its target's guns and garrison.
+  const ready = army - unarmed;
+  const stalledParts = hollowOn() && smart && ['alloy', 'chip'].some((g) => {
+    const dry = P.dry?.[g];
+    return haveG[g] < 1 && ((dry && S.time - dry[0] >= AI_SCRAP.crisis) || rates[g].made === 0);
+  });
+  const finish = stalledParts && ready >= lvl.threshold && ready >= enemyArmy * 2 + 2;
+  const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
   if (st.push) aiPush(p, lvl, army, enemyArmy);
   const pushing = P.pushOn > S.time; // (a Warden marches only on its push)
-  if ((st.push ? pushing : army >= lvl.threshold * 2) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
+  if ((st.push ? pushing : army >= lvl.threshold * 2 || finish) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
     let tgt = null, bd = Infinity;
     const enemyBase = getE(S.players[enemy].lander);
     // Uplinks: the nearest fort holding one of the enemy's Uplinks comes first, even ahead of a crushed rival's Command Base.
@@ -1281,7 +1295,7 @@ function aiThink(p) {
       if (d < bd) { bd = d; tgt = b; }
     }
     if (tgt) { /* (an Uplink fort) */ }
-    else if (smart) { if (aiMarch(p, lvl, enemy, army, enemyArmy, crushing)) return; }
+    else if (smart) { if (aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish)) return; }
     else if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
     else for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
@@ -1306,8 +1320,11 @@ function aiThink(p) {
       } else if (spot && avail >= need - guns) P.shieldWant = S.time; // (held back by the guns there)
     }
   }
-  // Recall a march that has nothing left to fight. (Not a storm: see aiStorm.)
-  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150 && !(P.stormOn && P.stormOn.id === P.march)) { recallRally(P.march); P.march = 0; }
+  // Recall a march after it has had time to reach the flag and fight. (Storms use aiStorm.)
+  const march = P.march && rallyById(P.march);
+  if (march && !(P.stormOn && P.stormOn.id === P.march) && S.time - (P.lastMarch || 0) > aiMarchTime(lander, march, 150)) {
+    recallRally(march.id); P.march = 0;
+  }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
@@ -1362,6 +1379,9 @@ const AI_NEST_ORE = 150, AI_NEST_OIL = 60, AI_NEST_RICH_REACH = 34;
 function aiNestRiches(p, nests) {
   const out = new Map(), zone = homeZone(p), c2 = aiNestClear() ** 2, held = [];
   const farm = S.buildings.some((b) => !b.dead && b.owner === p && b.built && b.type === 'farm' && !b.depleted);
+  // Once its last working Mine runs out, a vein on the far side of the Hollow is not a reserve.
+  const oreCrisis = hollowOn() && goodTotal(p, 'ore') < BDEFS.smelter.inp.ore &&
+    !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'mine' && aiGathers(b));
   let ore = 0, oil = 0;
   for (let t = 0; t < S.W * S.H; t++) {
     const r = S.res[t];
@@ -1370,7 +1390,10 @@ function aiNestRiches(p, nests) {
     const i = t % S.W, j = (t / S.W) | 0;
     let by = null, n = 0;
     for (const b of nests) if (dist2(b.x, b.y, i, j) < c2) { by = b; n++; }
-    if (!n) { if (r === R_ORE) ore += S.amt[t]; else oil += S.amt[t]; }
+    if (!n) {
+      if (r === R_OIL) oil += S.amt[t];
+      else if (!oreCrisis || S.owner[t] === p || (inReach(p, t) && !hotFor(p, t))) ore += S.amt[t];
+    }
     else if (n === 1) held.push([by.id, r, S.amt[t]]);
   }
   for (const [id, r, a] of held) if (r === R_ORE ? ore < AI_NEST_ORE : oil < AI_NEST_OIL) out.set(id, (out.get(id) || 0) + a);
@@ -3094,7 +3117,7 @@ function aiPush(p, lvl, army, enemyArmy) {
  * (With the bases defended, a rival far ahead used to march on the cheapest Outpost every few minutes and never on
  * the base, losing band after band, until the game ran out.) Returns true when a march set off.
  */
-function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
+function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   const P = S.players[p], lander = getE(P.lander), hz = homeZone(p);
   const spotBy = (b) => {
     for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
@@ -3112,11 +3135,12 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   // garrison, front forts, Keeps and the Command Bases it took too (its own keeps its home guard). The colony that won
   // the earlier fights holds two or three colonies' forts, nearly all of them in reach of the last rival and each
   // keeping warbots back, so it could never gather the storm (Crossroads on a small planet: the last two sat out the
-  // clock).
-  const last = crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id));
+  // clock). A Hollow colony short of parts can make this same call if its base is safe.
+  const fullGarrisons = (finish && !(P.homeCall > S.time)) ||
+    (crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id)));
   const eb = getE(S.players[enemy].lander), by = strong && eb && !eb.dead && eb.owner === enemy && !aiBeaten(P, eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
   if (by) {
-    const sp = aiSpare(p, { x: by.i, y: by.j }, last ? 'storm' : 'flag');
+    const sp = aiSpare(p, { x: by.i, y: by.j }, fullGarrisons ? 'storm' : 'flag');
     let n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
     // (A base that takes more than 30: the storm is as big as that and two more, when it can gather them. It used to
     // stop at 30 whatever the base took, so a base behind enough guns could never be stormed, and the rival marched
@@ -3147,7 +3171,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sc < hs && g <= 28) { hs = sc; hard = { b, need: g }; }
   }
   if (tgt) {
-    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, storm && last ? 'all' : true, false, true);
+    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, storm && fullGarrisons ? 'all' : true, false, true);
     if (sent && breach && breach.need > breach.shots) { recallRally(rally.id); aiWalled(P, tgt); } // (walls in the way it can't shoot through)
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
@@ -3167,17 +3191,24 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   return false;
 }
 
+/** Allow time for the slow units and detours on long marches on Immense or Planetary. */
+function aiMarchTime(lander, flag, baseTime) {
+  if (S.settings.size < IMMENSE_SIZE || !lander) return baseTime;
+  const extraTiles = Math.max(0, dist(lander.x + 0.5, lander.y + 0.5, flag.x, flag.y) - 60);
+  return baseTime + extraTiles * WARBOT_OFFROAD / BOTS.bulwark.speed;
+}
+
 /**
  * A storm of the enemy Command Base under way (P.stormOn: the march's flag `id`, the `base` and its owner `foe`, the
  * `n` sent, and `go` once it goes in). The band forms up under its flag, out of the guns' reach (aiStage); once three in
  * five of it stand within 5 tiles of the flag, the flag moves beside the base and the band goes in, at the gun that
  * covers the flag first (rally.first, see holdRally), then the next, then the base. It is called off when fewer than
- * two in five are left armed, or when the band hasn't formed up five minutes after setting off.
+ * two in five are left armed, or when the band hasn't formed up after five minutes plus any extra time for a long march on Immense or Planetary.
  */
 function aiStorm(p) {
   const P = S.players[p], T = P.stormOn, eb = getE(T.base), r = rallyById(T.id);
   const band = r ? rallyMembers(r.id).filter((u) => botArmed(u)) : [];
-  if (!eb || eb.dead || eb.owner !== T.foe || !r || band.length * 5 < T.n * 2 || (!T.go && S.time - (P.lastMarch || 0) > 300)) {
+  if (!eb || eb.dead || eb.owner !== T.foe || !r || band.length * 5 < T.n * 2 || (!T.go && S.time - (P.lastMarch || 0) > aiMarchTime(getE(P.lander), r, 300))) {
     if (r) recallRally(r.id);
     if (P.march === T.id) P.march = 0;
     P.stormOn = null;
@@ -3721,8 +3752,33 @@ function aiFarmSoil(p, cx, cy, claimed) {
   return n;
 }
 
+/** Live drizzle deposits of a scarce good that this colony could work with a new gatherer. */
+function aiDrizzleTargets(p, type) {
+  if (S.mode !== 'versus' || !S.drizzle?.spots?.length || !['outpost', 'mine', 'tap'].includes(type)) return [];
+  const P = S.players[p], have = playerGoods(p);
+  const wanted = (r) => {
+    const gatherer = r === R_ORE ? 'mine' : 'tap';
+    return (type === 'outpost' || type === gatherer) &&
+      ((P.short || []).includes(r) || (r === R_CRYSTAL && P.crLow) || have[RES[r].good] < 8);
+  };
+  const targets = [], buildings = playerBuildings(p);
+  for (const drop of S.drizzle.spots) {
+    if ((drop.r !== R_ORE && drop.r !== R_CRYSTAL) || !wanted(drop.r)) continue;
+    const gatherer = drop.r === R_ORE ? 'mine' : 'tap', r2 = BDEFS[gatherer].radius ** 2 + 0.3;
+    for (const t of [drop.t, drop.u]) {
+      if (t < 0 || S.res[t] !== drop.r || !S.amt[t] || hotFor(p, t)) continue;
+      if (S.owner[t] >= 0 && (S.owner[t] !== p || type === 'outpost')) continue;
+      const x = t % S.W, y = (t / S.W) | 0, zone = S.zone[t];
+      if (buildings.some((b) => b.type === gatherer && !aiShut(b) &&
+          S.zone[tIdx(b.x, b.y)] === zone && dist2(x, y, b.x, b.y) <= r2)) continue;
+      targets.push({ t, x, y, zone, score: 5 + Math.min(15, S.amt[t]) * 0.5 });
+    }
+  }
+  return targets;
+}
+
 function aiSearchSpot(p, type, lander, minDeposits = 2) {
-  const def = BDEFS[type], P = S.players[p];
+  const def = BDEFS[type], P = S.players[p], drizzle = aiDrizzleTargets(p, type);
   const fib = gatherRes('harvester'), sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, fib, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
   const freeCr = type === 'outpost' && (P.short || []).includes(R_CRYSTAL) ? [] : null;
@@ -3788,18 +3844,21 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
       if (rc > budget) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
-      let s, gn = -1;
+      let s, gn = -1, dropScore = 0;
       if (def.gather) {
         const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, gatherRes(type)); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < minDeposits && !u) {
+        for (const d of drizzle) {
+          if (d.zone === S.zone[tIdx(i, j)] && dist2(i, j, d.x, d.y) <= def.radius ** 2 + 0.3) dropScore += d.score;
+        }
+        if (n < minDeposits && !u && !dropScore) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
           if (!def.bedrock) continue;
           const f = rockFacesIn(i, j, def.radius);
           if (f < 3) continue;
           s = Math.min(f, 10) * 0.6 - dHome * 0.35 - 8;
-        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
+        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12 + dropScore;
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
@@ -3809,6 +3868,13 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
         if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
+        // Value deposits this Outpost will actually claim on its side of a crossing.
+        const zone = S.zone[tIdx(i, j)];
+        let claim = 0;
+        for (const d of drizzle) {
+          if (d.zone === zone && dist2(i, j, d.x, d.y) <= def.terr ** 2) claim += d.score;
+        }
+        s += Math.min(24, claim);
         if (S.victory === 'domination') s += newLandAt(p, i, j, BDEFS.outpost.terr) * 0.1; // Domination: the land it claims
         if (S.victory === 'uplinks' && S.uplinks) { // Uplinks: one its land would cover, not ours yet, and the way to the nearest free one
           let near = Infinity;
@@ -3931,7 +3997,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
       if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
       if (out && type !== 'outpost') s -= AI_OUT_COST; // (our own land first)
-      cands.push({ x: i, y: j, s, gn });
+      cands.push({ x: i, y: j, s, gn, dropScore });
     }
   }
   // Only the best few spots get the (costly) checks that a building won't block a pass and that
@@ -3945,10 +4011,17 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
     for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
       const c = cands[k];
       let s = c.s;
-      if (c.gn >= minDeposits) {
-        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, gatherRes(type))); // (a Mine counts only the Ore no Mine of ours works: never more)
-        if (w < minDeposits && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
-        s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
+      if (c.gn >= minDeposits || c.dropScore) {
+        const resource = gatherRes(type);
+        let walkedDrop = 0;
+        const visit = c.dropScore ? (t) => {
+          const d = drizzle.find((site) => site.t === t);
+          if (d) walkedDrop += d.score;
+        } : undefined;
+        // Count only the Ore no Mine of ours works, and keep the bonus only for drops a worker can reach.
+        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, resource, visit));
+        if (w < minDeposits && !walkedDrop && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
+        s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2 + walkedDrop - c.dropScore;
       }
       if ((best && s <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;
       best = { x: c.x, y: c.y, s };

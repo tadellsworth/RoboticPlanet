@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -112,7 +112,14 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('p-difficulty').onchange = () => act('rivalDifficulty', [$('p-difficulty').value], syncSaved);
+  $('p-difficulty').onchange = () => {
+    const select = $('p-difficulty'), value = select.value;
+    select.value = S.difficulty;
+    if (value !== S.difficulty) act('rivalDifficulty', [value], (ok) => {
+      syncRivalDifficulty();
+      if (!ok) toast('The rival difficulty could not be changed.', 'warn');
+    });
+  };
   $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
@@ -408,6 +415,7 @@ function checkMenuSettings() {
   const m = UI.menu, ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
   if (!ok(m.shape, SHAPE_PRESETS.length)) m.shape = 0;
   if (!ok(m.biome || 0, BIOME_ORDER.length) || !biomeAllowed(BIOME_ORDER[m.biome || 0], m.shapeRnd ? -1 : m.shape || 0)) m.biome = 0;
+  if (!BIOME_ORDER.includes(m.biome2)) m.biome2 = null;
   if (!ok(m.rough, TERRAIN_PRESETS.length)) m.rough = DEFAULT_ROUGH;
   if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
@@ -433,7 +441,7 @@ function checkMenuSettings() {
 function saveSettings() {
   const m = UI.menu;
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, players: m.players,
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, biome2: m.biome2, players: m.players,
       diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
@@ -442,7 +450,9 @@ function saveSettings() {
 function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && (SHAPE_PRESETS[m.shape || 0] || {}).hollow); }
 /** Is the Great Uplink win on for the game the menu would start (Versus)? */
 function menuUpWin() { return UI.menu.mode !== 'colony' && !!UI.menu.upwin && menuUpWinOk(); }
-const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
+const menuSizePlayers = () => UI.menu.mode === 'colony' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
+const menuSize = () => mapSizeForPlayers(UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], menuSizePlayers());
+
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 /**
  * Doctrines on the menu are numbers: 0 Random, then 1 to 5 in PERSONALITY_ORDER (the Steward first). UI.menu.style is
@@ -552,11 +562,12 @@ function menuMods() { return modList(UI.menu.mods, UI.menu.mode); }
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
+  const otherBiome = chosenSecondBiome(m, menuSize());
   const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   if (menuUpWin()) main.push('Great Uplink win');
-  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
+  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), ...(otherBiome ? [BIOMES[otherBiome].name] : []), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony) {
     // The rivals' doctrines, unless every one is a Steward (the usual).
@@ -720,6 +731,7 @@ function initMenu() {
   // Map type and Biome open their pickers.
   $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
   $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
+  $('m-biome2').onchange = () => { UI.menu.biome2 = $('m-biome2').value || null; syncMenu(); saveSettings(); };
   $('m-picker-close').onclick = () => closePicker();
   // Tapping outside the sheet closes it (on click, so the tap can't land on the menu underneath).
   $('m-picker').addEventListener('click', (e) => { if (e.target === $('m-picker')) closePicker(); });
@@ -814,6 +826,21 @@ function sizeInfoLines() {
   }
 }
 
+/** Size buttons shared by Custom Game and Observer. */
+function syncSizeChoices(el, shape, players, random) {
+  for (const button of el.children) {
+    const size = +button.dataset.v, preset = SIZE_PRESETS[size];
+    button.disabled = mapSizeForPlayers(size, players) !== size;
+    if (button.disabled) {
+      button.dataset.info = button.title = 'Planetary supports up to two colonies.';
+      continue;
+    }
+    button.title = '';
+    const { W, H } = mapDims({ size, shape, players });
+    button.dataset.info = `${preset.name}: ${random ? 'about ' : ''}${W}×${H} tiles${random ? ' (map types differ a little)' : ''}.`;
+  }
+}
+
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
 function syncMenu() {
   if (typeof ensureBiomeArt === 'function') ensureBiomeArt(BIOME_ORDER[UI.menu.biome || 0]); // the chosen biome's swatch
@@ -882,8 +909,8 @@ function syncMenu() {
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) markSeg($(id));
   for (const b of $('m-style').children) b.classList.toggle('peek', UI.docPeek === +b.dataset.v);
   // (Random map type: sizes as on a Standard map; the others differ a little.)
-  const players = menuPlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
-  for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${m.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${m.shapeRnd ? ' (map types differ a little)' : ''}.`; }
+  const players = menuSizePlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
+  syncSizeChoices($('m-size'), dShape, players, m.shapeRnd);
   $('m-size-v').textContent = `${m.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
   $('m-rough-v').textContent = TERRAIN_PRESETS[m.rough].name;
@@ -967,6 +994,27 @@ function syncPickRows() {
   const m = UI.menu;
   shapePickRow($('m-shape'), m.shapeRnd, m.shape || 0, menuPlayers());
   biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
+  syncSecondBiome('m', m, menuSize());
+}
+
+function secondBiomeChoices(m, size) {
+  if (m.shapeRnd || m.biomeRnd) return [];
+  return BIOME_ORDER.filter((key) => secondBiomeAllowed(key, BIOME_ORDER[m.biome || 0], size, m.shape || 0));
+}
+
+function chosenSecondBiome(m, size) {
+  return m.biome2 && secondBiomeChoices(m, size).includes(m.biome2) ? m.biome2 : null;
+}
+
+function syncSecondBiome(prefix, m, size) {
+  const choices = secondBiomeChoices(m, size), sel = $(prefix + '-biome2'), signature = choices.join(' ');
+  $(prefix + '-biome2-row').hidden = !choices.length;
+  if (sel.dataset.choices !== signature) {
+    sel.replaceChildren(new Option('None', ''), ...choices.map((key) => new Option(BIOMES[key].name, key)));
+    sel.dataset.choices = signature;
+  }
+  sel.value = choices.includes(m.biome2) ? m.biome2 : '';
+  if (sel.value) ensureBiomeArt(sel.value);
 }
 /**
  * A Map type row (.m-pick), shared by Custom Game and Observer mode: Random (rnd, for np players) or map type `shape`.
@@ -1522,11 +1570,12 @@ function previewSettings() {
   st.nuke = !!m.nuke;
   if (mode === 'versus' && m.teams && st.players === 4) st.teams = true; // (Four Isles: the allies' sandbars)
   st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
+  st.biome2 = chosenSecondBiome(m, st.size);
   return { seed: m.seed >>> 0, mode, st };
 }
 function previewKey() {
   const p = previewSettings(), s = p.st;
-  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.teams ? 1 : 0].join(':');
+  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.biome2, s.teams ? 1 : 0].join(':');
 }
 
 function schedulePreview(now) {
@@ -1571,6 +1620,8 @@ function renderPreview(cv, m, p) {
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: [18, 12, 10], fertile: [92, 98, 40] };
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
+  const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
+  const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -1588,6 +1639,10 @@ function renderPreview(cv, m, p) {
     else if (terr === T_ROCK) c = C.rock;
     else if (Rp[t]) c = C.ramp;
     else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
+    if (other) {
+      const key = terr === T_GROUND && c === C.ground ? 'ground' : terr === T_WATER ? 'water' : terr === T_ROCK ? 'rock' : null;
+      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed, boundary));
+    }
     const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
     // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.
     const below = j < H - 1 ? t + W : -1, right = i < W - 1 ? t + 1 : -1, above = j > 0 ? t - W : -1;
@@ -1636,12 +1691,24 @@ function renderPreview(cv, m, p) {
 
 /* ------------------------------------------------------------------ autosave */
 
-// Continue keeps its usual local save. The rolling history uses IndexedDB so large maps
-// can keep several snapshots without competing for localStorage's small quota.
-const AUTOSAVE_EVERY = 60, CHECKPOINT_LIMIT = 5;
+// Continue keeps its own save. Restore points are optional if the device is short on space.
+const AUTOSAVE_EVERY = 60, CHECKPOINT_LIMIT = 5, CHECKPOINT_KEY = 'terrafall.restorePoints.v1';
 let checkpointDB;
 
-function checkpointStore(run, update) {
+function readCheckpoints() {
+  try {
+    const book = JSON.parse(localStorage.getItem(CHECKPOINT_KEY));
+    if (typeof book?.run === 'string' && Array.isArray(book.entries)) return book;
+  } catch (e) { /* blocked or damaged history */ }
+  return null;
+}
+
+function removeCheckpointBook() {
+  try { localStorage.removeItem(CHECKPOINT_KEY); return true; } catch (e) { return false; }
+}
+
+// Read the previous version's history until a localStorage book is available for this game.
+function legacyCheckpoints(run) {
   if (!checkpointDB) {
     checkpointDB = new Promise((resolve, reject) => {
       const req = indexedDB.open('terrafall.checkpoints', 1);
@@ -1651,19 +1718,12 @@ function checkpointStore(run, update) {
     });
   }
   return checkpointDB.then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction('history', update ? 'readwrite' : 'readonly'), store = tx.objectStore('history');
-    const read = store.get('recent');
-    let entries = [];
+    const read = db.transaction('history', 'readonly').objectStore('history').get('recent');
     read.onsuccess = () => {
       const book = read.result;
-      entries = book && (run === null || book.run === run) ? book.entries : [];
-      if (update) {
-        const next = [update, ...entries.filter((e) => e.time !== update.time)].slice(0, CHECKPOINT_LIMIT);
-        store.put({ run, entries: next }, 'recent');
-      }
+      resolve(book && (run === null || book.run === run) ? book.entries : []);
     };
-    tx.oncomplete = () => resolve(entries);
-    tx.onabort = () => reject(tx.error);
+    read.onerror = () => reject(read.error);
   }));
 }
 
@@ -1682,16 +1742,24 @@ function canCheckpoint() {
 
 function checkpointTick() {
   if (!canCheckpoint() || UI.paused || S.time + 1e-6 < UI.nextCheckpoint) return;
-  const time = UI.nextCheckpoint;
-  UI.nextCheckpoint += AUTOSAVE_EVERY;
-  const json = serializeGame();
-  autoSave(json);
-  const run = S.checkpointRun;
-  checkpointStore(run, { time, json }).catch(() => {
-    if (S?.checkpointRun !== run || UI.checkpointFailed) return;
+  const time = S.time, run = S.checkpointRun;
+  UI.nextCheckpoint = (Math.floor((time + 1e-6) / AUTOSAVE_EVERY) + 1) * AUTOSAVE_EVERY;
+  const json = serializeGame(), prior = readCheckpoints();
+  const earlier = prior?.run === run ? prior.entries.filter((e) => e.time < time) : [];
+  const entries = [{ time, json }, ...earlier].slice(0, CHECKPOINT_LIMIT);
+  autoSave(json, prior ? removeCheckpointBook : undefined);
+  // Keep the newest snapshots first. A failed setItem leaves the previous book intact.
+  while (entries.length) {
+    try {
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ run, entries }));
+      UI.checkpointFailed = false;
+      return;
+    } catch (e) { entries.pop(); }
+  }
+  if (!UI.checkpointFailed && !UI.saveFailed) {
     UI.checkpointFailed = true;
-    toast('This browser couldn’t keep the rolling save history.', 'warn');
-  });
+    toast('This browser couldn’t keep a restore point. Continue is still available.', 'warn');
+  }
 }
 
 async function showCheckpoints(prefix = 'p') {
@@ -1701,33 +1769,41 @@ async function showCheckpoints(prefix = 'p') {
   row.hidden = true;
   if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
   try {
-    const entries = await checkpointStore(run);
-    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix) || !entries.length) return;
+    const book = readCheckpoints();
+    const stored = book && (fromMenu || book.run === run) ? book.entries : await legacyCheckpoints(run);
+    if ((!fromMenu && S !== game) || !canChooseCheckpoint(prefix)) return;
+    const entries = stored.filter((e) => typeof e?.json === 'string' && Number.isFinite(e.time) &&
+      (fromMenu || e.time <= game.time + 1e-6)).slice(0, CHECKPOINT_LIMIT);
+    if (!entries.length) return;
     if (fromMenu) {
       let seed;
       try { seed = JSON.parse(entries[0].json)?.seed; } catch (e) { /* The selected entry is checked when restored. */ }
-      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent checkpoints for Planet #${seed}` : 'Recent solo checkpoints';
+      $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent restore points for Planet #${seed}` : 'Recent solo restore points';
     }
-    select.replaceChildren(...entries.map((e, i) => new Option(fmtClock(e.time) + ' game time', i)));
+    const now = fromMenu ? entries[0].time : game.time;
+    select.replaceChildren(...entries.map((e, i) => {
+      const minutes = Math.floor((now - e.time + 1e-6) / AUTOSAVE_EVERY);
+      return new Option(`Restore point: ${minutes > 0 ? minutes + ' min ago' : 'just now'}`, i);
+    }));
     $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value], prefix);
     row.hidden = false;
   } catch (e) { /* history is unavailable; Continue remains independent */ }
 }
 
 function restoreCheckpoint(entry, prefix) {
-  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the checkpoint from ${fmtClock(entry.time)} game time?`)) return;
+  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the point from ${fmtClock(entry.time)} game time?`)) return;
   if (prefix === 'm') audioUnlock();
-  if (loadSaveText(entry.json, 'Checkpoint restored.')) {
+  if (loadSaveText(entry.json, 'Restore point loaded.')) {
     $('screen-pause').hidden = true;
     $('screen-over').hidden = true;
-  } else if (prefix === 'm') menuMsg('That checkpoint couldn’t be loaded.');
-  else toast('That checkpoint couldn’t be loaded.', 'warn');
+  } else if (prefix === 'm') menuMsg('That restore point couldn’t be loaded.');
+  else toast('That restore point couldn’t be loaded.', 'warn');
 }
 
-function autoSave(json) {
+function autoSave(json, makeRoom) {
   // (UI.saveHold: the game keeps failing, see `stage` in main.js. The last good save is left alone.)
   if (!canCheckpoint()) return;
-  if (saveGame(json)) { UI.savedAt = Date.now(); UI.saveFailed = false; }
+  if (saveGame(json) || (makeRoom?.() && saveGame(json))) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
     toast('Couldn\'t save the game: this browser\'s storage is full or blocked. Keep this tab open to keep playing.', 'warn');
@@ -1780,11 +1856,15 @@ function initDialogs() {
   }, true);
 }
 
-function syncSaved() {
+function syncRivalDifficulty() {
   const diff = $('p-difficulty');
-  $('p-difficulty-row').hidden = !S || !!S.mission || !!UI.watch || !S.players.some((r) => r.ai && !r.out);
+  $('p-difficulty-row').hidden = !S || S.winner >= 0 || !!S.mission || !!UI.watch ||
+    (MP.on && !mpIsHost()) || !rivalDifficultyTargets().length;
   if (S) diff.value = S.difficulty;
-  diff.disabled = MP.on && !mpIsHost();
+}
+
+function syncSaved() {
+  syncRivalDifficulty();
   syncPauseMods();
   if (UI.syncTod) UI.syncTod();
   syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
@@ -2914,7 +2994,8 @@ const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
 function planetOk(p) {
   const fits = (v, list) => v == null || (Number.isInteger(v) && v >= 0 && v < list.length);
   return !!p && typeof p === 'object' && Number.isFinite(p.seed) && (p.players == null || (Number.isInteger(p.players) && p.players >= 2 && p.players <= 4)) &&
-    fits(p.shape, SHAPE_PRESETS) && fits(p.size, SIZE_PRESETS) && fits(p.rough, TERRAIN_PRESETS) && fits(p.rich, RESOURCE_PRESETS) && fits(p.biome, BIOME_ORDER);
+    fits(p.shape, SHAPE_PRESETS) && fits(p.size, SIZE_PRESETS) && fits(p.rough, TERRAIN_PRESETS) && fits(p.rich, RESOURCE_PRESETS) && fits(p.biome, BIOME_ORDER) &&
+    (p.biome2 == null || secondBiomeAllowed(p.biome2, BIOME_ORDER[p.biome || 0], p.size, p.shape || 0));
 }
 function savedPlanets() {
   let l;
@@ -2926,20 +3007,21 @@ function savedPlanets() {
   return l;
 }
 function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
-const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
+const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.biome2, p.players].join(':');
 function savePlanet(p) { if (planetOk(p)) writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
-  return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
-    biome: UI.menu.biome || 0, players: menuPlayers() };
+  return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich,
+    biome: UI.menu.biome || 0, biome2: chosenSecondBiome(UI.menu, menuSize()), players: menuPlayers() };
 }
 /** The planet being played. */
 function gamePlanet() {
   const st = S.settings || {}; // (a very old save has none)
-  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
+  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), biome2: st.biome2, players: st.players || 2 };
 }
 function planetLabel(p) {
   const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', biomeName(p.biome || 0)];
+  if (p.biome2) bits.push(BIOMES[p.biome2].name);
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
   if (p.players > 2) bits.push(`${p.players} players`);
@@ -2955,7 +3037,7 @@ function renderPlanets() {
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
-    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
+    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, biome2: p.biome2 || null, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
     UI.menu.size[UI.menu.mode] = p.size;
     if (SHAPE_PRESETS[p.shape] && SHAPE_PRESETS[p.shape].teamDefault) UI.menu.teams = 1; // (a planet of a map made for 2 vs 2: Teams on)
     checkMenuSettings();
@@ -3013,8 +3095,8 @@ function startNewGame() {
   const pick = resolveRandom();
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
-    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
+    size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
+    nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
   });
@@ -4240,7 +4322,7 @@ function airfieldSection(b) {
     html += `<div class="air-drops" id="sh-air">
       <button class="btn primary" data-k="outpost">Drop Outpost ${costInline(BDEFS.dropost.cost)}</button>
       ${warOn() ? '<button class="btn" data-k="warbot">Drop 2 Warbots</button>' : ''}<button class="btn" data-k="worker">Drop 2 Workers</button></div>
-      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air until a road from home reaches it. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
+      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and can be stocked from a freight link or local storage. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
   } else html += `<p class="hint">${planes.some((u) => !BOTS[u.type].bomber) ? 'Its Cargo Plane is out on a flight.' : 'No Cargo Plane is based here yet: order one in the hangar below.'}</p>`;
   html += '<div class="section-label">Supplied by air</div><p class="hint" id="sh-air-places"></p>';
   // Airships built here wait in the hangar (in no spot of it) until there's a line for them.
@@ -4253,8 +4335,8 @@ function airfieldSection(b) {
 function airPlacesText(b) {
   const list = S.buildings.filter((c) => !c.dead && c.built && c.owner === b.owner && c.airSupply && airSuppliable(c) && airBaseNear(c.owner, c.x, c.y) === b);
   const keep = airKeep(b), short = Object.keys(keep).filter((g) => keep[g] > 0).map((g) => `${keep[g]} ${GOOD[g].name}`);
-  return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: switch on Supply by air in a Depot\'s or Outpost\'s panel (a Drop Outpost has it on). ') +
-    `A plane flies them what they're short of (their supply orders, Ammo for their warbots, a site's materials), ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
+  return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: set a trade route and switch on Supply by air at its Trade Terminal. ') +
+    `A plane flies them what their trade routes send out, ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
 }
 
 
@@ -4676,7 +4758,7 @@ function mastLinkTap(i, j, wx, wy) {
   });
 }
 
-/** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
+/** The Trade Terminal's "Supply by air" switch, once you have an Airfield. */
 function airSupplySection(b) {
   if (!airSuppliable(b) || !b.built || b.owner !== ME || !S.buildings.some((o) => !o.dead && o.built && o.owner === ME && BDEFS[o.type].airfield)) return '';
   return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
@@ -4688,7 +4770,7 @@ function airSupplyRoad(b) { return !b.airSupply && onHomeNet(b); }
 function airSupplyHint(b) {
   const base = airBaseNear(b.owner, b.x, b.y);
   if (airSupplyRoad(b)) return 'A road from home reaches this place: Haulers supply it. Supply by air is for places no road reaches.';
-  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches: it switches off by itself once a road from home reaches it.';
+  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield delivers this Terminal\'s outgoing trade goods. For a place no road reaches: it switches off by itself once a road from home reaches it.';
   if (!base) return 'Waiting for a Cargo Plane: none is based at an Airfield yet (order one in an Airfield\'s hangar).';
   const coming = S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id);
   return `Supplied from the Airfield ${dirText(b, base)}, ${BOTS.cargoplane.carry} goods a flight.` + (coming ? ' A plane is on its way.' : '');
@@ -6929,10 +7011,9 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
         <p class="hint">Its two Pavers lay your planned roads first, twice as fast as a Worker (they don't count toward the road crew in Paths). Then they surface: mark roads in Paths (Pave) and they keep just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
-    if (def.pump && b.built && b.owner === ME && !feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'))) {
-      const pr = pipeToRefinery(ME, b);
-      if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it in: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
-        <p class="hint">A pipeline to the nearest Refinery or Fuel Tank sends its Crude there every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
+    if (def.pump && b.built && b.owner === ME) {
+      html += '<div id="sh-pipe-offer" hidden><button class="btn" id="sh-pipe">Pipe it in</button>' +
+        '<p class="hint">A pipeline sends Crude to a Refinery or Fuel Tank without Tanker trips.</p></div>';
     }
     if (fuelUser(def) && b.built && b.owner === ME) {
       const pr = pipeToFuel(ME, b);
@@ -7030,7 +7111,8 @@ function openBuildingSheet(b) {
       if ($('sh-found')) $('sh-found').onclick = () => { const f = portFerry(b); if (!f) return; sfx('click'); startLanding(f, 0, 'port'); };
     }
     if ($('sh-pipe')) $('sh-pipe').onclick = () => {
-      $('sh-pipe').hidden = true;
+      $('sh-pipe-offer').hidden = $('sh-pipe').hidden = true;
+      delete $('sh-pipe-offer').dataset.tick;
       act('pipeToRefinery', [b.id], (r) => {
         if (r.why) { sfx('error'); toast(r.why, 'warn'); refreshSheet(); return; }
         const { n, owed } = r;
@@ -7203,6 +7285,14 @@ function refreshRoadLink(b) {
 }
 
 function refreshBuildingSheet(b) {
+  const pipeOffer = $('sh-pipe-offer');
+  if (pipeOffer && pipeOffer.dataset.tick !== String(Math.floor(S.tick / 30))) {
+    pipeOffer.dataset.tick = String(Math.floor(S.tick / 30));
+    const route = pipeToRefinery(ME, b);
+    pipeOffer.hidden = $('sh-pipe').hidden = !!route.why;
+    if (!route.why) $('sh-pipe').textContent = `Pipe it in: ${route.tiles.length} tile${route.tiles.length === 1 ? '' : 's'}, ${costText(route.cost)}`;
+  }
+
   const def = BDEFS[b.type];
   const mine = b.owner === ME;
   if (mine && def.terminal && b.built) renderTrade(b);
@@ -7280,7 +7370,10 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
       if (mine) {
         const joined = refineryPipes(ME), ns = buildingPipes(b);
-        parts.push(`<div class="kv"><span>Pipeline</span><span>${ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects'}</span></div>`);
+        const direct = feedTargets(b).some(({ c, goods }) => (c.type === 'refinery' || BDEFS[c.type].tank) && goods.includes('crude'));
+        const link = direct ? 'Direct feed to a neighbour' : pumpFeedsNextDoor(b) ? 'Direct feed when the neighbour is built'
+          : ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects';
+        parts.push(`<div class="kv"><span>Crude delivery</span><span>${link}</span></div>`);
       }
       // (the bar stays while it waits, empty: the panel doesn't jump each time it starts and stops)
       if (mine) parts.push(`<div class="bar"><div style="width:${b.timer > 0 && /^Working/.test(b.status || '') ? Math.round((b.timer / def.work) * 100) : 0}%"></div></div>`);
@@ -7793,7 +7886,7 @@ function shieldRows(u) {
 }
 
 /** Does a robot's panel offer Recycle this unit (anything that walks or drives: not a plane, ship or train)? */
-function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.wild; }
+function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !bt.wild; }
 
 /** The Recycle section of one of your robots' panels: Recycle this unit (or why not), or Keep this unit while it's on its way. */
 function refreshRecycle(u) {
@@ -8252,7 +8345,7 @@ function refreshAirTab() {
   h += cargo.length ? cargo.map((u) => {
     const free = u.inside && !u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id;
     return `<div class="kv army-row"><span>${planeStatus(u)}</span><span>${free ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="outpost">Drop Outpost</button>${warOn() ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="warbot">2 Warbots</button>` : ''}<button class="btn small" data-act="drop" data-id="${u.id}" data-k="worker">2 Workers</button>` : ''}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
-  }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies goods to places you switch to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
+  }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies freight to Trade Terminals set to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
   h += '<div class="section-label">Airships <span class="label-note">on lines between Mooring Masts</span></div>';
   h += ships.length ? ships.map((u) => `<div class="kv army-row"><span>${shipStatus(u)}</span><span><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
     : `<p class="hint">None yet: order one in an Airfield's hangar (+ Airship above). It carries ${BOTS.airship.carry} goods and ${BOTS.airship.seats} Workers or Warbots a trip, both ways, between two Mooring Masts you link (a Mast's panel: Link).</p>`;
@@ -9055,7 +9148,7 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

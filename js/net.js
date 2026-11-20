@@ -41,7 +41,7 @@ function relayUrl() {
  */
 function gameVersion() {
   if (NET.ver) return NET.ver;
-  const src = [simStep, newGame, applyOrder, hashState, serializeGame, deserializeGame, mpBeginTurn].map(String).join('|') + Object.keys(ORDERS).join(',') + JSON.stringify(BDEFS).length + JSON.stringify(BOTS).length;
+  const src = [simStep, newGame, aiSearchSpot, applyOrder, hashState, serializeGame, deserializeGame, mpBeginTurn].map(String).join('|') + Object.keys(ORDERS).join(',') + JSON.stringify(BDEFS).length + JSON.stringify(BOTS).length + JSON.stringify(SIZE_PRESETS);
   let h = 2166136261;
   for (let k = 0; k < src.length; k++) h = Math.imul(h ^ src.charCodeAt(k), 16777619);
   NET.ver = (h >>> 0).toString(36);

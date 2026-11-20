@@ -8,7 +8,7 @@ const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const files = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders'];
 const source = files.map((file) => read(`js/${file}.js`)).join('\n');
-const { missions, buildings, harbourSteps, airliftSteps } = vm.runInNewContext(source + `
+const { missions, buildings, harbourSteps, airliftSteps, arterialRun } = vm.runInNewContext(source + `
   ({
     missions: MISSIONS,
     buildings: BDEFS,
@@ -32,6 +32,22 @@ const { missions, buildings, harbourSteps, airliftSteps } = vm.runInNewContext(s
       } finally {
         overseasPorts = original;
       }
+    },
+    arterialRun() {
+      newGame(missionOptions(MISSIONS.findIndex((m) => m.id === 'arterial'), 2));
+      const { x, north, south } = arterialRoute(getE(S.players[0].lander));
+      const id = S.mission.arterialDepot;
+      const express = [];
+      for (let y = north; y <= south; y++) express.push([tIdx(x, y), 5], [tIdx(x - 1, y), 3]);
+      applyOrder(0, 'keep', [id, 'cement', 5]);
+      for (let tick = 0; tick < 30 * 60; tick++) simStep(1 / 30);
+      const bypass = { cement: getE(id).stock.cement, runs: S.mission.arterialRuns };
+      const marks = applyOrder(0, 'paths', [{ express }]).lanes;
+      const ramps = applyOrder(0, 'paths', [{ add: [tIdx(x + 1, north), tIdx(x + 1, south)] }]).laid;
+      for (let tick = 0; tick < 30 * 240 && !missionStates(S.mission)[2].done; tick++) simStep(1 / 30);
+      applyOrder(0, 'keep', [id, 'cement', 30]);
+      for (let tick = 0; tick < 30 * 240 && S.winner < 0; tick++) simStep(1 / 30);
+      return { bypass, marks, ramps, result: S.mission.result, runs: S.mission.arterialRuns, time: S.time };
     },
     airliftSteps() {
       const goal = MISSIONS.find((mission) => mission.id === 'airlift').goals[0];
@@ -58,16 +74,20 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rushhour crossings blacktop pipeline research longhaul railway maglev driver trade harbour skyline airlift mooring bughunt hollow forms livefire border holdline supply convoy siege chain lance hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade harbour skyline airlift mooring bughunt hollow forms livefire border holdline supply convoy siege chain lance hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 
 const shipOrder = "#sh-yard .order-row[data-k='cargoship'] [data-d='1']";
 const alloyOrder = "#sh-keep .keep-cell[data-g='alloy'] [data-d='5']";
 const controls = [
+  ['arterial', 1, ['Express (Shift+E)', 'Build'], ["#banner-seg [data-v='express']", '#banner-ok']],
+  ['arterial', 2, ['Roads (R)', 'Build'], ["#banner-seg [data-v='road']", '#banner-ok']],
+  ['arterial', 3, ['Marked roads'], ["#sh-pmode [data-v='marked']"]],
+  ['arterial', 4, ['Supply orders', 'Cement +5'], ["#sh-keep .keep-cell[data-g='cement'] [data-d='5']"]],
   ['harbour', 4, ['Shipyard', 'Container Ships +1', 'Supply orders', 'Alloy +5', '8 Alloy'], [shipOrder, alloyOrder]],
   ['airlift', 1, ['Order bots', 'Crawlers +1', 'Drive somewhere (G)', 'Deploy here (E)'], ["#sh-orders .order-row[data-k='crawler'] [data-d='1']", '#sh-crawl', '#sh-deploy']],
-  ['airlift', 4, ['Supply by air', 'On', 'Supply orders', 'Cement +5'], ["#sh-airsup [data-v='1']", "#sh-keep .keep-cell[data-g='cement'] [data-d='5']"]],
+  ['airlift', 4, ['Drop 2 Workers'], ["#sh-air [data-k='worker']"]],
   ['holdline', 2, ['Walls (X)', 'Build'], ["#banner-seg [data-v='wall']", '#build-walls', '#banner-ok']],
   ['siege', 5, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],
@@ -101,3 +121,12 @@ assert.equal(before, null);
 assert.equal(after.e, crawler);
 assert.equal(after.ui, '#sh-crawl, #sh-deploy');
 console.log('Mission hints, targets, tutorial selectors and chapter order passed.');
+
+const arterial = arterialRun();
+assert.equal(arterial.bypass.cement, 5);
+assert.equal(arterial.bypass.runs, 0, 'an ordinary-road delivery does not qualify');
+assert.equal(arterial.marks, 32);
+assert.equal(arterial.ramps, 2);
+assert.equal(arterial.result, 'won');
+assert.equal(arterial.runs, 4);
+assert.ok(arterial.time < 8 * 60, 'the Hard tutorial is short with the provided materials');

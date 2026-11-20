@@ -76,6 +76,11 @@ const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 
 function biomeAllowed(key, shape) {
   return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval));
 }
+/** Mixed scenery belongs on the largest surface maps on Ithaca I. Argos is a separate world. */
+function secondBiomeAllowed(key, primary, size, shape) {
+  return (size === IMMENSE_SIZE || size === PLANETARY_SIZE) && !SHAPE_PRESETS[shape]?.hollow && primary !== 'lunar' && primary !== 'hollow' &&
+    key !== primary && key !== 'lunar' && BIOME_ORDER.includes(key) && biomeAllowed(key, shape);
+}
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers
@@ -194,7 +199,7 @@ const BOTS = {
   bomber: { name: 'Vulcan Bomber', plural: 'Vulcan Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6, turn: 1.5, // a jet: it turns tighter, about the Cargo Plane's circle at its speed
     desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and 3 Fuel from its Airfield, on top of the Fuel in its tank (it can\'t take off without them), and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
-    desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield: a full tank takes 5 Fuel, a long round trip 4 to 6. It flies to the nearest Airfield when the Foundry finishes it.' },
+    desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 outgoing trade goods for a Trade Terminal set to Supply by air. It burns Fuel in the air and fills up at its Airfield: a full tank takes 5 Fuel, a long round trip 4 to 6. It flies to the nearest Airfield when the Foundry finishes it.' },
   // The Maglev pod (see MAGLEV): built at a Maglev Terminal's pod bay, it runs the guideway between the Terminal's line's two ends.
   magpod: { name: 'Maglev Pod', plural: 'Maglev Pods', speed: WORKER_SPEED * 3.4 * 3, hp: 12, haul: true, magpod: true, mixed: true, carry: 16, parts: 2, round: { alloy: 2, chip: 1 }, accel: 0.85 * 4, brake: 1.6 * 4,
     desc: 'A sleek freight pod on a Maglev line: 16 goods a trip, several kinds at once, at three times a Freight Train\'s top speed. It runs the line by itself, both ways, loading what the far Terminal needs and bringing its spare goods home, and dwells at each end to load. Goods only: no riders. It needs power: with a Generator within 4 tiles of each Terminal it flies; without (or in a solar flare) it crawls at a Worker\'s pace. Order it at a Maglev Terminal (4 Alloy, 2 Chips; four to a line). A pod on a span whose pylon is shot down is lost with its load.' },
@@ -643,11 +648,14 @@ const SHIP_MIN_LOAD = 8; // a far Port sends spare goods home by ship in loads o
 const RAIL_TUNNEL_COST = { cement: 3, alloy: 1 };
 
 /* New-game map settings (each is a slider on the menu). */
+const IMMENSE_SIZE = 4, PLANETARY_SIZE = 5;
 const SIZE_PRESETS = [
   { name: 'Small', w: 30, h: 42 },
   { name: 'Medium', w: 40, h: 56 },
   { name: 'Large', w: 50, h: 70 },
   { name: 'Huge', w: 60, h: 84 },
+  { name: 'Immense', w: 84, h: 118, ringfallHits: 9 },
+  { name: 'Planetary', w: 120, h: 168, ringfallHits: 11 },
 ];
 /*   levels  elevation levels (1 = flat)       scale  size of hills (smaller = more cliffs)
  *   extra   chance of extra ramps per cliff  gap    min tiles between extra ramps
@@ -718,8 +726,8 @@ const SHAPE_PRESETS = [
   // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
   { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
     tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
-  { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook a winding river and a floor rich in Ore and Crystal. Switchbacks and side canyons offer different ways down.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true,
-    tip: 'Grand Canyon: your colony starts on a high rim. Take the switchbacks or the trail through the side canyon down to the richest fields. Robots can wade at the fords, ships can sail along the river, and a Viaduct can cross the gorge at its narrows.' },
+  { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook rocky shelves, green river basins and Ore and Crystal. The river splits around islands between its narrows.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true,
+    tip: 'Grand Canyon: your colony starts on a high rim. Two single-lane descents lead down from each rim, a switchback and a side-canyon trail. Ships can sail around the midstream islands, robots can wade at the fords, and a Viaduct can cross at the narrows.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
@@ -739,7 +747,7 @@ const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
  *             share `contested` of them through the contested breaches, each leaving up to `tiles` deposits `rich`
  *             times as rich as a Ringfall deposit elsewhere
  *   crystal   Floating Crystal: a mass's Crystal holds this many times a cluster's usual amount
- *   nests     Murmur nest sites on each colony's side, Small to Huge, besides the Deep's mound at the centre
+ *   nests     Murmur nest sites on each colony's side, Small to Planetary, besides the Deep's mound at the centre
  *   deep      the Deep's mound (BDEFS mound): the level it starts at, guards on top of a nest's, and the hoard that
  *             spills out when it's wrecked; wrecking it knocks every other nest back to level 1 (see clearNest)
  *   relics    each crate in a side chamber's rows of robot parts: Alloy or Chips, between the two numbers
@@ -748,10 +756,16 @@ const HOLLOW = {
   breach: { home: 3.2, open: 2.6 }, contested: 4,
   ringfall: { contested: 0.67, tiles: 4, rich: 1.5 },
   crystal: 2.5,
-  nests: [4, 5, 6, 7],
+  nests: [4, 5, 6, 7, 9, 10],
   deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
   relics: { alloy: [3, 5], chip: [1, 2] },
 };
+// The Deep's local defenders, from its first cracks to critical damage.
+const DEEP_SURGES = [
+  { health: 0.75, every: 32, size: 2, cap: 5 },
+  { health: 2 / 3, every: 24, size: 3, cap: 8 },
+  { health: 1 / 3, every: 16, size: 4, cap: 12 },
+];
 /**
  * Bloom veins (R_VEIN, the Hollow): cut down to nothing, a vein grows back in `regrow` seconds (the Bloom spreads back
  * along its ridge). Cutting veins draws the Murmur: a Harvester that cut one in the last `lure` seconds looks `pull`
@@ -1268,12 +1282,12 @@ const BDEFS = {
     cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14, yard: ['cargoship', 'tankship', 'ferry'],
   },
   airfield: {
-    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Tankers its planes\' Fuel: it keeps 12, and every flight burns some (a Cargo Plane\'s long round trip 4 to 6, a bomber sortie 3 on top of its tank). Its hangar builds Airships too: they take no spot in it, and fly off to a line between two Mooring Masts. It is storage too, like a Depot.',
+    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or takes up to 8 outgoing trade goods to a Trade Terminal set to Supply by air. Haulers bring the Airfield what those places are short of, and Tankers its planes\' Fuel: it keeps 12, and every flight burns some (a Cargo Plane\'s long round trip 4 to 6, a bomber sortie 3 on top of its tank). Its hangar builds Airships too: they take no spot in it, and fly off to a line between two Mooring Masts. It is storage too, like a Depot.',
     cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber', 'airship'],
   },
   dropost: {
     name: 'Drop Outpost', short: 'Drop Outpost',
-    desc: 'A small outpost a Cargo Plane drops by parachute, anywhere: a foothold over rough ground or far from home. It claims a little land, holds two warbots, stores goods and charges two bots from the Fuel stored in it. It is supplied by air from your Airfield (supply orders and Ammo for its warbots) until a road reaches it.',
+    desc: 'A small outpost a Cargo Plane drops by parachute, anywhere: a foothold over rough ground or far from home. It claims a little land, holds two warbots, stores goods and charges two bots from the Fuel stored in it. Connect it to your roads or supply it from local storage.',
     cost: { cement: 6, alloy: 3 }, store: true, mil: true, terr: 4, garrison: 2, ammoStock: 4, charger: { slots: 2, rate: 25, fuel: true }, armor: 14, airdrop: true,
   },
   mast: {
@@ -1351,7 +1365,7 @@ const BDEFS = {
   },
   // The Hollow: the Deep's mound at the middle of the cathedral (HOLLOW.deep), the biggest nest of all.
   mound: {
-    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
+    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. As it cracks, it sends out more defenders in faster waves. A brighter pulse and deeper rumble warn of the stronger waves. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
     cost: {}, wild: true, armor: 160, buildTime: 1,
   },
   depot: {
