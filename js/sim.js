@@ -32,6 +32,7 @@ function simStep(dt) {
   countTraffic();
   SHIELDS.length = 0;
   for (const u of S.bots) if (!u.dead && !u.inside && BOTS[u.type].shield) SHIELDS.push(u);
+  for (const w of SHIELDS) shieldCovers(w);
   for (let k = reverse ? S.bots.length - 1 : 0; k >= 0 && k < S.bots.length; k += step) {
     const u = S.bots[k];
     if (u.dead) continue;
@@ -4917,6 +4918,7 @@ const SHIELDS = [];
 /** Does w's active shield intercept a shot toward u or its proposed firing position? */
 function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
+  if (u !== w && !(w.covIds && w.covIds.has(u.id))) return false; // (one of the BULWARK.coverMax it shelters: shieldCovers)
   const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
   if (ad < BULWARK.r + 0.15) return false;
   const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
@@ -4926,6 +4928,23 @@ function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
   if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) return false;
   const tx = x - sx, ty = y - sy, td = dhypot(tx, ty) || 1;
   return Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td <= BULWARK.r * 2.35;
+}
+
+/**
+ * The robots Bulwark w shelters this step (w.covIds, rebuilt each step with SHIELDS; not saved): of its owner's robots
+ * in its lee (within BULWARK.cover of it and behind its shield line), the BULWARK.coverMax nearest it, ties by id. Any
+ * others behind it get no cover from it: a huge blob behind one or two Bulwarks is mostly in the open.
+ */
+function shieldCovers(w) {
+  const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa), C2 = BULWARK.cover * BULWARK.cover, list = [];
+  for (const v of S.bots) {
+    if (v === w || v.dead || v.inside || v.owner !== w.owner || BOTS[v.type].air || BOTS[v.type].sea) continue;
+    const bx = v.x - w.x, by = v.y - w.y, d2 = bx * bx + by * by;
+    if (d2 > C2 || bx * fx + by * fy > BULWARK.r) continue;
+    list.push([d2, v.id]);
+  }
+  list.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  w.covIds = new Set(list.slice(0, BULWARK.coverMax).map((e) => e[1]));
 }
 
 /**
@@ -5021,7 +5040,15 @@ function torchFire(u, tx, ty, power, bld) {
     if (v.dead || v.inside || !foes(v.owner, u.owner) || v.dropping || (BOTS[v.type].air && v.flight)) continue;
     const dx = v.x - u.x, dy = v.y - u.y, d = dhypot(dx, dy);
     if (d > R || d < 0.05 || (dx * ca + dy * sa) / d < c) continue;
-    damageBot(v, TORCH.bot * power, u.x, u.y);
+    // Fire wraps round a shield: TORCH.shieldPass of it gets past, and the rest burns the shield TORCH.shieldMul as fast.
+    let dmg = TORCH.bot * power;
+    const w = SHIELDS.length && !calmAt(v.x, v.y) ? shieldAt(v, u.x, u.y) : null;
+    if (w) {
+      const blocked = dmg * (1 - TORCH.shieldPass), want = blocked * TORCH.shieldMul, took = Math.min(w.sh, want);
+      shieldTake(w, v, u.x, u.y, took, want);
+      dmg = dmg * TORCH.shieldPass + blocked * (1 - took / want);
+    }
+    damageBot(v, dmg);
   }
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';

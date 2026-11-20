@@ -1339,7 +1339,7 @@ const MISSIONS = [
       'A belt of crags with a few narrow channels: wall them and cover them with guns. Messages from your <b>Scouts</b> say when it masses or marches (Go shows where).',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
-      'Its warbots come behind a <b>Bulwark</b>, a shield robot: fire from in front can\'t reach them, so cover the channels from the side.',
+      'Its warbots come behind a <b>Bulwark</b>, a shield robot that covers six: gunfire from in front can\'t reach them, so cover the channels from the side.',
     ],
     mode: 'versus', seed: 2121, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 2, players: 2, style: 'rusher',
     rival: ['medium', 'medium', 'normal'], limit: [0, 0, 0],
@@ -1518,7 +1518,7 @@ const MISSIONS = [
       // round it, a Railgunner's slug goes through. (Shields its picket loses to anything count: S.players[1].stats.shieldsDown.)
       { kind: 'shields', n: [1, 2, 3], text: 'Break {n} Bulwark shields', at: 'foundry',
         count: (P, S) => (S.players[1].stats.shieldsDown || 0),
-        hint: 'Bot Foundry → Arc Casters <b>+1</b>, Skirmishers <b>+1</b>; then <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> their picket.',
+        hint: 'Arc Casters and Torches break shields: Foundry <b>+1</b> each, then <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> the picket.',
         ui: "#sh-orders .order-row[data-k='arccaster'] [data-d='1'], #sh-orders .order-row[data-k='skirmisher'] [data-d='1'], #btn-attack, #ar-attack" },
       { kind: 'scorch', n: [2, 3, 4], text: 'Scorch {n} patches of their farmland',
         count: (P) => P.stats.scorchedFoe || 0, // (fertile soil a rival farms, or on its land, burned for good: see scorchSoil)
