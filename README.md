@@ -2506,7 +2506,7 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   (`faunaCarrion`), as any wreck's do.
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
-  it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light
+  it, shines a short beam from its mast, up to four tiles or 16% of the view height, a hint of its owner's colour in it, with a soft halo, light
   on its pad, and a slow pulse every beacon keeps in time (`AMB.pulse`). In the Hollow it goes up its breach (`breachAt`);
   a base under rock would only light the roof. When your own base's beacon comes on in view, a soft low hum
   (`ambHum`, through `sfx('beacon')` and `mapVoice`).
