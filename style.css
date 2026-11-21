@@ -446,6 +446,59 @@ kbd {
 }
 #screen-pause, #screen-help, #screen-over { z-index: 30; background: rgba(10, 11, 15, 0.78); }
 #screen-stats { z-index: 40; background: rgba(10, 11, 15, 0.86); }
+#screen-keys {
+  z-index: 43;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 12px) calc(var(--safe-l) + 12px);
+  background: rgba(10, 11, 15, 0.8);
+}
+.card.keys-card {
+  display: flex; flex-direction: column; width: min(100%, 1680px); padding: 0;
+  max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px - var(--safe-t) - var(--safe-b));
+  overflow: hidden; background: #161820;
+}
+.ks-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 20px; border-bottom: 1px solid var(--line);
+}
+.keys-card .ks-head h2 { margin: 0 0 4px; }
+.ks-head .hint { margin: 0; }
+#p-keys, .ks-head .btn { min-height: 44px; }
+#keys-close:focus-visible, #keys-body:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#p-keys { margin-left: auto; }
+#keys-body {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+  padding: 12px; min-height: 0; overflow: auto; overscroll-behavior: contain;
+}
+.ks-column { min-width: 0; }
+.ks-group {
+  padding: 10px 12px; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); font-size: 14px; line-height: 1.4;
+}
+.ks-group h3 { margin: 0 0 6px; color: var(--accent); font-size: 15px; }
+.ks-group h4 { margin: 4px 0; font-size: 14px; }
+.ks-build h4:not(:first-child) { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ks-group p { margin: 0 0 6px; color: var(--muted); }
+.ks-group dl { margin: 0; }
+.ks-build dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
+.ks-build .ks-row:nth-child(2) { border-top: 0; }
+.ks-build .ks-row dt { min-width: 20px; }
+.ks-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; }
+.ks-row + .ks-row { border-top: 1px solid var(--line); }
+.ks-row dt { flex: 0 1 auto; min-width: 30px; }
+.ks-row dd { flex: 1; margin: 0; }
+.ks-row kbd { margin-bottom: 2px; white-space: nowrap; background: var(--panel-2); }
+@media (max-width: 1190px) {
+  #keys-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  #keys-body { grid-template-columns: minmax(0, 1fr); }
+  .ks-head { padding: 12px; }
+  .keys-card .ks-head h2 { font-size: 20px; }
+}
+@media (max-width: 360px) {
+  .ks-build dl { grid-template-columns: minmax(0, 1fr); }
+  .ks-build .ks-row:nth-child(2) { border-top: 1px solid var(--line); }
+}
 .card.missions-card { width: min(100%, 560px); background: #161820; }
 #screen-missions { z-index: 25; background: rgba(10, 11, 15, 0.9); }
 .ms-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -504,6 +557,9 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
    save line, then Feedback and Save & quit. Settings view: the volumes and Graphics, then the switches and Time of day. */
 #screen-pause { padding-top: calc(var(--safe-t) + 10px); padding-bottom: calc(var(--safe-b) + 10px); }
 .card.p-card { padding: 16px 16px 14px; }
+.p-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin-bottom: 8px; }
+.card .p-head h2 { margin: 0; }
+.p-head .p-mods { flex-basis: 100%; margin: 0; }
 .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .p-row { display: flex; gap: 8px; }
 #p-checkpoint-row, #o-checkpoint-row { margin-top: 8px; }
@@ -543,9 +599,7 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
   #screen-pause { padding-top: calc(var(--safe-t) + 8px); padding-bottom: calc(var(--safe-b) + 8px); }
   .card.p-card { width: min(100%, 640px); padding: 12px 16px; }
   .card.p-card.p-set { width: min(100%, 780px); }
-  .p-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
-  .p-head h2 { margin: 0; font-size: 21px; }
-  .p-head .p-mods { margin: 0; }
+  .card .p-head h2 { font-size: 21px; }
   .p-top { display: flex; gap: 8px; }
   .p-top .btn.big { padding: 9px 10px; }
   .p-grid { grid-template-columns: repeat(4, 1fr); }
@@ -1455,6 +1509,10 @@ canvas.chart.small { height: 110px; }
   --muted: #b9ad9f;
 }
 #screen-menu { background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.35), rgba(8, 12, 24, 0.86)); }
+/* The planet turning behind the main menu (js/menuplanet.js): its own canvas under the card. */
+#menu-planet { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; display: block; }
+#menu-planet[hidden] { display: none; }
+#screen-menu > .menu-card { position: relative; z-index: 1; }
 .menu-card, #screen-missions .card, #screen-help .card, #screen-lore .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
 .m-icon { display: block; width: 84px; height: 84px; margin: -4px auto 10px; border-radius: 20px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(241, 228, 211, 0.12); }
 #screen-menu .logo, .menu-card .m-head-logo { background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent; }

@@ -73,6 +73,36 @@ re-lit), and `art/tod/shared/` holds the headlight overlays, the light pool and 
 new sprite: render its three versions, save them as WebP at the day file's size under the same path, and add its key to
 `art/tod/tod-keys.js`. Sprites without them are colour-graded in code, which works but has no lights.
 
+### Sunsets and sunrises (drawn in code; no images)
+
+The owner's ask (Nov 20 2026): lighting is a big part of the game's look, so the sunsets should be beautiful and a little
+different per biome. `js/sunset.js` lays a render-only layer over the day-and-night light: no new art, nothing to
+re-render. Corvane sets in the west and rises in the east (the evening shadows fall east), so the land is lit from that
+side of the screen and falls into a cool shade on the far side. The grade is soft light (the land keeps its contrast:
+nothing is washed pale), a colour-dodge glow brightens the lit side's light tones, a multiply deepens the far side, and
+over everything standing goes a lighter soft-light grade and the low sun's glare. The rules a new biome's palette
+should keep (`DUSK_BIOMES`: three stops, `sun`, `tint`, `shade`, for golden hour, fire and violet):
+
+| Biome | Sunset | Touches |
+|---|---|---|
+| The Rust (red desert) | deep amber to blood red, violet shade | glowing dust, heat haze easing off, glints on the pools |
+| The Long Grass (savanna) | amber to red, violet shade | acacias silhouetted, gold dust, heat haze easing off |
+| The Shoals (tropical) | blazing orange, then pink and magenta | the sea's sheen and a path of glints toward the sun, palms silhouetted |
+| The Bloom | teal on the sun's side, violet away from it: no warm light at all | its glow wakes before night, spores drift up catching the light, shafts |
+| Greenreach (forest) | soft gold to rose | gold light shafts through the trees, pollen |
+| Blackwater (swamp) | dusty pink to mauve | pink fog banks over the ground |
+| Emberwood (autumn) | rich copper to plum | shafts, pollen |
+| The Polar Caps | pastel peach and pink, long blue shade | ice glints in the air |
+| Cinderlands (volcanic) | ember red fused with the lava | the lava glows up early, embers rising |
+| Steamwells | gold to rose | steam plumes lit gold, shafts through the steam |
+| Argos (the moon) | none: no air to redden the light | the evening's warm cast taken out, a hard terminator sweeping east to west in a minute |
+| The Hollow | none: it's underground | |
+
+Dawn uses one cooler palette (violet, rose, pale gold) except the Bloom's own (violet, teal, mint), at about 60%
+strength. The Ring shows as a faint pale arc low over the top of the view when zoomed out, after the land has gone
+into shadow. Robots' drop shadows stretch and turn violet. Keep team colours, buildings and robots clear: the strong
+grade goes on the ground, under the buildings, and the one over them is light and eases off zoomed far in.
+
 ## 2. Style direction
 
 **Cyberpunk industrial realism.** A frontier mining colony on a dusty alien world, run entirely by
@@ -1251,6 +1281,19 @@ soon as it's in the manifest.
 | A robot is destroyed | a small blast and a scorch mark |
 | A building is destroyed | it shakes, leans and **sinks into the ground**; a main blast, then two smaller blasts 0.35 s and 0.7 s later; a **dust cloud** billows out from its base; it leaves **rubble** and a scorch mark that fade over about a minute and a half |
 
+**The war on the land** (`js/warfx.js`, all drawn in code, no sheets): what a fight leaves in the air and on the
+ground after the effects above are over. The owner's theme: the immense beauty of the planet, torn apart by war, and
+healing.
+
+| What | Look |
+|---|---|
+| Smoke column (a building burned down, a burning wreck, a big blast) | Lumpy billows (`wfxSmoke`: sooty brown-black low down, pale grey up high, shaded at night) rising up to 9 tiles, spreading and leaning further downwind the higher they get; faint at the foot (the robots under it show), thinner zoomed in, lit orange from under while its fire burns. Columns within 1.8 tiles join. Lasts about 3½ minutes (a robot's wreck about 2), thinning over the last part |
+| Ground fire | Teardrop flames (`wfxFlame`) licking up from scorched grass round a wreck, a thin curl of smoke off each; a tree on it burns higher and longer. At dusk and night each throws the light pool, flickering, on the ground and buildings round it |
+| Ash and embers | Grey flakes drifting downwind and settling, orange embers floating up and winking out (glowing at night), over the 6-tile cells where things burned and blew up |
+| Shockwave | An ellipse racing out along the ground to 3.2 × the blast's reach: a dusty band behind a bright warm edge, and a fainter dusty ripple; a flash over the area and briefly the screen (brighter at night; a nuclear blast keeps its own). Reduced motion: no flash, a fainter, slower ring |
+| Burning oil (an Oil Pump, Refinery or Fuel Tank destroyed by force) | A roaring jet of flame from the wellhead: one long tongue the whole height with tongues of fire tearing up it, white-hot at its foot, swaying a little with the wind, sooty smoke torn off its top into a thick black column. Blackened, oil-soaked ground round it (`wfxSootBlot`); the ruin drawn in code: a charred wellhead stump and its pumpjack's fallen beam, or a burst tank's blackened shell, red embers for a minute after the flame dies. A tank's flame is lower and wider. At night two flickering light pools, strong. If art is ever made: `fx-oilfire` (a looping jet sheet) and `oilwell-ruin` would replace the code |
+| Healing ground | Baked into the ground with the scars (`paintScarHeal`): the scorch and ash drawn fainter step by step (glass less), grass tufts in the biome's colours, then small flowers (white, yellow, pink, violet by biome: `WFX_BLOOM`), thickest on crater rims. Craters, stumps and scrap stay as they are |
+
 The collapse uses each building's own art (sunk, tilted and clipped at ground level), so no "ruined" version of any
 building is needed. The white flash, laser beams and the Pulse Turret's glow stay drawn in code.
 
@@ -1774,6 +1817,54 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
+
+### Wind, water, sky and the planet view (drawn in code; no images)
+
+The owner's theme for these: the immense beauty of the planet, being torn apart by war. All of it is drawn in code
+(`js/nature.js`, `js/menuplanet.js`) and none of it takes art, but these are the looks to keep if any of it is ever
+redrawn as images:
+
+- **Wind.** One wind for the whole map, blowing the way the clouds drift. Up close the trees and plants lean a few
+  pixels downwind and shiver; gusts roll across them as waves. On the grass the gusts show as long crests of light
+  (`255,248,214`) with the darker side of the grass (`58,54,40`) just upwind, rolling with the wind at about three tiles
+  a second, faint enough that roads, buildings and robots read as before. A blast shoves the plants outward and sends a
+  ring of flattened grass out from it.
+- **Water.** By day: short horizontal flecks of sun on the ripples, warmer in the morning and evening, thickest toward
+  the top of the view. At night: Argos as a soft glow with a broken column of light under it, the Ring's band as a long
+  streak of glitter, a few stars; all of it fixed on the screen, as reflections are. On every shore a soft line of foam
+  runs up and slides back.
+- **Wet ground and frost.** After rain the land is a shade darker and cooler, roads glossy, puddles pale with the sky;
+  at night lamps and lit buildings leave long streaks of their colour on the wet ground. Frost is small white six-armed
+  crystals and pale patches over a cool tint, creeping in from the hollows of a noise field at dawn.
+- **The night sky on the land.** The Ring's light is silver and faint, a little stronger on one side of the map; its tint
+  and angle differ by planet (`NATFX.ring`). Auroras: green, sky blue and violet on the Polar Caps, violet and rose in the
+  Bloom, pale blue and teal on Argos.
+- **The planet view.** Past the map's edge, the map's own ground carries on, mirrored and faded into a haze in the biome's
+  colour (`NATFX.haze`: ochre for the Rust, grey-green for Greenreach, pale blue for the Polar Caps, near-black for Argos
+  and the Hollow), thickening outward; a soft dark line marks where the usable land ends. Zoomed right out the camera
+  tilts a little and the far side is a little lost in haze.
+- **The main menu.** Ithaca I as a coral world turning slowly in Corvane's light from the upper left: red deserts,
+  green forest, Emberwood's gold, ash, the violet Bloom, seas between and ice at the poles, a layer of cloud, a warm
+  band along the terminator, and the colonies' lights strung along the coasts on the night side, where now and then a
+  far-off fight flares orange. The Ring crosses in front of it in pale cream bands, Argos goes round, the sky has a
+  faint nebula and Corvane's glow in its corner.
+
+### Radiation (drawn in code; one optional image)
+
+Fallout zones and breached Reactors (README, Nuclear race, "Radiation"; `js/radfx.js`). All drawn in code:
+
+| What | How it's drawn |
+|---|---|
+| A zone on the ground | The grass under it drained of colour and dulled (a plain grey wash on Saver), a sickly green-yellow haze (`#96be28` to `#cee448`) thickest towards the rim and soft past it, a dark-backed dashed ring of `#def85c` on the edge, creeping round, and a small yellow-and-black trefoil on its north side close up. At night the haze adds light. |
+| Motes | Small green-yellow and pale mint specks drifting up through the haze (more on High and Ultra, none on Saver). |
+| A robot in a zone | A green glow round it, flickering, and specks rising off it. |
+| The reactor ruin | The owner's Reactor art, greyed and darkened, its cooling stack cut off along a jagged line (a charred rim, bent rebar, a dark mouth), a hole torn in its dome, burns across the pad and pieces of the stack on it; a darker blue-grey copy fades in at night. While it's hot, the stack's mouth glows green and the dome's hole blue. |
+| The light column | At night, over a hot ruin: a beam of light straight up from the stack, pale green-white at the bottom through green to blue, fading into the sky about 12 tiles up, with a wider soft halo (not on Saver) and its light on the ground round the ruin. |
+| Minimap | A ringed green-yellow disc for each zone; a green dot for a hot ruin, grey for a cold one. |
+
+`reactor-ruin@0` / `reactor-ruin@1` (optional, 512 px like the Reactor, same anchor): a painted ruin would replace the
+code-made one by day; keep the broken stack's mouth near (160, 140) and the dome's hole near (302, 176) of the 512, where
+the glows and the light column are drawn (`RADFX.stack`, `RADFX.dome`).
 
 ### Not swappable yet (ask Claude Code if you want these)
 

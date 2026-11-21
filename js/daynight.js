@@ -577,7 +577,8 @@ function drunkLight(x, y) {
 /** A bot's drop shadow now: offset (as a fraction of the shadow's length), opacity and spread. */
 function todShadow() {
   const D = TOD_TIMES.day.shadow, sh = TOD.active ? TOD.state.shadow : D;
-  return { kx: 0.12 * (sh.dx / D.dx), ky: 0.16 * (sh.dy / D.dy), alpha: 0.32 * (sh.alpha / D.alpha), grow: 1 + (sh.blur - 1) * 0.35 };
+  const long = typeof duskShadowLength === 'function' ? duskShadowLength() : 1; // (longer with the sun low: js/sunset.js)
+  return { kx: 0.12 * (sh.dx / D.dx) * long, ky: 0.16 * (sh.dy / D.dy), alpha: 0.32 * (sh.alpha / D.alpha), grow: 1 + (sh.blur - 1) * 0.35 };
 }
 
 /** A colour drawn in code (Walls, Gates) in the light now: '#rrggbb' graded like the ground. */

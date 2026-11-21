@@ -149,7 +149,7 @@ function drawCloudShadows(ctx, ox, oy, z) {
   const g = buf.getContext('2d');
   g.globalCompositeOperation = 'source-over';
   g.clearRect(0, 0, bw, bh);
-  const off = ambDrift(S.time), cell = C.cell, puff = ambPuff(), more = gfxStep() === 'ultra' ? 2 : 1;
+  const off = ambDrift(typeof natureCloudTime === 'function' ? natureCloudTime() : S.time), cell = C.cell, puff = ambPuff(), more = gfxStep() === 'ultra' ? 2 : 1;
   // The cells in view, in the sky's own frame (the ground's, less how far the wind has carried it).
   const x0 = -ox / z - off.x, x1 = (R.w - ox) / z - off.x, y0 = -oy / z - off.y, y1 = (R.h - oy) / z - off.y;
   let bx0 = bw, by0 = bh, bx1 = 0, by1 = 0; // (what the puffs cover: only that part is laid over the view)
@@ -842,7 +842,8 @@ const SPRING_PHASE = new Map(), SPRING_HEARD = { at: -99 }; // (render-only: eac
 /** Local steam and intermittent jets. Vent positions are the same as the baked mineral deposits. */
 function drawSpringSteam(ctx, ox, oy, z, v0, v1) {
   if (z < 11 || (LESS_MOTION && LESS_MOTION.matches)) return;
-  const night = TOD.active ? TOD.state.lights : 0, cloud = wxCloud(night > 0.65 ? '139,174,188' : '235,242,225');
+  const night = TOD.active ? TOD.state.lights : 0, gold = night <= 0.65 && typeof duskSteamRgb === 'function' ? duskSteamRgb() : null; // (lit gold by the sunset: js/sunset.js)
+  const cloud = wxCloud(night > 0.65 ? '139,174,188' : gold || '235,242,225');
   const wind = ambWind(Math.floor(S.time / WEATHER.slot)).x, now = R.time;
   const saver = gfxStep() === 'saver', count = saver ? 3 : 7;
   let budget = saver ? 10 : 25;

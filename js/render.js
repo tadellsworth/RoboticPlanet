@@ -735,8 +735,11 @@ function clampCam() {
 function isWide() { return R.w >= 1000 && R.h >= 520; }
 
 function centerOn(x, y) { R.cam.x = x; R.cam.y = y; clampCam(); }
-function screenToWorld(sx, sy) { return { x: (sx - R.w / 2) / R.cam.z + R.cam.x, y: (sy - R.h / 2) / R.cam.z + R.cam.y }; }
-function worldToScreen(wx, wy) { return { x: (wx - R.cam.x) * R.cam.z + R.w / 2, y: (wy - R.cam.y) * R.cam.z + R.h / 2 }; }
+/** A point of the flat frame being drawn (css px) on the map: what the drawing code culls by. */
+function viewToWorld(sx, sy) { return { x: (sx - R.w / 2) / R.cam.z + R.cam.x, y: (sy - R.h / 2) / R.cam.z + R.cam.y }; }
+// (Screen points go through the planet view's tilt, zoomed far out: js/nature.js. Clicks, picking and sounds use these.)
+function screenToWorld(sx, sy) { if (typeof natureUnwarp === 'function') ({ x: sx, y: sy } = natureUnwarp(sx, sy)); return viewToWorld(sx, sy); }
+function worldToScreen(wx, wy) { const x = (wx - R.cam.x) * R.cam.z + R.w / 2, y = (wy - R.cam.y) * R.cam.z + R.h / 2; return typeof natureWarpPt === 'function' ? natureWarpPt(x, y) : { x, y }; }
 
 /* ------------------------------------------------------------------ baked map */
 
@@ -763,6 +766,7 @@ function bakeMap() {
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
+  if (typeof duskSilReset === 'function') duskSilReset(); // (the plants' sunset silhouettes are made again for the new map)
   if (!R.terr) R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
   R.terrCtx = R.terr.getContext('2d');
@@ -782,6 +786,7 @@ function flushDirtyTiles() {
     const i = t % S.W, j = (t / S.W) | 0;
     redrawAround(R.mapCtx, i, j);
     if (R.glowMap) glowTiles(i - 1, j - 1, i + 1, j + 1);
+    if (typeof duskSilTiles === 'function') duskSilTiles(i - 1, j - 1, i + 1, j + 1); // (the plants' sunset silhouettes)
     for (const ch of chunks) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
   }
   S.dirtyTiles.length = 0;
@@ -821,6 +826,7 @@ function redrawRegion(i0, j0, i1, j1) {
     ctx.restore();
   }
   if (R.glowMap) glowTiles(i0, j0, i1, j1);
+  if (typeof duskSilTiles === 'function') duskSilTiles(i0, j0, i1, j1);
   MM.dirty = true;
 }
 
@@ -910,7 +916,7 @@ function veinGlow(ctx, i, j, grow) {
 /** Add the biome's night glow over the ground (after it's graded for the time of day), stronger the darker it is. */
 function drawBiomeGlow(ctx, ox, oy, z) {
   if (!R.glowMap) return;
-  const n = fxNight();
+  const n = Math.max(fxNight(), typeof duskWake === 'function' ? duskWake() : 0); // (the Bloom's glow wakes as the light fades: js/sunset.js)
   if (n < 0.02) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -922,7 +928,7 @@ function drawBiomeGlow(ctx, ox, oy, z) {
 
 /** The decorative plants of tiles i0..i1 × j0..j1, drawn over the ground already baked there. */
 function drawPlants(ctx, i0, j0, i1, j1, glow) {
-  if (!S.decor) return;
+  if (!S.decor || ctx.noPlants) return; // (a sharp chunk whose plants are drawn live: natureGround)
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
   R.inMap = true;
@@ -968,6 +974,7 @@ function hdBake(level, cx, cy) {
   c.width = n; c.height = n;
   const ctx = c.getContext('2d');
   ctx.hdScale = k;
+  ctx.noPlants = typeof natureLivePlants === 'function' && natureLivePlants(); // (drawn live, swaying: js/nature.js)
   ctx.setTransform(k, 0, 0, k, -cx * n, -cy * n);
   const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
   // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
@@ -984,6 +991,7 @@ function hdBake(level, cx, cy) {
 function drawOffMap(ctx, ox, oy, z) {
   const mw = S.W * z, mh = S.H * z;
   if (ox <= 0 && oy <= 0 && ox + mw >= R.w && oy + mh >= R.h) return; // the map covers the screen
+  if (typeof natureOffMap === 'function' && natureOffMap(ctx, ox, oy, z)) return; // (the land carrying on, faded into haze: js/nature.js)
   const tex = R.tex && R.tex.ground;
   if (tex && tex.img && tex.img.width) {
     if (!R.offPat || R.offPat.img !== tex.img) R.offPat = { img: tex.img, pat: ctx.createPattern(tex.img, 'repeat') };
@@ -1012,7 +1020,7 @@ function drawMapLayer(ctx, ox, oy, z) {
   if (!R.hd) hdReset();
   const hd = R.hd, C = HD_CHUNK, d = R.dpr;
   hd.frame++;
-  const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
+  const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const nx = Math.ceil(S.W / C), ny = Math.ceil(S.H / C);
   const cx0 = Math.floor(v0.x / C), cx1 = Math.floor(v1.x / C), cy0 = Math.floor(v0.y / C), cy1 = Math.floor(v1.y / C);
   const key = (lv, cx, cy) => (lv * 4096 + cy) * 4096 + cx;
@@ -5468,7 +5476,7 @@ function drawTruckBrakes(ctx, art, x, y, size, face) {
 function drawBotShadow(ctx, u, x, y, along, across) {
   // It leans and softens with the light (see todShadow): left in the morning, right in the evening, faint at night.
   const sh = todShadow();
-  ctx.fillStyle = `rgba(20,10,5,${(sh.alpha / sh.grow).toFixed(3)})`;
+  ctx.fillStyle = `rgba(${typeof duskShadowRgb === 'function' ? duskShadowRgb() : '20,10,5'},${(sh.alpha / sh.grow).toFixed(3)})`; // (violet in the sunset's long light)
   ctx.beginPath();
   ctx.ellipse(x + along * sh.kx, y + along * sh.ky, along * sh.grow, across * sh.grow, u.face, 0, Math.PI * 2);
   ctx.fill();
@@ -6405,16 +6413,18 @@ function render(dtReal) {
   // Big blasts near the middle of the screen shake it for a moment (a nuclear blast hardest; see fxShake).
   // (Not when the device is set to reduce motion.)
   if (!(LESS_MOTION && LESS_MOTION.matches)) { const a = fxShake(ox, oy, z); if (a > 0.2) { ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; } }
-  const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
+  const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
   drawOffMap(ctx, ox, oy, z);
   drawMapLayer(ctx, ox, oy, z);
+  if (typeof natureGround === 'function') natureGround(ctx, ox, oy, z, v0, v1); // (swaying plants, wind in the grass, wet ground, frost: js/nature.js)
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, false); // (and a Sapper's fresh ridge, where the colony can see it)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
@@ -6422,6 +6432,7 @@ function render(dtReal) {
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
+  if (typeof natureLight === 'function') natureLight(ctx, ox, oy, z, v0, v1); // (the Ring's light and the aurora, light on the water, wet roads at night: js/nature.js)
   drawWaterRipples(ctx, ox, oy, z, v0, v1);
   drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
@@ -6522,11 +6533,13 @@ function render(dtReal) {
     }
   }
   drawScorch(ctx, ox, oy, z);
+  if (typeof drawRadGround === 'function') drawRadGround(ctx, ox, oy, z, v0, v1); // (radiation zones: dead grass, the haze, the edge: js/radfx.js)
   drawDecals(ctx, ox, oy, z, inView);
   drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
   drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
+  if (typeof drawWarGround === 'function') drawWarGround(ctx, ox, oy, z, v0, v1); // (shockwaves and fires creeping over scorched grass: js/warfx.js)
   drawCalmGround(ctx, ox, oy, z, inView);
   if (typeof faunaGround === 'function') faunaGround(ctx, ox, oy, z, v0, v1); // the wildlife on the ground and in the trees (looks only: js/wildlife.js)
   drawPlans(ctx, ox, oy, z, inView);
@@ -6602,6 +6615,7 @@ function render(dtReal) {
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
+  if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
   let under = null;
@@ -6661,6 +6675,7 @@ function render(dtReal) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'pillar') { drawPillar(ctx, ox + (e.x + 0.5) * z, oy + e.y * z, z, e.x, e.y); continue; }
+    if (e.ent === 'ruin') { drawRadRuin(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
@@ -6748,6 +6763,7 @@ function render(dtReal) {
   drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
+  if (typeof duskSky === 'function') duskSky(ctx, ox, oy, z); // (the sunset's grade, glare, shafts, the Ring and the motes over everything standing: js/sunset.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
@@ -6828,10 +6844,13 @@ function render(dtReal) {
   if (R.workerView) drawWorkerView(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
+  if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
+  if (typeof drawRadAir === 'function') drawRadAir(ctx, ox, oy, z, v0, v1); // (radiation: motes, robots sickening, a hot ruin's smoke and light column, the Geiger crackle: js/radfx.js)
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
   if (S.crew && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
+  if (typeof natureView === 'function') natureView(ctx, ox, oy, z); // (zoomed far out: the camera's tilt and the depth haze: js/nature.js)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -8889,6 +8908,7 @@ function renderMinimap() {
     ctx.fillRect(x, y, w, h);
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
   }
+  if (typeof drawRadMinimap === 'function') drawRadMinimap(ctx, sx, sy); // (radiation zones and breached Reactors: js/radfx.js)
   // Trade routes: each Terminal's lane (the way its convoys drive), dashed in its owner's colour (a rival's fainter:
   // a raider's map), and the convoys on them, gold dots (flashing red when one was hit just now).
   for (const b of S.buildings) {
@@ -8999,7 +9019,7 @@ function renderMinimap() {
     ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
   if (S.crew && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
-  const a = screenToWorld(0, 0), c = screenToWorld(R.w, R.h);
+  const a = viewToWorld(0, 0), c = viewToWorld(R.w, R.h);
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(clamp(a.x, 0, S.W) * sx, clamp(a.y, 0, S.H) * sy,
@@ -11281,6 +11301,9 @@ function scarCrater(t) {
 function paintScars(ctx, i, j, x, y, t) {
   const a = S.ash[t], c = S.crater[t], lo = c & 15;
   const near = (di, dj, f) => inMap(i + di, j + dj) && f(tIdx(i + di, j + dj));
+  // Healing where nobody has fought for a while (js/warfx.js): the scorch and ash fade back into the ground, the mud a little.
+  const heal = typeof warHeal === 'function' ? warHeal(t) : 0, ga = ctx.globalAlpha;
+  if (heal) ctx.globalAlpha = ga * (1 - heal * (a >= SCARS.glass ? 0.45 : 0.82));
   // The grass dying back round the fighting: khaki, dead ground, deeper the more scarred tiles there are round it.
   const bl = scarBlight(i, j);
   if (bl >= 2) scarPatch(ctx, i, j, x, y, (u) => scarBlight(u % S.W, (u / S.W) | 0) >= 2, '#5e4d36', Math.min(0.85, 0.2 * bl));
@@ -11305,6 +11328,7 @@ function paintScars(ctx, i, j, x, y, t) {
   }
   // Torn earth round shell holes, browner with each, churned into mud with its ridges where they overlap (or big
   // craters crowd round).
+  if (heal) ctx.globalAlpha = ga * (1 - heal * 0.7);
   let churn = lo >= 4 ? 1 : 0;
   if (!churn && lo >= 2) { let m = 0; for (const [di, dj] of ARM_DIRS) if (near(di, dj, (u) => S.crater[u])) m++; churn = m >= 3 ? 1 : 0; }
   if (lo && !churn) scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) > 0 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.85, 0.32 + lo * 0.16));
@@ -11317,6 +11341,7 @@ function paintScars(ctx, i, j, x, y, t) {
       ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + w / 2, py - 2 + 4 * hash2(i, j, 590 + n), px + w, py + 1); ctx.stroke();
     }
   }
+  if (heal) ctx.globalAlpha = ga; // (the holes and craters themselves stay)
   // Shell holes: each a dark bowl with a lighter lip of thrown earth (light from the upper left).
   for (let n = 0, m = Math.min(lo, 7); n < m; n++) {
     const r = TP * (0.09 + 0.07 * hash2(i, j, 600 + n)), px = x + r + 2 + hash2(i, j, 610 + n) * (TP - 2 * r - 4), py = y + r + 2 + hash2(i, j, 620 + n) * (TP - 2 * r - 4);
@@ -11334,6 +11359,7 @@ function paintScars(ctx, i, j, x, y, t) {
     scarBigCrater(ctx, C.x * TP, C.y * TP, C.r * TP, u);
   }
   if (clip) ctx.restore();
+  if (heal) { ctx.globalAlpha = ga; paintScarHeal(ctx, i, j, x, y, t, heal); } // (grass and flowers coming up, on the old craters too)
 }
 
 /**

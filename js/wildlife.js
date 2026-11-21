@@ -100,7 +100,8 @@ const FAUNA_LIFE = {
 };
 const FAUNA_GLOW = { firefly: '#d4ff6a', eyes: '#d8ff8a', glowworm: '#7fe8ff', moth: '#fff0d0', embermoth: '#ff8a30' };
 /** How far (tiles) each kind of effect in S.fx is heard: gunfire, blasts, fire. */
-const FAUNA_FEAR = { muzzle: 7, flash: 10, boom: 10, nuke: 40, fuelblast: 14, flak: 8, pulsebeam: 7, flame: 6, arc: 5, collapse: 9, quake: 9 };
+const FAUNA_FEAR = { muzzle: 7, flash: 10, boom: 10, nuke: 40, fuelblast: 14, flak: 8, pulsebeam: 7, flame: 6, arc: 5, collapse: 9, quake: 9,
+  tracer: 6, railshot: 9, chain: 6, pulsehit: 5, shieldbreak: 7, crater: 12, domefall: 14 }; // (the gun lines, the Railgunner's and Arc Caster's shots, shells landing)
 
 const FAUNA = {
   of: null, cells: new Map(), spook: new Map(), list: [], fear: [], carrion: [], prints: [], lights: [], scatter: new Map(),

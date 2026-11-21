@@ -181,7 +181,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Mass Driver | 10 Cement, 8 Alloy, 4 Chips, two tiles (east-west or north-south, R turns it as you place it): storage that throws canisters of 12 goods every 10 s in an arc over anything to its **Catcher** 12–30 tiles away; it fires only with a Generator within 4 tiles (see Mass Drivers below) |
 | Catcher | 6 Cement, 4 Alloy, 2 Chips, one tile: storage that catches a Mass Driver's canisters; its stock is shared out like a Depot's |
 | Mooring Mast | 6 Cement, 3 Alloy, one tile: storage at one end of an **Airship line** (Link two: see Airships and Mooring Masts below); keeps 8 Fuel for its Airships, by Tanker or pipeline |
-| Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. (In a mission with `pressOn`, Convoy, the rival's Road Trains press on: `convoysPress` takes them off `gunShy`, so they never turn back and set out from a besieged Command Base, its run taken from storage enemy warbots are at.) **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. A Terminal holds no land round itself (`civClaims`: every other finished civilian building holds `CIV_CLAIM` tiles), so the post's ground stays open to everyone's roads; it still reaches out for building like one (`reachMap`). (It used to hold its ring, and as nothing on the post's ground can be attacked, a rival's shut roads out of there for good.) **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes), but for a Trade Terminal's construction site: enemy robots can wreck one there like any site, by an attack order, `sendAttack` or a flag held beside it (`calmShield`: only a finished building there is spared; bombs, shells and Missiles still spare the site; warbots used to fire at one for ever, the owner's call, Nov 2026); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break), so **no deposit lies there** either, where nothing could ever mine it (the owner's call, Nov 2026: `clearCalmGround`, at the start of a game once the posts, Uplinks and a mission's setup are in, and as a save loads, moves each one, the same kind and amount, to the nearest open tile just off the ground, `calmSpill`/`calmSpillOk`, on the same land if it can, the edge of the ground first; a post's half-turn twin, Teams and Long Haul 2v2, gets the twins of the first one's tiles, so both sides stay alike; an Energy crop just goes; no dice, the same on every device and on a rejoin), Ringfall's pieces that would land there lie just off it (`meteorImpact`), the drizzle keeps off it (`drizzleOk`), Grove Planters and Bio Farms plant nothing there (`findPlantSpot`, `findCropSpot`), and the Hollow's falling rock (`rockfall`) has no posts to mind; warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
+| Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. (In a mission with `pressOn`, Convoy, the rival's Road Trains press on: `convoysPress` takes them off `gunShy`, so they never turn back and set out from a besieged Command Base, its run taken from storage enemy warbots are at.) **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. A Terminal holds no land round itself (`civClaims`: every other finished civilian building holds `CIV_CLAIM` tiles), so the post's ground stays open to everyone's roads; it still reaches out for building like one (`reachMap`). (It used to hold its ring, and as nothing on the post's ground can be attacked, a rival's shut roads out of there for good.) **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes), but for a Trade Terminal's construction site: enemy robots can wreck one there like any site, by an attack order, `sendAttack` or a flag held beside it (`calmShield`: only a finished building there is spared; bombs, shells and Missiles still spare the site; warbots used to fire at one for ever, the owner's call, Nov 2026); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break), so **no deposit lies there** either, where nothing could ever mine it (the owner's call, Nov 2026: `clearCalmGround`, at the start of a game once the posts, Uplinks and a mission's setup are in, and as a save loads, moves each one, the same kind and amount, to the nearest open tile just off the ground, `calmSpill`/`calmSpillOk`, on the same land if it can, the edge of the ground first; on a new Versus planet made from the seed the map's own symmetry is kept (`uplinkOrbit`: the half turn, the quarter turns, Long Haul 2v2's two mirrors, the three-way turn): a deposit moves with its twins on every other colony's side, whether or not they lie on a post's ground (most posts have no twin), to a tile and its twins, one on a line of symmetry staying on it, so every side stays the same tile for tile while the posts and Uplinks keep their places (Long Haul 2v2's centre post, the middle Uplink); an Energy crop just goes; no dice, the same on every device and on a rejoin), Ringfall's pieces that would land there lie just off it (`meteorImpact`), the drizzle keeps off it (`drizzleOk`), Grove Planters and Bio Farms plant nothing there (`findPlantSpot`, `findCropSpot`), and the Hollow's falling rock (`rockfall`) has no posts to mind; warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -1503,7 +1503,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to download is tried once more a moment later (`loadImg`), and one that still fails draws nothing or the shape drawn
   in code: a missing canyon lip, Viaduct tower, Freight Train wagon or crossing barrier no longer makes the map throw
   (a Rift or Sky islands map could not start).
-- **The menu's backdrop:** an AI-vs-AI demo game plays behind the main menu. It opens 150 s into its game, fast-forwarded
+- **The menu's backdrop:** the planet turning (see **Wind, water, sky and the planet view**); under it an AI-vs-AI demo game plays on, drawn whenever the planet isn't showing. It opens 150 s into its game, fast-forwarded
   a slice each frame (`DEMO_WARM`, at most `WARM_MS` of a frame, in daylight: `TOD.dayHold`), so the page never waits
   for it at launch or on Save and quit (it ran all 4,500 steps at once: seconds on a phone).
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
@@ -2130,6 +2130,29 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
+  - **Radiation** (`RAD` in `js/defs.js`; the rules in `js/sim.js`, "radiation"; the looks and sound in `js/radfx.js`).
+    A nuke's fallout (`radAdd(..., 'nuke')` in `nukeImpact`, after `domeCatch`: a nuke a Shield Dome stops leaves none)
+    and a Nuclear Reactor destroyed by a foe (`reactorDown` from `destroyBuilding`: by force, and a foe hit its colony in
+    the last 2 s, `liftKiller`; dismantled, moved or wrecked by its own side it shuts down safely) leave a zone in
+    `S.rads` (`{ id, x, y, r, cr, t0, life, k, o }`): 7 tiles round a nuke for 330 s, 4 round a Reactor for 300 s, its
+    radius shrinking linearly to nothing (`cr`, set every half second by `updateRads`, so every reader sees the same
+    circle on every device and after a load). In a zone: robots out in the open (not indoors or in the air) lose
+    `RAD.hurt` (2%) of their full health a second at its middle, `RAD.edge` (half) of that at its rim (`radDose`): about
+    10% walking through a Reactor's, dead in a minute standing at a nuke's middle; buildings work at `RAD.work` (half:
+    `radWork` in `produce`, a gatherer's trip and a site going up; the panel says "slowed by radiation"); `findPath`
+    adds `RAD.path` a tile (`radMap`) for robots that don't fight (`avoidFor`) and for a rival's army on the march
+    (`routeOpts` `rad`), so they go round where it's short and still go in when their job is inside; gatherers, Pavers
+    and road crews take no node or tile in one (`radTile`); `canPlace` and `footPlace` refuse a building in one with how
+    long until that ground clears (`radWhy`, `radClearIn`); the rival's site search keeps 1.5 tiles clear of one, and
+    its nuke aim counts its own buildings in the fallout ring against a target. A breached Reactor leaves a ruin
+    (`S.ruins`, `{ id, x, y, t, o }`, up to `RAD.ruins`): drawn among the buildings as the Reactor's art greyed, its stack
+    broken and dome holed, smoking, and at night casting a green and blue light column for `RAD.glow` s before it goes
+    cold; it goes when something is built, laid or planned on its tile (`ruinTidy`). Zones and ruins are in `hashState`,
+    saves and `checkSave`; a save from before has none. On the ground (`drawRadGround`): the grass desaturated grey
+    (a plain wash on Saver), a green-yellow haze thickest at the rim with a slow flicker, a dashed ring at the edge and a
+    trefoil on its north side; motes drifting up (`RADFX.motes`, by Graphics step), robots in a zone glowing green, and
+    on the minimap a ringed disc (`drawRadMinimap`). With a robot selected in a zone, or the camera over one, a faint
+    Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
   `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3 or 3)
@@ -2355,7 +2378,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Game's Rules; kept in `localStorage` as `terrafall.graphics`, read once before the first resize, never in the game or
   an order). **Auto**, the default, is all of the above unchanged. **Saver** draws at 1×, runs at most 30 frames a
   second (`frame` in js/main.js), halves sparks, embers, smoke puffs and weather specks (`fxCount`, `wxCount`), and
-  drops the city haze and the roads' wide glow at night (the pools under buildings and the road lines stay). **High**
+  drops the city haze and the roads' wide glow at night (the pools under buildings and the road lines stay), and the
+  heavier touches of `js/nature.js` (swaying plants, wind in the grass, frost, the aurora, the far-zoom tilt). **High**
   lifts the pixel budget to 21 million (a 6K screen at 2×), switches to the sharper ground chunks as soon as the coarser
   ones would be stretched (`hdLevel`), keeps twice the chunk memory, and draws 1.5× the sparks and smoke. **Ultra**
   draws at the screen's full `devicePixelRatio` (budget 36 million), with twice the effects and weather, a finer city
@@ -2517,8 +2541,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   furnaces, clanks, drills, pump thumps, beeps; the Smelter and the Bot Foundry also press, ratchet and machine), a train's diesel throb and rail clack that quickens with its speed,
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
-  Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
-  all, **the land's own sounds** (`natureBeds`, `biomeCall`; with the wind, crickets and the sea they go through a bus of
+  Islands, Tidal flats and Four Isles; softer on lakes and rivers) and bubbling lava. Under it
+  all, **the land's own sounds** (`natureBeds`, `biomeCall`, `nightSounds`; with the wind, the night and the sea they go through a bus of
   their own, `AUDIO.natureBus`, set by the Ambience volume apart from the effects, `NATURE_LEVEL` at full): each biome's bed (`NATURE`: leaves rustling as the wind
   gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
   savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
@@ -2528,6 +2552,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   sliding). Both are loudest out in the wilds and fade as the view fills with a town: `WORLD.wild` is the share of the
   land on screen that isn't built on, paved or laid with track (a third built up is all town), eased so it doesn't jump;
   the calls come every few seconds in the wilds, hardly ever in the streets, more at dawn and fewer in rain or fog.
+  **The night** (`nightSounds`, `NIGHT_SET`, Nov 2026): out in the wilds a cricket chorus comes in as dusk deepens (one or
+  two first, the rest joining by full night), each cricket its own pitch, pulse count, chirp rate and loudness, singing
+  in bouts and falling quiet, another taking its place, so it never loops; a tree cricket's soft trill under them, a
+  katydid's rasp far off on the green, warm maps (Greenreach, Blackwater, the Shoals), a cicada's buzz swelling on the
+  Long Grass. In the forests (Greenreach, Emberwood) and Blackwater, now and then an owl hooting, a far-off night bird
+  (a three-note whistle or a nightjar's churr) and the leaves stirring; in Blackwater peepers by the water, frogs and
+  the odd splash; on the Long Grass and in the Rust a few insects and a dry, gusting wind. It follows `WORLD.wild` like
+  the beds, goes quiet in a fight (`WORLD.fray`: robots fighting on screen, or a blast a moment ago) and comes back over
+  ten seconds or so, thins over War scars and near a nest; rain hushes the insects (the frogs call on), a sandstorm or
+  gale too, fog a little. The Hollow, Argos, the poles and the Bloom keep their own nights. It costs at most
+  `NIGHT_VOICES` steady voices (made when a night first comes, let go after half a minute of day, their gates
+  scheduled a moment ahead on the audio clock) and `NIGHT_SHOTS` calls at once; audio only, nothing in the sim.
   Water: surf breaking on a sea map's shore, little waves lapping at a lake's or a river's banks (quicker on a river
   delta). The ground rumbles near the volcano on a Volcano map, harder once it rumbles its warning and while it erupts,
   and over lava. The weather (`weatherSound`: `weatherAt` while weather is shown, or a planet event's dust storm) is
@@ -2547,6 +2583,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
+- **Keyboard shortcut sheet:** press **/** during a game, or tap **Keys** in the pause menu. **/** or **Esc** closes
+  it. The sheet pauses single-player games while open, and multiplayer play continues. **?** still opens **How to play**.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
@@ -2674,6 +2712,19 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
+- **Sunsets and sunrises** (`js/sunset.js`, render only: no sim state, saves or randomness). From 75 s before the day
+  turns to evening until night is in (`DUSK_TIMES`, worked out from `TOD_CYCLE`), a golden-hour grade comes in, warms
+  through fire colours and deepens to magenta and violet; dawn runs the other way, gentler and cooler. Corvane sets in
+  the west and rises in the east, so the ground is lit from that side of the screen and falls into a cool long shade on
+  the far side, and robots' drop shadows stretch and turn violet (`duskShadowLength`, `duskShadowRgb`). Each biome has
+  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts,
+  plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
+  `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
+  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
+  Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
+  it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
+  `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
+  with reduce motion nothing drifts or twinkles.
 Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
 
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
@@ -2742,6 +2793,49 @@ limestone textures, mineral bands along lake shores, and six terrain decorations
 vents and periodic geysers. The mini pools are decorations cleared by construction. The selected
 map type still determines water crossings and resource placement. The terrain and Sky islands
 cliffs are rendered by `renderer/terrain/terrain_springs.py` and load in their own biome bundle.
+
+### Wind, water, sky and the planet view
+
+The land alive, in `js/nature.js`, for looks only: nothing there changes the game, `S`, saves or orders; what it keeps
+(`NAT`) is display-only and made afresh for each game. Anything random comes from the planet's seed (`hash2`), so every
+device sees the same land. Hooks in `render`: `natureGround` after the ground is drawn and before the time of day grades
+it, `natureLight` after the grade (before the water's ripples), `natureOffMap` from `drawOffMap`, and `natureView` over
+the finished frame (before the selection box). Reduced motion stills the sway, the gusts, the twinkles, the waves and the
+clouds' drift (`natureCloudTime`).
+
+- **Wind** (`natureWind`): one wind for the map, its way and strength from the same stretches of the weather's clock as
+  the clouds' drift (`ambWind`, veering as `ambDrift` does), stronger in a spell of weather. Gusts (`natGust`) roll
+  across it downwind: crests `NATFX.wind.gap` tiles apart in patches. Zoomed in past `NATFX.sway` px a tile the
+  decorative plants are drawn live (`natPlants`) instead of baked into the sharp chunks (a chunk baked while they sway
+  has `noPlants`; `drawPlants` skips it, `natRebake` bakes the ones on screen again one a frame), each leaning with the
+  wind and the gust over it, and pushed outward for a moment by a blast near it (`natHear` reads new blasts in `S.fx`).
+  At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
+  masked to `natVegMask`, one tile a pixel, laid over the view in one draw), and a blast sends a ring of them out.
+  Not on Graphics Saver.
+- **Wet ground** (`natureWet`): through a rainstorm and for a few minutes after it (`NATFX.wetFor`) the land is darker
+  and cooler, roads glossy, puddles in the low spots; at night the wet ground mirrors the streetlamps and the lit
+  buildings (`natWetNight`). The spells are the weather's (`weatherAt`), so it needs no state.
+- **Frost** (`natureFrost`): on the Polar Caps, Argos and Emberwood rime creeps over the land in the last of the night,
+  is thickest at dawn and melts by midday, following the time of day as shown. Four layers of crystals, each with more
+  than the last; not on open water, not on Saver.
+- **The night sky** (`natNightSky`): the Ring's faint silver light on the land, its strength, angle and tint by planet
+  (`natRing`), and on the Polar Caps, Argos and the Bloom a slow aurora's light drifting over the ground (not on Saver).
+- **Water** (`natWater`): the sun's sparkle by day (thickest up the view, toward the sun), the Ring's band and Argos
+  mirrored by night with stars on clear nights (fixed on the view, as reflections are), and small waves lapping along
+  the shores (`natShores`). Not on lava or Argos; none of the sky in the Hollow.
+- **The planet view** (`natureOffMap`, `natureView`): past the map's edge its own ground carries on, mirrored, faded and
+  sinking into a haze of the biome's colour (`NATFX.haze`) that thickens outward. Zoomed far out (below
+  `NATFX.tilt.from` times the furthest zoom) the camera tilts a little (`natureTiltAt`, at most `NATFX.tilt.most`): the
+  finished frame is redrawn in strips, each row as wide as its distance makes it (a true perspective: straight lines stay
+  straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
+  `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
+  minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
+- **The main menu** (`js/menuplanet.js`): Ithaca I turns slowly behind the menu card on its own canvas (`#menu-planet`):
+  a coral world from a fixed seed (regions round scattered centres, seas between, ice at the poles, a layer of cloud),
+  shaded per pixel in a small image a few times a second, the Ring and Argos round it, the colonies' lights on the night
+  side and now and then the flash of a fight. Made a few rows a frame at launch; stops while the menu is hidden or the
+  tab is in the background, and holds still with reduced motion. While it shows, the demo game behind the menu plays on
+  but isn't drawn (`menuPlanetCovers` in `drawNeeded`).
 
 ### Cloud shadows, remains and beacons
 
@@ -2846,6 +2940,28 @@ the game's own blasts and the planet's hash; it is drawn into the baked ground (
   blast are killed (`faunaKilled`: gone at once), the ground the game counts as heavily scarred (`scarDead`) is no
   habitat (`faunaBusy`), and the birdsong and insects thin out as the view fills with battlefield (`faunaScarred`, read by
   `biomeCall` and the drone in `js/audio.js`).
+- **The land healing and the war in the air** (`js/warfx.js`, looks only: display state in `R.wfx`, never in `S`, saves
+  or the hash). Where no fighting has gone on in a 6-tile cell or the cells round it for `WARFX.heal.quiet` (150 s), its
+  scars green again over `WARFX.heal.grow` (480 s, in 6 baked steps, `wfxHeal`): the scorch and ash fade back into the
+  ground under them (glass less), churned mud partly, and grass and then flowers come up, thickest on old craters
+  (`paintScarHeal`, by biome: `WFX_BLOOM`). A new blast on a tile starts its healing again; fighting nearby only holds
+  it. The craters, stumps, scrap and graveyards stay; `S.ash` never changes (the herds still keep off it). A loaded game
+  starts healing afresh. Also drawn there, from the game's effects as they're added (`wfxScan`): **smoke columns** from
+  buildings burned down, burning wrecks and big blasts, leaning with the clouds' wind, joining when close, lasting a few
+  minutes (`WARFX.col`, at most 6/14/20/28 by Graphics step), thinner zoomed in and faint at their foot; **fires** that
+  creep up to 2.4 tiles from a wreck over grass already scorched (trees burn higher) and die out, lighting the ground
+  and buildings round them at night (`drawLightPool`); **ash and embers** drifting over a fight's 6-tile cells and
+  settling over about two minutes; **shockwaves** (a ring of dust and light along the ground, `WARFX.shock`) from blasts of
+  reach 1.5 or more (a Missile, Ringfall, a fuel blast, a nuclear blast) and along the Lance's line, with a flash over the
+  area (none with reduced motion, and a fainter, slower ring).
+- **Burning oil** (`js/warfx.js`, looks only). A building destroyed by force (`collapseFx` marks its collapse effect
+  `burn`) that is in `WARFX.oil` burns (`wfxOil`): an Oil Pump for 210 s (its last 35 guttering out) then smoulders 240 s;
+  a Refinery 100 s and 140 s; a Fuel Tank 120 s and 160 s. Drawn: a jet of flame from the wellhead (3.4 tiles high for a
+  well, lower and wider for a tank), its own black smoke column pouring off the top of the flame (never joined with
+  another), blackened ground and the charred wreck (a wellhead stump and fallen beam, a burst tank's shell), embers in
+  it for a minute after. At dusk and night two light pools, flickering (`drawWfxOilLight`). Sound: `oilRoar` in
+  `js/audio.js`, one voice on the Effects bus for all of them (the loudest on screen, panned to it, a little louder with
+  more, at most 1.3×). A building put up on the spot puts it out in 3 s; nothing stops a rebuild.
 - **Saves and lockstep.** `crater` and `ash` are saved sparse (`SPARSE_LAYERS`: tile and value pairs), the lists as they
   are; `checkSave` checks them all; `hashState` takes the blast count (`S.scarN`), every pile and the count of bones.
   `scarLevel()` is 0 for Off (no layers: `S.crater` and `S.ash` are null).
@@ -2877,6 +2993,8 @@ js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
 js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
+js/sunset.js              sunsets and sunrises: each biome's dusk palette, long light, glints, motes, shafts (looks only)
+js/warfx.js               the war on the land: smoke columns, creeping fires, ash and embers, shockwaves, the scars healing (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects

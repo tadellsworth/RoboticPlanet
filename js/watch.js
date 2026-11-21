@@ -677,7 +677,7 @@ function initWatch() {
   };
   window.addEventListener('popstate', () => { if (!UI.inGame) closeWatch(true); });
   // Keys. The setup screen: Esc closes it. In a game being watched: the map moves and zooms, Space and Esc pause, [ ]
-  // the speed, M the minimap, I Statistics, ? How to play, F follows the action; no other key reaches the game (they
+  // the speed, M the minimap, I Statistics, ? How to play, / the shortcut sheet, F follows the action; no other key reaches the game (they
   // give orders, to a colony the computer plays).
   window.addEventListener('keydown', (e) => {
     const k = (e.key || '').toLowerCase(), tag = (e.target && e.target.tagName) || '';
@@ -690,7 +690,7 @@ function initWatch() {
     if (/^Digit[0-9]$/.test(e.code || '') || k === '`') { e.stopPropagation(); return; } // (no control groups, no Boosts)
     if (topScreen() || e.ctrlKey || e.metaKey || e.altKey) return;
     if (k === 'f') { e.preventDefault(); e.stopPropagation(); watchFollow(!UI.watch.follow, true); return; }
-    if (PAN_KEYS[k] || ['escape', ' ', 'spacebar', '+', '=', '-', '_', '[', ']', 'm', 'i', '?', 'shift'].includes(k)) return;
+    if (PAN_KEYS[k] || ['escape', ' ', 'spacebar', '+', '=', '-', '_', '[', ']', 'm', 'i', '?', SHORTCUT_SHEET_KEY, 'shift'].includes(k)) return;
     e.stopPropagation();
   }, true);
 }

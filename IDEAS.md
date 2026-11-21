@@ -12,11 +12,53 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## Sunsets per biome (built Nov 20 2026; open questions)
+
+Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's
+Sunsets and sunrises). Open:
+- A Sunsets switch of its own in Settings? For now it follows Time of day (none in Always day or Always night) and
+  Graphics (Saver keeps just the colour grade).
+- Real cast shadows: buildings' shadows are baked into their art (upper-left light), so only the robots' drop shadows
+  stretch at dusk. Re-lit "golden hour" sprite sets from the renderer would let buildings throw long shadows too.
+- The Ring as more than a faint arc: its shadow banding across the land, or ringshine lighting the night side.
+- A second map biome mixes palettes by the biome under the middle of the view; a smooth per-tile blend would be nicer.
+- On a device drawing the canvas without its graphics chip the sunset's full-screen blends cost about as much as the
+  rest of the frame (measured in a software-rendered browser); if that shows up on real phones, Saver's colour grade alone
+  could become Auto's too while frames are slow.
+
+## Radiation: open questions (built Nov 21 2026)
+
+Nuclear fallout and breached Reactors leave shrinking radiation zones that hurt robots, halve work and keep building out
+(`RAD`, `js/radfx.js`; see README, Nuclear race). Open:
+- A Shield Dome stops the nuke it catches, and with it the fallout, but it doesn't keep out a zone already on the ground
+  (fallout drifting in under it). Should a raised Dome shelter what's under it from a zone too, at a Crystal cost?
+- Fallout drifting with the wind (the clouds' wind, `ambWind`) rather than a still circle: it would need the wind as game
+  state.
+- Ways to clean it up faster: a decontamination crew or building, or rain washing it out sooner.
+- The rival weighs its own buildings in the fallout when it aims a nuke, but not the fallout itself in the Lance-or-nukes
+  choice (it slows the enemy's rebuilding and its own march in alike). Worth a point either way after more games?
+- A cold ruin is only looks: should Haulers salvage it for Alloy like other scrap, or should it stay as a monument?
+
+## The war on the land: open questions (built Nov 20 2026)
+
+Smoke columns, creeping fires, ash and embers, shockwaves and the scars healing are in (`js/warfx.js`, looks only; see
+README, War scars). Open:
+- The healing is display-only, so it isn't shared: a loaded game starts healing afresh, and two devices in a multiplayer
+  game can show different stages. Making it game state (a per-tile healed-at time in `S`, saved and hashed) would fix
+  both, and would let the herds come back to healed ground. Worth it?
+- Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
+- Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
+  (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Burning oil wells (built Nov 2026) are looks only. A gameplay version (a burning well can't be rebuilt until it's put
+  out, a Worker or a new firefighting unit capping it; the smoke blinding turrets) was not asked for; the owner's call.
+- Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
+
 ## The owner's ideas, filed Nov 19 2026
 
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
+  In the Missions revamp, also bring the long mission texts within the static test's limits (goals of 40 characters, intros of 5 lines): Arterial's goals, Maglev's hub goal and intro, and the older Blacktop and Lance ones (the owner, Nov 20).
 
 - **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
 - **Road crews (built Nov 20; open questions).** At most 3 Workers lay planned road at once (Road crew 2, 3, 5 or No
@@ -33,6 +75,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   and the Air/Army menus: `BOTS.magpod` must not appear there).
 - **No "Pipe to Terminal" button on an Oil Pump with a Refinery right beside it:** the conveyor join to adjacent
   production buildings already feeds it (the button is noise). Show it only when no Refinery or Fuel Tank touches the pump.
+- **Night sounds in the wilds (built Nov 20; open questions).** A cricket chorus that rises at dusk, a tree cricket's
+  trill, katydids and the savanna's cicada, owls, night birds and leaves in the forests, peepers, frogs and splashes in
+  Blackwater, insects and a dry wind on the Long Grass and in the Rust (`nightSounds` in `js/audio.js`; README, Sound).
+  Open: the owner to listen and set the level (the crickets' peak is `0.016` in `nightSchedule`, the calls' rates in
+  `NIGHT_SET`); whether the Shoals and Steamwells want more than their few crickets; whether the Bloom gets a night
+  chorus of its own (stranger, not insects); whether a Murmur night should thin the insects out near their tunnels.
 - **Tone down the road trucks' smoke and brake noise** (the exhaust puffs on Freight Trucks and Road Trains, and the
   brake squeal in `js/audio.js`): a little quieter and less constant.
 - **Dropped goods from a dismantled building go first to Haulers:** crates left by Dismantle are picked up before other
@@ -135,7 +183,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
   code search found these gaps (no key rebinding, no chat in multiplayer, one save only, no credits screen, no gamepad,
   no replays):
-  - **Controls and navigation:** a shortcut cheat sheet on `?` (nothing like it today); key rebinding; camera bookmarks
+  - **Controls and navigation:** shortcut cheat sheet shipped on `/` and Pause → Keys; key rebinding; camera bookmarks
     and a "jump to the last alert" key; an idle-army button beside the idle-Worker one; attack-move and shift-queued
     orders if not complete.
   - **Feedback and clarity:** income per minute beside each resource in the top bar; warnings for "storage nearly full"
@@ -149,7 +197,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     patterns (partly there); fuller screen-reader labels.
   - **Meta:** a "Daily Planet", a shared seed of the day with your own best result, easy to run on the relay.
   - **Bigger and optional:** gamepad support, translations, replays (already on the hold list).
-  - **Where to start (most polish for the effort):** the shortcut cheat sheet, camera bookmarks and last-alert jump,
+  - **Where to start (most polish for the effort):** camera bookmarks and last-alert jump,
     unit acknowledgement sounds, income rates and warnings, multiple save slots.
   - **A UX audit by Gemini:** the owner sends it screenshots of the main screens, and it lists confusing or unpolished
     spots against studio standards: a cheap, prioritised list (see handoff/ for how the export and import work).
@@ -450,8 +498,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
     the blob.
-  - **Map edges, looks only:** faded, unplayable terrain carrying on past the map's edge; a haze in the biome's colour
-    thickening outward; perhaps a slight curve at far zoom.
+  - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
+    on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
+    and zoomed far out the camera tilts a little under a depth haze (the planet view). Still open: a true curve of the
+    horizon at the very furthest zoom.
   - **Road crews:** the rivals and the Roadworks; a shorter phone label ("All" instead of "No limit").
   - **Orbital Lift:** an 18-minute opening time; rivals rarely reach it; the Warden in the Hollow gets no main project.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
@@ -919,7 +969,7 @@ Kept as built (the owner, Nov 17):
   like any hauler. In nine computer-only games (Nov 17) convoys were hit in five and one or two lost in four; the games
   ran about two minutes longer on average and all ended.
 - **No deposits on a post's ground** (the owner, Nov 2026): only a Terminal or a Ramp can be built there, so a deposit
-  there could never be mined. The map's are moved just off the ground (the same kind and amount, a mirrored pair's alike),
+  there could never be mined. The map's are moved just off the ground (the same kind and amount, each with its twins on the other colonies' sides, so a symmetric map stays symmetric tile for tile),
   as are an older save's as it loads; Ringfall's pieces land just off it, and Grove Planters and Bio Farms plant nothing
   there.
 

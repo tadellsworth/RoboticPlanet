@@ -238,7 +238,7 @@ const MISSIONS = [
   // Chapter 1, First Steps. One idea at a time: your first building and road, Stone and Cement, batteries, and the first Alloy.
   {
     id: 'touchdown', name: 'Touchdown', chapter: 'First Steps',
-    brief: 'Your first landing. Place a Harvester by the stalk groves, join it to your roads and watch the Fiber come in.',
+    brief: 'Your first landing. Place a Harvester by the stalk groves, join it to your roads and watch the Fiber come in. Press / for keyboard shortcuts.',
     intro: [
       'Drag to look around (with a mouse: right-drag or W A S D); pinch or scroll to zoom.',
       'A new building starts as a site: Haulers bring its materials from the Command Base, then a Worker builds it.',
@@ -662,7 +662,7 @@ const MISSIONS = [
       'Freight Trucks reach 4½ times off-road speed on Express. Sign gantries rise along the straight pair.',
       'Survey depot reception board lit. Destinations pending.',
     ],
-    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 2, biome: 'desert', shape: 0, limit: [0, 0, 14],
+    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 3, biome: 'desert', shape: 0, limit: [0, 0, 14],
     layout(m, W) {
       const base = m.bases[0], { x, north, south } = arterialRoute(base);
       for (let y = north - 1; y <= south + 2; y++) for (let i = base.x; i <= x + 4; i++) {
@@ -1638,6 +1638,7 @@ const MISSIONS = [
       'A <b>Nuclear race</b>: an Ore Mine beside green Uranium digs it first.',
       'A <b>Nuclear Reactor</b> enriches 2 Uranium into 1; a Nuclear Silo needs 6 for a missile.',
       'A nuclear missile flattens everything round where it lands. A direct hit destroys a Command Base.',
+      'Its fallout lingers: a green ring of radiation for minutes, where robots sicken, work slows and nothing is built. A Reactor a rival destroys leaks too.',
       'If one ever comes for you, press <b>Evacuate</b> (<kbd>V</kbd>) on the warning card.',
       'This mission ends with your launch. In free play, Custom Game → Rules switches the race on or off.',
     ],

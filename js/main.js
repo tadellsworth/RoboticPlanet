@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Terrafall — boot and main loop. Behind the main menu an AI-vs-AI demo game plays as a backdrop.
+ * Terrafall — boot and main loop. Behind the main menu an AI-vs-AI demo game plays on (under the turning planet: js/menuplanet.js).
  */
 
 let _lastFrame = performance.now();
@@ -67,11 +67,11 @@ function frameError(e) {
  * art (R.dirty). A paused game used to be drawn sixty times a second behind its pause menu. And the
  * demo behind the main menu is drawn every DEMO_FRAME ms, not every frame.
  */
-const COVERS = ['screen-pause', 'screen-help', 'screen-stats', 'screen-over', 'screen-boost', 'screen-missions', 'screen-mp', 'screen-lore', 'screen-feedback'];
+const COVERS = ['screen-pause', 'screen-keys', 'screen-help', 'screen-stats', 'screen-over', 'screen-boost', 'screen-missions', 'screen-mp', 'screen-lore', 'screen-feedback'];
 let _drawAt = 0, _drawDt = 0, _drawKey = '';
 function drawNeeded(now) {
   if (!S || !R.map) return true;
-  if (!UI.inGame) return now - _drawAt >= DEMO_FRAME;
+  if (!UI.inGame) return now - _drawAt >= DEMO_FRAME && !(typeof menuPlanetCovers === 'function' && menuPlanetCovers()); // (the planet turning behind the main menu hides the demo: js/menuplanet.js)
   const still = (UI.paused && !MP.on) || S.winner >= 0;
   const covered = still && COVERS.some((id) => { const el = document.getElementById(id); return el && !el.hidden; });
   const c = R.cam, key = covered ? `${c.x},${c.y},${c.z},${R.canvas.width},${R.canvas.height}` : '';
