@@ -7296,14 +7296,15 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-smode-hint"></p>
         <div class="section-label">Goods kept here <span class="label-note">tap to switch off</span></div>
         <div class="goodlist" id="sh-accept">${(def.tank ? ['crude', 'fuel'] : GOODS.filter((g) => nukeOn() || !NUKE_GOODS.includes(g))).map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
-      if (b.type !== 'lander' && !def.tank && !def.mdriver) {
-        // The goods a front line runs on, plus any already ordered; the rest behind "More goods".
-        const main = ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(warOn() ? ['ammo'] : []);
-        const goods = main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
-        html += `<div class="section-label">Supply orders <span class="label-note">stock it from home</span></div>
+      if (b.type !== 'lander' && !def.mdriver) {
+        // The goods a front line runs on, plus any already ordered; the rest behind "More goods". (A Fuel Tank: a minimum
+        // of Fuel and Crude to keep in it, the owner's ask, Nov 21 2026.)
+        const main = def.tank ? ['fuel', 'crude'] : ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(warOn() ? ['ammo'] : []);
+        const goods = def.tank ? main : main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
+        html += `<div class="section-label">${def.tank ? 'Keep at least' : 'Supply orders'} <span class="label-note">${def.tank ? 'Tankers top it up' : 'stock it from home'}</span></div>
           <div class="keep-list" id="sh-keep">${goods.map((g) => `<div class="keep-cell" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name}</span><b class="n">–</b>
             <button class="btn" data-d="-5" aria-label="Less ${GOOD[g].name}">−5</button><button class="btn" data-d="5" aria-label="More ${GOOD[g].name}">+5</button></div>`).join('')}</div>
-          <button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>
+          ${def.tank ? '' : `<button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>`}
           <p class="hint" id="sh-keep-hint"></p>`;
       }
       if (BDEFS[b.type].port && b.built && b.owner === ME) html += portSection(b);
@@ -8010,7 +8011,8 @@ function refreshBuildingSheet(b) {
     }
     let trucks = 0;
     for (const u of S.bots) if (!u.dead && u.owner === ME && BOTS[u.type].truck && !BOTS[u.type].train && !BOTS[u.type].tanker) trucks++; // Road Trains only run to far Depots
-    $('sh-keep-hint').textContent = !want
+    $('sh-keep-hint').textContent = BDEFS[b.type].tank ? (!want ? 'Set the least Fuel or Crude to keep in this tank: Tankers and Haulers bring more from your other storage whenever it drops below, and it isn\'t drawn on below that for other storage.'
+      : `${short ? 'Topping it up' : 'Stocked to your minimum'}. Tankers and Haulers bring more whenever it drops below.`) : !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (b.airSupply && !onHomeNet(b) ? `A Cargo Plane flies them in, ${BOTS.cargoplane.carry} goods a flight (see Supply by air).`
         : trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');

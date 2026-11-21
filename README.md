@@ -187,7 +187,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (no stock limit unless you set one) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit); explodes when destroyed |
-| Fuel Tank | Gather tab (T), 5 Cement + 2 Alloy: storage for **Crude and Fuel only**, up to 120 together (`tank`); the hub of an oil bloc: feeds up to 4 neighbours, a pipeline with one on it moves twice as much; a far bigger blast when destroyed full |
+| Fuel Tank | Gather tab (T), 5 Cement + 2 Alloy: storage for **Crude and Fuel only**, up to 120 together (`tank`); **Keep at least** N Fuel / Crude (its supply orders, `b.keep`, shown on tanks since Nov 21 2026); the hub of an oil bloc: feeds up to 4 neighbours, a pipeline with one on it moves twice as much; a far bigger blast when destroyed full |
 | Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
