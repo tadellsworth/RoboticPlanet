@@ -270,3 +270,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Redrew red and Arctic foxes with distinct ear, muzzle and coat proportions. Updated geese on the water and in migrating flocks, and gave turtles a domed shell with distinct scutes and rim.
 - Redrew the ember moth with patterned forewings and hindwings, and the ash beetle with six articulated legs and a warm seam between its wing cases.
 - Verified the renderers and goose flight shadow in Chromium. Captured comparisons at close-up and game scale.
+
+### Heron, owl and lizard redraws
+
+- Redrew the Blackwater heron’s wading, fishing and flight poses. Distinguished the woodland owl’s ear tufts from the snowy owl’s round head and kept eyeshine aligned with the face as each turns.
+- Gave the rock lizard jointed legs, splayed feet and a tapering tail that flexes while it darts.
+- Checked the before-and-after poses at game scale in Chromium, including bird shadows and the owl head turn.

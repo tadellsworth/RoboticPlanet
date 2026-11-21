@@ -1324,8 +1324,10 @@ function faunaGlows(ctx, ox, oy, z) {
     if (K.eyes && L > 0.4) for (const m of a.m) {
       if (m.fly || Math.sin(F.t * 0.9 + m.ph * 7) < -0.95) continue; // (a blink now and then)
       // (in the face of FAUNA_DRAW.owl, turning as it looks round)
-      const sz = Math.max(2, K.size * z), hx = ox + m.x * z + Math.sin(m.look || 0) * sz * 0.08, hy = oy + m.y * z - sz * 0.53, r = Math.max(2.4, z * 0.065);
-      faunaDot(ctx, hx - sz * 0.06, hy, r, K.eyes, 0.9 * a.vis); faunaDot(ctx, hx + sz * 0.06, hy, r, K.eyes, 0.9 * a.vis);
+      const { offset, half } = owlFace(m);
+      const sz = Math.max(2, K.size * z), hx = ox + m.x * z + offset * sz, hy = oy + m.y * z - sz * 0.53;
+      const r = Math.max(2.4, z * 0.065);
+      faunaDot(ctx, hx - sz * half, hy, r, K.eyes, 0.9 * a.vis); faunaDot(ctx, hx + sz * half, hy, r, K.eyes, 0.9 * a.vis);
     }
     if (K.glow) {
       for (const m of a.m) {
@@ -1449,6 +1451,12 @@ function bloomEyes(ctx, x, y, seam, s) {
   const radius = Math.max(0.019, 0.27 / s);
   faunaEll(ctx, x + 0.011, -y, radius, radius * 0.67, 0);
   faunaEll(ctx, x + 0.011, y, radius, radius * 0.67, 0); ctx.fill();
+}
+
+/** Screen-space head turn, shared by the owl's eyes and their glow. */
+function owlFace(m) {
+  const turn = Math.sin(m.look || 0);
+  return { offset: turn * 0.094, half: 0.074 - 0.027 * Math.abs(turn) };
 }
 
 const FAUNA_DRAW = {
@@ -2273,33 +2281,87 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** A heron standing in the shallows: rings on the water round its legs, grey body, the neck in an S (shot out to strike), dagger bill. */
+  /** Blackwater's heron stands over the shallows, then unfolds its neck in a fishing strike. */
   heron(ctx, x, y, s, m, a, air) {
-    const K = a.K, col = K.col;
-    if (air) { faunaWings(ctx, x, y, s * 1.9, m.f, m.ph * 0.55, col, air, { broad: true, neck: true }); return; }
-    const F = FAUNA, d = faunaSide(m);
-    if (m.rip !== undefined && F.t - m.rip < 1.6 && F.t >= m.rip) {
-      const k = (F.t - m.rip) / 1.6;
-      ctx.strokeStyle = faunaCol('#dfeef2', 0.2, 0.5 * (1 - k)); ctx.lineWidth = Math.max(0.6, s * 0.02);
-      ctx.beginPath(); ctx.ellipse(x, y, s * (0.1 + 0.35 * k), s * (0.035 + 0.12 * k), 0, 0, Math.PI * 2); ctx.stroke();
+    const [slate, pale, ink] = a.K.col;
+    if (air) {
+      const shadow = air === 'shadow', phase = m.ph * 0.45;
+      faunaWings(ctx, x, y, s * 1.92, m.f, phase, a.K.col, air, { broad: true, tips: true });
+      ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+      // In flight the neck folds against the breast and the legs extend well past the tail.
+      ctx.strokeStyle = shadow ? '#000' : faunaCol(ink); ctx.lineWidth = Math.max(0.018, 0.38 / s);
+      ctx.lineCap = 'round'; ctx.beginPath();
+      for (const side of [-1, 1]) {
+        ctx.moveTo(-0.24, side * 0.035); ctx.lineTo(-0.69, side * 0.034); ctx.lineTo(-0.76, side * 0.046);
+      }
+      ctx.stroke();
+      ctx.fillStyle = shadow ? '#000' : faunaCol(pale);
+      ctx.beginPath(); faunaEll(ctx, 0.254, 0, 0.165, 0.061, 0); ctx.fill();
+      ctx.fillStyle = shadow ? '#000' : faunaCol('#cba85c');
+      ctx.beginPath(); ctx.moveTo(0.365, -0.030); ctx.lineTo(0.653, 0);
+      ctx.lineTo(0.363, 0.030); ctx.fill();
+      ctx.restore();
+      return;
     }
-    ctx.fillStyle = faunaCol('#0c1418', 0, 0.25); ctx.beginPath(); ctx.ellipse(x, y, s * 0.12, s * 0.035, 0, 0, Math.PI * 2); ctx.fill();
-    const strike = m.strike !== undefined && F.t - m.strike < 0.4 ? Math.sin(((F.t - m.strike) / 0.4) * Math.PI) : 0;
-    ctx.save(); ctx.translate(x, y); ctx.scale(d, 1);
-    ctx.strokeStyle = faunaCol(col[2]); ctx.lineWidth = Math.max(0.8, s * 0.022); ctx.lineCap = 'round';
-    ctx.beginPath(); for (const lx of [-s * 0.02, s * 0.03]) { ctx.moveTo(lx, -s * 0.03); ctx.lineTo(lx * 1.5, -s * 0.33); } ctx.stroke();
-    ctx.fillStyle = faunaCol(col[0]);
-    ctx.beginPath(); faunaEll(ctx, -s * 0.02, -s * 0.4, s * 0.17, s * 0.075, -0.35); ctx.moveTo(-s * 0.14, -s * 0.37); ctx.lineTo(-s * 0.26, -s * 0.28); ctx.lineTo(-s * 0.12, -s * 0.33); ctx.fill();
-    ctx.fillStyle = faunaCol(col[2], 0, 0.5); ctx.beginPath(); faunaEll(ctx, -s * 0.05, -s * 0.42, s * 0.12, s * 0.04, -0.35); ctx.fill();
-    // the neck, from the shoulders in an S up to the head (shot forward and down to strike)
-    const hx = s * (0.14 + 0.28 * strike), hy = -s * (0.74 - 0.42 * strike);
-    ctx.strokeStyle = faunaCol(col[1]); ctx.lineWidth = Math.max(1, s * 0.045);
-    ctx.beginPath(); ctx.moveTo(s * 0.11, -s * 0.46); ctx.quadraticCurveTo(s * (0.02 + 0.2 * strike), -s * (0.6 - 0.15 * strike), hx, hy); ctx.stroke();
-    ctx.fillStyle = faunaCol(col[1]); ctx.beginPath(); faunaEll(ctx, hx, hy, s * 0.045, s * 0.035, 0); ctx.fill();
-    ctx.strokeStyle = faunaCol('#c8a040'); ctx.lineWidth = Math.max(0.8, s * 0.022);
-    ctx.beginPath(); ctx.moveTo(hx + s * 0.03, hy); ctx.lineTo(hx + s * 0.16, hy + s * (0.02 + 0.08 * strike)); ctx.stroke();
-    ctx.strokeStyle = faunaCol(col[2]); ctx.lineWidth = Math.max(0.6, s * 0.015);
-    ctx.beginPath(); ctx.moveTo(hx - s * 0.02, hy - s * 0.02); ctx.lineTo(hx - s * 0.12, hy - s * 0.04); ctx.stroke();
+
+    const since = FAUNA.t - (m.strike ?? -99);
+    const strike = since >= 0 && since < 0.4 ? Math.sin((since / 0.4) * Math.PI) : 0;
+    const ripple = FAUNA.t - (m.rip ?? -99);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.fillStyle = faunaCol('#17222c', 0, 0.20);
+    ctx.beginPath(); faunaEll(ctx, 0, 0.022, 0.245, 0.042, 0); ctx.fill();
+    if (ripple >= 0 && ripple < 1.6) {
+      const spread = ripple / 1.6;
+      ctx.strokeStyle = faunaCol('#dfeef2', 0.2, 0.45 * (1 - spread)); ctx.lineWidth = Math.max(0.012, 0.5 / s);
+      ctx.beginPath(); ctx.ellipse(0.06, 0.011, 0.10 + 0.35 * spread, 0.035 + 0.09 * spread, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const far of [true, false]) {
+      const foot = (far ? -0.14 : 0.086) + (m.mv ? Math.sin(m.ph + (far ? Math.PI : 0)) * 0.12 : 0);
+      const gy = far ? -0.028 : 0.014, knee = foot * 0.5 - (far ? 0.077 : 0.045);
+      ctx.strokeStyle = faunaCol(far ? '#4c4a4b' : '#77716b'); ctx.lineWidth = Math.max(0.028, 0.59 / s);
+      ctx.beginPath(); ctx.moveTo(far ? -0.095 : -0.024, -0.473);
+      ctx.lineTo(knee, -0.176); ctx.lineTo(foot, gy); ctx.lineTo(foot + 0.061, gy + 0.003); ctx.stroke();
+    }
+
+    const body = ctx.createLinearGradient(0, -0.56, 0, -0.35);
+    body.addColorStop(0, faunaCol(slate)); body.addColorStop(1, faunaCol(ink));
+    ctx.fillStyle = body; ctx.beginPath(); ctx.moveTo(-0.357, -0.381);
+    ctx.bezierCurveTo(-0.179, -0.495, -0.075, -0.558, 0.063, -0.564);
+    ctx.bezierCurveTo(0.207, -0.555, 0.248, -0.457, 0.162, -0.395);
+    ctx.quadraticCurveTo(0.068, -0.340, -0.128, -0.389);
+    ctx.quadraticCurveTo(-0.249, -0.354, -0.357, -0.381); ctx.fill();
+    ctx.fillStyle = faunaCol('#637786'); ctx.beginPath(); faunaEll(ctx, -0.081, -0.460, 0.198, 0.066, -0.18); ctx.fill();
+    if (s >= 13) {
+      ctx.strokeStyle = faunaCol(pale, 0, 0.39); ctx.lineWidth = 0.015;
+      ctx.beginPath(); ctx.moveTo(0.059, -0.485); ctx.quadraticCurveTo(-0.118, -0.484, -0.257, -0.402);
+      ctx.moveTo(0.014, -0.459); ctx.quadraticCurveTo(-0.125, -0.449, -0.214, -0.402); ctx.stroke();
+    }
+
+    // A tucked S becomes a long, low sweep as the bill reaches the water.
+    const hx = 0.170 + strike * 0.467, hy = -0.878 + strike * 0.741;
+    ctx.strokeStyle = faunaCol('#9da2a2'); ctx.lineWidth = Math.max(0.055, 0.84 / s);
+    ctx.beginPath(); ctx.moveTo(0.138, -0.491);
+    ctx.bezierCurveTo(0.237 + strike * 0.087, -0.585 + strike * 0.128,
+      -0.010 + strike * 0.444, -0.667 + strike * 0.24,
+      0.035 + strike * 0.452, -0.762 + strike * 0.455);
+    ctx.quadraticCurveTo(0.046 + strike * 0.516, hy - 0.014, hx, hy); ctx.stroke();
+    ctx.fillStyle = faunaCol(pale);
+    ctx.beginPath(); ctx.moveTo(0.124, -0.525); ctx.quadraticCurveTo(0.209, -0.518, 0.214, -0.438);
+    ctx.lineTo(0.176, -0.398); ctx.lineTo(0.185, -0.450); ctx.lineTo(0.145, -0.418);
+    ctx.quadraticCurveTo(0.169, -0.493, 0.124, -0.525); ctx.fill();
+
+    ctx.translate(hx, hy); ctx.rotate(strike * 0.55);
+    ctx.fillStyle = faunaCol(pale); ctx.beginPath(); faunaEll(ctx, -0.014, 0, 0.097, 0.060, -0.07); ctx.fill();
+    ctx.fillStyle = faunaCol(ink); ctx.beginPath(); ctx.moveTo(0.067, -0.028);
+    ctx.quadraticCurveTo(-0.002, -0.069, -0.079, -0.045);
+    ctx.lineTo(-0.195, -0.012); ctx.quadraticCurveTo(-0.066, -0.024, 0.064, -0.010); ctx.fill();
+    ctx.fillStyle = faunaCol('#dcb96f'); ctx.beginPath(); ctx.moveTo(0.062, -0.026);
+    ctx.lineTo(0.304, 0.001); ctx.lineTo(0.057, 0.031); ctx.fill();
+    if (s >= 11) {
+      ctx.fillStyle = faunaCol('#392f27'); ctx.beginPath(); faunaEll(ctx, 0.037, -0.018, 0.013, 0.011, 0); ctx.fill();
+    }
     ctx.restore();
   },
 
@@ -2408,17 +2470,58 @@ const FAUNA_DRAW = {
     ctx.fillStyle = faunaCol(col[1]); ctx.beginPath(); for (const v of [-1, 1]) faunaEll(ctx, x + c * s * 0.25 - sn * v * s * 0.17, y + sn * s * 0.25 + c * v * s * 0.17, s * 0.1, s * 0.1, 0); ctx.fill();
   },
 
-  /** A lizard: slim body, the tail swinging as it darts, little legs splayed. */
+  /** A rock lizard, with a compressed body and a tapering tail that lashes as it darts. */
   lizard(ctx, x, y, s, m, a) {
-    const col = a.K.col, c = Math.cos(m.f), sn = Math.sin(m.f), P = (u, v) => [x + (u * c - v * sn) * s, y + (u * sn + v * c) * s];
-    const sw = Math.sin(m.ph) * (m.mv ? 0.12 : 0.04);
-    ctx.strokeStyle = faunaCol(col[0]); ctx.lineCap = 'round';
-    ctx.lineWidth = Math.max(0.7, s * 0.07);
-    ctx.beginPath(); const t0 = P(-0.15, 0), t1 = P(-0.35, sw), t2 = P(-0.62, -sw * 1.4); ctx.moveTo(t0[0], t0[1]); ctx.quadraticCurveTo(t1[0], t1[1], t2[0], t2[1]); ctx.stroke();
-    ctx.lineWidth = Math.max(0.6, s * 0.05);
-    ctx.beginPath(); for (const [u, v, k] of [[0.12, 1, 1], [0.12, -1, -1], [-0.1, 1, -1], [-0.1, -1, 1]]) { const p = P(u, 0), q = P(u + k * sw * 0.8 + 0.05, v * 0.16); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); } ctx.stroke();
-    ctx.fillStyle = faunaCol(col[0]); ctx.beginPath(); faunaEll(ctx, x, y, s * 0.24, s * 0.075, m.f); const h = P(0.27, 0); faunaEll(ctx, h[0], h[1], s * 0.08, s * 0.055, m.f); ctx.fill();
-    if (s > 5) { ctx.fillStyle = faunaCol(col[2], 0, 0.5); ctx.beginPath(); faunaEll(ctx, x, y, s * 0.18, s * 0.03, m.f); ctx.fill(); }
+    const [sand, cream, scale] = a.K.col;
+    const stride = m.mv ? Math.sin(m.ph) : 0;
+    const sweep = m.mv ? 0.20 * stride : 0.028 * Math.sin(FAUNA.t * 2 + m.ph);
+    faunaShadow(ctx, x, y, s * 0.40, s * 0.14);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) for (const front of [false, true]) {
+      const hip = front ? 0.165 : -0.193, swing = stride * side * (front ? 1 : -1);
+      const knee = hip - 0.05 + swing * 0.088, foot = hip + 0.092 + swing * 0.115;
+      const spread = side * (front ? 0.215 : 0.249);
+      ctx.strokeStyle = faunaCol(scale); ctx.lineWidth = Math.max(0.046, 0.37 / s);
+      ctx.beginPath(); ctx.moveTo(hip, side * 0.065);
+      ctx.quadraticCurveTo(knee - 0.025, side * 0.127, knee, side * 0.174);
+      ctx.lineTo(foot, spread); ctx.stroke();
+      ctx.strokeStyle = faunaCol(sand); ctx.lineWidth = Math.max(0.020, 0.28 / s);
+      ctx.beginPath(); ctx.moveTo(foot - 0.017, spread);
+      ctx.lineTo(foot + 0.071, spread + side * 0.042); ctx.stroke();
+      if (s >= 13) {
+        ctx.lineWidth = 0.013; ctx.beginPath();
+        ctx.moveTo(foot - 0.001, spread); ctx.lineTo(foot + 0.055, spread + side * 0.078);
+        ctx.moveTo(foot - 0.012, spread); ctx.lineTo(foot + 0.040, spread - side * 0.025); ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = faunaCol(scale); ctx.beginPath(); ctx.moveTo(-0.204, -0.060);
+    ctx.bezierCurveTo(-0.414, -0.060 + sweep * 0.70, -0.597, -0.080 + sweep, -0.865, -sweep * 0.54);
+    ctx.bezierCurveTo(-0.660, 0.025 + sweep, -0.423, 0.103 + sweep * 0.69, -0.197, 0.065);
+    ctx.quadraticCurveTo(-0.167, 0.003, -0.204, -0.060); ctx.fill();
+
+    const skin = ctx.createLinearGradient(0, -0.128, 0, 0.126);
+    skin.addColorStop(0, faunaCol(cream)); skin.addColorStop(0.53, faunaCol(sand)); skin.addColorStop(1, faunaCol(scale));
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.moveTo(-0.306, -0.027);
+    ctx.bezierCurveTo(-0.226, -0.157, 0.059, -0.148, 0.199, -0.084);
+    ctx.quadraticCurveTo(0.339, -0.086, 0.422, -0.049);
+    ctx.quadraticCurveTo(0.494, 0.005, 0.415, 0.056);
+    ctx.quadraticCurveTo(0.306, 0.101, 0.201, 0.078);
+    ctx.bezierCurveTo(0.039, 0.148, -0.237, 0.158, -0.306, -0.027); ctx.fill();
+    ctx.strokeStyle = faunaCol(scale, 0, 0.67); ctx.lineWidth = 0.021;
+    ctx.beginPath(); ctx.moveTo(-0.264, -0.027); ctx.quadraticCurveTo(-0.041, -0.072, 0.191, -0.034); ctx.stroke();
+    if (s >= 10) {
+      ctx.fillStyle = faunaCol(scale, 0, 0.78); ctx.beginPath();
+      for (let k = 0; k < 5; k++) {
+        const xx = -0.18 + k * 0.078;
+        faunaEll(ctx, xx, 0.055 + Math.sin(k * 1.63) * 0.019, 0.026, 0.016, -0.15);
+      }
+      ctx.fill();
+    }
+    ctx.fillStyle = faunaCol('#30251f'); ctx.beginPath();
+    faunaEll(ctx, 0.332, -0.047, 0.019, 0.014, 0); faunaEll(ctx, 0.332, 0.052, 0.019, 0.014, 0); ctx.fill();
+    ctx.restore();
   },
 
   /** The ash beetle's scorched shell has a warm seam along the two wing cases. */
@@ -2521,17 +2624,73 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** An owl on a branch, from the front: round, a pale face turning to look round, ear tufts. (Its eyes glow in faunaGlows.) */
+  /** A horned woodland owl or a snowy owl, perched with its face following a slow scan. */
   owl(ctx, x, y, s, m, a, air) {
-    const K = a.K, col = K.col;
-    if (air) { faunaWings(ctx, x, y, s * 1.7, m.f, m.ph * 0.6, col, air, { broad: true, lift: K.lift }); return; }
-    const look = Math.sin(m.look || 0) * s * 0.08;
-    ctx.fillStyle = faunaCol(col[0], K.lift);
-    ctx.beginPath(); faunaEll(ctx, x, y - s * 0.22, s * 0.22, s * 0.3, 0); faunaEll(ctx, x + look * 0.4, y - s * 0.52, s * 0.19, s * 0.16, 0);
-    for (const v of [-1, 1]) { ctx.moveTo(x + look * 0.4 + v * s * 0.1, y - s * 0.6); ctx.lineTo(x + look * 0.4 + v * s * 0.17, y - s * 0.74); ctx.lineTo(x + look * 0.4 + v * s * 0.17, y - s * 0.58); ctx.closePath(); }
+    const { col: [feather, pale, dark], lift } = a.K, snowy = a.kind === 'snowyowl';
+    if (air) {
+      faunaWings(ctx, x, y, s * (snowy ? 1.86 : 1.77), m.f, m.ph * 0.6, a.K.col, air,
+        { broad: true, lift, band: !snowy, tips: snowy });
+      return;
+    }
+    const { offset, half } = owlFace(m);
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = faunaCol(snowy ? '#a3967e' : '#74614e', lift); ctx.lineWidth = 0.027;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      ctx.moveTo(side * 0.098, -0.037); ctx.quadraticCurveTo(side * 0.08, 0.009, side * 0.117, 0.011);
+      ctx.moveTo(side * 0.075, -0.028); ctx.quadraticCurveTo(side * 0.060, 0.003, side * 0.088, 0.010);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = faunaCol(dark, lift); ctx.beginPath(); ctx.moveTo(-0.092, -0.175);
+    ctx.lineTo(-0.108, 0.008); ctx.quadraticCurveTo(0, 0.064, 0.108, 0.009); ctx.lineTo(0.091, -0.174); ctx.fill();
+    const breast = ctx.createLinearGradient(-0.18, -0.32, 0.16, -0.08);
+    breast.addColorStop(0, faunaCol(pale, lift)); breast.addColorStop(1, faunaCol(feather, lift));
+    ctx.fillStyle = breast;
+    ctx.beginPath(); faunaEll(ctx, 0, -0.253, snowy ? 0.247 : 0.220, snowy ? 0.247 : 0.231, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(snowy ? '#bdbac5' : '#634e3f', lift); ctx.beginPath();
+    for (const side of [-1, 1]) faunaEll(ctx, side * (snowy ? 0.169 : 0.146), -0.217, 0.066, 0.163, side * 0.18);
     ctx.fill();
-    ctx.fillStyle = faunaCol(col[1], K.lift); ctx.beginPath(); faunaEll(ctx, x + look, y - s * 0.51, s * 0.14, s * 0.1, 0); faunaEll(ctx, x, y - s * 0.16, s * 0.12, s * 0.17, 0); ctx.fill();
-    if (s > 6) { ctx.fillStyle = faunaCol(col[2], K.lift); ctx.beginPath(); for (const v of [-1, 1]) faunaEll(ctx, x + look + v * s * 0.06, y - s * 0.53, s * 0.03, s * 0.03, 0); ctx.fill(); }
+    if (s >= 8) {
+      ctx.strokeStyle = faunaCol(dark, lift, snowy ? 0.56 : 0.65); ctx.lineWidth = 0.018;
+      ctx.beginPath();
+      for (let row = 0; row < 5; row++) {
+        const count = row === 0 || row === 4 ? 2 : 3, y0 = -0.324 + row * 0.050;
+        for (let k = 0; k < count; k++) {
+          const x0 = (k - (count - 1) / 2) * 0.082;
+          ctx.moveTo(x0 - 0.030, y0);
+          ctx.quadraticCurveTo(x0, y0 + (snowy ? 0.022 : 0.045), x0 + 0.029, y0 + 0.004);
+        }
+      }
+      ctx.stroke();
+    }
+
+    ctx.translate(offset, 0);
+    ctx.fillStyle = faunaCol(feather, lift); ctx.beginPath();
+    faunaEll(ctx, 0, -0.512, snowy ? 0.210 : 0.195, snowy ? 0.145 : 0.136, 0);
+    if (!snowy) for (const side of [-1, 1]) {
+      ctx.moveTo(side * 0.092, -0.571);
+      ctx.quadraticCurveTo(side * 0.131, -0.650, side * 0.197, -0.685);
+      ctx.quadraticCurveTo(side * 0.205, -0.610, side * 0.172, -0.530);
+    }
+    ctx.fill();
+    ctx.fillStyle = faunaCol(snowy ? '#e7e5e5' : '#5e4d48', lift); ctx.beginPath();
+    faunaEll(ctx, 0, -0.524, 0.159, 0.094, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(pale, lift);
+    ctx.beginPath();
+    for (const side of [-1, 1]) faunaEll(ctx, side * half, -0.520, 0.075, 0.074, side * 0.32);
+    ctx.fill();
+    ctx.fillStyle = faunaCol(dark, lift); ctx.beginPath();
+    ctx.moveTo(-0.026, -0.511); ctx.quadraticCurveTo(0.001, -0.526, 0.026, -0.511);
+    ctx.quadraticCurveTo(0.013, -0.461, -0.005, -0.472); ctx.fill();
+    ctx.fillStyle = faunaCol(a.K.eyes, 0.56); ctx.beginPath();
+    for (const side of [-1, 1]) faunaEll(ctx, side * half, -0.530, 0.026, 0.023, 0);
+    ctx.fill();
+    ctx.fillStyle = faunaCol('#252326', lift); ctx.beginPath();
+    for (const side of [-1, 1]) faunaEll(ctx, side * half, -0.530, 0.014, 0.016, 0);
+    ctx.fill();
+    ctx.restore();
   },
 
   /** A crow on a dead tree, side on: black, tail down, a flick of the wings now and then. */

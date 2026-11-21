@@ -1890,3 +1890,9 @@ shorter muzzles and rounded ears. Geese carry a white cheek patch in both poses,
 forward in flight and a widening wake on the water. Turtle shells have a domed profile, a pale rim and
 separate scutes. Cinderlands ash beetles have six legs and a warm seam between dark wing cases. Ember moths
 have charcoal forewings, rust-colored hindwings and bright bands that flicker as they flap.
+
+Blackwater herons fold an S-shaped neck while wading and extend it in a fishing strike. In flight,
+the neck tucks in and the feet trail behind broad wings. Woodland owls have feather tufts and darker
+facial discs. Snowy owls have round heads and barred pale feathers. Both use the same positions for
+their eyes and eyeshine as they scan. Rock lizards have a low, sand-colored body, splayed toes and
+a tapering tail that swings through their darting gait.
