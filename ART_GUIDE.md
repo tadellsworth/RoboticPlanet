@@ -1876,5 +1876,8 @@ Generate the Shoals' (tropical) WebP assets with
 
 Deer have a high, slender neck, articulated legs, pale rump and occasional branching antlers. Wildebeest have
 a heavy shoulder, lower rump, mane, hooked horns and dark hooves. The game draws these shapes and their gait
-from `js/wildlife.js`. Blackwater adds plated alligator backs and domed turtle shells. The Bloom uses folding
-shell plates, vane-headed runners and triangular sailwings in place of the drifting bells.
+from `js/wildlife.js`. Blackwater alligators have low olive bodies, broad rounded snouts, paired rows of
+raised scutes and muscular tails. Short legs and splayed feet carry each step. The Bloom’s fauna shares
+dark plum plates, warm amber eyes and soft rose highlights. Six-legged hinge-backs open overlapping
+plates along a warm seam. Switchtails balance on hooked feet with two flexing tails and raised sensory vanes.
+Sailwings bank on ribbed membranes around a narrow body. The hinge-back and sailwing also use this art in the Hollow.

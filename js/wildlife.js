@@ -46,11 +46,11 @@ const FAUNA_KINDS = {
   alligator: { mode: 'herd', draw: 'alligator', act: 'all', hab: 'shore', alt: 'open', min: 3, p: 0.55, n: [1, 2], z: 12, size: 0.71,
     speed: 0.32, run: 2.0, roam: true, col: ['#4f6147', '#94a06b', '#293c32'] },
   hinge: { mode: 'herd', draw: 'hinge', act: 'all', hab: 'open', min: 6, p: 0.71, n: [2, 3], z: 12, size: 0.54,
-    speed: 0.38, run: 2.2, roam: true, col: ['#624952', '#ffa660', '#352738'], lift: 0.27 },
+    speed: 0.38, run: 2.2, roam: true, col: ['#806073', '#e9ac76', '#342839'], lift: 0.27 },
   switchtail: { mode: 'herd', draw: 'switchtail', act: 'all', hab: 'open', min: 8, p: 0.56, n: [1, 3], z: 13, size: 0.49,
-    speed: 0.47, run: 2.6, roam: true, col: ['#336459', '#a4e2ab', '#1f3043'], lift: 0.32 },
+    speed: 0.47, run: 2.6, roam: true, col: ['#686782', '#edbb85', '#343044'], lift: 0.32 },
   sailwing: { mode: 'soar', draw: 'sailwing', act: 'all', hab: 'open', min: 7, p: 0.31, n: [1, 2], z: 10, size: 0.46,
-    high: 1.5, col: ['#753a61', '#edb494', '#3d224f'], lift: 0.35 },
+    high: 1.5, col: ['#906580', '#ebaf83', '#473151'], lift: 0.35 },
   gull: { mode: 'flock', draw: 'gull', act: 'day', hab: 'shore', alt: 'open', min: 3, p: 0.84, n: [3, 6], z: 13, size: 0.33,
     col: ['#f1f0e8', '#bcc5c7', '#343d42'], ground: true },
   songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
@@ -1413,6 +1413,25 @@ function faunaHoofLegs(ctx, m, run, bob, hind, fore, rump, chest, width, shade, 
   }
 }
 
+/** The Bloom animals share dark flexible plates with a pale, warm-lit edge. */
+function bloomShell(ctx, shell, shade, lo, hi) {
+  const g = ctx.createLinearGradient(0, lo, 0, hi);
+  g.addColorStop(0, faunaCol('#c89aa7', 0.42));
+  g.addColorStop(0.35, faunaCol(shell, 0.35));
+  g.addColorStop(1, faunaCol(shade, 0.31));
+  return g;
+}
+
+/** The paired amber eye spots sit inside a darker margin on all three species. */
+function bloomEyes(ctx, x, y, seam, s) {
+  ctx.fillStyle = faunaCol('#232035', 0.32); ctx.beginPath();
+  faunaEll(ctx, x, -y, 0.044, 0.026, -0.3); faunaEll(ctx, x, y, 0.044, 0.026, 0.3); ctx.fill();
+  ctx.fillStyle = faunaCol(seam, 0.76); ctx.beginPath();
+  const radius = Math.max(0.019, 0.27 / s);
+  faunaEll(ctx, x + 0.011, -y, radius, radius * 0.67, 0);
+  faunaEll(ctx, x + 0.011, y, radius, radius * 0.67, 0); ctx.fill();
+}
+
 const FAUNA_DRAW = {
   /** A small bird: perched (seen side on, a plump body, head, tail; breast lighter) or in flight (faunaWings). */
   bird(ctx, x, y, s, m, a, air) {
@@ -1803,87 +1822,248 @@ const FAUNA_DRAW = {
     ctx.stroke(); ctx.restore();
   },
 
+  /** Blackwater's broad-snouted alligator, seen from above with a muscular, flexing tail. */
   alligator(ctx, x, y, s, m, a) {
-    faunaShadow(ctx, x, y, s * 0.47, s * 0.13);
+    faunaShadow(ctx, x - Math.cos(m.f) * s * 0.12, y, s * 0.46, s * 0.14);
     ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
-    const [olive, ridge, dark] = a.K.col, wag = Math.sin(m.ph * 0.9) * (m.mv ? 0.19 : 0.09);
-    ctx.strokeStyle = faunaCol(dark); ctx.lineWidth = 0.072; ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (const [xx, i] of [[-0.21, 1], [0.15, -1]]) for (const side of [-1, 1]) {
-      const stride = m.mv ? Math.sin(m.ph + i * side) * 0.07 : 0;
-      ctx.moveTo(xx, side * 0.06); ctx.lineTo(xx - 0.045 + stride, side * 0.175); ctx.lineTo(xx + 0.055 + stride, side * 0.205);
+    const [olive, ridge, dark] = a.K.col;
+    const wag = Math.sin((m.mv ? m.ph * 0.76 : FAUNA.t * 1.3) + 0.25) * (m.mv ? 0.23 : 0.075);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) for (const front of [false, true]) {
+      const hip = front ? 0.17 : -0.24, stride = m.mv ? Math.sin(m.ph + (front === (side > 0) ? 0 : Math.PI)) * 0.085 : 0;
+      const knee = hip - (front ? 0.078 : 0.102) + stride * 0.5, foot = hip + (front ? 0.047 : -0.01) + stride;
+      ctx.strokeStyle = faunaCol(dark); ctx.lineWidth = front ? 0.070 : 0.087;
+      ctx.beginPath(); ctx.moveTo(hip, side * 0.085); ctx.quadraticCurveTo(knee - 0.025, side * 0.157, knee, side * 0.202);
+      ctx.quadraticCurveTo(knee + 0.011, side * 0.24, foot, side * 0.25); ctx.stroke();
+      ctx.fillStyle = faunaCol(olive);
+      ctx.beginPath(); faunaEll(ctx, foot, side * 0.25, 0.05, 0.025, side * 0.28); ctx.fill();
+      if (s >= 15) {
+        ctx.strokeStyle = faunaCol(olive); ctx.lineWidth = 0.012;
+        ctx.beginPath();
+        for (const toe of [-1, 0, 1]) {
+          ctx.moveTo(foot + 0.012, side * (0.25 + toe * 0.011));
+          ctx.quadraticCurveTo(foot + 0.043, side * (0.251 + toe * 0.018), foot + 0.073 - Math.abs(toe) * 0.01, side * (0.258 + toe * 0.026));
+        }
+        ctx.stroke();
+      }
     }
-    ctx.stroke();
-    const g = ctx.createLinearGradient(0, -0.13, 0, 0.18);
-    g.addColorStop(0, faunaCol(ridge)); g.addColorStop(0.5, faunaCol(olive)); g.addColorStop(1, faunaCol(dark));
-    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0.15, -0.095);
-    ctx.bezierCurveTo(0.32, -0.085, 0.42, -0.063, 0.56, -0.06);
-    ctx.quadraticCurveTo(0.62, 0, 0.55, 0.065); ctx.lineTo(0.2, 0.088);
-    ctx.bezierCurveTo(-0.16, 0.19, -0.31, 0.11, -0.48, 0.095);
-    ctx.quadraticCurveTo(-0.62, 0.07 + wag, -0.84, wag);
-    ctx.quadraticCurveTo(-0.55, -0.06 + wag, -0.45, -0.055);
-    ctx.quadraticCurveTo(-0.15, -0.19, 0.15, -0.095); ctx.fill();
-    ctx.fillStyle = faunaCol(dark, 0, 0.7);
-    for (let k = 0; k < 6; k++) {
-      const at = -0.38 + 0.09 * k;
-      ctx.beginPath(); ctx.moveTo(at, -0.048); ctx.lineTo(at + 0.053, -0.01); ctx.lineTo(at, 0.043); ctx.fill();
+
+    const tail = ctx.createLinearGradient(-0.88, wag * 0.4, -0.24, 0.035);
+    tail.addColorStop(0, faunaCol(dark)); tail.addColorStop(1, faunaCol(olive));
+    ctx.fillStyle = tail; ctx.beginPath(); ctx.moveTo(-0.229, -0.098);
+    ctx.bezierCurveTo(-0.55, -0.119, -0.84, wag - 0.11, -1.048, wag * 0.68);
+    ctx.bezierCurveTo(-0.98, wag + 0.049, -0.67, 0.026 + wag * 0.45, -0.412, 0.068);
+    ctx.quadraticCurveTo(-0.32, 0.102, -0.221, 0.112); ctx.fill();
+
+    const skin = ctx.createLinearGradient(0, -0.17, 0, 0.18);
+    skin.addColorStop(0, faunaCol('#7b8969')); skin.addColorStop(0.38, faunaCol(olive)); skin.addColorStop(1, faunaCol(dark));
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.moveTo(-0.449, -0.057);
+    ctx.bezierCurveTo(-0.329, -0.116, -0.177, -0.198, 0.013, -0.154);
+    ctx.bezierCurveTo(0.194, -0.125, 0.214, -0.091, 0.350, -0.088);
+    ctx.lineTo(0.384, 0.095);
+    ctx.bezierCurveTo(0.162, 0.135, 0.011, 0.180, -0.134, 0.161);
+    ctx.quadraticCurveTo(-0.340, 0.142, -0.444, 0.058);
+    ctx.quadraticCurveTo(-0.484, 0.002, -0.449, -0.057); ctx.fill();
+
+    // Two main rows of raised scutes and a taper of paired ridges down the tail.
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 6; k++) {
+        const xx = -0.366 + k * 0.081, yy = side * (0.046 + Math.sin(k * Math.PI / 7) * 0.024);
+        ctx.fillStyle = faunaCol(dark); ctx.beginPath(); ctx.moveTo(xx - 0.028, yy);
+        ctx.lineTo(xx + 0.004, yy - 0.030); ctx.lineTo(xx + 0.034, yy - 0.004);
+        ctx.lineTo(xx + 0.016, yy + 0.025); ctx.closePath(); ctx.fill();
+        if (s >= 14) {
+          ctx.strokeStyle = faunaCol(ridge, 0, 0.7); ctx.lineWidth = 0.010;
+          ctx.beginPath(); ctx.moveTo(xx - 0.020, yy - 0.002); ctx.lineTo(xx + 0.006, yy - 0.021);
+          ctx.lineTo(xx + 0.027, yy - 0.007); ctx.stroke();
+        }
+      }
+      if (s >= 14) {
+        ctx.strokeStyle = faunaCol(ridge, 0, 0.64); ctx.lineWidth = 0.014;
+        ctx.beginPath(); ctx.moveTo(-0.36, side * 0.038);
+        ctx.quadraticCurveTo(-0.656, side * 0.034 + wag * 0.19, -0.914, wag * 0.65 + side * 0.010); ctx.stroke();
+      }
     }
-    ctx.fillStyle = faunaCol('#c5aa67'); ctx.beginPath();
-    faunaEll(ctx, 0.29, -0.042, 0.022, 0.019, 0); faunaEll(ctx, 0.29, 0.041, 0.022, 0.019, 0); ctx.fill();
+
+    // Raised eyes at the skull, a narrowing at the jaw hinge and a wide U-shaped snout.
+    const head = ctx.createLinearGradient(0.37, -0.114, 0.37, 0.110);
+    head.addColorStop(0, faunaCol(ridge)); head.addColorStop(0.52, faunaCol(olive)); head.addColorStop(1, faunaCol(dark));
+    ctx.fillStyle = faunaCol('#23332d'); ctx.beginPath(); faunaEll(ctx, 0.455, 0.016, 0.24, 0.108, 0); ctx.fill();
+    ctx.fillStyle = head; ctx.beginPath(); ctx.moveTo(0.233, -0.076);
+    ctx.quadraticCurveTo(0.296, -0.126, 0.366, -0.100);
+    ctx.quadraticCurveTo(0.430, -0.059, 0.486, -0.076);
+    ctx.quadraticCurveTo(0.629, -0.109, 0.666, -0.058);
+    ctx.quadraticCurveTo(0.711, 0.001, 0.664, 0.056);
+    ctx.quadraticCurveTo(0.618, 0.102, 0.484, 0.072);
+    ctx.quadraticCurveTo(0.420, 0.071, 0.352, 0.101);
+    ctx.quadraticCurveTo(0.275, 0.117, 0.231, 0.072); ctx.fill();
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = faunaCol('#384839'); ctx.beginPath(); faunaEll(ctx, 0.335, side * 0.076, 0.052, 0.031, side * -0.32); ctx.fill();
+      ctx.fillStyle = faunaCol('#c8b677'); ctx.beginPath(); faunaEll(ctx, 0.366, side * 0.079, 0.020, 0.012, side * -0.28); ctx.fill();
+      if (s >= 12) {
+        ctx.fillStyle = faunaCol('#182722'); ctx.beginPath();
+        faunaEll(ctx, 0.370, side * 0.079, 0.008, 0.009, 0); faunaEll(ctx, 0.625, side * 0.031, 0.018, 0.010, side * 0.43); ctx.fill();
+      }
+    }
     ctx.restore();
   },
 
-  /** An armored native walker. Its shell opens like overlapping stone blades to reveal a warm seam. */
+  /** The hinge-back opens segmented shell plates as its soft body flexes. */
   hinge(ctx, x, y, s, m, a) {
-    faunaShadow(ctx, x, y, s * 0.44, s * 0.16);
+    faunaShadow(ctx, x, y, s * 0.42, s * 0.17);
     ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
-    const [rock, seam, shade] = a.K.col, gap = 0.022 + (0.5 + 0.5 * Math.sin(FAUNA.t * 1.1 + m.ph)) * 0.039;
-    ctx.strokeStyle = faunaCol(shade, 0.12); ctx.lineWidth = 0.07; ctx.lineCap = 'round'; ctx.beginPath();
+    const [shell, seam, shade] = a.K.col;
+    const gap = 0.021 + 0.024 * (0.5 + 0.5 * Math.sin(FAUNA.t * 1.6 + m.ph));
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
-      const leg = -0.25 + k * 0.22, swing = m.mv ? Math.sin(m.ph + side * 0.9 + k * 1.9) * 0.11 : 0;
-      ctx.moveTo(leg, 0); ctx.lineTo(leg + 0.08 + swing, side * 0.19); ctx.lineTo(leg + swing, side * 0.27);
+      const root = -0.265 + k * 0.217, swing = m.mv ? Math.sin(m.ph + side * Math.PI * 0.5 + k * 2.05) * 0.087 : 0;
+      const knee = root + (k - 1) * 0.125 + swing * 0.7;
+      const foot = knee - 0.066 + swing * 0.45, span = side * (0.31 - 0.015 * Math.abs(k - 1));
+      ctx.strokeStyle = faunaCol(shade, 0.26); ctx.lineWidth = 0.071;
+      ctx.beginPath(); ctx.moveTo(root, side * 0.087); ctx.quadraticCurveTo(knee + 0.037, side * 0.165, knee, side * 0.234); ctx.stroke();
+      ctx.strokeStyle = faunaCol(shell, 0.34); ctx.lineWidth = 0.042;
+      ctx.beginPath(); ctx.moveTo(knee, side * 0.225); ctx.quadraticCurveTo(knee - 0.037, side * 0.264, foot, span); ctx.stroke();
+      ctx.fillStyle = faunaCol(shade, 0.30); ctx.beginPath(); faunaEll(ctx, foot - 0.014, span, 0.034, 0.017, side * 0.36); ctx.fill();
     }
-    ctx.stroke();
-    ctx.fillStyle = faunaCol(seam, 0.68); ctx.beginPath(); faunaEll(ctx, -0.035, 0, 0.39, gap * 1.5, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(shade, 0.27); ctx.beginPath(); faunaEll(ctx, -0.09, 0, 0.39, 0.207, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(seam, 0.61); ctx.beginPath(); faunaEll(ctx, -0.089, 0, 0.336, gap, 0); ctx.fill();
+
+    const armor = bloomShell(ctx, shell, shade, -0.225, 0.258);
+    const widths = [0.148, 0.200, 0.220, 0.171];
     for (const side of [-1, 1]) {
-      const g = ctx.createLinearGradient(0, 0, -0.17, side * 0.23);
-      g.addColorStop(0, faunaCol(shade, 0.28)); g.addColorStop(0.57, faunaCol(rock, 0.2)); g.addColorStop(1, faunaCol('#a17585', 0.24));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-0.49, side * gap);
-      ctx.bezierCurveTo(-0.28, side * 0.24, 0.10, side * 0.25, 0.30, side * 0.14); ctx.lineTo(0.42, side * gap);
-      ctx.lineTo(-0.49, side * gap); ctx.fill();
+      for (let k = 0; k < widths.length; k++) {
+        const root = -0.459 + k * 0.166, width = widths[k];
+        ctx.fillStyle = armor; ctx.beginPath(); ctx.moveTo(root, side * gap * 1.02);
+        ctx.quadraticCurveTo(root - 0.037, side * (gap + width * 0.94), root + 0.089, side * width);
+        ctx.quadraticCurveTo(root + 0.161, side * (width + 0.027), root + 0.195, side * (width * 0.70));
+        ctx.quadraticCurveTo(root + 0.209, side * width * 0.30, root + 0.152, side * gap);
+        ctx.quadraticCurveTo(root + 0.082, side * (gap * 0.27), root, side * gap); ctx.fill();
+        if (s >= 14) {
+          ctx.strokeStyle = faunaCol('#dec1c3', 0.30, 0.44); ctx.lineWidth = 0.013;
+          ctx.beginPath(); ctx.moveTo(root + 0.030, side * (width * 0.84));
+          ctx.quadraticCurveTo(root + 0.091, side * (width + 0.005), root + 0.160, side * (width * 0.71)); ctx.stroke();
+        }
+      }
     }
+    ctx.fillStyle = faunaCol(shade, 0.25); ctx.beginPath(); faunaEll(ctx, 0.350, 0, 0.167, 0.117, 0); ctx.fill();
+    ctx.fillStyle = bloomShell(ctx, shell, shade, -0.106, 0.104);
+    ctx.beginPath(); ctx.moveTo(0.273, -0.116); ctx.bezierCurveTo(0.392, -0.139, 0.474, -0.083, 0.502, -0.015);
+    ctx.bezierCurveTo(0.481, 0.093, 0.377, 0.136, 0.273, 0.116);
+    ctx.quadraticCurveTo(0.295, 0, 0.273, -0.116); ctx.fill();
+    bloomEyes(ctx, 0.430, 0.053, seam, s);
     ctx.restore();
   },
 
-  /** A native runner with counter-swinging tails and a pair of tall sensory vanes. */
+  /** The switchtail braces on two hooked feet and balances with independently flexing tails. */
   switchtail(ctx, x, y, s, m, a) {
-    faunaShadow(ctx, x, y, s * 0.4, s * 0.12);
+    faunaShadow(ctx, x, y, s * 0.41, s * 0.09);
     ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
-    const [body, vane, shade] = a.K.col, stride = m.mv ? Math.sin(m.ph) : 0;
-    ctx.lineCap = 'round'; ctx.strokeStyle = faunaCol(shade, 0.24); ctx.lineWidth = 0.052; ctx.beginPath();
+    const [shell, seam, shade] = a.K.col, stride = m.mv ? Math.sin(m.ph) : 0;
+    const bob = m.mv ? Math.cos(m.ph * 2) * 0.025 : 0;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const side of [-1, 1]) {
-      ctx.moveTo(-0.13, -0.23); ctx.lineTo(-0.13 + side * stride * 0.10, -0.10);
-      ctx.lineTo(-0.24 + side * stride * 0.17, side * 0.04);
-      ctx.moveTo(-0.18, -0.23); ctx.quadraticCurveTo(-0.47, -0.14 + side * 0.07, -0.64, -0.24 - side * (0.12 + stride * 0.07));
+      const step = side * stride * 0.13, rise = side < 0 ? -0.052 : 0;
+      ctx.strokeStyle = faunaCol(side < 0 ? shade : shell, 0.30); ctx.lineWidth = side < 0 ? 0.064 : 0.079;
+      ctx.beginPath(); ctx.moveTo(-0.069, -0.292 + bob);
+      ctx.quadraticCurveTo(0.059 + step * 0.58, -0.252, 0.035 + step * 0.57, -0.177 + rise);
+      ctx.lineTo(-0.100 + step, -0.100 + rise); ctx.stroke();
+      ctx.strokeStyle = faunaCol(shade, 0.3); ctx.lineWidth = 0.034;
+      ctx.beginPath(); ctx.moveTo(-0.100 + step, -0.101 + rise);
+      ctx.lineTo(-0.043 + step, -0.020 + rise); ctx.quadraticCurveTo(-0.004 + step, -0.038 + rise, 0.035 + step, -0.010 + rise); ctx.stroke();
     }
-    ctx.stroke();
-    ctx.fillStyle = faunaCol(body, 0.46); ctx.beginPath(); faunaEll(ctx, 0.01, -0.25, 0.23, 0.12, -0.21);
-    faunaEll(ctx, 0.20, -0.35, 0.12, 0.076, -0.18); ctx.fill();
-    ctx.fillStyle = faunaCol(vane, 0.65); ctx.beginPath(); ctx.moveTo(0.15, -0.34);
-    ctx.quadraticCurveTo(0.01, -0.49, 0.10, -0.63); ctx.quadraticCurveTo(0.24, -0.53, 0.24, -0.36); ctx.fill();
-    ctx.restore();
+    ctx.translate(0, bob);
+    for (const side of [-1, 1]) {
+      const tip = -0.252 + side * (0.116 + stride * 0.067);
+      ctx.fillStyle = faunaCol(side < 0 ? shade : shell, 0.34);
+      ctx.beginPath(); ctx.moveTo(-0.243, -0.341 + side * 0.015);
+      ctx.bezierCurveTo(-0.458, -0.281 + side * 0.068, -0.605, tip + 0.083, -0.760, tip);
+      ctx.bezierCurveTo(-0.596, tip + 0.026, -0.477, -0.369 + side * 0.057, -0.215, -0.394 + side * 0.015); ctx.fill();
+    }
+
+    ctx.fillStyle = bloomShell(ctx, shell, shade, -0.49, -0.22);
+    ctx.beginPath(); ctx.moveTo(-0.352, -0.333);
+    ctx.bezierCurveTo(-0.286, -0.446, -0.091, -0.469, 0.073, -0.422);
+    ctx.quadraticCurveTo(0.138, -0.400, 0.163, -0.473);
+    ctx.quadraticCurveTo(0.222, -0.557, 0.297, -0.513);
+    ctx.quadraticCurveTo(0.333, -0.435, 0.242, -0.379);
+    ctx.bezierCurveTo(0.148, -0.320, 0.072, -0.243, -0.060, -0.247);
+    ctx.quadraticCurveTo(-0.234, -0.254, -0.352, -0.333); ctx.fill();
+
+    // Leaf-thin sensory vanes fold back while moving. Their warm edges match the hinge-back's seams.
+    for (const side of [-1, 1]) {
+      const root = side < 0 ? 0.237 : 0.188, tip = root - (m.mv ? 0.18 : 0.095);
+      const crest = side < 0 ? -0.696 : -0.742;
+      const vane = ctx.createLinearGradient(root, -0.509, tip, crest);
+      vane.addColorStop(0, faunaCol(shade, 0.38)); vane.addColorStop(1, faunaCol(seam, 0.61));
+      ctx.fillStyle = vane; ctx.beginPath(); ctx.moveTo(root + 0.052, -0.514);
+      ctx.quadraticCurveTo(root + 0.038, crest + 0.078, tip, crest);
+      ctx.quadraticCurveTo(tip - 0.078, crest + 0.135, root - 0.028, -0.515); ctx.fill();
+    }
+    ctx.fillStyle = faunaCol(shade, 0.36); ctx.beginPath(); ctx.moveTo(0.186, -0.494);
+    ctx.bezierCurveTo(0.248, -0.559, 0.373, -0.548, 0.422, -0.477);
+    ctx.quadraticCurveTo(0.389, -0.423, 0.311, -0.422);
+    ctx.quadraticCurveTo(0.236, -0.418, 0.186, -0.494); ctx.fill();
+    ctx.strokeStyle = faunaCol('#c6a0aa', 0.49, 0.75); ctx.lineWidth = 0.024;
+    ctx.beginPath(); ctx.moveTo(-0.283, -0.373);
+    ctx.quadraticCurveTo(-0.172, -0.425, -0.043, -0.394); ctx.quadraticCurveTo(0.038, -0.362, 0.110, -0.388); ctx.stroke();
+    if (s >= 15) {
+      ctx.strokeStyle = faunaCol(shade, 0.28, 0.56); ctx.lineWidth = 0.012;
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const px = -0.214 + k * 0.073;
+        ctx.moveTo(px, -0.386); ctx.quadraticCurveTo(px + 0.032, -0.362, px + 0.047, -0.313);
+      }
+      ctx.stroke();
+    }
+    ctx.save(); ctx.translate(0.342, -0.490); ctx.rotate(0.25);
+    bloomEyes(ctx, 0, 0.029, seam, s);
+    ctx.restore(); ctx.restore();
   },
 
-  /** A native flier whose folding triangular sails are edged with dim light. */
+  /** The sailwing's living membranes flex along their ribs and bank with the animal. */
   sailwing(ctx, x, y, s, m, a, part) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
-    const shadow = part === 'shadow', wing = 0.54 + 0.29 * Math.sin(m.ph * 1.1) ** 2;
-    ctx.fillStyle = shadow ? '#111' : faunaCol(a.K.col[0], 0.39);
-    ctx.strokeStyle = faunaCol(a.K.col[1], 0.63, 0.8); ctx.lineWidth = 0.035;
+    const [shell, seam, shade] = a.K.col, shadow = part === 'shadow';
+    const bank = Math.sin(m.ph * 0.44) * 0.12, beat = Math.sin(m.ph * 1.18);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const side of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(0.38, 0); ctx.quadraticCurveTo(0.14, side * wing, -0.22, side * wing);
-      ctx.lineTo(-0.35, side * 0.32); ctx.lineTo(-0.11, side * 0.15); ctx.lineTo(-0.49, 0); ctx.closePath();
-      ctx.fill(); if (!shadow) ctx.stroke();
+      const span = side * (0.72 + 0.12 * beat + side * bank), tip = -0.233 - 0.09 * beat;
+      ctx.fillStyle = '#111';
+      if (!shadow) {
+        const sail = ctx.createLinearGradient(0, 0, tip, span);
+        sail.addColorStop(0, faunaCol(shade, 0.31)); sail.addColorStop(0.52, faunaCol(shell, 0.39));
+        sail.addColorStop(1, faunaCol('#d9a5af', 0.50));
+        ctx.fillStyle = sail;
+      }
+      ctx.beginPath(); ctx.moveTo(0.226, side * 0.087);
+      ctx.bezierCurveTo(0.252, span * 0.44, 0.061, span * 0.83, tip, span);
+      ctx.quadraticCurveTo(tip + 0.016, span * 0.70, -0.393, span * 0.66);
+      ctx.quadraticCurveTo(-0.241, span * 0.46, -0.457, span * 0.38);
+      ctx.quadraticCurveTo(-0.252, span * 0.27, -0.273, side * 0.048); ctx.fill();
+      if (shadow) continue;
+      ctx.strokeStyle = faunaCol('#ebbbc1', 0.55, 0.65); ctx.lineWidth = 0.019;
+      ctx.beginPath(); ctx.moveTo(0.220, side * 0.087);
+      ctx.bezierCurveTo(0.247, span * 0.44, 0.061, span * 0.83, tip, span); ctx.stroke();
+      if (s >= 13) {
+        ctx.strokeStyle = faunaCol(shade, 0.34, 0.74); ctx.lineWidth = 0.018;
+        ctx.beginPath();
+        ctx.moveTo(0.176, side * 0.091); ctx.quadraticCurveTo(0.119, span * 0.57, tip, span);
+        ctx.moveTo(0.045, side * 0.088); ctx.quadraticCurveTo(-0.046, span * 0.46, -0.393, span * 0.66);
+        ctx.moveTo(-0.089, side * 0.074); ctx.quadraticCurveTo(-0.226, span * 0.30, -0.457, span * 0.38); ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = shadow ? '#111' : bloomShell(ctx, shell, shade, -0.114, 0.118);
+    ctx.beginPath(); ctx.moveTo(-0.649, 0);
+    ctx.quadraticCurveTo(-0.381, -0.065, -0.220, -0.112);
+    ctx.bezierCurveTo(0.024, -0.194, 0.326, -0.104, 0.460, 0);
+    ctx.bezierCurveTo(0.326, 0.103, 0.032, 0.195, -0.222, 0.108);
+    ctx.quadraticCurveTo(-0.400, 0.049, -0.649, 0); ctx.fill();
+    if (!shadow) {
+      ctx.strokeStyle = faunaCol(seam, 0.54, 0.85); ctx.lineWidth = 0.024;
+      ctx.beginPath(); ctx.moveTo(-0.405, 0);
+      ctx.quadraticCurveTo(-0.133, -0.014, 0.248, 0); ctx.stroke();
+      bloomEyes(ctx, 0.343, 0.037, seam, s);
     }
     ctx.restore();
   },

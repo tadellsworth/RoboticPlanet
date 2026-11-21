@@ -2705,8 +2705,9 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   Steamwells. Deer, wildebeest and bison have distinct bodies and grazing poses. Gulls cry over the Shoals and
   Steamwells (`gullCry` in js/audio.js), mud pots pop in Steamwells, and a geyser going
   off in view is heard (`geyserSound`, from `drawSpringSteam` in js/ambient.js: render-only, at most one every 1.5 s). Shorebirds,
-  songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
-  sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
+  songbirds or raptors fly over each region according to the habitat. Look for broad-snouted alligators with paired
+  rows of scutes in Blackwater. The Bloom’s armored hinge-backs, twin-tailed switchtails and rib-winged sailwings
+  share dark plates and amber eyes. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
   usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
   stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.

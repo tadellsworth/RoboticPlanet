@@ -252,3 +252,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Gave Steamwells bison, the forest deer and Long Grass wildebeest distinct anatomy, walk and run cycles, and grazing poses. Refined the deer's grazing neck after reviewing the enlarged comparison.
 - Checked head-up and grazing poses and the herd silhouettes at game scale in Chromium. Updated the art guide and README.
+
+### Blackwater and Bloom wildlife redraws
+
+- Gave Blackwater alligators a broad snout, raised scutes, articulated feet and a flexing tail.
+- Redrew the Bloom’s hinge-back, switchtail and sailwing around shared plum plates and amber eyes. Each has a distinct gait or flight silhouette.
+- Checked the new renderers in Blackwater, the Bloom and the Hollow in Chromium. Verified the sailwing’s shadow and compared the before and after art at game scale.
