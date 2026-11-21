@@ -1843,11 +1843,19 @@ redrawn as images:
   colour (`NATFX.haze`: ochre for the Rust, grey-green for Greenreach, pale blue for the Polar Caps, near-black for Argos
   and the Hollow), thickening outward; a soft dark line marks where the usable land ends. Zoomed right out the camera
   tilts a little and the far side is a little lost in haze.
-- **The main menu.** Ithaca I as a coral world turning slowly in Corvane's light from the upper left: red deserts,
-  green forest, Emberwood's gold, ash, the violet Bloom, seas between and ice at the poles, a layer of cloud, a warm
-  band along the terminator, and the colonies' lights strung along the coasts on the night side, where now and then a
-  far-off fight flares orange. The Ring crosses in front of it in pale cream bands, Argos goes round, the sky has a
-  faint nebula and Corvane's glow in its corner.
+- **The main menu: Corvane's system** (only what LORE.md has in the sky). Beside the card (across the top on a phone),
+  Corvane glows orange-white with a breathing corona, a thin anamorphic streak and faint lens rings, flaring now and then.
+  Ithaca I goes round it on a slow, flattened orbit (four minutes), bigger on the near side, passing behind the star's
+  glare on the far side, its lit side always toward Corvane: a coral world of red deserts, green forest, Emberwood's
+  gold, ash, the violet Bloom, seas and polar ice under a layer of cloud, a warm band at the terminator, and on the night
+  side the colonies' lights along the coasts. The war is down there, kept distant: small orange-white bursts in a few
+  fronts near the lights, a red glow (and by day a smudge of smoke) where they fought, now and then a missile's thin
+  line arcing between colonies and a brighter strike with a fading ring; after a few minutes on the menu, rarely, a
+  nuclear blast (a white flash lighting the night side and the Ring, a pale ring spreading, an orange glow fading over
+  half a minute). The Ring in cream bands, brightest toward the star; Argos, grey and cratered, going round with its
+  shadow crossing the planet; the four vanguard Carriers as tiny white specks with a blinking light; ringfall streaking
+  into the atmosphere; the Wren's speck and thruster trail coming in from the system's edge. A deep starfield (far stars
+  and a faint nebula, nearer stars drifting a little), and a soft dark shade behind the card.
 
 ### Radiation (drawn in code; one optional image)
 

@@ -2834,12 +2834,22 @@ clouds' drift (`natureCloudTime`).
   straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
   `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
   minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
-- **The main menu** (`js/menuplanet.js`): Ithaca I turns slowly behind the menu card on its own canvas (`#menu-planet`):
-  a coral world from a fixed seed (regions round scattered centres, seas between, ice at the poles, a layer of cloud),
-  shaded per pixel in a small image a few times a second, the Ring and Argos round it, the colonies' lights on the night
-  side and now and then the flash of a fight. Made a few rows a frame at launch; stops while the menu is hidden or the
-  tab is in the background, and holds still with reduced motion. While it shows, the demo game behind the menu plays on
-  but isn't drawn (`menuPlanetCovers` in `drawNeeded`).
+- **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
+  beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
+  `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
+  turning as it goes; its face is a coral world from a fixed seed (`mplMakeMap`, a few rows a frame at launch), shaded per
+  pixel in a small image from its normals (`mplShade`, with Argos's shadow where the line from Argos away from the star
+  meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
+  vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
+  the surface (`mplWarTick`, `mplWarDraw`): fronts near the colonies' lights flicker with bursts and the odd bigger
+  boom, leave fires (smoke by day), missiles' lines arc between colonies, a big strike about once a minute, all placed on
+  the map and turning with the planet, hidden past the limb; and after `MPLANET.nukeFirst` seconds on the menu, at most
+  once every `MPLANET.nukeGap`, a nuclear blast on the night side (`mplNuke`, also `MPL.nukeNow()` for testing).
+  Sprites (glows, flashes, the sky) are made once. A dozen frames a second; on Graphics Saver five, the sphere shaded
+  every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
+  (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
+  background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
+  `drawNeeded`).
 
 ### Cloud shadows, remains and beacons
 
