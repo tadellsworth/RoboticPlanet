@@ -396,7 +396,7 @@ const MISSIONS = [
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Chip Fab</b> (<kbd>F</kbd>), touching the Smelter and a road: a conveyor feeds it Alloy.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='fab']" },
       { kind: 'built', type: 'foundry', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Bot Foundry</b> (<kbd>U</kbd>). In a hurry? Tap its site → Priority: <b>High</b>.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Bot Foundry</b> (<kbd>B</kbd>). In a hurry? Tap its site → Priority: <b>High</b>.',
         wait: 'Your Bot Foundry is going up. In a hurry? Tap its site → Priority: <b>High</b>: it gets its materials and builder first.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='foundry'], #sh-prio [data-v='high']" },
       { kind: 'bots', n: [3, 4, 6],
