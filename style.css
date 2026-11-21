@@ -1144,6 +1144,8 @@ canvas.chart.small { height: 110px; }
 .army-row > span:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: 0 1 auto; margin-left: auto; }
 .army-row > span:first-child { flex: 1 1 160px; min-width: 0; }
 #ar-tabs { margin-bottom: 8px; }
+.army-cmds.ally-goods { grid-template-columns: repeat(3, 1fr); } /* (the Ally panel's goods: js/ally.js) */
+.army-cmds.ally-goods .btn { padding: 8px 4px; }
 
 /* ---------- main menu: Home, Customise (the new-game setup) and the map type / biome pickers ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }

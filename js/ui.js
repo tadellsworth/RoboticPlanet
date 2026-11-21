@@ -98,6 +98,7 @@ function initUI() {
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
   initQol(); // (camera spots, recent alerts, goods a minute, save slots: js/qol.js)
   initPolish(); // (health bars switch, Idle button, Surrender, Rematch: js/polish.js)
+  initAlly(); // (commands for a computer ally: js/ally.js)
   initPolish3(); // (the Daily Planet, chat, team pings, Ready and colours in the lobby: js/polish3.js)
   initCloud(); // (cloud saves: Save to the cloud in the pause menu, Load from a code on the main menu, js/cloud.js)
   initMeta(); // (Colony goals, Records and achievements: js/goals.js)
@@ -2132,6 +2133,11 @@ const SHEET_KEYS = {
   'sh-fout': ['o', 'Sail out of the Port'],
   'sh-tarmor': ['r', 'Armor this train'],
   'ar-attack': ['q', 'Attack'],
+  'al-attack': ['q', 'Ally: Attack here'],
+  'al-defend': ['g', 'Ally: Defend this area'],
+  'al-help': ['h', 'Ally: Help me'],
+  'al-hold': ['b', 'Ally: Hold back'],
+  'al-cancel': ['c', 'Ally: Back to its own plan'],
   'ar-hold': ['g', 'Hold ground'],
   'ar-station': ['v', 'Station'],
   'ar-recall': ['c', 'Recall all'],
@@ -2271,6 +2277,7 @@ const MAP_KEYS = [
 const SHIFT_KEYS = {
   f: { group: 'panels', label: 'Order bots (again for the next Foundry)', run: openFoundryOrders },
   t: { group: 'paths', label: 'Toggle Goods flow', run: () => togglePathsMap('goods', R.goodsMap) },
+  a: { group: 'army', label: 'Ally: command your computer teammate (team games)', run: () => openAllySheet(), when: () => myAiAllies().length > 0 }, // (else Shift+A pans, as A does)
   ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {
     group: 'paths', label: { viaduct: 'Viaducts', ropeway: 'Ropeways', maglev: 'Maglev lines', express: 'Express' }[tool],
     run: () => openPaths(tool),
@@ -2465,7 +2472,7 @@ function initKeyboard() {
     // Camera spots (js/qol.js): Shift+F1–F4 keeps the view, F1–F4 goes back to it.
     const fk = /^f([1-4])$/.exec(k);
     if (fk) { e.preventDefault(); if (e.shiftKey) saveCamSpot(+fk[1]); else goCamSpot(+fk[1]); return; }
-    const shifted = e.shiftKey && SHIFT_KEYS[k];
+    const shifted = e.shiftKey && SHIFT_KEYS[k] && (!SHIFT_KEYS[k].when || SHIFT_KEYS[k].when()) && SHIFT_KEYS[k];
     if (shifted) { e.preventDefault(); shifted.run(); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
@@ -4133,7 +4140,8 @@ function setMode(mode, keepPlan) {
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
-  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch' && mode !== 'mastlink' && mode !== 'mdaim') R.aimHover = null;
+  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch' && mode !== 'mastlink' && mode !== 'mdaim' && mode !== 'allyaim') R.aimHover = null;
+  if (mode !== 'allyaim') UI.allyAim = null;
   if (mode !== 'mastlink') UI.linkMast = 0;
   if (mode !== 'mdaim') UI.mdAim = 0;
   if (mode !== 'strike') R.napalmAt = null;
@@ -5876,6 +5884,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   if (R.mode === 'mastlink') { mastLinkTap(i, j, wx, wy); return; }
   if (R.mode === 'mdaim') { mdAimTap(i, j, wx, wy); return; }
+  if (R.mode === 'allyaim') { allyAimTap(i, j, wx, wy); return; } // (Attack here, Defend this area: js/ally.js)
   const rally = rallyAtTap(wx, wy);
   const b = buildingAtTap(i, j, wx, wy);
   if (R.mode === 'attack' && UI.armyCmd) { armyTap(UI.armyCmd, i, j, b); return; }
@@ -5938,7 +5947,7 @@ function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
   if (R.mode === 'bpplace') { bpHover(i, j); return; }
-  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink' || R.mode === 'mdaim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink' || R.mode === 'mdaim' || R.mode === 'allyaim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode === 'place' && UI.placeType === 'maglev') { if (UI.ropeA && !(R.ropeEnd && R.ropeEnd.tapped) && inMap(i, j)) maglevPreview(i, j, false); return; } // (the line to the pointer, its pylon spots ringed)
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
@@ -8968,6 +8977,7 @@ function refreshSheet() {
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
+  if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
@@ -9498,6 +9508,7 @@ function uiTick(dt) {
   netTick();
   mpBannerTick();
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
+  allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();

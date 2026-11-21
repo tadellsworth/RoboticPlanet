@@ -378,6 +378,27 @@ const ORDERS = {
   crawl(p, uid, i, j) { const u = ownU(p, uid, 'crawler'); return u ? driveCrawler(u, i, j) : 'That Crawler is gone.'; },
   deploy(p, uid) { const u = ownU(p, uid, 'crawler'); return u ? deployCrawler(u) : 'That Crawler is gone.'; },
   trainArmor(p, uid) { const u = ownU(p, uid, 'rail'); return u ? orderTrainArmor(p, u) : 'That train is gone.'; },
+  /**
+   * A command for player p's computer ally `to` (-1: every one on its team): `kind` one of ALLY_KINDS, with a spot
+   * (i, j) for Attack here and Defend this area (and for Attack, `tid`, an enemy building or robot tapped there), or
+   * the good for Ask for goods. Each ally carries it out or says why not (allyCommand, ai.js): { n } took it, `why`
+   * the first refusal, (i, j) where it went.
+   */
+  allyCmd(p, to, kind, i, j, tid) {
+    if (!human(p) || !S.players[p] || S.players[p].out || S.watch || !ALLY_KINDS.includes(kind)) return { n: 0, why: '' };
+    const qs = allyCmdTargets(p, Number.isInteger(to) ? to : -1);
+    if (!qs.length) return { n: 0, why: 'No computer ally on your team.' };
+    let g = '';
+    if (kind === 'goods') { g = i; if (!ALLY_GOODS.includes(g)) return { n: 0, why: 'Pick a good.' }; i = j = -1; tid = 0; }
+    else if (kind === 'attack' || kind === 'defend') {
+      const e = kind === 'attack' && Number.isInteger(tid) && tid ? liveE(tid) : null;
+      if (e && e.owner >= 0 && foes(e.owner, p)) { tid = e.id; i = Math.floor(e.x); j = Math.floor(e.y); }
+      else { tid = 0; if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return { n: 0, why: 'Tap a spot on the map.' }; }
+    } else { i = j = -1; tid = 0; }
+    let n = 0, why = '';
+    for (const q of qs) { const r = allyCommand(q, p, kind, i, j, tid, g); if (r) why = why || r; else n++; }
+    return { n, why, i, j };
+  },
   sendAttack(p, tid, n, all) { const t = liveB(tid); return t && foes(t.owner, p) ? sendAttack(p, t, n | 0, !!all) : 0; },
   fireMissile(p, tid) { const t = liveB(tid); return t && foes(t.owner, p) ? fireMissile(p, t) : false; },
   missileAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].missile ? fireMissileAt(s, i, j) : false; },

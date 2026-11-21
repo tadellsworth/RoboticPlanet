@@ -6854,6 +6854,7 @@ function render(dtReal) {
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
+  if (S.allyShips && S.allyShips.length && typeof drawAllyShips === 'function') drawAllyShips(ctx, ox, oy, z); // (goods on a supply run from a computer ally: js/ally.js)
   if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
   if (typeof natureView === 'function') natureView(ctx, ox, oy, z); // (zoomed far out: the camera's tilt and the depth haze: js/nature.js)
   if (R.box) {

@@ -79,6 +79,7 @@ function simStep(dt) {
     P.aiT = DIFFICULTY[S.difficulty].think;
     aiThink(P.id);
   }
+  if (S.allyShips && S.allyShips.length && S.tick % 30 === 21) allyShipsTick(); // (goods on a supply run from a computer ally: ai.js)
   noteGone(); // (the game's story, S.log: buildings lost in this step)
   if (S.tick % 60 === 41) logTick();
   if (S.tick % 15 === 0) {
@@ -17419,6 +17420,9 @@ function hashState() {
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
+  // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.
+  for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
+  for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
