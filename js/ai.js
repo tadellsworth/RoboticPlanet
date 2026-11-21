@@ -364,7 +364,8 @@ function aiScrap(p, c) {
 
 function aiThink(p) {
   const P = S.players[p];
-  const lvl = aiLevel(p), st = aiStyle(p);
+  let lvl = aiLevel(p);
+  const st = aiStyle(p);
   // An Easy rival keeps to the plain rules: the ones marked `smart` below are for Medium, Normal and Hard.
   const smart = S.difficulty !== 'easy';
   let me = playerBuildings(p);
@@ -818,7 +819,9 @@ function aiThink(p) {
         }
         continue;
       }
-      const spot = aiFindSpot(p, type, lander, (islandWar || hollowOn()) && type === 'mine' && starved.includes(type));
+      // (And a Tap on a single Crystal cluster, on any map, for a colony short of Crystal with no Tap at all: on Standard
+      // seed 11 a Turtle's last clusters were single ones, its Chips ran dry at minute 30 and its army never grew again.)
+      const spot = aiFindSpot(p, type, lander, ((islandWar || hollowOn()) && type === 'mine' && starved.includes(type)) || (type === 'tap' && crLow && !counts.tap));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -1134,6 +1137,19 @@ function aiThink(p) {
   //    two rivals, the one it's up against is the nearest still in the game.)
   const enemy = rivalOf(p);
   const rival = (o) => o >= 0 && foes(o, p) && !S.players[o].out && !S.players[o].absent;
+  // Parts gone for good (no Alloy or Chips made or held for AI_SCRAP.crisis), and a smaller army can still finish.
+  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
+  const ready = army - unarmed;
+  const partsOut = (q, made) => ['alloy', 'chip'].some((g) => {
+    const dry = S.players[q].dry?.[g], have = playerGoods(q)[g] || 0;
+    return have < 1 && ((dry && S.time - dry[0] >= AI_SCRAP.crisis) || made?.[g].made === 0);
+  });
+  const stalledParts = smart && partsOut(p, rates);
+  // A dead planet: neither side can make another warbot (on Islands seed 21 the Ore ran out on every island by minute
+  // 40, the colonies held four armed warbots and three, and neither ever reached the army it attacks or lands with).
+  // Its attack threshold comes down to what it has, four at least, while it has more than the enemy's whole army.
+  const deadPlanet = stalledParts && enemy >= 0 && S.players[enemy].dry && partsOut(enemy) && ready >= 2 && ready > enemyArmy;
+  if (deadPlanet) lvl = { ...lvl, threshold: Math.min(lvl.threshold, Math.max(2, ready - 2)) };
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
     // missile can knock no lower (see captureOnly).
@@ -1273,15 +1289,13 @@ function aiThink(p) {
   // they meet and attack what stands there): Medium and up, the one that takes the fewest to beat, with enough, or it
   // masses first; with a decisive lead, a storm of the enemy Command Base (aiMarch). An Easy rival marches on the
   // nearest, and with twice the enemy's army on the enemy Command Base itself.
-  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
   // A stranded Foundry cannot supply the usual march. A clear advantage still counts with a
-  // smaller army, provided it can actually beat its target's guns and garrison.
-  const ready = army - unarmed;
-  const stalledParts = hollowOn() && smart && ['alloy', 'chip'].some((g) => {
-    const dry = P.dry?.[g];
-    return haveG[g] < 1 && ((dry && S.time - dry[0] >= AI_SCRAP.crisis) || rates[g].made === 0);
-  });
-  const finish = stalledParts && ready >= lvl.threshold && ready >= enemyArmy * 2 + 2;
+  // smaller army, provided it can actually beat its target's guns and garrison. (Not held to the attack threshold
+  // as well: with no parts the army never grows to it, and on Hollow Small seed 25 a colony with four armed warbots
+  // against none sat out the last half hour; aiMarch's own floor for a crushing march, 4, stands.)
+  // (Any map since the dead-planet rule above: it was the Hollow's alone.) With the enemy out of parts as well, a lead
+  // of two is enough.
+  const finish = stalledParts && ready >= Math.max(4, deadPlanet ? enemyArmy + 2 : enemyArmy * 2 + 2);
   const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
   if (st.push) aiPush(p, lvl, army, enemyArmy);
@@ -1552,7 +1566,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
   const port = getE(ferry.inside);
   if (!port || !BDEFS[port.type].port) return;
   const avail = rallyAvailable(p, port.x, port.y, true);
-  if (avail < 4 || army < lvl.threshold + 2) return;
+  if (avail < Math.min(4, lvl.threshold) || army < lvl.threshold + 2) return;
   // The beach: a shore tile the Ferry can reach beside an enemy building, scored by how close it is and
   // how little guards it (turrets and garrisons within 6 tiles count against it).
   let targets = S.buildings.filter((b) => !b.dead && b.owner >= 0 && foes(b.owner, p) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
@@ -1680,7 +1694,7 @@ function aiBeach(p, lvl, army, ferries, yard) {
   }
   if (storm < 0 && !held) return false;
   const port = getE(f0.inside), avail = rallyAvailable(p, port.x, port.y, true);
-  if (avail < 4) return false;
+  if (avail < Math.min(4, lvl.threshold)) return false;
   const cands = [];
   for (const b of S.buildings) {
     if (b.dead || !b.built || b.owner < 0 || !foes(b.owner, p) || !BDEFS[b.type].mil || BDEFS[b.type].bunker || BDEFS[b.type].wild) continue;
@@ -3490,9 +3504,11 @@ function aiCounterRaid(p) {
     let first = null, bd = Infinity;
     for (const u of strays) { const d = dist2(u.x, u.y, L.x, L.y); if (d < bd) { bd = d; first = u; } }
     const i = Math.floor(first.x), j = Math.floor(first.y);
-    const raiders = strays.filter((u) => dist2(u.x, u.y, first.x, first.y) <= 36).length;
-    if (rallyAvailable(p, i, j) >= Math.ceil(raiders * 1.3)) {
-      const { sent, rally } = sendToRally(p, i, j, raiders * 2);
+    // (Counted by those that can still shoot: on Islands seed 21 three rival warbots sat out of Ammo in an Outpost they
+    // had planted on a colony's island from minute 36, and the one warbot it could spare never went for all four.)
+    const raiders = strays.filter((u) => dist2(u.x, u.y, first.x, first.y) <= 36 && botArmed(u)).length;
+    if (rallyAvailable(p, i, j) >= Math.max(1, Math.ceil(raiders * 1.3))) {
+      const { sent, rally } = sendToRally(p, i, j, Math.max(3, raiders * 2));
       if (sent) P.counters.push({ stray: { x: i, y: j }, mine: rally.id, at: S.time });
     }
   }
@@ -3515,10 +3531,18 @@ function aiCounterRaid(p) {
   }
 }
 
-/** Enemy warbots out in the open on p's land, under no flag and on no attack (aiCounterRaid). Not the Murmur. */
+/**
+ * Enemy warbots out in the open on p's land, under no flag and on no attack (aiCounterRaid). Not the Murmur. Also
+ * those on p's home island when theirs is another one, out in the open or in a garrison they planted there.
+ */
 function aiStrays(p) {
-  return S.bots.filter((u) => !u.dead && !u.inside && isArmy(u) && foes(u.owner, p) && !isWild(u.owner) &&
-    !(u.task && (u.task.type === 'hold' || u.task.type === 'attack')) && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] === p);
+  const hz = homeZone(p);
+  return S.bots.filter((u) => {
+    if (u.dead || !isArmy(u) || !foes(u.owner, p) || isWild(u.owner) || (u.task && (u.task.type === 'hold' || u.task.type === 'attack'))) return false;
+    const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (hz >= 0 && S.zone[t] === hz && homeZone(u.owner) !== hz) return true;
+    return !u.inside && S.owner[t] === p;
+  });
 }
 
 /**
@@ -3807,7 +3831,7 @@ function aiFindSpot(p, type, lander, singleOre) {
   P.noSpot = P.noSpot || {};
   const miss = P.noSpot[type];
   if (miss && miss.ver === S.territoryVer && S.time < miss.until) return null;
-  // A stranded colony can use an isolated Ore deposit once its mines have run dry.
+  // A stranded colony can use an isolated Ore deposit once its mines have run dry (and one short of Crystal a lone cluster).
   const spot = aiSearchSpot(p, type, lander) || (singleOre ? aiSearchSpot(p, type, lander, 1) : null);
   if (!spot) P.noSpot[type] = { ver: S.territoryVer, until: S.time + 20 };
   return spot;

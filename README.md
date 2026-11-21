@@ -1018,7 +1018,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Ore, and up to half its oil, lies within that many tiles of a nest (more on Small maps), so once its own run low it
     clears the nests sitting on them first (`aiNestRiches`, see The Murmur).
     With parts scarce and a clear lead, a rival can gather a smaller armed force for the final push if it can
-    beat the guns and garrison. At low Fuel, key industry Workers keep working if the available charge would not
+    beat the guns and garrison: four armed warbots and twice the enemy's army and two more, below its usual attack
+    threshold (with no parts its army never grows to that, and it sat out the end of the game). This holds on any map,
+    and on a **dead planet**, the enemy out of parts as well (`deadPlanet`, `aiThink`), with more armed warbots than the
+    enemy's whole army, two at least, its attack threshold comes down to what it has (two fewer, two at least: the
+    landings of `aiNaval` and `aiBeach` too, four warbots spare or the threshold), and a lead of two is enough for the
+    final push (Islands seed 21: the Ore ran out on every island by minute 40 and neither colony ever attacked again). At low Fuel, key industry Workers keep working if the available charge would not
     repay the trip. An Ore-starved rival can mine a single accessible vein and ignores distant, unclaimed veins
     when judging which nests to clear.
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
@@ -1085,8 +1090,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   until then it has two seconds a tile from home and half a minute), and the band comes home early when the enemy
   army within 5 tiles of it outnumbers it. The rival answers your raids (`aiCounterRaid`) only when it can send a third
   more warbots than the flag has; enemy warbots standing on its land under no flag (a landing whose flag came down, a
-  band that can't walk home across the water: `aiStrays`, not ones on an attack) get the same answer, the group nearest
-  its Command Base first. Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
+  band that can't walk home across the water: `aiStrays`, not ones on an attack; on its home island, when theirs is
+  another, those in a garrison they planted there too) get the same answer, the group nearest its Command Base first,
+  counted by those that can still shoot (one out of Ammo needs one warbot spare, and three go). Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
   road within `AI_SCORCH_NEAR` (6) tiles of an enemy Bio Farm instead and sends a Torch along (`aiRaidTorch`); a Torch on
   a raid with a full tank burns the nearest patch of an enemy farm's soil within `AI_SCORCH_REACH` (8) tiles that no gun
   covers (`aiRaidScorch`), refills and comes back to the flag (`u.resume`). Missiles crater the roads where they land.
@@ -1651,7 +1657,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   sites, and it orders the Road Train for it straight away (it takes four Chips: once the Crystal had gone there were none left
   to make it). Running low (`P.crLow`: short, or under 10 in stock with the Taps bringing in less than the Fabs use),
   it puts up Crystal Taps first wherever clusters are left on its land, up to `AI_CRYSTAL_TAPS` (4), even with every
-  worker busy, and they get a worker first; its Smelters rest while it holds `AI_ALLOY_PILE` (40) Alloy, until it's
+  worker busy, and they get a worker first (with no Tap at all, on a lone cluster too, any map: a Turtle's last
+  clusters were single ones on Standard seed 11, and its Chips ran dry for the last half hour); its Smelters rest while it holds `AI_ALLOY_PILE` (40) Alloy, until it's
   down to half (`b.alloyRest`: the Alloy in hand buys Crystal at the Terminal, a made good for a raw one at three-quarters
   of its worth, and their workers go to the Taps); and at the Terminal (`aiTrade`) a route that brings Crystal, or else
   Chips, comes first, it never sends Crystal, and a route under way that brings neither is changed for one
