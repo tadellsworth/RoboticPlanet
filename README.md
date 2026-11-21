@@ -2571,7 +2571,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
   always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
-  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer.
+  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer. Settings
+  also has **Menu background** (Classic / Planet: see The main menu under Looks). **From the main menu**: the
+  **Settings** pill (`#m-settings`, a gear, among Records, Observer, Lore and Feedback) opens the same view on its own
+  over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
+  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the pill.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -2811,7 +2815,7 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts (off for now: the owner, Nov 21 2026),
   plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
   `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
-  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
+  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead (bowed, its middle leading, as on a round world: `D.lineAt`, `duskNightPath`), and the
   Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
   it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
   `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
@@ -2945,7 +2949,10 @@ clouds' drift (`natureCloudTime`).
   every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
   (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
   background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
-  `drawNeeded`).
+  `drawNeeded`). Only with **Menu background** on **Planet** (`menuBg` / `setMenuBg`, kept on the device as
+  `terrafall.menubg`): on **Classic**, the default, the menu shows the demo game through its dimmed gradient as before
+  Nov 21 2026, and the canvas and map aren't even made (`mplMake` runs the first time Planet is wanted); switching to
+  Classic stops the frames (`cancelAnimationFrame`) and hides the canvas at once.
 
 ### Cloud shadows, remains and beacons
 

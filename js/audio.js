@@ -61,7 +61,10 @@ function musicLevel() { return AUDIO.music * MUSIC_LEVEL * ((typeof MUSIC !== 'u
 
 /** Browsers only start audio from a tap or key press: called on the first one (and on Start). */
 function audioUnlock() {
-  if (AUDIO.ctx) { if (AUDIO.ctx.state === 'suspended' && !document.hidden) AUDIO.ctx.resume(); return; }
+  // A context can be 'suspended', or 'interrupted' (Safari, after a call, Siri or another app took the sound), and
+  // only a tap brings it back; one the browser 'closed' is built afresh.
+  if (AUDIO.ctx && AUDIO.ctx.state === 'closed') { AUDIO.ctx = null; if (typeof MUSIC !== 'undefined' && MUSIC.timer) { clearInterval(MUSIC.timer); MUSIC.timer = 0; } }
+  if (AUDIO.ctx) { if (AUDIO.ctx.state !== 'running' && !document.hidden) { const r = AUDIO.ctx.resume(); if (r && r.catch) r.catch(() => {}); } return; }
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -79,8 +82,13 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   // Nothing plays while the game is in the background.
   document.addEventListener('visibilitychange', () => {
     if (!AUDIO.ctx) return;
-    if (document.hidden) AUDIO.ctx.suspend(); else AUDIO.ctx.resume();
+    const r = document.hidden ? AUDIO.ctx.suspend() : AUDIO.ctx.resume();
+    if (r && r.catch) r.catch(() => {});
   });
+  // Back from the app switcher (pageshow) or a window regaining focus: try again (a tap does it if this can't).
+  const back = () => { if (AUDIO.ctx && AUDIO.ctx.state !== 'running' && AUDIO.ctx.state !== 'closed' && !document.hidden) { const r = AUDIO.ctx.resume(); if (r && r.catch) r.catch(() => {}); } };
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', back);
 }
 
 /*
