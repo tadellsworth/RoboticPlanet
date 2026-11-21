@@ -6706,9 +6706,7 @@ function checkSurrender() {
   if (S.mission || S.mode === 'colony' || S.winner >= 0) return;
   const live = S.players.filter((P) => !P.absent && !P.out);
   if (live.length < 2) return;
-  const n = S.players.map(() => ({ b: 0, wb: 0, wk: 0, fd: false }));
-  for (const b of S.buildings) { if (b.dead || !b.built || b.owner < 0 || !n[b.owner]) continue; n[b.owner].b++; if (BDEFS[b.type].bots) n[b.owner].fd = true; }
-  for (const u of S.bots) { if (u.dead || u.owner < 0 || !n[u.owner]) continue; if (isArmy(u)) n[u.owner].wb++; else if (u.type === 'worker') n[u.owner].wk++; }
+  const n = colonyCounts();
   for (const P of live) {
     const me = n[P.id];
     P.peakB = Math.max(P.peakB || 0, me.b);
@@ -6719,6 +6717,25 @@ function checkSurrender() {
     P.giveUp = beaten || broke ? (P.giveUp || 0) + 1 : Math.max(0, (P.giveUp || 0) - 2);
     if (P.giveUp >= SURRENDER.hold) { surrender(P.id, by); return; }
   }
+}
+
+/** Every colony's built buildings (b), warbots (wb) and Workers (wk), and whether it has a Bot Foundry (fd): for surrender. */
+function colonyCounts() {
+  const n = S.players.map(() => ({ b: 0, wb: 0, wk: 0, fd: false }));
+  for (const b of S.buildings) { if (b.dead || !b.built || b.owner < 0 || !n[b.owner]) continue; n[b.owner].b++; if (BDEFS[b.type].bots) n[b.owner].fd = true; }
+  for (const u of S.bots) { if (u.dead || u.owner < 0 || !n[u.owner]) continue; if (isArmy(u)) n[u.owner].wb++; else if (u.type === 'worker') n[u.owner].wk++; }
+  return n;
+}
+
+/**
+ * Who player p would surrender to (the pause menu's Surrender, an order): the rival still in that hit it last, else
+ * the strongest (beatenBy); -1 when there's no rival left to give up to.
+ */
+function surrenderTo(p) {
+  const P = S.players[p], live = S.players.filter((Q) => !Q.absent && !Q.out);
+  if (!P || P.out || !live.some((Q) => foes(Q.id, p) && !isWild(Q.id))) return -1;
+  const by = beatenBy(P, live, colonyCounts());
+  return by >= 0 && !isWild(by) ? by : -1;
 }
 
 /** The share of the land anyone holds that wins Domination, by how many colonies are still in. */
@@ -6737,7 +6754,8 @@ function beatenBy(P, live, n) {
 /** Player p gives up to player `by` (see checkSurrender): everything it had is theirs, as when a Command Base falls. */
 function surrender(p, by) {
   const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0;
-  if (isMe(by)) postMsg(ME, `${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
+  if (isMe(p)) postMsg(ME, `You surrendered to ${playerName(by)}: everything you built is theirs.`, x, y, 'lost');
+  else if (isMe(by)) postMsg(ME, `${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
   else if (!isMe(p)) postMsg(ME, `${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
   doctrineVoice(p, by, 'surrender', x, y); // (its last words, in its doctrine's voice)
   eliminate(p, by, 'surrender');

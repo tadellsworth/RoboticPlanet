@@ -5146,11 +5146,7 @@ function drawCritter(ctx, u, x, y, s) {
     ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
-  if (u.hp < u.maxHp && R.clean < 2) {
-    const bw = s * 0.34 * L.sh[0] / 0.17, top = y - s * Math.max(0.24, L.sh[0] * 1.3);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2, top, bw, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - bw / 2, top, (bw * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
-  }
+  { const bw = s * 0.34 * L.sh[0] / 0.17; hpBar(ctx, u.id, u.hp / u.maxHp, x - bw / 2, y - s * Math.max(0.24, L.sh[0] * 1.3), bw, Math.max(2, s * 0.05)); }
 }
 
 /** The fresh ridge each Sapper under the ground leaves behind it (its last few tiles, kept here as it goes: once it's through, the game's tunnels take over). */
@@ -5311,11 +5307,7 @@ function drawShip(ctx, u, sx, sy, s) {
         s * 0.13, side < 0 ? '#ff6960' : '#68f5c0', night * 0.65);
     }
   }
-  if (u.hp < u.maxHp && R.clean < 2) {
-    const w = s * 0.6;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.42, w, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.42, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
-  }
+  hpBar(ctx, u.id, u.hp / u.maxHp, sx - s * 0.3, sy - s * 0.42, s * 0.6, Math.max(2, s * 0.05));
 }
 
 /** Short headlamps fitted to the three specialists' front corners. */
@@ -5329,6 +5321,24 @@ function drawSpecialistHeadlights(ctx, u, x, y, size) {
     const px = x + c * front - s * side, py = y + s * front + c * side;
     fxGlow(ctx, px, py, size * 0.16, '#f0f5ff', night * 0.85);
   }
+}
+
+/**
+ * A health bar (js/polish.js has the setting): frac of full, drawn at (x, y), w by h pixels. Shown while damaged (with
+ * Health bars on, the default) and, faintly when full, for what's selected; green, then amber, then red as it falls.
+ * Nothing in photo mode (R.clean 2).
+ */
+function hpBar(ctx, id, frac, x, y, w, h) {
+  if (R.clean >= 2 || !(frac >= 0)) return;
+  const sel = typeof UI !== 'undefined' && ((UI.selSet && UI.selSet.has(id)) || R.selected === id || UI.selBot === id);
+  const hurt = frac < 0.999;
+  if (!(hurt && (R.hpBars || sel)) && !sel) return;
+  const ga = ctx.globalAlpha;
+  if (!hurt) ctx.globalAlpha = ga * 0.45;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = frac > 0.6 ? '#7bea6b' : frac > 0.3 ? '#ffd166' : '#ff5a5a';
+  ctx.fillRect(x, y, w * Math.min(1, frac), h);
+  ctx.globalAlpha = ga;
 }
 
 function drawBot(ctx, u, sx, sy, s) {
@@ -5436,13 +5446,7 @@ function drawBot(ctx, u, sx, sy, s) {
       ctx.fillRect(x, y, Math.max(1.5, (w * u.bat) / 100), h);
     }
   }
-  if (u.hp < u.maxHp && R.clean < 2) {
-    const w = s * 0.4;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(sx - w / 2, sy - s * 0.36, w, 3);
-    ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#7bea6b' : '#ff6b5a';
-    ctx.fillRect(sx - w / 2, sy - s * 0.36, (w * u.hp) / u.maxHp, 3);
-  }
+  hpBar(ctx, u.id, u.hp / u.maxHp, sx - s * 0.2, sy - s * 0.36, s * 0.4, 3);
 }
 
 /* Driving animation: frames step every FRAME_STEP tiles driven. */
@@ -6585,6 +6589,7 @@ function render(dtReal) {
   else if (R.mode === 'scorch') drawScorchPick(ctx, ox, oy, z);
   else if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
   if (R.ghost) drawRanges(ctx, R.ghost.type, R.ghost.x, R.ghost.y, ox, oy, z, 0);
+  if (typeof drawReach === 'function' && R.clean < 2) drawReach(ctx, ox, oy, z); // (a defence or armed robot hovered, the army picked: js/polish.js)
 
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
@@ -6693,13 +6698,7 @@ function render(dtReal) {
       if (e.type === 'city' && e.cCap > 0 && e.cBy >= 0 && R.clean < 2) drawCityTaking(ctx, e, cx, cy, z);
       buildingSmoke(e);
       const def = BDEFS[e.type];
-      if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
-        const w = z * 0.8 * (def.foot || 1), by = cy - z * 0.62 * (def.foot || 1);
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(cx - w / 2, by, w, Math.max(3, z * 0.08));
-        ctx.fillStyle = e.armor / def.armor > 0.4 ? '#ffd166' : '#ff5a5a';
-        ctx.fillRect(cx - w / 2, by, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
-      }
+      if (e.built) { const w = z * 0.8 * (def.foot || 1); hpBar(ctx, e.id, e.armor < def.armor - 0.05 ? e.armor / def.armor : 1, cx - w / 2, cy - z * 0.62 * (def.foot || 1), w, Math.max(3, z * 0.08)); }
       const mine = e.owner === ME && !R.clean;
       if (mine) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
       if (mine && S.players[ME].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
@@ -6849,6 +6848,7 @@ function render(dtReal) {
   if (R.workerView) drawWorkerView(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
+  if (typeof drawGoodsPops === 'function' && !R.clean) drawGoodsPops(ctx, ox, oy, z); // (+N where goods are made or stored: js/polish.js)
   if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
   if (typeof drawRadAir === 'function') drawRadAir(ctx, ox, oy, z, v0, v1); // (radiation: motes, robots sickening, a hot ruin's smoke and light column, the Geiger crackle: js/radfx.js)
   if (S.event) drawEvent(ctx, ox, oy, z);
@@ -9092,11 +9092,7 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     ctx.restore();
   }
   const bh = Math.max(2, s * 0.05);
-  if (u.hp < u.maxHp && !u.parked && R.clean < 2) {
-    const w = s * 0.6;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, bh);
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, bh);
-  }
+  if (!u.parked) hpBar(ctx, u.id, u.hp / u.maxHp, sx - s * 0.3, sy - s * 0.6, s * 0.6, bh);
   // Its fuel gauge (yours only), below it (the health bar is above): the tank, in the Fuel colour, going orange
   // when it runs low.
   if (u.owner === ME && !R.clean && u.bat !== undefined) { // (not a wreck: it has no tank)
@@ -9141,11 +9137,7 @@ function drawAirship(ctx, u, sx, sy, s, alt) {
   }
   drawAirshipFans(ctx, u, x, y, F, f, alt);
   const bh = Math.max(2, s * 0.05);
-  if (u.hp < u.maxHp && !u.parked && R.clean < 2) {
-    const w = s * 0.9;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - ext - bh - 2, w, bh);
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - ext - bh - 2, (w * Math.max(0, u.hp)) / u.maxHp, bh);
-  }
+  if (!u.parked) hpBar(ctx, u.id, u.hp / u.maxHp, x - s * 0.45, y - ext - bh - 2, s * 0.9, bh);
   // Its fuel gauge (yours only), below it, as a plane's.
   if (u.owner === ME && !R.clean && u.bat !== undefined && !u.parked) {
     const w = s * 0.9, gy = y + ext + 2, k = clamp(u.bat, 0, 100) / 100;

@@ -52,6 +52,17 @@ const ORDERS = {
     for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival difficulty is now ${after.label}.`, undefined, undefined, 'info');
     return true;
   },
+  /**
+   * Surrender (the pause menu, confirmed first): player p gives up to the rival beating it (surrenderTo), which takes
+   * everything it had, as when a Command Base falls. Versus games only (not Colony, a mission or a watched game).
+   */
+  surrender(p) {
+    if (S.mission || S.watch || S.mode === 'colony' || S.winner >= 0 || !human(p) || S.players[p].out) return false;
+    const by = surrenderTo(p);
+    if (by < 0) return false;
+    surrender(p, by);
+    return true;
+  },
   /* ---------------------------------------------------------------- building settings (its panel) */
   prio(p, id, v) {
     const b = ownB(p, id); if (!b) return;

@@ -141,6 +141,11 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <span>Base</span><kbd>H</kbd>
     </button>
+    <!-- A war on (js/polish.js): your warbots standing about with nothing to do, picked a group at a time; the badge counts them. -->
+    <button id="btn-idle" class="tool" hidden title="Idle warbots (,)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 20v-3a6 6 0 0 1 12 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 4.5h3.5L17 9h3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Idle</span><kbd>,</kbd><b class="tool-n" id="idle-n" hidden></b>
+    </button>
     <!-- Co-op only (js/coop.js): mark the middle of the view for your partner (the . key marks the spot under the mouse). -->
     <button id="btn-ping" class="tool" hidden title="Ping: mark this spot for your partner">
       <svg viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" fill="currentColor"/></svg>
@@ -449,6 +454,7 @@
       </div>
       <div class="p-row p-foot">
         <button id="p-feedback" class="btn" aria-label="Send feedback" title="Send feedback: report a bug, suggest an idea or say what you think of the balance (the game stays as it is)">Feedback</button>
+        <button id="p-surrender" class="btn ghost" hidden title="Give up this game: your colony goes to the rival beating you (tap twice)">Surrender</button>
         <button id="p-quit" class="btn ghost">Save &amp; quit</button>
       </div>
     </div>
@@ -471,6 +477,7 @@
         <button type="button" id="p-full" class="p-sw-row" role="switch" aria-checked="false" hidden title="The game fills the whole screen (Alt+Enter)"><span>Full screen</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">Off</span><i></i></span></button>
         <button type="button" id="p-weather" class="p-sw-row" role="switch" aria-checked="true" title="Sandstorms on the red desert, rainstorms with fog in the forest, blizzards on the poles: now and then, for looks only"><span>Weather</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
         <button type="button" id="p-scouts" class="p-sw-row" role="switch" aria-checked="true" title="Now and then a message on what a computer rival is up to: a march, a raid, a storm, an army massing"><span>Scout reports</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
+        <button type="button" id="p-hpbars" class="p-sw-row" role="switch" aria-checked="true" title="Thin bars over damaged robots and buildings (what you've picked shows one anyway)"><span>Health bars</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
         <button type="button" id="p-cursor" class="p-sw-row" role="switch" aria-checked="true" hidden title="Terrafall's own mouse pointer, in the colours of its icon: it turns coral over what you can click and becomes a target over a rival when your army is picked"><span>Custom cursor</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
         <button type="button" id="p-haptics" class="p-sw-row" role="switch" aria-checked="true" hidden title="A short buzz when an order is given, a building placed or a road built, and for a warning (on a phone that can vibrate)"><span>Vibration</span><span class="p-sw" aria-hidden="true"><span class="p-sw-v">On</span><i></i></span></button>
         <div class="p-tod"><div class="p-sw-row p-tod-row" title="Cycle (morning to night, 12 minutes round), always day or always night (a display setting)"><span id="p-l-tod">Time of day</span>
@@ -1856,6 +1863,7 @@
     </div>
     <button id="o-statsbtn" class="btn big">Statistics and graphs</button>
     <button id="o-keep" class="btn big" hidden>Keep playing</button>
+    <button id="o-rematch" class="btn big" hidden>Rematch</button>
     <button id="o-new" class="btn primary big">New game</button>
     <button id="o-menu" class="btn big ghost">Main menu</button>
   </div>
@@ -1903,6 +1911,7 @@
 <script src="js/scout.js"></script>
 <script src="js/blueprint.js"></script>
 <script src="js/qol.js"></script>
+<script src="js/polish.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

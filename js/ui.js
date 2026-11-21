@@ -97,6 +97,7 @@ function initUI() {
   initLore();
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
   initQol(); // (camera spots, recent alerts, goods a minute, save slots: js/qol.js)
+  initPolish(); // (health bars switch, Idle button, Surrender, Rematch: js/polish.js)
   initCloud(); // (cloud saves: Save to the cloud in the pause menu, Load from a code on the main menu, js/cloud.js)
   initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
@@ -2263,6 +2264,7 @@ const MAP_KEYS = [
   { keys: ['+', '='], group: 'camera', label: 'Zoom in', run: () => zoomBy(1.25) },
   { keys: ['-', '_'], group: 'camera', label: 'Zoom out', run: () => zoomBy(0.8) },
   { keys: ['?'], group: 'panels', label: 'How to play', run: showHelp },
+  { keys: [','], group: 'army', label: 'Pick idle warbots (again: the next group)', run: () => nextIdleArmy() },
   { keys: ['.'], group: 'army', label: 'Ping under the pointer (co-op)', run: () => typeof coopPingHere === 'function' && !!coopPingHere(true) },
 ];
 const SHIFT_KEYS = {
@@ -3272,28 +3274,34 @@ function modsBriefing() {
   if (l.length) postMsg(ME, `Challenge: ${l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0]}. The pause menu lists them.`, 0, 0, 'warn');
 }
 
-function startNewGame() {
+/**
+ * Start a game from the new-game menu; or, given `again` (the options a game was started with: UI.lastGame), the same
+ * game over again (the end screen's Rematch: the same seed, map, mode, rivals and rules).
+ */
+function startNewGame(again) {
   UI.buildTab = 'gather'; // (a new game's build menu opens on Gather, the owner's call; picking another tab is remembered as before)
   clearSave();
   closePicker(false);
   // Random map type or biome: picked now (see resolveRandom); the menu keeps Random for next time.
-  const pick = resolveRandom();
-  newGame({
+  const pick = again ? null : resolveRandom();
+  const opts = again || {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
-  });
+  };
+  newGame(opts);
+  UI.lastGame = { s: S, opts }; // (for Rematch: this game, while it's the one being played)
   enterGame();
   updateHUD();
   placeMinimap();
-  postMsg(ME, UI.menu.mode === 'colony'
+  postMsg(ME, opts.mode === 'colony'
     ? (BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? `Your bots have landed on ${regionName(S.settings.biome)}. Build, expand and make this moon home.`
       : `Your bots have landed in ${regionName(S.settings.biome)}. Build, expand and make this planet home.`)
     : nColonies() > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : `Your bots have landed. A rival colony, ${callsign(1, true)}, landed to the north. Build up fast!`, 0, 0, 'info');
-  if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
+  if (!again && (UI.menu.shapeRnd || UI.menu.biomeRnd)) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   doctrineLines();
   modsBriefing();
   if (S.wildlife) {
@@ -3305,14 +3313,14 @@ function startNewGame() {
     postMsg(ME, S.mode === 'colony'
       ? `The Murmur live here (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. By day they keep to their nests; ${every} their tunnels spread toward your power and packs come up through the exits. Pulse Turrets (with Crystal) and warbots keep them off; collapse an exit with warbots; clear a nest to win the goods it hoards.`
       : `The Murmur (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. They are nobody's side: ${every} their tunnels spread toward the colonies' power, and packs come up through the exits to raid all of you. Collapse an exit with warbots; wreck a nest by day and its tunnels die back.`, near ? near.x : 0, near ? near.y : 0, 'warn');
-  } else if (UI.menu.murmur !== 'off' && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
-  else if (UI.menu.murmur !== 'off' && !S.mission && !murmurShape(S.settings.shape)) postMsg(ME, `No Murmur on ${SHAPE_PRESETS[S.settings.shape].name}: its land has no room for their nests.`, 0, 0, 'info');
+  } else if (opts.murmur !== 'off' && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
+  else if (opts.murmur !== 'off' && !S.mission && !murmurShape(S.settings.shape)) postMsg(ME, `No Murmur on ${SHAPE_PRESETS[S.settings.shape].name}: its land has no room for their nests.`, 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${nColonies() > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
-  if (UI.menu.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && S.hollow) postMsg(ME, 'No Uplinks in the Hollow: the Pathfinder never mapped it. This game is won by Capture.', 0, 0, 'info');
+  if (opts.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && S.hollow) postMsg(ME, 'No Uplinks in the Hollow: the Pathfinder never mapped it. This game is won by Capture.', 0, 0, 'info');
   if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
@@ -3637,6 +3645,7 @@ function helpForTouch() {
 function showGameOver() {
   UI.overShown = true;
   showCheckpoints('o');
+  $('o-rematch').hidden = true;
   if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
   clearSave();
   UI.overNew = null; UI.overMenu = null;
@@ -3666,10 +3675,12 @@ function showGameOver() {
     : how === 'contact' ? `${The} held its Great Uplink's transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
+      : how === 'surrender' && S.players[ME].out ? `You surrendered to ${The === 'The rival' ? 'the rival' : The}: everything you built is theirs. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   if (S.teams && how === 'contact') $('o-text').textContent = won ? `${S.winner === ME ? 'Your' : `${playerName(S.winner)}'s`} Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact: your team wins.`
     : `The rival team's Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`;
   else if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
+    : how === 'surrender' && S.players[ME].out ? 'You surrendered: the rival team takes everything you built. Regroup and try again.'
     : `The rival team ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
@@ -3682,6 +3693,7 @@ function showGameOver() {
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
+  syncRematch(); // (js/polish.js)
   $('screen-over').hidden = false;
 }
 
@@ -3764,6 +3776,7 @@ function startMission(k, diff) {
   clearSave();
   $('screen-missions').hidden = true;
   newGame({ ...missionOptions(k, diff), scars: scarsPref() });
+  UI.lastGame = { s: S, mission: [k, diff] }; // (for Rematch)
   enterGame();
   updateHUD();
   placeMinimap();
@@ -4016,6 +4029,7 @@ function showMissionOver() {
   $('o-menu').textContent = 'Missions';
   UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
   metaGameOver(); // (achievements earned: js/goals.js)
+  syncRematch(); // (js/polish.js)
   $('screen-over').hidden = false;
 }
 
@@ -6914,6 +6928,7 @@ function openSheet(kind, id, html) {
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
   $('banner').hidden = true;
   markSheetKeys();
+  panelHelp(kind, id); // (its ? for How to play: js/polish.js)
   if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); }
 }
 
@@ -9501,7 +9516,7 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); qolHudTick(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); qolHudTick(); polishHudTick(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

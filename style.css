@@ -270,6 +270,17 @@ body.mm-off .objrow { margin-right: 54px; }
   background: linear-gradient(to top, rgba(14, 15, 20, 0.85), rgba(14, 15, 20, 0));
 }
 #bottombar.three { grid-template-columns: repeat(3, 1fr); }
+#bottombar.five { grid-template-columns: repeat(5, 1fr); } /* (a war on: Idle beside Army) */
+.tool { position: relative; }
+.tool.none { opacity: 0.62; }
+/* The Idle button's count (js/polish.js): a small pill on its corner. */
+.tool-n { position: absolute; top: -6px; right: -4px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #ff8a6b; color: #1a0f0b;
+  font: 800 11px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); pointer-events: none; }
+/* A panel's ? (js/polish.js): its How to play section. */
+.sheet-title .sh-help { margin-left: auto; flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06);
+  color: var(--muted); font: 700 14px/1 system-ui, sans-serif; cursor: pointer; }
+.sheet-title .sh-help:hover, .sheet-title .sh-help:focus-visible { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+#p-surrender.p-arm { color: #ffb3a6; border-color: rgba(255, 120, 100, 0.5); }
 .tool {
   display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 7px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; font-weight: 600;
@@ -935,7 +946,7 @@ body.mode-road .objrow { display: none; }
   .toprow .chip { min-height: 36px; padding: 3px 9px; }
   .objective { padding: 5px 9px; }
   /* Tools: a rail down the left edge. */
-  #bottombar, #bottombar.three { left: 0; right: auto; bottom: 0; width: var(--rail); grid-template-columns: 1fr; gap: 5px;
+  #bottombar, #bottombar.three, #bottombar.five { left: 0; right: auto; bottom: 0; width: var(--rail); grid-template-columns: 1fr; gap: 5px;
     padding: 6px 6px calc(var(--safe-b) + 6px) calc(var(--safe-l) + 6px); background: linear-gradient(to right, rgba(14, 15, 20, 0.85), rgba(14, 15, 20, 0)); }
   .tool { padding: 4px 2px 3px; min-height: 44px; gap: 0; }
   .tool svg { width: 20px; height: 20px; }
