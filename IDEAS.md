@@ -98,7 +98,8 @@ a Warlord beat a Commander in 12 of 16, every game decided (8 to 20 minutes; one
 A second campaign, apart from the Main Campaign and replayable: conquer Ithaca I region by region, as in Galactic
 Conquest from Star Wars Battlefront II (the inspiration only; the name and look are ours). In the lore, the vanguards'
 sealed contingency orders said "secure Ithaca I for us"; each run plays those orders out as a fresh what-if.
-Comes on the roadmap after the Main Campaign.
+**Order (the owner, Nov 21):** Deep Core, Sundering Ray, Atmosphere Engine, the top-tier Murmur unit and the smarter
+Murmur first; then **Contingency, before the Main Campaign** and other items.
 
 **Decided (the owner, Nov 21):** the name is **Contingency**; the planet map is **turn-based**; battles are
 **shorter** than a free game (about 15 to 25 minutes); **auto-resolve** is allowed for any battle.
@@ -712,7 +713,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
     so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
     the Sponsors did to Earth.
-  - **Sunlance** (weapon). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
+  - **Sunlance** (weapon; saved for later, the owner, Nov 21 2026: not in this round of megastructures, as the Lance of
+    Corvane already fills the beam-weapon role). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
     buildings in a line. By day only; useless in a dust storm, and a solar flare overloads and damages it. Night leaves
     you open, in step with the Murmur.
   - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
