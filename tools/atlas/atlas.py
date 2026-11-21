@@ -214,7 +214,7 @@ x,y=px(146,-20); d.ellipse([x-80,y-55,x+80,y+55],outline=(235,175,255,230),width
 text(x,y+70,'the Hollow lies beneath',F(20,True),fill=(235,195,255,255))
 # header
 text(W/2,46,'ITHACA I',FBs(40),fill=(255,232,196,255),sp=1)
-text(W-20,46,'Atlas: draft for the owner\'s approval',F(24,True),fill=(200,190,170,255),anchor='rm')
+text(W-20,46,'Atlas of the four vanguards',F(24,True),fill=(200,190,170,255),anchor='rm')
 text(20,46,'Pathfinder survey, revised T+31',F(24,True),fill=(200,190,170,255),anchor='lm')
 # legend band
 y0=H+TOP+30
@@ -227,7 +227,7 @@ for k in range(36):
 x,y=ax-40,ay-30; d.polygon([(x,y-11),(x+9,y),(x,y+11),(x-9,y)],fill=COL['U']+(255,),outline=(0,0,0,255))
 text(x+13,y,'Lunar Relay',F(19),fill=COL['U']+(255,),anchor='lm'); text(ax+20,ay+55,'Silent Crater',F(20,True))
 text(ax,y0-6,'ARGOS, the moon',FBs(24)); text(ax-R-20,ay+R-10,'reached by orbit only · no Murmur',F(18,True),anchor='rm')
-items=[('U','Uplink (a fifth is dealt per run in Contingency)'),('$','Trade Post (neutral)'),('P',"the Pathfinder's hull"),('T','Passenger Town, the empty town'),
+items=[('U','Uplink (relay tower to home)'),('$','Trade Post (neutral)'),('P',"the Pathfinder's hull"),('T','Passenger Town, the empty town'),
  ('x','wreck of a failed landing (a log to recover)'),('S','fallen Ring shard'),('B','breaches into the Hollow'),('o','named place')]
 for i,(k,lab) in enumerate(items):
     x=60+(i//4)*760; y=y0+40+(i%4)*52; c=COL[k]
