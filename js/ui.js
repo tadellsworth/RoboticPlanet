@@ -82,7 +82,7 @@ function initUI() {
   checkMenuSettings();
   initMenu();
   initMulti();
-  $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
+  $('m-continue').onclick = () => { audioUnlock(); continueNewest(); }; // (the newest of the autosave and the save slots: js/qol.js)
   $('m-import').onclick = () => { audioUnlock(); $('m-import-msg').hidden = true; $('m-import-file').value = ''; $('m-import-file').click(); };
   $('m-import-file').onchange = () => { const f = $('m-import-file').files && $('m-import-file').files[0]; if (f) importSaveFile(f); };
   $('p-export').onclick = () => { sfx('click'); downloadSave(); };
@@ -96,6 +96,7 @@ function initUI() {
   helpPagerInit();
   initLore();
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
+  initQol(); // (camera spots, recent alerts, goods a minute, save slots: js/qol.js)
   initCloud(); // (cloud saves: Save to the cloud in the pause menu, Load from a code on the main menu, js/cloud.js)
   initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
@@ -973,7 +974,7 @@ function syncMenu() {
   $('m-saveplanet').title = rnd ? 'Pick a map type and biome (not Random) to save this planet' : 'Keep this planet (with its map settings) to play again';
   const sum = menuSummary();
   $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra"><span class="vh"> · </span>${sum.extra}</span>` : '');
-  $('m-continue').hidden = !hasSave();
+  syncContinue(); // (the Continue card and Saved games: js/qol.js)
   if (UI.menuView === 'home') showCheckpoints('m');
   syncInfo();
   schedulePreview();
@@ -2017,7 +2018,7 @@ function showGoodTip(g, el, ms) {
   let tip = $('good-tip');
   if (!tip) { tip = document.createElement('div'); tip.id = 'good-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
   clearTimeout(UI.tipTimer);
-  tip.innerHTML = `<b>${GOOD[g].name}</b> <em>${el.lastChild.textContent}</em><span>${GOOD[g].desc}</span>`;
+  tip.innerHTML = `<b>${GOOD[g].name}</b> <em>${el.lastChild.textContent}</em><span>${GOOD[g].desc}</span>${UI.inGame ? goodRateTip(g) : ''}`;
   tip.hidden = false;
   tip.dataset.g = g;
   const r = el.getBoundingClientRect(), w = tip.offsetWidth;
@@ -2036,7 +2037,8 @@ function hideGoodTip() {
 /*
  * WASD or arrow keys pan · B build (then a building's key: a letter, or 1–7; or R for roads) · R or P opens and closes Paths (inside
  * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map, Shift+T goods flow map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
- * Shift + digit to save) · Shift+F a Bot Foundry's Order bots list · J jump to the latest alert · Esc back / clear selection / pause ·
+ * Shift + digit to save) · Shift+F a Bot Foundry's Order bots list · J jump to the latest alert (again: the one before) ·
+ * F1–F4 a camera spot (Shift+F1–F4 keeps one: js/qol.js) · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
  */
 /**
@@ -2255,9 +2257,7 @@ const MAP_KEYS = [
   { keys: ['y'], group: 'panels', label: 'Toggle Goods', run: () => {
     if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); }
   } },
-  { keys: ['j'], group: 'camera', label: 'Jump to latest alert', run: () => {
-    if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); }
-  } },
+  { keys: ['j'], group: 'camera', label: 'Jump to the latest alert (again: the one before)', run: () => jumpAlert() },
   { keys: ['['], group: 'game', label: 'Slow down', run: () => { stepSpeed(-1); } },
   { keys: [']'], group: 'game', label: 'Speed up', run: () => { stepSpeed(1); } },
   { keys: ['+', '='], group: 'camera', label: 'Zoom in', run: () => zoomBy(1.25) },
@@ -2335,6 +2335,8 @@ function renderKeys() {
       [Object.keys(PAN_KEYS), 'Pan the map'],
       ...map('camera'),
       [['Shift + scroll'], 'Pan sideways with a trackpad'],
+      [['F1–F4'], 'Go to a camera spot'],
+      [['Shift+F1–F4'], 'Keep this view as a camera spot'],
       [['F'], 'Follow the action (Observer)'],
     ]),
     section('Selection and control groups', [
@@ -2457,6 +2459,9 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
+    // Camera spots (js/qol.js): Shift+F1–F4 keeps the view, F1–F4 goes back to it.
+    const fk = /^f([1-4])$/.exec(k);
+    if (fk) { e.preventDefault(); if (e.shiftKey) saveCamSpot(+fk[1]); else goCamSpot(+fk[1]); return; }
     const shifted = e.shiftKey && SHIFT_KEYS[k];
     if (shifted) { e.preventDefault(); shifted.run(); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
@@ -3090,6 +3095,7 @@ function escapeKey() {
   if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('screen-cloud').hidden) { closeCloud(); return; } // (cloud saves: over the pause menu, or a link's question)
+  if (!$('screen-saves').hidden) { closeSaves(); return; } // (Saved games: over the pause menu, js/qol.js)
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
@@ -9489,13 +9495,13 @@ function uiTick(dt) {
     const m = S.msgs.shift();
     if (typeof coopQuiet === 'function' && coopQuiet(m.text, m.kind)) { coopLog(m.text, m.kind, m.x, m.y); continue; } // (co-op: not my role's: the log only)
     toast(m.text, m.kind, m.x, m.y);
-    if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
+    if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) { UI.lastAlert = { x: m.x, y: m.y }; qolAlert(m); }
     if (m.kind === 'lost') sfx('alert');
     if (m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') haptic(m.kind === 'warn' ? 'warn' : 'bad'); // (a short buzz under a finger: input.js)
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); qolHudTick(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

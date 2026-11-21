@@ -5691,7 +5691,9 @@ function wayOwnersFromLand() {
 function saveGame(json) {
   if (!S || S.winner >= 0 || S.players[0].ai) return false;
   if (typeof MP !== 'undefined' && MP.on) return false; // (a multiplayer game lives on everyone's devices: it isn't saved for Continue)
-  try { localStorage.setItem(SAVE_KEY, json || serializeGame()); return true; } catch (e) { return false; }
+  try { localStorage.setItem(SAVE_KEY, json || serializeGame()); } catch (e) { return false; }
+  if (typeof noteAutoSaved === 'function') noteAutoSaved(); // (the Saved games list's line for it: js/qol.js, interface only)
+  return true;
 }
 
 function hasSave() {
