@@ -29,8 +29,8 @@ const MPLANET = {
   carrier: 46,            // ...for a Carrier to go round
   tilt: -0.32,            // the Ring's slant (radians)
   wren: 190,              // seconds between the Wren's visits (it takes 70 to come in)
-  nukeFirst: 210,         // seconds the menu is open before a nuclear blast may come, then one every nukeGap at most
-  nukeGap: [360, 540],
+  nukeFirst: 60,          // seconds the menu is open before a nuclear blast may come, then one every nukeGap at most
+  nukeGap: [150, 150],
 };
 
 const MPL = { c: null, g: null, raf: 0, last: 0, t: 0, open: 0, map: null, sky: null, sphere: null, geo: null, w: 0, h: 0, dpr: 1, on: false,
