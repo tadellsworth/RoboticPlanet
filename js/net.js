@@ -18,7 +18,8 @@ const NET = {
   tries: 0, timer: 0, lastIn: 0, pingT: 0, ping: 0, error: '', fresh: false, startMsg: null,
   parts: new Map(),  // big messages coming in pieces: id → parts
   partId: 0,
-  onLobby: null, onStart: null, onError: null, onLink: null,
+  caps: [],          // what the relay does beyond its first version (hello's caps: 'chat', 'prefs'); [] on an older relay
+  onLobby: null, onStart: null, onError: null, onLink: null, onChat: null,
 };
 const NET_PIECE = 200000; // characters a piece, for messages bigger than that (a whole game)
 const NET_CODES = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // (no I, L, O, 0 or 1: easy to read out)
@@ -77,7 +78,7 @@ function netConnect(code, opts) {
   Object.assign(NET, {
     url: relayUrl(), code: String(code || '').toUpperCase(), id: o.id || netRandomId(), name: o.name || netName() || 'Player',
     state: 'connecting', me: -1, seat: -1, host: -1, seats: [], settings: null, started: false, seq: 0, outbox: [],
-    tries: 0, error: '', fresh: !!o.fresh, create: !!o.create, joined: false, startMsg: null, parts: new Map(),
+    tries: 0, error: '', fresh: !!o.fresh, create: !!o.create, joined: false, startMsg: null, parts: new Map(), caps: [],
   });
   if (!NET.url) { NET.state = 'off'; NET.error = 'norelay'; if (NET.onError) NET.onError('norelay'); return; }
   netOpen();
@@ -92,6 +93,9 @@ function netOpen() {
   let ws;
   try { ws = new WebSocket(`${NET.url}/room/${NET.code}?${q}`); } catch (e) { netRetry(); return; }
   NET.ws = ws;
+  // (a new socket gets its full quiet time to say hello: netTick closed one that opened before its first message
+  // when the last thing heard was long ago, or never, as on a fresh page, and after four of those gave up as unreachable)
+  NET.lastIn = Date.now();
   ws.onmessage = (e) => { if (NET.ws === ws) netIn(e.data); };
   ws.onclose = () => { if (NET.ws === ws) { NET.ws = null; netLink(); netRetry(); } };
   ws.onerror = () => { /* (onclose follows) */ };
@@ -140,6 +144,9 @@ function netSendFrame(text) {
 /** The lobby: my name, and (the host) the game's settings and the start. */
 function netLobbySend(msg) { netRaw(JSON.stringify(msg)); }
 
+/** Does the relay do this (hello's caps: 'chat', 'prefs')? An older relay does none of them. */
+function netCan(cap) { return NET.caps.includes(cap); }
+
 /** Is the relay getting through (connected, and something heard lately)? */
 function netLinkOK() { return !!NET.ws && NET.ws.readyState === 1 && Date.now() - NET.lastIn < 4000; }
 function netLink() { MP.linkOK = netLinkOK(); if (NET.onLink) NET.onLink(MP.linkOK); }
@@ -151,6 +158,7 @@ function netIn(text) {
   switch (m.t) {
     case 'hello':
       NET.seat = m.seat; NET.host = m.host; NET.started = m.started; NET.tries = 0; NET.joined = true;
+      NET.caps = Array.isArray(m.caps) ? m.caps : [];
       if (!m.started) NET.state = 'lobby';
       else {
         NET.state = 'game';
@@ -181,6 +189,8 @@ function netIn(text) {
   }
   // The game's messages, in the relay's order (once each: a reconnect can bring some again).
   if (m.seq) { if (m.seq <= NET.seq) return; NET.seq = m.seq; }
+  // A chat line (js/polish3.js): never part of the game. (An older relay numbers and logs one sent in a game.)
+  if (m.t === 'chat') { if (NET.onChat) NET.onChat(m); return; }
   if (m.t === 'part') {
     if (!NET.parts.has(m.id)) NET.parts.set(m.id, []);
     const ps = NET.parts.get(m.id);
@@ -196,6 +206,10 @@ function netIn(text) {
 function netTick() {
   if (NET.state === 'off') return;
   const now = Date.now();
+  // (a long frame or a page in the background: what came in meanwhile is still queued, so give it a few seconds before
+  // calling the socket quiet, rather than drop a good connection after a slow map bake)
+  if (now - (NET.tickAt || now) > 2000) NET.lastIn = Math.max(NET.lastIn, now - 8000);
+  NET.tickAt = now;
   if (now - NET.pingT > 4000) { NET.pingT = now; netRaw(JSON.stringify({ t: 'ping', at: now })); }
   // (a socket that went quiet without closing, as a phone's can: start again)
   if (NET.ws && NET.ws.readyState === 1 && now - NET.lastIn > 12000) { const ws = NET.ws; NET.ws = null; try { ws.close(); } catch (e) { /* gone */ } netRetry(); }

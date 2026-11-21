@@ -12,11 +12,16 @@
  *   since   reconnecting: send me the log after this message
  *   fresh   reconnecting with nothing (a reloaded page): skip the log, I'll ask for the game
  *
- * From the relay:  hello {seat, code, host, started, seq}   lobby {seats, host, settings}   error {why}
+ * From the relay:  hello {seat, code, host, started, seq, caps}   lobby {seats, host, settings}   error {why}
  *                  start {settings, players (null: a computer's colony)}   and every game message, with seq and by
  *                  (the sender's seat).
- * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on),
- *                  but a co-op cursor or ping (cur, mark), which goes to the others unnumbered and isn't logged.
+ * To the relay:    in the lobby: name, settings and start (the host), leave, ping, prefs {ready, color} and chat;
+ *                  in a game: anything (passed on), but a cursor, ping or chat line (cur, mark, chat), which goes to
+ *                  the others unnumbered and isn't logged (to: [players] narrows it to those players: a team's chat).
+ *
+ * caps (in hello) lists what this relay does beyond the first version: 'chat' (lobby chat, and chat, pings and cursors
+ * unnumbered and routed by `to`), 'prefs' (each seat's ready and colour, in the lobby's seats). A game that finds no
+ * caps is on an older relay: it hides lobby chat and Ready, and its chat in a game goes as a numbered message instead.
  *
  * It also takes players' feedback: POST /feedback (see feedback.js), and keeps cloud saves: /save (see saves.js).
  */
@@ -26,6 +31,9 @@ const MAX_SLOTS = 8;         // places in a game: up to four colonies, then (co-
 const MAX_MSG = 1 << 20;     // bytes: bigger messages (a whole game) come in pieces
 const MAX_LOG = 48 << 20;    // bytes of log kept (the oldest pieces of whole games go first)
 const CODE = /^[A-Z2-9]{4,8}$/;
+const CAPS = ['chat', 'prefs'];
+const CHAT_MAX = 200;        // characters in a chat line
+const CHAT_RATE = [6, 5000]; // chat lines a seat may send in that many ms
 
 import { handleFeedback, Gate } from './feedback.js';
 import { handleSaves, Saves } from './saves.js';
@@ -81,7 +89,7 @@ export class Room {
       seat = this.seats.findIndex((s) => !s);
       if (seat < 0) seat = this.seats.length;
       if (seat >= MAX_SEATS) return fail('full');
-      this.seats[seat] = { id, name, v, ws: null, on: false };
+      this.seats[seat] = { id, name, v, ws: null, on: false, ready: false, color: -1, chat: [] };
     }
     const S = this.seats[seat];
     if (S.ws && S.ws !== ws) { try { S.ws.close(1000, 'replaced'); } catch (e) { /* gone already */ } }
@@ -92,7 +100,7 @@ export class Room {
     const bye = () => { if (S.ws === ws) { S.ws = null; S.on = false; this.presence(); } };
     ws.addEventListener('close', bye);
     ws.addEventListener('error', bye);
-    send(ws, { t: 'hello', seat, code: this.code, host: this.host(), started: this.started, seq: this.seq });
+    send(ws, { t: 'hello', seat, code: this.code, host: this.host(), started: this.started, seq: this.seq, caps: CAPS });
     if (this.started) {
       // Back in a game: the start, then (unless it has nothing to catch up from) the log since its last message.
       send(ws, this.startMsg);
@@ -107,7 +115,7 @@ export class Room {
 
   /** Everyone's told who's here (the lobby, or who's connected in a game). */
   presence() {
-    const seats = this.seats.map((s, k) => (s ? { seat: k, name: s.name, on: s.on, v: s.v } : null)).filter(Boolean);
+    const seats = this.seats.map((s, k) => (s ? { seat: k, name: s.name, on: s.on, v: s.v, ready: !!s.ready, color: Number.isInteger(s.color) ? s.color : -1 } : null)).filter(Boolean);
     this.broadcast({ t: 'lobby', code: this.code, host: this.host(), started: this.started, seats, settings: this.settings });
   }
 
@@ -122,6 +130,13 @@ export class Room {
     if (!this.started) {
       // The lobby.
       if (msg.t === 'name') { S.name = clean(msg.name) || S.name; this.presence(); return; }
+      if (msg.t === 'prefs') {
+        if (typeof msg.ready === 'boolean') S.ready = msg.ready;
+        if (Number.isInteger(msg.color) && msg.color >= -1 && msg.color < 8) S.color = msg.color;
+        this.presence();
+        return;
+      }
+      if (msg.t === 'chat') { const c = this.chat(S, seat, msg); if (c) this.broadcast(c, ws); return; }
       if (msg.t === 'leave') { this.seats[seat] = null; try { ws.close(1000, 'left'); } catch (e) { /* closed */ } this.presence(); return; }
       if (seat !== this.host()) return;
       if (msg.t === 'settings') { this.settings = msg.settings || null; this.presence(); return; }
@@ -151,10 +166,14 @@ export class Room {
     if (me < 0) return;
     if (msg.t === 'turn' || msg.t === 'want' || msg.t === 'rejoin' || msg.t === 'cur' || msg.t === 'mark') msg.p = me;
     msg.by = seat;
-    // A co-op cursor or ping: passed straight on to the others, unnumbered and not kept (it isn't part of the game).
-    if (msg.t === 'cur' || msg.t === 'mark') {
-      const text = JSON.stringify(msg);
-      for (const s of this.seats) if (s && s.ws && s.ws !== ws) { try { s.ws.send(text); } catch (e) { /* closing */ } }
+    // A cursor, ping or chat line: passed straight on to the others (or, with `to`, those players only), unnumbered
+    // and not kept (it isn't part of the game).
+    if (msg.t === 'cur' || msg.t === 'mark' || msg.t === 'chat') {
+      let out = msg;
+      if (msg.t === 'chat') { out = this.chat(S, seat, msg); if (!out) return; out.p = me; }
+      const to = Array.isArray(msg.to) ? msg.to.filter((p) => Number.isInteger(p)).map((p) => this.players[p]) : null;
+      const text = JSON.stringify(out);
+      this.seats.forEach((s, k) => { if (s && s.ws && s.ws !== ws && (!to || to.includes(k))) { try { s.ws.send(text); } catch (e) { /* closing */ } } });
       return;
     }
     msg.seq = ++this.seq;
@@ -166,9 +185,22 @@ export class Room {
     for (const s of this.seats) if (s && s.ws) { try { s.ws.send(text); } catch (e) { /* closing */ } }
   }
 
-  broadcast(msg) {
+  broadcast(msg, but) {
     const text = JSON.stringify(msg);
-    for (const s of this.seats) if (s && s.ws) { try { s.ws.send(text); } catch (e) { /* closing */ } }
+    for (const s of this.seats) if (s && s.ws && s.ws !== but) { try { s.ws.send(text); } catch (e) { /* closing */ } }
+  }
+
+  /** A chat line from seat S, cleaned and rate-limited: what goes round, or null (nothing to say, or too many). */
+  chat(S, seat, msg) {
+    const text = String(msg.text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, CHAT_MAX);
+    if (!text) return null;
+    const now = Date.now();
+    S.chat = (S.chat || []).filter((t) => now - t < CHAT_RATE[1]);
+    if (S.chat.length >= CHAT_RATE[0]) return null;
+    S.chat.push(now);
+    const out = { t: 'chat', by: seat, name: S.name, text, team: !!msg.team, id: String(msg.id || '').slice(0, 24) };
+    if (Array.isArray(msg.to)) out.to = msg.to.filter((p) => Number.isInteger(p)).slice(0, 8);
+    return out;
   }
 }
 
