@@ -951,8 +951,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
 - **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
-  forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
-  (held back for now); the rival running ferry lines.
+  forward Port stocked by Container Ship. Still open: the rival running ferry lines, and **the naval war** (owner,
+  Nov 21: add a **Warboat**, and expand fighting at sea). Proposed roster, in build order:
+  - **Warboat** (built at a Port): a fast armed patrol craft with a pulse cannon. It escorts convoys, hunts enemy
+    ships and Ferries, and lightly shells the shore. The core naval unit.
+  - **Coastal Battery** (a shore building): a heavy gun that outranges the Warboat, so a held coast is a real defence.
+  - **Diver**: a submersible drone, unseen until it surfaces to fire torpedoes at ships. It is spotted by Warboats
+    close by, or by a **Sonar Buoy** (a cheap placeable picket on the water).
+  - **Flak Corvette**: an anti-air escort that sails with convoys and Ferries against bombers and Airships.
+  - **Monitor**: a slow, heavily armoured shore-bombardment ship, like a Howitzer at sea, for breaking coastal forts.
+    Weak against Divers.
+  - **Sea mines** (dropped by a Warboat upgrade or a Mine Layer boat): close a channel or a Port mouth.
+  Rock-paper-scissors: Warboat beats Diver once found; Diver beats Monitor and cargo; Coastal Battery beats Warboat;
+  Monitor beats Coastal Battery; Flak Corvette guards the lot from the air. Needs: ship-vs-ship combat, the rival using
+  it (`aiNaval`), art sheets for the owner to pick from, Missions goals, and How to play.
 - **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **Vulcan Bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
