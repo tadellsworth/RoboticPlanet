@@ -263,7 +263,7 @@ function drawCoop(ctx, ox, oy, z) {
   // Pings: rings spreading from the spot, and who pinged it.
   COOP.pings = COOP.pings.filter((p) => now - p.t0 < COOP_PING_MS);
   for (const p of COOP.pings) {
-    const age = (now - p.t0) / 1000, k = age / (COOP_PING_MS / 1000), x = ox + p.x * z, y = oy + p.y * z, col = pingColor(p.q);
+    const age = (now - p.t0) / 1000, k = age / (COOP_PING_MS / 1000), x = ox + p.x * z, y = oy + p.y * z, col = p.col || pingColor(p.q); // (p.col: an order to a computer ally, js/ally.js)
     for (let n = 0; n < 2; n++) {
       const f = ((age * 0.9 + n * 0.5) % 1);
       ctx.globalAlpha = (1 - f) * (1 - k * 0.6);
@@ -274,7 +274,7 @@ function drawCoop(ctx, ox, oy, z) {
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 7, y - 16); ctx.lineTo(x + 7, y - 16); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.arc(x, y - 19, 7.5, 0, Math.PI * 2); ctx.fill();
-    coopTag(ctx, x + 12, y - 19, p.q === MP.me ? 'You' : co ? coopName(p.q) : mpWho(p.q), col, 1 - k * 0.5);
+    coopTag(ctx, x + 12, y - 19, p.tag || (p.q === MP.me ? 'You' : co ? coopName(p.q) : mpWho(p.q)), col, 1 - k * 0.5);
   }
   if (!co) { ctx.globalAlpha = 1; return; }
   // The partner's cursor: a dot in their colour with their name, eased toward where it was last heard.
@@ -300,9 +300,9 @@ function drawCoopMini(ctx, sx, sy) {
   for (const p of COOP.pings) {
     if (now - p.t0 > COOP_PING_MS) continue;
     const f = ((now - p.t0) / 700) % 1;
-    ctx.strokeStyle = pingColor(p.q); ctx.lineWidth = 1.5; ctx.globalAlpha = 1 - f;
+    ctx.strokeStyle = p.col || pingColor(p.q); ctx.lineWidth = 1.5; ctx.globalAlpha = 1 - f;
     ctx.beginPath(); ctx.arc(p.x * sx, p.y * sy, 2 + f * 9, 0, Math.PI * 2); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.fillStyle = pingColor(p.q);
+    ctx.globalAlpha = 1; ctx.fillStyle = p.col || pingColor(p.q);
     ctx.fillRect(p.x * sx - 1.5, p.y * sy - 1.5, 3, 3);
   }
   if (!co) { ctx.globalAlpha = 1; return; }

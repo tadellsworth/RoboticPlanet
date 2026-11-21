@@ -3153,7 +3153,19 @@ Teams on, the two southern colonies play the two northern ones). The lobby shows
 first and then computer players, and the host taps a person to move them to the other team (never more than two a
 side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
 computer only goes after the other team. A computer ally can send spare Warbots against a raid on your land when its
-own base is safe, using a garrison that can reach the raid. Teams get mirrored neutral Trade Posts where the terrain
+own base is safe, using a garrison that can reach the raid. **Commands for a computer ally** (`js/ally.js`, the Ally panel: the bar's Ally button
+or Shift+A, shown only with a computer colony on your team): Attack here (Q, then tap an enemy building, robot or
+spot), Defend this area (G, then tap), Help me (H), Hold back (B), Ask for goods (a good's button) and Back to its own
+plan (C), to one ally or all. Each is the order `allyCmd(to, kind, i, j, tid)` (`js/orders.js`), so co-op, 2v2 and
+multiplayer stay in step; `allyCommand` in `js/ai.js` carries it out at once and answers in the ally's voice
+(`ALLY_SAYS`) or says why not (no warbots to spare, ground it can't walk to, nothing of that good to spare, a supply
+run still on its way). Attack and Help me: up to 20 spare warbots on a rally flag (`rally.target`/`first` at a
+building), called home when it falls or after 150 / 120 s (more on a long march); Defend: half of what it can spare
+(2 to 12) for 600 s, topped up every 30 s when down to half; Hold back: 600 s of no Missiles, nukes, marches or raids
+(it still answers raids, `aiCounterRaid`), its own rallies recalled; goods: 30% of its stock above 15 (3 to 40, once
+a minute per ally) leave its storage on a supply run (`S.allyShips`, 2 tiles/s, 15 to 90 s) to your storage nearest
+its Command Base, drawn as a crate crossing the map. State: `P.allyCmd` (`atk`, `def`, `hold`), kept up by
+`aiAllyCmds`; both it and `S.allyShips` are in `hashState` and the save. Numbers: `ALLY_CMD` in `js/defs.js`. Teams get mirrored neutral Trade Posts where the terrain
 allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
 Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
 won by **Capture**: take both enemy Command Bases and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer

@@ -371,6 +371,7 @@ function aiThink(p) {
   let me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
+  aiAllyCmds(p); // (a teammate's commands: see allyCommand)
   aiArmorTrains(p);
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
@@ -1150,7 +1151,8 @@ function aiThink(p) {
   // Its attack threshold comes down to what it has, four at least, while it has more than the enemy's whole army.
   const deadPlanet = stalledParts && enemy >= 0 && S.players[enemy].dry && partsOut(enemy) && ready >= 2 && ready > enemyArmy;
   if (deadPlanet) lvl = { ...lvl, threshold: Math.min(lvl.threshold, Math.max(2, ready - 2)) };
-  if (S.mode !== 'colony' && S.time >= lvl.grace) {
+  const heldBack = allyHeld(p); // (held back by a teammate, Hold back on the Ally panel: no Missiles, nukes, marches or raids)
+  if (S.mode !== 'colony' && S.time >= lvl.grace && !heldBack) {
     // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
     // missile can knock no lower (see captureOnly).
     const dmg = BDEFS.silo.missile.damage, coming = new Map(), soft = P.soften && S.time < P.soften.until ? P.soften : null;
@@ -1186,11 +1188,13 @@ function aiThink(p) {
 
   // 4a) Nuclear race: fire a ready nuclear missile where it destroys the most, and clear out of the
   //     blast ring of any heading this way.
-  if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
+  if (nukeOn() && !heldBack) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
   // 4b) Megastructures: the Lance of Corvane (or the nukes), and a Shield Dome when threatened (late in the game).
   aiUranium(p, me, lander, !few && sites < maxSites + 1);
   aiMega(p, me, lander, !few && sites < maxSites + 1);
+  // Held back: it only answers raids on its land and its allies' (aiCounterRaid).
+  if (heldBack) { if (S.mode !== 'colony') aiCounterRaid(p); return; }
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   // A colony short on home-island Ore can use an extra site for its first Port.
@@ -4364,4 +4368,146 @@ function aiJamGup(p, b) {
   if (avail < 4) return;
   const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(30, avail), 'all', false, true);
   if (sent) { rally.first = aiFirstGun(b.owner, spot.i, spot.j) || b.id; P.gupRally = rally.id; P.gupJamT = S.time; }
+}
+
+/* ------------------------------------------------------------------ commands from a teammate (orders.js: allyCmd) */
+/*
+ * A person in a team game commands their computer ally (the Ally panel): Attack here, Defend this area, Help me, Hold
+ * back, Ask for goods, or back to its own plan. What it's doing for them is kept on the ally (P.allyCmd: `atk`, an
+ * attack or Help me under way; `def`, ground held; `hold`, its army kept home; with the person who asked, `by`, and
+ * its rally flag, `rid`), and goods on their way in S.allyShips; both are in hashState and a save. It acts at once
+ * (an order runs on every device at the same tick) and answers in its own voice; aiAllyCmds keeps it up as it thinks.
+ */
+
+/** The computer allies of player p that take its commands: `to`, or all of them (-1). */
+function allyCmdTargets(p, to) {
+  const out = [];
+  for (const P of S.players) if (P.ai && !P.out && !P.absent && !isWild(P.id) && allies(p, P.id) && (to < 0 || P.id === to)) out.push(P.id);
+  return out;
+}
+/** Ally q tells player `to` (in its voice, on their device): ALLY_SAYS[key] with {n}, {g}, {b}, {who} filled in. */
+function allySay(q, to, key, x, y, fill) {
+  let t = ALLY_SAYS[key] || key;
+  for (const k in fill || {}) t = t.split('{' + k + '}').join(fill[k]);
+  postMsg(to, key === 'arrived' ? t : `${callsign(q)}: “${t}”`, x, y, key === 'arrived' ? 'good' : 'voice');
+}
+/** A tile beside (i, j) ally q's warbots can walk to and stand on (its home ground's area), or null. */
+function allySpot(q, i, j) {
+  const z = homeZone(q);
+  for (let r = 0; r <= ALLY_CMD.reach; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !inMap(i + di, j + dj)) continue;
+    const t = tIdx(i + di, j + dj);
+    if (walkable(t) && !S.bAt[t] && S.zone[t] === z) return { i: i + di, j: j + dj };
+  }
+  return null;
+}
+/** Where Help me sends them: player p's warbots in a fight (the one nearest its Command Base), else its base. */
+function allyHelpSpot(p) {
+  const L = getE(S.players[p].lander);
+  let best = null, bd = Infinity;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.inside || !u.fight || !isArmy(u)) continue;
+    const d = L ? dist2(u.x, u.y, L.x, L.y) : 0;
+    if (d < bd) { bd = d; best = u; }
+  }
+  if (best) return { i: Math.floor(best.x), j: Math.floor(best.y) };
+  return L && !L.dead && L.owner === p ? { i: L.x, j: L.y } : null;
+}
+/** Ally q stops what it was doing for someone (slot 'atk', 'def' or 'hold'): its flag comes down, and it says `key`. */
+function allyEnd(q, slot, key) {
+  const C = S.players[q].allyCmd, c = C && C[slot];
+  if (!c) return;
+  if (c.rid && rallyById(c.rid)) recallRally(c.rid);
+  delete C[slot];
+  if (key) allySay(q, c.by, key, c.x, c.y);
+}
+/** Is computer player p holding its army back (a teammate's Hold back)? */
+function allyHeld(p) { const C = S.players[p].allyCmd; return !!(C && C.hold && S.time < C.hold.until); }
+
+/**
+ * Computer ally q carries out player p's command `kind` (spot (i, j), target `tid`, good `g`): '' if it does, else
+ * why not (it says so too).
+ */
+function allyCommand(q, p, kind, i, j, tid, g) {
+  const P = S.players[q], C = P.allyCmd || (P.allyCmd = {}), L = getE(P.lander);
+  const no = (key, fill) => { allySay(q, p, key, i >= 0 ? i + 0.5 : undefined, j >= 0 ? j + 0.5 : undefined, fill); return ALLY_SAYS[key].replace('{g}', fill && fill.g || ''); };
+  if (!L || L.dead || L.owner !== q) return no('noArmy');
+  if (kind === 'cancel') { allyEnd(q, 'atk'); allyEnd(q, 'def'); allyEnd(q, 'hold'); allySay(q, p, 'cancel'); return ''; }
+  if (kind === 'hold') {
+    allyEnd(q, 'atk');
+    // Its own marches, raids and storms come home (not ground it holds for someone, nor a counter to a raid).
+    for (const r of S.rallies.slice()) if (r.owner === q && !(C.def && C.def.rid === r.id) && !(P.counters || []).some((c) => c.mine === r.id)) recallRally(r.id);
+    C.hold = { by: p, until: S.time + ALLY_CMD.holdFor };
+    allySay(q, p, 'hold', L.x + 0.5, L.y + 0.5);
+    return '';
+  }
+  if (kind === 'goods') {
+    const name = GOOD[g].name.toLowerCase(), have = spendable(q)[g] || 0;
+    const n = Math.min(ALLY_CMD.goodsMax, Math.floor((have - ALLY_CMD.keep) * ALLY_CMD.goodsShare));
+    if (n < ALLY_CMD.goodsMin) return no('noGoods', { g: name });
+    if (S.time < (P.allyGoodsAt || -1e9) + ALLY_CMD.goodsEvery) return no('wait');
+    const store = nearestStoreTo(p, L.x + 0.5, L.y + 0.5);
+    if (!store) return no('noStore');
+    takeGood(q, g, n);
+    const x = L.x + 0.5, y = L.y + 0.5, d = dist(x, y, store.x + 0.5, store.y + 0.5);
+    (S.allyShips || (S.allyShips = [])).push({ id: S.nextId++, from: q, to: p, g, n, x, y, sid: store.id, t0: S.time, at: S.time + clamp(d / ALLY_CMD.shipSpeed, ALLY_CMD.shipMin, ALLY_CMD.shipMax) });
+    P.allyGoodsAt = S.time;
+    allySay(q, p, 'goods', store.x, store.y, { n, g: goodN(g, n).toLowerCase(), b: BDEFS[store.type].name });
+    return '';
+  }
+  if (kind === 'help') { const h = allyHelpSpot(p); if (!h) return no('noGround'); i = h.i; j = h.j; }
+  const s = allySpot(q, i, j);
+  if (!s) return no('noGround');
+  const avail = rallyAvailable(q, s.i, s.j, true);
+  if (avail < ALLY_CMD.min) return no('noArmy');
+  const slot = kind === 'defend' ? 'def' : 'atk';
+  allyEnd(q, slot);
+  const want = kind === 'defend' ? clamp(Math.ceil(avail * ALLY_CMD.defendShare), ALLY_CMD.min, ALLY_CMD.defendMax) : Math.min(avail, ALLY_CMD.send);
+  const { sent, rally } = sendToRally(q, s.i, s.j, want, true, kind === 'help', true);
+  if (!sent) return no('noArmy');
+  rally.ally = p;
+  const t = tid ? getE(tid) : null;
+  if (t && !t.dead && BDEFS[t.type] && foes(t.owner, q)) { rally.target = t.id; rally.first = t.id; }
+  C[slot] = { k: kind, by: p, x: s.i, y: s.j, rid: rally.id, tid: t && BDEFS[t.type] ? t.id : 0, want, at: S.time, top: S.time, until: kind === 'defend' ? S.time + ALLY_CMD.defendFor : undefined };
+  allySay(q, p, kind, s.i + 0.5, s.j + 0.5);
+  return '';
+}
+
+/** Ally p keeps up its teammates' commands as it thinks: attacks end, held ground is topped up, a hold runs out. */
+function aiAllyCmds(p) {
+  const P = S.players[p], C = P.allyCmd;
+  if (!C) return;
+  const L = getE(P.lander);
+  if (C.atk) {
+    const c = C.atk, r = rallyById(c.rid), t = c.tid ? getE(c.tid) : null, down = !!c.tid && (!t || t.dead || !foes(t.owner, p));
+    if (down || !r) allyEnd(p, 'atk', down ? 'done' : 'back');
+    else if (S.time - c.at > aiMarchTime(L, r, c.k === 'help' ? ALLY_CMD.helpFor : ALLY_CMD.attackFor)) allyEnd(p, 'atk', 'back');
+  }
+  if (C.def) {
+    const c = C.def;
+    if (S.time > c.until) allyEnd(p, 'def', 'defendEnd');
+    else {
+      const have = rallyById(c.rid) ? rallyMembers(c.rid).length : 0;
+      if (have < Math.ceil(c.want / 2) && S.time - c.top > ALLY_CMD.topUp && rallyAvailable(p, c.x, c.y, true) >= 1) {
+        c.top = S.time;
+        const { sent, rally } = sendToRally(p, c.x, c.y, c.want - have, true, false, true);
+        if (sent) { rally.ally = c.by; c.rid = rally.id; }
+      }
+    }
+  }
+  if (C.hold && S.time >= C.hold.until) allyEnd(p, 'hold', 'holdEnd');
+}
+
+/** Goods on a supply run from an ally (S.allyShips) land in the storage they were sent to (or the nearest left). */
+function allyShipsTick() {
+  const left = [];
+  for (const s of S.allyShips) {
+    if (S.time < s.at) { left.push(s); continue; }
+    let b = getE(s.sid);
+    if (!b || b.dead || b.owner !== s.to) b = nearestStoreTo(s.to, s.x, s.y);
+    if (!b) continue; // (nowhere left to land: lost)
+    bump(b.stock, s.g, s.n);
+    allySay(s.from, s.to, 'arrived', b.x, b.y, { n: s.n, g: goodN(s.g, s.n).toLowerCase(), who: callsign(s.from), b: BDEFS[b.type].name });
+  }
+  S.allyShips = left;
 }

@@ -158,7 +158,7 @@ function drawGoodsPops(ctx, ox, oy, z) {
 /* ------------------------------------------------------------------ the ? on a panel */
 
 /** Panels that aren't about one building or robot, and the section each opens. */
-const PANEL_TOPICS = { army: 'hs-army', rally: 'hs-army', post: 'hs-trade', road: 'hs-roads', goods: 'hs-supply', pop: 'hs-bots', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony' };
+const PANEL_TOPICS = { ally: 'hs-ally', army: 'hs-army', rally: 'hs-army', post: 'hs-trade', road: 'hs-roads', goods: 'hs-supply', pop: 'hs-bots', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony' };
 /** Where a name's own section isn't the one that names it most. */
 const TOPIC_FIX = {
   lander: 'hs-start', outpost: 'hs-land', foundry: 'hs-bots', worker: 'hs-bots', hauler: 'hs-bots', repair: 'hs-defence', wall: 'hs-defence', gate: 'hs-defence',

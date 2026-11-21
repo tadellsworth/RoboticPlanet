@@ -2115,3 +2115,40 @@ function regionName(biome, cap) {
   const r = (BIOMES[biome] || BIOMES.desert).region || '';
   return cap ? r.charAt(0).toUpperCase() + r.slice(1) : r;
 }
+
+/*
+ * Commands for a computer ally (a team game: the Ally panel, Shift+A; orders.js allyCmd, ai.js allyCommand). Times in
+ * game seconds. An attack or Help me sends up to `send` warbots (at least `min` to spare, or it says no) and calls them
+ * home after attackFor / helpFor (more on a long march); Defend this area keeps `defendShare` of what it can spare
+ * (min to defendMax) on the spot for defendFor, topped up every topUp seconds when it's down to half; Hold back keeps
+ * its army home for holdFor. Ask for goods: a share of what it holds above `keep` (goodsMin to goodsMax), once every
+ * goodsEvery seconds per ally, on a supply run of shipSpeed tiles a second (shipMin to shipMax seconds) to your
+ * storage nearest its Command Base.
+ */
+const ALLY_CMD = {
+  min: 2, send: 20, attackFor: 150, helpFor: 120,
+  defendShare: 0.5, defendMax: 12, defendFor: 600, topUp: 30, holdFor: 600, reach: 4,
+  goodsShare: 0.3, goodsMin: 3, goodsMax: 40, keep: 15, goodsEvery: 60, shipSpeed: 2, shipMin: 15, shipMax: 90,
+};
+/** The commands (in the order of the panel) and the goods an ally can be asked for. */
+const ALLY_KINDS = ['attack', 'defend', 'help', 'hold', 'goods', 'cancel'];
+const ALLY_GOODS = ['cement', 'stone', 'fiber', 'ore', 'crystal', 'alloy', 'chip', 'ammo', 'fuel'];
+/** What a computer ally says back (its callsign before it, in the messages): terse, by the Accord's book. */
+const ALLY_SAYS = {
+  attack: 'Acknowledged. Moving on the marked position.',
+  defend: 'Acknowledged. Holding the marked ground.',
+  help: 'Acknowledged. Warbots en route to you.',
+  hold: 'Acknowledged. Holding at home.',
+  cancel: 'Acknowledged. Resuming our own plan.',
+  goods: 'Acknowledged. {n} {g} on a supply run to your {b}.',
+  noArmy: 'Negative: no warbots to spare.',
+  noGround: 'Negative: our warbots cannot reach that ground.',
+  noGoods: 'Negative: no {g} to spare.',
+  noStore: 'Negative: you have no storage to receive it.',
+  wait: 'Negative: the last supply run is still on its way.',
+  done: 'Strike complete. Resuming our own plan.',
+  back: 'Withdrawing. Resuming our own plan.',
+  defendEnd: 'Standing down from the marked ground.',
+  holdEnd: 'Hold-back over. Resuming our own plan.',
+  arrived: '{n} {g} from {who} arrived at your {b}.',
+};

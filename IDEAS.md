@@ -547,8 +547,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
     of a Worker: Workers saved in a big late colony.
 - **Approved for later (the owner, Nov 20 2026).** On record, none started:
-  - **Commands for an AI teammate** in team games: attack here, defend this area, help me, hold back, ask for goods.
-    Design it with the owner first.
+  - **Commands for an AI teammate** (done, Nov 21 2026: the Ally panel, `js/ally.js`, order `allyCmd`): attack here,
+    defend this area, help me, hold back, ask for goods, back to its own plan. Still open for the owner: whether goods
+    should travel by real trucks on the roads (today a supply run crosses the map on a timer), a Missions goal for it
+    once there is a team mission, and whether an ally should ever ask you for help or goods in return.
   - **A Research Lab for Versus** (Colony only today).
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
