@@ -21,6 +21,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
 - **Next after the current batch (the owner, Nov 21 2026):**
   1. Design the new top-tier Murmur unit (the behemoth in the Murmur rework notes): a design sheet first.
+     **The owner chose the Harrow (Nov 21)**, the walking siege mound, with Scuttlers in its spine and a cave-in
+     crater when it comes up (design/behemoth on the behemoth-design branch). Being built into the game.
      The owner (Nov 21): the biggest and scariest-looking Murmur form, and the most powerful thing on the map:
      almost an endgame unit, which only a real army can bring down. **On the Hollow (the owner, Nov 21):** when the
      Deep's mound is almost destroyed, two burst out of it: one heads north and one south, one for each colony (one per
