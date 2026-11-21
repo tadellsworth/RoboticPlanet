@@ -56,6 +56,45 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Mass Driver sound (BUILT, Nov 21 2026: a deep charging hum, a crack and thump, a falling rush of air):** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
+## Contingency: a repeatable planet-conquest campaign (the owner's idea, Nov 21 2026)
+
+A second campaign, apart from the Main Campaign and replayable: conquer Ithaca I region by region, as in Galactic
+Conquest from Star Wars Battlefront II (the inspiration only; the name and look are ours). In the lore, the vanguards'
+sealed contingency orders said "secure Ithaca I for us"; each run plays those orders out as a fresh what-if.
+Comes on the roadmap after the Main Campaign.
+
+**Decided (the owner, Nov 21):** the name is **Contingency**; the planet map is **turn-based**; battles are
+**shorter** than a free game (about 15 to 25 minutes); **auto-resolve** is allowed for any battle.
+**Open:** factions. Either the four vanguard callsigns, each with a small perk from its Sponsor (COBALT cheaper and
+faster roads; VERMILION more Ore and Alloy; VIRIDIAN better Bio Farms and Agribots; TYRIAN better Trade Post rates),
+or those callsigns plus a choice among the rival doctrines. Also open: whether fleets on the map can be intercepted
+before they land, and whether a run ends on a fixed turn count.
+
+The design so far:
+- **The planet map:** the turning Ithaca I from the menu (js/menuplanet.js), reused as a globe you spin. It is cut
+  into about 20 to 30 territories grouped by the LORE.md regions: the Rust, Greenreach, Emberwood, the Long Grass,
+  Blackwater, the Polar Caps, Cinderlands, Steamwells, the Bloom and the Shoals. **Argos** is a front of its own,
+  reached from orbit, and the only ground with no Murmur. **The Shoals** are reached only by sea or air, so a coastal
+  Port territory is needed first. Each vanguard starts with a home territory.
+- **Turns:** every side moves its landing forces (Command Groups dropped from its Carrier) one territory at a time.
+  Moving into an enemy's territory starts a battle: a normal Terrafall match whose biome, map shape and size come from
+  that territory. Rivals attack you too, and you defend in a real match. Any battle can be auto-resolved.
+- **Territories pay:** each one adds supply to your Carrier between battles (the Rust Ore, Greenreach Fiber,
+  Steamwells Fuel, strike sites Crystal). Special places: the **Uplinks** (hold most of them to win), **Arrival City**,
+  **the Pathfinder's landing site** (a unique bonus), and the **Trade Posts** (neutral; nobody can take them). Fortified
+  territories keep some walls and turrets: the next battle there starts with them built.
+- **Between battles:** the Carrier's reserve stock buys upgrades (extra starting units, a second Command Base,
+  research done ahead) and one-use cards: an **orbital drop** (reinforcements mid-battle), a **called ringfall**
+  (a strike from the Ring), an **Accord ledger deal** (a cheap trade at a Trade Post), and a **Corvane flare** (enemy
+  batteries drain).
+- **The Murmur:** spread out from the Bloom and the Hollow between turns into territories nobody guards. Any vanguard
+  can push them back. Late in a run, an assault on the Hollow can be an optional major battle that pushes the Murmur
+  back for good.
+- **Winning:** hold most of the Uplinks for a set number of turns, or take every rival's home territory.
+- **Every run differs:** territory layout and resources are shuffled, rival doctrines are random, planet events come
+  (a ringfall season, a flare year), and difficulty runs from Settler to Warlord. A run is about 3 to 6 hours, saved
+  between battles. Later: 2 to 4 players on the same planet map, as allies or against each other.
+
 ## Polish round 1 (built Nov 21 2026; open questions)
 
 Camera spots (Shift+F1–F4 / F1–F4, minimap pips), J stepping back through recent alerts, each good's net change a
