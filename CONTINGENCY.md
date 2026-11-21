@@ -90,7 +90,7 @@ Each battle is a normal Terrafall match built from its territory. **(owner: shor
 
 - **The map.** The biome is the territory's region. The map shape comes from a short list for that region (the Rust:
   Open, Crater or Canyon Maze; Blackwater: River Delta or Lakes; the Shoals: Islands; Cinderlands: Volcano or Fault
-  Line; and so on). Battles are played Small or Medium. Each battle's seed is fixed by the run, so loading a save
+  Line; and so on). Battles are played Small or Medium; a home territory is fought on a Large map, with a 35-minute cap (owner, Nov 21). Each battle's seed is fixed by the run, so loading a save
   replays the same map.
 - **Who's in it.** Usually 1 vs 1. If two rivals both move into a territory you hold, you fight a three-way battle.
   An ally's Command Group in a neighboring territory can join as your teammate (see Truces and alliances).
@@ -319,5 +319,4 @@ in orders and seeded state from the start so that this is possible later.
 
 Decided: callsigns with a perk and their own card, plus random rival doctrines; orders revealed together with no
 interception; the T+31 window; truces and alliances in the first build.
-Still open: battle size. The plan is Small and Medium only, to keep battles to 15 to 25 minutes. Should home
-territories be Large?
+Battle size: Small or Medium, and Large for home territories (35-minute cap). Nothing is open.
