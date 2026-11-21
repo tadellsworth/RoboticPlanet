@@ -18,7 +18,7 @@ shown as zero.
 
 ## Factions
 
-**Recommended [open]:** you pick one of the four vanguard callsigns, and that gives you a perk and one card only your
+**Decided (owner, Nov 21):** you pick one of the four vanguard callsigns, and that gives you a perk and one card only your
 callsign has. Each of the other three callsigns gets a random rival doctrine, shown on the globe, or you can set them
 in Advanced. Doctrine also decides how each rival plays the globe (see Rival AI). The two ideas in IDEAS combine
 cleanly this way: a callsign says who sent you, and a doctrine says how a rival thinks.
@@ -64,7 +64,7 @@ Each turn runs in this order:
 1. **Income.** You get Reserve (the Carrier's stock) from every territory you hold.
 2. **Spend.** You can buy a Command Group, fortify a territory, buy refits (permanent upgrades) or buy cards.
 3. **Orders.** You move each Command Group one border at a time. All sides give orders together and reveal them at
-   once; no fleets are intercepted mid-move **[open]**. A Command Group can move to Argos only from a territory with
+   once; no fleets are intercepted mid-move **(owner)**. A Command Group can move to Argos only from a territory with
    orbital launch: the Pathfinder's site or a built Orbital Lift. The Shoals can only be entered from a coastal
    territory.
 4. **Battles.** Every contested territory gets a battle. You choose for each one: **Play** or **Auto-resolve**
@@ -93,7 +93,7 @@ Each battle is a normal Terrafall match built from its territory. **(owner: shor
   Line; and so on). Battles are played Small or Medium. Each battle's seed is fixed by the run, so loading a save
   replays the same map.
 - **Who's in it.** Usually 1 vs 1. If two rivals both move into a territory you hold, you fight a three-way battle.
-  An ally's Command Group in a neighboring territory can join as your teammate **[open: alliances]**.
+  An ally's Command Group in a neighboring territory can join as your teammate (see Truces and alliances).
 - **The kit.** Each side lands with a kit sized by its rank, in the style of the missions' starting kits:
   - goods: 1 star is a basic stock, and 5 stars is about a 10-minute colony's worth;
   - warbots: 4 at 1 star, up to 14 at 5 stars;
@@ -211,6 +211,7 @@ the next battle in that territory starts with it already built.
 - **The last turn, T+31:** if no one has won by turn 30, the year's report opens **the window**: a last turn in which
   every Uplink territory is fought over. Whoever then holds the most Uplinks wins. A tie goes to whoever holds the
   most territory. This caps a run at about 3 to 6 hours **(owner)**.
+- **The T+31 window is decided (owner, Nov 21).**
 - **Losing:** you lose when you have no Command Group left and no Reserve to buy one. The report reads: "Reserve
   exhausted. Carrier dark."
 - **The win screen:**
@@ -228,12 +229,35 @@ Each rival's doctrine decides how it moves:
 | Herald | Attacks every turn, aims at your nearest territory, ignores the Murmur |
 | Warden | Fortifies to level 3 and attacks only where it's sure, holds Uplinks hard |
 | Salvager | Hits weakly guarded resource territories, buys cards and Silent Running |
-| Steward | Goes for Uplinks, clears the Murmur, and offers you a truce when you're stronger **[open: truces]** |
+| Steward | Goes for Uplinks, clears the Murmur, and offers you a truce when you're stronger |
 | Architect | Builds megastructures, wants Passenger Town (Arrival City), and goes nuclear late (Called Ringfall + Lance) |
 
 Difficulty runs from Settler to Warlord **(owner)**. It sets the battle AI, as in a normal match, plus the rivals'
 income on the globe (×0.8 to ×1.3). Advanced options: rival doctrines, the Murmur (off, normal, rampant), events on
 or off, the turn cap on or off, and a fixed run seed.
+
+## Truces and alliances (owner, Nov 21: in the first build)
+
+- **Offers.** In the Spend phase, a rival may offer a truce, or you can offer one from a rival's card. A truce lasts 5
+  turns. During a truce, neither side moves into the other's territory, and you share a border in peace.
+- **Who agrees:**
+
+  | Doctrine | Truces |
+  | --- | --- |
+  | Steward | Offers one when you're clearly stronger, or when the Murmur meter is high; quotes Accord clauses |
+  | Warden | Accepts if you don't border its home |
+  | Architect | Accepts only for a price in Reserve |
+  | Salvager | Takes your Reserve and may break the truce |
+  | Herald | Never agrees: "Arrival in one day. No delay authorised." |
+
+- **Alliance.** A truce kept for 5 turns can become an alliance for the run. Allied Command Groups in a neighboring
+  territory join each other's battles as teammates, and allied Uplinks count together toward the Uplink win.
+  - Only one alliance at a time.
+  - Two allies can't win together: once one Uplink win is near, the alliance ends with a year's notice.
+- **Breaking a truce.** Your Command Groups lose a star in morale, and every rival with a truce trusts you less (no
+  offers for 5 turns). The report logs it: "Truce breach logged for review by the Accord tribunal."
+- **Building it:** stage 7, with the rest of the doctrine writing; the engine (stage 1) keeps truce state from the
+  start.
 
 ## Saving
 
@@ -291,11 +315,9 @@ Each stage gets tested and shipped to `main` before the next starts.
 **Later:** 2 to 4 players on the same globe, as allies or against each other **(owner)**. The engine keeps everything
 in orders and seeded state from the start so that this is possible later.
 
-## Open for the owner
+## Decided Nov 21, and still open
 
-1. **Factions:** callsign with a perk and its own card, plus random rival doctrines (recommended)? Or callsigns only?
-2. **Fleet interception:** simultaneous orders with no interception (recommended, simpler and fair), or groups that
-   meet on a border fight there?
-3. **Turn cap:** the T+31 window (recommended, ties the run to the lore's clock), or no cap?
-4. **Truces/alliances** with rivals on the globe (the Steward offering one): yes, later, or never?
-5. **Battle size:** Small and Medium only (recommended for 15 to 25 minutes), or Large for home territories?
+Decided: callsigns with a perk and their own card, plus random rival doctrines; orders revealed together with no
+interception; the T+31 window; truces and alliances in the first build.
+Still open: battle size. The plan is Small and Medium only, to keep battles to 15 to 25 minutes. Should home
+territories be Large?
