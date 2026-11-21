@@ -74,7 +74,7 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade harbour skyline airlift mooring bughunt hollow forms livefire border holdline keepstime supply convoy siege chain lance hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring bughunt hollow forms livefire border holdline keepstime supply convoy siege chain lance hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 

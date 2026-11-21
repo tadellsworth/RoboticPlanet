@@ -1727,6 +1727,25 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 29: the Deep Core (installed)
+
+The owner's look **A** from the megastructure design sheet (Nov 21 2026), the "Headframe". Rendered with
+`renderer/b/deepcore.js` at every time of day for both teams by `renderer/tools/render_deepcore.sh`;
+`renderer/tools/install_deepcore.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Deep Core").
+Framed like the Lift (`DEEP_FRAME`), sized to stand with the other 3 × 3 megastructures: its tower is the tallest thing
+on the pad, as tall on screen as the Lift's cable stub and twice the Uplink's dish. What moves and what tells its depth
+is drawn in code, so it reads at any zoom. Flavor: "Core sample rig, rated to 40 kilometres. The survey filed the lower
+readings as instrument error."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `deepcore@0`, `deepcore@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad; a raised concrete shaft collar with a hazard-ringed dark square shaft and its cage guides; a red steel lattice winding tower (four legs braced in X's) rising to a sheave deck with a team-colour fascia and a railing, two raking back legs down to the winding house; floodlights on the deck aimed at the wheels (white at dusk and night) and a red beacon; the ropes from the wheels into the shaft and to the winding house, a long white shed with a hipped roof, a team band under its eaves, a lit window band at night; a skip bin on the tower and a covered conveyor down to three hoppers (rust ORE, violet CRY, green U, labelled, team-colour rims) with chutes where Haulers load; the depth gauge, a grey cabinet with three dark lamp sockets; a spoil heap of broken rock in the north-west corner; a fuel line and crates. No wheels: the game draws them | `drawDeep` |
+| `deepcore-work-0`…`deepcore-work-7` (day only, graded for the time of day; no team colour, one set for every team) | The two spoked red winding wheels alone (six spokes, a pale tab on the rim so the turning reads), frame k turned k/8 of 60 degrees, the left one way and the right the other; every other surface depth only | `drawDeep`: 8 frames a second while it works, held where they stopped when it doesn't (`DEEP_WHEEL`) |
+| (code) | The shaft's glow | `deepLights` (`DEEP_MARKS.shaft`): from stage 2 a violet pool in the shaft's mouth and a column of violet light rising out of it, pulsing slowly; at stage 3 bigger, brighter and quicker; faint by day, full at night (`deepGlow`); its light pool on the ground at night too |
+| (code) | The gauge | three violet lamps at `DEEP_MARKS.g1`…`g3`, one lit per stage, the next blinking while it works toward it |
+| (code) | Floodlit wheels | soft white light over `wheelL` and `wheelR` at dusk and night (dark when the Murmur cut it) |
+| (code) | Under construction | the generic megastructure site (`drawMegaSite`): the tower rising out of its dashed footprint as the work goes on |
+
 ### Batch 28: the Great Uplink (installed)
 
 The owner's look **A** from the design sheet (Nov 20 2026), the "Dish Array". Rendered with `renderer/b/gup.js` at every

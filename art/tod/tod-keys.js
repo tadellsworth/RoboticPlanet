@@ -23,5 +23,7 @@ for (const t of [0, 1]) TOD_KEYS.push(`gup@${t}`, `gup-down@${t}`);
 for (const t of [0, 1]) TOD_KEYS.push(`sunder@${t}`, `sunder-site1@${t}`, `sunder-site2@${t}`);
 for (const w of ['w', 'e']) for (let e = 0; e < 3; e++) TOD_KEYS.push(`sunder-ram-${w}-${e}`);
 for (let k = 0; k < 6; k++) for (let e = 0; e < 2; e++) TOD_KEYS.push(`sunder-plate-${k}-${e}`);
+// The Deep Core (renderer/tools/install_deepcore.py): the tower and its yard (its wheels, one set, are graded in code).
+for (const t of [0, 1]) TOD_KEYS.push(`deepcore@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);

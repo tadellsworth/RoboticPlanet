@@ -66,7 +66,8 @@ const MD_FRAME = { scale: 2.4789, anchor: [0.5, 0.57] }; // (the Mass Driver's w
 const LANCE_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }, DOME_FRAME = { scale: 2.9904, anchor: [0.5, 0.6] }; // (the megastructures' wide frames: see tools/install_lance.py)
 const CITY_FRAME = { scale: 6.5789, anchor: [0.5, 0.6] }; // (Arrival City's wide frame: see tools/install_city.py)
 const LIFT_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Orbital Lift's wide frame, as the Lance's: see tools/install_lift.py)
-const GUP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (the Great Uplink's wide frame, as the Lift's: see tools/install_gup.py)
+const GUP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] };
+const DEEP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (the Deep Core's wide frame, as the Uplink's: see tools/install_deepcore.py) // (the Great Uplink's wide frame, as the Lift's: see tools/install_gup.py)
 const SUNDER_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Sundering Ray's wide frame, as the Lance's: see tools/install_sunder.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
@@ -268,6 +269,11 @@ const ART_MANIFEST = {
   ...Object.fromEntries([0, 1].flatMap((t) => ['sunder', 'sunder-site1', 'sunder-site2'].map((k) => [`${k}@${t}`, { src: `buildings/${k}@${t}.webp`, ...SUNDER_FRAME }]))),
   ...Object.fromEntries(['w', 'e'].flatMap((w) => [0, 1, 2].map((e) => [`sunder-ram-${w}-${e}`, { src: `buildings/sunder-ram-${w}-${e}.webp`, ...SUNDER_FRAME }]))),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5].flatMap((k) => [0, 1].map((e) => [`sunder-plate-${k}-${e}`, { src: `buildings/sunder-plate-${k}-${e}.webp`, ...SUNDER_FRAME }]))),
+  // The Deep Core (renderer/b/deepcore.js, the owner's look A, the Headframe, installed by tools/install_deepcore.py): the
+  // tower and its yard without the wheels (deepcore@T, every time of day), and the two wheels turning, 8 frames through
+  // 60 degrees (deepcore-work-K, one set for every team), drawn over it by drawDeep; the shaft's glow and the gauge in code.
+  ...Object.fromEntries([0, 1].map((t) => [`deepcore@${t}`, { src: `buildings/deepcore@${t}.webp`, ...DEEP_FRAME }])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, k) => [`deepcore-work-${k}`, { src: `buildings/deepcore-work-${k}.webp`, ...DEEP_FRAME }])),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

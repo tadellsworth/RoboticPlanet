@@ -3074,6 +3074,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
   if (type === 'sunder') { drawSunder(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'deepcore') { drawDeep(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6675,6 +6676,7 @@ function render(dtReal) {
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
       if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
+      if (e.type === 'deepcore' && e.built) { const ga0 = ctx.globalAlpha, M = DEEP_MARKS, gk = deepGlow(e.dcStage || 1); ctx.globalAlpha = ga0 * 0.5; pool(ox + pc.x * z, oy + (pc.y - 0.3) * z, z * 2.2, '#f4f8ff'); if (gk > 0) { ctx.globalAlpha = ga0 * gk; pool(ox + (pc.x + M.shaft[0]) * z, oy + (pc.y + M.shaft[1]) * z, z * 1.8, '#a46cff'); } ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Deep Core: its floods, and the violet of its shaft as deep as it is)
       if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : (e.type === 'lance' && e.lOn) || (e.type === 'sunder' && e.sOn) ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
@@ -10686,6 +10688,73 @@ function drawLift(ctx, cx, cy, s, owner, b) {
 }
 
 /*
+ * The Deep Core (the owner's look A, the Headframe): its pad and winding tower (deepcore@T), and over it the two winding
+ * wheels (deepcore-work-0…7, through 60 degrees: six spokes), turning while it works and standing where they stopped
+ * when it doesn't. In code: the violet glow rising out of the shaft once it reaches the buried ringfall (stage 2),
+ * brighter and pulsing at stage 3, faint by day and strong at night (you can see from across the map how deep it is, and
+ * so can the Murmur); the gauge's three lamps, lit one per stage; the floodlit wheels at night. A stub (the build menu,
+ * a site's ghost) is drawn whole, its wheels still and its shaft dark.
+ */
+/** Where the Deep Core's parts are on screen, in tiles from its square's middle (tools/install_deepcore.py prints them). */
+const DEEP_MARKS = { shaft: [-0.235, -0.24], wheelL: [-0.524, -1.501], wheelR: [-0.011, -1.501], beacon: [-0.264, -1.627], g1: [0.775, 0.72], g2: [0.779, 0.683], g3: [0.782, 0.644] };
+const DEEP_WHEEL = new Map(); // (each Core's wheel frame where it stopped: looks only)
+function drawDeep(ctx, cx, cy, s, owner, b) {
+  const art = artFor('deepcore', owner);
+  if (!art) { drawMegaPlain(ctx, 'deepcore', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+  const live = !!(b && b.id && b.built);
+  let f = 0;
+  if (live) {
+    if (DEEP_WHEEL.size > 64) DEEP_WHEEL.clear();
+    f = b.working ? Math.floor(R.time * 8) % 8 : DEEP_WHEEL.get(b.id) || 0;
+    DEEP_WHEEL.set(b.id, f);
+  }
+  const w = ART['deepcore-work-' + f];
+  if (w) drawArt(ctx, w, cx, cy, s);
+  if (live) deepLights(ctx, b, cx, cy, s);
+}
+/** How strongly the Deep Core's shaft glows at stage st now (0 at bedrock): faint by day, full at night. */
+function deepGlow(st) {
+  if (st < 2) return 0;
+  const night = TOD.active ? Math.min(1, TOD.state.lights || 0) : 0;
+  return (st >= 3 ? 1 : 0.55) * (0.3 + 0.7 * night);
+}
+function deepLights(ctx, b, cx, cy, s) {
+  if (R.inMap) return;
+  const st = b.dcStage || 1, M = DEEP_MARKS, P = (k) => [cx + M[k][0] * s, cy + M[k][1] * s];
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // the shaft: a violet pool in its mouth and a column of light rising out of it, pulsing slowly (faster at stage 3)
+  const k = deepGlow(st) * (gfx().fx < 1 ? 1 : 0.85 + 0.15 * Math.sin(R.time * (st >= 3 ? 2.2 : 1.1) + b.id));
+  if (k > 0.01) {
+    const [x, y] = P('shaft'), r = s * (st >= 3 ? 0.42 : 0.32);
+    let g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(214,170,255,${0.9 * k})`); g.addColorStop(0.35, `rgba(160,96,255,${0.55 * k})`); g.addColorStop(1, 'rgba(110,50,220,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    const h = s * (st >= 3 ? 2.2 : 1.5), cw = s * (st >= 3 ? 0.2 : 0.14);
+    g = ctx.createLinearGradient(x, y, x, y - h);
+    g.addColorStop(0, `rgba(176,120,255,${0.5 * k})`); g.addColorStop(0.5, `rgba(140,80,255,${0.18 * k})`); g.addColorStop(1, 'rgba(120,60,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - cw, y); ctx.lineTo(x - cw * 0.5, y - h); ctx.lineTo(x + cw * 0.5, y - h); ctx.lineTo(x + cw, y); ctx.closePath(); ctx.fill();
+  }
+  // the gauge: a lamp lit for each stage reached (the next one blinking while it works toward it)
+  for (let n = 1; n <= 3; n++) {
+    const [x, y] = P('g' + n), on = n <= st ? 1 : n === st + 1 && b.working ? (Math.sin(R.time * 5) > 0.6 ? 0.35 : 0) : 0;
+    if (!on) continue;
+    const r = Math.max(1, s * 0.03), g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    g.addColorStop(0, `rgba(230,200,255,${on})`); g.addColorStop(0.3, `rgba(170,110,255,${0.8 * on})`); g.addColorStop(1, 'rgba(140,80,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+  }
+  // the floodlit wheels at night (dark while the Murmur cut it, or in a blackout)
+  const lit = TOD.active ? Math.max(0, Math.min(1, ((TOD.state.lights || 0) - 0.2) / 0.5)) : 0;
+  if (lit > 0.01 && !nightDark(b)) for (const m of ['wheelL', 'wheelR']) {
+    const [x, y] = P(m), r = s * 0.75, g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(240,244,255,${0.22 * lit})`); g.addColorStop(1, 'rgba(240,244,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/*
  * The Great Uplink (the owner's look A, the Dish Array): its pad (gup@T, battle-damaged below 30%: gup-down@T), and in
  * code (drawGupSignals) its signal: red lights blinking round the dish's rim at night; while it transmits, a glow in its
  * owner's colour swelling in the bowl with each pulse (GUP.pulse s), a pale beam rising straight up the screen from the
@@ -10992,6 +11061,11 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
     ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#41464c'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.35, s * 0.15, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'deepcore') { // (a red winding tower over a dark shaft, two wheels at its top)
+    ctx.fillStyle = '#16121c'; ctx.fillRect(cx - s * 0.35, cy - s * 0.25, s * 0.7, s * 0.5);
+    ctx.strokeStyle = '#a8342a'; ctx.lineWidth = Math.max(1.5, s * 0.1);
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.5, cy + s * 0.2); ctx.lineTo(cx - s * 0.3, cy - s * 1.6); ctx.lineTo(cx + s * 0.3, cy - s * 1.6); ctx.lineTo(cx + s * 0.5, cy + s * 0.2); ctx.stroke();
+    for (const dx of [-0.32, 0.32]) { ctx.beginPath(); ctx.arc(cx + dx * s, cy - s * 1.7, s * 0.28, 0, Math.PI * 2); ctx.stroke(); }
   } else if (type === 'lift') { // (an eight-sided collar where the cable is clamped)
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2; ctx.lineTo(cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.7); } ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#e8eef5'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();

@@ -1052,6 +1052,50 @@ const MISSIONS = [
     ],
   },
 
+  // The Deep Core (the megastructure sheet's mission idea, Nov 2026): an old planet whose veins are nearly dug out. The
+  // Core goes deeper while it has power and never runs dry, and every depth is heard below: a bigger raid the night
+  // after stage 2 (Quiet, so a first taste of the Murmur, with four warbots for it).
+  {
+    id: 'dryground', name: 'Dry Ground', chapter: 'Industry and Trade',
+    brief: 'An old landing site, its veins nearly dug out. Sink a Deep Core: it brings up Ore and Crystal that never run dry, but the ground hears it.',
+    intro: [
+      'The <b>Deep Core</b> (Build, Mega, <kbd>E</kbd>) needs a <b>Generator</b> with Fuel within 4 tiles: it takes a Fuel a minute.',
+      'It goes deeper while it has power. Stage 1: 6 Ore a minute. After 6 minutes, stage 2: 8 Ore and 3 Crystal.',
+      'Its hoppers hold 30 of each; lay a road to it and Haulers carry them off. It never runs dry.',
+      'The <b>Murmur</b> live below: at night they come up to raid, and every depth the Core reaches is heard.',
+      'The night after stage 2 a bigger raid comes for it. You have 4 <b>warbots</b>: stand them by it at dusk.',
+    ],
+    mode: 'colony', seed: 4417, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, mega: true, war: true, murmur: 'quiet', limit: [0, 0, 40],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const P = S.players[0], L = getE(P.lander);
+      // The veins are nearly gone: a dig or two left in each.
+      for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_ORE && S.amt[t] > 2) S.amt[t] = 2;
+      L.stock.cement += 70; L.stock.alloy += 45; L.stock.chip += 22; L.stock.crystal += 12; L.stock.fuel += 20; // (the Core's and its Generator's)
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generator's Fuel)
+      for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 30;
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'deepcore', n: 1,
+        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>), then <b>Mega</b> (<kbd>6</kbd>) → <b>Deep Core</b> (<kbd>E</kbd>) within 4 tiles.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='deepcore'], .bcard[data-t='generator']" },
+      { kind: 'deepStage', n: 2, text: 'Reach stage 2 of the Deep Core, the buried ringfall', at: 'deepcore',
+        count: (P) => P.stats.deepStage || 0,
+        hint: 'Keep its Generator fed (a Tanker brings Fuel): 6 minutes of power. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
+        ui: '#btn-speed' },
+      { kind: 'deepCrystal', n: [12, 20, 30], text: 'Bring up {n} Crystal from the Deep Core', at: 'deepcore',
+        count: (P) => P.stats.deepCrystal || 0,
+        hint: 'Tap the Core → <b>Lay road</b> (<kbd>R</kbd>) to storage: Haulers empty its hoppers, so they never fill up.',
+        ui: '#sh-layroad, #btn-speed' },
+      { kind: 'deepHeld', n: 1, text: 'Keep the Deep Core standing through the night the Murmur come for it', at: 'deepcore',
+        count: (P) => P.stats.deepHeld || 0,
+        hint: 'At dusk, <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the Core, and a <b>Pulse Turret</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).',
+        ui: "#btn-attack, #ar-hold, .bcard[data-t='turret']" },
+    ],
+  },
+
   // Chapter 5, Sea and Sky. Ports and ships between islands, Viaducts and Ropeways between mesas, a Crawler and an airlift.
   {
     id: 'harbour', name: 'Harbour', chapter: 'Sea and Sky',
