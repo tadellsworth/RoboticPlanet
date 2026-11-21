@@ -1929,6 +1929,13 @@ the glows and the light column are drawn (`RADFX.stack`, `RADFX.dome`).
 - Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
 
 
+### Deer and wildebeest
+
+The Greenreach and Emberwood deer use white-tailed deer proportions, with a slender neck,
+tapered face, pale underside to the tail and antlers on some adults. Long Grass wildebeest
+have a deeper chest, a back that slopes toward the rump, a dark mane and short shoulder bands.
+Both use jointed legs for their walk and run. Their horns, antlers and coats follow the scene lighting.
+
 ### Steamwells (geothermal basin)
 
 Steamwells uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
@@ -1936,6 +1943,8 @@ terraces have bright carbonate lips and darker seams, with the same upper-left l
 other terrain. The 512 px textures tile seamlessly. The six centered transparent scenery sprites
 show baths, stacked pools, a geyser cone, a dry sulfur shelf and vents. The geyser and vents use
 the same tile offsets for their animated steam. The Sky islands use layered limestone canyon art.
+The bison are drawn in `js/wildlife.js` with a tall shoulder hump, a low bearded head and short
+upswept horns. Those shapes carry the silhouette at game zoom. The fur accents appear only closer in.
 
 Regenerate the WebP set with
 `python renderer/terrain/terrain_springs.py art/biomes/springs` using the renderer's Python environment.
@@ -1958,5 +1967,37 @@ Generate the Shoals' (tropical) WebP assets with
 
 Deer have a high, slender neck, articulated legs, pale rump and occasional branching antlers. Wildebeest have
 a heavy shoulder, lower rump, mane, hooked horns and dark hooves. The game draws these shapes and their gait
-from `js/wildlife.js`. Blackwater adds plated alligator backs and domed turtle shells. The Bloom uses folding
-shell plates, vane-headed runners and triangular sailwings in place of the drifting bells.
+from `js/wildlife.js`. Blackwater alligators have low olive bodies, broad rounded snouts, paired rows of
+raised scutes and muscular tails. Short legs and splayed feet carry each step. The Bloom’s fauna shares
+dark plum plates, warm amber eyes and soft rose highlights. Six-legged hinge-backs open overlapping
+plates along a warm seam. Switchtails balance on hooked feet with two flexing tails and raised sensory vanes.
+Sailwings bank on ribbed membranes around a narrow body. The hinge-back also uses this art in the Hollow.
+The Hollow’s sailwing has a pale body, a thin line of cartilage and translucent violet membranes with
+scalloped edges. Its blind crawler has overlapping bone-colored plates, hooked legs and long feelers.
+Shoals crabs have red shells, broad pincers and four pairs of walking legs. Their body faces across
+the direction of travel during a sidestep.
+Red foxes have dark shins, sharp ears and a long white-tipped brush. Arctic foxes have a deeper coat,
+shorter muzzles and rounded ears. Geese carry a white cheek patch in both poses, with a long neck stretched
+forward in flight and a widening wake on the water. Turtle shells have a domed profile, a pale rim and
+separate scutes. Cinderlands ash beetles have six legs and a warm seam between dark wing cases. Ember moths
+have charcoal forewings, rust-colored hindwings and bright bands that flicker as they flap.
+
+Blackwater herons fold an S-shaped neck while wading and extend it in a fishing strike. In flight,
+the neck tucks in and the feet trail behind broad wings. Woodland owls have feather tufts and darker
+facial discs. Snowy owls have round heads and barred pale feathers. Both use the same positions for
+their eyes and eyeshine as they scan. Rock lizards have a low, sand-colored body, splayed toes and
+a tapering tail that swings through their darting gait.
+
+The dolphin’s pitch follows its leap, with a swept dorsal fin, moving flukes and a splash fixed
+where it reenters the water. Gulls have gray mantles, black primaries and white wingtip spots.
+They bank while flying and pull their wings in as they approach the ground. Hares alternate a
+crouched body and a long bound. Dry-biome hares have sandy coats. Polar hares keep white coats.
+
+Dusk bats have dark brown bodies and scalloped membranes stretched along visible wing fingers.
+Each bat varies its wingbeat and banks into turns. The wings compress asymmetrically during a
+bank, so the motion reads at game scale.
+
+Soaring birds have species-specific profiles in `SOARING_BIRDS`. Hawks have broad wings and a broad
+rust-colored fan. Vultures rock gently on long, fingered wings. Crows beat more often and spread a
+rounded fan, while ravens coast longer between beats and show a wedge tail. Both the flight and shadow
+draws use the same outlines.

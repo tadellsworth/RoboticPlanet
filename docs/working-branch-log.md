@@ -248,3 +248,48 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Fixed neutral site placement and Trade Post deposit relocation on Long Haul 2v2, Crossroads and the other exact-symmetry Versus layouts. Placement now works in complete sets of corresponding tiles. A cramped layout can still have one shared neutral site, such as the central relay on Four Isles.
 - Superseded when merged with the Trade Post clearing fix: the posts and Uplinks keep their original placement (Long Haul 2v2's centre post and half-turn pairs, the middle Uplink), and only the clearing keeps the symmetry, moving each deposit with its twins (`clearCalmGround`). The site checks in the map test follow those layouts.
 - Added a map regression test for every supported size and player count. It checks deterministic rebuilds, mixed biomes and Ring drizzle on the target maps, and accounts for the deliberately richer spare corner on three-player quarter maps.
+
+### Bison, deer and wildebeest redraws
+
+- Gave Steamwells bison, the forest deer and Long Grass wildebeest distinct anatomy, walk and run cycles, and grazing poses. Refined the deer's grazing neck after reviewing the enlarged comparison.
+- Checked head-up and grazing poses and the herd silhouettes at game scale in Chromium. Updated the art guide and README.
+
+### Blackwater and Bloom wildlife redraws
+
+- Gave Blackwater alligators a broad snout, raised scutes, articulated feet and a flexing tail.
+- Redrew the Bloom’s hinge-back, switchtail and sailwing around shared plum plates and amber eyes. Each has a distinct gait or flight silhouette.
+- Checked the new renderers in Blackwater, the Bloom and the Hollow in Chromium. Verified the sailwing’s shadow and compared the before and after art at game scale.
+
+### Shoals crabs and Hollow wildlife
+
+- Added red shore crabs with pincers and a sideways walk. Small groups stick to open ground along the Shoals’ beaches.
+- Redrew the Hollow’s blind crawler and gave its cave sailwing a dedicated model. The Hollow still uses the existing hinge-back.
+- Verified crabs spawning and moving along a generated Shoals beach in Chromium. Checked the Hollow sprites at game scale and the cave sailwing’s shadow.
+
+### Foxes, geese, turtles and Cinderlands insects
+
+- Redrew red and Arctic foxes with distinct ear, muzzle and coat proportions. Updated geese on the water and in migrating flocks, and gave turtles a domed shell with distinct scutes and rim.
+- Redrew the ember moth with patterned forewings and hindwings, and the ash beetle with six articulated legs and a warm seam between its wing cases.
+- Verified the renderers and goose flight shadow in Chromium. Captured comparisons at close-up and game scale.
+
+### Heron, owl and lizard redraws
+
+- Redrew the Blackwater heron’s wading, fishing and flight poses. Distinguished the woodland owl’s ear tufts from the snowy owl’s round head and kept eyeshine aligned with the face as each turns.
+- Gave the rock lizard jointed legs, splayed feet and a tapering tail that flexes while it darts.
+- Checked the before-and-after poses at game scale in Chromium, including bird shadows and the owl head turn.
+
+### Dolphin, gull and hare redraws
+
+- Redrew dolphin breaches with a continuous pitch, a flexing tail and a splash fixed at reentry.
+- Gave gulls distinctive flight, landing and standing poses. Redrew hares with a crouch-to-bound motion and separate dry-biome and Polar Caps coats.
+- Verified the marine scheduler and game-scale artwork in Chromium, including dolphin launch and entry phases and the gull shadow.
+
+### Dusk bat redraw
+
+- Replaced the dusk bat’s generic flight shape with jointed wing membranes, a tail web and a distinct head. Gave each bat its own turn rhythm and linked its wing asymmetry to the bank angle.
+- Verified on a generated Rust map in Chromium with dusk lighting, including natural spawning, finite motion and game-scale rendering.
+
+### Hawks, vultures, crows and ravens
+
+- Replaced the shared bird silhouette with distinct wing and tail profiles, including a hawk’s rusty fan, fingered vulture wings, a crow’s fan tail and a raven’s wedge tail. Each uses its own flap and glide cadence. Updated the perched crow too.
+- Verified the flight and shadow silhouettes in Chromium and made before-and-after views at close-up and game scale.

@@ -2739,11 +2739,20 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 
 - **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): deer and foxes in Greenreach and Emberwood, wildebeest and hares on the Long
   Grass, alligators and turtles in Blackwater, hares and arctic foxes in the Polar Caps, lizards and hares in the Rust,
-  lizards and ash beetles in Cinderlands, lizards and turtles on the Shoals, and bison herds (`bison`, the wildebeest build with a dark shaggy hump), lizards and
-  turtles in Steamwells. Gulls cry over both (`gullCry` in js/audio.js), mud pots pop in Steamwells, and a geyser going
+  lizards and ash beetles in Cinderlands, lizards, turtles and red shore crabs on the Shoals, and bison, lizards and turtles in
+  Steamwells. Deer, wildebeest and bison have distinct bodies and grazing poses. Gulls cry over the Shoals and
+  Steamwells (`gullCry` in js/audio.js), mud pots pop in Steamwells, and a geyser going
   off in view is heard (`geyserSound`, from `drawSpringSteam` in js/ambient.js: render-only, at most one every 1.5 s). Shorebirds,
-  songbirds or raptors fly over each region according to the habitat. The Bloom has hinge-backs, switchtails and
-  sailwings. The Hollow has crawlers, hinge-backs and cave sailwings. Argos is airless.
+  songbirds or raptors fly over each region according to the habitat. Look for broad-snouted alligators with paired
+  rows of scutes in Blackwater. The Bloom’s armored hinge-backs, twin-tailed switchtails and rib-winged sailwings
+  share dark plates and amber eyes. Arctic foxes have shorter ears and a thicker coat than red foxes. Geese show
+  white cheek patches on the water and in flight, and turtles have domed, plated shells. Cinderlands ash beetles
+  have an ember-colored seam and ember moths show warm bands when they flap. Blackwater herons tuck their necks
+  in flight and extend them to fish. Woodland owls have ear tufts, while snowy owls have rounded heads and pale
+  barred feathers. Rock lizards dart with splayed feet and a swinging tail. Hares crouch before each bound with
+  their ears back, in sandy coats on dry ground and white coats on the Polar Caps. Bats in the Rust make quick,
+  banked turns at dusk on dark, scalloped wings. Hawks show broad rust-colored tails, vultures rock on fingered
+  wings, crows spread a fan, and ravens trail a wedge-shaped tail. The Hollow has pale, blind crawlers, hinge-backs and cave sailwings with ragged translucent membranes. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
   usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
   stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.
@@ -2776,8 +2785,8 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 ### The Shoals (tropical coasts) and lava effects
 
 Choose a naval map to enable **the Shoals** (tropical islands) in the biome picker. It uses coral sand, palms,
-reef water, pale shallows and seagulls along the shore. Small waves drift across open water. On naval maps, fish and dolphins leap in open
-water and whales sometimes surface to blow. Frozen water and lava have their own scenery.
+reef water and pale shallows. Gulls bank on broad, black-tipped wings and tuck in to land. Red crabs sidestep along the beaches. Small waves drift across open water. On naval maps, dolphins arch out of open water and leave a splash where they dive back in. Fish leap and
+whales sometimes surface to blow. Frozen water and lava have their own scenery.
 The Volcano map type and Cinderlands have drifting highlights on exposed lava and steam vents
 along the banks. These effects are drawn in the browser without changing terrain or movement.
 
