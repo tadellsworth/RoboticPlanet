@@ -2126,9 +2126,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 22-tile range shows as a red ring; tap any spot inside it (a
   building, open ground, or a rival robot or vehicle on the ground) to see the blast radius, then **Fire**. With no
-  building there, a rival robot or vehicle within `MISSILE_LOCK` (0.9) tiles of the tile's middle is locked onto
-  (`missileBotAt`, `m.bot`): `updateMissiles` moves the aim point with it each tick, and at impact it takes the full
-  24 if still within 0.6 tiles (the owner's ask, Nov 21 2026). Aircraft can't be locked onto. (Army → rival building → Fire missile also works.)
+  building there, a rival robot or vehicle within `MISSILE_LOCK` (0.9) tiles of the tile's middle is the target
+  (`missileBotAt`, `m.bot`): the Missile flies to where it stood at launch (no homing: the owner, Nov 21 2026), and at
+  impact it takes the full 24 if still within 0.6 tiles; moved off, only the blast can catch it. Not aircraft. (Army → rival building → Fire missile also works.)
   Under a finger the view never zooms out past `AIM_TILE` (20 px a tile; fitting the whole ring on a phone made tiles
   9 px, twenty under a fingertip): tap to drop the crosshair, drag it to adjust (`mapGrab`, a drag that starts on it;
   elsewhere a drag moves the map), and only Fire launches (a second tap on the spot fires only with a mouse). A bomber's

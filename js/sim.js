@@ -8572,13 +8572,13 @@ function fireMissileAt(silo, i, j) {
   S.missiles.push({
     owner, from: silo.id, target: target ? target.id : 0, t: 0, dur: Math.max(1.6, d / 8),
     x0: silo.x + 0.5, y0: silo.y + 0.5, x1: unit ? unit.x : tx + 0.5, y1: unit ? unit.y : ty + 0.5,
-    ...(unit ? { bot: unit.id } : {}), // (locked onto a robot or vehicle: it follows it, see updateMissiles)
+    ...(unit ? { bot: unit.id } : {}), // (aimed at a robot or vehicle: at where it was when fired; no homing, the owner, Nov 21 2026)
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
   const hit = target ? target.owner : S.owner[tIdx(tx, ty)];
   if (target) postMsg(target.owner, `Incoming missile from ${playerName(owner)}! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
-  else if (unit) postMsg(unit.owner, `Incoming missile from ${playerName(owner)}! It is locked onto one of your ${BOTS[unit.type].plural}.`, unit.x, unit.y, 'bad');
+  else if (unit) postMsg(unit.owner, `Incoming missile from ${playerName(owner)}! It is aimed at one of your ${BOTS[unit.type].plural}: move it!`, unit.x, unit.y, 'bad');
   else if (hit >= 0 && foes(hit, owner)) postMsg(hit, `Incoming missile from ${playerName(owner)}!`, tx, ty, 'bad');
   if (hit >= 0) doctrineVoice(owner, hit, 'missile', tx, ty, 90);
   return true;
@@ -8610,7 +8610,6 @@ function updateMissiles(dt) {
       if (m.t >= m.dur) nukeImpact(m);
       continue;
     }
-    if (m.bot) { const u = getE(m.bot); if (u && !u.dead && !u.inside && !aloft(u)) { m.x1 = u.x; m.y1 = u.y; } } // (locked on: it follows the robot to the end)
     if (!m.roar && m.dur - m.t <= MISSILE_WARN) { m.roar = true; sfx('incoming', m.x1, m.y1); } // (its roar as it dives in)
     if (S.tick % 3 === 0) {
       const k = Math.min(1, m.t / m.dur);
