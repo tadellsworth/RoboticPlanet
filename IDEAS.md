@@ -24,6 +24,19 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).
+- **Global leaderboards (the owner, Nov 21 2026: for later, for when the game goes public).** Built on the relay's
+  Cloudflare Worker (a small table of scores + a page to read them). Scores are proved, not trusted: the game is
+  deterministic, so a submission carries the day's setup and the player's orders, and the server (or a nightly job)
+  replays it and only then accepts the time. Steps: (1) the Daily Planet board, no accounts: a hidden player ID made on
+  the device and a chosen display name (lost if the browser is cleared); (2) all-time boards (Daily Planets won, longest
+  daily streak) and per-Mission fastest clears, later a Versus ranking; (3) optional accounts (passkey or an email link,
+  no passwords) that also carry cloud saves between devices. Plan for a name filter and a way to hide names, a short
+  privacy note (only ID, name and scores until accounts), and Cloudflare's free tier covering it.
+- **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
+  (Nov 21 2026), waiting for the owner's answers** (31 questions; the sheet and DECISIONS.txt were sent to the owner).
+  Recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
+  Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
+  look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
