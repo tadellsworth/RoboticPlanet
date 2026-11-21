@@ -666,14 +666,14 @@ function natWater(ctx, ox, oy, z, v0, v1, night) {
         if (fl <= 0) continue;
         const x = ox + (i + 0.15 + 0.7 * hash2(j, i * 3 + n, seed + 4092)) * z, y = oy + (j + 0.15 + 0.7 * hash2(i, j * 3 + n, seed + 4093)) * z;
         const zone = 0.45 + 0.55 * clamp(1.15 - (y / R.h) * 1.3 - (x / R.w) * 0.4, 0, 1); // (toward the sun, up the view)
-        if (hash2(i, j * 7 + n, seed + 4094) > zone) continue;
+        if (hash2(i, j * 7 + n, seed + 4094) > zone * 0.75) continue;
         const s = r * (1 + fl * 1.4), th = Math.max(0.6, s * 0.28);
         (fl > 0.7 ? Q : P).rect(x - s * 1.6, y - th / 2, s * 3.2, th); // (a fleck of light along a ripple)
-        if (fl > 0.9 && z >= 20) Q.rect(x - th / 2, y - s * 0.9, th, s * 1.8);
+        if (fl > 0.96 && z >= 20) Q.rect(x - th / 2, y - s * 0.9, th, s * 1.8);
       }
     }
-    ctx.fillStyle = `rgba(${warm},${0.5 * sun})`; ctx.fill(P);
-    ctx.fillStyle = `rgba(${warm},${0.85 * sun})`; ctx.fill(Q);
+    ctx.fillStyle = `rgba(${warm},${0.32 * sun})`; ctx.fill(P); // (toned down a touch: the owner, Nov 21)
+    ctx.fillStyle = `rgba(${warm},${0.55 * sun})`; ctx.fill(Q);
   }
   // Night: the Ring's band and Argos mirrored on the water (fixed on the view, as a reflection is), shimmering.
   if (night > 0.05 && sky) {
