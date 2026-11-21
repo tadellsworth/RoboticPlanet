@@ -2821,7 +2821,7 @@ clouds' drift (`natureCloudTime`).
 - **Wet ground** (`natureWet`): through a rainstorm and for a few minutes after it (`NATFX.wetFor`) the land is darker
   and cooler, roads glossy, puddles in the low spots; at night the wet ground mirrors the streetlamps and the lit
   buildings (`natWetNight`). The spells are the weather's (`weatherAt`), so it needs no state.
-- **Frost** (`natureFrost`): on the Polar Caps, Argos and Emberwood rime creeps over the land in the last of the night,
+- **Frost** (`natureFrost`): on the Polar Caps and Argos (not Emberwood: too heavy there, the owner, Nov 21) a light rime creeps over the land in the last of the night,
   is thickest at dawn and melts by midday, following the time of day as shown. Four layers of crystals, each with more
   than the last; not on open water, not on Saver.
 - **The night sky** (`natNightSky`): the Ring's faint silver light on the land, its strength, angle and tint by planet
