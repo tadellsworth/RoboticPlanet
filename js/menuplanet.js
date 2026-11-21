@@ -20,7 +20,7 @@
 
 const MPLANET = {
   texW: 512, texH: 256,   // the planet's map (longitude × latitude)
-  res: 260,               // the most pixels across the shaded sphere is made at (it's drawn larger, smoothly)
+  res: 300,               // the most pixels across the shaded sphere is made at (it's drawn larger, smoothly)
   fps: 12, fpsSaver: 5,   // frames a second
   orbit: 240,             // seconds for Ithaca I to go once round Corvane
   turn: 150,              // ...to turn once
@@ -149,10 +149,10 @@ function mplMakeSky(w, h) {
 function mplLayout(w, h) {
   if (w >= h * 1.15) {
     // (beside the card, a little behind its edge at most; the Ring kept inside the screen at the orbit's far right)
-    const r = clamp(Math.min(h * 0.085, (w / 2 - 150) * 0.1), 22, 92), left = w / 2 + 150, right = w - 16 - r * 2, a = (right - left) / 2;
+    const r = clamp(Math.min(h * 0.13, (w / 2 - 150) * 0.155), 24, 150), left = w / 2 + 150, right = w - 16 - r * 2, a = (right - left) / 2;
     return { sx: (left + right) / 2, sy: h * 0.46, a, b: a * 0.32, r, card: { x: w / 2, y: h / 2, r: 330 } };
   }
-  const a = w * 0.4, r = clamp(w * 0.085, 18, 70);
+  const a = w * 0.4, r = clamp(w * 0.12, 20, 100);
   return { sx: w * 0.5, sy: Math.max(r * 1.4, h * 0.07), a, b: a * 0.28, r, card: { x: w / 2, y: h * 0.55, r: Math.max(w, h) * 0.6 } };
 }
 
