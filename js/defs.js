@@ -856,6 +856,8 @@ const SURRENDER = { after: 720, hold: 40, left: 0.4, odds: 4 };
 const DOM = { share: [0, 0, 0.6, 0.5, 0.45], min: 0.2, hold: 180 };
 /** Seconds before a missile (or a nuclear one, ×1.6) lands that its roar is heard diving in (sound only). */
 const MISSILE_WARN = 1.3;
+/** A Missile aimed at a spot with a rival robot or vehicle on the ground within this many tiles locks onto it and follows it (missileBotAt). */
+const MISSILE_LOCK = 0.9;
 const SORTIE_ARMOR = 0.25;
 const SORTIE_REACH = 6.5; // guards out on a sortie fight enemies within this of their garrison
 // A guard out on a sortie gives up a foe that is more than this many tiles from the fort (or the building) it defends.

@@ -15,7 +15,7 @@
  *   them running out from a blast.
  * - Wet ground (natWet): after rain the land and roads stay dark and glossy for a few minutes, with puddles; at night the
  *   wet roads mirror the streetlamps and the colonies' lights.
- * - Frost (natFrost): on the cold maps (the Polar Caps, Argos) rime creeps over the ground at dawn and melts
+ * - Frost (natFrost): on the cold maps (the Polar Caps, Argos; a light one on Emberwood) rime creeps over the ground at dawn and melts
  *   by midday.
  * - The night sky (natSky): the Ring's faint silver light on the land (its strength, angle and tint differ by planet),
  *   and on the Polar Caps, Argos and the Bloom a slow aurora's light rippling over the ground.
@@ -43,7 +43,7 @@ const NATFX = {
   // Blasts that push the vegetation outward: tiles of reach (a 'boom' or 'flash' grows with its own size).
   blast: { boom: 2.6, flash: 2.2, fuelblast: 4.5, nuke: 15, crater: 3.2, collapse: 3, domefall: 6 },
   wetFor: 220,     // seconds the ground takes to dry after rain (the wetness falls by e each wetFor)
-  frost: { polar: 0.5, lunar: 0.35 }, // how heavy the dawn rime is
+  frost: { polar: 0.5, lunar: 0.35, autumn: 0.25 }, // how heavy the dawn rime is
   // The planet view: the most the camera tilts (the top row's narrowing, as a share), from how far in it starts
   // (times the furthest zoom), and the haze in each biome's colour.
   tilt: { most: 0.09, from: 1.9 },
