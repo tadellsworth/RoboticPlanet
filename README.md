@@ -2476,9 +2476,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `worth` (6). The Sundering Ray (`aiSunder`, `AI_SUNDER`, kind 'weapon' in `AI_MEGA_KIND`): a Warden picks it as its
     one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min) when the Murmur are Active and a
     nest's tunnels reach within `near` (12) tiles of its Command Base (`aiTunnelNear`); it goes up near home
-    (`aiMegaSpot`, its goods first) with its 2 Generators beside it (again as any is lost), Use Reactor off. By day,
-    after a night the Murmur raided it (or with their tunnels that close), it strikes the deep over the nest closest to
-    home; the night after a blow it keeps `guard` (6) warbots at the Ray (a rally); any rival with a Ray Quakes the spot
+    (`aiMegaSpot`, its goods first) with its 2 Generators going down with the site (again as any is lost), Use Reactor
+    off. By day, after a night the Murmur raided it (or with their tunnels that close, or every `every` (2) nights while
+    that nest is within 40 tiles of home: `P.sunderNight`), it strikes the deep over the nest closest to home; the night after a blow it keeps `guard` (6) warbots at the Ray (a rally); any rival with a Ray Quakes the spot
     worth the most within reach (`aiQuakeSpot`: a foe's buildings, defences and roads in the circle, its own side's
     taken off, at least `worth` 5) when its next attack is due within the wind-up, so its army arrives while the Walls
     are cracked. From `domeAt`

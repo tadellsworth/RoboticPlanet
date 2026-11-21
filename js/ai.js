@@ -4544,11 +4544,11 @@ function allyShipsTick() {
  * nukes or the Ray). The Warden picks it (P.megaPick 'sunder') from AI_SUNDER.pickAt s in when the Murmur are Active and
  * a nest's tunnels reach within AI_SUNDER.near tiles of its Command Base; it goes up near home with its 2 Generators. It
  * strikes the deep over the nest closest to home after a night the Murmur raided it (or once its tunnels come that
- * close), by day, and the night after a blow keeps AI_SUNDER.guard warbots at the Ray. Any rival that owns one Quakes a
+ * close, or every AI_SUNDER.every nights while that nest is within SUNDER.lure tiles of home), by day, and the night after a blow keeps AI_SUNDER.guard warbots at the Ray. Any rival that owns one Quakes a
  * foe's cluster of buildings and roads within reach (at least AI_SUNDER.worth) just before a push (its next attack due
  * within the wind-up), so its army arrives while the Walls are cracked.
  */
-const AI_SUNDER = { pickAt: 900, near: 12, guard: 6, worth: 5, look: 20, think: 5 };
+const AI_SUNDER = { pickAt: 900, near: 12, guard: 6, worth: 5, look: 20, think: 5, every: 2 };
 
 /** Does a nest's tunnel come within r tiles of (x, y)? The nest it belongs to, the nearest such, or null. */
 function aiTunnelNear(x, y, r) {
@@ -4603,8 +4603,8 @@ function aiSunder(p, me, lander, canBuild) {
     if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; P.sunderAt = Math.round(S.time); }
     return;
   }
-  if (!ray.built) { if (!ray.prio) { ray.prio = 'high'; ray.sitePrio = 1; } return; }
-  // Its two Generators, again as any is lost.
+  if (!ray.built && !ray.prio) { ray.prio = 'high'; ray.sitePrio = 1; }
+  // Its two Generators, with the site (their goods first), and again as any is lost.
   const gens = me.filter((b) => b.type === 'generator' && footDist(ray, b.x + 0.5, b.y + 0.5) <= SUNDER.reach + 0.5), have = playerGoods(p), gc = BDEFS.generator.cost;
   if (gens.length < SUNDER.gens && canBuild && have.cement >= gc.cement && have.alloy >= gc.alloy && S.time - (P.sunderLook ?? -999) >= AI_SUNDER.look / 4) {
     P.sunderLook = S.time;
@@ -4612,6 +4612,7 @@ function aiSunder(p, me, lander, canBuild) {
     const r = spot && placeSite(p, 'generator', spot[0], spot[1]);
     if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
   }
+  if (!ray.built) return;
   ray.sUseR = false; // (the Uranium is kept for whatever else wants it)
   // The night after a blow: a guard at the Ray, once a night.
   const n = murmurNights(S.time), lureNight = ray.sLure && (ray.sLure === n + 1 || (ray.sLure === n && murmurNight(S.time)));
@@ -4623,14 +4624,14 @@ function aiSunder(p, me, lander, canBuild) {
   if (ray.sOn || S.time - (P.sunderT || -99) < AI_SUNDER.think) return;
   P.sunderT = S.time;
   if (sunderBlocked(ray)) return;
-  // Strike the Deep: by day, over the nest closest to home once the Murmur raided it (or their tunnels are that close).
+  // Strike the Deep: by day, over the nest closest to home once the Murmur raided it, or their tunnels come that close,
+  // or (keeping it down) every AI_SUNDER.every nights while that nest is within SUNDER.lure tiles of home.
   if (sunderDeepOn() && !murmurNight(S.time)) {
     const raided = P.hitBy && (P.hitBy[wildOwner()] || -999) > S.time - TOD_LEN, near = aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near);
-    if (raided || near) {
-      let nest = near;
-      if (!nest) { let bd = Infinity; for (const b of S.buildings) if (!b.dead && isNestB(b)) { const d = dist2(b.x, b.y, lander.x, lander.y); if (d < bd) { bd = d; nest = b; } } }
-      if (nest && !setSunderAim(ray, nest.x, nest.y, 'deep')) { P.sunderDeeps = (P.sunderDeeps || 0) + 1; return; }
-    }
+    let nest = near;
+    if (!nest) { let bd = Infinity; for (const b of S.buildings) if (!b.dead && isNestB(b)) { const d = dist2(b.x, b.y, lander.x, lander.y); if (d < bd) { bd = d; nest = b; } } }
+    const due = nest && n - (P.sunderNight ?? -99) >= AI_SUNDER.every && dist(nest.x, nest.y, lander.x, lander.y) <= SUNDER.lure;
+    if (nest && (raided || near || due) && !setSunderAim(ray, nest.x, nest.y, 'deep')) { P.sunderDeeps = (P.sunderDeeps || 0) + 1; P.sunderNight = n; return; }
   }
   // A Quake just before a push: its next attack due within the wind-up and the ripple's way there.
   if (S.mode !== 'colony' && P.nextAttack - S.time <= sunderTime(ray) + SUNDER.travelMax + 10) {

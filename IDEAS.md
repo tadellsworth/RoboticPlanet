@@ -57,7 +57,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     buildings too (as the Lance's line burns its own), but nothing on a Trade Post's ground; a Strike the Deep's seal
     runs through the second night after the blow; cracked roads are mended by idle Workers by themselves, a 3 × 3 patch
     in 4 s (no Cement), cracked foundations by the ordinary paid Repair; stunned robots neither move nor fire for 4 s;
-    the AI Warden picks it from 15 minutes in (when its pick is still open), as its one weapon, no Nuclear Silo then.
+    the AI Warden picks it from 15 minutes in (when its pick is still open), as its one weapon, no Nuclear Silo then, and besides striking after a raid strikes the nest nearest home every other day while it is within 40 tiles (with no raid it would never fire: Wardens seldom march into Quake range).
     Open: whether the Murmur should also go for it on the night of a blow struck after dark (now: only the next night),
     and the balance audit's look at its numbers.
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
