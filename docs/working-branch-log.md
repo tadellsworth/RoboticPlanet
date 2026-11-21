@@ -264,3 +264,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Added red shore crabs with pincers and a sideways walk. Small groups stick to open ground along the Shoals’ beaches.
 - Redrew the Hollow’s blind crawler and gave its cave sailwing a dedicated model. The Hollow still uses the existing hinge-back.
 - Verified crabs spawning and moving along a generated Shoals beach in Chromium. Checked the Hollow sprites at game scale and the cave sailwing’s shadow.
+
+### Foxes, geese, turtles and Cinderlands insects
+
+- Redrew red and Arctic foxes with distinct ear, muzzle and coat proportions. Updated geese on the water and in migrating flocks, and gave turtles a domed shell with distinct scutes and rim.
+- Redrew the ember moth with patterned forewings and hindwings, and the ash beetle with six articulated legs and a warm seam between its wing cases.
+- Verified the renderers and goose flight shadow in Chromium. Captured comparisons at close-up and game scale.

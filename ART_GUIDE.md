@@ -1885,3 +1885,8 @@ The Hollow’s sailwing has a pale body, a thin line of cartilage and translucen
 scalloped edges. Its blind crawler has overlapping bone-colored plates, hooked legs and long feelers.
 Shoals crabs have red shells, broad pincers and four pairs of walking legs. Their body faces across
 the direction of travel during a sidestep.
+Red foxes have dark shins, sharp ears and a long white-tipped brush. Arctic foxes have a deeper coat,
+shorter muzzles and rounded ears. Geese carry a white cheek patch in both poses, with a long neck stretched
+forward in flight and a widening wake on the water. Turtle shells have a domed profile, a pale rim and
+separate scutes. Cinderlands ash beetles have six legs and a warm seam between dark wing cases. Ember moths
+have charcoal forewings, rust-colored hindwings and bright bands that flicker as they flap.

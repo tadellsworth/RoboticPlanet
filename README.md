@@ -2707,7 +2707,9 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   off in view is heard (`geyserSound`, from `drawSpringSteam` in js/ambient.js: render-only, at most one every 1.5 s). Shorebirds,
   songbirds or raptors fly over each region according to the habitat. Look for broad-snouted alligators with paired
   rows of scutes in Blackwater. The Bloom’s armored hinge-backs, twin-tailed switchtails and rib-winged sailwings
-  share dark plates and amber eyes. The Hollow has pale, blind crawlers, hinge-backs and cave sailwings with ragged translucent membranes. Argos is airless.
+  share dark plates and amber eyes. Arctic foxes have shorter ears and a thicker coat than red foxes. Geese show
+  white cheek patches on the water and in flight, and turtles have domed, plated shells. Cinderlands ash beetles
+  have an ember-colored seam and ember moths show warm bands when they flap. The Hollow has pale, blind crawlers, hinge-backs and cave sailwings with ragged translucent membranes. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
   usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
   stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.
