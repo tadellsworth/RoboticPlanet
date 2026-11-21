@@ -5214,14 +5214,15 @@ function showAimBanner(problem) {
     return;
   }
   if (R.aim) {
-    const t = missileTargetAt(ME, R.aim.i, R.aim.j);
+    const t = missileTargetAt(ME, R.aim.i, R.aim.j), u = t ? null : missileBotAt(ME, R.aim.i, R.aim.j);
     html += t ? `Fire at the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
+      : u ? `Fire at the ${playerName(u.owner)} <b>${BOTS[u.type].name}</b>? The Missile locks onto it and follows it; the blast hurts rival buildings and bots within ${md.splash} tiles.`
       : 'Fire at this spot? The blast hurts rival buildings and bots within ' + md.splash + ' tiles.';
     if (onTouch()) html += ' Drag the crosshair to move it.';
     ok = 'Fire';
   } else {
     const w = silo.stock.warhead || 0;
-    html += `Tap where to fire, inside the red ring (${md.range} tiles). A hit wrecks most buildings; the blast hurts everything rival within ${md.splash} tiles. <b>${w}</b> Missile${w === 1 ? '' : 's'} loaded.`;
+    html += `Tap where to fire, inside the red ring (${md.range} tiles): a building, a rival robot or vehicle (it locks on and follows it) or any patch of ground. A hit wrecks most buildings; the blast hurts everything rival within ${md.splash} tiles. <b>${w}</b> Missile${w === 1 ? '' : 's'} loaded.`;
   }
   showBanner(html, ok, 'Cancel');
 }
@@ -5259,7 +5260,7 @@ function fireAimed() {
     });
     return;
   }
-  const t = missileTargetAt(ME, i, j), tName = t ? BDEFS[t.type].name : '';
+  const t = missileTargetAt(ME, i, j), lu = t ? null : missileBotAt(ME, i, j), tName = t ? BDEFS[t.type].name : lu ? BOTS[lu.type].name : '';
   act('missileAt', [sid, i, j], (ok) => {
     if (ok) {
       toast(tName ? `Missile away: it will hit the ${tName} in a few seconds.` : 'Missile away.', 'info');

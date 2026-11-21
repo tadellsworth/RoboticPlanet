@@ -12,6 +12,16 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## The owner's notes, Nov 21 2026 (for later)
+
+- **Lance of Corvane cooling down:** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
+  normal look as the reload runs out (drawn from its reload clock; red at its hottest just after the shot).
+- **Polish round 2:** skip the What's new popup and the credits for now.
+- **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
+  or in the pause menu; nothing pushy, nothing in a game).
+- **Mass Driver sound:** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
+  building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
+
 ## Sunsets per biome (built Nov 20 2026; open questions)
 
 Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's
@@ -498,6 +508,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
     the blob.
+  - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
+    Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
+    and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
+    none), and whether the Wren's waystation could show at the system's edge.
   - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
     on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
     and zoomed far out the camera tilts a little under a depth haze (the planet view). Still open: a true curve of the

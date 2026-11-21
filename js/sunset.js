@@ -101,7 +101,7 @@ const DUSK_BIOMES = {
       { sun: [255, 232, 118], tint: [250, 214, 110], shade: [118, 128, 152] },
       { sun: [255, 196, 90], tint: [240, 160, 96], shade: [100, 92, 150] },
       { sun: [222, 110, 132], tint: [142, 80, 132], shade: [68, 60, 132] },
-    ], motes: 'pollen', glitter: 0.4, shafts: 1.6, k: 1, ring: true,
+    ], motes: 'pollen', glitter: 0.4, shafts: 1.0, k: 1, ring: true, // (shafts 1.6 till the owner found them a bit much, Nov 21)
   },
   // Blackwater: a hazy pink fog.
   swamp: {
@@ -461,10 +461,10 @@ function duskSky(ctx, ox, oy, z) {
   const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, rr);
   g.addColorStop(0, duskRgb(P.sun, 0.7)); g.addColorStop(0.45, duskRgb(P.sun, 0.18)); g.addColorStop(1, duskRgb(P.sun, 0));
   ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = a * 0.26 * (1 - 0.5 * duskSmooth(0.7, 1, D.h));
+  ctx.globalAlpha = a * 0.19 * (1 - 0.5 * duskSmooth(0.7, 1, D.h)); // (0.26 till Nov 21: a bit much)
   ctx.fillStyle = g;
   if (D.dir > 0) ctx.fillRect(0, 0, Math.min(R.w, sx + rr * 0.8), R.h); else ctx.fillRect(Math.max(0, sx - rr * 0.8), 0, R.w, R.h); // (beyond, it has faded)
-  if (D.B.shafts) duskShafts(ctx, D, sx, sy, a);
+  // (light shafts: off for now, the owner, Nov 21 2026; duskShafts is kept for later)
   if (D.B.ring) duskRing(ctx, z, D);
   if (D.B.motes) duskMotes(ctx, z, D, a);
   ctx.restore();
@@ -515,7 +515,7 @@ function duskShafts(ctx, D, sx, sy, a) {
     const h1 = hash2(k, 1, 701), h2 = hash2(k, 2, 703);
     const ang = base + D.dir * (h1 - 0.5) * 0.7 + (still ? 0 : 0.025 * Math.sin(R.time * 0.11 + k * 1.7));
     const wid = R.h * (0.05 + 0.12 * h2);
-    ctx.globalAlpha = a * D.B.shafts * (0.12 + 0.12 * h2) * (1 - duskSmooth(0.65, 0.95, D.h)) * (still ? 1 : 0.8 + 0.2 * Math.sin(R.time * 0.3 + k * 2.1));
+    ctx.globalAlpha = a * D.B.shafts * (0.08 + 0.08 * h2) * (1 - duskSmooth(0.65, 0.95, D.h)) * (still ? 1 : 0.8 + 0.2 * Math.sin(R.time * 0.3 + k * 2.1));
     ctx.save();
     ctx.translate(sx, sy); ctx.rotate(ang);
     ctx.drawImage(img, 0, -wid / 2, L, wid);

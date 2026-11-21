@@ -15,7 +15,7 @@
  *   them running out from a blast.
  * - Wet ground (natWet): after rain the land and roads stay dark and glossy for a few minutes, with puddles; at night the
  *   wet roads mirror the streetlamps and the colonies' lights.
- * - Frost (natFrost): on the cold maps (the Polar Caps, Argos, Emberwood) rime creeps over the ground at dawn and melts
+ * - Frost (natFrost): on the cold maps (the Polar Caps, Argos; a light one on Emberwood) rime creeps over the ground at dawn and melts
  *   by midday.
  * - The night sky (natSky): the Ring's faint silver light on the land (its strength, angle and tint differ by planet),
  *   and on the Polar Caps, Argos and the Bloom a slow aurora's light rippling over the ground.
@@ -43,7 +43,7 @@ const NATFX = {
   // Blasts that push the vegetation outward: tiles of reach (a 'boom' or 'flash' grows with its own size).
   blast: { boom: 2.6, flash: 2.2, fuelblast: 4.5, nuke: 15, crater: 3.2, collapse: 3, domefall: 6 },
   wetFor: 220,     // seconds the ground takes to dry after rain (the wetness falls by e each wetFor)
-  frost: { polar: 0.85, lunar: 0.6, autumn: 0.75 }, // how heavy the dawn rime is
+  frost: { polar: 0.5, lunar: 0.35, autumn: 0.25 }, // how heavy the dawn rime is
   // The planet view: the most the camera tilts (the top row's narrowing, as a share), from how far in it starts
   // (times the furthest zoom), and the haze in each biome's colour.
   tilt: { most: 0.09, from: 1.9 },
@@ -143,7 +143,7 @@ function natureGround(ctx, ox, oy, z, v0, v1) {
   natState();
   natHear();
   if (hdLevel(z) && R.hd) { natPlants(ctx, ox, oy, z, v0, v1); natRebake(z, v0, v1); }
-  if (!natSaver() && !natStill()) natSheen(ctx, ox, oy, z);
+  // (wind in the grass, natSheen: off for now, the owner, Nov 21 2026: the bright crests read as moving light streaks)
   const wet = natureWet();
   if (wet > 0.01) natWetGround(ctx, ox, oy, z, v0, v1, wet);
   const fr = natureFrost();
@@ -445,7 +445,7 @@ function natureFrost() {
   if (!k || !S || !weatherOn() || typeof TOD === 'undefined') return 0;
   const x = natDayPos();
   if (x === null) return 0;
-  const N0 = NIGHT_TO - 90, M1 = 90, D1 = 240; // (from 90 s before night ends; melting through the morning into the day)
+  const N0 = NIGHT_TO - 90, M1 = 30, D1 = 300; // (from 90 s before night ends; melting slowly from early morning to midday: the owner, Nov 21)
   let f = 0;
   if (x >= N0) f = (x - N0) / (TOD_LEN - N0);
   else if (x < M1) f = 1;
@@ -508,7 +508,8 @@ function natFrostLayers() {
 
 /** Frost over the land in view (and the plants and roads on it; not on open water), as heavy as `f` (0..1). */
 function natFrost(ctx, ox, oy, z, f) {
-  const L = natFrostLayers(), lv = f * 4, a = Math.min(3, Math.floor(lv)), b = Math.min(3, a + 1), mix = lv - a;
+  // (lv 0..1: the first layer fades in; above, each layer crossfades into the next, so nothing pops in or out)
+  const L = natFrostLayers(), lv = f * 4, k = Math.min(2, Math.max(0, Math.floor(lv - 1))), mix = clamp(lv - 1 - k, 0, 1);
   // Only the land: a rectangle for each run of land tiles along each row in view.
   const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const i0 = Math.max(0, Math.floor(v0.x)), i1 = Math.min(S.W - 1, Math.ceil(v1.x)), j0 = Math.max(0, Math.floor(v0.y)), j1 = Math.min(S.H - 1, Math.ceil(v1.y));
@@ -535,8 +536,8 @@ function natFrost(ctx, ox, oy, z, f) {
     ctx.globalAlpha = al; ctx.fillStyle = pat;
     ctx.fillRect(0, 0, R.w, R.h);
   };
-  draw(L[a], Math.min(1, lv)); // (each layer has all of the last one's crystals, and more)
-  if (a !== b && lv >= 1) draw(L[b], mix);
+  if (lv <= 1) draw(L[0], lv);
+  else { draw(L[k], 1 - mix); draw(L[k + 1], mix); } // (each layer has all of the last one's crystals, and more)
   ctx.restore();
 }
 
@@ -666,14 +667,14 @@ function natWater(ctx, ox, oy, z, v0, v1, night) {
         if (fl <= 0) continue;
         const x = ox + (i + 0.15 + 0.7 * hash2(j, i * 3 + n, seed + 4092)) * z, y = oy + (j + 0.15 + 0.7 * hash2(i, j * 3 + n, seed + 4093)) * z;
         const zone = 0.45 + 0.55 * clamp(1.15 - (y / R.h) * 1.3 - (x / R.w) * 0.4, 0, 1); // (toward the sun, up the view)
-        if (hash2(i, j * 7 + n, seed + 4094) > zone) continue;
+        if (hash2(i, j * 7 + n, seed + 4094) > zone * 0.75) continue;
         const s = r * (1 + fl * 1.4), th = Math.max(0.6, s * 0.28);
         (fl > 0.7 ? Q : P).rect(x - s * 1.6, y - th / 2, s * 3.2, th); // (a fleck of light along a ripple)
-        if (fl > 0.9 && z >= 20) Q.rect(x - th / 2, y - s * 0.9, th, s * 1.8);
+        if (fl > 0.96 && z >= 20) Q.rect(x - th / 2, y - s * 0.9, th, s * 1.8);
       }
     }
-    ctx.fillStyle = `rgba(${warm},${0.5 * sun})`; ctx.fill(P);
-    ctx.fillStyle = `rgba(${warm},${0.85 * sun})`; ctx.fill(Q);
+    ctx.fillStyle = `rgba(${warm},${0.32 * sun})`; ctx.fill(P); // (toned down a touch: the owner, Nov 21)
+    ctx.fillStyle = `rgba(${warm},${0.55 * sun})`; ctx.fill(Q);
   }
   // Night: the Ring's band and Argos mirrored on the water (fixed on the view, as a reflection is), shimmering.
   if (night > 0.05 && sky) {

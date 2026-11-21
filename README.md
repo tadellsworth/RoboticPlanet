@@ -194,7 +194,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Roadworks | Takes two Pavers. They lay planned road first (twice a Worker's rate, outside the road crew limit), then pave and maintain the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles), and lay Express lanes (1 Asphalt and a quarter Alloy a tile) |
 | Ammo Plant | Alloy + Cement → 3 **Ammo**; warbots reload it in the Command Base and Outposts, 5 shots per Ammo (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
-| Missile Silo | Fires Missiles at rival buildings up to 22 tiles away; holds 2, reloads in 60 s (Versus; 25 s until Nov 2026, the owner's call) |
+| Missile Silo | Fires Missiles at rival buildings, ground or units (locks on) up to 22 tiles away; holds 2, reloads in 60 s (Versus; 25 s until Nov 2026, the owner's call) |
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
@@ -2122,8 +2122,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
   A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
-  To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
-  building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
+  To fire, tap a Silo and press **Aim missile**: its 22-tile range shows as a red ring; tap any spot inside it (a
+  building, open ground, or a rival robot or vehicle on the ground) to see the blast radius, then **Fire**. With no
+  building there, a rival robot or vehicle within `MISSILE_LOCK` (0.9) tiles of the tile's middle is locked onto
+  (`missileBotAt`, `m.bot`): `updateMissiles` moves the aim point with it each tick, and at impact it takes the full
+  24 if still within 0.6 tiles (the owner's ask, Nov 21 2026). Aircraft can't be locked onto. (Army → rival building → Fire missile also works.)
   Under a finger the view never zooms out past `AIM_TILE` (20 px a tile; fitting the whole ring on a phone made tiles
   9 px, twenty under a fingertip): tap to drop the crosshair, drag it to adjust (`mapGrab`, a drag that starts on it;
   elsewhere a drag moves the map), and only Fire launches (a second tap on the spot fires only with a mouse). A bomber's
@@ -2726,7 +2729,7 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   through fire colours and deepens to magenta and violet; dawn runs the other way, gentler and cooler. Corvane sets in
   the west and rises in the east, so the ground is lit from that side of the screen and falls into a cool long shade on
   the far side, and robots' drop shadows stretch and turn violet (`duskShadowLength`, `duskShadowRgb`). Each biome has
-  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts,
+  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts (off for now: the owner, Nov 21 2026),
   plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
   `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
   Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
@@ -2827,13 +2830,13 @@ clouds' drift (`natureCloudTime`).
   decorative plants are drawn live (`natPlants`) instead of baked into the sharp chunks (a chunk baked while they sway
   has `noPlants`; `drawPlants` skips it, `natRebake` bakes the ones on screen again one a frame), each leaning with the
   wind and the gust over it, and pushed outward for a moment by a blast near it (`natHear` reads new blasts in `S.fx`).
-  At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
+  (Off for now: the owner, Nov 21 2026.) At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
   masked to `natVegMask`, one tile a pixel, laid over the view in one draw), and a blast sends a ring of them out.
   Not on Graphics Saver.
 - **Wet ground** (`natureWet`): through a rainstorm and for a few minutes after it (`NATFX.wetFor`) the land is darker
   and cooler, roads glossy, puddles in the low spots; at night the wet ground mirrors the streetlamps and the lit
   buildings (`natWetNight`). The spells are the weather's (`weatherAt`), so it needs no state.
-- **Frost** (`natureFrost`): on the Polar Caps, Argos and Emberwood rime creeps over the land in the last of the night,
+- **Frost** (`natureFrost`): on the Polar Caps and Argos, and lightly on Emberwood (toned down: the owner, Nov 21), rime creeps over the land in the last of the night,
   is thickest at dawn and melts by midday, following the time of day as shown. Four layers of crystals, each with more
   than the last; not on open water, not on Saver.
 - **The night sky** (`natNightSky`): the Ring's faint silver light on the land, its strength, angle and tint by planet
@@ -2848,12 +2851,22 @@ clouds' drift (`natureCloudTime`).
   straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
   `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
   minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
-- **The main menu** (`js/menuplanet.js`): Ithaca I turns slowly behind the menu card on its own canvas (`#menu-planet`):
-  a coral world from a fixed seed (regions round scattered centres, seas between, ice at the poles, a layer of cloud),
-  shaded per pixel in a small image a few times a second, the Ring and Argos round it, the colonies' lights on the night
-  side and now and then the flash of a fight. Made a few rows a frame at launch; stops while the menu is hidden or the
-  tab is in the background, and holds still with reduced motion. While it shows, the demo game behind the menu plays on
-  but isn't drawn (`menuPlanetCovers` in `drawNeeded`).
+- **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
+  beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
+  `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
+  turning as it goes; its face is a coral world from a fixed seed (`mplMakeMap`, a few rows a frame at launch), shaded per
+  pixel in a small image from its normals (`mplShade`, with Argos's shadow where the line from Argos away from the star
+  meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
+  vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
+  the surface (`mplWarTick`, `mplWarDraw`): fronts near the colonies' lights flicker with bursts and the odd bigger
+  boom, leave fires (smoke by day), missiles' lines arc between colonies, a big strike about once a minute, all placed on
+  the map and turning with the planet, hidden past the limb; and after `MPLANET.nukeFirst` seconds on the menu, at most
+  once every `MPLANET.nukeGap`, a nuclear blast on the night side (`mplNuke`, also `MPL.nukeNow()` for testing).
+  Sprites (glows, flashes, the sky) are made once. A dozen frames a second; on Graphics Saver five, the sphere shaded
+  every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
+  (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
+  background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
+  `drawNeeded`).
 
 ### Cloud shadows, remains and beacons
 

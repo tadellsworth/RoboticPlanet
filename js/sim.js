@@ -8530,6 +8530,21 @@ function missileTargetAt(owner, i, j) {
   return null;
 }
 
+/**
+ * The rival robot or vehicle on the ground a missile aimed at tile (i, j) would lock onto, if there's no building
+ * there: the nearest within MISSILE_LOCK tiles of the tile's middle (not in the air, not inside a building).
+ */
+function missileBotAt(owner, i, j) {
+  if (!inMap(i, j)) return null;
+  let best = null, bd = MISSILE_LOCK * MISSILE_LOCK;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || BOTS[u.type].air || !foes(u.owner, owner)) continue;
+    const d = dist2(u.x, u.y, i + 0.5, j + 0.5);
+    if (d <= bd) { bd = d; best = u; }
+  }
+  return best;
+}
+
 /** Can this silo fire at tile (i, j) now? '' if so, otherwise why not. */
 function missileBlocked(silo, i, j) {
   if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
@@ -8548,7 +8563,7 @@ function missileBlocked(silo, i, j) {
 function fireMissileAt(silo, i, j) {
   if (missileBlocked(silo, i, j)) return false;
   const owner = silo.owner, md = BDEFS[silo.type].missile;
-  const target = missileTargetAt(owner, i, j);
+  const target = missileTargetAt(owner, i, j), unit = target ? null : missileBotAt(owner, i, j);
   const tx = target ? target.x : i, ty = target ? target.y : j;
   bump(silo.stock, 'warhead', -1);
   usedGood(silo.owner, 'warhead', 1);
@@ -8556,12 +8571,14 @@ function fireMissileAt(silo, i, j) {
   const d = dist(silo.x, silo.y, tx, ty);
   S.missiles.push({
     owner, from: silo.id, target: target ? target.id : 0, t: 0, dur: Math.max(1.6, d / 8),
-    x0: silo.x + 0.5, y0: silo.y + 0.5, x1: tx + 0.5, y1: ty + 0.5,
+    x0: silo.x + 0.5, y0: silo.y + 0.5, x1: unit ? unit.x : tx + 0.5, y1: unit ? unit.y : ty + 0.5,
+    ...(unit ? { bot: unit.id } : {}), // (locked onto a robot or vehicle: it follows it, see updateMissiles)
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
   const hit = target ? target.owner : S.owner[tIdx(tx, ty)];
   if (target) postMsg(target.owner, `Incoming missile from ${playerName(owner)}! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
+  else if (unit) postMsg(unit.owner, `Incoming missile from ${playerName(owner)}! It is locked onto one of your ${BOTS[unit.type].plural}.`, unit.x, unit.y, 'bad');
   else if (hit >= 0 && foes(hit, owner)) postMsg(hit, `Incoming missile from ${playerName(owner)}!`, tx, ty, 'bad');
   if (hit >= 0) doctrineVoice(owner, hit, 'missile', tx, ty, 90);
   return true;
@@ -8593,6 +8610,7 @@ function updateMissiles(dt) {
       if (m.t >= m.dur) nukeImpact(m);
       continue;
     }
+    if (m.bot) { const u = getE(m.bot); if (u && !u.dead && !u.inside && !aloft(u)) { m.x1 = u.x; m.y1 = u.y; } } // (locked on: it follows the robot to the end)
     if (!m.roar && m.dur - m.t <= MISSILE_WARN) { m.roar = true; sfx('incoming', m.x1, m.y1); } // (its roar as it dives in)
     if (S.tick % 3 === 0) {
       const k = Math.min(1, m.t / m.dur);
@@ -8667,8 +8685,11 @@ function missileImpact(m) {
       if (e.armor <= 0) { e.armor = 0; cityDown(e, m.owner); } // (Arrival City knocked down)
     }
   }
+  const hitU = m.bot ? getE(m.bot) : null; // (the robot it was locked onto takes the full hit if it's still under it)
+  const direct = hitU && !hitU.dead && !hitU.inside && dist2(hitU.x, hitU.y, m.x1, m.y1) <= 0.6 * 0.6 ? hitU : null;
+  if (direct) { hitByNow(direct.owner, m.owner); damageBot(direct, md.damage); }
   for (const u of S.bots) {
-    if (!u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
+    if (u !== direct && !u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
   }
   // The blast craters the roads around it.
   const ci = Math.floor(m.x1), cj = Math.floor(m.y1), R0 = Math.ceil(MISSILE_ROAD);
