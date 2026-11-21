@@ -5497,6 +5497,9 @@ function checkSave(o) {
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
     for (const k of ['lfRes', 'lfBoost', 'lfCd', 'lfT', 'lfMul', 'lfPaid', 'lfUps', 'lfDrops', 'lfWarn', 'lfFeed', 'lfWait']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     if (b.lfSend != null && !(obj(b.lfSend) && Object.keys(b.lfSend).length <= LIFT.goods && Object.keys(b.lfSend).every((g) => LIFT_GOODS.includes(g) && Number.isFinite(b.lfSend[g])))) bad();
+    // a Murmur tunnel exit (its nest's id) and a Harrow's crater that stays one (b.crater)
+    if (b.crater != null && !(b.crater === 1 && b.type === 'burrow')) bad();
+    if (b.type === 'burrow' && b.nest != null && !(Number.isSafeInteger(b.nest) && b.nest > 0)) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }

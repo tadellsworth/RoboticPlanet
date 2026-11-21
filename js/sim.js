@@ -12839,6 +12839,14 @@ function spawnHarrow(x, y, p, o = {}) {
   }
   M.craters.push({ x: i, y: j, t: Math.round(S.time * 1000) / 1000 });
   if (M.craters.length > 16) M.craters.shift();
+  // The crater stays open as one of its nest's tunnel exits (b.crater): packs come up through it on later nights, and
+  // warbots collapse it like any other. (None with no nest left to own it.)
+  const ct = tIdx(i, j), nk = u.nest ? murmurAdopt(getE(u.nest)) : 0;
+  if (nk && !S.bAt[ct]) {
+    const e = addBuilding(wildOwner(), 'burrow', i, j, true);
+    e.nest = u.nest; e.armor = MURMUR.exitArmor; e.crater = 1;
+    if (!S.tun[ct]) { S.tun[ct] = nk; M.ver = (M.ver || 0) + 1; }
+  }
   addFx('ring', i + 0.5, j + 0.5, { color: WILD_COLOR, r: 3.5, life: 1.4 });
   for (let k = 0; k < 6; k++) addFx('dust', i + 0.5 + (hash2(u.id, k, 3) - 0.5) * 3, j + 0.5 + (hash2(u.id, k, 4) - 0.5) * 3, { r: 1.2 });
   sfx('harrow', i + 0.5, j + 0.5);
@@ -17988,6 +17996,7 @@ function hashState() {
     if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
+    if (b.crater) { int(b.id); int(b.nest || 0); } // (a Harrow's crater, a tunnel exit)
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
   }
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)

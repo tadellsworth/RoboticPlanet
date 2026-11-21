@@ -1580,7 +1580,7 @@ with the rest of them (`MURMUR_ART`, `MURMUR_TOD_KEYS`, `dist/murmur.js`).
 | `harrow-hurt-f0` | Flinching: head down, rolled away, the star clenched, the jaws wide | `hurt`, after a blow of 6 or more; its glow stuttering |
 | `harrow-fall-f0` | Dying: rolled onto its side, limbs limp, the light gone, spires broken off beside it | Its body where it fell (`S.mur.husks`), fading out over its last 10 s |
 | `harrow-up-f0…2` | Coming up out of the ground: the ground bursting with only its spires and hands through, head and shoulders out, climbing out; a crater of broken earth, torn slabs and lit cracks round it | `up`, `HARROW.up` s, once |
-| `harrow-crater` | The cave-in crater it leaves: a dark throat, a heaped rim, torn slabs, cracks lit faintly | On the ground where it came up (`S.mur.craters`), 6 tiles, fading over its last minute (`HARROW.crater` s); its light at dusk and night |
+| `harrow-crater` | The cave-in crater it leaves: a dark throat, a heaped rim, torn slabs, cracks lit faintly | On the ground where it came up (`S.mur.craters`), 6 tiles, fading over its last minute (`HARROW.crater` s); its light at dusk and night. It stays open as a tunnel exit, so the exit's own art stands in its middle until warbots collapse it |
 | `harrow-cracks` | The slam's broken ground: a disc of split earth, the cracks lit violet, slabs heaved up | Where it slammed (`S.mur.cracks`), 6 tiles, fading in 20 s, its light strongest at first |
 | `<every key above>-glow` | The crystal's light alone: the night glow pass, bloomed, one gain for every frame | Added over it as bright as it's charged, by day faint and full at night |
 

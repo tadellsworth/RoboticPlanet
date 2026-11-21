@@ -28,13 +28,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
      Deep's mound is almost destroyed, two burst out of it: one heads north and one south, one for each colony (one per
      colony with three or four). **And late in both campaigns** (the owner, Nov 21): the Main Campaign's Act III, and Contingency late in a
      run or with the Murmur meter high. **And in long ordinary games on Active** (the owner, Nov 21): past a set
-     point, a 50% chance it comes, rolled from the game's seed so it stays rare. Which point: **night 6, proposed, awaiting the owner's confirmation** (one seeded roll at its dusk warning; on a hit it comes on a seeded night from 6 to 8).
+     point, a 50% chance it comes, rolled from the game's seed so it stays rare. Which point: **night 6, confirmed by the owner (Nov 21 2026)** (one seeded roll at its dusk warning; on a hit it comes on a seeded night from 6 to 8).
      **BUILT (Nov 21 2026): the Harrow** (README, "The Harrow"; How to play, The Harrow; ART_GUIDE Batch 31; the
      mission *The Harrow* in First Contact; `lh/harrow-test.js`). Numbers measured, not the sheet's guess: **240 health**
      with small arms at a quarter (960 points of small-arms fire; the sheet's ~1,400 came before robots' ammo was
-     counted: a 20-robot army fires about 250 points, heavy and quarter-strength, before it must reload). Open: the
-     roll's night (6: **proposed, awaiting the owner's confirmation**); whether a second roll comes much later; whether
-     its crater should stay a tunnel exit; whether Arc Casters should heal it (the sheet's Bearer idea, not used).
+     counted: a 20-robot army fires about 250 points, heavy and quarter-strength, before it must reload). The owner
+     (Nov 21): night 6 **confirmed**; **keep the slam and its strength as they are** (the owner will test it and wants it
+     tough); **its crater stays open as a tunnel exit** of its nest (BUILT). Open: whether a second roll comes much later;
+     whether Arc Casters should heal it (the sheet's Bearer idea, not used).
      **BUILT (Nov 21 2026): the Harrow** (README, "The Harrow"; How to play, The Harrow; ART_GUIDE Batch 31; the
      mission *The Harrow* in First Contact; `lh/harrow-test.js`). Numbers measured, not the sheet's guess: **240 health**
      with small arms at a quarter (960 points of small-arms fire; the sheet said ~1,400 health before robots' ammo was

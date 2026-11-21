@@ -2170,14 +2170,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     across (its body about 4.5 by 3). **When it comes:** (1) the Hollow: the Deep's mound under `mound` (a quarter) of its
     armor (`updateNest` → `harrowMound`): two burst out of it, 4 tiles out toward each colony's Command Base, one for
     each colony, once a game (`S.mur.hw.mound`); (2) a long game on Active (not the Hollow, not a mission unless it sets
-    `harrowRoll`): at the dusk warning of night `rollNight` (6, about 70 minutes in: *proposed, awaiting the owner's
-    confirmation*), one roll from the seed (`hash2(S.seed, …)` < `chance`, 0.5: `S.mur.hw.roll` 2, or 1 for no), and on a
+    `harrowRoll`): at the dusk warning of night `rollNight` (6, about 70 minutes in: confirmed by the owner, Nov 21
+    2026), one roll from the seed (`hash2(S.seed, …)` < `chance`, 0.5: `S.mur.hw.roll` 2, or 1 for no), and on a
     hit a seeded night in `nights` (6 to 8, `S.mur.hw.night`); at that nightfall (`harrowNight`) it comes up through the
     exit of the nest grown most nearest its colony (or 4 tiles out of the nest), at the colony holding most charge
     (`chargeWorth`), once (`S.mur.hw.done`); (3) `spawnHarrow(x, y, p, { nest, noEscort, quiet })` for missions and the
     campaigns (CAMPAIGN.md, CONTINGENCY.md), and a mission's `S.mission.harrowAt` (*The Harrow*). It needs the Murmur
     in the game (`S.wildlife`); its pack and riders need a nest left. **Coming up** (pose `up`, `up` s): a cave-in
-    crater (`S.mur.craters`, drawn `crater` s) crushes what's within 2 tiles (Walls, roads, track and pipes), and its
+    crater (`S.mur.craters`, drawn `crater` s) crushes what's within 2 tiles (Walls, roads, track and pipes) and stays
+    open as a tunnel exit of its nest (a `burrow` with `b.crater`, on the nest's tunnel: packs use it on later nights,
+    warbots collapse it like any other; none when no nest is left to own it), and its
     pack (`escort`: 6 Scuttlers, 2 Brutes) comes up raiding the Command Base; every colony is told, its target loudest
     (`sfx('harrow')`), and the music goes to Night Murmurs (`musicMood`). **Its walk** (task `harrow`: `p`, `tb`,
     `ph` 'up' | 'go' | 'slam', `path`/`pi`, `re`, `slamAt`, `born`): at `speed` (Worker × 0.45) along its own route
@@ -2204,7 +2206,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`aiHarrow`, at the top of `aiMurmur`): with one going for it or within `aiReach` (30) tiles, one rally flag
     (`P.hwRally`) a few tiles ahead of it on the way to what it's after (by that, once it's within 10), every warbot it
     can spare sent there (the rear too), the flag moved with it until the fight is on, `P.massFor` raised to `aiNeed` + 4,
-    and no exit or nest strikes meanwhile; the flag comes down when it's gone. Saved: the task, `u.riders`, `S.mur.hw`,
+    and no exit or nest strikes meanwhile; the flag comes down when it's gone. Saved: the task, `u.riders`, a crater exit's `b.crater`, `S.mur.hw`,
     `craters`, `cracks`, `husks` (checkSave; hashState). Mission: First Contact's *The Harrow*. Tests:
     `lh/harrow-test.js` (the kit).
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
