@@ -143,7 +143,7 @@ function natureGround(ctx, ox, oy, z, v0, v1) {
   natState();
   natHear();
   if (hdLevel(z) && R.hd) { natPlants(ctx, ox, oy, z, v0, v1); natRebake(z, v0, v1); }
-  if (!natSaver() && !natStill()) natSheen(ctx, ox, oy, z);
+  // (wind in the grass, natSheen: off for now, the owner, Nov 21 2026: the bright crests read as moving light streaks)
   const wet = natureWet();
   if (wet > 0.01) natWetGround(ctx, ox, oy, z, v0, v1, wet);
   const fr = natureFrost();

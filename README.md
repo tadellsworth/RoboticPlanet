@@ -2818,7 +2818,7 @@ clouds' drift (`natureCloudTime`).
   decorative plants are drawn live (`natPlants`) instead of baked into the sharp chunks (a chunk baked while they sway
   has `noPlants`; `drawPlants` skips it, `natRebake` bakes the ones on screen again one a frame), each leaning with the
   wind and the gust over it, and pushed outward for a moment by a blast near it (`natHear` reads new blasts in `S.fx`).
-  At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
+  (Off for now: the owner, Nov 21 2026.) At any zoom, crests of bent grass with their darker side upwind roll over the grassy land (`natSheen`: a small buffer
   masked to `natVegMask`, one tile a pixel, laid over the view in one draw), and a blast sends a ring of them out.
   Not on Graphics Saver.
 - **Wet ground** (`natureWet`): through a rainstorm and for a few minutes after it (`NATFX.wetFor`) the land is darker
