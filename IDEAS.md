@@ -67,7 +67,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     - "A crater for 5 minutes" is not a separate rule: the shaft (with the Murmur on) is the lasting mark; with them off
       the ground is free at once.
     - The Core's output is multiplied by the colony's difficulty `mult`, like every producer; Arrival City's boost
-      doesn't reach it. It can't be paused (turn its Generator off).
+      doesn't reach it. It can be turned off on its panel like the Shield Dome (owner, Nov 21): no Fuel burned, depth kept.
     - The Hollow's "each stage counts double" is read as every call twice as big (Brutes too).
     - The mission *Dry Ground* teaches the Murmur briefly before First Contact (Quiet, four warbots), as the sheet put it
       in Industry and Trade; its Crystal goal counts what the Core brings up (12, 20 or 30 by level).

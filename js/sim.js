@@ -4154,7 +4154,9 @@ function updateBuilding(b, dt) {
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
     if (def.dome) b.dUp = 0;
+    if (def.deepcore) { deepHeld(b); deepWarn(b); } // (turned off, a raid it has already called still comes)
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
+      : def.deepcore ? 'Off: not digging and burning no Fuel, its depth kept (the Murmur aren\'t drawn to it while it\'s off)'
       : def.dome ? `Off: the dome is down and saves its Crystal (turned on, it takes ${DOME.warm} s to come up)`
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
@@ -9463,7 +9465,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
