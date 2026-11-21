@@ -21,6 +21,10 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
 - **Next after the current batch (the owner, Nov 21 2026):**
   1. Design the new top-tier Murmur unit (the behemoth in the Murmur rework notes): a design sheet first.
+     **Sheet made (Nov 21 2026), awaiting the owner's choice:** design/behemoth/BEHEMOTH-SHEET.md, three directions
+     (A the Harrow, a walking siege mound; B the Maw, a burrowing leviathan; C the Bearer, a carrier); recommended A.
+     Triggers settled by the owner: two burst out of the Deep's mound when it's almost down; late in both campaigns;
+     a seeded 50% chance once per long Active game (proposed: night 6).
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).

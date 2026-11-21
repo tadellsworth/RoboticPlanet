@@ -1001,3 +1001,6 @@ function mergeAll(K, geos) {
   }
   return out;
 }
+
+// shared with murmur_behemoth.js (the behemoth design sheet): the palettes, the body plan, the face and the Scuttler
+export { PAL, coat, plan, face, centreOn, mergeAll, scuttler };

@@ -489,6 +489,28 @@ python3 tools/install_murmur_forms.py out/murmur out/fx <game>/art   # sprites, 
 
 The Lore guide's Spitter (brighter pouches) is the catalogue's `murmur-spitter-hero` through `post/murmur_lore.py`.
 
+## The behemoth design sheet
+
+Three directions for the biggest Murmur form (the Harrow, the Maw, the Bearer: design/behemoth/BEHEMOTH-SHEET.md), for
+the owner to choose; not installed. `b/murmur_behemoth.js` builds them with the Murmur kit (`murmur_moleskit.js`) and
+the body plan, palettes, face and Scuttler that `b/murmur_moles.js` now exports (its own renders are unchanged). The
+sprite frame is 18 world units, drawn 6 tiles wide. `?c=harrow|maw|bearer`, `?pose=` (harrow: walk, rear, slam, fall,
+emerge; maw: up, heave, erupt, sink; bearer: walk, draw, birth, fall, emerge), `?f=` walking frame, `?charge=` (default
+0.9), `?hero=1&hi=1`, `?tod=`. Run from this folder:
+
+```
+for j in harrow:walk harrow:rear harrow:slam harrow:fall harrow:emerge maw:up maw:heave maw:erupt maw:sink \
+         bearer:walk bearer:draw bearer:birth bearer:fall bearer:emerge; do c=${j%%:*}; p=${j#*:}
+  ch=; case $p in fall|sink) ch='&charge=0.08';; esac
+  node run.js out/beh "murmur_behemoth:::$c-$p:c=$c&pose=$p$ch" "murmur_behemoth:::$c-$p-n:c=$c&pose=$p$ch&tod=night"
+done   # and the walking frame 3: <c>-walk-f2 with &f=2 (harrow, bearer)
+node run.js out/beh 'murmur_behemoth:::hero-harrow-walk:c=harrow&pose=walk&hero=1&hi=1' ...   # the six hero shots the sheet lists
+python3 compose_any.py out/beh <every name> --b1 5 --b2 15 --glow 1.2      # heroes: --b1 7 --b2 22
+TERRAFALL_ART=../art python3 preview/behemoth_mock.py out/beh out/preview/beh   # scale line-ups, sieges, the Hollow's mound
+python3 preview/behemoth_sheet.py out/beh out/preview/beh out/sheet
+node preview/shoot.js out/sheet out/sheet/overview.html out/sheet/harrow.html out/sheet/maw.html out/sheet/bearer.html
+```
+
 ## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake (the stake since retired: Batch 20)
 
 `tools/render_install.sh` renders everything the game uses from the two sets above (one job at a time), and
