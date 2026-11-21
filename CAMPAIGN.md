@@ -108,6 +108,9 @@ The war turns serious, and the colony reaches for home. Every answer it gets is 
 
 The colony learns the truth, the Murmur rise from what the war left behind, and the last fight is over a signal no one will answer.
 
+The behemoth, the biggest Murmur form, which only an army can bring down, appears in Act III's missions (owner, Nov 21
+2026; its design sheet is on the roadmap).
+
 ### 11. What the War Feeds
 
 - **Map:** The Bloom. Rivals: none at first; a Herald colony arrives late.

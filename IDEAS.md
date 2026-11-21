@@ -24,7 +24,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
      The owner (Nov 21): the biggest and scariest-looking Murmur form, and the most powerful thing on the map:
      almost an endgame unit, which only a real army can bring down. **On the Hollow (the owner, Nov 21):** when the
      Deep's mound is almost destroyed, two burst out of it: one heads north and one south, one for each colony (one per
-     colony with three or four). Whether it also comes elsewhere (late game on Active, in Contingency) is still open.
+     colony with three or four). **And late in both campaigns** (the owner, Nov 21): the Main Campaign's Act III, and Contingency late in a
+     run or with the Murmur meter high. Whether it comes in ordinary late games on Active is still open.
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).
