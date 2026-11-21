@@ -21,10 +21,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
 - **Next after the current batch (the owner, Nov 21 2026):**
   1. Design the new top-tier Murmur unit (the behemoth in the Murmur rework notes): a design sheet first.
-     **Sheet made (Nov 21 2026), awaiting the owner's choice:** design/behemoth/BEHEMOTH-SHEET.md, three directions
-     (A the Harrow, a walking siege mound; B the Maw, a burrowing leviathan; C the Bearer, a carrier); recommended A.
-     Triggers settled by the owner: two burst out of the Deep's mound when it's almost down; late in both campaigns;
-     a seeded 50% chance once per long Active game (proposed: night 6).
+     **The owner chose the Harrow (Nov 21)**, the walking siege mound, with Scuttlers in its spine and a cave-in
+     crater when it comes up (design/behemoth on the behemoth-design branch). Being built into the game.
+     The owner (Nov 21): the biggest and scariest-looking Murmur form, and the most powerful thing on the map:
+     almost an endgame unit, which only a real army can bring down. **On the Hollow (the owner, Nov 21):** when the
+     Deep's mound is almost destroyed, two burst out of it: one heads north and one south, one for each colony (one per
+     colony with three or four). **And late in both campaigns** (the owner, Nov 21): the Main Campaign's Act III, and Contingency late in a
+     run or with the Murmur meter high. **And in long ordinary games on Active** (the owner, Nov 21): past a set
+     point, a 50% chance it comes, rolled from the game's seed so it stays rare. Which point: **night 6, proposed, awaiting the owner's confirmation** (one seeded roll at its dusk warning; on a hit it comes on a seeded night from 6 to 8).
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).
