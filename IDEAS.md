@@ -35,6 +35,15 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
   **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
+  **The Sundering Ray's look and effect, the plan (the owner, Nov 21 2026), real seismic methods:** a phased array.
+  A ring or line of heavy hydraulic ram plates set in the ground (vibroseis-style) round a central bore tower over a
+  deep shot hole. Charging: the rams pump one after another in a rolling, visible drumroll, dust lifting off the plates,
+  the hum climbing. Firing: the bore charge goes off and every plate slams in a timed ripple; the tiny delays steer the
+  energy one way (how real seismic arrays and radar aim without moving), so it really is a ray through the earth. The
+  ray: a bulge running through the ground to the target, dust kicked up along it, a line of small cracks, trees shaking,
+  robots staggering as it passes; it arrives a moment later (sound through rock), which gives the target its warning
+  naturally. On arrival the ground heaves and cracks spread in a circle; Murmur tunnels cave in along the path and at
+  the target. Keeps the approved Piston Battery look.
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
   - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright
