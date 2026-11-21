@@ -153,6 +153,8 @@ sealed contingency orders said "secure Ithaca I for us"; each run plays those or
 **Order (the owner, Nov 21):** Deep Core, Sundering Ray, Atmosphere Engine, the top-tier Murmur unit and the smarter
 Murmur first; then **Contingency, before the Main Campaign** and other items.
 
+**The full plan is in CONTINGENCY.md** (Nov 21): the globe, turns, battles, Reserve, the Murmur, megastructures
+on the globe, winning, rival AI, screens, the build order and the questions still open.
 **Decided (the owner, Nov 21):** the name is **Contingency**; the planet map is **turn-based**; battles are
 **shorter** than a free game (about 15 to 25 minutes); **auto-resolve** is allowed for any battle.
 **Open:** factions. Either the four vanguard callsigns, each with a small perk from its Sponsor (COBALT cheaper and
