@@ -32,6 +32,9 @@ cleanly this way: a callsign says who sent you, and a doctrine says how a rival 
 
 ## The globe
 
+**The map is LORE.md's atlas (approved Nov 21).** The territories, their land borders and the sea crossings are in
+`tools/atlas/` and listed below.
+
 - **What it is.** The turning Ithaca I from the main menu (js/menuplanet.js), which you can now spin and tap. Its
   surface is cut into **28 territories** grouped by region. Borders are drawn in faint atlas lines with region names,
   and each territory is tinted by its owner's color.
@@ -320,3 +323,32 @@ in orders and seeded state from the start so that this is possible later.
 Decided: callsigns with a perk and their own card, plus random rival doctrines; orders revealed together with no
 interception; the T+31 window; truces and alliances in the first build.
 Battle size: Small or Medium, and Large for home territories (35-minute cap). Nothing is open.
+
+## The atlas: the territories and their links (Nov 21)
+
+| Region | Territories |
+| --- | --- |
+| The Rust | Pathfinder's Landing, Redwash Flats, Dustgate, Ironbluff |
+| Greenreach | Passenger Town, Tallpine, Stillwater |
+| Emberwood | Goldleaf, Foxford |
+| The Long Grass | Herdway, Ledger Post, Windsweep |
+| Blackwater | the Delta, Heron Reach |
+| The Polar Caps | Northcap, Southcap |
+| Cinderlands | Ringfall Basin, Ashfield, Cinder Rift |
+| Steamwells | Geyser Field, the Terraces |
+| The Shoals | Palm Keys, Lantern Reef |
+| The Bloom | Violet Reach, Bloom Edge |
+| The Hollow | the Hollow (beneath Violet Reach) |
+| Argos | Lunar Relay, Silent Crater |
+
+**Land borders** are drawn from the map. The Tallpine isthmus and the Delta's shallows reach Lantern Reef on foot.
+**Sea crossings** need a Port, so you must hold a coastal territory:
+
+| From | To | Across |
+| --- | --- | --- |
+| Dustgate, Passenger Town | Palm Keys | the Warm Sea |
+| Windsweep, Ledger Post | Geyser Field, Ringfall Basin | the Narrows |
+| Heron Reach | Cinder Rift | the Grey Sound |
+| Bloom Edge, Violet Reach | Goldleaf, Redwash Flats, Ironbluff | the Long Sea, where the map wraps |
+
+**Orbit links:** Pathfinder's Landing (and any Orbital Lift) reaches Argos.

@@ -70,6 +70,51 @@ The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds. 
 | The Bloom | Violet alien growth | Native life feeding on fallen Crystal (see Native life). |
 | The Hollow | Underground caverns | The Murmur's lair beneath the Bloom (see The Hollow). |
 
+### The atlas
+
+The owner approved this map on Nov 21, 2026. It is the one map of the planet, used by both campaigns, the menu planet and
+the Lore guide.
+
+- **The map:** `art/lore/atlas.webp`, with views of the globe in `art/lore/atlas-globe.webp`.
+- **How it is made:** the script `tools/atlas/atlas.py` draws it, so a change to the map is a change to that script.
+
+![Ithaca I, the atlas](art/lore/atlas.webp)
+
+- **Size.** About 1.1 times Earth's width, so its gravity is a little heavier than Earth's.
+- **Land and sea.** 65% land and 35% water, ice caps included. Earth is the other way round.
+- **Three continents with narrow seas between them:**
+  - **The western continent, the old Accord heartland:** the Rust (the largest region on the planet), Greenreach and
+    Emberwood. The first landings came down here.
+  - **The middle continent:** the Long Grass and Blackwater. A thin isthmus at Tallpine joins it to Greenreach, the
+    only dry way between two continents.
+  - **The eastern continent, the struck land:** Cinderlands, Steamwells and the Bloom, with the Hollow beneath the
+    Bloom.
+- **The seas:**
+  - **the Warm Sea,** with the Shoals in it, between the west and middle continents;
+  - **the Narrows,** between the middle and east;
+  - **the Long Sea,** between the east and west;
+  - **the Grey Sound** in the south;
+  - **the Cold Sea** in the north.
+
+  The Polar Caps cover both poles.
+- **The ringfall belt.** The Ring is tilted, so its pieces fall along a band that swings from the Rust down to
+  Cinderlands, and strike sites cluster under it. The Bloom grows where the belt crosses the eastern continent, feeding
+  on the fallen Crystal. The Shoals lie far from the belt.
+- **Named places:**
+  - **Uplinks:** Northcap (above Glass Lake), Stillwater (Greenreach), Lantern Reef (the Shoals) and the Lunar Relay
+    (Argos).
+  - **The Pathfinder's hull,** at Pathfinder's Landing in the Rust.
+  - **Passenger Town,** the empty town, in Greenreach.
+  - **Trade Posts:** Ledger Post (the Long Grass) and Spring Market (Steamwells).
+  - **The Ring Shard Spire,** in Ringfall Basin, the biggest crater.
+  - **Landmarks:** the Long Falls, the Stone Forest, Glass Lake and the Clock Geyser.
+  - **The Breach Fields,** at Violet Reach: the shafts into the Hollow.
+  - **Wrecks of failed landings:** the *Kestrel* (Blackwater), the *Ninth Survey* (Cinderlands) and the *Halvard*
+    (Emberwood), each with a log to recover.
+  - **On Argos:** Silent Crater.
+- **Contingency's territories.** The globe is split into 28 territories, listed with their borders and sea crossings in
+  CONTINGENCY.md.
+
 - **Steamwells.** A basin where an old strike broke the crust but never opened it. The heat stayed underground. Turquoise and amber pools step down sulfur-stained limestone terraces, steam drifts off the vents, and the geysers go off on their own clocks, as they did long before anyone came to time them. The Pathfinder's survey marked it "thermal reserve: future bathing and greenhouse district." The bison it seeded graze the warm grass between the springs, and nothing has bathed here yet.
 - **The Shoals.** Coral keys and palm islands scattered across the warm seas near the equator, where ringfall rarely lands. No road reaches them; a colony comes by Port or by air. The survey filed them as "coastal settlement, phase two": gulls on every beach, turtles hauling out on the sand, reefs as clear as the day the seed vaults opened. The beaches are lit by nothing but the moon.
 
