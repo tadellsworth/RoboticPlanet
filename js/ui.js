@@ -2048,7 +2048,7 @@ function openFoundryOrders() {
   const ready = all.filter((b) => b.built).sort((a, b) => a.id - b.id);
   if (!ready.length) {
     sfx('error');
-    toast(all.length ? 'Your Bot Foundry is still being built.' : 'You have no Bot Foundry yet: Build (B) → Make (2) → Bot Foundry (U).', 'warn');
+    toast(all.length ? 'Your Bot Foundry is still being built.' : 'You have no Bot Foundry yet: Build (B) → Make (2) → Bot Foundry (B).', 'warn');
     return;
   }
   const at = UI.sheetKind === 'bld' ? ready.findIndex((b) => b.id === UI.sheetFor) : -1;
@@ -2067,13 +2067,13 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
  * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
- * map and B closes the menu, so no building uses those. R lays roads (the Move tab's Roads card) except on a tab with a
+ * map, and B closes the menu except on the Make tab, where B is the Bot Foundry (Build, 2, B). R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
  * Defend tab's Walls card is X, as in Paths. On the All tab each card shows its tab's number and letter.
  */
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
-  make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
+  make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
   mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', gup: 'u' },
@@ -2471,7 +2471,7 @@ function initKeyboard() {
     if (UI.sheetKind === 'build' && k === 'r' && !(BUILD_KEYS[UI.buildTab] && Object.values(BUILD_KEYS[UI.buildTab]).includes('r'))) { e.preventDefault(); openRoadDraw(); return; }
     if (UI.sheetKind === 'build' && k === 'x' && $('build-walls')) { e.preventDefault(); $('build-walls').click(); return; }
     // A letter that's no building's on this tab does what it does elsewhere (Q army, H base, M minimap...).
-    if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && k !== 'b') {
+    if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && (k !== 'b' || (BUILD_KEYS[UI.buildTab] && Object.values(BUILD_KEYS[UI.buildTab]).includes('b')))) {
       const keys = BUILD_KEYS[UI.buildTab];
       const type = keys && Object.keys(keys).find((t) => keys[t] === k);
       const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
