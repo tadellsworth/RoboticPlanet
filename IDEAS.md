@@ -16,6 +16,9 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 - **Lance of Corvane cooling down:** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
   normal look as the reload runs out (drawn from its reload clock; red at its hottest just after the shot).
+- **Polish round 2:** skip the What's new popup and the credits for now.
+- **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
+  or in the pause menu; nothing pushy, nothing in a game).
 - **Mass Driver sound:** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
