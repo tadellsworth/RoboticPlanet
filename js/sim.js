@@ -10833,7 +10833,8 @@ function placeUplinks(seed) {
   }
   // Each Uplink's own tile is cleared of anything growing or lying there (with its twins, so the map stays fair).
   S.uplinks = ups.map((u, k) => ({ id: k + 1, x: u.x, y: u.y, owner: -1, jam: 0 }));
-  for (const u of S.uplinks) { const t = tIdx(u.x, u.y); S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
+  // (The middle one has twins that aren't Uplinks: they're cleared too, so every colony's side stays the same tile for tile.)
+  for (const u of S.uplinks) for (const t of uplinkOrbit(tIdx(u.x, u.y)) || [tIdx(u.x, u.y)]) { S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
   return S.uplinks;
 }
 
@@ -13295,18 +13296,22 @@ function calmSpillOk(t, from, sameZone) {
 }
 
 /**
- * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk),
- * on the same land if there is one near, else anywhere near (a tie goes to the tile further out from the posts' ground);
- * -1 if there's nowhere. The same answer on every device.
+ * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk,
+ * and `fit` if given: see clearCalmGround), on the same land if there is one near, else anywhere near, else anywhere at all (a tie goes to the
+ * tile further out from the posts' ground); -1 if there's nowhere. The same answer on every device.
  */
-function calmSpill(from) {
+function calmSpill(from, fit) {
   const fi = from % S.W, fj = (from / S.W) | 0;
+  // (Out to 20 tiles, and then the whole map: a post can take up a whole islet.)
   for (const same of [true, false]) {
-    for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) {
+    const radii = [];
+    for (let R = TRADE_POST.calm + 2; R <= TRADE_POST.calm * 2 + 14; R += 4) radii.push(R);
+    if (!same) radii.push(Math.max(S.W, S.H));
+    for (const R of radii) {
       let best = -1, bd = Infinity, bo = -1;
       for (let j = Math.max(0, fj - R); j <= Math.min(S.H - 1, fj + R); j++) for (let i = Math.max(0, fi - R); i <= Math.min(S.W - 1, fi + R); i++) {
         const t = j * S.W + i, d = dist2(i, j, fi, fj);
-        if (d > bd || !calmSpillOk(t, from, same)) continue;
+        if (d > bd || !calmSpillOk(t, from, same) || (fit && !fit(t, same))) continue;
         let out = Infinity;
         for (const p of S.posts) out = Math.min(out, Math.max(Math.abs(p.x - i), Math.abs(p.y - j)));
         if (d < bd || out > bo) { best = t; bd = d; bo = out; }
@@ -13332,41 +13337,46 @@ function moveDeposit(from, to) {
  * Clear the Trade Posts' ground of deposits (see calmSpillOk): each moves, the same kind and amount, to the nearest open
  * tile just off it (calmSpill), the ones at the edge of the ground first; an Energy crop is a planting, and just goes.
  * At the start of a game (once the posts, the Uplinks and a mission's own setup are in) and as a save loads (one from
- * before this rule). A post's half-turn twin (Teams and Long Haul 2v2 pair them) has its deposits moved to the twins of
- * the first one's tiles, so both sides stay alike. No dice: every device does the same. Returns how many moved.
+ * before this rule). No dice: every device does the same. Returns how many moved.
+ * With `sym` (a new Versus game on a planet made from the seed: newGame) the map's own symmetry is kept (uplinkOrbit:
+ * the half turn, the quarter turns, Long Haul 2v2's two mirrors, the three-way turn): a deposit and its twins on every
+ * other colony's side move together, to a tile and its twins, whether or not the twins lie on a post's ground (most posts
+ * have no twin post), so every colony's side stays the same tile for tile; a deposit on a line of symmetry stays on it.
  */
-function clearCalmGround() {
+function clearCalmGround(sym) {
   if (!S.posts || !S.posts.length) return 0;
-  const R = TRADE_POST.calm, N = S.W * S.H, half = (t) => N - 1 - t;
-  const done = new Map(); // post -> its moves [{ f, t, r, a }]
-  let moved = 0;
-  for (const p of S.posts) {
-    const src = [];
+  const R = TRADE_POST.calm, orbit = (t) => (sym ? uplinkOrbit(t) : null) || [t];
+  const src = [];
+  S.posts.forEach((p, n) => {
     for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
       const i = p.x + di, j = p.y + dj;
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j);
       if (!S.res[t]) continue;
       if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.dirtyTiles.push(t); continue; }
-      src.push([Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
+      src.push([n, Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
     }
-    // The twin's moves, turned half round, if they all still fit.
-    const twin = S.posts.find((q) => q !== p && done.has(q) && q.x === S.W - 1 - p.x && q.y === S.H - 1 - p.y);
-    if (twin && src.length) {
-      const plan = done.get(twin).map((m) => ({ f: half(m.f), t: half(m.t), r: m.r, a: m.a }));
-      const same = plan.length === src.length && plan.every((m, k) => S.res[m.f] === m.r && S.amt[m.f] === m.a && src.some((s) => s[2] === m.f) && plan.findIndex((x) => x.t === m.t) === k && calmSpillOk(m.t, m.f, false));
-      if (same) { for (const m of plan) { moveDeposit(m.f, m.t); moved++; } done.set(p, plan); continue; }
-    }
-    src.sort((a, b) => b[0] - a[0] || b[1] - a[1] || a[2] - b[2]);
-    const moves = [];
-    for (const [, , f] of src) {
-      const t = calmSpill(f);
-      if (t < 0) continue;
-      moves.push({ f, t, r: S.res[f], a: S.amt[f] });
-      moveDeposit(f, t);
-      moved++;
-    }
-    done.set(p, moves);
+  });
+  // Post by post, the edge of its ground first.
+  src.sort((a, b) => a[0] - b[0] || b[1] - a[1] || b[2] - a[2] || a[3] - b[3]);
+  let moved = 0;
+  for (const [, , , s] of src) {
+    if (!S.res[s]) continue; // (moved already, with a twin)
+    const O = orbit(s), r = S.res[s], a = S.amt[s];
+    // The twins that hold the same deposit move with it (on a planet made from the seed: all of them).
+    const ks = O.map((u, k) => k).filter((k) => O.indexOf(O[k]) === k && S.res[O[k]] === r && S.amt[O[k]] === a);
+    // Its new tile's twins: open ground off every post's ground, on the same land as theirs if it can be, and as many
+    // of them as it has (a twin that is the deposit's own tile is the new tile's own: on a line of symmetry, it stays on it).
+    const fit = (d, same) => {
+      const D = orbit(d);
+      if (D.length !== O.length) return false;
+      for (let k = 0; k < O.length; k++) for (let m = 0; m < k; m++) if ((O[k] === O[m]) !== (D[k] === D[m])) return false;
+      return ks.every((k) => k === 0 || calmSpillOk(D[k], O[k], same));
+    };
+    let d = ks.length > 1 ? calmSpill(s, fit) : -1, D = d >= 0 ? orbit(d) : null;
+    if (d < 0) { d = calmSpill(s); D = [d]; ks.length = 1; } // (nowhere for them all: this one alone)
+    if (d < 0) continue;
+    for (const k of ks) { moveDeposit(O[k], D[k]); moved++; }
   }
   return moved;
 }

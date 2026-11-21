@@ -2731,7 +2731,7 @@ function newGame(opts) {
   if (!grandCanyon) placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
-  clearCalmGround(); // (no deposits on a Trade Post's ground: moved just off it)
+  clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
