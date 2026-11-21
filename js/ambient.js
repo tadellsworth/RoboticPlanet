@@ -149,7 +149,7 @@ function drawCloudShadows(ctx, ox, oy, z) {
   const g = buf.getContext('2d');
   g.globalCompositeOperation = 'source-over';
   g.clearRect(0, 0, bw, bh);
-  const off = ambDrift(S.time), cell = C.cell, puff = ambPuff(), more = gfxStep() === 'ultra' ? 2 : 1;
+  const off = ambDrift(typeof natureCloudTime === 'function' ? natureCloudTime() : S.time), cell = C.cell, puff = ambPuff(), more = gfxStep() === 'ultra' ? 2 : 1;
   // The cells in view, in the sky's own frame (the ground's, less how far the wind has carried it).
   const x0 = -ox / z - off.x, x1 = (R.w - ox) / z - off.x, y0 = -oy / z - off.y, y1 = (R.h - oy) / z - off.y;
   let bx0 = bw, by0 = bh, bx1 = 0, by1 = 0; // (what the puffs cover: only that part is laid over the view)

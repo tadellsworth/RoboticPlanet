@@ -662,7 +662,7 @@ const MISSIONS = [
       'Freight Trucks reach 4½ times off-road speed on Express. Sign gantries rise along the straight pair.',
       'Survey depot reception board lit. Destinations pending.',
     ],
-    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 2, biome: 'desert', shape: 0, limit: [0, 0, 14],
+    mode: 'colony', seed: 5521, size: 1, rough: 0, rich: 3, biome: 'desert', shape: 0, limit: [0, 0, 14],
     layout(m, W) {
       const base = m.bases[0], { x, north, south } = arterialRoute(base);
       for (let y = north - 1; y <= south + 2; y++) for (let i = base.x; i <= x + 4; i++) {

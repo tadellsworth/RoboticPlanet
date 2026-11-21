@@ -36,6 +36,8 @@ README, War scars). Open:
 - Ash for good and nuclear glass heal like the rest (glass less); should glass never green?
 - Fires only creep over ground the war has already scorched (so none with War scars Off). A real grass-fire mechanic
   (spreading by wind, burning crops and groves) would be game state and a balance question.
+- Burning oil wells (built Nov 2026) are looks only. A gameplay version (a burning well can't be rebuilt until it's put
+  out, a Worker or a new firefighting unit capping it; the smoke blinding turrets) was not asked for; the owner's call.
 - Sound: crackling for the ground fires, a low boom for the shockwave's ring reaching the camera.
 
 ## The owner's ideas, filed Nov 19 2026
@@ -43,6 +45,7 @@ README, War scars). Open:
 Roadmap order the owner set: finish the new transit items, **add all the new megastructures and other units, then a
 complete game-balance audit** (every unit and building has a defined, useful purpose, nothing over- or underpowered),
 and only **then revamp the Missions** (to use the new units) and **then the Main Campaign**. Quick fixes can go any time.
+  In the Missions revamp, also bring the long mission texts within the static test's limits (goals of 40 characters, intros of 5 lines): Arterial's goals, Maglev's hub goal and intro, and the older Blacktop and Lance ones (the owner, Nov 20).
 
 - **Owner, Nov 20: circle back to a Research Lab for Versus mode (Colony only today).** (Open.)
 - **Road crews (built Nov 20; open questions).** At most 3 Workers lay planned road at once (Road crew 2, 3, 5 or No
@@ -482,8 +485,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
     the blob.
-  - **Map edges, looks only:** faded, unplayable terrain carrying on past the map's edge; a haze in the biome's colour
-    thickening outward; perhaps a slight curve at far zoom.
+  - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
+    on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
+    and zoomed far out the camera tilts a little under a depth haze (the planet view). Still open: a true curve of the
+    horizon at the very furthest zoom.
   - **Road crews:** the rivals and the Roadworks; a shorter phone label ("All" instead of "No limit").
   - **Orbital Lift:** an 18-minute opening time; rivals rarely reach it; the Warden in the Hollow gets no main project.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by

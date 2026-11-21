@@ -1073,6 +1073,41 @@ function liftHum(k, w) {
   LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
 }
 
+/*
+ * Burning oil on screen (an oil well, a Refinery or a Fuel Tank set alight: js/warfx.js): a low roar, a rumble of
+ * turbulent fire with a slow surge in it, panned to the loudest well (pan -1..1) and as loud as it is near the middle of
+ * the screen and fierce (k 0..1; 0 stops it). One voice for them all, so several wells never stack: more of them only
+ * bring it up a little (n). On the Effects volume.
+ */
+const OILROAR = { o: null };
+function oilRoar(k, pan, n) {
+  const ac = AUDIO.ctx;
+  if (!ac || !sfxReady()) k = 0;
+  if (!k) {
+    if (OILROAR.o) { const t = ac.currentTime, h = OILROAR.o; OILROAR.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.5); setTimeout(() => { try { h.n.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 2500); }
+    return;
+  }
+  if (!OILROAR.o) {
+    const n0 = ac.createBufferSource(), len = ac.sampleRate * 3, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    let v = 0; for (let i = 0; i < len; i++) { v = v * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = v * 5; } // (brown: the body of the roar)
+    n0.buffer = buf; n0.loop = true;
+    const lp = ac.createBiquadFilter(), bp = ac.createBiquadFilter(), gb = ac.createGain(), am = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain(), g = ac.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 0.7;
+    bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.8; gb.gain.value = 0.18; // (a hiss of flame over it)
+    l.type = 'sine'; l.frequency.value = 0.35; lg.gain.value = 0.25; am.gain.value = 0.8; // (the slow surge)
+    l.connect(lg).connect(am.gain);
+    n0.connect(lp).connect(am); n0.connect(bp).connect(gb).connect(am);
+    const pn = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (pn) am.connect(g).connect(pn).connect(AUDIO.fxBus); else am.connect(g).connect(AUDIO.fxBus);
+    g.gain.value = 0.0001;
+    n0.start(); l.start();
+    OILROAR.o = { n: n0, l, g, pn };
+  }
+  const t = ac.currentTime, h = OILROAR.o;
+  h.g.gain.setTargetAtTime(0.11 * k * Math.min(1.3, 1 + 0.12 * ((n || 1) - 1)), t, 0.6);
+  if (h.pn) h.pn.pan.setTargetAtTime(Math.max(-0.8, Math.min(0.8, pan || 0)), t, 0.4);
+}
+
 /** Contact (the Great Uplink win): the music falls away to silence, and after it one answering tone (sfx 'gupanswer'). */
 function gupSilence() {
   duckMusic(0.0001, 14);
@@ -1248,6 +1283,18 @@ function audioTick(dt) {
       if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
     }
     liftHum(lk, lw);
+    // Burning oil on screen (js/warfx.js): its roar, from the loudest well, a little more with more of them.
+    let ok = 0, op = 0, on = 0;
+    if (live && typeof R !== 'undefined' && R.wfx && R.wfx.of === S && R.wfx.oil && R.wfx.oil.length) for (const e of R.wfx.oil) {
+      const f = wfxOilLevel(e);
+      if (f <= 0.02) continue;
+      const p = worldToScreen(e.x, e.y);
+      if (p.x < -120 || p.y < -120 || p.x > R.w + 120 || p.y > R.h + 120) continue;
+      const k = f * (1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h))) * zoomLoud();
+      on++;
+      if (k > ok) { ok = k; op = (p.x / R.w) * 2 - 1; }
+    }
+    oilRoar(ok, op, on);
     // A Great Uplink transmitting on screen: its slow pulse, in time with the beam (gupPhase); in the last GUP.echo s, with
     // the Murmur in the game, the ground repeating it back. Jammed or without power, silence.
     if (live) {
