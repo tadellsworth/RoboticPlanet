@@ -353,7 +353,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Workers, Agribots and Crawlers never drive along one: `findPath` (`opts.lane`, from `routeOpts`) lets a barred bot
   step onto a lane only across its direction (an overpass, a ramp), never along it, so keep an ordinary road for them.
   Wear as asphalt (same counters, slows past half, resurfaced at `REPAVE_AT`, 1 Asphalt); worn through it drops to
-  asphalt, lights out (`wearRoad`). An ordinary road touching a lane's side is a ramp (a junction: give way); where a
+  asphalt, lights out (`wearRoad`). The step across between a pair's two carriageways (two one-way tiles side by side, same axis) is no junction
+  (`sideLane` in `js/world.js`, Nov 21 2026: before, every tile of a two-way lane slowed traffic as a junction). An
+  ordinary road touching a lane's side is a ramp (a junction: give way); where a
   road crosses a lane (four roads on a lane tile) an overpass is planned for its owner (`expressJoins`, from `layRoad`
   and the paths order; the sketches count them, `draftOverpasses`); lanes never cross each other. The art is drawn in
   code (`drawExpress` in `js/render.js`: median, barrier, amber and white lines, cat's-eyes, hazard aprons at ramps,

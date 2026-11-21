@@ -4287,6 +4287,18 @@ function setPave(i, j, tier) {
   markDirty(i, j);
 }
 
+/**
+ * Is the step from road tile t to its neighbour u only a move across into a parallel one-way lane (both tiles one-way
+ * along the same axis, the step across it: an Express lane's two carriageways side by side)? Not a junction then, so it
+ * doesn't slow the traffic on it (the owner, Nov 21 2026: every tile of a two-way Express lane counted as a junction).
+ */
+function sideLane(t, u) {
+  const a = S.road[t], b = S.road[u];
+  if (a < 2 || b < 2) return false;
+  const vert = (v) => v === 3 || v === 5, across = Math.abs(u - t) === 1; // (a step east or west)
+  return across ? vert(a) && vert(b) : !vert(a) && !vert(b);
+}
+
 /** The best path surface anywhere on the map (route planning needs it for an exact estimate). */
 function topPave() {
   if (S.topPaveCache) return S.topPaveCache;
@@ -4469,7 +4481,7 @@ function roadNet(who) {
     if (!rl(t)) continue;
     let k = 0;
     const i = t % W;
-    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && rl(u) && canStep(t, u)) k++;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && rl(u) && canStep(t, u) && !sideLane(t, u)) k++;
     if (k >= 3 && S.road[t]) junc[t] = k;
     if (lab[t] < 0) flood(t);
   }
