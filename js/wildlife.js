@@ -58,7 +58,7 @@ const FAUNA_KINDS = {
   deer: { mode: 'herd', draw: 'deer', act: 'day', hab: 'shore', min: 2, p: 0.7, alt: 'edge', n: [2, 4], z: 12, size: 0.48, speed: 0.32, run: 2.7, col: ['#8e5c36', '#e8dccb', '#4a2e1a'] },
   // Bison (Steamwells): a small herd grazing the warm grassland between the springs.
   bison: { mode: 'herd', draw: 'bison', act: 'day', hab: 'open', min: 20, p: 0.6, n: [3, 6], z: 10, size: 0.7, speed: 0.2, run: 2.2, col: ['#5a3a24', '#8a6440', '#20140c'], spread: 1.4 },
-  herd: { mode: 'herd', draw: 'antelope', act: 'day', hab: 'open', min: 26, p: 0.5, n: [5, 10], z: 9, size: 0.46, speed: 0.26, run: 2.9, col: ['#4c4038', '#8c7c6a', '#1c1814'], spread: 1.6 },
+  herd: { mode: 'herd', draw: 'antelope', act: 'day', hab: 'open', min: 26, p: 0.5, n: [5, 10], z: 9, size: 0.46, speed: 0.26, run: 2.9, col: ['#635f57', '#969083', '#232321'], spread: 1.6 },
   fox: { mode: 'herd', draw: 'fox', act: 'day', hab: 'open', min: 10, p: 0.45, n: [1, 1], z: 14, size: 0.38, speed: 0.6, run: 2.5, col: ['#c0602c', '#f2e6d6', '#2a1a10'], roam: true },
   hare: { mode: 'herd', draw: 'hare', act: 'day', hab: 'open', min: 12, p: 0.55, n: [1, 3], z: 16, size: 0.28, speed: 0.45, run: 3.2, col: ['#f4eee2', '#ffffff', '#3a3632'], hop: true, spread: 2.4, roam: true },
   arcticfox: { mode: 'herd', draw: 'fox', act: 'night', hab: 'open', min: 16, p: 0.4, n: [1, 1], z: 14, size: 0.36, speed: 0.75, run: 2.5, col: ['#e2e2de', '#ffffff', '#6c6c74'], roam: true, tracks: true, lift: 0.3 },
@@ -1393,6 +1393,26 @@ function faunaSide(m) { const c = Math.cos(m.f); if (c > 0.25) m.dir = 1; else i
 /** A soft round shadow under something on the ground. */
 function faunaShadow(ctx, x, y, rx, ry) { ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x + rx * 0.15, y + ry * 0.5, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
 
+/** Jointed fore and hind legs, with far feet offset to match the game's raised side view. */
+function faunaHoofLegs(ctx, m, run, bob, hind, fore, rump, chest, width, shade, coat) {
+  for (const far of [true, false]) for (const front of [false, true]) {
+    const hip = (front ? fore : hind) + (far ? 0.047 : 0);
+    const top = (front ? chest : rump) + bob - (far ? 0.021 : 0);
+    const swing = m.mv ? Math.sin(m.ph + (front === far ? Math.PI : 0)) : 0;
+    const foot = hip + swing * (run ? 0.176 : 0.074);
+    const ground = (far ? -0.064 : 0) - Math.max(0, swing) * (run ? 0.09 : 0.03);
+    const joint = hip + (foot - hip) * 0.43 - (front ? 0.006 : 0.063);
+    const leg = faunaCol(far ? shade : coat);
+    ctx.strokeStyle = leg; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = width * (front ? 0.84 : 1.16);
+    ctx.beginPath(); ctx.moveTo(hip, top);
+    ctx.quadraticCurveTo(hip + (front ? 0.012 : 0.049), (top + ground) * 0.50, joint, ground - 0.137); ctx.stroke();
+    ctx.lineWidth = width * 0.66;
+    ctx.beginPath(); ctx.moveTo(joint, ground - 0.141); ctx.lineTo(foot, ground - 0.026); ctx.stroke();
+    ctx.strokeStyle = faunaCol(shade); ctx.lineWidth = width * 0.68;
+    ctx.beginPath(); ctx.moveTo(foot - 0.014, ground - 0.018); ctx.lineTo(foot + width * 0.61, ground - 0.015); ctx.stroke();
+  }
+}
+
 const FAUNA_DRAW = {
   /** A small bird: perched (seen side on, a plump body, head, tail; breast lighter) or in flight (faunaWings). */
   bird(ctx, x, y, s, m, a, air) {
@@ -1431,17 +1451,258 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** Four-footed animals, seen from the side (as the game's three-quarter view shows them): a deer, an antelope, a fox, a hare. */
-  deer(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, false); },
-  antelope(ctx, x, y, s, m, a) { FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, true); },
-  // A bison: the wildebeest's build with a heavy, shaggy shoulder hump and a low, dark head.
-  bison(ctx, x, y, s, m, a) {
-    FAUNA_DRAW.hoofed(ctx, x, y, s, m, a, true);
-    const shade = a.K.col[2], coat = a.K.col[0];
+  /** White-tailed deer proportions, with a slender neck and a white flag on the tail. */
+  deer(ctx, x, y, s, m, a) {
+    const [coat, cream, shade] = a.K.col;
+    const run = m.mv && m.sp > a.K.speed * 1.5, bob = run ? Math.sin(m.ph * 2) * 0.038 : 0;
+    const graze = !m.mv && !m.head;
+    faunaShadow(ctx, x, y, s * 0.36, s * 0.072);
     ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
-    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, 0.14, -0.33, 0.21, 0.17, -0.1); ctx.fill(); // the dark, shaggy forequarters
-    ctx.beginPath(); faunaEll(ctx, 0.08, -0.43, 0.15, 0.1, -0.35); ctx.fill(); // the hump over the shoulders
-    ctx.fillStyle = faunaCol(coat, 0, 0.6); ctx.beginPath(); faunaEll(ctx, 0.05, -0.47, 0.08, 0.04, -0.35); ctx.fill(); // (light on its crest)
+    faunaHoofLegs(ctx, m, run, bob, -0.241, 0.198, -0.351, -0.379, 0.041, shade, coat);
+    ctx.translate(0, bob);
+
+    const fur = ctx.createLinearGradient(0, -0.57, 0, -0.27);
+    fur.addColorStop(0, faunaCol('#785035')); fur.addColorStop(0.55, faunaCol(coat)); fur.addColorStop(1, faunaCol('#ad8056'));
+    ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-0.351, -0.456);
+    ctx.bezierCurveTo(-0.322, -0.558, -0.218, -0.543, -0.116, -0.521);
+    ctx.bezierCurveTo(0.011, -0.489, 0.124, -0.551, 0.208, -0.559);
+    ctx.bezierCurveTo(0.312, -0.529, 0.307, -0.411, 0.240, -0.348);
+    ctx.quadraticCurveTo(0.107, -0.332, 0.048, -0.356);
+    ctx.bezierCurveTo(-0.060, -0.327, -0.140, -0.321, -0.210, -0.347);
+    ctx.bezierCurveTo(-0.288, -0.317, -0.372, -0.370, -0.351, -0.456); ctx.fill();
+
+    // Pale belly and the underside of the tail. The tail lifts in a run.
+    ctx.fillStyle = faunaCol(cream);
+    ctx.beginPath(); faunaEll(ctx, -0.075, -0.351, 0.137, 0.017, -0.065); ctx.fill();
+    ctx.save(); ctx.translate(-0.324, -0.478); ctx.rotate(run ? 0.45 : -0.76);
+    ctx.beginPath(); ctx.moveTo(0.018, 0.010); ctx.quadraticCurveTo(-0.032, -0.035, -0.109, -0.015);
+    ctx.quadraticCurveTo(-0.081, 0.038, -0.014, 0.036); ctx.fill();
+    ctx.fillStyle = faunaCol(coat); ctx.beginPath(); ctx.moveTo(0.012, 0.013);
+    ctx.quadraticCurveTo(-0.028, -0.041, -0.109, -0.015); ctx.quadraticCurveTo(-0.071, 0.000, -0.024, 0.018); ctx.fill();
+    ctx.restore();
+
+    const hx = graze ? 0.503 : 0.305, hy = graze ? -0.169 : -0.692;
+    if (graze) {
+      // The neck sweeps out from the shoulder and tapers where it meets the back of the skull.
+      const neck = ctx.createLinearGradient(0.14, -0.455, 0.49, -0.19);
+      neck.addColorStop(0, faunaCol(coat)); neck.addColorStop(0.37, faunaCol(coat));
+      neck.addColorStop(1, faunaCol('#ac7a52'));
+      ctx.fillStyle = neck; ctx.beginPath(); ctx.moveTo(0.125, -0.526);
+      ctx.bezierCurveTo(0.255, -0.571, 0.359, -0.422, 0.424, -0.309);
+      ctx.quadraticCurveTo(0.471, -0.239, 0.522, -0.218);
+      ctx.quadraticCurveTo(0.518, -0.173, 0.476, -0.139);
+      ctx.bezierCurveTo(0.415, -0.169, 0.387, -0.246, 0.321, -0.298);
+      ctx.quadraticCurveTo(0.252, -0.352, 0.177, -0.366); ctx.fill();
+    } else {
+      ctx.fillStyle = faunaCol(coat); ctx.beginPath(); ctx.moveTo(0.106, -0.520);
+      ctx.quadraticCurveTo(hx - 0.140, hy + 0.113, hx - 0.041, hy - 0.035);
+      ctx.lineTo(hx + 0.045, hy + 0.035);
+      ctx.quadraticCurveTo(hx - 0.048, hy + 0.192, 0.223, -0.360); ctx.fill();
+      ctx.fillStyle = faunaCol('#c49b73'); ctx.beginPath(); ctx.moveTo(hx + 0.028, hy + 0.030);
+      ctx.quadraticCurveTo(hx - 0.046, hy + 0.183, 0.223, -0.368);
+      ctx.quadraticCurveTo(hx - 0.037, hy + 0.153, hx + 0.012, hy + 0.006); ctx.fill();
+    }
+
+    ctx.translate(hx, hy); ctx.rotate(graze ? 1.25 : 0.16);
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, -0.037, -0.058, 0.068, 0.025, -1.31); ctx.fill();
+    ctx.fillStyle = faunaCol(coat); ctx.beginPath(); ctx.moveTo(-0.078, -0.014);
+    ctx.quadraticCurveTo(-0.050, -0.074, 0.019, -0.056);
+    ctx.lineTo(0.134, 0.000); ctx.quadraticCurveTo(0.156, 0.028, 0.116, 0.044);
+    ctx.quadraticCurveTo(0.063, 0.052, -0.035, 0.033); ctx.fill();
+    ctx.fillStyle = faunaCol(cream); ctx.beginPath();
+    faunaEll(ctx, 0.100, 0.032, 0.036, 0.015, 0.08); faunaEll(ctx, -0.005, 0.030, 0.041, 0.017, 0.12); ctx.fill();
+    ctx.fillStyle = faunaCol(coat); ctx.beginPath();
+    ctx.moveTo(-0.027, -0.040); ctx.quadraticCurveTo(-0.113, -0.021, -0.148, -0.116);
+    ctx.quadraticCurveTo(-0.061, -0.129, -0.027, -0.040); ctx.fill();
+    ctx.fillStyle = faunaCol('#c7a082'); ctx.beginPath(); faunaEll(ctx, -0.100, -0.085, 0.041, 0.013, 0.46); ctx.fill();
+    ctx.fillStyle = faunaCol('#32231a'); ctx.beginPath();
+    faunaEll(ctx, 0.029, -0.022, 0.014, 0.011, 0); faunaEll(ctx, 0.135, 0.015, 0.019, 0.014, 0); ctx.fill();
+    if (m.antlers && s >= 11) {
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(0.012, 0.36 / s);
+      ctx.strokeStyle = faunaCol('#89715a');
+      ctx.beginPath(); ctx.moveTo(-0.035, -0.051);
+      ctx.quadraticCurveTo(0.024, -0.133, -0.021, -0.209); ctx.quadraticCurveTo(-0.043, -0.256, 0.013, -0.292);
+      ctx.moveTo(-0.026, -0.216); ctx.lineTo(-0.064, -0.281); ctx.stroke();
+      ctx.strokeStyle = faunaCol('#c6a680');
+      ctx.beginPath(); ctx.moveTo(-0.006, -0.047); ctx.quadraticCurveTo(-0.093, -0.104, -0.106, -0.177);
+      ctx.quadraticCurveTo(-0.127, -0.251, -0.043, -0.266);
+      ctx.moveTo(-0.073, -0.115); ctx.quadraticCurveTo(-0.044, -0.159, -0.055, -0.198);
+      ctx.moveTo(-0.111, -0.186); ctx.lineTo(-0.146, -0.253);
+      ctx.moveTo(-0.094, -0.247); ctx.lineTo(-0.089, -0.307); ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /** Blue wildebeest proportions, with a deep chest, angular mane and narrow hindquarters. */
+  antelope(ctx, x, y, s, m, a) {
+    const [coat, light, shade] = a.K.col;
+    const run = m.mv && m.sp > a.K.speed * 1.5, bob = run ? Math.sin(m.ph * 2) * 0.024 : 0;
+    const graze = !m.mv && !m.head;
+    faunaShadow(ctx, x, y, s * 0.43, s * 0.084);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    faunaHoofLegs(ctx, m, run, bob, -0.293, 0.205, -0.330, -0.339, 0.055, shade, coat);
+    ctx.translate(0, bob);
+
+    const tailX = -0.452 + Math.sin(FAUNA.t * 1.7 + m.ph) * 0.035;
+    ctx.strokeStyle = faunaCol(shade); ctx.lineWidth = 0.023;
+    ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-0.370, -0.440);
+    ctx.quadraticCurveTo(-0.487, -0.320, tailX, -0.203); ctx.stroke();
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); ctx.moveTo(tailX - 0.016, -0.240);
+    ctx.quadraticCurveTo(tailX - 0.052, -0.180, tailX - 0.012, -0.120);
+    ctx.quadraticCurveTo(tailX + 0.044, -0.159, tailX + 0.008, -0.239); ctx.fill();
+
+    const fur = ctx.createLinearGradient(-0.09, -0.622, 0.055, -0.279);
+    fur.addColorStop(0, faunaCol(light)); fur.addColorStop(0.58, faunaCol(coat)); fur.addColorStop(1, faunaCol('#514a42'));
+    ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-0.400, -0.394);
+    ctx.bezierCurveTo(-0.409, -0.474, -0.351, -0.495, -0.265, -0.511);
+    ctx.bezierCurveTo(-0.098, -0.532, 0.052, -0.584, 0.132, -0.612);
+    ctx.bezierCurveTo(0.234, -0.647, 0.310, -0.563, 0.324, -0.489);
+    ctx.bezierCurveTo(0.358, -0.368, 0.303, -0.262, 0.222, -0.258);
+    ctx.bezierCurveTo(0.106, -0.264, 0.000, -0.307, -0.144, -0.320);
+    ctx.bezierCurveTo(-0.247, -0.335, -0.373, -0.311, -0.400, -0.394); ctx.fill();
+
+    const hx = graze ? 0.358 : 0.334, hy = graze ? -0.285 : -0.517;
+    ctx.fillStyle = faunaCol('#534a41'); ctx.beginPath(); ctx.moveTo(0.151, -0.586);
+    ctx.quadraticCurveTo(0.233, -0.649, hx + 0.034, hy - 0.070);
+    ctx.lineTo(hx + 0.042, hy + 0.074); ctx.quadraticCurveTo(0.315, -0.293, 0.231, -0.263); ctx.fill();
+    // Uneven crest and throat fringe sit over the sloping shoulder, with brindling behind them.
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); ctx.moveTo(-0.011, -0.558);
+    ctx.lineTo(0.054, -0.627); ctx.lineTo(0.047, -0.647); ctx.lineTo(0.108, -0.644);
+    ctx.lineTo(0.127, -0.676); ctx.lineTo(0.174, -0.664); ctx.lineTo(0.180, -0.687);
+    ctx.quadraticCurveTo(0.258, -0.665, hx + 0.028, hy - 0.062);
+    ctx.lineTo(hx - 0.046, hy - 0.013); ctx.quadraticCurveTo(0.219, -0.577, 0.129, -0.578); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0.254, -0.402); ctx.lineTo(hx + 0.016, hy + 0.066);
+    ctx.quadraticCurveTo(hx + 0.006, hy + 0.108, 0.278, -0.274);
+    ctx.lineTo(0.253, -0.242); ctx.lineTo(0.254, -0.284); ctx.lineTo(0.215, -0.264); ctx.closePath(); ctx.fill();
+    if (s >= 13) {
+      ctx.strokeStyle = faunaCol(shade, 0, 0.50); ctx.lineWidth = 0.023;
+      ctx.beginPath();
+      for (const [stripeX, stripeY, length] of [[-0.049, -0.547, 0.113], [0.004, -0.565, 0.147], [0.063, -0.588, 0.171], [0.126, -0.590, 0.180], [0.188, -0.556, 0.166]]) {
+        ctx.moveTo(stripeX, stripeY); ctx.quadraticCurveTo(stripeX - 0.033, stripeY + length * 0.58, stripeX + 0.028, stripeY + length);
+      }
+      ctx.stroke();
+    }
+
+    ctx.translate(hx, hy); ctx.rotate(graze ? 1.20 : 0.41);
+    ctx.fillStyle = faunaCol('#887a63'); ctx.beginPath(); ctx.moveTo(0.013, -0.059);
+    ctx.bezierCurveTo(0.035, -0.123, 0.085, -0.160, 0.051, -0.209);
+    ctx.quadraticCurveTo(0.113, -0.176, 0.072, -0.116); ctx.lineTo(0.043, -0.049); ctx.fill();
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); ctx.moveTo(-0.095, -0.020);
+    ctx.quadraticCurveTo(-0.068, -0.090, 0.018, -0.079);
+    ctx.bezierCurveTo(0.072, -0.065, 0.136, -0.039, 0.214, -0.027);
+    ctx.quadraticCurveTo(0.256, -0.005, 0.228, 0.055);
+    ctx.quadraticCurveTo(0.173, 0.088, 0.112, 0.053);
+    ctx.lineTo(0.039, 0.060); ctx.lineTo(0.013, 0.167); ctx.lineTo(-0.022, 0.111);
+    ctx.lineTo(-0.032, 0.067); ctx.quadraticCurveTo(-0.092, 0.047, -0.095, -0.020); ctx.fill();
+    ctx.fillStyle = faunaCol('#67615a'); ctx.beginPath();
+    faunaEll(ctx, 0.200, 0.027, 0.053, 0.039, 0.1); faunaEll(ctx, -0.072, -0.046, 0.064, 0.023, -2.55); ctx.fill();
+    // The near horn drops outward and hooks up, with a broad base and a fine dark point.
+    ctx.fillStyle = faunaCol('#c0ad90'); ctx.beginPath(); ctx.moveTo(0.027, -0.060);
+    ctx.bezierCurveTo(-0.038, -0.022, -0.128, -0.008, -0.172, -0.047);
+    ctx.quadraticCurveTo(-0.208, -0.095, -0.163, -0.158);
+    ctx.quadraticCurveTo(-0.184, -0.068, -0.107, -0.074);
+    ctx.quadraticCurveTo(-0.049, -0.077, 0.002, -0.108); ctx.fill();
+    ctx.fillStyle = faunaCol('#191a19'); ctx.beginPath();
+    faunaEll(ctx, 0.074, -0.029, 0.015, 0.013, 0); faunaEll(ctx, 0.219, 0.011, 0.013, 0.010, 0); ctx.fill();
+    ctx.restore();
+  },
+  /** The Steamwells bison has a short, sloping rump behind a tall shoulder hump and a low, bearded head. */
+  bison(ctx, x, y, s, m, a) {
+    const [coat, light, shade] = a.K.col;
+    const run = m.mv && m.sp > a.K.speed * 1.5, bob = run ? Math.sin(m.ph * 2) * 0.027 : 0;
+    faunaShadow(ctx, x, y, s * 0.42, s * 0.084);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    // Stocky legs with a visible hock on the hind pair. The far feet sit higher in the game's view.
+    const leg = (front, far) => {
+      const hip = front ? 0.185 : -0.27;
+      const stride = m.mv ? Math.sin(m.ph + (front === far ? Math.PI : 0)) : 0;
+      const step = stride * (run ? 0.16 : 0.065), foot = hip + step + (far ? 0.055 : 0);
+      const ground = (far ? -0.055 : 0) - Math.max(0, stride) * (run ? 0.08 : 0.025);
+      const joint = hip + step * 0.40 - (front ? 0.017 : 0.062);
+      const top = (front ? -0.305 : -0.29) + bob - (far ? 0.022 : 0);
+      ctx.fillStyle = faunaCol(far ? shade : front ? '#492c1d' : coat);
+      ctx.beginPath(); ctx.moveTo(hip - 0.055, top); ctx.lineTo(hip + 0.062, top);
+      ctx.quadraticCurveTo(hip + 0.062, top + 0.07, joint + 0.028, ground - 0.09);
+      ctx.lineTo(foot + 0.029, ground - 0.024); ctx.lineTo(foot - 0.031, ground - 0.025);
+      ctx.lineTo(joint - 0.027, ground - 0.088); ctx.quadraticCurveTo(hip - 0.046, top + 0.075, hip - 0.055, top); ctx.fill();
+      ctx.fillStyle = faunaCol('#1c1511');
+      ctx.beginPath(); ctx.moveTo(foot - 0.030, ground - 0.045); ctx.lineTo(foot + 0.029, ground - 0.046);
+      ctx.lineTo(foot + 0.047, ground - 0.006); ctx.lineTo(foot - 0.032, ground); ctx.fill();
+    };
+    leg(false, true); leg(true, true);
+    leg(false, false); leg(true, false);
+    ctx.translate(0, bob);
+
+    const tail = -0.435 + 0.028 * Math.sin(FAUNA.t * 2 + m.ph);
+    ctx.strokeStyle = faunaCol(shade); ctx.lineWidth = 0.025;
+    ctx.beginPath(); ctx.moveTo(-0.37, -0.405); ctx.quadraticCurveTo(-0.44, -0.36, tail, -0.265); ctx.stroke();
+    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, tail, -0.257, 0.023, 0.044, 0.14); ctx.fill();
+
+    const fur = ctx.createLinearGradient(-0.20, -0.60, 0.17, -0.21);
+    fur.addColorStop(0, faunaCol(light)); fur.addColorStop(0.42, faunaCol(coat)); fur.addColorStop(1, faunaCol('#3e2518'));
+    ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-0.389, -0.362);
+    ctx.bezierCurveTo(-0.396, -0.435, -0.31, -0.499, -0.213, -0.500);
+    ctx.bezierCurveTo(-0.113, -0.505, -0.073, -0.595, 0.028, -0.651);
+    ctx.bezierCurveTo(0.113, -0.712, 0.213, -0.676, 0.251, -0.613);
+    ctx.bezierCurveTo(0.292, -0.564, 0.329, -0.490, 0.320, -0.422);
+    ctx.quadraticCurveTo(0.338, -0.291, 0.258, -0.212);
+    ctx.lineTo(0.222, -0.239); ctx.lineTo(0.181, -0.212); ctx.lineTo(0.141, -0.240);
+    ctx.bezierCurveTo(0.050, -0.228, -0.060, -0.259, -0.146, -0.257);
+    ctx.bezierCurveTo(-0.254, -0.255, -0.356, -0.268, -0.389, -0.362); ctx.fill();
+
+    // The shaggy mane ends partway down the flank, where the summer coat lies flat.
+    ctx.fillStyle = faunaCol('#482d20');
+    ctx.beginPath(); ctx.moveTo(0.077, -0.663);
+    ctx.bezierCurveTo(0.223, -0.716, 0.255, -0.613, 0.317, -0.474);
+    ctx.quadraticCurveTo(0.359, -0.296, 0.258, -0.212);
+    ctx.lineTo(0.222, -0.239); ctx.lineTo(0.181, -0.212); ctx.lineTo(0.141, -0.240);
+    ctx.lineTo(0.091, -0.253); ctx.lineTo(0.080, -0.291); ctx.lineTo(0.047, -0.279);
+    ctx.bezierCurveTo(0.058, -0.424, 0.004, -0.437, 0.045, -0.554);
+    ctx.quadraticCurveTo(0.063, -0.608, 0.077, -0.663); ctx.fill();
+
+    if (s >= 17) {
+      ctx.strokeStyle = faunaCol('#a7784b', 0, 0.32); ctx.lineWidth = 0.012;
+      ctx.beginPath(); ctx.moveTo(-0.33, -0.412); ctx.quadraticCurveTo(-0.29, -0.46, -0.15, -0.466);
+      for (const [fx, fy, length] of [[0.062, -0.601, 0.062], [0.103, -0.636, 0.079], [0.161, -0.624, 0.041], [0.194, -0.603, 0.091], [0.094, -0.483, 0.090], [0.142, -0.449, 0.040], [0.189, -0.495, 0.116]]) {
+        ctx.moveTo(fx, fy); ctx.quadraticCurveTo(fx - 0.026, fy + length * 0.61, fx - 0.005, fy + length);
+      }
+      ctx.stroke();
+    }
+
+    // Lower the neck as the head pivots, so a grazing muzzle reaches the grass.
+    const grazing = !m.head && !m.mv;
+    if (grazing) {
+      ctx.fillStyle = faunaCol('#482d20');
+      ctx.beginPath(); ctx.moveTo(0.219, -0.534);
+      ctx.quadraticCurveTo(0.31, -0.529, 0.361, -0.313);
+      ctx.lineTo(0.255, -0.260);
+      ctx.quadraticCurveTo(0.221, -0.400, 0.195, -0.428); ctx.fill();
+    }
+    ctx.translate(grazing ? 0.288 : 0.250, grazing ? -0.288 : -0.450);
+    ctx.rotate(grazing ? 1.23 + Math.sin(FAUNA.t * 2 + m.ph) * 0.065 : 0.20 + (m.mv ? Math.sin(m.ph) * 0.045 : 0));
+    ctx.fillStyle = faunaCol('#342218'); ctx.beginPath(); faunaEll(ctx, 0.101, -0.052, 0.067, 0.032, -0.65); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-0.055, -0.092);
+    ctx.bezierCurveTo(0.015, -0.153, 0.118, -0.139, 0.161, -0.079);
+    ctx.lineTo(0.267, -0.010); ctx.quadraticCurveTo(0.290, 0.033, 0.224, 0.070);
+    ctx.lineTo(0.171, 0.066); ctx.lineTo(0.114, 0.168); ctx.lineTo(0.085, 0.142);
+    ctx.lineTo(0.055, 0.160); ctx.lineTo(0.043, 0.105); ctx.quadraticCurveTo(-0.025, 0.104, -0.055, 0.026); ctx.fill();
+    ctx.fillStyle = faunaCol('#766153'); ctx.beginPath(); faunaEll(ctx, 0.230, 0.033, 0.053, 0.039, -0.14); ctx.fill();
+    ctx.fillStyle = faunaCol('#64442e'); ctx.beginPath(); faunaEll(ctx, -0.017, -0.081, 0.08, 0.039, -0.15); ctx.fill();
+
+    // Short upswept horns, darkest at their roots and points.
+    ctx.fillStyle = faunaCol('#c0a788');
+    ctx.beginPath(); ctx.moveTo(0.019, -0.096); ctx.quadraticCurveTo(-0.031, -0.108, -0.058, -0.147);
+    ctx.quadraticCurveTo(-0.080, -0.190, -0.046, -0.221); ctx.quadraticCurveTo(-0.057, -0.156, 0.032, -0.132); ctx.fill();
+    if (s >= 13) {
+      ctx.fillStyle = faunaCol('#866e57');
+      ctx.beginPath(); ctx.moveTo(0.076, -0.111); ctx.quadraticCurveTo(0.091, -0.171, 0.121, -0.183);
+      ctx.quadraticCurveTo(0.111, -0.145, 0.106, -0.104); ctx.fill();
+      ctx.fillStyle = faunaCol('#1c1511'); ctx.beginPath();
+      faunaEll(ctx, 0.130, -0.047, 0.017, 0.012, 0); faunaEll(ctx, 0.256, 0.027, 0.014, 0.009, 0);
+      ctx.fill();
+    }
     ctx.restore();
   },
   fox(ctx, x, y, s, m, a, air) { FAUNA_DRAW.beast(ctx, x, y, s, m, a, 'fox'); },
@@ -1501,74 +1762,6 @@ const FAUNA_DRAW = {
       ctx.strokeStyle = faunaCol('#2a221a', lift); ctx.lineWidth = Math.max(0.8, s * 0.022);
       ctx.beginPath(); ctx.moveTo(hx - s * 0.03, hy - s * 0.03); ctx.quadraticCurveTo(hx - s * 0.1, hy - s * 0.05, hx - s * 0.06, hy - s * 0.12); ctx.stroke();
     }
-    ctx.restore();
-  },
-  /** Jointed gait and species-specific silhouette under the same light as the rest of the wildlife. */
-  hoofed(ctx, x, y, s, m, a, wildebeest) {
-    faunaShadow(ctx, x, y, s * 0.40, s * 0.11);
-    const gait = m.mv ? m.ph : 0, run = m.mv && m.sp > a.K.speed * 1.5;
-    const bob = run ? Math.sin(gait * 2) * 0.04 : 0;
-    const back = wildebeest ? -0.35 : -0.43, shoulder = wildebeest ? -0.57 : -0.51;
-    const [coat, light, shade] = a.K.col;
-    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const leg = (front, far) => {
-      const hip = front ? 0.18 : -0.24, h = (front ? -0.34 : -0.31) + bob + (far ? -0.035 : 0);
-      const stride = m.mv ? Math.sin(gait + (front === far ? Math.PI : 0)) : 0;
-      const step = stride * (run ? 0.20 : 0.088), foot = (far ? -0.06 : 0) - Math.max(0, stride) * (m.mv ? (run ? 0.10 : 0.036) : 0);
-      const knee = hip + (front ? 0.028 : -0.067) + step * 0.42;
-      ctx.strokeStyle = faunaCol(far ? shade : coat); ctx.lineWidth = front ? 0.049 : 0.059;
-      ctx.beginPath(); ctx.moveTo(hip, h); ctx.quadraticCurveTo(knee, h + 0.10, knee, h + 0.17); ctx.stroke();
-      ctx.strokeStyle = faunaCol(far ? shade : coat); ctx.lineWidth = 0.028;
-      ctx.beginPath(); ctx.moveTo(knee, h + 0.165); ctx.lineTo(hip + step, foot - 0.024); ctx.stroke();
-      ctx.strokeStyle = faunaCol(shade); ctx.lineWidth = 0.034;
-      ctx.beginPath(); ctx.moveTo(hip + step - 0.016, foot - 0.017); ctx.lineTo(hip + step + 0.030, foot - 0.015); ctx.stroke();
-    };
-    leg(false, true); leg(true, true);
-    ctx.translate(0, bob);
-    const g = ctx.createLinearGradient(-0.1, shoulder, 0, -0.23);
-    g.addColorStop(0, faunaCol(wildebeest ? shade : coat));
-    g.addColorStop(0.43, faunaCol(coat)); g.addColorStop(1, faunaCol(light));
-    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-0.38, back);
-    ctx.bezierCurveTo(-0.27, back - 0.08, 0.04, shoulder + 0.09, 0.17, shoulder);
-    ctx.bezierCurveTo(0.34, shoulder - 0.016, 0.34, -0.40, 0.25, -0.32);
-    ctx.bezierCurveTo(0.11, -0.235, -0.08, -0.27, -0.19, -0.29);
-    ctx.bezierCurveTo(-0.31, -0.23, -0.40, -0.30, -0.38, back); ctx.fill();
-    ctx.strokeStyle = faunaCol(wildebeest ? shade : light); ctx.lineWidth = wildebeest ? 0.034 : 0.045;
-    ctx.beginPath(); ctx.moveTo(-0.365, back + 0.039);
-    ctx.quadraticCurveTo(-0.47, back + 0.06 + Math.sin(gait) * 0.02, wildebeest ? -0.41 : -0.49, wildebeest ? -0.14 : back + 0.09); ctx.stroke();
-    if (wildebeest && s >= 14) {
-      ctx.strokeStyle = faunaCol(shade, 0, 0.7); ctx.lineWidth = 0.018;
-      for (let k = 0; k < 5; k++) {
-        const xx = -0.055 + k * 0.05, yy = -0.43 - k * 0.023;
-        ctx.beginPath(); ctx.moveTo(xx, yy); ctx.quadraticCurveTo(xx - 0.02, yy + 0.095, xx + 0.036, yy + 0.12); ctx.stroke();
-      }
-    }
-    const up = m.mv || m.head, hx = up ? 0.36 : 0.43, hy = up ? (wildebeest ? -0.563 : -0.66) : -0.14, tilt = up ? (wildebeest ? 0.24 : 0.02) : 1.03;
-    ctx.fillStyle = faunaCol(coat); ctx.beginPath(); ctx.moveTo(0.12, shoulder + 0.027);
-    ctx.quadraticCurveTo(0.23, shoulder - 0.04, hx - 0.069, hy - 0.041); ctx.lineTo(hx + 0.017, hy + 0.034);
-    ctx.quadraticCurveTo(0.36, -0.37, 0.22, -0.335); ctx.fill();
-    ctx.save(); ctx.translate(hx, hy); ctx.rotate(tilt);
-    ctx.fillStyle = faunaCol(wildebeest ? shade : coat); ctx.beginPath();
-    ctx.moveTo(-0.10, -0.064); ctx.quadraticCurveTo(0.016, -0.09, 0.055, -0.049);
-    ctx.lineTo(0.13, -0.016); ctx.quadraticCurveTo(0.16, 0.021, 0.089, 0.039);
-    ctx.lineTo(-0.055, 0.037); ctx.fill();
-    ctx.fillStyle = faunaCol(shade); ctx.beginPath(); faunaEll(ctx, 0.024, -0.027, 0.016, 0.014, 0); ctx.fill();
-    ctx.fillStyle = faunaCol(wildebeest ? coat : light); ctx.beginPath();
-    faunaEll(ctx, -0.058, -0.069, wildebeest ? 0.079 : 0.090, 0.026, -2.44); ctx.fill();
-    ctx.strokeStyle = faunaCol(wildebeest ? '#b6a891' : '#cbb58c'); ctx.lineWidth = 0.020;
-    if (wildebeest) {
-      ctx.beginPath(); ctx.moveTo(-0.044, -0.061); ctx.bezierCurveTo(-0.143, -0.022, -0.189, -0.093, -0.141, -0.143);
-      ctx.moveTo(-0.013, -0.066); ctx.bezierCurveTo(0.017, -0.156, 0.061, -0.155, 0.062, -0.125); ctx.stroke();
-      ctx.strokeStyle = faunaCol(shade); ctx.beginPath(); ctx.moveTo(0.012, 0.022); ctx.lineTo(-0.008, 0.137); ctx.stroke();
-    } else if (m.antlers && s >= 13) {
-      ctx.beginPath(); ctx.moveTo(-0.036, -0.055); ctx.quadraticCurveTo(-0.11, -0.19, -0.191, -0.244);
-      ctx.moveTo(-0.11, -0.173); ctx.lineTo(-0.073, -0.251); ctx.moveTo(-0.142, -0.208); ctx.lineTo(-0.138, -0.292);
-      ctx.moveTo(-0.014, -0.055); ctx.quadraticCurveTo(0.001, -0.157, -0.046, -0.220);
-      ctx.moveTo(-0.018, -0.174); ctx.lineTo(0.038, -0.215); ctx.stroke();
-    }
-    ctx.restore(); ctx.translate(0, -bob);
-    leg(false, false); leg(true, false);
     ctx.restore();
   },
   /** A hare: hunched on its big hind legs, long ears up (laid back as it runs), a white scut; it bounds. */

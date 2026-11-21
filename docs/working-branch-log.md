@@ -247,3 +247,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Fixed neutral site placement and Trade Post deposit relocation on Long Haul 2v2, Crossroads and the other exact-symmetry Versus layouts. Placement now works in complete sets of corresponding tiles. A cramped layout can still have one shared neutral site, such as the central relay on Four Isles.
 - Added a map regression test for every supported size and player count. It checks deterministic rebuilds, mixed biomes and Ring drizzle on the target maps, and accounts for the deliberately richer spare corner on three-player quarter maps.
+
+### Bison, deer and wildebeest redraws
+
+- Gave Steamwells bison, the forest deer and Long Grass wildebeest distinct anatomy, walk and run cycles, and grazing poses. Refined the deer's grazing neck after reviewing the enlarged comparison.
+- Checked head-up and grazing poses and the herd silhouettes at game scale in Chromium. Updated the art guide and README.

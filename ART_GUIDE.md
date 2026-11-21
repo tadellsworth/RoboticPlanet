@@ -1838,6 +1838,13 @@ on the ground and small, since they are baked at 32 px a tile and redrawn at 64 
 - Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
 
 
+### Deer and wildebeest
+
+The Greenreach and Emberwood deer use white-tailed deer proportions, with a slender neck,
+tapered face, pale underside to the tail and antlers on some adults. Long Grass wildebeest
+have a deeper chest, a back that slopes toward the rump, a dark mane and short shoulder bands.
+Both use jointed legs for their walk and run. Their horns, antlers and coats follow the scene lighting.
+
 ### Steamwells (geothermal basin)
 
 Steamwells uses pale limestone, sulfur ochre, and turquoise and sage mineral water. The
@@ -1845,6 +1852,8 @@ terraces have bright carbonate lips and darker seams, with the same upper-left l
 other terrain. The 512 px textures tile seamlessly. The six centered transparent scenery sprites
 show baths, stacked pools, a geyser cone, a dry sulfur shelf and vents. The geyser and vents use
 the same tile offsets for their animated steam. The Sky islands use layered limestone canyon art.
+The bison are drawn in `js/wildlife.js` with a tall shoulder hump, a low bearded head and short
+upswept horns. Those shapes carry the silhouette at game zoom. The fur accents appear only closer in.
 
 Regenerate the WebP set with
 `python renderer/terrain/terrain_springs.py art/biomes/springs` using the renderer's Python environment.
