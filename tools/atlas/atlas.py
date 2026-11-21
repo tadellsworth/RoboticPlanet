@@ -98,6 +98,60 @@ for k in range(260):
     r=cr.uniform(2,9)*(3 if k<6 else 1)
     d.ellipse([x-r,y-r,x+r,y+r],outline=(40,30,28,150),width=2,fill=(0,0,0,40))
 im=Image.alpha_composite(im,ov)
+# The menu planet's face (art/lore/ithaca-map.webp, read by js/menuplanet.js): the same map, small, unlabelled and with
+# no borders: the regions' colours blended softly across their seams (a little darker along them), the coasts a little
+# paler, the same craters (drawn twice as wide, so they still show that small). Its alpha holds the colonies' night
+# lights: 255 none, 254 down to 225 ever brighter; towns along the coasts and in the territories' hearts, never on the
+# ice, few in the Bloom.
+def menu_map():
+    import scipy.ndimage as nd
+    MW,MH=512,256; SS=2  # (drawn at twice the size, then shrunk)
+    col=img.astype(float); lm=land.astype(float)
+    s=9.0  # (full-size px: about two of the small map's)
+    bl=np.stack([nd.gaussian_filter(col[...,c]*lm,s,mode=('nearest','wrap')) for c in range(3)],-1)
+    bw=nd.gaussian_filter(lm,s,mode=('nearest','wrap'))[...,None]
+    soft=np.where(land[...,None],bl/np.maximum(bw,1e-6),col)
+    rid0=np.array([list(REG).index(T[k][1]) if k>=0 else -1 for k in range(-1,len(T))])[tid+1]
+    seam=((rid0!=np.roll(rid0,1,1))|(rid0!=np.roll(rid0,1,0)))&land&np.roll(land,1,1)&np.roll(land,1,0)
+    ridge=np.clip(nd.gaussian_filter(seam.astype(float),5,mode=('nearest','wrap'))*6,0,1)
+    soft*=(1-0.12*ridge)[...,None]
+    shore=np.clip(1-nd.distance_transform_edt(land)/7,0,1)*land*~(pn|ps)
+    soft+=(np.array([226,204,170])-soft)*(0.3*shore)[...,None]
+    big=Image.fromarray(np.clip(soft,0,255).astype(np.uint8)).resize((MW*SS,MH*SS),Image.LANCZOS).convert('RGBA')
+    co=Image.new('RGBA',big.size,(0,0,0,0)); cd=ImageDraw.Draw(co); k_=MW*SS/W
+    cr=np.random.default_rng(5)  # (the atlas's craters, in the same order)
+    for k in range(260):
+        lo=cr.uniform(-180,180); la=beltlat(lo)+cr.normal(0,6)
+        x,y=px(lo,la); i,j=int(x)%W,int(min(max(y,0),H-1))
+        if not land[j,i] or tid[j,i] in (iN,iS): continue
+        r=cr.uniform(2,9)*(3 if k<6 else 1)*k_*2.2; x*=k_; y*=k_
+        cd.ellipse([x-r,y-r,x+r,y+r],outline=(40,30,28,150),width=SS,fill=(0,0,0,40))
+    small=Image.alpha_composite(big,co).convert('RGB').resize((MW,MH),Image.LANCZOS)
+    # the lights, on the small map
+    sl=np.asarray(Image.fromarray(land.astype(np.uint8)*255).resize((MW,MH),Image.BOX))>127
+    st=np.asarray(Image.fromarray((tid+1).astype(np.uint8)).resize((MW,MH),Image.NEAREST)).astype(int)-1
+    ice=(st==iN)|(st==iS)
+    coast=np.clip(1-(nd.distance_transform_edt(sl)-1)/3,0,1)*sl
+    slon=np.linspace(-180,180,MW,endpoint=False)+180/MW; slat=np.linspace(90,-90,MH,endpoint=False)-90/MH
+    SLO,SLA=np.meshgrid(np.radians(slon),np.radians(slat))
+    P=np.stack([np.cos(SLA)*np.cos(SLO),np.cos(SLA)*np.sin(SLO),np.sin(SLA)],-1)
+    heart=np.zeros((MH,MW))
+    for n,r,lo,la,rad in T:
+        if r=='polar': continue
+        ang=np.degrees(np.arccos(np.clip(P@vec(lo,la),-1,1)))
+        heart=np.maximum(heart,np.clip(1-ang/(rad*0.45),0,1))
+    few={'bloom':0.3,'cinder':0.7,'shoals':0.8}
+    rmul=np.ones((MH,MW))
+    for k,t_ in enumerate(T): rmul[st==k]=few.get(t_[1],1.0)
+    lr=np.random.default_rng(13)
+    p=(0.012+0.07*coast+0.09*heart**1.5)*rmul*sl*~ice
+    lit=lr.random((MH,MW))<p
+    a=np.full((MH,MW),255,np.uint8)
+    a[lit]=(254-lr.integers(0,30,lit.sum())).astype(np.uint8)
+    dst=os.path.normpath(os.path.join(OUT,'..','..','..','art','lore','ithaca-map.webp'))
+    Image.fromarray(np.dstack([np.asarray(small),a]),'RGBA').save(dst,quality=82,method=6,alpha_quality=100,exact=True)
+    print('menu map:',dst,'lights',int(lit.sum()),'of',int(sl.sum()),'land texels')
+menu_map()
 # borders
 t=tid
 bt=np.zeros(t.shape,bool); br=np.zeros(t.shape,bool)

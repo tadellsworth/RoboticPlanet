@@ -1481,11 +1481,13 @@ slow, tell Claude Code: each effect's length is one number in the code.
 
 The main menu's Lore guide (`#screen-lore` in `index.html`) shows a few pictures of its own. They are plain `<img>`
 tags (with `data-src`, loaded when the guide first opens), not manifest keys: to change one, replace the file at the
-same size, or point the tag at a new one. Keep them small (WebP; the whole set is under 400 KB).
+same size, or point the tag at a new one. Keep them small (WebP; the atlas, the largest, is about 250 KB).
 
 | File | Size | What, and how it was made |
 |---|---|---|
 | `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
+| `lore/atlas.webp` | 2400×1620 | The atlas of Ithaca I (LORE.md: The atlas, approved by the owner): every region, territory, sea and named place, the ringfall belt, Argos in the corner. Made by `tools/atlas/atlas.py` (writes `tools/atlas/out/ithaca-atlas.png`, then WebP); shown on the guide's The atlas page, a tap enlarging it. `lore/atlas-globe.webp` (1760×680): three views of the globe from it (`tools/atlas/globe.py`). |
+| `lore/ithaca-map.webp` | 512×256 | Not in the guide: the menu planet's face (`js/menuplanet.js`), the atlas made small, equirectangular (longitude −180° at the left edge), with no labels or borders, the regions blended at their seams and the craters drawn twice as wide. Its alpha holds the night lights (255 none, 254–225 ever brighter). Written by `tools/atlas/atlas.py` itself (`menu_map`), about 15 KB; inline in the one-file build (`window.ITHACA_MAP`). |
 | `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
 | `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Sapper at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
 
@@ -1909,9 +1911,10 @@ redrawn as images:
 - **The main menu: Corvane's system** (only what LORE.md has in the sky). Beside the card (across the top on a phone),
   Corvane glows orange-white with a breathing corona, a thin anamorphic streak and faint lens rings, flaring now and then.
   Ithaca I goes round it on a slow, flattened orbit (four minutes), bigger on the near side, passing behind the star's
-  glare on the far side, its lit side always toward Corvane: a coral world of red deserts, green forest, Emberwood's
-  gold, ash, the violet Bloom, seas and polar ice under a layer of cloud, a warm band at the terminator, and on the night
-  side the colonies' lights along the coasts. The war is down there, kept distant: small orange-white bursts in a few
+  glare on the far side, its lit side always toward Corvane, turning west to east. Its face is the atlas (LORE.md: The
+  atlas; `art/lore/ithaca-map.webp`): the three continents and their seas, the regions' colours blended softly across
+  their seams, the ringfall belt's craters, polar ice, under a layer of cloud, a warm band at the terminator, and on the
+  night side the colonies' lights along the coasts and in the territories' hearts (few in the Bloom, none on the ice). The war is down there, kept distant: small orange-white bursts in a few
   fronts near the lights, a red glow (and by day a smudge of smoke) where they fought, now and then a missile's thin
   line arcing between colonies and a brighter strike with a fading ring; after a few minutes on the menu, rarely, a
   nuclear blast (a white flash lighting the night side and the Ring, a pale ring spreading, an orange glow fading over

@@ -1961,8 +1961,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
   **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
-  Ithaca I, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
+  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
+  Ithaca I, The atlas, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
@@ -1972,7 +1972,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
-  `renderer/post/lore_planet.py`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
+  `renderer/post/lore_planet.py`), `art/lore/atlas.webp` (the atlas, LORE.md: The atlas, made by `tools/atlas/atlas.py`;
+  on The atlas page a tap enlarges it over the whole screen to pan with a finger, a tap or Esc closing it, as does a page
+  turn: `.lore-zoom` in `initLore`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
   `art/lore/murmur-<class>.webp` (night renders of the Murmur built to LORE.md's art brief, `renderer/b/murmur_moles.js`
   with `hero=1`, cropped by `renderer/post/murmur_lore.py`), and the game's own Command Base, Trade Post, Uplink
   and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
@@ -3120,7 +3122,13 @@ clouds' drift (`natureCloudTime`).
 - **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
   beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
   `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
-  turning as it goes; its face is a coral world from a fixed seed (`mplMakeMap`, a few rows a frame at launch), shaded per
+  turning west to east as it goes (the land moves to the right); its face is the atlas (LORE.md: The atlas):
+  `art/lore/ithaca-map.webp`, the atlas made small by `tools/atlas/atlas.py` (`menu_map`: 512×256, no labels or borders,
+  the regions' colours blended at their seams, the ringfall belt's craters), its alpha the colonies' night lights (towns
+  along the coasts and in the territories' hearts; `mplAtlas` reads it; inline as `window.ITHACA_MAP` in the one-file
+  build). The clouds are made from a fixed seed (`mplMakeMap`, a few rows a frame at launch), and so is a face of its own
+  (the old coral patchwork) until the picture comes, at most `MPLANET.atlasWait` seconds, or if it can't be had (a page
+  opened from a file, whose canvas can't be read). It is shaded per
   pixel in a small image from its normals (`mplShade`, with Argos's shadow where the line from Argos away from the star
   meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
   vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
@@ -3303,7 +3311,9 @@ js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
 js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
-art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
+art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
+                          face (ithaca-map.webp, the atlas made small)
+tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,

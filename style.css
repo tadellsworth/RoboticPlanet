@@ -1632,6 +1632,11 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .lore-fig img { display: block; width: 100%; height: auto; border-radius: 12px; background: #0a1225; }
 .lore-fig figcaption { margin-top: 5px; font-size: 12px; font-style: italic; color: var(--muted); }
 .lore-hero img { aspect-ratio: 16 / 9; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(241, 228, 211, 0.1); }
+.lore-zoom { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 12px; }
+.lore-atlas img { box-shadow: 0 0 0 1px rgba(241, 228, 211, 0.1); }
+/* Enlarged (tap the atlas: initLore): the map fills the screen at about its own size, panned with a finger; a tap closes it. */
+.lore-atlas.open .lore-zoom { position: fixed; inset: 0; z-index: 60; overflow: auto; border-radius: 0; cursor: zoom-out; background: rgba(4, 6, 14, 0.96); touch-action: pan-x pan-y; }
+.lore-atlas.open .lore-zoom img { width: min(2400px, max(100vw, 1400px)); max-width: none; border-radius: 0; box-shadow: none; }
 .lore-plate svg { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 0 0 1px rgba(241, 228, 211, 0.1); }
 .lp-label text { font: 700 12.5px system-ui, sans-serif; letter-spacing: 0.12em; fill: #f4ece2; }
 .lp-small text { font: 600 11px system-ui, sans-serif; }

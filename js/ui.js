@@ -3592,6 +3592,7 @@ function pagerInit(P) {
 /** Show one page of a paged screen: its contents page (P.top), or one section; back at the top of it. */
 function pagerShow(P, id) {
   const secs = pagerSections(P), k = secs.findIndex((s) => s.id === id), body = $(P.scr).querySelector('.help-body');
+  if (P.unzoom) P.unzoom(); // (the Lore guide's atlas, enlarged, goes back on a page turn)
   if (P.top && $(P.top)) $(P.top).hidden = k >= 0;
   secs.forEach((s, i) => { s.hidden = i !== k; });
   $(P.nav).hidden = k < 0;
@@ -3640,6 +3641,7 @@ function openLore(at) {
 function closeLore(fromBack) {
   if ($('screen-lore').hidden) return;
   $('screen-lore').hidden = true;
+  if (LORE_PAGER.unzoom) LORE_PAGER.unzoom();
   musicLore(false);
   if (!fromBack) try { if (history.state && history.state.lore) history.back(); } catch (e) { /* as above */ }
 }
@@ -3655,6 +3657,14 @@ function initLore() {
     e.preventDefault();
     pagerShow(LORE_PAGER, a.dataset.lore);
   });
+  // The atlas (The atlas page): a tap enlarges it over the whole screen, to pan with a finger; a tap or Esc closes it.
+  const zoom = $('screen-lore').querySelector('.lore-zoom');
+  if (zoom) {
+    const fig = zoom.parentElement, set = (on) => { fig.classList.toggle('open', on); zoom.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+    zoom.onclick = () => { sfx('click'); set(!fig.classList.contains('open')); };
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && fig.classList.contains('open')) { e.preventDefault(); e.stopImmediatePropagation(); set(false); } }, true);
+    LORE_PAGER.unzoom = () => set(false);
+  }
   // ← and → turn the pages (a picker keeps its own arrows); Esc closes it (initMenu).
   $('screen-lore').addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || (e.target && e.target.tagName === 'SELECT')) return;
