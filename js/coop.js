@@ -6,7 +6,9 @@
  * each construction site (b.by: see addBuilding). The rest is here, on each device, and never touches the game:
  *
  * - the partner's cursor, a coloured dot with their name, sent a few times a second as a `cur` message;
- * - pings (the . key, or Ping on the bar): a spot marked for both, with a sound, on the map and the minimap (`mark`);
+ * - pings (the . key, Alt+click on the map or minimap, a long press on the minimap, or Ping on the bar): a spot marked
+ *   for the team, with a sound, on the map and the minimap (`mark`). Pings are team-only: they go to the people running
+ *   my colony and my allies' (a 2 vs 2 game's teammate), never to a rival; a game with no teammates has none;
  * - the partner's orders noted: a line in the message log ("Sam placed a Smelter site"), the army's sent as alerts,
  *   and a badge with their name where their plans and army orders went (MP.onOrder);
  * - a badge on each construction site with the initial of whoever placed it, and its name in the site's panel;
@@ -25,6 +27,7 @@ const COOP_CURSOR_MS = 120; // a cursor goes out at most this often (and only wh
 const COOP_PING_MS = 6000, COOP_MARK_MS = 5000, COOP_CURSOR_FADE = 20000;
 const COOP_CONFIRM_S = 60; // Dismantle asks first on what the partner placed less than this long ago (game seconds)
 const COOP_ROLES = { both: 'Both', econ: 'Economy', mil: 'Military' };
+const PING_RATE = [3, 5000]; // pings this device may send in that many ms
 
 /** Is this a co-op game (a multiplayer game with a shared colony)? */
 function coopOn() { return typeof MP !== 'undefined' && MP.on && !!(S && S.crew); }
@@ -34,6 +37,19 @@ function coopName(q) { const c = S && S.crew && S.crew[q]; return c ? c.n : 'You
 function coopColor(q) { return COOP_COLORS[(q | 0) % COOP_COLORS.length]; }
 /** Was this placed by someone else running my colony (not me)? */
 function coopByMate(b) { return coopOn() && b && b.by !== undefined && b.by !== MP.me; }
+
+/** Is person q on my team (running my colony with me, or an ally's: 2 vs 2)? Pings and team chat go to them only. */
+function mpTeammate(q) {
+  if (typeof MP === 'undefined' || !MP.on || !S || q === MP.me || !MP.humans.includes(q)) return false;
+  const c = mpCol(q);
+  return c === ME || allies(c, ME);
+}
+/** The people on my team (lockstep players), for pings and team chat. */
+function mpTeammates() { return typeof MP !== 'undefined' && MP.on && S ? MP.humans.filter(mpTeammate) : []; }
+/** Can I ping (a multiplayer game with someone on my team, and I'm playing)? */
+function pingOn() { return !!(typeof MP !== 'undefined' && MP.on && UI.inGame && S && mpTeammates().length && !mpWatching()); }
+/** A ping's colour: the person's in co-op (each has their own), else their colony's. */
+function pingColor(q) { return coopOn() ? coopColor(q) : PLAYER_COLORS[mpCol(q)] || '#ffd84a'; }
 
 /** This device's role in co-op (Both, Economy or Military): kept on the device. */
 function coopRole() { let r = 'both'; try { r = localStorage.getItem('terrafall.role') || 'both'; } catch (e) { /* storage blocked */ } return COOP_ROLES[r] ? r : 'both'; }
@@ -74,7 +90,7 @@ function coopSend(msg) { if (typeof netRaw === 'function' && NET.state === 'game
 /** Every frame (uiTick): my cursor to my partner, now and then. */
 function coopTick() {
   const bar = $('btn-ping');
-  if (bar) bar.hidden = !coopOn();
+  if (bar) bar.hidden = !pingOn();
   if (!coopOn() || !coopMates().length || !R.mouse || !UI.inGame) return;
   const now = performance.now();
   if (now - COOP.sentAt < COOP_CURSOR_MS) return;
@@ -85,12 +101,18 @@ function coopTick() {
   coopSend({ t: 'cur', p: MP.me, x: Math.round(w.x * 10) / 10, y: Math.round(w.y * 10) / 10 });
 }
 
-/** A partner's cursor or ping (MP.onPeer): only from someone running my colony. */
+/** A partner's cursor or ping (MP.onPeer): a cursor only from someone running my colony, a ping from my team. */
 function coopPeer(msg) {
   const q = msg.p;
-  if (!coopOn() || !Number.isInteger(q) || q === MP.me || !S.crew[q] || mpCol(q) !== ME) return;
+  if (!Number.isInteger(q) || q === MP.me || !S) return;
   const x = +msg.x, y = +msg.y;
   if (!(x >= 0 && y >= 0 && x <= S.W && y <= S.H)) return;
+  if (msg.t === 'mark' && mpTeammate(q) && !coopOn()) {
+    coopAddPing(x, y, q);
+    toast(`${mpWho(q)} pinged a spot.`, 'info', Math.floor(x), Math.floor(y));
+    return;
+  }
+  if (!coopOn() || !S.crew[q] || mpCol(q) !== ME) return;
   if (msg.t === 'cur') {
     const c = COOP.peers.get(q);
     if (c) Object.assign(c, { tx: x, ty: y, at: performance.now() });
@@ -107,18 +129,25 @@ function coopAddPing(x, y, q) {
   sfx('ping');
 }
 
-/** Ping a spot for everyone on the colony (the . key: under the mouse; Ping on the bar: the middle of the view). */
+/**
+ * Ping a spot for my team (the . key or Alt+click: under the mouse; a long press on the minimap: there; Ping on the
+ * bar: the middle of the view). A few at a time: more than PING_RATE asks to wait. False: no ping (nobody to see it).
+ */
 function coopPing(x, y) {
-  if (!coopOn()) return;
+  if (!pingOn()) { if (typeof MP !== 'undefined' && MP.on && UI.inGame) toast('Pings go to your team only: nobody on your team to see one in this game.', 'info'); return false; }
+  const now = performance.now();
+  COOP.sent = (COOP.sent || []).filter((t) => now - t < PING_RATE[1]);
+  if (COOP.sent.length >= PING_RATE[0]) { toast('Easy on the pings: wait a moment.', 'warn'); return false; }
+  COOP.sent.push(now);
   x = clamp(x, 0, S.W); y = clamp(y, 0, S.H);
   coopAddPing(x, y, MP.me);
-  coopSend({ t: 'mark', p: MP.me, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+  coopSend({ t: 'mark', p: MP.me, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, to: mpTeammates() });
+  return true;
 }
 function coopPingHere(atMouse) {
-  if (!coopOn()) return false;
+  if (typeof MP === 'undefined' || !MP.on) return false;
   const w = atMouse && R.mouse ? screenToWorld(R.mouse.x, R.mouse.y) : { x: R.cam.x, y: R.cam.y };
-  coopPing(w.x, w.y);
-  return true;
+  return coopPing(w.x, w.y);
 }
 
 /* ------------------------------------------------------------------ the partner's orders */
@@ -202,10 +231,11 @@ function coopTag(ctx, x, y, text, col, alpha) {
 
 /** The map's co-op layer: site badges, order badges, pings and the partner's cursor. */
 function drawCoop(ctx, ox, oy, z) {
-  if (!coopOn()) return;
+  const co = coopOn();
+  if (!co && !COOP.pings.length) return;
   const now = performance.now();
   // A badge on each of my colony's construction sites: the placer's initial, in their colour.
-  if (z >= 9) {
+  if (co && z >= 9) {
     ctx.font = `700 ${Math.round(clamp(z * 0.3, 9, 13))}px system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const r = clamp(z * 0.2, 6, 9);
@@ -233,7 +263,7 @@ function drawCoop(ctx, ox, oy, z) {
   // Pings: rings spreading from the spot, and who pinged it.
   COOP.pings = COOP.pings.filter((p) => now - p.t0 < COOP_PING_MS);
   for (const p of COOP.pings) {
-    const age = (now - p.t0) / 1000, k = age / (COOP_PING_MS / 1000), x = ox + p.x * z, y = oy + p.y * z, col = coopColor(p.q);
+    const age = (now - p.t0) / 1000, k = age / (COOP_PING_MS / 1000), x = ox + p.x * z, y = oy + p.y * z, col = pingColor(p.q);
     for (let n = 0; n < 2; n++) {
       const f = ((age * 0.9 + n * 0.5) % 1);
       ctx.globalAlpha = (1 - f) * (1 - k * 0.6);
@@ -244,8 +274,9 @@ function drawCoop(ctx, ox, oy, z) {
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 7, y - 16); ctx.lineTo(x + 7, y - 16); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.arc(x, y - 19, 7.5, 0, Math.PI * 2); ctx.fill();
-    coopTag(ctx, x + 12, y - 19, p.q === MP.me ? 'You' : coopName(p.q), col, 1 - k * 0.5);
+    coopTag(ctx, x + 12, y - 19, p.q === MP.me ? 'You' : co ? coopName(p.q) : mpWho(p.q), col, 1 - k * 0.5);
   }
+  if (!co) { ctx.globalAlpha = 1; return; }
   // The partner's cursor: a dot in their colour with their name, eased toward where it was last heard.
   const ease = 1 - Math.pow(0.001, Math.min(0.1, R.dt || 0.016));
   for (const [q, c] of COOP.peers) {
@@ -263,15 +294,18 @@ function drawCoop(ctx, ox, oy, z) {
 
 /** The minimap's: pings (pulsing) and the partner's cursor. */
 function drawCoopMini(ctx, sx, sy) {
-  if (!coopOn()) return;
+  const co = coopOn();
+  if (!co && !COOP.pings.length) return;
   const now = performance.now();
   for (const p of COOP.pings) {
+    if (now - p.t0 > COOP_PING_MS) continue;
     const f = ((now - p.t0) / 700) % 1;
-    ctx.strokeStyle = coopColor(p.q); ctx.lineWidth = 1.5; ctx.globalAlpha = 1 - f;
+    ctx.strokeStyle = pingColor(p.q); ctx.lineWidth = 1.5; ctx.globalAlpha = 1 - f;
     ctx.beginPath(); ctx.arc(p.x * sx, p.y * sy, 2 + f * 9, 0, Math.PI * 2); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.fillStyle = coopColor(p.q);
+    ctx.globalAlpha = 1; ctx.fillStyle = pingColor(p.q);
     ctx.fillRect(p.x * sx - 1.5, p.y * sy - 1.5, 3, 3);
   }
+  if (!co) { ctx.globalAlpha = 1; return; }
   for (const [q, c] of COOP.peers) {
     if (now - c.at > COOP_CURSOR_FADE || mpAINow(q)) continue;
     ctx.fillStyle = coopColor(q);

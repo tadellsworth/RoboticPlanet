@@ -2113,3 +2113,52 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .sv-acts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; flex: none; }
 @media (max-width: 499px) { .sv-row { flex-direction: column; align-items: stretch; } .sv-acts { justify-content: flex-start; } .sv-name { max-width: none; } }
 @media (pointer: coarse) { .sv-acts .btn { min-height: 40px; } }
+/* ---------- Polish round 3 (js/polish3.js) ---------- */
+/* The Daily Planet card on the main menu. */
+.m-daily { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; max-width: 420px; margin: 0 auto 10px; padding: 9px 14px;
+  border-radius: 12px; border: 1px solid rgba(255, 196, 87, 0.45); background: rgba(255, 196, 87, 0.08); color: var(--text); font: inherit; cursor: pointer; line-height: 1.25; }
+.m-daily:hover, .m-daily:focus-visible { background: rgba(255, 196, 87, 0.15); }
+.m-daily .md-k { font-weight: 800; font-size: 14.5px; color: #ffd98a; letter-spacing: 0.01em; }
+.m-daily .md-line { font-size: 12.5px; color: var(--text); opacity: 0.9; text-wrap: balance; }
+.m-daily .md-best { font-size: 12px; color: var(--muted); }
+/* In-game chat: the last lines over the map's lower left, the line to type in when open; the button that opens it. */
+.chat { position: fixed; z-index: 29; left: calc(var(--safe-l) + 10px); bottom: calc(var(--safe-b) + 150px); width: min(380px, calc(100% - 20px));
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.chat[hidden] { display: none; }
+.chat.open { pointer-events: auto; }
+.chat-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 40vh; overflow-y: auto; font-size: 13.5px; line-height: 1.35; }
+.chat .chat-log li { align-self: flex-start; max-width: 100%; padding: 3px 9px; border-radius: 8px; background: rgba(14, 15, 22, 0.78); color: var(--text); overflow-wrap: anywhere;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.chat-log li.me b { color: var(--accent); }
+.chat-log li i { font-style: normal; color: var(--good); font-weight: 700; }
+.chat-log li.sys { color: var(--muted); font-style: italic; }
+.chat.open .chat-log { padding: 6px; border-radius: 10px; background: rgba(14, 15, 22, 0.6); }
+.chat-form { display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 12px; background: rgba(20, 22, 30, 0.94); border: 1px solid var(--line); }
+.chat-form[hidden] { display: none; }
+.chat-form input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: #14161d; color: var(--text); }
+.chat-to { flex: none; font: 700 12px/1 system-ui, sans-serif; padding: 8px 9px; border-radius: 8px; border: 1px solid rgba(126, 224, 138, 0.5); background: rgba(126, 224, 138, 0.1); color: var(--good); cursor: pointer; }
+.chat-to[hidden] { display: none; }
+.chat-fab { position: fixed; z-index: 29; left: calc(var(--safe-l) + 10px); bottom: calc(var(--safe-b) + 104px); width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: rgba(20, 22, 30, 0.9); color: var(--text); cursor: pointer; }
+.chat-fab[hidden] { display: none; }
+.chat-fab:hover { border-color: rgba(255, 255, 255, 0.3); }
+@media (min-width: 900px) { .chat { bottom: calc(var(--safe-b) + 120px); } .chat-fab { bottom: calc(var(--safe-b) + 74px); } }
+/* The lobby: your colour (no two the same), Ready, and the chat. */
+.mp-prefs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0 2px; }
+.mp-prefs[hidden] { display: none; }
+.mp-prefs .m-rl { font-size: 13px; color: var(--muted); }
+.mp-colors { display: flex; gap: 8px; }
+.mp-sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.15); background: var(--sw); cursor: pointer; padding: 0; }
+.mp-sw.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); }
+.mp-sw:disabled { opacity: 0.25; cursor: not-allowed; }
+.mp-ready { margin-left: auto; min-width: 96px; }
+.mp-ready.on { background: rgba(126, 224, 138, 0.16); border-color: rgba(126, 224, 138, 0.6); color: var(--good); }
+.mp-prefs .hint { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.mp-prefs .hint:empty { display: none; }
+.mp-players li.ready .dot { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(126, 224, 138, 0.7); }
+.mp-chat { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; }
+.mp-chat[hidden] { display: none; }
+.mp-chat .chat-log { max-height: 120px; padding: 6px 8px; border-radius: 10px; background: var(--panel-2); font-size: 13px; min-height: 34px; }
+.mp-chat .chat-log:empty::before { content: 'Lobby chat: say hello.'; color: var(--muted); font-style: italic; }
+.mp-chatrow { display: flex; gap: 6px; }
+.mp-chatrow input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: #14161d; color: var(--text); }

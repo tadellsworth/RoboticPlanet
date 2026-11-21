@@ -108,7 +108,7 @@ function initMulti() {
     if (b.dataset.doc === 'close') UI.mpDocK = null; else UI.mpDocOpen = b.dataset.doc === 'more';
     mpDocNote();
   });
-  $('mp-start').onclick = () => { sfx('click'); mpHostStart(); };
+  $('mp-start').onclick = () => { sfx('click'); if (mpReadyGate()) mpHostStart(); };
   $('mp-leave').onclick = () => { sfx('click'); mpLeaveLobby(); };
   $('mp-joincancel').onclick = () => {
     sfx('click'); mpStop(); netClose();
@@ -272,26 +272,28 @@ function renderLobby() {
   const odd = people.filter((s) => s.v && s.v !== hostV);
   let k = 0, html = '';
   const teams = !!(st && st.teams && st.teamOf);
-  const tags = (s) => [s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : ''].filter(Boolean).join(' · ');
-  const person = (s, col, also) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span><small>${[tags(s), also].filter(Boolean).join(' · ')}</small></li>`;
+  const tags = (s) => [s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : '', mpReadyTag(s)].filter(Boolean).join(' · ');
+  // (a person's dot: the colour they picked, else their place's; js/polish3.js)
+  const person = (s, col, also) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}${s.ready && s.on ? ' ready' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${s.on && !coop.includes(s.seat) ? mpSeatColor(s, col) : col}"></span><span class="nm">${esc(s.name)}</span><small>${[tags(s), also].filter(Boolean).join(' · ')}</small></li>`;
   // The computer's places, each with its doctrine: the host picks it here (a dropdown), and it goes round with the
   // settings (st.styles, by player slot: a choice stays with its colony), so every device deals the same. The rows are
   // the places the game will have: people away at the start get none (see mpHostStart), so they're listed apart.
   const slots = [];
+  P3.cpuUsed = new Set(); // (the computer places' colours, handed out as drawn: js/polish3.js)
   // (each place by its callsign, the Accord's name for its colour: VERMILION for red...)
   const cpu = (slot, ally) => {
     slots.push(slot);
     const v = mpSeatDoc(slot), sign = CALLSIGNS[slot] || 'Computer', who = `${sign}, computer ${ally ? 'player' : 'rival'}`;
     const doc = host ? `<select class="mp-doc" data-k="${slot}" aria-label="${who}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
       : `<small class="mp-docname">${docNameOf(v)}</small>`;
-    return `<li class="ai" data-k="${slot}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${PLAYER_COLORS[slot]}"></span><span class="nm">${sign}</span><small>computer${st ? ' · ' + DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
+    return `<li class="ai" data-k="${slot}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${mpCpuColor(slot)}"></span><span class="nm">${sign}</span><small>computer${st ? ' · ' + DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
   };
   if (teams) {
     // Two a side: the people on each team, then the computer in the empty places (in the colours they'll land in).
     for (const t of [0, 1]) {
       html += `<li class="mp-team"><span>Team ${t ? 'B' : 'A'}</span>${host ? '<small>tap a player to move them across</small>' : ''}</li>`;
       const on = people.filter((s) => st.teamOf[s.seat] === t);
-      for (let n = 0; n < 2; n++) html += n < on.length ? person(on[n], PLAYER_COLORS[t * 2 + n]) : cpu(t * 2 + n, true);
+      for (let n = 0; n < 2; n++) html += n < on.length ? person(on[n], LOOK_BASE.colors[t * 2 + n]) : cpu(t * 2 + n, true);
     }
     const away = NET.seats.filter((s) => !s.on);
     if (away.length) html += '<li class="mp-team"><span>Away</span></li>' + away.map((s) => person(s, '#555', `Team ${st.teamOf[s.seat] ? 'B' : 'A'}`)).join('');
@@ -300,11 +302,11 @@ function renderLobby() {
     const swap = host && !colony;
     for (const s of NET.seats) {
       const mate = coop.includes(s.seat);
-      let li = person(s, mate ? PLAYER_COLORS[0] : s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555', mate ? `co-op: shares ${esc(mpHostName())}'s colony` : '');
+      let li = person(s, mate ? mpSeatColor(NET.seats.find((x) => x.seat === NET.host) || s, LOOK_BASE.colors[0]) : s.on ? LOOK_BASE.colors[k++ % 4] : '#555', mate ? `co-op: shares ${esc(mpHostName())}'s colony` : '');
       if (swap && s.seat !== NET.host) li = li.replace('<li class="', '<li class="mp-coop ');
       html += li;
     }
-    for (let a = 0; a < ai; a++) html += cpu(k++ % PLAYER_COLORS.length, false);
+    for (let a = 0; a < ai; a++) html += cpu(k++ % 4, false);
     if (swap && people.length > 1) html += `<li class="mp-team mp-coophint"><small>Tap a player to have them share your colony (co-op), or to give them their own again</small></li>`;
   }
   if (UI.mpLobbyHTML !== html || !$('mp-players').children.length) { $('mp-players').innerHTML = html; UI.mpLobbyHTML = html; }
@@ -340,7 +342,12 @@ function renderLobby() {
   else if (total > room) why = `${st && !st.shapeRnd ? SHAPE_PRESETS[st.shape].name : 'That map type'} has room for ${room}: pick another map type in Change settings (one marked “3–4 players” takes four).`;
   $('mp-start').disabled = !!why;
   $('mp-lmsg').classList.remove('ok');
-  $('mp-lmsg').textContent = host || people.length < 2 || odd.length ? why : 'Waiting for the host to start the game…';
+  // (Ready, on a relay that does it: js/polish3.js. The host may still start, with a second tap.)
+  const unready = mpNotReady();
+  if (!why && host && unready.length && performance.now() - P3.readyArm > 5000) why = `Waiting for ${unready.map((s) => s.name).join(' and ')} to be ready (or tap Start twice to start anyway).`;
+  if (performance.now() - P3.readyArm > 5000) $('mp-start').textContent = 'Start game';
+  $('mp-lmsg').textContent = host || people.length < 2 || odd.length ? why : netCan('prefs') && !(mpMe() || {}).ready ? 'Tap Ready when you are: the host starts the game.' : 'Waiting for the host to start the game…';
+  renderPrefs();
   // The host's first look at the lobby: send the settings round.
   if (host && !st) mpSendSettings();
 }
@@ -466,6 +473,9 @@ function mpHostStart() {
     for (const k of coop) slots.push(k);
     Object.assign(settings, { coop, cols, coopCol: 0, slotsN: slots.length });
   } else settings.coop = [];
+  // Each colony's colour (the picks in the lobby: js/polish3.js), by place, so every device dresses them alike.
+  const cols = settings.teams ? 4 : settings.cols || Math.max(settings.players, own.length);
+  settings.look = mpLook(slots || own.map((s) => s.seat), cols);
   netLobbySend({ t: 'start', settings, slots });
 }
 
@@ -502,6 +512,7 @@ function mpOnStart(m) {
   const me = NET.me;
   if (me < 0) return;
   const s = m.settings, coop = !!(s && s.slotsN);
+  applyLook(s && s.look); // (the colours picked in the lobby, before anything is made: js/polish3.js)
   // (co-op through a relay from before co-op, which seats no more than four places: it got the places wrong)
   if (coop && m.players.length !== s.slotsN) {
     netClose(); netRemember(false);
@@ -588,7 +599,7 @@ function mpEvent(kind, x) {
 function mpWho(p) { return S && S.crew && S.crew[p] ? S.crew[p].n : playerName(p); }
 
 /** Who's connected changed (in a game): nothing to show here (the banner and the drops cover it). */
-function mpPresence() { /* (the lobby list is for before the start) */ }
+function mpPresence() { mpPresence3(); } // (who's reconnecting: js/polish3.js)
 
 /** Every frame in a game: the banner over the map. */
 function mpBannerTick() {
@@ -600,9 +611,9 @@ function mpBannerTick() {
   else if (MPJ.on) { text = 'Joining the game…'; wait = true; }
   else if (P && P.out) text = 'Your colony has fallen: you\'re watching the rest of the game.';
   else if (mpAINow(MP.me)) { text = mpBehind() > 2 ? 'Catching up with the others…' : 'Taking your colony back…'; wait = true; }
-  else if (!MP.linkOK && NET.state === 'game') { text = 'Reconnecting…'; wait = true; }
+  else if (!MP.linkOK && NET.state === 'game') { text = NET.tries > 1 ? `Reconnecting… (try ${NET.tries})` : 'Reconnecting…'; wait = true; }
   else if (MP.stalled > 0.8 && MP.waitFor.length) {
-    const names = MP.waitFor.map((p) => mpWho(p)).join(' and ');
+    const names = MP.waitFor.map((p) => mpWho(p) + (mpReconnecting(p) ? ' (reconnecting)' : '')).join(' and ');
     const left = Math.max(0, Math.ceil(LS.STALL_S - MP.stalled));
     const mates = MP.waitFor.every((p) => S.crew && mpCol(p) === ME); // (co-op: a partner gone leaves the colony with me)
     text = `Waiting for ${names}` + (MP.stalled > 4 ? (mates ? ` (carrying on without them in ${left} s)` : ` (the computer takes over in ${left} s)`) : '…');

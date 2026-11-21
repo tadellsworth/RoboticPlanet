@@ -32,7 +32,7 @@ function act(name, args, cb) {
 function randomSeed() { return 1 + Math.floor(Math.random() * 999998); }
 
 function iconFor(type, owner) {
-  const key = type + '@' + (owner || 0);
+  const key = type + '@' + artTeam(owner || 0);
   if (!UI.icons[key]) UI.icons[key] = buildingIcon(type, 96, owner || 0);
   return UI.icons[key];
 }
@@ -98,6 +98,7 @@ function initUI() {
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
   initQol(); // (camera spots, recent alerts, goods a minute, save slots: js/qol.js)
   initPolish(); // (health bars switch, Idle button, Surrender, Rematch: js/polish.js)
+  initPolish3(); // (the Daily Planet, chat, team pings, Ready and colours in the lobby: js/polish3.js)
   initCloud(); // (cloud saves: Save to the cloud in the pause menu, Load from a code on the main menu, js/cloud.js)
   initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
@@ -2265,7 +2266,7 @@ const MAP_KEYS = [
   { keys: ['-', '_'], group: 'camera', label: 'Zoom out', run: () => zoomBy(0.8) },
   { keys: ['?'], group: 'panels', label: 'How to play', run: showHelp },
   { keys: [','], group: 'army', label: 'Pick idle warbots (again: the next group)', run: () => nextIdleArmy() },
-  { keys: ['.'], group: 'army', label: 'Ping under the pointer (co-op)', run: () => typeof coopPingHere === 'function' && !!coopPingHere(true) },
+  { keys: ['.'], group: 'army', label: 'Ping under the pointer for your team (multiplayer; Alt+click too)', run: () => typeof coopPingHere === 'function' && !!coopPingHere(true) },
 ];
 const SHIFT_KEYS = {
   f: { group: 'panels', label: 'Order bots (again for the next Foundry)', run: openFoundryOrders },
@@ -2372,7 +2373,7 @@ function renderKeys() {
     ]),
     section('Army (Q) and orders', [
       ...map('army'),
-      [['Enter'], 'Confirm the map banner’s main action'],
+      [['Enter'], 'Confirm the map banner’s main action (multiplayer, with none: open the chat)'],
       [['B', 'N'], 'Bomb or Napalm (while choosing a target)'],
     ]),
       `<section class="ks-group" aria-label="Army panel keys">${sub('In the Army panel', panel('army'))}</section>`,
@@ -3693,6 +3694,7 @@ function showGameOver() {
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
+  dailyOver(won); // (the Daily Planet's best time: js/polish3.js)
   syncRematch(); // (js/polish.js)
   $('screen-over').hidden = false;
 }
@@ -9496,6 +9498,7 @@ function uiTick(dt) {
   netTick();
   mpBannerTick();
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
+  polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)

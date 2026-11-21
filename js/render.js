@@ -487,7 +487,7 @@ function recolorArt(red, cyan, team = 2) {
 }
 
 function artFor(key, owner) {
-  return ART[key + '@' + owner] || ART[key] || null;
+  return ART[key + '@' + artTeam(owner)] || ART[key] || null;
 }
 
 /** Draw part of a seamless texture so one image spans 4×4 tiles (less visible repetition). */
@@ -3095,7 +3095,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   // without that part ('<type>-base') while the loop plays.
   if (art && b && b.built && working && artFor(type + '-base', owner) && ART[type + '-work-0']) art = artFor(type + '-base', owner);
   if (art) {
-    if (!ART[type + '@' + owner] && type !== 'ramp') {
+    if (!ART[type + '@' + artTeam(owner)] && type !== 'ramp') {
       // Shared art: a thin team-coloured bar along the front edge shows whose building it is.
       const w = s * 0.56, h = Math.max(2.5, s * 0.07), y = cy + s * 0.43;
       ctx.fillStyle = 'rgba(10,10,14,0.7)';
@@ -3868,7 +3868,7 @@ function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
     const art = piece(k);
     if (!art) continue;
     drawArt(ctx, art, cx, cy, s);
-    const sp = spark >= 0 && ART[`${k}@${owner}-spark-f${spark}`];
+    const sp = spark >= 0 && ART[`${k}@${artTeam(owner)}-spark-f${spark}`];
     if (sp) drawArt(ctx, sp, cx, cy, s);
   }
   if (post) { const [dx, dy] = ends[1]; drawArt(ctx, post, cx + dx * s, cy + dy * s, s); }
@@ -5454,7 +5454,7 @@ const FRAME_STEP = 1 / 12;
 
 /** The driving frame bot u shows now ('<type>@<team>-f0' …), or null if it has no frames. */
 function driveFrame(u) {
-  const base = u.type + '@' + u.owner + '-f';
+  const base = u.type + '@' + artTeam(u.owner) + '-f';
   if (!ART[base + '0']) return null;
   let n = 1;
   while (ART[base + n]) n++;
@@ -6854,7 +6854,7 @@ function render(dtReal) {
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
-  if (S.crew && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
+  if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
   if (typeof natureView === 'function') natureView(ctx, ox, oy, z); // (zoomed far out: the camera's tilt and the depth haze: js/nature.js)
   if (R.box) {
     // The selection box being dragged (desktop).
@@ -9023,7 +9023,7 @@ function renderMinimap() {
     ctx.fillStyle = '#ffcf4a';
     ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
-  if (S.crew && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
+  if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
   const a = viewToWorld(0, 0), c = viewToWorld(R.w, R.h);
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.5;

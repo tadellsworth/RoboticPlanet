@@ -1048,6 +1048,14 @@ const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, cry
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
 const RIVAL_NAMES = ['Blue', 'Red', 'Green', 'Purple']; // (COBALT is blue, as LORE.md has it)
 /**
+ * Whose team art each colony wears (art keys '<name>@<team>': 0 cyan, 1 red, 2 green, 3 purple). It is [0, 1, 2, 3]
+ * except in a multiplayer game where the players picked their colours in the lobby: then the start's settings carry
+ * the pick (settings.look) and every device applies it before the game is made (applyLook in js/polish3.js), so the
+ * colours, colour names and callsigns of each colony agree everywhere. Only the look: the game itself never reads it.
+ */
+const TEAM_ART = [0, 1, 2, 3];
+function artTeam(o) { const t = TEAM_ART[o]; return t === undefined ? o : t; }
+/**
  * The hidden boost menu (tap the clock three times, or press ` on a keyboard): for a game you're winning
  * too easily, or losing. Each button gives you or one rival this much, at its Command Base.
  */

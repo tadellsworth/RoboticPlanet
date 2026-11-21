@@ -41,6 +41,19 @@
 
 <div id="hud" hidden>
   <!-- Multiplayer: waiting for a player, paused by someone, or watching (see mpBanner in ui.js). -->
+  <!-- Multiplayer chat (js/polish3.js): the last lines, fading; Enter or Chat opens the line to type in. Plain text only. -->
+  <button type="button" id="btn-chat" class="chat-fab" hidden title="Chat (Enter)" aria-label="Chat">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 5.5h16v10h-9l-4.5 3.8v-3.8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><b class="tool-n" id="chat-n" hidden></b>
+  </button>
+  <div id="chat" class="chat" hidden>
+    <ol id="chat-log" class="chat-log" aria-live="polite" aria-label="Chat"></ol>
+    <form id="chat-form" class="chat-form" hidden autocomplete="off">
+      <button type="button" id="chat-to" class="chat-to" hidden>All</button>
+      <input id="chat-in" type="text" maxlength="140" enterkeyhint="send" placeholder="Say something… (Enter sends, Esc closes)" aria-label="Chat message">
+      <button type="button" id="chat-send" class="btn small">Send</button>
+      <button type="button" id="chat-mute" class="btn small ghost" aria-pressed="false" title="Mute: hide the others' chat (the Chat button counts what you miss)">Mute</button>
+    </form>
+  </div>
   <div id="mp-banner" class="mp-banner" role="status" aria-live="polite" hidden><span id="mp-banner-text"></span><button type="button" id="mp-banner-btn" class="btn small" hidden></button></div>
   <header id="topbar">
     <div id="goods" class="goods"></div>
@@ -146,8 +159,8 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 20v-3a6 6 0 0 1 12 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 4.5h3.5L17 9h3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Idle</span><kbd>,</kbd><b class="tool-n" id="idle-n" hidden></b>
     </button>
-    <!-- Co-op only (js/coop.js): mark the middle of the view for your partner (the . key marks the spot under the mouse). -->
-    <button id="btn-ping" class="tool" hidden title="Ping: mark this spot for your partner">
+    <!-- Multiplayer with teammates (js/coop.js): mark the middle of the view for your team (. or Alt+click: the spot under the mouse). -->
+    <button id="btn-ping" class="tool" hidden title="Ping: mark the middle of your view for your team (. or Alt+click: under the pointer)">
       <svg viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" fill="currentColor"/></svg>
       <span>Ping</span><kbd>.</kbd>
     </button>
@@ -189,6 +202,12 @@
         </div>
       </div>
       <button id="m-rejoin" class="btn big m-cont" hidden>Rejoin multiplayer game</button>
+      <!-- The Daily Planet (js/polish3.js): one planet a day (UTC), the same for everyone; its best time kept on this device. -->
+      <button type="button" id="m-daily" class="m-daily" title="Today's planet: the same map, biome and rivals for everyone until midnight UTC">
+        <span class="md-k">Daily Planet — <span id="m-daily-date"></span></span>
+        <span class="md-line" id="m-daily-line"></span>
+        <span class="md-best" id="m-daily-best"></span>
+      </button>
     </div>
     <!-- Customise: the whole new-game setup (opened by Custom Game; $('m-more').open = true works too). -->
     <div class="m-setup" id="m-more" role="region" aria-labelledby="m-setup-title" hidden>
@@ -401,6 +420,18 @@
         <div class="seg" id="mp-roles" role="radiogroup" aria-labelledby="mp-l-role">
           <button type="button" role="radio" data-v="both">Both</button><button type="button" role="radio" data-v="econ">Economy</button><button type="button" role="radio" data-v="mil">Military</button>
         </div><small class="hint" id="mp-role-hint"></small></div>
+      <!-- Your colour and Ready (js/polish3.js), on a relay that does them: no two players the same colour. -->
+      <div class="mp-prefs" id="mp-prefs" hidden>
+        <span class="m-rl" id="mp-l-color">Your colour</span>
+        <div class="mp-colors" id="mp-colors" role="radiogroup" aria-labelledby="mp-l-color"></div>
+        <button type="button" id="mp-ready" class="btn mp-ready" aria-pressed="false">Ready?</button>
+        <small class="hint" id="mp-colors-hint"></small>
+      </div>
+      <!-- The lobby's chat (js/polish3.js), on a relay that carries it. -->
+      <div class="mp-chat" id="mp-chat" hidden>
+        <ol class="chat-log" id="mp-chatlog" aria-live="polite" aria-label="Lobby chat"></ol>
+        <div class="mp-chatrow"><input id="mp-chatin" type="text" maxlength="140" enterkeyhint="send" placeholder="Chat with the others…" aria-label="Chat message"><button type="button" id="mp-chatsend" class="btn small">Send</button></div>
+      </div>
       <div class="section-label">Game</div>
       <p class="mp-sum" id="mp-sum"></p>
       <button type="button" id="mp-settings" class="btn">Change settings</button>
@@ -1351,15 +1382,18 @@
         <ul class="chain">
           <li><b>Host a game</b> gets you a room code to give the others (<b>Share</b> sends or copies a link that opens the game with the code filled in: they just tap <b>Join</b>). They type the code and tap <b>Join</b>.</li>
           <li>The lobby lists everyone, and computer rivals fill the empty places. The host taps <b>Change settings</b> (Versus or Colony, without Unlimited resources), picks each computer's <b>doctrine</b> from its row (point at a row, or tap it, for a line on how that doctrine plays; <b>How it plays</b> opens the whole of it). A doctrine stays with its colony when people come and go or the teams change, and someone away when the game starts leaves their place to the computer, in a 2 vs 2 game taps names to move players between teams, and then <b>Start game</b>.</li>
+          <li><b>Your colour</b> and <b>Ready</b>: in the lobby each player taps one of the four colours (one someone else has is greyed out; leave it and the host's game picks one) and taps <b>Ready</b> when set. The host's list says who is ready; <b>Start game</b> waits for everyone, or tap it twice to start anyway. The lobby also has a <b>chat</b> line.</li>
+          <li><b>Chat</b> in the game: <kbd>Enter</kbd> opens the chat line (on a touch screen, the round <b>Chat</b> button at the lower left), <kbd>Enter</kbd> sends, <kbd>Esc</kbd> closes. The last lines show over the map for a few seconds; open, it shows the history. With teammates and a human rival, <b>All</b>/<b>Team</b> (or <kbd>Tab</kbd>) picks who reads it. <b>Mute</b> hides the others' lines (the Chat button counts what you missed). Plain text only.</li>
+          <li><b>Pings</b> are for your team only (your co-op partner, or your ally's player in 2 vs 2; with no teammate there's no one to ping): <kbd>Alt</kbd>+click on the map or minimap, <kbd>.</kbd> under the pointer, a long press on the minimap on a touch screen, or <b>Ping</b> on the bar for the middle of your view. Rings and a pin show on their map and minimap, with a sound; three pings every few seconds at most.</li>
           <li>Everyone plays at one speed: there's no speed control and no Boosts menu, and the briefing card doesn't pause.</li>
-          <li>The pause menu doesn't stop the game; <b>Pause the game for everyone</b> does, and a banner says who paused. If someone drops out, the computer takes over their colony after a few seconds until they're back.</li>
+          <li>The pause menu doesn't stop the game; <b>Pause the game for everyone</b> does, and a banner says who paused. If someone drops out, the banner says <i>Waiting for Sam (reconnecting)</i> and the computer takes over their colony after a few seconds until they're back (a line says when they've reconnected). If it's your connection, the banner says <b>Reconnecting…</b> and the game tries again by itself, then catches up.</li>
           <li><b>Leave the game</b> (tap twice) hands your colony to the computer. If you reload or lose the connection, <b>Rejoin multiplayer game</b> on the main menu gets you back in. You can rejoin during a pause. <b>Cancel</b> leaves your seat available if you want to retry.</li>
           <li>If your colony falls you can stay and watch. Multiplayer games aren't saved for Continue.</li>
         </ul>
         <p><b>Co-op: one colony, two players.</b> Two of you run one colony together, each on your own device: one economy, one set of buildings and robots, one win or loss. In <b>Custom Game</b> pick Versus (against computer rivals) or Colony (just the two of you and the planet), then <b>Host a co-op game</b>: you get the lobby and a room code, and whoever joins shares your colony (in the multiplayer settings, <b>Co-op: Share my colony</b> does the same; in the lobby the host taps a player to move them into or out of their colony). Colony mode in multiplayer is always co-op.</p>
         <ul class="chain">
           <li>Either of you can build, order the army and change any setting: there are no fixed jobs. Each keeps their own view, selection and menus.</li>
-          <li>Your partner's cursor shows on your map as a coloured dot with their name. <kbd>.</kbd> pings the spot under your mouse (on a touch screen, <b>Ping</b> on the bar marks the middle of your view): rings and a pin on both maps and the minimap, with a sound.</li>
+          <li>Your partner's cursor shows on your map as a coloured dot with their name. <kbd>.</kbd> or <kbd>Alt</kbd>+click pings the spot under your mouse (on a touch screen, a long press on the minimap, or <b>Ping</b> on the bar for the middle of your view): rings and a pin on both maps and the minimap, with a sound.</li>
           <li>Each construction site has a small badge with the initial of whoever placed it (its panel says <b>Placed by</b>), your partner's plans and army orders show their name where they went for a few seconds, and the message log says who did what: <i>Sam placed a Smelter site</i>, <i>Sam sent 6 warbots to attack the Outpost</i>.</li>
           <li><b>Your role</b> in the lobby (Both, Economy or Military) only picks which alerts pop up for you: Economy keeps news of the war in the message log, Military the colony's everyday news (losses and the Command Base always pop up). It never limits what you can do.</li>
           <li><b>Dismantle</b> on something your partner placed less than a minute ago says so and asks you to tap again.</li>
@@ -1370,6 +1404,7 @@
 
       <section id="hs-records">
         <h3>Records and achievements</h3>
+        <p><b>The Daily Planet</b> (the card on the main menu, with today's date) is one planet a day, the same for everyone: a Versus game on Normal against one or two computer rivals, its map type, biome, ground, resources and the rivals' doctrines all picked from the date. It changes at midnight UTC. Your best time to win it today (and how many tries) is kept on this device and shown on the card; <b>Rematch</b> plays it again. A game with Boosts doesn't count.</p>
         <p><b>Records</b> (on the main menu) keeps your best on this device: the <b>fastest win</b> on each map type at each rival level, the <b>longest game</b>, the <b>most land</b> you've held and your <b>biggest colony</b> (robots and buildings). When a game beats one, its end screen says so.</p>
         <ul class="chain">
           <li>Records and wins count single-player Versus and Colony games. Missions and multiplayer don't, and nor does a game where you used <b>Boosts</b>, stopped the rivals building something, or played with <b>Unlimited resources</b>.</li>
@@ -1413,7 +1448,7 @@
           <li><kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot (all but one in each garrison); <kbd>,</kbd> pick the idle ones, a group at a time.</li>
           <li><kbd>Shift</kbd>+<kbd>F</kbd> opens your Bot Foundry's <b>Order bots</b> list from anywhere, to order more robots without leaving what you're looking at (again for your next Foundry, if you have several).</li>
           <li><kbd>Shift</kbd>+<kbd>P</kbd> Photo mode: the interface hidden for a picture of your colony (see Views, statistics and settings).</li>
-          <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert (again for the one before); <kbd>F1</kbd>–<kbd>F4</kbd> a camera spot (<kbd>Shift</kbd>+<kbd>F1</kbd>–<kbd>F4</kbd> keeps one); <kbd>M</kbd> minimap; <kbd>.</kbd> ping the spot under the mouse (co-op); <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
+          <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert (again for the one before); <kbd>F1</kbd>–<kbd>F4</kbd> a camera spot (<kbd>Shift</kbd>+<kbd>F1</kbd>–<kbd>F4</kbd> keeps one); <kbd>M</kbd> minimap; <kbd>.</kbd> or <kbd>Alt</kbd>+click ping the spot under the mouse for your team (multiplayer); <kbd>Enter</kbd> chat (multiplayer); <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
           <li><kbd>I</kbd> Statistics; <kbd>U</kbd> Your robots; <kbd>Y</kbd> Goods; <kbd>?</kbd> How to play; <kbd>`</kbd> Boosts.</li>
           <li><kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>Space</kbd> pause; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen.</li>
           <li>Placing a blueprint, <kbd>R</kbd> turns it a quarter turn.</li>
@@ -1915,6 +1950,7 @@
 <script src="js/blueprint.js"></script>
 <script src="js/qol.js"></script>
 <script src="js/polish.js"></script>
+<script src="js/polish3.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
