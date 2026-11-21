@@ -2922,7 +2922,7 @@ clouds' drift (`natureCloudTime`).
   meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
   vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
   the surface (`mplWarTick`, `mplWarDraw`): fronts near the colonies' lights flicker with bursts and the odd bigger
-  boom, leave fires (smoke by day), missiles' lines arc between colonies, a big strike about once a minute, all placed on
+  boom, leave fires (smoke by day), missiles' lines arc between colonies, a big strike about every half minute (busier since Nov 21 2026: up to 4 fronts, more bursts and missiles), all placed on
   the map and turning with the planet, hidden past the limb; and after `MPLANET.nukeFirst` seconds on the menu, at most
   once every `MPLANET.nukeGap`, a nuclear blast on the night side (`mplNuke`, also `MPL.nukeNow()` for testing).
   Sprites (glows, flashes, the sky) are made once. A dozen frames a second; on Graphics Saver five, the sphere shaded
