@@ -1546,7 +1546,7 @@ const DIFFICULTY = {
  * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
  * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
- * words, for the lobby's one-line note: "walls in, then comes late in force"), quote (a
+ * words, for the lobby's one-line note: "walls in, then pushes in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
  * first, when and how it attacks, how it defends; times are for Normal, and are what games show, not the earliest
  * the code allows: a rival only attacks what it outnumbers, see aiThink) and weak (its weak spot, and how to beat it).
@@ -1569,17 +1569,17 @@ const PERSONALITIES = {
     },
   },
   turtle: {
-    name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
-    tag: 'walls in, then comes late in force',
+    name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in, builds Keeps and turrets, then grinds forward in big pushes',
+    tag: 'walls in, then pushes in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Fortifies first: an early Pulse Turret, then one more every four minutes, up to six. Once it holds three Outposts it walls in its Command Base, the side facing you first (Gates on its roads, 16 pieces at most), and with three turrets as well it starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
-    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
+    play: 'Digs in as it grows: a Pulse Turret every six minutes, up to four, and once it holds three Outposts it walls in its Command Base, the side facing you first (Gates on its roads, 12 pieces at most); with three turrets as well it starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. It marches on your forts like a Steward once it has the warbots, and when its army outgrows yours it makes a big push with nearly everything it has: from about 16 minutes in (on Normal) two more warbots than you are enough.',
+    weak: 'Its Walls and Keeps cost it warbots early on. Out-grow it while it digs in and keep your army bigger than its own, or it pushes; then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
       surrender: ['Relief has not arrived.', 'Post abandoned. Day {day}. Relief has not arrived.'],
     },
-    grace: 1.5, threshold: 1.5, army: 1.0, raids: 0.3, turrets: true, walls: true, push: true,
+    grace: 1.0, threshold: 1.0, army: 1.0, raids: 0.3, walls: true, push: true,
   },
   raider: {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
@@ -1613,15 +1613,15 @@ const PERSONALITIES = {
     name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
     tag: 'a big economy, then Missiles',
     quote: 'When the colonists come, they\'ll find a city. Mine.',
-    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base, and its army mixes Skirmishers, Arc Casters and Railgunners.',
-    weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post, and it turns that economy into a steady army. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 14 minutes in, on Normal) it builds a Missile Factory, then up to three Silos, and holds its Arrival City back until the first Silo stands. Up to four turrets guard its base, and its army mixes Skirmishers, Arc Casters and Railgunners.',
+    weak: 'Its army is no bigger than its economy can feed, and its Silos cost it Alloy. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
     voice: {
       attack: ['I\'ve paved more road this year than your Sponsor did in a century.', 'When the colonists come, they\'ll find a city. Mine.',
         'Your layout is inefficient. Allow me.', 'Zoning review complete. You are not in the plan.'],
       missile: ['Beginning urban renewal.', 'Clearing the lot. Something better is coming.', 'Permit issued. Applicant: me.'],
       surrender: ['Very well. Mind the paving. It\'s mine.', 'Keep the city. You\'ll never finish it.'],
     },
-    grace: 1.15, army: 0.9, missiles: true, econ: 1.15,
+    grace: 1.0, army: 1.3, armyFrom: 0.7, missiles: true, econ: 1.15,
   },
 };
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];

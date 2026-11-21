@@ -108,7 +108,7 @@ function aiArmyKinds(kinds) { let n = 0; for (const k in kinds) if (BOTS[k] && B
  */
 const AI_ANSWERS = {
   balanced: { skirmisher: [6, 2], arccaster: [8, 1], railgunner: [8, 1] },
-  turtle: { skirmisher: [12, 1], arccaster: [8, 1], railgunner: [4, 3] },
+  turtle: { skirmisher: [12, 1], arccaster: [8, 1], railgunner: [6, 2] },
   raider: { skirmisher: [2, 7], arccaster: [12, 1], railgunner: [0, 0] },
   rusher: { skirmisher: [8, 2], arccaster: [12, 1], railgunner: [0, 0] },
   tycoon: { skirmisher: [6, 2], arccaster: [5, 2], railgunner: [5, 2] },
@@ -168,7 +168,7 @@ const AI_FORT = {
   tycoon: { turrets: 4, every: 360, front: 2, walls: 0.6 },
   raider: { turrets: 2, every: 540, front: 1, walls: 0.2 },
   rusher: { turrets: 2, every: 600, front: 1, walls: 0.15 },
-  turtle: { turrets: 6, every: 240, front: 3, walls: 1 },
+  turtle: { turrets: 4, every: 360, front: 3, walls: 1 },
 };
 function aiFort(p) {
   const F = AI_FORT[S.players[p].style] || AI_FORT.balanced;
@@ -214,7 +214,7 @@ function aiFortWalls(p) {
  * its Cement into 26 to 39 pieces by 18 minutes, built two turrets of its six, fell behind on Outposts and won 1.5 games
  * in 16.)
  */
-const AI_TURTLE_WALLS = 16, AI_TURTLE_KEEP = 3;
+const AI_TURTLE_WALLS = 12, AI_TURTLE_KEEP = 3;
 function aiTurtleWalls(p) {
   if (!aiStyle(p).walls || !warOn() || S.time < 360) return;
   const P = S.players[p];
@@ -887,6 +887,7 @@ function aiThink(p) {
     if (!cap || !b.built) continue;
     if (forBridge && (b.type === 'armory' || b.type === 'fab')) { if (!b.paused) setPaused(b, true); continue; }
     if (forFoundry && (b.type === 'armory' || (b.type === 'fab' && (stockNow.chip || 0) >= fCost.chip))) { if (!b.paused) setPaused(b, true); continue; }
+    if (b.type === 'armory' && aiMissileShort(p, me) && (stockNow.ammo || 0) >= 4) { if (!b.paused) setPaused(b, true); continue; } // (an Architect's missile site first: aiMissileShort)
     const hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
@@ -1015,6 +1016,7 @@ function aiThink(p) {
     for (const id of P.triage) { const b = getE(id); if (b && !b.dead && b.owner === p && b.paused) setPaused(b, false); }
     delete P.triage;
   }
+  const missileSite = st.missiles ? aiMissileShort(p, me) : null; // (an Architect's missile site waiting for Alloy or Chips)
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
     // Triage: workers, and nothing else, until there are enough (but one Hauler first when there is none and a few
@@ -1042,9 +1044,16 @@ function aiThink(p) {
     // while the army isn't well behind and the colony has the workers and the Haulers its buildings call for: with the
     // army alone to go by it stood off for missiles up to two fifths of a war while buildings stood empty. (An Easy
     // rival keeps the old rule.)
-    // (An Architect rests it while it has three warbots more than its rival, six at least: by its army target, which
-    // climbs with the clock, it hardly ever rested once a war was on, and its missile sites waited for goods the Foundry took.)
-    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? army >= Math.max(START_WARBOTS + 2, aiArmyOf(rivalOf(p)) + 3)
+    // (An Architect rests it only for a Missile Factory or Silo site short of its Alloy or Chips (aiMissileShort), for
+    // AI_MISSILE_REST s at most per site, with its army no more than two behind its rival's. Resting it whenever it had
+    // three warbots more than its rival, it never pulled far ahead and won 5 of 16 AI games; never resting it, 8, but
+    // its Silo sites waited for Alloy the Foundry took and one Silo stood in 16 games.)
+    let misRest = false;
+    if (missileSite) {
+      if (!P.misRest || P.misRest.id !== missileSite.id) P.misRest = { id: missileSite.id, t: S.time };
+      misRest = S.time - P.misRest.t < AI_MISSILE_REST && army >= Math.max(4, aiArmyOf(rivalOf(p)) - 2);
+    }
+    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? misRest
       : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= wantHaulers)));
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
     if (((forMissiles || (needArmory && !opening) || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
@@ -1138,9 +1147,9 @@ function aiThink(p) {
     // Warden (turtle) starts no push (aiPush), an Architect (tycoon) fires its Missiles into the army at its gates (below).
     if (P.homeCall > S.time && st.harass && P.nextRaid > S.time + 15 && !P.raid) P.nextRaid = S.time + 15;
     const pushing = P.pushOn > S.time; // (a Warden's big push: see aiPush)
-    // (A Warden keeps a third home until its push, outnumbered or not: it digs in, then comes late in one go. A Salvager
-    // keeps only the usual one, threatened or not: its home guard is thin, its bands go out from five minutes in.)
-    if (smart) P.homeGuard = st.harass ? 0 : P.homeCall > S.time || (st.walls && !pushing && army < them * 1.5 + 4) ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
+    // (A Salvager keeps only the usual one, threatened or not: its home guard is thin, its bands go out from five minutes
+    // in. A Warden used to keep a third home until its push, outnumbered or not: about four wins in 16 lost to it, Nov 2026.)
+    if (smart) P.homeGuard = st.harass ? 0 : P.homeCall > S.time ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
     const allIn = (smart && army >= lvl.threshold * 2 && army >= them * 2 + 2) || pushing, massing = P.massFor && S.time <= P.massFor.until;
     for (const b of me) {
       if (b.type !== 'outpost' || b.dead || !b.built) continue;
@@ -1323,8 +1332,8 @@ function aiThink(p) {
   const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
   if (st.push) aiPush(p, lvl, army, enemyArmy);
-  const pushing = P.pushOn > S.time; // (a Warden marches only on its push)
-  if ((st.push ? pushing : army >= lvl.threshold * 2 || finish) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
+  const pushing = P.pushOn > S.time; // (a Warden's push: it marches then with all it can gather, see aiPush)
+  if ((pushing || army >= lvl.threshold * 2 || finish) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
     let tgt = null, bd = Infinity;
     const enemyBase = getE(S.players[enemy].lander);
     // Uplinks: the nearest fort holding one of the enemy's Uplinks comes first, even ahead of a crushed rival's Command Base.
@@ -2385,8 +2394,11 @@ function aiMega(p, me, lander, canBuild) {
  */
 function aiCity(p, me, lander, canBuild) {
   const P = S.players[p], site = me.find((b) => !b.built && BDEFS[b.type].city);
-  if (site) { if (!site.prio) { site.prio = 'high'; site.sitePrio = 1; } return; } // (its goods come first: it fills as they come in)
-  if (aiMegaMain(p) !== 'city' || !canBuild || !lander || S.time < AI_MEGA.cityAt || me.some((b) => BDEFS[b.type].city)) return;
+  if (site) { // (its goods come first: it fills as they come in; an Architect's missile sites before it, see aiMissileFirst)
+    if (aiMissileFirst(p, me, false)) { if (site.prio === 'high') delete site.prio; site.sitePrio = 1; } else if (!site.prio) { site.prio = 'high'; site.sitePrio = 1; }
+    return;
+  }
+  if (aiMegaMain(p) !== 'city' || !canBuild || !lander || S.time < AI_MEGA.cityAt || me.some((b) => BDEFS[b.type].city) || aiMissileFirst(p, me, true)) return;
   if (worldBan('city') || megaBlocked(p, 'city') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiCityFunds(p)) return;
   if (S.time - (P.cityLook ?? -999) < AI_MEGA.look) return;
   P.cityLook = S.time;
@@ -3207,19 +3219,20 @@ function aiBeaten(P, b, n) { return !!P.beaten && P.beaten.some((q) => q.until >
 function aiWalled(P, b) { (P.beaten = P.beaten || []).push({ x: b.x, y: b.y, n: 1e6, until: S.time + 60 }); }
 
 /**
- * A Warden's big push (st.push): it marches only on a push. Before AI_PUSH_AT one starts only with twice its attack
- * threshold and half as many again as its rival's army and two more; from then on, with its attack threshold and two
+ * A Warden's big push (st.push), besides the marches any rival makes. Before AI_PUSH_AT one starts only with twice its
+ * attack threshold and AI_PUSH_EARLY times its rival's army and two more; from then on, with its attack threshold and two
  * more than its rival's (and, after a push, as many as that push took less two). For four minutes (P.pushOn) its home
  * guard is two, its Keeps hold two and its Outposts none, and its march takes all it can gather, its attack threshold
  * at least (aiMarch). Not while its base is threatened. (It used to march in a quarter of its games, half an hour in,
- * with a third of its army kept back.)
+ * with a third of its army kept back; then only on a push, with a third of its army at home until it went: it won 3 AI
+ * games of 16. The doctrine retune of Nov 2026.)
  */
 const AI_ALL_IN = 1680; // from 28 minutes, when long wars are fought out, an Architect stops its missile programme (see aiMissilePlan)
-const AI_PUSH_AT = 1320;
+const AI_PUSH_AT = 960, AI_PUSH_EARLY = 1.2;
 function aiPush(p, lvl, army, enemyArmy) {
   const P = S.players[p];
   if (P.pushOn > S.time || P.homeCall > S.time || S.mode === 'colony') return; // (not while its base is threatened)
-  const need = S.time < AI_PUSH_AT ? Math.max(lvl.threshold * 2, Math.ceil(enemyArmy * 1.5) + 2) : Math.max(lvl.threshold, enemyArmy + 2, (P.pushN || 0) - 2);
+  const need = S.time < AI_PUSH_AT ? Math.max(lvl.threshold * 2, Math.ceil(enemyArmy * AI_PUSH_EARLY) + 2) : Math.max(lvl.threshold, enemyArmy + 2, (P.pushN || 0) - 2);
   if (army >= need) { P.pushOn = S.time + 240; P.pushN = army; }
 }
 
@@ -3607,6 +3620,31 @@ function aiMissileKnot(p, L, silo) {
  * Returns the building type it is saving for, or null.
  */
 const AI_MISSILE_GAP = 4; // (an Architect's missile programme starts with its army no more than this behind its rival's)
+const AI_MISSILE_FROM = 480; // (and from eight minutes in)
+/**
+ * An Architect's Missile Factory or Silo site still short of its Alloy or Chips, or null. Until it has them its Ammo Plant
+ * rests (with 4 Ammo in hand) and its Bot Foundry too for up to AI_MISSILE_REST s (aiThink): the Alloy is kept for the
+ * missile programme. (Taken as it came by the Ammo Plant and Arrival City,
+ * the 4 Alloy of a site took 2 to 6 minutes to arrive, and its Silos stood at 22.6 minutes on average in the balance
+ * audit of Nov 2026. Resting the Foundry for as long as a site waited left its army too thin: it won 4 games of 16, not 6.)
+ */
+const AI_MISSILE_REST = 45;
+function aiMissileShort(p, me) {
+  if (!aiStyle(p).missiles) return null;
+  return me.find((b) => !b.built && (b.type === 'munitions' || b.type === 'silo') &&
+    ['alloy', 'chip'].some((g) => (b.stock[g] || 0) + (b.inc[g] || 0) < (BDEFS[b.type].cost[g] || 0))) || null;
+}
+/**
+ * Does an Architect's Arrival City wait for its missile programme? Its site isn't placed until a Silo stands (or from
+ * AI_MISSILE_CITY on, or with no Silos to be had), and while a Missile Factory or Silo is going up the City's site loses
+ * its high priority. (Opened at 12 minutes, the City's 30 Alloy went first and its Silos waited behind it for minutes.)
+ */
+const AI_MISSILE_CITY = 1080;
+function aiMissileFirst(p, me, placing) {
+  if (!aiStyle(p).missiles || S.difficulty === 'easy' || worldBan('silo') || S.time >= AI_ALL_IN) return false;
+  if (me.some((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'))) return true;
+  return placing && S.time < AI_MISSILE_CITY && !me.some((b) => b.built && b.type === 'silo');
+}
 function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   const P = S.players[p], lvl = aiLevel(p), st = aiStyle(p);
   P.feedMissiles = false;
@@ -3637,9 +3675,9 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   // pressure it put its Silos up at 24 minutes on average, after most games were over, and fired 6 Missiles in 40
   // games: the balance audit of Nov 2026. Its description promises them 8 to 16 minutes in.)
   const ready = (st.missiles
-    ? S.time >= Math.max(base.grace * 0.8, 600) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(4, foeArmy - AI_MISSILE_GAP)
+    ? S.time >= Math.max(base.grace * 0.8, AI_MISSILE_FROM) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(4, foeArmy - AI_MISSILE_GAP)
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
-    (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? 2 : 4);
+    (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? (counts.munitions ? 0 : 2) : 4); // (an Architect's Silos, once its Missile Factory stands, wait for no spare workers)
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
   if (worldBan('silo')) { P.saveStart = 0; return null; } // (the Hollow: no missiles)
   let want = null;

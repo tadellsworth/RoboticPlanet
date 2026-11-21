@@ -1593,7 +1593,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   gathers an army it already has for a march or a storm (`lootHeld`: `P.massFor` with `lead` and as many armed warbots
   as it takes, or `P.stormOn`), since only garrisoned warbots can be sent (`aiSpare`), and on the Hollow, whose cleared
   nests' hoards never rot, half its army shuttled crates while it "massed"; one without the lead or short of the
-  warbots keeps looting (the crates may be the Alloy it lives on). A player's warbots holding a flag (not the rival's) carry home piles within `FLAG_LOOT` (8)
+  warbots keeps looting (the crates may be the Alloy it lives on), but while it masses for a march with the warbots
+  it needs no more than a quarter of its armed army goes on carrying (`LOOT_MASS_SHARE`: in an even Hollow war 11 of a
+  Steward's 26 shuttled crates for half an hour while it massed for 15 it never had at home, and a 27-minute game ran
+  to 71). A player's warbots holding a flag (not the rival's) carry home piles within `FLAG_LOOT` (8)
   tiles of it once no enemy robot (the Murmur too) or gun is as near, up to half the squad at a time, and go back to the
   flag after (`flagLoot`, `flagPile`, `u.resume`); they used to stand beside a nest's hoard and leave it to rot. Crates
   left at an Outpost (`b.loot`) are hauled on to storage, and its panel lists them as Salvage (with a warning if no road
@@ -1652,17 +1655,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   applied by `aiStyle`/`aiLevel` in `js/ai.js`; the keys stay the old style words): each scales the difficulty's grace
   period, attack threshold, army growth and raid rate (the attack threshold stays between 3 and `AI_THRESHOLD_MAX`, 9:
   an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
-  later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
-  (`aiTurtleWalls`: once it has `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS`
-  (16) pieces standing, Chokepoint mouths included; its first Keep waits for 3 turrets and 3 Outposts) and a turret more
-  every four minutes (up to six; each one due goes first in its plan), its first at two and a half minutes, ahead of the
-  rest of its plan (the other doctrines' first waits for five, `AI_DEFENCE_AT`). It marches only in one big push (`aiPush`,
-  `push`): before 22 minutes (`AI_PUSH_AT`) only with twice its attack threshold and half as many again as its rival's
-  army and two more; from then on with its threshold and two more than its rival's (after a push, as many as that push
+  rare raids, a square ring of Walls and Gates six tiles round its Command Base (`aiTurtleWalls`: once it has
+  `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS` (12) pieces standing,
+  Chokepoint mouths included), up to three Keeps from seven minutes (its first waits for 3 turrets and 3 Outposts),
+  four Pulse Turrets (one every six minutes) and three front guns, no bombers, and its big push (`aiPush`, `push`): before
+  16 minutes (`AI_PUSH_AT`) with twice its attack threshold and a fifth as many again as its rival's army and two more
+  (`AI_PUSH_EARLY`); from then on with its threshold and two more than its rival's (after a push, as many as that push
   took less two). For four minutes (`P.pushOn`) its home guard is two, its Keeps hold two and its Outposts none, and the
-  march takes all it can gather, its threshold at least; never while its base is threatened, and until its push it
-  keeps a third of its army at home (see the home guard below). (It used to march in a quarter of its games, half an
-  hour in, with a third of its army kept back.) Every doctrine fortifies (`AI_FORT`, `aiFort`):
+  march takes all it can gather, its threshold at least; never while its base is threatened. Between pushes it marches
+  as the plain rule says. (Balance pass of Nov 2026, the owner's wish for a medium-strong Warden: it won 3 of 16 AI
+  games while it marched only on a push, kept a third of its army at home until then and put up six turrets, each
+  ahead of its economy, with its first at two and a half minutes; 7 of 16 as it is. Walls and Keeps kept, the home
+  third alone cost it about four wins.) Every doctrine fortifies (`AI_FORT`, `aiFort`):
   up to `turrets` Pulse Turrets, one more every `every` seconds (round the Command Base on the side facing the rival,
   spread apart), a Minigun Nest or Bunker by its fort nearest the rival every six minutes from about ten minutes in (up to
   `front`, through `P.defWant`), and with chance `walls` (decided once a game from the seed) an arc of Wall seven tiles
@@ -1776,7 +1780,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two warbots die to a Pulse Turret, three sent at the building beside one all die, three at the turret lose one.
   **The army's mix** (`aiAnswers`, `AI_ANSWERS`): once its army is up, beside the Bulwarks and Torches, each doctrine
   wants one of each answer for every so many warbots (Steward: a Skirmisher per 6, an Arc Caster and a Railgunner per 8;
-  Warden: Railgunners per 4, up to 3; Salvager: Skirmishers per 2, up to 7; Herald: few, it masses warbots; Architect: a
+  Warden: Railgunners per 6, up to 2; Salvager: Skirmishers per 2, up to 7; Herald: few, it masses warbots; Architect: a
   Skirmisher per 6, Arc Casters and Railgunners per 5). Against a rival with 2 Bulwarks or more, or 18 robots in its
   army, it adds Arc Casters (up to 3) and Railgunners (one a Bulwark, up to 2); against Railgunners and Arc Casters,
   Skirmishers; against 4 Skirmishers or more, no more Skirmishers of its own and one Bulwark at most. The answers are
@@ -1836,13 +1840,19 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   lanes of its Terminals, `aiConvoyLanes`: three times the score, and the raid waits a minute longer there for a convoy,
   `P.raid.convoy`), out of the guns' reach and never on a Trade Post's ground. Its attacks put a working building, Fuel
   Station or Depot that little guards ahead of a fort. The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
-  faster (`econ`), it builds extra Smelters and Chip Fabs (and a second Crystal Tap) and goes for Missile Silos (up to
-  three) once its Bot Foundry runs: its programme (`aiMissilePlan`) starts from ten minutes once its army is no more
+  faster (`econ`), it builds extra Smelters and Chip Fabs (and a second Crystal Tap), turns them into an army that grows
+  from early on (`army` 1.3, `armyFrom` 0.7, `grace` 1.0: it won 6 of 16 AI games at 0.9 and 1.15, 8 as it is) and goes for Missile Silos (up to
+  three) once its Bot Foundry runs: its programme (`aiMissilePlan`) starts from eight minutes (`AI_MISSILE_FROM`) once its army is no more
   than `AI_MISSILE_GAP` (4) behind its rival's (four at least; two ahead, as it was, put its Silos at 24 minutes on
-  average under pressure: November 2026 balance pass) and two workers to spare; the Missile Factory and then each Silo (the next once
+  average under pressure: November 2026 balance pass) and two workers to spare (none, once the Missile Factory stands); the Missile Factory and then each Silo (the next once
   the ones it has hold a Missile each) go down as soon as the Cement is there, one past its site limit, its first Ammo
-  Plant and turret still going ahead; its Bot Foundry rests for them only while it has three warbots more than its
-  rival, the factory rests while no Silo has room or its army is more than two behind its rival's, and from
+  Plant and turret still going ahead; while one of those sites still waits for Alloy or Chips its Ammo Plant rests
+  (with 4 Ammo in hand: `aiMissileShort`), and its Arrival City waits (`aiMissileFirst`: the City's site goes down
+  only once a Silo stands, or from `AI_MISSILE_CITY`, 18 minutes, and a City site already going up loses its high
+  priority while a missile site waits; its 30 Alloy used to go first and the Silos stood at 22.6 minutes on average);
+  its Bot Foundry rests for such a site for `AI_MISSILE_REST` (45) s at most, with its army no more than two behind
+  its rival's (resting it whenever it had three warbots more than its rival, it never pulled ahead: 5 wins of 16; for
+  as long as a site waited, 3 to 4; for 90 s, 5), the factory rests while no Silo has room or its army is more than two behind its rival's, and from
   `AI_ALL_IN` (28 minutes) it rests for good. Its Silos stand back from the border, nearest home with six of its
   rival's buildings in reach (`aiSearchSpot`). On Normal and Hard its Missiles go at what its rival lives on
   (`aiMissileWorth`, by `AI_BOMB_VALUE`), then any other working building, and at a fort only when its warbots in reach
@@ -2375,8 +2385,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     the music falls silent, then one answering tone (`gupanswer`).
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
-    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
-    and Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 19 min; none for the
+    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or
+    from 18 minutes (`aiMissileFirst`), and the Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 19 min; none for the
     Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (15 min)
     once it has a Bot Foundry and half its Cement and Crystal (`aiLiftFunds`), with its line over the fewest of its own
     buildings, toward open ground, never its Command Base (`aiLiftSpot`), and keeps its other buildings off that line

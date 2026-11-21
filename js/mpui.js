@@ -429,7 +429,7 @@ function mpDocNote() {
   probe.remove();
   el.style.minHeight = h + 'px';
 }
-/** A doctrine in a few words, for the lobby's line: "Warden (turtle): walls in, then comes late in force." */
+/** A doctrine in a few words, for the lobby's line: "Warden (turtle): walls in, then pushes in force." */
 function mpDocLine(d) {
   return d === 'random' ? `<b>Random:</b> ${DOCTRINE_RANDOM_TAG}.` : `<b>${docLabel(d)}:</b> ${PERSONALITIES[d].tag}.`;
 }

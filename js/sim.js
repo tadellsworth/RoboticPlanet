@@ -6487,15 +6487,19 @@ function updateLoot() {
  * of the warbots (massing for a nest strike, aiMurmur's P.massFor, for a march it hasn't the army for, or in an even
  * war): the crates may be the Alloy it lives on, and an even war's rival masses for some fort most of the game. (Held
  * whenever it massed, three of four Hollow Large games ran out the clock that had ended, their colonies starved.)
+ * Massing for a march with the warbots it needs but no lead, it holds back only those past LOOT_MASS_SHARE of its armed
+ * army out at the crates: in an even Hollow war 11 of a Steward's 26 shuttled crates for half an hour while it massed
+ * for 15 it never had at home (Hollow seed 11, Normal size: 27 minutes became 71).
  */
+const LOOT_MASS_SHARE = 0.25;
 function lootHeld(owner) {
   const P = S.players[owner];
   if (!P || !P.ai) return false;
   if (P.stormOn) return true;
-  if (!P.massFor || !P.massFor.lead || S.time > P.massFor.until) return false;
-  let armed = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && botArmed(u)) armed++;
-  return armed >= P.massFor.need - 2;
+  if (!P.massFor || !(P.massFor.lead || P.massFor.march) || S.time > P.massFor.until) return false;
+  let armed = 0, looting = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && botArmed(u)) { armed++; if (u.loot || u.task?.type === 'loot') looting++; }
+  return P.massFor.lead ? armed >= P.massFor.need - 2 : armed >= P.massFor.need && looting >= armed * LOOT_MASS_SHARE;
 }
 
 /**

@@ -1579,7 +1579,7 @@ const MISSIONS = [
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
     brief: 'A Warden (a turtle) hides behind Walls, turrets and a Bulwark picket. Break the shields, burn through with Torches and send in missiles.',
     intro: [
-      'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
+      'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, then it grinds forward in big pushes.',
       '<b>Torches</b> burn through Walls and can <b>Scorch the earth</b>. Send them with a <b>Bulwark</b> and they can fire from behind its shield if the Wall is in reach.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
@@ -1604,6 +1604,9 @@ const MISSIONS = [
       const pick = [...Array([1, 2, 2][diff]).fill('bulwark'), ...Array([2, 3, 4][diff]).fill('warbot')];
       pick.forEach((t, k) => { const u = addBot(1, t, fx - 1 + (k % 3), fy - 1 + Math.floor(k / 3)); u.task = { type: 'hold', rally: flag.id, slot: k }; });
       S.players[1].stats.startBots = S.players[1].stats.bots;
+      // (No march or push of its own for the first quarter hour on Normal and Hard: since the doctrine retune of Nov 2026 a
+      // Warden pushes once its army outgrows yours, and at ten minutes its push broke the siege before a shield went down.)
+      if (diff > 0) S.players[1].nextAttack = 900;
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',

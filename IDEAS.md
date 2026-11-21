@@ -615,6 +615,33 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
       Lift from 15 (18; a Herald's Lift from 19, was 22) and Dome from 17 (20). In 40 games 17 Cities and 14 Lifts were
       placed (7 and 3) and one City finished (none before); games ran a little longer (24.0 minutes to a win, was 20.4).
     - 40-game batch: no game undecided (1 before). Wins of 16: Salvager 11, Herald 11, Steward 9, Architect 6, Warden 3.
+    - **Doctrine retune (Nov 21 2026, the owner: the Warden and the Architect in line with the others; Salvager,
+      Steward and Herald left as they are).** 40-game batch, wins of 16 before → after: Salvager 11 → 10, Herald 11 → 8,
+      Steward 9 → 7, Architect 6 → 8, Warden 3 → 7; none undecided; 24.0 → 19.4 minutes to a win.
+      - *Warden*: what held it back was keeping a third of its army at home until its push (about four wins on its
+        own, measured on its 16 games: walls and Keeps alone, 5; without the home third, 9), marching only on a push, and
+        six turrets each put ahead of its economy. Now it marches as the plain rule says and still makes its all-in push
+        (from 16 minutes with two more than its rival, before that twice its threshold and a fifth more than its rival);
+        grace and threshold a Steward's, four turrets one every six minutes, 12 Wall pieces, up to three Keeps,
+        Railgunners per 6 (up to 2). Tried and dropped: a bigger or earlier army (army 1.2–1.35, `armyFrom` 0.7: 1 to
+        3.5 wins), fewer walls or turrets with push-only marching (5), the push without normal marches (5).
+      - *Architect*: army 0.9 → 1.3 from early on (`armyFrom` 0.7, grace 1.15 → 1.0); its Foundry no longer rests for
+        missiles whenever it is three warbots up (it never pulled ahead: 5 wins), only for a missile site short of
+        Alloy or Chips, 45 s at most a site; its Ammo Plant rests for such a site and its Arrival City waits for its first
+        Silo (or 18 minutes); the programme starts from 8 minutes (was 10), its Silos without spare workers once the
+        factory stands. Missile Factory up at 10–13 minutes in most games, but Silos still often come late or not at
+        all (3 built in 16 games: 14, 17 and 29 minutes; 6 Missiles fired): a 90 s rest put them at 12–17 but cost
+        three wins (5 of 16), a rest for as long as a site waits four. **Still open:** Silos at 10–12 minutes without
+        thinning its army (an Alloy reserve that doesn't stop the Foundry?).
+      - *Hollow stalls* (r2 batch: Hollow 11 27 → 71.5, Hollow 25 33 → 74.5 minutes after the balance pass): in an even
+        war a Steward massing for a march had 11 of its 26 warbots shuttling crates from the nests' hoards, so it never
+        had the 15 it massed for at home and never marched. While it masses for a march with the warbots it needs, at
+        most a quarter of its armed army now goes on carrying (`LOOT_MASS_SHARE`): Hollow 11 28, Hollow 25 17.1. The
+        r2 batch: 1 undecided (Hollow 12, the known stall), 22.6 minutes on average (31.1). Hollow Large (seeds 11 and
+        21) ran out the 90-minute clock in a check with this rule; seed 21 did before it too, seed 11 ended at 37.6:
+        worth a closer look.
+      - Siege Breakers: on Normal and Hard its Warden makes no march or push of its own for 15 minutes (its push at
+        10 minutes broke the stand-in player's siege before a shield went down; won again at 24:53 and 26:04).
   - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
     Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
     and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
