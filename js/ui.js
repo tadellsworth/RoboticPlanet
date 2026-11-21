@@ -2148,6 +2148,8 @@ const SHEET_KEYS = {
   'sh-sdeep': ['f', 'Sundering Ray: Strike the Deep'],
   'sh-squake': ['q', 'Sundering Ray: Quake'],
   'sh-sstop': ['c', 'Stand down the Sundering Ray'],
+  'sh-storm': ['f', 'Atmosphere Engine: Storm Front'],
+  'sh-stormoff': ['c', 'Call the storm off'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],
   'sh-st-send': ['v', 'Station here'],
@@ -4470,7 +4472,7 @@ function showScorchBanner(problem) {
 /** A tap or click on the map while picking soil to scorch: a click (or the banner's Scorch, under a finger) sends them. */
 function scorchTap(i, j) {
   if (!inMap(i, j)) return;
-  const why = scorchTileWhy(tIdx(i, j));
+  const why = scorchTileWhy(tIdx(i, j), ME);
   if (why) { sfx('error'); R.scorchAt = null; showScorchBanner(why); return; }
   if (INPUT.mouse) { sendScorch(i, j); return; }
   R.scorchAt = { i, j };
@@ -5228,6 +5230,8 @@ function startAim(silo, mode) {
   R.selected = silo.id;
   // The Lance of Corvane: no ring (it reaches across the map); the view stays, and the line follows the pointer.
   if (BDEFS[silo.type].lance) { if (silo.lAim) R.aim = { i: silo.lAim[0], j: silo.lAim[1] }; showAimBanner(); return; }
+  // The Atmosphere Engine's Storm Front: anywhere on the map (the view stays); its own circle, kept clear, is shown.
+  if (BDEFS[silo.type].atmos) { R.aim = null; showAimBanner(); return; }
   // The Sundering Ray: Strike the Deep reaches anywhere (the view stays); a Quake shows its reach round the Ray.
   const ray = !!BDEFS[silo.type].sunder;
   if (ray) {
@@ -5271,7 +5275,7 @@ function mapGrab(x, y) {
 }
 
 /** Why the weapon being aimed (a Silo, a Nuclear Silo, the Lance) can't strike tile (i, j) ('' if it can). */
-function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.sunder ? sunderAimBlocked(silo, i, j, UI.aimMode) : d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
+function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.atmos ? atmosStormBlocked(silo, i, j) : d.sunder ? sunderAimBlocked(silo, i, j, UI.aimMode) : d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
 
 function showAimBanner(problem) {
   const silo = getE(UI.aimSilo), md = BDEFS.silo.missile;
@@ -5283,6 +5287,14 @@ function showAimBanner(problem) {
       ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything in the red core (2 tiles wide) is destroyed, yours too; the fainter edge either side is scorched to half armor.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
+    return;
+  }
+  if (BDEFS[silo.type].atmos) {
+    const st = silo.aeStage || 2;
+    html += R.aim
+      ? `<b>${silo.aeStorm ? 'Move the storm here?' : 'Set the storm down here?'}</b> A ${STORM.r}-tile storm sits here while the Engine has power: enemy robots under it move at ${Math.round(STORM.slow * 100)}% speed, their sites go up at ${Math.round(STORM.build * 100)}%, their guns reach ${Math.round(STORM.range * 100)}% as far${st >= 3 ? `, their crops stop growing and wither after ${Math.round(STORM.drought / 60)} minutes` : ''}${st >= 4 ? ', and lightning strikes one of their buildings about once a minute' : ''}. Everyone sees it. It can be moved again in ${Math.round(STORM.cd)} s.`
+      : `Tap a spot anywhere on the map, clear of the Engine's own circle (${ATMOS.r[st - 1] + STORM.r} tiles from its middle) and outside any other Engine's: the ${STORM.r}-tile circle the storm sits on.`;
+    showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.aeStorm ? 'Move it' : 'Storm') : null, 'Cancel');
     return;
   }
   if (BDEFS[silo.type].sunder) {
@@ -5336,6 +5348,14 @@ function fireAimed() {
     const was = silo.lOn;
     act('lanceAim', [sid, i, j], (why) => {
       if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${lanceTime(silo)} seconds.`, 'info'); return; }
+      sfx('error'); showAimBanner(why);
+    });
+    return;
+  }
+  if (BDEFS[silo.type].atmos) {
+    const was = !!silo.aeStorm;
+    act('atmosStorm', [sid, i, j], (why) => {
+      if (!why) { setMode('normal'); sfx('order'); toast(was ? 'The storm front moves: it settles over the new spot.' : 'The storm front rolls out: it settles over the spot while the Engine has power.', 'info'); return; }
       sfx('error'); showAimBanner(why);
     });
     return;
@@ -7481,6 +7501,10 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-saim-hint"></p><button class="btn" id="sh-sstop" hidden>Stand down (the blow is lost)</button>
         <button class="btn" id="sh-suser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-suser-hint"></p>`;
     }
+    if (def.atmos && b.built && b.owner === ME) {
+      html += `<button class="btn primary big" id="sh-storm">Storm Front</button>
+        <p class="hint" id="sh-storm-hint"></p><button class="btn" id="sh-stormoff" hidden>Call the storm off</button>`;
+    }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
         <p class="hint" id="sh-aim-hint">Shows the Silo's ${def.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.</p>`;
@@ -7546,6 +7570,8 @@ function openBuildingSheet(b) {
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-sdeep')) $('sh-sdeep').onclick = () => { sfx('click'); startAim(b, 'deep'); };
     if ($('sh-squake')) $('sh-squake').onclick = () => { sfx('click'); startAim(b, 'quake'); };
+    if ($('sh-storm')) $('sh-storm').onclick = () => { sfx('click'); startAim(b); };
+    if ($('sh-stormoff')) $('sh-stormoff').onclick = () => { sfx('click'); act('atmosStormOff', [b.id], () => { toast('The storm front breaks up: the sky over there clears.', 'info'); refreshSheet(); }); };
     if ($('sh-sstop')) $('sh-sstop').onclick = () => { sfx('click'); act('sunderStop', [b.id], () => { toast('The Sundering Ray stands down: the blow is lost.', 'info'); refreshSheet(); }); };
     if ($('sh-suser')) $('sh-suser').onclick = () => { sfx('click'); const on = !b.sUseR; act('sunderReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Ray winds up on it (${SUNDER.reactorCharge} s, ${SUNDER.uranium} Uranium or an Enriched Uranium a blow).` : 'Use Reactor off: with Generators in reach the Ray winds up on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
     if ($('sh-lstop')) $('sh-lstop').onclick = () => { sfx('click'); act('lanceStop', [b.id], () => { toast('The Lance stands down: its charge is lost.', 'info'); refreshSheet(); }); };
@@ -7768,6 +7794,7 @@ function refreshBuildingSheet(b) {
   } else {
     parts.push(`<div class="kv"><span>Armor</span><span>${Math.ceil(Math.max(0, b.armor))} / ${def.armor}</span></div>
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
+    if (mine && stormOverB(b)) parts.push(`<div class="kv"><span>Storm</span><span><b class="err">Under a rival's storm front</b>: robots slow, sites go up slower, guns reach less. Destroy its Atmosphere Engine, or build your own: its circle is calm</span></div>`);
     if (mine && def.staff) {
       const op = getE(b.staff);
       if (def.crews > 1) {
@@ -7973,7 +8000,8 @@ function refreshBuildingSheet(b) {
       const nx = st < 4 ? ATMOS.stages[st] : 0, f = st < 4 ? (T - ATMOS.stages[st - 1]) / (nx - ATMOS.stages[st - 1]) : 1;
       parts.push(`<div class="kv"><span>Stage</span><span>${lamps} ${st}, ${ATMOS_STAGE_NAMES[st - 1]}${st < 4 ? `: ${ATMOS_STAGE_NAMES[st]} after ${fmtSecs(nx - T)} more of power` : ': the last'}</span></div><div class="bar"><div style="width:${Math.round(Math.max(0, Math.min(1, f)) * 100)}%;background:#7ee08a"></div></div>`);
       const what = ['no dust storm', 'rain at night, barren ground fertile, the Bloom held back', 'grass, crops a quarter faster, the Bloom withering', 'groves seeding themselves, no Bloom and no Murmur exit'];
-      parts.push(`<div class="kv"><span>Its circle</span><span>${Math.round(atmosReach(b))} of ${ATMOS.r[st - 1]} tiles round it (for everyone in it): ${what.slice(0, st).join('; ')}</span></div>`);
+      parts.push(`<div class="kv"><span>Its circle</span><span>${Math.round(atmosReach(b))} of ${ATMOS.r[st - 1]} tiles round it: ${what.slice(0, st).join('; ')}${st >= 2 ? `; enemy robots in it wade through mud at ${Math.round(ATMOS.mud * 100)}% speed, and while it has power enemy Torches can't burn there` : ''}. The calm${st >= 3 ? ' and the faster crops are' : ' is'} its owner's and allies' only</span></div>`);
+      if (b.aeStorm && st >= 2) parts.push(`<div class="kv"><span>Storm Front</span><span>${atmosStormOn(b) ? `Over the ground at ${b.aeStorm[0]}, ${b.aeStorm[1]}, ${STORM.r} tiles round${st >= 4 ? ', lightning about once a minute' : ''}` : 'Gone while it has no power: it comes back where it was'}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Power</span><span>${b.aeSrc === 'reactor' ? `A Nuclear Reactor in reach: a Uranium every ${Math.round(ATMOS.uEvery / 60)} minutes` : b.aeSrc === 'gen' ? `${ATMOS.gens} Generators in reach: a Fuel a minute from each` : `<b>None</b>: ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor. Its land stays as it is`}</span></div>`);
       if (b.aeCall && murmurCfg()) parts.push(`<div class="kv"><span>The Bloom</span><span><b class="err">Fights back the next night: ${ATMOS.sappers[b.aeCall - 1]} Sapper${ATMOS.sappers[b.aeCall - 1] === 1 ? '' : 's'} will dig in under it</b></span></div>`);
       else if (murmurCfg()) parts.push(`<div class="kv"><span>The Murmur</span><span>They hate it: every night they go for it first</span></div>`);
@@ -8038,6 +8066,13 @@ function refreshBuildingSheet(b) {
       $('sh-suser').textContent = `Use Reactor: ${b.sUseR ? 'On' : 'Off'}`; $('sh-suser').setAttribute('aria-pressed', b.sUseR ? 'true' : 'false'); $('sh-suser').classList.toggle('on', !!b.sUseR);
       $('sh-suser-hint').textContent = `With Generators and a Reactor both in reach: On winds up on the Reactor (${SUNDER.reactorCharge} s, reload ${Math.round(SUNDER.reactorReload / 60)} min, ${SUNDER.uranium} Uranium a blow); Off uses the Generators (${SUNDER.charge} s, reload ${Math.round(SUNDER.reload / 60)} min). A Reactor alone is always used.`;
     }
+  } else if (def.atmos && $('sh-storm')) {
+    const left = Math.ceil(STORM.cd - (S.time - (b.aeStormT ?? -1e9))), st = b.aeStage || 1;
+    const why = st < 2 ? `Comes with stage 2, Rain: ${fmtSecs(Math.max(1, Math.ceil(ATMOS.stages[1] - (b.aeT || 0))))} more of power.` : !b.aeSrc ? 'No power: no storm. Feed its Generators.' : left > 0 ? `The sky is still turning: it can be moved again in ${fmtSecs(left)}.` : '';
+    $('sh-storm').disabled = !!why;
+    $('sh-storm').textContent = b.aeStorm ? 'Move the storm' : 'Storm Front';
+    $('sh-storm-hint').textContent = why || `Tap Storm Front, then a spot anywhere on the map (not within ${ATMOS.r[st - 1] + STORM.r} tiles of the Engine, nor in another Engine's circle): a ${STORM.r}-tile storm sits there while the Engine has power. Under it enemy robots move at ${Math.round(STORM.slow * 100)}% speed, their sites go up at ${Math.round(STORM.build * 100)}% and their guns reach ${Math.round(STORM.range * 100)}% as far${st >= 3 ? '; their crops stop growing and wither after ' + Math.round(STORM.drought / 60) + ' minutes' : ' (from Green, their crops wither too)'}${st >= 4 ? '; lightning strikes one of their buildings about once a minute' : ' (at the Garden, lightning)'}. A minute before it can be moved again.`;
+    if ($('sh-stormoff')) $('sh-stormoff').hidden = !b.aeStorm;
   } else if ($('sh-aim') && def.nukeSilo) {
     $('sh-aim').disabled = !b.armed;
     $('sh-aim-hint').textContent = b.armed ? `Shows its ${NUKE.range}-tile range: tap a spot inside it to see the ${NUKE.radius}-tile blast, then launch.` : 'Builds a nuclear missile once its parts are in.';

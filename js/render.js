@@ -6812,6 +6812,7 @@ function render(dtReal) {
   drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
   drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
   drawAtmosPlumes(ctx, ox, oy, z); // (the Atmosphere Engines: their plumes, lit at night, and the rain round them)
+  drawAtmosStorms(ctx, ox, oy, z); // (their Storm Fronts: a dark cloud turning over the spot, rain under it, everyone sees it)
   drawSunderAir(ctx, ox, oy, z); // (the Sundering Ray: dust along its ripple, cracked buildings, stunned robots)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
@@ -8173,6 +8174,7 @@ function drawAim(ctx, ox, oy, z) {
   if (!silo) return;
   if (BDEFS[silo.type].lance) { const sp = R.aim || R.aimHover; if (sp && !lanceAimBlocked(silo, sp.i, sp.j)) drawLanceLine(ctx, ox, oy, z, silo, sp.i, sp.j, true); return; }
   if (BDEFS[silo.type].sunder) { drawSunderAim(ctx, ox, oy, z, silo); return; }
+  if (BDEFS[silo.type].atmos) { drawStormAim(ctx, ox, oy, z, silo); return; }
   const nuke = !!BDEFS[silo.type].nukeSilo;
   const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;
@@ -8832,6 +8834,25 @@ function drawEffects(ctx, ox, oy, z) {
         ctx.globalAlpha = 0.8 * Math.max(0, 1 - k * 2);
         ctx.fillStyle = '#ff7a2e';
         for (let n = 0; n < 5; n++) { const a = n * 1.26 + f.x; ctx.beginPath(); ctx.arc(x + Math.cos(a) * z * 0.35, y + Math.sin(a) * z * 0.25, z * 0.05, 0, Math.PI * 2); ctx.fill(); }
+        break;
+      }
+      case 'stormbolt': {
+        // Lightning out of a Storm Front (stormBolt): a jagged bolt from high up to the building, flickering twice, a
+        // white-blue flash where it lands, and the afterglow fading.
+        const on = f.t < 0.08 || (f.t > 0.16 && f.t < 0.24) ? 1 : f.t < 0.3 ? 0.35 : 0;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        fxGlow(ctx, x, y, z * (1.6 + k), '#bcd4ff', 0.75 * (1 - k));
+        if (on > 0) {
+          const sx = x + (hash2(f.seed | 0, 1, 77) - 0.5) * z * 3, sy = y - z * 9;
+          ctx.globalAlpha = on;
+          ctx.strokeStyle = 'rgba(170,200,255,0.55)'; ctx.lineWidth = Math.max(3, z * 0.22);
+          ctx.beginPath(); boltPath(ctx, sx, sy, x, y, z * 0.5, (f.seed | 0) * 13 + 5, 9); ctx.stroke();
+          ctx.strokeStyle = '#f4f8ff'; ctx.lineWidth = Math.max(1.2, z * 0.07);
+          ctx.beginPath(); boltPath(ctx, sx, sy, x, y, z * 0.5, (f.seed | 0) * 13 + 5, 9); ctx.stroke();
+          ctx.beginPath(); boltPath(ctx, x + (sx - x) * 0.5, y + (sy - y) * 0.5, x + z * 1.2, y - z * 2.5, z * 0.3, (f.seed | 0) * 13 + 9, 4); ctx.stroke();
+        }
+        ctx.restore();
         break;
       }
       case 'ring': {
@@ -11413,7 +11434,7 @@ function drawNapalmPick(ctx, ox, oy, z) {
 function drawScorchPick(ctx, ox, oy, z) {
   for (const [spot, picked] of [[R.aimHover, false], [R.scorchAt, true]]) {
     if (!spot || !inMap(spot.i, spot.j)) continue;
-    const ok = !scorchTileWhy(tIdx(spot.i, spot.j)), x = ox + spot.i * z, y = oy + spot.j * z;
+    const ok = !scorchTileWhy(tIdx(spot.i, spot.j), ME), x = ox + spot.i * z, y = oy + spot.j * z;
     if (ok) { ctx.fillStyle = `rgba(255,120,30,${picked ? 0.45 : 0.28})`; ctx.fillRect(x + 2, y + 2, z - 4, z - 4); }
     ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#ff9a3c' : 'rgba(255,154,60,0.75)';
     ctx.lineWidth = picked ? Math.max(2.5, z * 0.07) : 2;
@@ -12243,5 +12264,82 @@ function drawSunderAim(ctx, ox, oy, z, b) {
   }
   const k = Math.max(6, z * 0.6);
   ctx.beginPath(); ctx.moveTo(px - k, py); ctx.lineTo(px + k, py); ctx.moveTo(px, py - k); ctx.lineTo(px, py + k); ctx.stroke();
+  ctx.restore();
+}
+
+/*
+ * The Atmosphere Engines' Storm Fronts (STORM; atmosStormOn): over the spot, a dark cloud turning slowly round its middle
+ * (billows on two rings, the inner one faster), its shadow on the ground, a darker rim so its edge reads from far out,
+ * and rain under it. At night the cloud is lit a little from inside (blue-grey) so it still reads. It rolls in and
+ * breaks up over a few seconds (R.stormK). Everyone sees it.
+ */
+function drawAtmosStorms(ctx, ox, oy, z) {
+  const K = R.stormK || (R.stormK = {}), dt = Math.min(0.25, Math.max(0, R.time - (R.stormT ?? R.time)));
+  R.stormT = R.time;
+  const night = fxNight(), lite = gfx().fx < 1;
+  for (const b of S.buildings) {
+    if (b.type !== 'atmos') continue;
+    const on = atmosStormOn(b), k0 = K[b.id] || 0, k = on ? Math.min(1, k0 + dt / 3) : Math.max(0, k0 - dt / 2);
+    if (k <= 0 || !b.aeStorm) { delete K[b.id]; continue; }
+    K[b.id] = k;
+    const X = ox + (b.aeStorm[0] + 0.5) * z, Y = oy + (b.aeStorm[1] + 0.5) * z, r = STORM.r * z;
+    if (X < -r * 1.6 || X > R.w + r * 1.6 || Y < -r * 1.6 || Y > R.h + r * 1.6) continue;
+    ctx.save();
+    // the shadow on the ground, and the rim
+    const sh = ctx.createRadialGradient(X, Y, r * 0.2, X, Y, r * 1.12);
+    sh.addColorStop(0, `rgba(14,18,28,${(night ? 0.28 : 0.42) * k})`); sh.addColorStop(0.82, `rgba(14,18,28,${(night ? 0.22 : 0.34) * k})`); sh.addColorStop(1, 'rgba(14,18,28,0)');
+    ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(X, Y, r * 1.12, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = night ? `rgba(150,170,210,${0.35 * k})` : `rgba(30,36,50,${0.45 * k})`; ctx.lineWidth = Math.max(1.5, z * 0.12); ctx.setLineDash([z * 0.6, z * 0.35]); ctx.lineDashOffset = R.time * z * 0.4;
+    ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    // rain under it: slanted streaks falling all over the circle
+    ctx.strokeStyle = night ? `rgba(180,200,230,${0.4 * k})` : `rgba(210,222,240,${0.45 * k})`; ctx.lineWidth = Math.max(1, z * 0.03);
+    ctx.beginPath();
+    for (let q = 0, N = lite ? 60 : 130; q < N; q++) {
+      const a = hash2(b.id, q, 31) * Math.PI * 2, d = Math.sqrt(hash2(b.id, q, 32)) * r * 0.95, f = (R.time * 1.6 + hash2(b.id, q, 33)) % 1;
+      const x = X + Math.cos(a) * d + f * z * 0.3, y = Y + Math.sin(a) * d * 0.85 - (1 - f) * z * 1.4;
+      ctx.moveTo(x, y); ctx.lineTo(x - z * 0.12, y + z * 0.45);
+    }
+    ctx.stroke();
+    // the cloud: three spiral arms of billows wound round its middle, turning slowly; each billow a darker underside
+    // (its shadow side), its body and a paler top, so it reads as heaped cloud seen from above. At night darker, its
+    // tops lit a little blue-grey.
+    const under = wxCloud(night ? '18,22,34' : '30,34,44'), body = wxCloud(night ? '52,60,82' : '74,80,94'), tops = wxCloud(night ? '112,126,162' : '150,156,168');
+    const spin = R.time * 0.11 + b.id * 1.7, arms = 3, per = lite ? 5 : 8;
+    const puff = (x, y, w, a) => {
+      ctx.globalAlpha = 0.55 * a * k; ctx.drawImage(under, x - w * 0.5 + w * 0.08, y - w * 0.3 + w * 0.12, w, w * 0.62);
+      ctx.globalAlpha = 0.7 * a * k; ctx.drawImage(body, x - w * 0.5, y - w * 0.32, w, w * 0.62);
+      ctx.globalAlpha = (night ? 0.5 : 0.45) * a * k; ctx.drawImage(tops, x - w * 0.36 - w * 0.08, y - w * 0.3 - w * 0.08, w * 0.72, w * 0.42);
+    };
+    puff(X, Y - z * 1.6, r * 1.05, 0.9); // (its heart, densest)
+    for (let q = per - 1; q >= 0; q--) for (let arm = 0; arm < arms; arm++) {
+      const t = (q + 1) / per, a = spin + (arm / arms) * Math.PI * 2 + t * 2.4 + (hash2(b.id, q * 3 + arm, 41) - 0.5) * 0.3;
+      const d = r * (0.18 + 0.8 * t), w = r * (0.42 + 0.38 * t) * (0.85 + 0.3 * hash2(b.id, q * 3 + arm, 42));
+      puff(X + Math.cos(a) * d, Y + Math.sin(a) * d * 0.8 - z * 1.6, w, 1 - 0.35 * t);
+    }
+    ctx.globalAlpha = 1;
+    // lightning in the cloud now and then at the Garden (looks only: the strike itself is stormBolt's)
+    if ((b.aeStage || 0) >= 4) {
+      const n = Math.floor(R.time / 3.7 + b.id), ph = R.time / 3.7 + b.id - n;
+      if (hash2(b.id, n, 51) < 0.5 && ph < 0.06) { ctx.globalAlpha = k; ctx.globalCompositeOperation = 'lighter'; fxGlow(ctx, X + (hash2(b.id, n, 52) - 0.5) * r, Y - z * 1.6, r * 0.9, '#c8d8ff', 0.5); }
+    }
+    ctx.restore();
+  }
+}
+
+/** Aiming a Storm Front: the Engine's own circle kept clear (dimmed ring) and the storm's circle at the pointer. */
+function drawStormAim(ctx, ox, oy, z, b) {
+  const c = bCentre(b), st = b.aeStage || 2, cx = ox + c.x * z, cy = oy + c.y * z, keep = (ATMOS.r[st - 1] + STORM.r) * z;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(143,224,138,0.8)'; ctx.fillStyle = 'rgba(143,224,138,0.06)'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.5, z * 0.3]);
+  ctx.beginPath(); ctx.arc(cx, cy, keep, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+  const sp = R.aim || R.aimHover;
+  if (sp) {
+    const ok = !atmosStormBlocked(b, sp.i, sp.j), px = ox + (sp.i + 0.5) * z, py = oy + (sp.j + 0.5) * z, r = STORM.r * z;
+    ctx.fillStyle = ok ? 'rgba(60,70,96,0.3)' : 'rgba(200,200,200,0.12)';
+    ctx.strokeStyle = !ok ? 'rgba(200,200,200,0.8)' : R.aim ? '#9fb4e8' : 'rgba(159,180,232,0.85)';
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const k = Math.max(6, z * 0.6);
+    ctx.beginPath(); ctx.moveTo(px - k, py); ctx.lineTo(px + k, py); ctx.moveTo(px, py - k); ctx.lineTo(px, py + k); ctx.stroke();
+  }
   ctx.restore();
 }

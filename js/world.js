@@ -2649,7 +2649,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
-    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, green: {}, aeFade: [], fires: [],
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, green: {}, aeFade: [], drought: {}, fires: [],
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
@@ -5400,7 +5400,9 @@ function checkSave(o) {
   if (o.wildOwner != null && !(Number.isInteger(o.wildOwner) && o.wildOwner >= 0 && o.wildOwner < o.players.length)) bad();
   // The land Atmosphere Engines changed (tile: stage 1 to 4) and the calm of fallen ones fading (ATMOS).
   if (o.green != null && !(obj(o.green) && Object.keys(o.green).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && [1, 2, 3, 4].includes(o.green[k])))) bad();
-  if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k]))))) bad();
+  if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k])) && (f.p == null || (Number.isInteger(f.p) && f.p >= -1 && f.p < o.players.length))))) bad();
+  // The drought under a Storm Front (tile: whole seconds a foe's crop there has been under it, short of STORM.drought).
+  if (o.drought != null && !(obj(o.drought) && Object.keys(o.drought).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && Number.isInteger(o.drought[k]) && o.drought[k] > 0 && o.drought[k] < STORM.drought))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
@@ -5479,6 +5481,11 @@ function checkSave(o) {
     if (b.aeStage != null && ![0, 1, 2, 3, 4].includes(b.aeStage)) bad();
     if (b.aeSrc != null && !['', 'gen', 'reactor'].includes(b.aeSrc)) bad();
     if (b.aeGens != null && !(Array.isArray(b.aeGens) && b.aeGens.length <= 4 && b.aeGens.every(Number.isInteger))) bad();
+    // (its Storm Front: the tile it's centred on, on the map, set only from Rain; when it was set; the lightning's count)
+    if (b.aeStorm != null && !(Array.isArray(b.aeStorm) && b.aeStorm.length === 2 && b.aeStorm.every(Number.isInteger) && b.aeStorm[0] >= 0 && b.aeStorm[1] >= 0 && b.aeStorm[0] < o.W && b.aeStorm[1] < o.H && BDEFS[b.type].atmos && (b.aeStage || 0) >= 2)) bad();
+    for (const k of ['aeStormT', 'aeBolt']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.aeBolt != null && !(b.aeBolt >= 0 && b.aeBolt <= STORM.boltEvery)) bad();
+    if (b.aeBoltN != null && !(Number.isInteger(b.aeBoltN) && b.aeBoltN >= 0)) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
@@ -5514,7 +5521,7 @@ function checkSave(o) {
   if (o.mission) {
     const M = o.mission;
     if (!obj(M) || ![0, 1, 2, 3, 4].includes(M.diff) || (!M.lv5 && M.diff > 2)) bad();
-    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
+    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY', 'stormCalm', 'calmRun']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
     if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
@@ -5641,6 +5648,7 @@ function deserializeGame(json) {
   o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
   o.green = o.green && typeof o.green === 'object' && !Array.isArray(o.green) ? o.green : {}; // the land an Atmosphere Engine changed (saves from before it: none)
   o.aeFade = Array.isArray(o.aeFade) ? o.aeFade : [];
+  o.drought = o.drought && typeof o.drought === 'object' && !Array.isArray(o.drought) ? o.drought : {}; // (crops under a Storm Front: saves from before it, none)
   o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
   for (const k of SPARSE_LAYERS) o[k] = Array.isArray(o[k]) ? sparseIn(o[k], o.W * o.H) : null; // (War scars: made below for a save from before)

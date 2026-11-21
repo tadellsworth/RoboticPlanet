@@ -1100,15 +1100,30 @@ const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ o
  * Bloom stops spreading (no tunnel is dug in). Green: crops there grow `crop` times as fast and the Bloom withers back a
  * tile every `wither` s (tunnels and Bloom veins). Garden: no Bloom, no Murmur exit, and groves seed themselves (one every
  * `seedEvery` s, `groves` at most). The land each stage reaches is marked in S.green (tile: 1 to 4, kept for good), spread
- * out from its foot at `spread` tiles a second. Everyone's within its circle: the weather, not who owns the ground.
+ * out from its foot at `spread` tiles a second. The circle is its owner's (and allies'): the calm in a dust storm and the
+ * faster crops are theirs only (atmosOwnAt), the land changes for everyone in it (fertile soil, the Bloom held back).
+ * From Rain, a foe's robots and vehicles on its ground move at `mud` speed (the mud: atmosMud), and while it has power
+ * a foe's Torches can't burn the ground or leave fires in it (the rain puts them out: atmosRainAt).
  * The Murmur: they go for it first every night; each new stage, the next night `sappers[stage - 1]` Sappers dig in under it.
  * Destroyed: what is green stays green; its calm and its hold on the Bloom shrink back to nothing over `fade` s (S.aeFade).
  * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's on a barren home (The Rust,
  * Cinderlands) or with Planetary events on, from `aiAt` s; the Herald sends Torches to burn a foe's greening.
  */
 const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12, 16, 20], stages: [0, 360, 960, 1680], spread: 0.25,
-  crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2 };
+  crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2, mud: 0.5 };
 const ATMOS_STAGE_NAMES = ['Calm', 'Rain', 'Green', 'Garden'];
+/*
+ * The Engine's Storm Front (the owner's approval, Nov 21 2026): from Rain its owner sets a storm down anywhere on the map
+ * (an order: atmosStorm; b.aeStorm the tile it's centred on), `r` tiles round, while the Engine stands and has power (no
+ * power: the storm is gone until it has again, in the same place). Not where it would reach the Engine's own circle (its
+ * stage's full radius), nor centred in another Engine's circle; and nothing of it in any Engine's circle (the calm: two
+ * Engines contest the sky). It can be set down again `cd` s after the last time. Under it, for the owner's foes: robots
+ * and vehicles at `slow` speed, building sites go up at `build` speed, guns reach `range` as far. From Green, a foe's
+ * crops under it stop growing (the drought: S.drought, tile: s under it) and after `drought` s wither (the soil stays).
+ * At the Garden, every `boltEvery` s lightning strikes one of a foe's buildings under it (picked by the seed): `boltDmg`
+ * of its armor, never below `boltFloor`. Destroyed, the storm ends at once. Everyone sees it.
+ */
+const STORM = { r: 5, slow: 0.6, build: 0.6, range: 0.75, cd: 60, drought: 180, boltEvery: 60, boltDmg: 0.15, boltFloor: 0.3 };
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4, warm: 30,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1460,7 +1475,7 @@ const BDEFS = {
   },
   atmos: {
     name: 'Atmosphere Engine', short: 'Engine',
-    desc: 'A terraforming tower: a great concrete cooling-tower shell with fans round its foot, venting a tall white plume. It slowly changes the weather and the land round it, for everyone in its circle, whoever owns the ground. It needs power: 2 Generators with Fuel within 4 tiles (it takes a Fuel a minute from each) or a Nuclear Reactor there (a Uranium every 6 minutes). Stage 1, Calm, at once: 8 tiles round it, no dust storm (bots go at full speed). Stage 2, Rain, after 6 minutes of power: 12 tiles, rain at night, barren ground turns fertile (Bio Farms work anywhere in it) and the Bloom stops spreading there. Stage 3, Green, 10 minutes later: 16 tiles of grass, crops grow a quarter faster, the Bloom withers back a tile a minute. Stage 4, Garden, 12 minutes later: 20 tiles, groves seed themselves, no Bloom and no Murmur exit. Without power it stops growing; the land it changed stays. The Murmur hate it: they go for it first every night, and after each new stage Sappers dig in under it. Destroyed, what is green stays green, but the storms and the Bloom come back in over 10 minutes. Opens 20 minutes into a game. One per colony. Not on Argos or in the Hollow.',
+    desc: 'A terraforming tower: a great concrete cooling-tower shell with fans round its foot, venting a tall white plume. It slowly changes the weather and the land round it. It needs power: 2 Generators with Fuel within 4 tiles (it takes a Fuel a minute from each) or a Nuclear Reactor there (a Uranium every 6 minutes). Stage 1, Calm, at once: 8 tiles round it, no dust storm for you and your allies. Stage 2, Rain, after 6 minutes of power: 12 tiles, rain at night, barren ground turns fertile (Bio Farms work anywhere in it), the Bloom stops spreading there, enemy robots and vehicles in it wade through mud at half speed, and while it has power enemy Torches can\'t burn anything there. Stage 3, Green, 10 minutes later: 16 tiles of grass, your crops grow a quarter faster, the Bloom withers back a tile a minute. Stage 4, Garden, 12 minutes later: 20 tiles, groves seed themselves, no Bloom and no Murmur exit. From Rain its panel sends a Storm Front anywhere on the map (5 tiles round, not near its own circle nor inside another Engine\'s): under it enemy robots move at 60% speed, their sites go up at 60% and their guns reach three-quarters as far; from Green their crops stop growing and wither after 3 minutes; at the Garden lightning strikes one of their buildings about once a minute. A minute before it can be moved again; no power, no storm. Without power it stops growing; the land it changed stays. The Murmur hate it: they go for it first every night, and after each new stage Sappers dig in under it. Destroyed, its storm ends at once; what is green stays green, but the storms and the Bloom come back in over 10 minutes. Opens 20 minutes into a game. One per colony. Not on Argos or in the Hollow.',
     cost: { cement: 50, alloy: 40, chip: 24, crystal: 30, fiber: 20 }, atmos: true, mega: true, foot: 4, armor: 100, buildTime: 360,
   },
   terminal: {

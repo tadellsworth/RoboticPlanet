@@ -286,6 +286,37 @@ function aeOpenNear(S, x, y, L) {
 const AE_BUILT = { kind: 'built', type: 'atmos', n: 1,
   hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Mega</b> (<kbd>6</kbd>) → <b>Atmosphere Engine</b> (<kbd>N</kbd>). Then <b>Lay road</b> to it.',
   ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='atmos'], #sh-layroad" };
+/**
+ * Overcast: rival E's Atmosphere Engine, built, at stage `st`, on its land as near its Command Base as there is room and
+ * far enough from the player's Command Base L for its storm to reach L; its two Generators beside it, full of Fuel.
+ */
+function ocEngine(S, E, L, st) {
+  const p = E.owner, far = ATMOS.r[st - 1] + STORM.r + 2;
+  // (open level ground for its 4 x 4 and a tile round it, its stone and groves cleared: the Steward made room for it)
+  const room = (i, j) => { for (let b = -1; b <= 4; b++) for (let a = -1; a <= 4; a++) { if (!inMap(i + a, j + b)) return false; const t = tIdx(i + a, j + b); if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.ramp[t] || S.road[t] || (S.owner[t] >= 0 && S.owner[t] !== p) || ((a >= 0 && a < 4 && b >= 0 && b < 4) && S.res[t] && S.res[t] !== R_BOULDER && S.res[t] !== R_STALK)) return false; } return true; };
+  let sp = null, bd = Infinity;
+  for (let j = 1; j < S.H - 5; j++) for (let i = 1; i < S.W - 5; i++) {
+    const d = dist(i + 2, j + 2, E.x + 0.5, E.y + 0.5);
+    if (d < 5 || d >= bd || dist(i + 2, j + 2, L.x + 0.5, L.y + 0.5) < far || !room(i, j)) continue;
+    bd = d; sp = [i, j];
+  }
+  if (!sp) return null;
+  for (let b = 0; b < 4; b++) for (let a = 0; a < 4; a++) { const t = tIdx(sp[0] + a, sp[1] + b); S.res[t] = R_NONE; S.amt[t] = 0; markDirty(sp[0] + a, sp[1] + b); }
+  const b = addBuilding(p, 'atmos', sp[0], sp[1], true);
+  b.aeT = ATMOS.stages[st - 1] + 1; b.aeStage = st; b.aeP = ATMOS.r[st - 1];
+  computeTerritory();
+  for (let n = 0; n < ATMOS.gens; n++) {
+    let g = null, gd = Infinity;
+    for (let j = b.y - 6; j <= b.y + 9; j++) for (let i = b.x - 6; i <= b.x + 9; i++) {
+      if (!inMap(i, j) || footDist(b, i + 0.5, j + 0.5) > ATMOS.reach || !canPlace(p, 'generator', i, j).ok) continue;
+      const d = dist2(i, j, E.x, E.y);
+      if (d < gd) { gd = d; g = [i, j]; }
+    }
+    if (g) { const G = addBuilding(p, 'generator', g[0], g[1], true); G.stock.fuel = BDEFS.generator.fuelCap; }
+  }
+  b.aeSrc = 'gen';
+  return b;
+}
 const aeStageGoal = (n, text, hint) => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui: '#btn-speed' });
 
 const MISSIONS = [
@@ -2011,8 +2042,8 @@ const MISSIONS = [
     intro: [
       'The valley was the Pathfinder\'s garden once. Build the <b>Atmosphere Engine</b> and bring it to the <b>Garden</b>, stage 4.',
       'The rival is a <b>Herald</b>: its clock stopped a day before Arrival. It sees your greening as overgrowth on its landing zone.',
-      'Its <b>Torches</b> come to burn the green ground: burned soil never grows again. Guns covering the green keep them off.',
-      'Green ground is everyone\'s: the Engine changes the weather, not who owns the land. The Murmur come up at night.',
+      'Its <b>Torches</b> come to burn the green: burned soil never grows again. While the Engine has power its rain puts them out.',
+      'So they go for its <b>Generators</b>: guard them. Its circle is yours: enemy robots wade through its mud. The Murmur come at night.',
       'Green enough of the valley\'s land (the goal says how much), then hold it for 5 minutes.',
     ],
     mode: 'versus', seed: 6011, size: 0, rough: 1, rich: 3, biome: 'savanna', shape: 0, players: 2, style: 'rusher', mega: true, murmur: 'quiet',
@@ -2037,11 +2068,54 @@ const MISSIONS = [
       AE_BUILT,
       aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power in all. Guard it at night; the Murmur hate it.'),
       { kind: 'greened', n: [25, 32, 40], text: 'Green {n}% of the valley\'s land', at: 'atmos', count: (P, S) => S.mission.greenPct || 0,
-        hint: 'Stage 3 and 4 ground counts. Keep Torches off it: <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>) on the green.',
+        hint: 'Stage 3 and 4 ground counts. Guard its Generators: <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>) by them.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']" },
       { kind: 'greenHeld', n: 5, text: 'Hold it green for {n} minutes', count: (P, S) => Math.floor((S.mission.greenRun || 0) / 60),
-        hint: 'Torches burn it a tile at a time: <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>) any that come.',
+        hint: 'Torches cut its power to stop the rain: <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>) any that come.',
         ui: '#btn-attack, #ar-attack' },
+    ],
+  },
+  // Overcast: the Steward next door built its Atmosphere Engine first and has turned the weather on you (the Engine's
+  // Storm Front, Nov 2026). Its storm sits over your Command Base from the start: break it (destroy their Engine, or build
+  // your own: any Engine's circle is calm sky), hold the sky, and learn the Storm Front by sending one back.
+  {
+    id: 'overcast', name: 'Overcast', chapter: 'War',
+    brief: '"Weather management, sector 4. Proceeding per schedule." The Steward has turned its Engine\'s rain on your colony. Break the storm.',
+    intro: [
+      'Your neighbour, a <b>Steward</b>, built its Atmosphere Engine first. Its <b>Storm Front</b> sits over your Command Base.',
+      'Under it your robots crawl, your sites go up slowly and your guns fall short. From Green, crops wither; at the Garden, lightning.',
+      'Break it: destroy their Engine, or build your own (Build, Mega, <kbd>N</kbd>). Any Engine\'s circle is calm sky: no storm gets in.',
+      'Then hold the sky. At stage 2, Rain, your Engine can send a storm back: not into their circle, but over the ground they cross.',
+      'It was built to bring the rain to the fields. Nobody wrote down who would aim it.',
+    ],
+    mode: 'versus', seed: 4419, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, players: 2, style: 'balanced', mega: true,
+    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 50],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4);
+      const P = S.players[0], L = getE(P.lander), P1 = S.players[1], E = getE(P1.lander);
+      aeKit(L); L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 10;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+      for (let k = 0; k < 8; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 40;
+      P.stats.startBots = P.stats.bots;
+      // The Steward's Engine on the far side of its Command Base, at Rain (Green from Colonist), its two Generators fed,
+      // and its storm over your Command Base.
+      const st = mPick([2, 3, 3], diff), eng = ocEngine(S, E, L, st);
+      if (eng) { eng.aeStorm = [L.x, L.y]; eng.aeStormT = 0; }
+      bump(E.stock, 'fuel', 30); enterBuilding(addBot(1, 'tanker', E.x, E.y), E); // (Fuel for its Generators)
+      S.mission.stormCalm = 1;
+      P1.stats.startBots = P1.stats.bots;
+    },
+    goals: [
+      { kind: 'stormBroken', n: 1, text: 'Break the storm over your colony', count: (P, S) => (stormBrokenFor(0) ? 1 : 0),
+        hint: 'Attack their Engine: <b>Army</b> (<kbd>Q</kbd>). Or build your own, <kbd>B</kbd> <kbd>6</kbd> <kbd>N</kbd>: its circle is calm.',
+        ui: "#btn-attack, #btn-build, #build-tabs [data-g='mega'], .bcard[data-t='atmos']" },
+      { kind: 'skyHeld', n: [3, 4, 5], text: 'Hold the sky over your Command Base for {n} minutes', count: (P, S) => Math.floor((S.mission.calmRun || 0) / 60),
+        hint: 'Keep their Engine down, or yours standing: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'stormSent', n: 1, text: 'Send a Storm Front of your own', at: 'atmos', count: (P) => P.stats.storms || 0,
+        hint: 'At stage 2, Rain: tap your Engine → <b>Storm Front</b> (<kbd>F</kbd>), then a spot outside their calm circle.',
+        ui: '#sh-storm' },
     ],
   },
   {

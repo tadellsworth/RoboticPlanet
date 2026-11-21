@@ -2423,7 +2423,9 @@ function aiDeep(p, me, lander, canBuild) {
  * half its Cement and Crystal and its Fiber in hand): near its Command Base, with its 2 Generators going up beside it,
  * their goods first, and again as one is lost. And the Herald, its clock frozen at "Arrival in one day", sees a foe's
  * greening as overgrowth on the landing zone: every ATMOS.burnEvery s, up to ATMOS.burnN of its Torches with full tanks
- * go to burn the fertile ground a foe's Engine has made (its Rain or more), where no gun of theirs covers it.
+ * go to burn the fertile ground a foe's Engine has made (its Rain or more), where no gun of theirs covers it; while the
+ * Engine has power its rain puts their fire out there, so they go for its Generators (or Reactor) instead. Any rival with
+ * an Engine at Rain sets its Storm Front down (aiAtmosStorm).
  */
 function aiAtmosHome() { return !worldBan('atmos') && (!!S.events || biome() === 'desert' || biome() === 'volcanic'); }
 function aiAtmos(p, me, lander, canBuild) {
@@ -2438,6 +2440,7 @@ function aiAtmos(p, me, lander, canBuild) {
       const spot = aiMegaSpot(p, 'generator', [e], ATMOS.reach, lander, 0), r = spot && placeSite(p, 'generator', spot[0], spot[1]);
       if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
     }
+    aiAtmosStorm(p, e);
     return;
   }
   if (aiMegaMain(p) !== 'atmos' || !canBuild || !lander || S.time < ATMOS.aiAt || megaBlocked(p, 'atmos') || worldBan('atmos') || !aiMegaRoom(p, 'main')) return;
@@ -2472,16 +2475,72 @@ function aiAtmosBurn(p) {
     for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j);
-      if (!(S.green[t] >= 2) || taken.has(t) || scorchTileWhy(t) || gunCovers(p, t)) continue;
+      if (!(S.green[t] >= 2) || taken.has(t) || scorchTileWhy(t, p) || gunCovers(p, t)) continue;
       const d = dist2(i, j, u.x, u.y);
       if (d < bd) { bd = d; best = t; }
     }
-    if (best < 0) break;
+    if (best < 0) {
+      // Rained out: they go for what powers it (a Generator feeding it, or its Reactor), so the rain stops.
+      const pw = [...(eng.aeGens || []), eng.aeUr || 0].map(getE).find((g) => g && !g.dead && g.owner === eng.owner);
+      if (!pw || !atmosRainAt(c.x, c.y, p)) break;
+      exitBuilding(u);
+      u.task = { type: 'attack', target: pw.id }; u.path = null;
+      P.stats.aeCutSent = (P.stats.aeCutSent || 0) + 1;
+      continue;
+    }
     taken.add(best);
     exitBuilding(u);
     u.task = { type: 'scorch', tile: best }; u.path = null;
     P.stats.aeBurnSent = (P.stats.aeBurnSent || 0) + 1;
   }
+}
+
+/*
+ * A rival's Storm Front (STORM): once its Engine is at Rain with power, every AI_STORM.think s it sets the storm where it
+ * hurts most: a warlike rival (the Herald, the Salvager, the Warden, or any at Warlord) over the foe's guns just before
+ * its next attack (AI_STORM.soon s off); the Steward and the Architect over the foe's fields; otherwise over the foe's
+ * base (as anyone does when the first has nothing to hit). It moves it only to a better spot.
+ */
+const AI_STORM = { think: 20, soon: 75 };
+function aiAtmosStorm(p, e) {
+  const P = S.players[p];
+  if (!e.built || (e.aeStage || 0) < 2 || !e.aeSrc || S.time - (P.stormT ?? -999) < AI_STORM.think || S.time - (e.aeStormT ?? -1e9) < STORM.cd) return;
+  P.stormT = S.time;
+  const st = P.style, war = st === 'rusher' || st === 'raider' || st === 'turtle' || diffAtLeast('warlord');
+  const want = war && S.mode !== 'colony' && P.nextAttack - S.time <= AI_STORM.soon ? 'guns' : st === 'balanced' || st === 'tycoon' ? 'fields' : 'base';
+  const spot = aiStormSpot(p, e, want) || (want !== 'base' ? aiStormSpot(p, e, 'base') : null);
+  if (!spot) return;
+  const now = e.aeStorm ? aiStormScore(p, e.aeStorm[0], e.aeStorm[1], spot.want) : -1;
+  if (e.aeStorm && spot.s <= now * 1.25 + 1) return; // (where it is will do)
+  if (!setAtmosStorm(e, spot.i, spot.j)) { P.stats.stormSet = (P.stats.stormSet || 0) + 1; P.stormWant = spot.want; }
+}
+/** How much a storm centred on (i, j) would hurt rival p's foes, for what it wants ('fields', 'guns' or 'base'). */
+function aiStormScore(p, i, j, want) {
+  const x = i + 0.5, y = j + 0.5, R2 = STORM.r * STORM.r;
+  let s = 0;
+  for (const o of S.buildings) {
+    if (o.dead || !(o.owner >= 0) || isWild(o.owner) || !foes(o.owner, p) || dist2(o.x + 0.5, o.y + 0.5, x, y) > R2 || atmosAt(o.x + 0.5, o.y + 0.5) >= 1) continue;
+    const def = BDEFS[o.type];
+    s += want === 'guns' ? (DEFENCE_TYPES.has(o.type) && !def.barrier ? 3 : def.barrier ? 0.5 : 0.25) : want === 'fields' ? (o.type === 'farm' ? 2 : 0.1) : (o.type === 'lander' ? 3 : o.built ? 1 : 1.5);
+  }
+  if (want === 'fields') for (let jj = j - STORM.r; jj <= j + STORM.r; jj++) for (let ii = i - STORM.r; ii <= i + STORM.r; ii++) {
+    if (!inMap(ii, jj) || dist2(ii + 0.5, jj + 0.5, x, y) > R2) continue;
+    const t = tIdx(ii, jj);
+    if (S.res[t] === R_CROP && atmosAt(ii + 0.5, jj + 0.5) < 1 && foes(S.owner[t], p) && S.owner[t] >= 0) s += 0.5;
+  }
+  return s;
+}
+/** The best spot for rival p's Storm Front from Engine e, for what it wants: { i, j, s, want } on a foe's building, or null. */
+function aiStormSpot(p, e, want) {
+  let best = null;
+  for (const o of S.buildings) {
+    if (o.dead || !(o.owner >= 0) || isWild(o.owner) || !foes(o.owner, p)) continue;
+    if (want === 'fields' ? o.type !== 'farm' : want === 'guns' ? !DEFENCE_TYPES.has(o.type) || BDEFS[o.type].barrier : false) continue;
+    if (atmosStormBlocked(e, o.x, o.y)) continue;
+    const s = aiStormScore(p, o.x, o.y, want);
+    if (s >= (want === 'base' ? 2 : 3) && (!best || s > best.s)) best = { i: o.x, j: o.y, s, want };
+  }
+  return best;
 }
 
 /** Rival p's warbots stand by its Deep Core through a night it has called the Murmur for, and go home at dawn. */
@@ -3044,7 +3103,7 @@ function aiRaidScorch(p) {
     for (let j = uj - R; j <= uj + R; j++) for (let i = ui - R; i <= ui + R; i++) {
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j), d = dist2(i, j, ui, uj);
-      if (d >= bd || !S.fert[t] || taken.has(t) || S.zone[t] !== zone || scorchTileWhy(t) || gunCovers(p, t)) continue;
+      if (d >= bd || !S.fert[t] || taken.has(t) || S.zone[t] !== zone || scorchTileWhy(t, p) || gunCovers(p, t)) continue;
       if (!farms.some((f) => dist2(f.x, f.y, i, j) <= r2)) continue;
       bd = d; best = t;
     }

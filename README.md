@@ -36,7 +36,7 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*)) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
@@ -218,7 +218,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
 | Deep Core | 60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 3 × 3 tiles, armor 100, one per colony (Megastructures), from 20 minutes in: a winding tower over a shaft that goes deeper while it has power (a Generator within 4 tiles, a Fuel a minute, or a Reactor, no Uranium): 6 Ore a minute; after 6 minutes 8 Ore and 3 Crystal; 10 minutes later 10 Ore, 4 Crystal and a Uranium every 4 minutes; never runs dry; 30 of each in its hoppers for Haulers; the Murmur raid it the night after each stage, and its open shaft is their exit once it's destroyed (see Megastructures below) |
-| Atmosphere Engine | 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20 Fiber, 4 × 4 tiles, armor 100, one per colony (Megastructures), from 20 minutes in, not on Argos or in the Hollow: a cooling-tower shell venting a plume that changes the land round it while it has power (2 Generators within 4 tiles, a Fuel a minute from each, or a Reactor, a Uranium every 6 minutes): Calm at once (8 tiles, no dust storm), Rain after 6 minutes (12 tiles, the ground fertile, the Bloom held), Green 10 minutes later (16 tiles, crops a quarter faster, the Bloom withering), Garden 12 minutes after that (20 tiles, groves, no Bloom, no Murmur exit). For everyone in its circle. The Murmur go for it first; Sappers the night after each stage. Destroyed, the land stays changed; its hold fades over 10 minutes |
+| Atmosphere Engine | 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20 Fiber, 4 × 4 tiles, armor 100, one per colony (Megastructures), from 20 minutes in, not on Argos or in the Hollow: a cooling-tower shell venting a plume that changes the land round it while it has power (2 Generators within 4 tiles, a Fuel a minute from each, or a Reactor, a Uranium every 6 minutes): Calm at once (8 tiles, no dust storm), Rain after 6 minutes (12 tiles, the ground fertile, the Bloom held), Green 10 minutes later (16 tiles, crops a quarter faster, the Bloom withering), Garden 12 minutes after that (20 tiles, groves, no Bloom, no Murmur exit). The land changes for everyone in its circle, but the calm and the faster crops are its owner's (and allies'); from Rain enemy robots in it wade through mud at half speed, and while it has power enemy Torches can't burn there. From Rain its **Storm Front** (panel, F): a 5-tile storm set anywhere clear of its own circle and of other Engines' (moved a minute after), while it has power: enemy robots 60% speed, sites 60%, guns 75% reach under it; from Green their crops stop and wither after 3 minutes; at the Garden lightning on one of their buildings about once a minute (15% armor, never below 30%). No storm in any Engine's circle; it ends when its Engine falls. The Murmur go for it first; Sappers the night after each stage. Destroyed, the land stays changed; its hold fades over 10 minutes |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
@@ -2407,14 +2407,37 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     The land (`atmosTick`, once a second): `atmosPaint` marks every ground tile in its reach with the stage in `S.green`
     (a sparse map, tile → 1 to 4, kept for good; not on burned soil, lava or the tide), and from Rain sets `S.fert`
     (Bio Farms plant it like any fertile soil; the soil stays when the Engine goes). Green: crops on `S.green` ≥ 3 grow
-    `crop` (1.25) times as fast (`growStalks`); every `wither` (60) s `atmosWither` takes the nearest tile of the Bloom in
+    `crop` (1.25) times as fast (`growStalks`) when the crop's holder (`soilHolder`) is the owner's or an ally's
+    (`atmosOwnAt`); every `wither` (60) s `atmosWither` takes the nearest tile of the Bloom in
     its reach (a tunnel, `S.tun`, or a Bloom vein; `P.stats.atmosWither`). Garden: all of it at once, any tunnel exit
     in it caves in, and every `seedEvery` (20) s `atmosSeed` puts a stalk grove on open Garden ground, `groves` (24) in
     its reach at most (`P.stats.atmosGroves`). Its hold (`atmosHolds`, worked out once a tick; `atmosAt(x, y)` the
-    highest stage over a spot): Calm, no dust storm (`evSpeed(x, y)`, from `speedMul` and a ship's speed); Rain, no
+    highest stage over a spot; each hold carries its owner `p` and `on`, its power): Calm, no dust storm for its owner
+    and allies (`evSpeed(x, y, p)` → `atmosOwnAt`, from `speedMul` and a ship's speed; with no `p`, anyone's); Rain, no
     tunnel dug in (`murmurDig`); Garden, no exit opens (`atmosGardenAt` in `murmurOpenExit` and `deepExit`). Destroyed
     or dismantled (`destroyBuilding` → `atmosGone`), `S.green` and the soil stay, and its hold goes into `S.aeFade`
-    ({ x, y, r, st, t0 }), shrinking to nothing over `fade` (600) s. The Murmur: `chargeWorth` 6 and `murmurPower` +3
+    ({ x, y, r, st, t0, p }), shrinking to nothing over `fade` (600) s. **The circle is its owner's:** from Rain a
+    foe's robots and vehicles in a standing Engine's circle move at `mud` (0.5) speed (`atmosMud` in `speedMul`; not
+    the Murmur, aircraft or ships; `atmosFoeAt`), and while it has power (`b.working`) a foe's Torches are rained out
+    there (`atmosRainAt`): `scorchTileWhy(t, by)` refuses the tile, and their flames leave no burns (`scarBurn`) or fire.
+    **Its Storm Front** (`STORM`): the order `atmosStorm` (`setAtmosStorm`; `atmosStormBlocked`: from Rain, with power,
+    on the map, `cd` (60) s after the last, the centre at least its stage's radius + `r` (5) from its middle, not inside
+    another standing Engine's reach) sets `b.aeStorm` ([i, j]) and `b.aeStormT`; `atmosStormOff` calls it off. It is up
+    while the Engine stands at Rain or later with power (`atmosStormOn`; listed in `atmosHolds` → `atmosStorms`), and
+    over a spot for a foe of its owner unless the spot is in any Engine's hold (`stormOver`, `stormOverB`): robots
+    `slow` (0.6, `atmosMud`), building sites `build` (0.6, `stormWork` in the builders' progress), guns `range` (0.75:
+    `auraRange` takes the rest off `def.range`, so every gun's reach and `gunReach` follow). From Green, `atmosDrought`
+    (from `atmosTick`) counts a foe's crops under it (holder by `soilHolder`) in `S.drought` (tile → s, rebuilt each
+    second: a crop out from under it starts again); `growStalks` skips them, and at `drought` (180) s they wither (the
+    soil stays; `P.stats.droughtCrops`). At the Garden every `boltEvery` (60) s of power (`b.aeBolt`) `stormBolt` picks
+    one of the foes' buildings under it with `hash2(b.id, b.aeBoltN, S.seed)` and takes `boltDmg` (0.15) of its armor,
+    never below `boltFloor` (0.3) (fx `stormbolt`, sound `stormbolt`, `P.stats.bolts`). Destroyed, `atmosGone` ends it
+    and tells the colonies under it. Saved in `aeStorm`, `aeStormT`, `aeBolt`, `aeBoltN` and `S.drought` (checked by
+    `checkSave`; a storm only on a Rain Engine, on the map) and hashed. Drawn by `drawAtmosStorms` (a dark cloud turning
+    over the spot from `wxCloud` billows, its shadow and dashed rim, rain under it; lit blue-grey at night; it rolls in
+    and breaks up over a few seconds) and, aiming, `drawStormAim`; the panel's **Storm Front** button (`sh-storm`, F)
+    aims it through `startAim` (anywhere: the Engine's kept-clear circle shown), **Call the storm off** (`sh-stormoff`,
+    C); a building of yours under a rival's storm says so on its panel. The Murmur: `chargeWorth` 6 and `murmurPower` +3
     whether it works or not; `atmosLure` puts it first for a pack (`murmurPrey`, from `lure` (20) tiles further out, +40)
     and for an Active strike (`murmurPlan`, +60, from further out); each stage from Rain, with the Murmur on and a nest
     standing, sets `b.aeCall` for the next night (`b.aeCallN`): `atmosWarn` at dusk, and `atmosCalls` (from `murmurTick`,
@@ -2435,12 +2458,22 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `aiAtmosHome` (The Rust or Cinderlands, or Planetary events on), from `ATMOS.aiAt` (21 min), with half its Cement and
     Crystal and its Fiber in hand, near its Command Base, its 2 Generators going up beside it. The Herald (`aiAtmosBurn`):
     every `burnEvery` (120) s, up to `burnN` (2) of its Torches with full tanks go to scorch the fertile ground nearest a
-    foe's Engine at Rain or more, where no gun of the foe's covers it (`P.stats.aeBurnSent`). The rival AI's building
+    foe's Engine at Rain or more, where no gun of the foe's covers it (`P.stats.aeBurnSent`); rained out of a powered
+    Engine's circle they go for a Generator feeding it (or its Reactor) instead (`P.stats.aeCutSent`). Any rival with
+    an Engine at Rain and power sets its Storm Front (`aiAtmosStorm`, every `AI_STORM.think` (20) s, `aiStormSpot`,
+    `aiStormScore`): a warlike one (Herald, Salvager, Warden, or any at Warlord) over the foe's guns when its next attack
+    is within `AI_STORM.soon` (75) s, the Steward and the Architect over the foe's farms and crops, otherwise over the
+    foe's base; it moves the storm only to a clearly better spot (`P.stormWant`). The rival AI's building
     spots no longer keep Engine-made soil free for farms. Missions: *Rain* (Growing the Colony), *Seed Vault* and
-    *Under the Bloom* (First Contact), *Landing Zone* (War); helpers `aeOwn`, `aeFarms`, `aeKit`, `AE_BUILT`,
+    *Under the Bloom* (First Contact), *Landing Zone* and *Overcast* (War); helpers `aeOwn`, `aeFarms`, `aeKit`, `AE_BUILT`,
     `aeStageGoal`, `aeOpenNear`; a mission's `greenWant` makes `atmosTick` count the greened share of the land
     (`atmosGreened`: stage 3 or more) in `S.mission.greenPct` and the seconds it has held (`greenRun`); Seed Vault's
     hull (`S.mission.hullX`, `hullY`) is drawn by `drawPathfinderHull`, its seed stock four crates of Fiber that never rot.
+    *Overcast* (after Landing Zone): a Steward on The Rust with its Engine already at Rain (Green from Colonist) behind
+    its base (`ocEngine`), its 2 Generators full and a Tanker, its storm over your Command Base; goals: break it
+    (`stormBrokenFor(0)`: no foe Engine standing, or your own Engine's circle over your Command Base), hold the sky
+    3, 4 or 5 minutes (`S.mission.stormCalm` makes `atmosTick` count `calmRun`, hashed and checked), and send a Storm
+    Front of your own (`P.stats.storms`).
   - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 200 s; 3 × 3; armor 120;
     the owner's look A, the Dish Array, Nov 2026). Only in a game with the **Great Uplink win** on (`gupWinOn`:
     `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu

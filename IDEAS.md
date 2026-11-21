@@ -93,7 +93,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     (`renderer/b/atmos.js`; the plume, its night light and the rain in code), the sheet's numbers (50 Cement, 40 Alloy,
     24 Chips, 30 Crystal, 20 Fiber, 360 s, armor 100, 4 × 4, from 20 minutes, one per colony; 2 Generators, a Fuel a
     minute each, or a Reactor, a Uranium every 6 minutes; Calm 8, Rain 12, Green 16, Garden 20 tiles at 0, 6, 16 and 28
-    minutes of power) and the (R) answers: everyone's circle, green stays green when it falls, the Murmur first every
+    minutes of power) and the (R) answers: everyone's circle (since made its owner's: below), green stays green when it falls, the Murmur first every
     night and Sappers at each new stage, no exits in the Garden, the Steward's project and the Herald's burning, no
     terraforming win yet. Read into the sheet, for the owner to confirm:
     - Key **N** on the Mega tab (A pans). Its own How to play section, with a pointer from Megastructures.
@@ -123,6 +123,42 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
       is the Garden's wildlife; *Seed Vault* draws the Pathfinder's hull in code as a mission landmark (LORE.md's open
       question about the wreck is otherwise untouched), its seed stock four crates of Fiber, and its storm is the Endless
       dust storm modifier.
+  - **The Engine's new powers: BUILT (Nov 21 2026), the owner's five approved** (the circle is yours, Storm Front,
+    Drought, Lightning, rain puts out fire; README, How to play "The Atmosphere Engine", the guide; the new War mission
+    *Overcast*, after Landing Zone). Numbers: mud 50% speed; the storm 5 tiles round, robots 60% speed, sites 60%,
+    guns 75% reach, a minute before it moves again; crops wither after 3 minutes; lightning once a minute of power,
+    15% of the building's armor, never below 30%. **Decisions made for the owner to approve:**
+    - "The circle is yours" replaces "everyone's circle": the calm and the faster crops are the owner's and allies'
+      (a crop's owner: the Bio Farm it belongs to, else whose land it is); the land itself (fertile soil, the Bloom held
+      back, no exits) still changes for everyone in it. The mud starts at Rain (Calm is only calm), holds while the
+      Engine stands, powered or not, and slows robots and vehicles, not the Murmur, aircraft or ships. A fallen Engine's
+      fading hold keeps its calm for its owner, but no mud.
+    - The rain puts out fire only while the Engine has power: cut its power and Torches can burn the green again. So the
+      Herald's Torches, rained out, now go for a Generator feeding it (or its Reactor). Rained out means no scorching
+      the earth and no flame burns (War scars) in its circle; their flame still hurts buildings and robots there.
+      Napalm is unchanged (the brief named Torches).
+    - The Storm Front has no range limit (anywhere on the map, like Strike the Deep); its centre must be its stage's
+      radius plus 5 from the Engine's middle (17, 21, 25 tiles), and not inside another standing Engine's circle.
+      Nothing of any storm reaches inside any Engine's circle, its owner's included (a fallen one's fading hold too),
+      so a circle that grows into a storm set earlier is calm.
+    - Unpowered (or the Murmur's cut at night), the storm is gone at once and comes back where it was with power; it
+      rolls in and breaks up over a few seconds on screen. It can be called off on the panel; a new one waits out the
+      minute. No power, no new storm. Rivals' sites under it go up at 60% (a site's middle under the storm).
+    - The drought is crops only (Bio Farm crops, not Grove Planter stalks), counted while the crop sits continuously
+      under the storm; out from under it the count starts again. The soil stays fertile: the farm can replant.
+    - Lightning needs a foe's finished building under the storm; none there, the bolt is lost. It is picked from the
+      seed (no new random state). It never takes a building below 30%, so it never captures or wrecks anything.
+    - The rivals: "Warlord-type" is read as the warlike doctrines (Herald, Salvager, Warden) or any rival on the Warlord
+      level: over the foe's guns when its next attack is 75 seconds off or less. The Steward and the Architect go for
+      fields (farms and crops), anyone with nothing better for the base. It looks every 20 seconds and moves the storm
+      only to a clearly better spot. (Only the Steward builds the Engine on its own today.)
+    - *Overcast* (War, after Landing Zone): a Steward on The Rust with its Engine already at Rain (Green from Colonist),
+      its storm on your Command Base at the start (the Steward may move it to your fields). Goals: break it (their Engine
+      gone, or your own Engine's circle over your Command Base), hold the sky 3/4/5 minutes, and send a Storm Front of
+      your own, which is where the button is taught: Landing Zone has its four goals, and the other Engine missions are
+      Colony games with no foe to storm.
+    Open: balance (the 60/60/75 numbers and the minute's wait), whether the mud should also catch the Murmur, and
+    whether napalm should be rained out too.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).

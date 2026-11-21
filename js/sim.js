@@ -113,8 +113,9 @@ function growStalks(dt) {
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
+    if (r === R_CROP && S.drought && S.drought[t]) continue; // (under a foe's Storm Front from Green: the drought, see atmosDrought)
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 ? ATMOS.crop : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (an Atmosphere Engine's Green: crops a quarter faster)
+    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 && atmosOwnAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, soilHolder(t)) ? ATMOS.crop : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (an Atmosphere Engine's Green: its owner's crops a quarter faster)
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -1650,7 +1651,7 @@ function moveAlong(u, dt) {
       if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
     }
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
-    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed(u.x, u.y) * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed(u.x, u.y, u.owner) * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -3581,7 +3582,7 @@ function doBuild(u, t, dt) {
   const def = BDEFS[s.type];
   const cap = siteFrac(s);
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone)
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s) * stormWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone or under a foe's Storm Front)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
     if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
@@ -4781,7 +4782,7 @@ function keepOver(b) {
   return null;
 }
 /** Extra reach (tiles) and reload factor a defence gets from a Keep's aura. */
-function auraRange(b) { return keepOver(b) ? KEEP.range : 0; }
+function auraRange(b) { return (keepOver(b) ? KEEP.range : 0) - (stormOverB(b) ? (BDEFS[b.type].range || 0) * (1 - STORM.range) : 0); } // (under a foe's Storm Front its guns reach STORM.range as far)
 function auraRate(b) { return keepOver(b) ? KEEP.rate : 1; }
 /** Damage to building b after a Keep's aura: Walls and Gates in it take a third less. */
 function keepShield(b, dmg) { return BDEFS[b.type].barrier && keepOver(b) ? dmg / KEEP.wallMul : dmg; }
@@ -5253,10 +5254,10 @@ function torchFire(u, tx, ty, power, bld) {
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
     hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1), u.owner);
-    if (hash2(u.id, S.tick, 11) < 0.12) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
+    if (hash2(u.id, S.tick, 11) < 0.12 && !atmosRainAt(bld.x + 0.5, bld.y + 0.5, u.owner)) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
-  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars)
+  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); if (!atmosRainAt(u.x + ca * f, u.y + sa * f, u.owner)) scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars; none in a foe's Engine's rain)
   if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
   if (u.gel <= 0 && isMe(u.owner)) {
     const P = S.players[ME];
@@ -5546,12 +5547,16 @@ function scorchSoil(t, by, quiet) {
   return true;
 }
 
-/** Why the soil at tile t can't be scorched, or '' if it can: fertile soil (open, or with a crop on it) with no building on it. */
-function scorchTileWhy(t) {
+/**
+ * Why the soil at tile t can't be scorched (by player `by`'s Torches, if given), or '' if it can: fertile soil (open, or
+ * with a crop on it) with no building on it, and not in the rain of a foe's powered Atmosphere Engine (atmosRainAt).
+ */
+function scorchTileWhy(t, by) {
   if (!(t >= 0 && t < S.W * S.H)) return 'Outside the map.';
   if (burntSoil(t)) return 'That soil is burned already.';
   if (!S.fert[t] || S.terrain[t] !== T_GROUND) return 'Pick fertile soil: the dark farmland Bio Farms grow crops on.';
   if (S.bAt[t]) return 'A building stands on it.';
+  if (by !== undefined && by >= 0 && atmosRainAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, by)) return 'It is raining there: an Atmosphere Engine\'s rain puts the fire out. Cut its power first.';
   return '';
 }
 
@@ -5567,7 +5572,7 @@ function orderScorch(owner, ids, i, j) {
   if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return { n: 0, why: 'Outside the map.' };
   const torches = orderable(owner, Array.isArray(ids) ? ids : []).filter((u) => BOTS[u.type].flame);
   if (!torches.length) return { n: 0, why: 'Pick one of your Torches.' };
-  const why = scorchTileWhy(tIdx(i, j));
+  const why = scorchTileWhy(tIdx(i, j), owner);
   if (why) return { n: 0, why };
   const ready = torches.filter(scorchReady);
   if (!ready.length) return { n: 0, why: `It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): let it refill with Fuel at storage or a Fuel Station first.` };
@@ -5577,7 +5582,7 @@ function orderScorch(owner, ids, i, j) {
   for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
     if (!inMap(i + di, j + dj) || di * di + dj * dj > R * R + 0.5) continue;
     const t = tIdx(i + di, j + dj);
-    if (!taken.has(t) && !scorchTileWhy(t)) tiles.push([di * di + dj * dj, t]);
+    if (!taken.has(t) && !scorchTileWhy(t, owner)) tiles.push([di * di + dj * dj, t]);
   }
   tiles.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let n = 0;
@@ -5609,7 +5614,7 @@ function doScorch(u, t, dt) {
   const i = t.tile % S.W, j = (t.tile / S.W) | 0, x = i + 0.5, y = j + 0.5;
   if (!(t.spray > 0)) {
     // (The patch was burned by another, or built on, or its tank ran dry on the way: the job's over.)
-    if (scorchTileWhy(t.tile) || !scorchReady(u)) { scorchDone(u); return; }
+    if (scorchTileWhy(t.tile, u.owner) || !scorchReady(u)) { scorchDone(u); return; }
     if (dist2(u.x, u.y, x, y) > TORCH.scorchReach * TORCH.scorchReach) {
       const r = travel(u, i, j, dt);
       if (r === null) { scorchDone(u); return; }
@@ -10163,7 +10168,7 @@ function eventNow(type) {
   return E && S.time >= E.t0 && (!type || E.type === type) ? E : null;
 }
 /** Bot speed in a dust storm. */
-function evSpeed(x, y) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && atmosAt(x, y) >= 1) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside)
+function evSpeed(x, y, p) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && (p === undefined ? atmosAt(x, y) >= 1 : atmosOwnAt(x, y, p))) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside, for its owner and allies)
 /** Battery drain in a solar flare. */
 function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
 
@@ -10551,7 +10556,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -17518,8 +17523,10 @@ function hashState() {
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
-  for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); }
+  for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
+  for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)
   if (S.mission && S.mission.greenWant) { int(S.mission.greenPct || 0); int(S.mission.greenRun || 0); }
+  if (S.mission && S.mission.stormCalm) int(S.mission.calmRun || 0);
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
@@ -17568,7 +17575,7 @@ function hashState() {
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].deepcore) { int(b.id); num(b.dcT || 0); int(b.dcStage || 0); obj(b.dcAcc); str(b.dcSrc); num(b.dcFuel || 0); int(b.dcGen || 0); num(b.dcGenT || 0); int(b.dcCall || 0); int(b.dcCallN || 0); int(b.dcWarn || 0); int(b.dcHeldN || 0); }
-    if (BDEFS[b.type].atmos) { int(b.id); num(b.aeT || 0); int(b.aeStage || 0); num(b.aeP || 0); str(b.aeSrc); num(b.aeFuel || 0); for (const g of b.aeGens || []) int(g); num(b.aeGenT || 0); num(b.aeU || 0); int(b.aeUr || 0); num(b.aeWith || 0); num(b.aeSeed || 0); int(b.aeCall || 0); int(b.aeCallN || 0); int(b.aeWarn || 0); }
+    if (BDEFS[b.type].atmos) { int(b.id); num(b.aeT || 0); int(b.aeStage || 0); num(b.aeP || 0); str(b.aeSrc); num(b.aeFuel || 0); for (const g of b.aeGens || []) int(g); num(b.aeGenT || 0); num(b.aeU || 0); int(b.aeUr || 0); num(b.aeWith || 0); num(b.aeSeed || 0); int(b.aeCall || 0); int(b.aeCallN || 0); int(b.aeWarn || 0); int(b.aeStorm ? b.aeStorm[0] : -1); int(b.aeStorm ? b.aeStorm[1] : -1); num(b.aeStormT ?? -1); num(b.aeBolt || 0); int(b.aeBoltN || 0); }
     if (b.shaft !== undefined) { int(b.id); int(b.shaft); int(b.capper || 0); num(b.capT || 0); int(b.capPaid || 0); } // (a fallen Deep Core's open shaft)
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
@@ -19987,9 +19994,14 @@ function updateAtmos(b, dt) {
     b.aeSeed = (b.aeSeed || 0) + dt;
     if (b.aeSeed >= ATMOS.seedEvery) { b.aeSeed -= ATMOS.seedEvery; atmosSeed(b); }
   }
+  // Its Storm Front at the Garden: lightning, every STORM.boltEvery s of power (stormBolt).
+  if (b.aeStorm && b.aeStage >= 4) {
+    b.aeBolt = (b.aeBolt || 0) + dt;
+    if (b.aeBolt >= STORM.boltEvery) { b.aeBolt -= STORM.boltEvery; stormBolt(b); }
+  }
   const next = b.aeStage < 4 ? ATMOS.stages[b.aeStage] - b.aeT : 0;
   b.status = `${ATMOS_STAGE_NAMES[b.aeStage - 1]}, ${Math.round(atmosReach(b))} of ${R} tiles round it` + (src === 'reactor' ? ', on Reactor power' : '') +
-    (b.aeStage < 4 ? `: ${ATMOS_STAGE_NAMES[b.aeStage]} in ${fmtSecs(next)}` : ': the garden is growing');
+    (b.aeStage < 4 ? `: ${ATMOS_STAGE_NAMES[b.aeStage]} in ${fmtSecs(next)}` : ': the garden is growing') + (b.aeStorm && b.aeStage >= 2 ? '. Its storm front is out' : '');
 }
 
 /** Engine b reaches stage `st`: its owner is told; with the Murmur on, Sappers dig in under it the next night. */
@@ -20045,11 +20057,14 @@ function atmosTick() {
   if (S.aeFade && S.aeFade.length) S.aeFade = S.aeFade.filter((f) => S.time - f.t0 < ATMOS.fade);
   // (a mission that counts the greened land: its share, and how long it has held what the mission wants)
   if (S.mission && S.mission.greenWant) { const g = atmosGreened(); S.mission.greenPct = g.of ? Math.floor((100 * g.n) / g.of) : 0; S.mission.greenRun = S.mission.greenPct >= S.mission.greenWant ? (S.mission.greenRun || 0) + 1 : 0; }
+  // (a mission with a rival's storm over the player's base: how long its sky has been held since the storm was broken)
+  if (S.mission && S.mission.stormCalm) S.mission.calmRun = stormBrokenFor(0) ? (S.mission.calmRun || 0) + 1 : 0;
   for (const b of S.buildings) {
     if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
     atmosPaint(b);
     if (b.aeStage >= 4) atmosWither(b, Infinity); // (the Garden: no Bloom at all, and no exit)
   }
+  if (atmosStorms().length || (S.drought && Object.keys(S.drought).length)) atmosDrought();
 }
 
 /** Mark the ground Engine b's change has reached with its stage (S.green): from Rain fertile, unless burned for good. */
@@ -20114,25 +20129,39 @@ function atmosSeed(b) {
 /** Engine b is gone (destroyBuilding): what it changed stays; its calm and its hold on the Bloom fade over ATMOS.fade s. */
 function atmosGone(b) {
   const c = bCentre(b), R = atmosReach(b);
-  if (R > 0 && b.aeStage) (S.aeFade = S.aeFade || []).push({ x: c.x, y: c.y, r: R, st: b.aeStage, t0: S.time });
+  if (R > 0 && b.aeStage) (S.aeFade = S.aeFade || []).push({ x: c.x, y: c.y, r: R, st: b.aeStage, t0: S.time, p: b.owner });
   logEvent({ t: S.time, k: 'atmosLost', p: b.owner, g: b.aeStage || 1 });
   const P = S.players[b.owner];
-  if (P && !b.gone) postMsg(b.owner, 'Your Atmosphere Engine is gone. The land it changed stays green, but the storms and the Bloom will come back in at its edges.', c.x, c.y, 'lost');
+  if (P && !b.gone) postMsg(b.owner, `Your Atmosphere Engine is gone${b.aeStorm ? ', and its storm front with it' : ''}. The land it changed stays green, but the storms and the Bloom will come back in at its edges.`, c.x, c.y, 'lost');
+  // Its storm front ends at once: the colonies under it are told.
+  if (b.aeStorm && (b.aeStage || 0) >= 2) for (const Q of S.players) {
+    if (Q.out || isWild(Q.id) || !foes(Q.id, b.owner) || !S.buildings.some((e) => !e.dead && e.owner === Q.id && dist2(e.x + 0.5, e.y + 0.5, b.aeStorm[0] + 0.5, b.aeStorm[1] + 0.5) <= sq(STORM.r + 1))) continue;
+    postMsg(Q.id, 'The storm over your colony breaks up: the Atmosphere Engine that held it is gone.', b.aeStorm[0], b.aeStorm[1], 'good');
+  }
+  b.aeStorm = null;
 }
 
 /*
  * Where the Engines hold the weather and the Bloom, this tick: each standing one with a stage (its reach), and each fallen
- * one's, shrinking to nothing over ATMOS.fade s. { x, y, r, st, id }. Worked out once a tick (bots ask it in a dust storm).
+ * one's, shrinking to nothing over ATMOS.fade s. { x, y, r, st, id, p (its owner; -1 unknown), on (it has power) }. And
+ * the Storm Fronts up (atmosStormOn): { x, y, r, p, st, id }. Worked out once a tick (every bot asks it as it moves).
  */
-let ATMOS_HOLD = { of: null, tick: -1, list: [] };
+let ATMOS_HOLD = { of: null, tick: -1, list: [], storms: [] };
 function atmosHolds() {
   if (ATMOS_HOLD.of === S && ATMOS_HOLD.tick === S.tick) return ATMOS_HOLD.list;
-  const list = [];
-  for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].atmos && b.aeStage) { const c = bCentre(b), r = atmosReach(b); if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id }); }
-  for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0 }); }
-  ATMOS_HOLD = { of: S, tick: S.tick, list };
+  const list = [], storms = [];
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
+    const c = bCentre(b), r = atmosReach(b);
+    if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id, p: b.owner, on: !!b.working });
+    if (atmosStormOn(b)) storms.push({ x: b.aeStorm[0] + 0.5, y: b.aeStorm[1] + 0.5, r: STORM.r, p: b.owner, st: b.aeStage, id: b.id });
+  }
+  for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0, p: f.p ?? -1, on: false }); }
+  ATMOS_HOLD = { of: S, tick: S.tick, list, storms };
   return list;
 }
+/** The Storm Fronts up this tick (see atmosHolds). */
+function atmosStorms() { atmosHolds(); return ATMOS_HOLD.storms; }
 /** The highest stage of an Engine's hold over (x, y): 1 calm (no dust storm), 2 the Bloom can't spread, 4 no exit. 0 none. */
 function atmosAt(x, y) {
   if (!S.buildings.length) return 0;
@@ -20150,4 +20179,166 @@ function atmosGreened() {
   let n = 0, of = 0;
   for (let t = 0, N = S.W * S.H; t < N; t++) if (S.terrain[t] === T_GROUND) { of++; if ((S.green[t] || 0) >= 3) n++; }
   return { n, of };
+}
+
+/* ------------------------------------------------------------------ the circle is its owner's, and the Storm Front */
+
+/*
+ * The circle is its owner's (the owner's approval, Nov 21 2026): the calm in a dust storm (evSpeed) and the faster crops
+ * on Green (growStalks) are for the Engine's owner and allies; a foe's robots on its ground wade through mud from Rain
+ * (atmosMud), and while it has power a foe's Torches can't burn there (atmosRainAt). Its Storm Front (STORM): b.aeStorm,
+ * the tile it is centred on, set by an order (atmosStorm: setAtmosStorm) from Rain; b.aeStormT when it was last set (the
+ * STORM.cd wait); b.aeBolt, s of power toward the next lightning (Garden), b.aeBoltN how many have come (the seed for the
+ * pick). S.drought (tile: s a foe's crop there has been under a storm from Green; see atmosDrought).
+ */
+
+/** Is (x, y) in the circle of an Engine (standing, or a fallen one's fading hold) of player p or one of p's allies? */
+function atmosOwnAt(x, y, p) {
+  if (!(p >= 0) || !S.buildings.length) return false;
+  for (const h of atmosHolds()) if (h.p >= 0 && !foes(h.p, p) && dist2(x, y, h.x, h.y) <= h.r * h.r) return true;
+  return false;
+}
+/** The hold of a standing Engine of a foe of player p over (x, y), at stage `st` or later (and with power, if `on`), or null. */
+function atmosFoeAt(x, y, p, st, on) {
+  if (!S.buildings.length) return null;
+  for (const h of atmosHolds()) if (h.id && h.st >= st && (!on || h.on) && h.p >= 0 && foes(h.p, p) && dist2(x, y, h.x, h.y) <= h.r * h.r) return h;
+  return null;
+}
+/** Is it raining on (x, y) for player p's Torches: in the circle of a foe's Engine at Rain or later, with power? (no burning there) */
+function atmosRainAt(x, y, p) { return p >= 0 && !isWild(p) && !!atmosFoeAt(x, y, p, 2, true); }
+/**
+ * Robot or vehicle u's pace in the weather a foe made: on a foe's Engine's ground from Rain, the mud (ATMOS.mud); under a
+ * foe's Storm Front, STORM.slow. Not the Murmur, aircraft or ships.
+ */
+function atmosMud(u) {
+  if (!S.buildings.length || (!atmosHolds().length && !ATMOS_HOLD.storms.length)) return 1;
+  if (!(u.owner >= 0) || isWild(u.owner) || BOTS[u.type].air || BOTS[u.type].sea || BOTS[u.type].wild) return 1;
+  if (atmosFoeAt(u.x, u.y, u.owner, 2, false)) return ATMOS.mud;
+  return stormOver(u.x, u.y, u.owner) ? STORM.slow : 1;
+}
+
+/** Is Engine b's Storm Front up now (set, at Rain or later, the Engine standing with power)? */
+function atmosStormOn(b) { return !!(b && !b.dead && b.built && b.aeStorm && (b.aeStage || 0) >= 2 && b.working); }
+/** The Storm Front of a foe of player p over (x, y), or null; none inside any Engine's circle (the calm: atmosAt). */
+function stormOver(x, y, p) {
+  const L = atmosStorms();
+  if (!L.length || !(p >= 0) || isWild(p)) return null;
+  for (const s of L) if (foes(s.p, p) && dist2(x, y, s.x, s.y) <= s.r * s.r) return atmosAt(x, y) >= 1 ? null : s;
+  return null;
+}
+/** Is building (or site) b under a foe's Storm Front? */
+function stormOverB(b) { if (!atmosStorms().length) return null; const c = bCentre(b); return stormOver(c.x, c.y, b.owner); }
+/** How fast site s goes up for its builders: STORM.build under a foe's Storm Front. */
+function stormWork(s) { return stormOverB(s) ? STORM.build : 1; }
+
+/** Why Engine b can't set its Storm Front down centred on tile (i, j), or '' if it can. */
+function atmosStormBlocked(b, i, j) {
+  if (!b || b.dead || !BDEFS[b.type].atmos) return 'That Atmosphere Engine is gone.';
+  if (!b.built) return 'The Atmosphere Engine isn\'t finished yet.';
+  if ((b.aeStage || 1) < 2) return `The Storm Front comes with stage 2, Rain: ${fmtSecs(Math.max(1, Math.ceil(ATMOS.stages[1] - (b.aeT || 0))))} more of power.`;
+  if (!b.aeSrc) return `It has no power: ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor.`;
+  if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Pick a spot on the map.';
+  const left = STORM.cd - (S.time - (b.aeStormT ?? -1e9));
+  if (left > 0) return `The sky is still turning: the storm can be moved again in ${fmtSecs(Math.ceil(left))}.`;
+  const c = bCentre(b), x = i + 0.5, y = j + 0.5, R = ATMOS.r[(b.aeStage || 1) - 1];
+  if (dist(c.x, c.y, x, y) < R + STORM.r) return `Too close to its own circle: the storm must stay clear of the ${R} tiles round the Engine (${R + STORM.r} from its middle).`;
+  for (const e of S.buildings) {
+    if (e === b || e.dead || !e.built || !BDEFS[e.type].atmos || !e.aeStage) continue;
+    const ec = bCentre(e), r = atmosReach(e);
+    if (r > 0 && dist2(ec.x, ec.y, x, y) <= r * r) return 'Another Atmosphere Engine holds the sky there: its circle stays calm.';
+  }
+  return '';
+}
+/** Set Engine b's Storm Front down centred on tile (i, j) (an order: atmosStorm). '' or why not. */
+function setAtmosStorm(b, i, j) {
+  const why = atmosStormBlocked(b, i, j);
+  if (why) return why;
+  b.aeStorm = [i, j]; b.aeStormT = S.time;
+  const P = S.players[b.owner];
+  if (P) P.stats.storms = (P.stats.storms || 0) + 1;
+  logEvent({ t: S.time, k: 'storm', p: b.owner, g: b.aeStage || 2 });
+  addFx('ring', i + 0.5, j + 0.5, { color: '#7c8ba8', r: STORM.r, life: 1.2 });
+  // The colonies under it are told (once in a while each).
+  for (const Q of S.players) {
+    if (Q.out || isWild(Q.id) || !foes(Q.id, b.owner) || S.time - (Q.stormMsg ?? -999) < 60) continue;
+    if (!S.buildings.some((e) => !e.dead && e.owner === Q.id && dist2(e.x + 0.5, e.y + 0.5, i + 0.5, j + 0.5) <= sq(STORM.r + 1))) continue;
+    Q.stormMsg = S.time;
+    postMsg(Q.id, `A storm front from ${playerName(b.owner)}'s Atmosphere Engine has settled over your colony: your robots slow, your sites go up slower and your guns reach less under it. Destroy the Engine, or calm the sky with one of your own.`, i, j, 'bad');
+    if (isMe(Q.id)) sfx('alert');
+  }
+  return '';
+}
+/** Call Engine b's Storm Front off (an order: atmosStormOff). The wait to set it down again stays. */
+function atmosStormOff(b) { if (b && b.aeStorm) b.aeStorm = null; }
+
+/**
+ * The drought (once a second, from atmosTick): a foe's crops under a Storm Front from Green stop growing (S.drought marks
+ * them: growStalks skips them) and after STORM.drought s under it wither, the soil left as it was. Out from under it, a
+ * crop's count starts again.
+ */
+function atmosDrought() {
+  const old = S.drought || {}, D = {};
+  for (const s of atmosStorms()) {
+    if (s.st < 3) continue;
+    for (let j = Math.floor(s.y - s.r); j <= Math.ceil(s.y + s.r); j++) for (let i = Math.floor(s.x - s.r); i <= Math.ceil(s.x + s.r); i++) {
+      if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, s.x, s.y) > s.r * s.r) continue;
+      const t = tIdx(i, j);
+      if (S.res[t] !== R_CROP || D[t] || atmosAt(i + 0.5, j + 0.5) >= 1) continue;
+      const who = soilHolder(t);
+      if (!(who >= 0) || isWild(who) || !foes(s.p, who)) continue;
+      D[t] = (old[t] || 0) + 1;
+      if (D[t] === 1) {
+        const Q = S.players[who];
+        if (Q && S.time - (Q.droughtMsg ?? -999) > 120) { Q.droughtMsg = S.time; postMsg(who, `A rival's storm sits over your fields: the crops under it have stopped growing, and wither in ${Math.round(STORM.drought / 60)} minutes.`, i, j, 'bad'); }
+      }
+      if (D[t] >= STORM.drought) {
+        delete D[t];
+        S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0;
+        markDirty(i, j);
+        const P = S.players[s.p];
+        if (P) P.stats.droughtCrops = (P.stats.droughtCrops || 0) + 1;
+      }
+    }
+  }
+  S.drought = D;
+}
+
+/**
+ * Lightning out of Engine b's Storm Front (the Garden, every STORM.boltEvery s of power): one of the buildings of its
+ * owner's foes under it, picked by the seed (hash2 with b.aeBoltN), loses STORM.boltDmg of its armor, never below
+ * STORM.boltFloor (a scorch, not a wreck). None under it: the bolt is lost.
+ */
+function stormBolt(b) {
+  b.aeBoltN = (b.aeBoltN || 0) + 1;
+  if (!atmosStormOn(b)) return;
+  const x = b.aeStorm[0] + 0.5, y = b.aeStorm[1] + 0.5, R2 = STORM.r * STORM.r, cand = [];
+  for (const e of S.buildings) {
+    if (e.dead || !e.built || !(e.owner >= 0) || isWild(e.owner) || !foes(b.owner, e.owner) || BDEFS[e.type].wild) continue;
+    const c = bCentre(e);
+    if (dist2(c.x, c.y, x, y) > R2 || atmosAt(c.x, c.y) >= 1) continue;
+    cand.push(e);
+  }
+  if (!cand.length) return;
+  const e = cand[Math.floor(hash2(b.id, b.aeBoltN, S.seed | 0) * cand.length)], max = BDEFS[e.type].armor || 1, c = bCentre(e);
+  const before = e.armor;
+  e.armor = Math.max(Math.min(e.armor, max * STORM.boltFloor), e.armor - max * STORM.boltDmg);
+  e.lastHit = S.time;
+  addFx('stormbolt', c.x, c.y, { life: 0.8, seed: b.aeBoltN });
+  sfx('stormbolt', c.x, c.y);
+  const P = S.players[b.owner], Q = S.players[e.owner];
+  if (P) P.stats.bolts = (P.stats.bolts || 0) + 1;
+  logEvent({ t: S.time, k: 'bolt', p: b.owner, q: e.owner, b: e.type });
+  if (Q && before - e.armor > 0 && S.time - (Q.boltMsg ?? -999) > 45) { Q.boltMsg = S.time; postMsg(e.owner, `Lightning from a rival's storm struck your ${BDEFS[e.type].name}.`, e.x, e.y, 'bad'); }
+}
+
+/**
+ * Is the sky over player p's Command Base its own: no foe's Atmosphere Engine standing (built or going up), or p's own
+ * (or an ally's) Engine's circle over it, where no storm can be? (Overcast's goals.)
+ */
+function stormBrokenFor(p) {
+  const L = S.players[p] ? getE(S.players[p].lander) : null;
+  if (!L || L.dead) return false;
+  if (!S.buildings.some((e) => !e.dead && BDEFS[e.type].atmos && e.owner >= 0 && foes(e.owner, p))) return true;
+  const c = bCentre(L);
+  return S.buildings.some((e) => !e.dead && e.built && BDEFS[e.type].atmos && !foes(e.owner, p)) && atmosOwnAt(c.x, c.y, p);
 }

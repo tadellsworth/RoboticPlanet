@@ -1743,6 +1743,8 @@ Flavor: "Scheduled in the Pathfinder's plan for T−10. Started late. Running to
 | (code) | Night | pale cyan light from inside the throat up the plume, the waist band's glow (`bandL`, `bandR`, `band`), the rim lamps blinking (`rimL`, `rimR`); dark when the Murmur cut it |
 | (code) | Rain | from stage 2, a drizzle at night within about 7 tiles of the tower |
 | (code) | The changed land | `drawGreen`, in the ground tiles: Calm a little cleaner, Rain damp dark earth with sprouts, Green grass, Garden deep grass with flowers and young trees |
+| (code) | The Storm Front | `drawAtmosStorms`: over the storm's spot, three spiral arms of heaped billows (from `wxCloud`: a dark underside, a slate body, paler tops; blue-grey and dimmer at night) wound round a dense heart and turning slowly, their shadow on the ground, a dashed rim at its 5-tile edge, rain streaks falling all over it; it rolls in over 3 s and breaks up over 2; at the Garden a flash in the cloud now and then. Aiming: `drawStormAim` (the Engine's kept-clear circle in green, the storm's circle at the pointer) |
+| (code) | Lightning | fx `stormbolt`: a jagged white-blue bolt from high above down to the building (`boltPath`, a branch), flickering twice, and a white-blue flash where it lands |
 | (code) | Seed Vault's hull | `drawPathfinderHull`: a long white lander hull half-buried in drift sand, its Accord stripe faded, the vault hatch open |
 
 ### Batch 29: the Deep Core (installed)

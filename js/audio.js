@@ -251,7 +251,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
   sundercharge: 2, sunderthud: 0.12, sunderfire: 1, sunderquake: 0.8,
-  deepstage: 3, atmosstage: 4,
+  deepstage: 3, atmosstage: 4, stormbolt: 1,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -274,6 +274,7 @@ const BLAST_SIZE = {
   sundercharge: 3, sunderthud: 2.6, sunderfire: 3, sunderquake: 2.4, // (the Sundering Ray's thudding is heard by everyone, as the Lance's charge; its blow landing far off)
   deepstage: 1.8, // (a Deep Core reaching a new depth: heard off screen, near by)
   atmosstage: 1.8, // (an Atmosphere Engine reaching a new stage: heard off screen, near by)
+  stormbolt: 1.6, // (lightning out of a Storm Front: a crack and a roll, heard off screen near by)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
@@ -960,6 +961,13 @@ function sfx(name, dest, y, dur) {
       break;
     // An Atmosphere Engine reaching a new stage: a long breath of air through its fans, a soft rising open fifth over
     // it, and the patter of the first rain.
+    // Lightning out of a Storm Front striking a building: a sharp crack right on top of it, then the thunder's long roll.
+    case 'stormbolt':
+      _noise(0.12, 0.16, { type: 'highpass', freq: 1400, delay: 0, dest: D });
+      _noise(0.35, 0.12, { type: 'lowpass', freq: 2200, to: 600, attack: 0.005, delay: 0.02, dest: D });
+      _noise(3.2, 0.09, { type: 'lowpass', freq: 300, to: 60, attack: 0.25, delay: 0.15, dest: D });
+      _noise(2.2, 0.05, { type: 'lowpass', freq: 170, to: 50, attack: 0.4, delay: 0.9, dest: D });
+      break;
     case 'atmosstage':
       _noise(2.6, 0.05, { type: 'bandpass', freq: 520, delay: 0, dest: D });
       for (const [f, dl] of [[196, 0.2], [293.7, 0.6], [392, 1.0]]) { _tone(f, 2.4, 'sine', 0.03, f * 1.002, dl, D); _tone(f * 2.003, 1.6, 'sine', 0.008, null, dl + 0.05, D); }
