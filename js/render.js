@@ -10235,11 +10235,42 @@ function lanceMarks(b) {
   return { r, m: [c * 2.4, s * 2.4 - 0.85], b: [-c * 0.5, -s * 0.5 - 0.4] };
 }
 
+/**
+ * A Lance cooling after its shot: the barrel glows a dull red along its length (strongest at the muzzle), and smoke
+ * curls up off it, thick at first and thinning as it cools. Drawn from the frame's clock: looks only.
+ */
+function lanceCoolFx(ctx, b, cx, cy, s, cool) {
+  const M = lanceMarks(b), t = R.time, still = typeof natStill === 'function' && natStill();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(255,${70 + 60 * (1 - cool)},30,${0.5 * cool})`; ctx.lineCap = 'round'; ctx.lineWidth = s * 0.14;
+  ctx.beginPath(); ctx.moveTo(cx + M.r[0][0] * s, cy + M.r[0][1] * s); ctx.lineTo(cx + M.m[0] * s, cy + M.m[1] * s); ctx.stroke();
+  ctx.globalAlpha = 0.6 * cool; const mr = s * 0.35;
+  ctx.drawImage(glowDisc('#ff5a1e'), cx + M.m[0] * s - mr, cy + M.m[1] * s - mr, mr * 2, mr * 2);
+  ctx.restore();
+  // smoke: a few soft grey puffs rising and drifting off the barrel, fewer as it cools (none on Saver)
+  if (typeof gfxStep === 'function' && gfxStep() === 'saver') return;
+  const n = Math.ceil(6 * cool);
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const f = still ? (i + 0.5) / n : ((t * 0.35 + i / n) % 1), along = 0.35 + 0.6 * ((i * 0.37) % 1);
+    const bx = cx + (M.r[0][0] + (M.m[0] - M.r[0][0]) * along) * s, by = cy + (M.r[0][1] + (M.m[1] - M.r[0][1]) * along) * s;
+    const x = bx + Math.sin(f * 5 + i) * s * 0.15 + f * s * 0.3, y = by - f * s * 1.6, r = s * (0.12 + 0.35 * f);
+    ctx.globalAlpha = Math.min(0.55, 0.65 * Math.sqrt(cool)) * (1 - f);
+    ctx.fillStyle = '#4a4644';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** Lance b's charge as it shows: rings lit one by one with the charge, white-hot at full; cooling after a shot. */
 function drawLanceCharge(ctx, b, cx, cy, s) {
   const since = b.lShot ? S.time - b.lShot : 99;
-  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = since < 8 ? 1 - since / 8 : 0;
+  // Cooling: red-hot right after the shot, fading slowly back to normal over the whole reload (the owner, Nov 21 2026).
+  const rl = b.lReload > 0 && b.lShot ? b.lReload / (b.lSrc === 'reactor' ? LANCE.reactorReload : LANCE.reload) : 0;
+  const k = b.lOn ? Math.min(1, (b.lCharge || 0) / lanceTime(b)) : 0, cool = Math.max(since < 8 ? 1 - since / 8 : 0, Math.min(1, rl) ** 1.5 * 0.9);
   if (!k && !cool) return;
+  if (cool > 0.03 && !b.lOn) lanceCoolFx(ctx, b, cx, cy, s, cool);
   const M = lanceMarks(b), t = R.time, full = b.lOn && k >= 1;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';

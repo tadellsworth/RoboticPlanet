@@ -14,7 +14,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## The owner's notes, Nov 21 2026 (for later)
 
-- **Lance of Corvane cooling down:** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
+- **Lance of Corvane cooling down (BUILT, Nov 21 2026):** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
   normal look as the reload runs out (drawn from its reload clock; red at its hottest just after the shot).
 - **Hollow seed 12 stalls again** (75 min, AI vs AI): the rule that fixed it (a rival's own dismantled crates not hauled
   first, `collectCrates` in js/sim.js) made a reloaded save play differently (murmur-forms-sim-test), so it was undone.
@@ -22,7 +22,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
-- **Mass Driver sound:** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
+- **Mass Driver sound (BUILT, Nov 21 2026: a deep charging hum, a crack and thump, a falling rush of air):** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
 ## Polish round 1 (built Nov 21 2026; open questions)

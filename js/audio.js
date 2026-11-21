@@ -690,20 +690,23 @@ function sfx(name, dest, y, dur) {
       _noise(0.04, 0.12, { type: 'highpass', freq: 1800, attack: 0.002, dest: D });
       _noise(0.6, 0.12, { type: 'bandpass', freq: 600, to: 2600, q: 1.1, attack: 0.04, dest: D });
       break;
-    // The Mass Driver: its coils charging (a whine rising through the charge, a buzz under it), the hard crack of the
-    // shot with the canister's whistle falling away over its flight, and the clang of the Catcher's arms closing on it.
+    // The Mass Driver: its capacitor banks charging (a deep electric hum climbing, a thin capacitor whine over it, a
+    // crackle building), then the shot: a hard electromagnetic crack and a heavy thump, the coils' ring, and the canister
+    // leaving as a falling rush of air (no whistle: the owner, Nov 21 2026, found the old one a funny whistle).
     case 'mdcharge':
-      _tone(180, 1.6, 'sawtooth', 0.025, 1900, 0, D);
-      _tone(360, 1.6, 'sine', 0.03, 3800, 0, D);
-      _noise(1.5, 0.05, { type: 'bandpass', freq: 600, to: 4200, q: 3, attack: 1.2, dest: D });
+      _tone(55, 1.6, 'sawtooth', 0.05, 110, 0, D); // (the banks' hum, climbing)
+      _tone(110, 1.6, 'square', 0.012, 220, 0, D);
+      _tone(1200, 1.5, 'sine', 0.008, 5200, 0.1, D); // (the capacitor whine, faint and high)
+      _noise(1.5, 0.04, { type: 'bandpass', freq: 2500, to: 6000, q: 4, attack: 1.3, dest: D }); // (the crackle building)
       break;
     case 'mdlaunch':
-      _noise(0.05, 0.3, { type: 'highpass', freq: 2200, attack: 0.001, dest: D });
-      _tone(1400, 0.08, 'square', 0.07, 300, 0, D);
-      _tone(62, 0.35, 'sine', 0.2, 34, 0, D);
-      _noise(0.4, 0.12, { freq: 900, to: 200, attack: 0.002, dest: D });
-      _tone(2600, 2.4, 'sine', 0.022, 900, 0.1, D); // (the whistle in flight)
-      _noise(2.2, 0.03, { type: 'bandpass', freq: 3000, to: 1100, q: 6, attack: 0.3, delay: 0.1, dest: D });
+      _noise(0.03, 0.4, { type: 'highpass', freq: 3000, attack: 0.0005, dest: D }); // (the crack)
+      _noise(0.12, 0.25, { type: 'bandpass', freq: 1800, to: 400, q: 1.5, attack: 0.001, dest: D });
+      _tone(48, 0.5, 'sine', 0.3, 28, 0, D); // (the thump)
+      _tone(96, 0.25, 'triangle', 0.12, 40, 0, D);
+      _tone(780, 0.6, 'sawtooth', 0.02, 160, 0.01, D); // (the coils' electric snap falling)
+      _tone(1560, 0.9, 'sine', 0.012, 1480, 0.02, D); // (the rails ringing)
+      _noise(1.4, 0.07, { type: 'lowpass', freq: 1400, to: 250, attack: 0.05, delay: 0.05, dest: D }); // (the rush of air as it goes)
       break;
     case 'mdcatch':
       _tone(520, 0.6, 'triangle', 0.08, 500, 0, D); _tone(1310, 0.45, 'sine', 0.05, 1290, 0, D); _tone(2090, 0.3, 'sine', 0.025, null, 0, D);
