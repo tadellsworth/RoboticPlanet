@@ -16,6 +16,10 @@
  * fewer on Graphics Saver (with fewer flashes, and no ringfall, Wren or drifting stars); stopped while the menu is hidden
  * or the tab is in the background; near-still with reduced motion (no flashes: the fires just glow). While it shows, the
  * demo game behind the menu isn't drawn (menuPlanetCovers: main.js).
+ *
+ * Only with the Menu background setting on Planet (menuBg / setMenuBg, kept on this device; Settings, from the main menu
+ * or the pause menu). On Classic (the default) the menu shows the AI-vs-AI demo game through its dimmed gradient, as it
+ * always did, and none of this is made or run: no canvas, no map, no frames.
  */
 
 const MPLANET = {
@@ -36,6 +40,20 @@ const MPLANET = {
 const MPL = { c: null, g: null, raf: 0, last: 0, t: 0, open: 0, map: null, sky: null, sphere: null, geo: null, w: 0, h: 0, dpr: 1, on: false,
   war: { fronts: [], fires: [], flashes: [], tracers: [], strikes: [], nextFront: 0, nextStrike: 20, nextTracer: 6, nuke: null, nextNuke: 0 },
   falls: [], nextFall: 4, spr: {} };
+
+/* The Menu background setting: 'classic' (the demo game, the default) or 'planet' (this). */
+const MENU_BG_KEY = 'terrafall.menubg';
+const MENU_BG = ['classic', 'planet'];
+let _menuBg = 'classic';
+try { const v = localStorage.getItem(MENU_BG_KEY); if (MENU_BG.includes(v)) _menuBg = v; } catch (e) { /* storage unavailable */ }
+function menuBg() { return _menuBg; }
+/** Pick the menu's background; it changes at once (the planet starts, or stops and is put away). */
+function setMenuBg(v) {
+  if (!MENU_BG.includes(v)) return;
+  _menuBg = v;
+  try { localStorage.setItem(MENU_BG_KEY, v); } catch (e) { /* storage unavailable */ }
+  if (typeof document !== 'undefined') mplWatch();
+}
 
 /** 3D value noise (0..1), for a seamless map on the sphere. */
 function mplNoise(x, y, z, seed) {
@@ -545,18 +563,21 @@ function mplFrame(now) {
   mplDraw(dt, still, saver);
 }
 
-/** Start or stop the backdrop as the menu shows or hides, and as the tab comes and goes. */
+/** Start or stop the backdrop as the menu shows or hides, as the tab comes and goes, and with the Menu background setting. */
 function mplWatch() {
   const menu = document.getElementById('screen-menu');
-  const on = !!menu && !menu.hidden && !document.hidden;
+  if (!menu) return;
+  const want = _menuBg === 'planet';
+  if (want && !MPL.c) mplMake(menu);
+  const on = want && !menu.hidden && !document.hidden;
   MPL.on = on;
-  if (MPL.c) MPL.c.hidden = !menu || menu.hidden;
-  if (on && !MPL.raf) MPL.raf = requestAnimationFrame(mplFrame);
+  if (MPL.c) MPL.c.hidden = !want || menu.hidden;
+  if (!on && MPL.raf) { cancelAnimationFrame(MPL.raf); MPL.raf = 0; }
+  if (on && !MPL.raf) { MPL.last = 0; MPL.raf = requestAnimationFrame(mplFrame); }
 }
 
-function menuPlanetInit() {
-  const menu = document.getElementById('screen-menu');
-  if (!menu || MPL.c || typeof document.createElement !== 'function') return;
+/** The canvas and the planet's map: made the first time the Planet background is wanted (never on Classic). */
+function mplMake(menu) {
   const c = document.createElement('canvas');
   c.id = 'menu-planet';
   c.setAttribute('aria-hidden', 'true');
@@ -565,6 +586,13 @@ function menuPlanetInit() {
   MPL.map = mplMakeMap();
   MPL.t = 30;
   MPL.nukeNow = mplNuke; // (a debug hook: the rare blast, at once)
+}
+
+let _mplInit = false;
+function menuPlanetInit() {
+  const menu = document.getElementById('screen-menu');
+  if (!menu || _mplInit || typeof document.createElement !== 'function') return;
+  _mplInit = true;
   new MutationObserver(mplWatch).observe(menu, { attributes: true, attributeFilter: ['hidden'] });
   document.addEventListener('visibilitychange', mplWatch);
   mplWatch();

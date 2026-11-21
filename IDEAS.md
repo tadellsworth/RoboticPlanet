@@ -617,7 +617,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     - 40-game batch: no game undecided (1 before). Wins of 16: Salvager 11, Herald 11, Steward 9, Architect 6, Warden 3.
   - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
     Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
-    and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
+    and, rarely, a nuclear blast. Since Nov 21 2026 it's a choice, **Menu background** in Settings (now also on the
+    main menu), and **Classic** (the demo game) is the default for now, the owner's call. Still open: whether Planet
+    becomes the default later; the other planets of the system (Ithaca I is the fourth; LORE.md names
     none), and whether the Wren's waystation could show at the system's edge.
   - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
     on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
@@ -951,8 +953,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
 - **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
-  forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
-  (held back for now); the rival running ferry lines.
+  forward Port stocked by Container Ship. Still open: the rival running ferry lines, and **the naval war** (owner,
+  Nov 21: add a **Warboat**, and expand fighting at sea). Proposed roster, in build order:
+  - **Warboat** (built at a Port): a fast armed patrol craft with a pulse cannon. It escorts convoys, hunts enemy
+    ships and Ferries, and lightly shells the shore. The core naval unit.
+  - **Coastal Battery** (a shore building): a heavy gun that outranges the Warboat, so a held coast is a real defence.
+  - **Diver**: a submersible drone, unseen until it surfaces to fire torpedoes at ships. It is spotted by Warboats
+    close by, or by a **Sonar Buoy** (a cheap placeable picket on the water).
+  - **Flak Corvette**: an anti-air escort that sails with convoys and Ferries against bombers and Airships.
+  - **Monitor**: a slow, heavily armoured shore-bombardment ship, like a Howitzer at sea, for breaking coastal forts.
+    Weak against Divers.
+  - **Sea mines** (dropped by a Warboat upgrade or a Mine Layer boat): close a channel or a Port mouth.
+  Rock-paper-scissors: Warboat beats Diver once found; Diver beats Monitor and cargo; Coastal Battery beats Warboat;
+  Monitor beats Coastal Battery; Flak Corvette guards the lot from the air. Needs: ship-vs-ship combat, the rival using
+  it (`aiNaval`), art sheets for the owner to pick from, Missions goals, and How to play.
 - **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **Vulcan Bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
@@ -969,6 +983,19 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
   shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
+  **The air war (owner, Nov 21: save for later).** Proposed roster, in build order:
+  - **Interceptor** (a fighter from the Airfield): shoots down bombers and Airships and escorts your own bombers, so
+    bombers meet a counter in the air and not only guns on the ground. The core air-combat unit.
+  - **Radar Station** (a building): sees aircraft coming early (an alert), and Flak Guns near it fire further.
+  - **Gunship / Attack Drone**: circles a spot for a while strafing warbots; close support, not a one-off strike.
+  - **Transport Helicopter**: drops a small band of warbots anywhere, over walls and cliffs; slow and fragile, a raid tool
+    beside the Ferry's beach landings.
+  - **SAM Launcher** (a building, or mobile): long-range missiles, a hard hit and a slow reload; beats Gunships and
+    Airships, while fast Interceptors can slip it.
+  - **Repair Drone**: hovers over damaged robots and mends them in the field.
+  - **Carrier** (late, joins the naval war): a ship that launches and refuels aircraft.
+  Counters: Interceptor beats bombers and Gunships; Flak and SAM beat low Interceptors; Gunship beats warbots; Radar
+  makes every air defence better. First pair to build: Interceptor + Radar Station.
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.

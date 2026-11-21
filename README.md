@@ -2566,7 +2566,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
   always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
-  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer.
+  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer. Settings
+  also has **Menu background** (Classic / Planet: see The main menu under Looks). **From the main menu**: the
+  **Settings** pill (`#m-settings`, a gear, among Records, Observer, Lore and Feedback) opens the same view on its own
+  over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
+  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the pill.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -2940,7 +2944,10 @@ clouds' drift (`natureCloudTime`).
   every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
   (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
   background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
-  `drawNeeded`).
+  `drawNeeded`). Only with **Menu background** on **Planet** (`menuBg` / `setMenuBg`, kept on the device as
+  `terrafall.menubg`): on **Classic**, the default, the menu shows the demo game through its dimmed gradient as before
+  Nov 21 2026, and the canvas and map aren't even made (`mplMake` runs the first time Planet is wanted); switching to
+  Classic stops the frames (`cancelAnimationFrame`) and hides the canvas at once.
 
 ### Cloud shadows, remains and beacons
 

@@ -1512,7 +1512,7 @@ canvas.chart.small { height: 110px; }
 .help-pager .fp-next { text-align: right; }
 
 /* ---- The menus in the app icon's colours: midnight navy, coral and cream (icons/icon.svg) ---- */
-#screen-menu, .m-picker, #screen-missions, #screen-help, #screen-lore, #screen-feedback {
+#screen-menu, .m-picker, #screen-missions, #screen-help, #screen-lore, #screen-feedback, #screen-pause.from-menu {
   --accent: #ff6b4a;          /* the planet's coral */
   --accent-ink: #14213d;      /* navy text on coral */
   --panel: rgba(17, 27, 51, 0.95);
@@ -1543,6 +1543,9 @@ canvas.chart.small { height: 110px; }
 .m-links .m-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 9px; border-radius: 999px;
   border: 1px solid rgba(241, 228, 211, 0.14); background: rgba(20, 33, 61, 0.5); font-size: 13px; letter-spacing: 0.02em; }
 .m-links .m-pill svg { color: #ff8a66; }
+/* Settings from the main menu (openMenuSettings): the pause menu's Settings view over the menu, in the menu's colours. */
+#screen-pause.from-menu { background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.6), rgba(8, 12, 24, 0.92)); }
+#screen-pause.from-menu .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
 #screen-menu .m-links .m-pill:hover { color: #ffb08f; border-color: rgba(255, 107, 74, 0.45); }
 #screen-missions .help-body h3, #screen-help .help-body h3, #screen-lore .help-body h3 { color: #ff8a66; }
 
