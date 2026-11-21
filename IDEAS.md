@@ -33,8 +33,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   no passwords) that also carry cloud saves between devices. Plan for a name filter and a way to hide names, a short
   privacy note (only ID, name and scores until accounts), and Cloudflare's free tier covering it.
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
-  (Nov 21 2026), waiting for the owner's answers** (31 questions; the sheet and DECISIONS.txt were sent to the owner).
-  Recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
+  (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
+  **B Piston Battery**. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
 - **Polish round 2:** skip the What's new popup and the credits for now.
