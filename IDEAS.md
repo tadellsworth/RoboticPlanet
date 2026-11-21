@@ -785,6 +785,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     - **Doctrine retune (Nov 21 2026, the owner: the Warden and the Architect in line with the others; Salvager,
       Steward and Herald left as they are).** 40-game batch, wins of 16 before → after: Salvager 11 → 10, Herald 11 → 8,
       Steward 9 → 7, Architect 6 → 8, Warden 3 → 7; none undecided; 24.0 → 19.4 minutes to a win.
+      **The owner (Nov 21): the Warden is fine at 7; revisit it later.** The rivals' Deep Core test now plays its war
+      on a Large map at Easy: with the retuned Warden one side won before the Core stood.
       - *Warden*: what held it back was keeping a third of its army at home until its push (about four wins on its
         own, measured on its 16 games: walls and Keeps alone, 5; without the home third, 9), marching only on a push, and
         six turrets each put ahead of its economy. Now it marches as the plain rule says and still makes its all-in push
