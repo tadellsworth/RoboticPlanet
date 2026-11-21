@@ -866,7 +866,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
   turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.
 - **Dismantled crates:** idle Haulers take reachable crates before their regular jobs. Workers can carry the remainder
-  when Haulers cannot take it, after construction, staffing and other local Worker jobs.
+  when Haulers cannot take it, after construction, staffing and other local Worker jobs. Not a rival's: it dismantles
+  every gatherer that runs dry and every stuck site, so its crates wait their turn behind the goods its sites need.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
@@ -879,7 +880,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   between the homes out toward the rim, sized to leave as much sea as a two-way map, round an islet in the middle) and
   a couple of little islets, at least `ISLE_GAP` (4) tiles of sea apart (5 to 10 bridge tiles), so a crossing is a
   long, dear bridge (`bridgeMul`) or a ship; the AI bridges toward its rival (`aiBridge`) and makes beach landings
-  (`aiNaval`: its landed warbots march on once the beach is clear, idle ones across the water go after the nearest
+  (`aiNaval`: its landed warbots march on once the beach is clear, of what the warbots holding the flag would shoot
+  (`RALLY_REACH2`, about 3 tiles, as in `holdRally`), idle ones across the water go after the nearest
   enemy building there, and once a rival's army is nearly gone (the weakest one, in a free-for-all) it lands by that
   rival's Command Base; warbots stranded across the water out of Ammo don't stop its Foundry, as unarmed ones at home
   do). Specks of land under 8 tiles go under.
@@ -1082,7 +1084,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stretches are tried in turn). A raid's clock (`RAID_TIME`) starts when the first raider reaches the flag (`P.raid.at`;
   until then it has two seconds a tile from home and half a minute), and the band comes home early when the enemy
   army within 5 tiles of it outnumbers it. The rival answers your raids (`aiCounterRaid`) only when it can send a third
-  more warbots than the flag has. Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
+  more warbots than the flag has; enemy warbots standing on its land under no flag (a landing whose flag came down, a
+  band that can't walk home across the water: `aiStrays`, not ones on an attack) get the same answer, the group nearest
+  its Command Base first. Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
   road within `AI_SCORCH_NEAR` (6) tiles of an enemy Bio Farm instead and sends a Torch along (`aiRaidTorch`); a Torch on
   a raid with a full tank burns the nearest patch of an enemy farm's soil within `AI_SCORCH_REACH` (8) tiles that no gun
   covers (`aiRaidScorch`), refills and comes back to the flag (`u.resume`). Missiles crater the roads where they land.
@@ -1515,7 +1519,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no
   Haulers) collect piles and take them to storage (`dispatch` step 4d, `doCrate`) while no enemy robot or gun is
   within `CRATE_SAFE` tiles (`foesNear`). Idle or victorious warbots nearby carry one crate each to their side's
-  nearest garrison and go back for more (`doLoot`); a rival's stays home instead while its colony, with a decisive lead,
+  nearest garrison and go back for more (`doLoot`; none where their side has no garrison on that ground, `lootNear`:
+  stranded across the water they picked a crate up and put it back every tick); a rival's stays home instead while its colony, with a decisive lead,
   gathers an army it already has for a march or a storm (`lootHeld`: `P.massFor` with `lead` and as many armed warbots
   as it takes, or `P.stormOn`), since only garrisoned warbots can be sent (`aiSpare`), and on the Hollow, whose cleared
   nests' hoards never rot, half its army shuttled crates while it "massed"; one without the lead or short of the

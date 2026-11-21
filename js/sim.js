@@ -988,7 +988,7 @@ function findCharger(u, maxWalk, workTrip) {
     // A staffed building can work slowly. Don't leave it for a trip whose share of the remaining
     // Fuel won't get the worker back with enough charge to do any better.
     if (workTrip && ch.fuel) {
-      const energy = (b.energy || 0) + (b.stock.fuel || 0) * FUEL_ENERGY;
+      const energy = (b.energy || 0) + ((b.stock.fuel || 0) + (b.inc.fuel || 0)) * FUEL_ENERGY;
       const useful = Math.max(0, BATTERY.low - (u.bat ?? 100)) + 2 * walk * BATTERY.workerMove;
       if (energy < useful * ((queue.get(b.id) || 0) + 1)) continue;
     }
@@ -2065,7 +2065,7 @@ function dispatch(p) {
   function collectCrates(priority, workersOnly = false) {
     for (const l of S.loot || []) {
       if (!idle.length) return;
-      if ((l.dismantled === p) !== priority) continue;
+      if ((l.dismantled === p && !P.ai) !== priority) continue;
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
@@ -6492,7 +6492,10 @@ function lootHeld(owner) {
   return armed >= P.massFor.need - 2;
 }
 
-/** A loot pile within `range` tiles of warbot u that it could walk to, or null. */
+/**
+ * A loot pile within `range` tiles of warbot u that it could walk to, or null. None with no garrison of its side on
+ * that ground to carry a crate to (lootHome): a warbot left across the water picked one up and put it back every tick.
+ */
 function lootNear(u, range) {
   if (!S.loot || !S.loot.length || u.loot || u.noLoot > S.time) return null; // (called home: it leaves crates be a while)
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
@@ -6502,7 +6505,7 @@ function lootNear(u, range) {
     if (d > bd || lootLeft(l) <= (l.claimed || 0) || S.zone[tIdx(l.x, l.y)] !== zone) continue;
     bd = d; best = l;
   }
-  return best;
+  return best && lootHome(u) ? best : null;
 }
 
 /** The pile of crates nearest flag r, within FLAG_LOOT of it, that warbot u could walk to and nobody has claimed all of, or null. */
@@ -7872,6 +7875,8 @@ function rechargePoint(u, needAmmo) {
   return best;
 }
 
+/** How near a flag (squared tiles) an enemy building is for the warbots holding it to go for it (holdRally). */
+const RALLY_REACH2 = 10;
 const RALLY_SPOTS = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]];
 
 /**
@@ -7913,13 +7918,13 @@ function holdRally(u, t, r, dt, power) {
   if (dist2(u.x, u.y, r.x, r.y) > 9 && escortMove(u, r.x, r.y, { rally: r.id }, dt)) return;
   let tgt = t.target ? getE(t.target) : null;
   if (!botArmed(u) || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
-  else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10 && tgt.id !== r.first)) {
+  else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > RALLY_REACH2 && tgt.id !== r.first)) {
     tgt = null;
     t.target = 0;
     u.scanT2 = (u.scanT2 || 0) - dt;
     if (u.scanT2 <= 0) {
       u.scanT2 = 0.5;
-      let bd = 10;
+      let bd = RALLY_REACH2;
       // (A flag planted for an Attack goes for that building first; the rival AI's marches for the gun that covers
       // the flag, r.first, then on as usual: warbots only shoot back at robots, so the gun has to be their target.)
       const own = r.target ? getE(r.target) : r.first ? getE(r.first) : null;

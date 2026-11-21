@@ -1487,10 +1487,12 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild, firstFerry) {
   const P = S.players[p];
   // Warbots it landed march on from the beach once there's nothing left to fight round the flag: the
   // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
-  // (Not a band still gathering on its beach: see aiBeach.)
+  // (Not a band still gathering on its beach: see aiBeach.) "Round the flag" is as near as the warbots holding it
+  // go for a building (RALLY_REACH2, holdRally): it was 4 tiles, so a band landed on Islands seed 21 with a Quarry
+  // 3.6 tiles off stood by its flag from minute 26 to the cap, neither shooting the Quarry nor marching on.
   for (const r of S.rallies) {
     if (r.owner !== p || !r.landing || S.time - r.landing < 15 || (P.beach && !P.beach.go && P.beach.rid === r.id)) continue;
-    if (S.buildings.some((b) => !b.dead && foes(b.owner, p) && b.owner >= 0 && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < 16)) continue;
+    if (S.buildings.some((b) => !b.dead && foes(b.owner, p) && b.owner >= 0 && !calmShield(b) && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < RALLY_REACH2)) continue;
     const z = S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))];
     let tgt = null, bd = Infinity;
     for (const b of S.buildings) {
@@ -3465,15 +3467,32 @@ function aiSiege(p) {
  * Answer a hostile rally flag on our land, or cover an ally who hasn't responded yet.
  * Send up to twice as many warbots and call them back when the raiders are gone. Only commit
  * if we can spare a third more than the raiders, and keep defenders home under a home alert.
+ * Enemy warbots standing on our land under no flag (aiStrays) get the same answer.
  */
 function aiCounterRaid(p) {
   const P = S.players[p];
   P.counters = (P.counters || []).filter((c) => {
-    const theirs = rallyById(c.enemy), ours = rallyById(c.mine);
-    const over = !theirs || !rallyMembers(c.enemy).length || S.time - c.at > 120;
+    const ours = rallyById(c.mine);
+    const over = c.stray ? !aiStrays(p).some((u) => dist2(u.x, u.y, c.stray.x + 0.5, c.stray.y + 0.5) <= 36) || S.time - c.at > 120
+      : !rallyById(c.enemy) || !rallyMembers(c.enemy).length || S.time - c.at > 120;
     if (over && ours) recallRally(c.mine);
     return !over && ours;
   });
+  // Strays: a landing party whose flag came down, or a band that can't walk home across the water, stands about on
+  // our land with no flag to answer. The nearest group to the Command Base gets a counter like a raid's. (Islands
+  // seed 21: four rival warbots stood at a colony's Port from minute 20, its robots kept away from the Port and its
+  // seven warbots never went, and the game ran to the cap.)
+  const strays = P.counters.some((c) => c.stray) ? [] : aiStrays(p), L = getE(P.lander);
+  if (strays.length && L) {
+    let first = null, bd = Infinity;
+    for (const u of strays) { const d = dist2(u.x, u.y, L.x, L.y); if (d < bd) { bd = d; first = u; } }
+    const i = Math.floor(first.x), j = Math.floor(first.y);
+    const raiders = strays.filter((u) => dist2(u.x, u.y, first.x, first.y) <= 36).length;
+    if (rallyAvailable(p, i, j) >= Math.ceil(raiders * 1.3)) {
+      const { sent, rally } = sendToRally(p, i, j, raiders * 2);
+      if (sent) P.counters.push({ stray: { x: i, y: j }, mine: rally.id, at: S.time });
+    }
+  }
   for (const r of S.rallies) {
     if (!foes(r.owner, p) || P.counters.some((c) => c.enemy === r.id)) continue;
     const i = Math.floor(r.x), j = Math.floor(r.y);
@@ -3491,6 +3510,12 @@ function aiCounterRaid(p) {
     const { sent, rally } = sendToRally(p, i, j, raiders * 2);
     if (sent) P.counters.push({ enemy: r.id, mine: rally.id, at: S.time });
   }
+}
+
+/** Enemy warbots out in the open on p's land, under no flag and on no attack (aiCounterRaid). Not the Murmur. */
+function aiStrays(p) {
+  return S.bots.filter((u) => !u.dead && !u.inside && isArmy(u) && foes(u.owner, p) && !isWild(u.owner) &&
+    !(u.task && (u.task.type === 'hold' || u.task.type === 'attack')) && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] === p);
 }
 
 /**
