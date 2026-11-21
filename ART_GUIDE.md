@@ -1896,3 +1896,8 @@ the neck tucks in and the feet trail behind broad wings. Woodland owls have feat
 facial discs. Snowy owls have round heads and barred pale feathers. Both use the same positions for
 their eyes and eyeshine as they scan. Rock lizards have a low, sand-colored body, splayed toes and
 a tapering tail that swings through their darting gait.
+
+The dolphin’s pitch follows its leap, with a swept dorsal fin, moving flukes and a splash fixed
+where it reenters the water. Gulls have gray mantles, black primaries and white wingtip spots.
+They bank while flying and pull their wings in as they approach the ground. Hares alternate a
+crouched body and a long bound. Dry-biome hares have sandy coats. Polar hares keep white coats.

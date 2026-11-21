@@ -276,3 +276,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Redrew the Blackwater heron’s wading, fishing and flight poses. Distinguished the woodland owl’s ear tufts from the snowy owl’s round head and kept eyeshine aligned with the face as each turns.
 - Gave the rock lizard jointed legs, splayed feet and a tapering tail that flexes while it darts.
 - Checked the before-and-after poses at game scale in Chromium, including bird shadows and the owl head turn.
+
+### Dolphin, gull and hare redraws
+
+- Redrew dolphin breaches with a continuous pitch, a flexing tail and a splash fixed at reentry.
+- Gave gulls distinctive flight, landing and standing poses. Redrew hares with a crouch-to-bound motion and separate dry-biome and Polar Caps coats.
+- Verified the marine scheduler and game-scale artwork in Chromium, including dolphin launch and entry phases and the gull shadow.

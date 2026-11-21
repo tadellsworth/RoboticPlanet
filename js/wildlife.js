@@ -1482,18 +1482,86 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
+  /** A coastal gull with a gray mantle, black primaries and pink feet. */
   gull(ctx, x, y, s, m, a, air) {
-    if (air) { faunaWings(ctx, x, y, s * 2.05, m.f, m.ph * 0.72, a.K.col, air, { broad: true, tips: true }); return; }
-    faunaShadow(ctx, x, y, s * 0.35, s * 0.13);
-    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m), 1);
-    ctx.fillStyle = faunaCol(a.K.col[0]); ctx.beginPath();
-    faunaEll(ctx, -s * 0.045, -s * 0.22, s * 0.32, s * 0.16, -0.24);
-    faunaEll(ctx, s * 0.22, -s * 0.37, s * 0.13, s * 0.11, 0.05);
-    ctx.fill();
-    ctx.fillStyle = faunaCol(a.K.col[1]); ctx.beginPath();
-    faunaEll(ctx, -s * 0.14, -s * 0.23, s * 0.22, s * 0.10, -0.22); ctx.fill();
-    ctx.fillStyle = faunaCol('#ca9d4c'); ctx.beginPath();
-    ctx.moveTo(s * 0.32, -s * 0.41); ctx.lineTo(s * 0.50, -s * 0.34); ctx.lineTo(s * 0.33, -s * 0.32); ctx.fill();
+    const [white, mantle, ink] = a.K.col;
+    if (air) {
+      const shadow = air === 'shadow', phase = m.ph * 0.72, beat = Math.cos(phase);
+      const bank = Math.sin(m.ph * 0.24) * 0.16;
+      const landing = m.fly && m.h < 0.40 && m.D && Math.hypot(m.tx - m.x, m.ty - m.y) < m.D * 0.25;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+      for (const side of [-1, 1]) {
+        const span = side * ((0.60 + 0.44 * Math.abs(beat)) * (landing ? 0.82 : 1) + side * bank);
+        const tip = -0.28 - 0.12 * beat - (landing ? 0.13 : 0), wrist = 0.131 - (landing ? 0.07 : 0);
+        ctx.fillStyle = shadow ? '#111' : faunaCol(mantle);
+        ctx.beginPath(); ctx.moveTo(0.181, side * 0.072);
+        ctx.bezierCurveTo(0.273, span * 0.23, 0.221, span * 0.52, wrist, span * 0.56);
+        ctx.quadraticCurveTo(tip + 0.135, span * 0.88, tip, span);
+        ctx.quadraticCurveTo(tip - 0.13, span * 1.02, tip - 0.17, span * 0.81);
+        ctx.quadraticCurveTo(-0.354, span * 0.62, -0.275, span * 0.40);
+        ctx.quadraticCurveTo(-0.307, side * 0.161, -0.271, side * 0.055); ctx.fill();
+        if (shadow) continue;
+        ctx.fillStyle = faunaCol(ink);
+        ctx.beginPath(); ctx.moveTo(tip + 0.146, span * 0.83);
+        ctx.quadraticCurveTo(tip + 0.068, span * 0.963, tip, span);
+        ctx.quadraticCurveTo(tip - 0.13, span * 1.02, tip - 0.17, span * 0.81);
+        ctx.lineTo(tip - 0.124, span * 0.77); ctx.lineTo(tip - 0.063, span * 0.778);
+        ctx.lineTo(tip - 0.023, span * 0.736); ctx.fill();
+        if (s >= 9) {
+          ctx.fillStyle = faunaCol(white);
+          ctx.beginPath(); faunaEll(ctx, tip - 0.039, span * 0.936, 0.030, 0.015, side * -0.28);
+          faunaEll(ctx, tip - 0.096, span * 0.858, 0.021, 0.013, side * -0.37); ctx.fill();
+        }
+      }
+      if (landing && !shadow) {
+        ctx.strokeStyle = faunaCol('#ba807b'); ctx.lineWidth = Math.max(0.036, 0.48 / s);
+        ctx.lineCap = 'round'; ctx.beginPath();
+        for (const side of [-1, 1]) {
+          ctx.moveTo(-0.04, side * 0.046); ctx.lineTo(-0.142, side * 0.158); ctx.lineTo(-0.05, side * 0.185);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = shadow ? '#111' : faunaCol(white);
+      ctx.beginPath(); ctx.moveTo(-0.286, -0.078); ctx.lineTo(-0.542, -0.114);
+      ctx.quadraticCurveTo(-0.590, 0, -0.542, 0.114); ctx.lineTo(-0.286, 0.079);
+      faunaEll(ctx, -0.065, 0, 0.338, 0.114, 0);
+      faunaEll(ctx, landing ? 0.22 : 0.32, 0, 0.124, 0.085, 0); ctx.fill();
+      ctx.fillStyle = shadow ? '#111' : faunaCol('#d8aa56');
+      const bill = landing ? 0.32 : 0.42;
+      ctx.beginPath(); ctx.moveTo(bill - 0.017, -0.034); ctx.lineTo(bill + 0.126, -0.008);
+      ctx.quadraticCurveTo(bill + 0.143, 0.012, bill - 0.014, 0.033); ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    faunaShadow(ctx, x, y, s * 0.44, s * 0.10);
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = faunaCol('#be8780'); ctx.lineWidth = Math.max(0.029, 0.45 / s);
+    ctx.beginPath(); ctx.moveTo(-0.074, -0.186); ctx.lineTo(-0.105, -0.022); ctx.lineTo(0.016, -0.013);
+    ctx.moveTo(0.031, -0.181); ctx.lineTo(0.043, -0.010); ctx.lineTo(0.147, 0); ctx.stroke();
+    ctx.fillStyle = faunaCol(white); ctx.beginPath(); ctx.moveTo(-0.454, -0.229);
+    ctx.bezierCurveTo(-0.296, -0.291, -0.047, -0.433, 0.092, -0.373);
+    ctx.quadraticCurveTo(0.204, -0.346, 0.220, -0.442);
+    ctx.quadraticCurveTo(0.220, -0.581, 0.358, -0.553);
+    ctx.quadraticCurveTo(0.473, -0.529, 0.444, -0.445);
+    ctx.quadraticCurveTo(0.411, -0.395, 0.317, -0.383);
+    ctx.quadraticCurveTo(0.300, -0.183, 0.112, -0.133);
+    ctx.quadraticCurveTo(-0.058, -0.116, -0.236, -0.189);
+    ctx.quadraticCurveTo(-0.358, -0.181, -0.454, -0.229); ctx.fill();
+    ctx.fillStyle = faunaCol(mantle); ctx.beginPath(); ctx.moveTo(-0.371, -0.245);
+    ctx.bezierCurveTo(-0.234, -0.301, -0.011, -0.410, 0.113, -0.340);
+    ctx.quadraticCurveTo(0.199, -0.300, 0.086, -0.252); ctx.quadraticCurveTo(-0.182, -0.228, -0.371, -0.245); ctx.fill();
+    ctx.fillStyle = faunaCol(ink); ctx.beginPath(); ctx.moveTo(-0.387, -0.243);
+    ctx.quadraticCurveTo(-0.294, -0.303, -0.183, -0.321);
+    ctx.quadraticCurveTo(-0.219, -0.261, -0.317, -0.230); ctx.fill();
+    ctx.fillStyle = faunaCol('#d4a752'); ctx.beginPath(); ctx.moveTo(0.416, -0.494);
+    ctx.quadraticCurveTo(0.538, -0.497, 0.582, -0.457);
+    ctx.quadraticCurveTo(0.531, -0.427, 0.417, -0.442); ctx.fill();
+    if (s >= 9) {
+      ctx.fillStyle = faunaCol('#352b28'); ctx.beginPath(); faunaEll(ctx, 0.386, -0.502, 0.016, 0.013, 0); ctx.fill();
+      ctx.fillStyle = faunaCol('#a84f3c'); ctx.beginPath(); faunaEll(ctx, 0.532, -0.451, 0.018, 0.010, 0); ctx.fill();
+    }
     ctx.restore();
   },
 
@@ -1835,21 +1903,70 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** A hare: hunched on its big hind legs, long ears up (laid back as it runs), a white scut; it bounds. */
+  /** A hare folds its legs under a crouch and opens into a long bound, ears pressed back. */
   hare(ctx, x, y, s, m, a) {
-    const K = a.K, col = K.col, d = faunaSide(m), hop = (m.h || 0) * FAUNA.z, run = !!m.mv;
-    ctx.fillStyle = 'rgba(30,40,60,0.3)'; ctx.beginPath(); ctx.ellipse(x + s * 0.04, y, s * 0.28, s * 0.075, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.save(); ctx.translate(x, y - hop); ctx.scale(d, 1);
-    ctx.fillStyle = faunaCol(col[0], K.lift);
-    ctx.beginPath();
-    faunaEll(ctx, 0, -s * 0.15, s * (run ? 0.26 : 0.21), s * 0.13, run ? 0 : -0.2);
-    faunaEll(ctx, -s * 0.1, -s * 0.09, s * 0.12, s * 0.09, 0);
-    faunaEll(ctx, s * 0.2, -s * (run ? 0.2 : 0.27), s * 0.085, s * 0.07, 0.2);
-    faunaEll(ctx, s * (run ? 0.08 : 0.15), -s * (run ? 0.29 : 0.44), s * 0.035, s * 0.14, run ? 1.1 : -0.25);
-    ctx.strokeStyle = faunaCol('#7c766c', K.lift, 0.55); ctx.lineWidth = Math.max(0.8, s * 0.025); ctx.stroke(); // (white on the snow: a fine outline)
-    ctx.fill();
-    ctx.fillStyle = faunaCol(col[1], K.lift); ctx.beginPath(); faunaEll(ctx, -s * 0.22, -s * 0.17, s * 0.05, s * 0.05, 0); ctx.fill();
-    if (s > 6) { ctx.fillStyle = faunaCol(col[2], K.lift); ctx.beginPath(); faunaEll(ctx, s * (run ? 0.0 : 0.11), -s * (run ? 0.3 : 0.56), s * 0.02, s * 0.03, 0); ctx.fill(); }
+    const { col, lift } = a.K, snow = biome() === 'polar', moving = !!m.mv;
+    const [coat, pale, dark] = snow ? col : ['#aa7f59', '#e5c9a3', '#4f3e36'];
+    const gather = moving ? 0.5 + 0.5 * Math.cos(m.ph * 2) : 1;
+    const reach = 1 - gather, hop = (m.h || 0) * FAUNA.z;
+    faunaShadow(ctx, x, y, s * (0.33 + reach * 0.08), s * 0.075);
+    ctx.save(); ctx.translate(x, y - hop); ctx.scale(faunaSide(m) * s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    for (const far of [true, false]) {
+      const dy = far ? -0.043 : 0, dx = far ? 0.050 : 0;
+      const fore = 0.21 + reach * 0.24 + dx;
+      const hind = -0.18 - reach * 0.40 + dx;
+      ctx.strokeStyle = faunaCol(far ? (snow ? '#a7a39f' : '#72573e') : coat, lift);
+      ctx.lineWidth = far ? 0.044 : 0.053;
+      ctx.beginPath(); ctx.moveTo(0.164, -0.171);
+      ctx.quadraticCurveTo(0.142 + reach * 0.23, -0.086 + dy, fore, -0.018 - reach * 0.048 + dy);
+      ctx.lineTo(fore + 0.058, -0.016 - reach * 0.048 + dy); ctx.stroke();
+      ctx.lineWidth = far ? 0.068 : 0.091;
+      ctx.beginPath(); ctx.moveTo(-0.228, -0.183);
+      ctx.quadraticCurveTo(-0.292 - reach * 0.10, -0.13, -0.283 - reach * 0.22, -0.045 + dy);
+      ctx.lineTo(hind, -0.014 - reach * 0.040 + dy);
+      ctx.lineTo(hind + 0.077 - 0.118 * reach, -0.016 - reach * 0.048 + dy); ctx.stroke();
+    }
+
+    ctx.fillStyle = faunaCol(pale, lift); ctx.beginPath();
+    faunaEll(ctx, -0.345 - reach * 0.035, -0.223, 0.078, 0.047, -0.65); ctx.fill();
+    const fur = ctx.createLinearGradient(-0.07, -0.37, 0.04, -0.11);
+    fur.addColorStop(0, faunaCol(snow ? '#e1dddd' : '#8c664a', lift));
+    fur.addColorStop(0.49, faunaCol(coat, lift)); fur.addColorStop(1, faunaCol(pale, lift));
+    ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-0.347 - reach * 0.053, -0.217);
+    ctx.bezierCurveTo(-0.330, -0.349 - gather * 0.045, -0.184, -0.401 + reach * 0.107, -0.029, -0.309 + reach * 0.031);
+    ctx.quadraticCurveTo(0.140, -0.315, 0.238 + reach * 0.064, -0.252);
+    ctx.quadraticCurveTo(0.257, -0.165, 0.171, -0.129);
+    ctx.bezierCurveTo(0.044, -0.096 - reach * 0.037, -0.100, -0.163, -0.207, -0.111);
+    ctx.quadraticCurveTo(-0.348, -0.089, -0.347 - reach * 0.053, -0.217); ctx.fill();
+
+    const hx = 0.231 + reach * 0.099, hy = -0.309 + reach * 0.077;
+    ctx.translate(hx, hy);
+    const tuck = moving ? 0.57 + reach * 0.58 : 0.12;
+    for (const far of [true, false]) {
+      ctx.save(); ctx.translate(far ? 0.015 : -0.047, far ? -0.047 : -0.031);
+      ctx.rotate(-tuck - (far ? 0.03 : 0.16));
+      ctx.fillStyle = faunaCol(far ? (snow ? '#c3bfc0' : '#886849') : coat, lift);
+      ctx.beginPath(); ctx.moveTo(-0.034, 0.037);
+      ctx.bezierCurveTo(-0.080, -0.096, -0.056, -0.260, -0.028, -0.325);
+      ctx.quadraticCurveTo(0.011, -0.353, 0.033, -0.273);
+      ctx.quadraticCurveTo(0.062, -0.126, 0.040, 0.037); ctx.fill();
+      ctx.fillStyle = faunaCol(dark, lift, 0.83); ctx.beginPath(); faunaEll(ctx, -0.019, -0.292, 0.031, 0.048, 0.12); ctx.fill();
+      if (!far && s >= 10) {
+        ctx.fillStyle = faunaCol(snow ? '#bd9c9f' : '#c39783', lift); ctx.beginPath();
+        faunaEll(ctx, -0.002, -0.147, 0.023, 0.093, -0.03); ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.fillStyle = faunaCol(coat, lift); ctx.beginPath(); ctx.moveTo(-0.100, -0.019);
+    ctx.bezierCurveTo(-0.064, -0.106, 0.034, -0.095, 0.089, -0.061);
+    ctx.quadraticCurveTo(0.109, -0.013, 0.157, 0.001);
+    ctx.quadraticCurveTo(0.164, 0.042, 0.087, 0.060);
+    ctx.quadraticCurveTo(-0.031, 0.078, -0.100, -0.019); ctx.fill();
+    ctx.fillStyle = faunaCol(pale, lift); ctx.beginPath(); faunaEll(ctx, 0.089, 0.036, 0.057, 0.025, 0); ctx.fill();
+    ctx.fillStyle = faunaCol('#322a26', lift); ctx.beginPath();
+    faunaEll(ctx, 0.046, -0.033, 0.019, 0.017, 0); faunaEll(ctx, 0.145, 0.009, 0.016, 0.012, 0); ctx.fill();
     ctx.restore();
   },
 
@@ -2795,13 +2912,14 @@ function drawSeaLife(ctx, ox, oy, z, v0, v1) {
       if (kind === 'whale') drawWhaleBlow(ctx, ox + x * z, oy + y * z, z, angle, age);
       else {
         const dolphin = kind === 'dolphin', spacing = dolphin ? 0.12 : 0.18;
+        const speed = width * 1.8 / (duration - 0.65);
         for (let k = 0; k < (dolphin ? 2 : 3); k++) {
           const local = age - k * (dolphin ? 0.48 : 0.23);
           if (local <= 0 || local >= duration - 0.65) continue;
-          const run = (local / (duration - 0.65) - 0.5) * width * 1.8 - k * spacing;
+          const run = local * speed - width * 0.9 - k * spacing;
           const side = (k % 2 ? -1 : 1) * k * spacing;
           const sx = x + dx * run - dy * side, sy = y + dy * run + dx * side;
-          if (marineWater(sx, sy)) drawSeaLeap(ctx, ox + sx * z, oy + sy * z, z, angle, local, dolphin);
+          if (marineWater(sx, sy)) drawSeaLeap(ctx, ox + sx * z, oy + sy * z, z, angle, local, dolphin, speed);
         }
       }
       budget--;
@@ -2819,39 +2937,83 @@ function marineRipple(ctx, x, y, z, p, strength) {
   ctx.restore();
 }
 
-function drawSeaLeap(ctx, x, y, z, angle, time, dolphin) {
-  const cycle = dolphin ? 1.48 : 0.83, flight = dolphin ? 0.72 : 0.40;
-  const t = time % cycle, p = t / flight;
-  if (p >= 1) { marineRipple(ctx, x, y, z, Math.min(1, (t - flight) * 2.7), dolphin ? 0.85 : 0.6); return; }
-  const rise = Math.sin(p * Math.PI) * z * (dolphin ? 0.48 : 0.24), size = z * (dolphin ? 0.47 : 0.21);
+function drawSeaLeap(ctx, x, y, z, angle, time, dolphin, speed) {
+  if (dolphin) { drawDolphinLeap(ctx, x, y, z, angle, time, speed); return; }
+  const t = time % 0.83, p = t / 0.40;
+  if (p >= 1) { marineRipple(ctx, x, y, z, Math.min(1, (t - 0.40) * 2.7), 0.6); return; }
+  const rise = Math.sin(p * Math.PI) * z * 0.24, size = z * 0.21;
   if (p < 0.2 || p > 0.8) marineRipple(ctx, x, y, z, p < 0.2 ? p * 2 : (p - 0.8) * 2, 0.84);
-  ctx.save();
-  ctx.translate(x, y - rise);
+  ctx.save(); ctx.translate(x, y - rise);
   const left = Math.cos(angle) < 0;
   if (left) ctx.scale(-1, 1);
   ctx.rotate(Math.sin(angle) * (left ? -0.43 : 0.43) + (p - 0.5) * 0.99);
   ctx.scale(size, size);
   const g = ctx.createLinearGradient(0, -0.26, 0, 0.25);
-  g.addColorStop(0, dolphin ? '#244858' : '#427585');
-  g.addColorStop(0.52, dolphin ? '#789fa7' : '#a4cbbe');
-  g.addColorStop(1, '#d6e4d4');
-  ctx.fillStyle = g;
-  if (!dolphin) {
-    ctx.beginPath(); ctx.moveTo(-0.24, 0);
-    ctx.quadraticCurveTo(0.04, -0.36, 0.43, -0.04);
-    ctx.quadraticCurveTo(0.2, 0.27, -0.24, 0.09);
-    ctx.lineTo(-0.61, 0.24); ctx.lineTo(-0.48, 0.04); ctx.lineTo(-0.64, -0.17);
-    ctx.closePath(); ctx.fill(); ctx.restore(); return;
+  g.addColorStop(0, '#427585'); g.addColorStop(0.52, '#a4cbbe'); g.addColorStop(1, '#d6e4d4');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-0.24, 0);
+  ctx.quadraticCurveTo(0.04, -0.36, 0.43, -0.04);
+  ctx.quadraticCurveTo(0.2, 0.27, -0.24, 0.09);
+  ctx.lineTo(-0.61, 0.24); ctx.lineTo(-0.48, 0.04); ctx.lineTo(-0.64, -0.17);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+/** A dolphin follows the tangent of its leap, with its tail and fins kept in the same moving profile. */
+function drawDolphinLeap(ctx, x, y, z, angle, time, speed) {
+  const cycle = 1.48, flight = 0.72, t = time % cycle;
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  if (t >= flight) {
+    // The entry splash stays at the point where it hit the water.
+    const dt = t - flight, px = x - dx * speed * z * dt, py = y - dy * speed * z * dt;
+    marineRipple(ctx, px, py, z, Math.min(1, dt * 2.3), 0.85);
+    if (dt < 0.24) {
+      const fade = dt / 0.24;
+      ctx.save(); ctx.globalAlpha *= 0.68 * (1 - fade);
+      ctx.strokeStyle = '#d9f2ed'; ctx.lineWidth = Math.max(0.55, z * 0.014); ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const side of [-1, 1]) {
+        ctx.moveTo(px + side * z * 0.044, py);
+        ctx.quadraticCurveTo(px + side * z * (0.14 + fade * 0.12), py - z * (0.18 - fade * 0.07), px + side * z * (0.21 + fade * 0.19), py - z * 0.018);
+      }
+      ctx.stroke(); ctx.restore();
+    }
+    return;
   }
-  ctx.beginPath(); ctx.moveTo(-0.42, 0.02);
-  ctx.bezierCurveTo(-0.20, -0.13, 0.10, -0.35, 0.37, -0.21);
-  ctx.quadraticCurveTo(0.45, -0.18, 0.44, -0.07);
-  ctx.quadraticCurveTo(0.64, -0.03, 0.54, 0.045);
-  ctx.quadraticCurveTo(0.18, 0.08, -0.43, 0.09);
-  ctx.lineTo(-0.66, 0.21); ctx.lineTo(-0.57, 0.045); ctx.lineTo(-0.72, -0.12); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#365d6d';
-  ctx.beginPath(); ctx.moveTo(-0.18, -0.18);
-  ctx.quadraticCurveTo(-0.28, -0.40, -0.06, -0.39); ctx.lineTo(0.12, -0.23); ctx.fill();
+
+  const p = t / flight, phase = p * Math.PI, height = 0.50;
+  const climb = Math.cos(phase), rise = Math.sin(phase) * z * height;
+  const vy = speed * dy - height * Math.PI * climb / flight;
+  const pitch = clamp(Math.atan2(vy, Math.max(0.14, speed * Math.abs(dx))), -1.18, 1.18);
+  const tailY = 0.038 + 0.123 * Math.sin((p - 0.04) * 2 * Math.PI);
+  if (p < 0.19) marineRipple(ctx, x - dx * speed * z * t, y - dy * speed * z * t, z, p * 2.8, 0.75);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x - z * 1.25, y - z * 1.65, z * 2.5, z * 1.65); ctx.clip();
+  ctx.translate(x, y - rise); ctx.scale(dx < 0 ? -1 : 1, 1);
+  ctx.rotate(pitch); ctx.scale(z * 0.48, z * 0.48);
+
+  ctx.fillStyle = '#315968'; ctx.beginPath(); ctx.moveTo(-0.158, -0.193);
+  ctx.quadraticCurveTo(-0.181, -0.357, -0.309, -0.453);
+  ctx.quadraticCurveTo(-0.091, -0.449, 0.136, -0.171); ctx.fill();
+  ctx.fillStyle = '#426f7c'; ctx.beginPath(); ctx.moveTo(-0.568, tailY - 0.024);
+  ctx.quadraticCurveTo(-0.738, tailY - 0.032 - climb * 0.07, -0.875, tailY + 0.051);
+  ctx.quadraticCurveTo(-0.821, tailY + 0.076, -0.766, tailY + 0.078);
+  ctx.quadraticCurveTo(-0.821, tailY + 0.133, -0.825, tailY + 0.183);
+  ctx.quadraticCurveTo(-0.711, tailY + 0.157, -0.568, tailY + 0.028); ctx.fill();
+
+  const skin = ctx.createLinearGradient(-0.05, -0.29, 0.05, 0.165);
+  skin.addColorStop(0, '#2b5366'); skin.addColorStop(0.56, '#789fa7'); skin.addColorStop(1, '#d0dfd7');
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.moveTo(-0.588, tailY - 0.028);
+  ctx.bezierCurveTo(-0.350, -0.080, -0.099, -0.298, 0.241, -0.265);
+  ctx.bezierCurveTo(0.407, -0.255, 0.477, -0.149, 0.476, -0.076);
+  ctx.lineTo(0.622, -0.034); ctx.quadraticCurveTo(0.673, -0.014, 0.622, 0.012);
+  ctx.lineTo(0.477, 0.028);
+  ctx.bezierCurveTo(0.283, 0.167, -0.010, 0.136, -0.225, 0.096);
+  ctx.quadraticCurveTo(-0.463, tailY + 0.071, -0.588, tailY + 0.030); ctx.fill();
+  ctx.fillStyle = '#537d87'; ctx.beginPath(); ctx.moveTo(0.043, 0.037);
+  ctx.quadraticCurveTo(0.005, 0.167, -0.157 - p * 0.07, 0.248);
+  ctx.quadraticCurveTo(-0.040, 0.234, 0.190, 0.083); ctx.fill();
+  if (z >= 22) {
+    ctx.fillStyle = '#203b44'; ctx.beginPath(); faunaEll(ctx, 0.395, -0.079, 0.027, 0.018, -0.1); ctx.fill();
+  }
   ctx.restore();
 }
 
