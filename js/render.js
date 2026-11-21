@@ -1224,8 +1224,10 @@ function paintTile(ctx, i, j, other, blend) {
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
-  if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
+  const aeG = terr === T_GROUND && S.green ? S.green[t] || 0 : 0; // (an Atmosphere Engine's land: drawGreen)
+  if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t] && aeG < 2) drawFertile(ctx, i, j, x, y);
   else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
+  if (aeG && !S.ramp[t]) drawGreen(ctx, i, j, x, y, t, aeG);
   if (terr === T_GROUND && !S.burnt?.[t] && SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon && canyonMeadow(t)) {
     const green = (S.fert[t] ? 0.46 : 0.24) * (0.75 + fbm(i / 3, j / 3, S.seed % 100000, 2) * 0.5);
     ctx.fillStyle = `rgba(101,153,57,${green})`;
@@ -2835,6 +2837,43 @@ function drawFertile(ctx, i, j, x, y) {
 }
 
 /**
+ * The land an Atmosphere Engine changed (S.green: the stage that reached it; see atmosPaint), drawn in code: Calm, the dust
+ * settled (a little cleaner and darker); Rain, damp dark earth with the first sprouts; Green, grass; Garden, deep grass
+ * with flowers and, here and there, a young tree. Soft-edged where it meets unchanged ground, mottled so the circle
+ * doesn't read as tiles.
+ */
+function drawGreen(ctx, i, j, x, y, t, lv) {
+  const G = (di, dj) => (inMap(i + di, j + dj) ? S.green[tIdx(i + di, j + dj)] || 0 : 0);
+  const n = 0.75 + fbm(i / 3.5, j / 3.5, (S.seed % 100000) + 77, 2) * 0.5, h = (k) => hash2(i * 7 + k, j * 13 - k, 9101);
+  const edge = [G(-1, 0), G(1, 0), G(0, -1), G(0, 1)].filter((v) => v < Math.min(lv, 3)).length;
+  const k = edge ? 0.7 : 1;
+  if (lv === 1) { ctx.fillStyle = `rgba(40,46,38,${0.1 * n * k})`; ctx.fillRect(x, y, TP, TP); return; }
+  // Rain: damp, darker earth; the first sprouts
+  ctx.fillStyle = `rgba(52,42,26,${0.32 * n * k})`; ctx.fillRect(x, y, TP, TP);
+  if (lv === 2) {
+    ctx.fillStyle = `rgba(110,170,70,${0.55 * k})`;
+    for (let q = 0; q < 5; q++) if (h(q) < 0.6) ctx.fillRect(x + 2 + h(q + 10) * (TP - 4), y + 2 + h(q + 20) * (TP - 4), 2, 2);
+    return;
+  }
+  // Green and Garden: grass, mottled, with blades
+  ctx.fillStyle = lv >= 4 ? `rgba(74,140,52,${0.66 * n * k})` : `rgba(98,152,60,${0.5 * n * k})`;
+  ctx.fillRect(x, y, TP, TP);
+  ctx.fillStyle = lv >= 4 ? 'rgba(40,92,30,0.5)' : 'rgba(60,110,40,0.42)';
+  for (let q = 0; q < 9; q++) { const bx = x + 1 + h(q + 30) * (TP - 3), by = y + 2 + h(q + 40) * (TP - 5); ctx.fillRect(bx, by, 1.5, 3); }
+  if (lv < 4) return;
+  // the Garden: flowers, and now and then a young tree (its shade, its crown)
+  const fl = ['#f4e46a', '#ffffff', '#e48ab0', '#a8c8ff'];
+  for (let q = 0; q < 4; q++) if (h(q + 50) < 0.55) { ctx.fillStyle = fl[Math.floor(h(q + 60) * 4)]; ctx.fillRect(x + 2 + h(q + 70) * (TP - 5), y + 2 + h(q + 80) * (TP - 5), 2, 2); }
+  if (h(99) < 0.09 && !S.road[t] && !S.res[t] && !S.bAt[t]) {
+    const tx = x + 8 + h(91) * 16, ty = y + 10 + h(92) * 12, r = 6 + h(93) * 4;
+    ctx.fillStyle = 'rgba(10,30,8,0.35)'; ctx.beginPath(); ctx.ellipse(tx + 3, ty + r * 0.6, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3d22'; ctx.fillRect(tx - 1, ty - 2, 2, r * 0.8);
+    ctx.fillStyle = '#2f6e2a'; ctx.beginPath(); ctx.arc(tx, ty - r * 0.6, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,190,80,0.55)'; ctx.beginPath(); ctx.arc(tx - r * 0.3, ty - r * 0.9, r * 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
  * Burned soil (fertile soil scorched for good by napalm or a Torch: see scorchSoil): charred black earth, the old
  * furrows burnt darker, flecked with grey ash and a few rust-brown cinders. Drawn in code (no art).
  */
@@ -3073,6 +3112,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
   if (type === 'deepcore') { drawDeep(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'atmos') { drawAtmos(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6673,6 +6713,7 @@ function render(dtReal) {
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
       if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
+      if (e.type === 'atmos' && e.built) { const ga0 = ctx.globalAlpha, M = ATMOS_MARKS; ctx.globalAlpha = ga0 * 0.55; pool(ox + pc.x * z, oy + (pc.y + 0.6) * z, z * 2.8, '#f4f8ff'); if (e.working || (e.aeStage || 0) >= 2) { ctx.globalAlpha = ga0 * 0.5; pool(ox + (pc.x + M.throat[0]) * z, oy + (pc.y + M.throat[1] + 0.8) * z, z * 2.4, '#8fe8ff'); } ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Atmosphere Engine: its floods, and the plume's cyan from its throat)
       if (e.type === 'deepcore' && e.built) { const ga0 = ctx.globalAlpha, M = DEEP_MARKS, gk = deepGlow(e.dcStage || 1); ctx.globalAlpha = ga0 * 0.5; pool(ox + pc.x * z, oy + (pc.y - 0.3) * z, z * 2.2, '#f4f8ff'); if (gk > 0) { ctx.globalAlpha = ga0 * gk; pool(ox + (pc.x + M.shaft[0]) * z, oy + (pc.y + M.shaft[1]) * z, z * 1.8, '#a46cff'); } ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Deep Core: its floods, and the violet of its shaft as deep as it is)
       if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
       pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
@@ -6767,6 +6808,7 @@ function render(dtReal) {
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
   drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
   drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
+  drawAtmosPlumes(ctx, ox, oy, z); // (the Atmosphere Engines: their plumes, lit at night, and the rain round them)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (typeof duskSky === 'function') duskSky(ctx, ox, oy, z); // (the sunset's grade, glare, shafts, the Ring and the motes over everything standing: js/sunset.js)
@@ -6843,6 +6885,7 @@ function render(dtReal) {
   }
 
   drawRopeways(ctx, ox, oy, z);
+  if (S.mission && S.mission.hullX != null) drawPathfinderHull(ctx, ox, oy, z); // (Seed Vault: the Pathfinder's hull, half-buried)
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
@@ -7984,6 +8027,14 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
     ctx.beginPath(); ctx.arc(cx, cy, (CITY.land + 0.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= 0.7;
     return;
   }
+  if (def.atmos) { // (the Atmosphere Engine: its four stages' circles round its middle, and its Generators' reach)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]), st = b && BDEFS[b.type].atmos ? b.aeStage || 0 : 0;
+    ctx.lineWidth = 1.5; ctx.setLineDash([z * 0.4, z * 0.25]);
+    for (let k = 0; k < 4; k++) { ctx.strokeStyle = ['rgba(200,225,240,0.75)', 'rgba(127,214,255,0.8)', 'rgba(143,224,138,0.8)', 'rgba(63,191,90,0.85)'][k]; ctx.globalAlpha *= k < st ? 1 : 0.5; ctx.beginPath(); ctx.arc(cx, cy, ATMOS.r[k] * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= k < st ? 1 : 0.5; }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.beginPath(); ctx.arc(cx, cy, (ATMOS.reach + def.foot / 2) * z, 0, Math.PI * 2); ctx.stroke();
+    return;
+  }
   if (def.dome || def.lance) {
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
     if (def.dome) { ctx.fillStyle = 'rgba(120,200,255,0.07)'; ctx.strokeStyle = 'rgba(150,215,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]); ctx.beginPath(); ctx.arc(cx, cy, DOME.radius * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); }
@@ -8163,6 +8214,24 @@ function drawCrate(ctx, cx, cy, s, g) {
   ctx.beginPath(); ctx.moveTo(cx - s / 2, cy - s / 2); ctx.lineTo(cx + s / 2, cy + s / 2); ctx.stroke();
   ctx.fillStyle = (GOOD[g] && GOOD[g].color) || '#fff';
   ctx.beginPath(); ctx.arc(cx, cy, s * 0.24, 0, Math.PI * 2); ctx.fill();
+}
+
+/**
+ * The Pathfinder's hull (a mission landmark, Seed Vault): a long white lander hull lying half-buried in the dunes, its
+ * Accord stripe faded, a vault hatch open in its side, drift sand banked against it. Drawn in code.
+ */
+function drawPathfinderHull(ctx, ox, oy, z) {
+  const x = ox + (S.mission.hullX + 0.5) * z, y = oy + (S.mission.hullY + 0.5) * z, w = z * 2.6, h = z * 0.95;
+  ctx.save();
+  ctx.fillStyle = 'rgba(30,20,10,0.3)'; ctx.beginPath(); ctx.ellipse(x + z * 0.2, y + z * 0.35, w * 1.05, h * 0.75, -0.25, 0, Math.PI * 2); ctx.fill();
+  ctx.translate(x, y); ctx.rotate(-0.25);
+  const g = ctx.createLinearGradient(0, -h, 0, h);
+  g.addColorStop(0, '#f2f0ea'); g.addColorStop(0.55, '#c9c5bb'); g.addColorStop(1, '#8f897d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, Math.PI, 0); ctx.lineTo(w, h * 0.15); ctx.lineTo(-w, h * 0.15); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(90,110,150,0.55)'; ctx.fillRect(-w * 0.75, -h * 0.42, w * 1.4, h * 0.12); // (the faded Accord stripe)
+  ctx.fillStyle = '#2a2622'; ctx.fillRect(-w * 0.12, -h * 0.25, w * 0.26, h * 0.35); // (the vault hatch, open)
+  ctx.fillStyle = 'rgba(214,186,140,0.9)'; ctx.beginPath(); ctx.ellipse(-w * 0.55, h * 0.15, w * 0.6, h * 0.35, 0.1, Math.PI, 0); ctx.fill(); ctx.beginPath(); ctx.ellipse(w * 0.7, h * 0.18, w * 0.45, h * 0.3, -0.1, Math.PI, 0); ctx.fill();
+  ctx.restore();
 }
 
 /** Loot piles: a few crates (more for a bigger pile) with a count, fading in their last half minute. */
@@ -10677,6 +10746,72 @@ function drawLift(ctx, cx, cy, s, owner, b) {
 }
 
 /*
+ * The Atmosphere Engine (the owner's look A, the Rain Tower): its pad, its cooling-tower shell, the intake fans round its
+ * foot and its lit waist band (atmos@T, every time of day), drawn whole; the plume, its night light and the rain are drawn
+ * in code over everything standing (drawAtmosPlumes): the plume is the whole idea, you can see from anywhere that this
+ * thing makes weather.
+ */
+/** Where the Engine's parts are on screen, in tiles from its square's middle (tools/install_atmos.py prints them). */
+const ATMOS_MARKS = { rimL: [-1.016, -2.005], rimR: [1.294, -2.005], throat: [0.137, -2.087], band: [0.135, -0.607], bandL: [-0.882, -1.47], bandR: [1.144, -1.47], throatW: 1.0 };
+function drawAtmos(ctx, cx, cy, s, owner, b) {
+  const art = artFor('atmos', owner);
+  if (!art) { drawMegaPlain(ctx, 'atmos', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+}
+/** Every Atmosphere Engine's plume on the screen, drifting downwind; at night lit pale cyan from the throat, its waist band and rim lights; rain round it from stage 2. */
+function drawAtmosPlumes(ctx, ox, oy, z) {
+  const night = TOD.active ? Math.min(1, TOD.state.lights || 0) : 0, mul = TOD.active && TOD.state.mul ? TOD.state.mul : [1, 1, 1], M = ATMOS_MARKS;
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'atmos' || !b.built) continue;
+    const c = bCentre(b), X = ox + c.x * z, Y = oy + c.y * z;
+    if (X < -z * 14 || X > R.w + z * 14 || Y < -z * 4 || Y - z * 16 > R.h + z * 4) continue;
+    const tx = X + M.throat[0] * z, ty = Y + M.throat[1] * z, on = b.working ? 1 : 0.35, st = b.aeStage || 1, dark = nightDark(b);
+    ctx.save();
+    // The plume: puffs rising out of the throat, swelling and drifting east as they go, thinner when it stops.
+    const N = gfx().fx < 1 ? 7 : 12, H = z * (6 + 2 * on), lit = dark ? 0 : night * 0.75, cy = [150, 215, 235], tint = (v, k) => Math.round(clamp(v * mul[k] * (1 - lit) + cy[k] * (0.55 + 0.45 * v / 255) * lit, 0, 255)); // (at night lit pale cyan from the throat)
+    for (let q = N - 1; q >= 0; q--) {
+      const p = ((R.time * (0.05 + 0.03 * on) + q / N + b.id * 0.137) % 1), w = Math.pow(p, 1.4);
+      const px = tx + w * z * 3.2 + Math.sin(R.time * 0.6 + q * 1.7) * z * 0.12 * p, py = ty - p * H;
+      const r = z * M.throatW * (0.75 + 1.9 * p) * (0.75 + 0.25 * on), a = Math.pow(1 - p, 1.3) * (p < 0.08 ? p / 0.08 : 1) * (0.42 + 0.25 * on);
+      const g = ctx.createRadialGradient(px - r * 0.25, py - r * 0.3, r * 0.1, px, py, r);
+      g.addColorStop(0, `rgba(${tint(250, 0)},${tint(251, 1)},${tint(253, 2)},${a})`); g.addColorStop(0.65, `rgba(${tint(228, 0)},${tint(232, 1)},${tint(238, 2)},${a * 0.75})`); g.addColorStop(1, `rgba(${tint(215, 0)},${tint(220, 1)},${tint(228, 2)},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    if (night > 0.05 && !dark) {
+      // lit from inside the throat: pale cyan, strongest at its foot
+      const k = night * (0.35 + 0.65 * on), gr = z * 2.6, g = ctx.createRadialGradient(tx, ty - z * 0.6, 0, tx, ty - z * 0.8, gr);
+      g.addColorStop(0, `rgba(170,240,255,${0.55 * k})`); g.addColorStop(0.5, `rgba(90,200,240,${0.22 * k})`); g.addColorStop(1, 'rgba(60,160,220,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(tx + z * 0.4, ty - z * 1.2, gr, gr * 1.3, 0, 0, Math.PI * 2); ctx.fill();
+      // the waist band's glow: the front of the ring round its waist
+      const bcx = X + (M.bandL[0] + M.bandR[0]) / 2 * z, bcy = Y + M.bandL[1] * z, brx = (M.bandR[0] - M.bandL[0]) / 2 * z, bry = (M.band[1] - M.bandL[1]) * z;
+      ctx.strokeStyle = `rgba(120,220,255,${0.35 * night})`; ctx.lineWidth = Math.max(2, z * 0.22);
+      ctx.beginPath(); ctx.ellipse(bcx, bcy, brx, bry, 0, 0.08, Math.PI - 0.08); ctx.stroke();
+      // red lights on the rim, blinking together
+      if (Math.floor(R.time * 1.2 + b.id) % 2 === 0) for (const m of ['rimL', 'rimR']) {
+        const x = X + M[m][0] * z, y = Y + M[m][1] * z, r = Math.max(2, z * 0.16), gg = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+        gg.addColorStop(0, `rgba(255,90,60,${0.9 * night})`); gg.addColorStop(1, 'rgba(255,40,20,0)');
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, r * 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // Rain round it at night, from stage 2: soft drizzle falling in its circle near the tower.
+    if (st >= 2 && night > 0.3 && gfx().fx >= 1) {
+      const RR = Math.min(ATMOS.r[st - 1], 7) * z, n = 50;
+      ctx.strokeStyle = `rgba(190,215,235,${0.28 * night})`; ctx.lineWidth = Math.max(1, z * 0.025);
+      ctx.beginPath();
+      for (let q = 0; q < n; q++) {
+        const a = hash2(b.id, q, 3) * Math.PI * 2, d = Math.sqrt(hash2(b.id, q, 4)) * RR, f = (R.time * 0.9 + hash2(b.id, q, 5)) % 1;
+        const x = X + Math.cos(a) * d, y = Y + Math.sin(a) * d * 0.8 - (1 - f) * z * 1.2;
+        ctx.moveTo(x, y); ctx.lineTo(x - z * 0.05, y + z * 0.3);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/*
  * The Deep Core (the owner's look A, the Headframe): its pad and winding tower (deepcore@T), and over it the two winding
  * wheels (deepcore-work-0…7, through 60 degrees: six spokes), turning while it works and standing where they stopped
  * when it doesn't. In code: the violet glow rising out of the shaft once it reaches the buried ringfall (stage 2),
@@ -11050,6 +11185,10 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
     ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#41464c'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.35, s * 0.15, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'atmos') { // (a cooling-tower shell, wider at the foot, its throat dark)
+    ctx.fillStyle = '#cfcac0'; ctx.beginPath(); ctx.moveTo(cx - s * 1.3, cy + s * 0.9); ctx.quadraticCurveTo(cx - s * 0.7, cy - s * 0.6, cx - s * 0.95, cy - s * 2.0); ctx.lineTo(cx + s * 0.95, cy - s * 2.0); ctx.quadraticCurveTo(cx + s * 0.7, cy - s * 0.6, cx + s * 1.3, cy + s * 0.9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a3f46'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 2.0, s * 0.95, s * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3aa8d8'; ctx.lineWidth = Math.max(1.5, s * 0.08); ctx.beginPath(); ctx.moveTo(cx - s * 0.72, cy - s * 0.7); ctx.lineTo(cx + s * 0.72, cy - s * 0.7); ctx.stroke();
   } else if (type === 'deepcore') { // (a red winding tower over a dark shaft, two wheels at its top)
     ctx.fillStyle = '#16121c'; ctx.fillRect(cx - s * 0.35, cy - s * 0.25, s * 0.7, s * 0.5);
     ctx.strokeStyle = '#a8342a'; ctx.lineWidth = Math.max(1.5, s * 0.1);

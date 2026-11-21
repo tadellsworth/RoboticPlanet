@@ -1058,6 +1058,26 @@ const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructio
  */
 const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ ore: 6 }, { ore: 8, crystal: 3 }, { ore: 10, crystal: 4, uranium: 0.25 }],
   cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1800 };
+/*
+ * The Atmosphere Engine (BDEFS.atmos; the owner's look A, the Rain Tower, Nov 21 2026): a 4 x 4 cooling-tower shell that
+ * slowly changes the weather and the land round it, finishing the Pathfinder's work. It opens `at` s into a free-play game
+ * (a mission that teaches it: at once). Power: `gens` Generators with Fuel within `reach` tiles of its square, the Engine
+ * taking a Fuel from each every `genFuel` s (b.aeFuel: s left of the Fuel it last took; b.aeGens their ids), or a Nuclear
+ * Reactor there burning a Uranium every `uEvery` s (b.aeU). Without power it stops growing; what it changed stays.
+ * Its stages (b.aeStage, from b.aeT, s of powered work: `stages`): 1 Calm, 2 Rain, 3 Green, 4 Garden, reaching `r` tiles
+ * from its middle. Calm: no dust storm inside (bots at full speed). Rain: barren ground turns fertile (S.fert) and the
+ * Bloom stops spreading (no tunnel is dug in). Green: crops there grow `crop` times as fast and the Bloom withers back a
+ * tile every `wither` s (tunnels and Bloom veins). Garden: no Bloom, no Murmur exit, and groves seed themselves (one every
+ * `seedEvery` s, `groves` at most). The land each stage reaches is marked in S.green (tile: 1 to 4, kept for good), spread
+ * out from its foot at `spread` tiles a second. Everyone's within its circle: the weather, not who owns the ground.
+ * The Murmur: they go for it first every night; each new stage, the next night `sappers[stage - 1]` Sappers dig in under it.
+ * Destroyed: what is green stays green; its calm and its hold on the Bloom shrink back to nothing over `fade` s (S.aeFade).
+ * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's on a barren home (The Rust,
+ * Cinderlands) or with Planetary events on, from `aiAt` s; the Herald sends Torches to burn a foe's greening.
+ */
+const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12, 16, 20], stages: [0, 360, 960, 1680], spread: 0.25,
+  crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2 };
+const ATMOS_STAGE_NAMES = ['Calm', 'Rain', 'Green', 'Garden'];
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4, warm: 30,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1402,6 +1422,11 @@ const BDEFS = {
     desc: 'A huge drill into the crust under a red winding tower: it slowly brings up Ore, Crystal and a little Uranium, more the deeper it goes, and never runs dry. It goes deeper by itself while it has power: a Generator with Fuel within 4 tiles (it burns a Fuel a minute) or a Nuclear Reactor there (no Uranium used). Stage 1, at once: 6 Ore a minute. Stage 2, the buried ringfall, after 6 minutes of power: 8 Ore and 3 Crystal. Stage 3, the deep seam, 10 minutes later: 10 Ore, 4 Crystal and a Uranium every 4 minutes. It holds 30 of each; Haulers carry them off. Without power it stops but keeps its depth; below half its armor it goes no deeper and brings up half. Every depth is heard below: it draws the Murmur like a Generator, the night after stage 2 a bigger raid comes for it, and the night after stage 3 the Deep answers: two more Brutes, and a new tunnel exit near it. Destroyed, its depth and stock are lost, and with the Murmur on its open shaft is their way up until a Worker caps it (20 seconds, 4 Cement). On Argos, no Crystal. Opens 20 minutes into a game. One per colony.',
     cost: { cement: 60, alloy: 40, chip: 20, crystal: 10 }, deepcore: true, mega: true, foot: 3, out: { ore: 30, crystal: 30, uranium: 30 }, armor: 100, buildTime: 300,
   },
+  atmos: {
+    name: 'Atmosphere Engine', short: 'Engine',
+    desc: 'A terraforming tower: a great concrete cooling-tower shell with fans round its foot, venting a tall white plume. It slowly changes the weather and the land round it, for everyone in its circle, whoever owns the ground. It needs power: 2 Generators with Fuel within 4 tiles (it takes a Fuel a minute from each) or a Nuclear Reactor there (a Uranium every 6 minutes). Stage 1, Calm, at once: 8 tiles round it, no dust storm (bots go at full speed). Stage 2, Rain, after 6 minutes of power: 12 tiles, rain at night, barren ground turns fertile (Bio Farms work anywhere in it) and the Bloom stops spreading there. Stage 3, Green, 10 minutes later: 16 tiles of grass, crops grow a quarter faster, the Bloom withers back a tile a minute. Stage 4, Garden, 12 minutes later: 20 tiles, groves seed themselves, no Bloom and no Murmur exit. Without power it stops growing; the land it changed stays. The Murmur hate it: they go for it first every night, and after each new stage Sappers dig in under it. Destroyed, what is green stays green, but the storms and the Bloom come back in over 10 minutes. Opens 20 minutes into a game. One per colony. Not on Argos or in the Hollow.',
+    cost: { cement: 50, alloy: 40, chip: 24, crystal: 30, fiber: 20 }, atmos: true, mega: true, foot: 4, armor: 100, buildTime: 360,
+  },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 8, alloy: 3 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
@@ -1433,7 +1458,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -1441,7 +1466,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'deepcore', 'gup'], late: true },
+  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -2052,6 +2077,7 @@ const FLAVOR = {
   city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
   lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
   deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
+  atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',

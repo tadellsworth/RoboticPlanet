@@ -21,5 +21,7 @@ for (const t of [0, 1]) TOD_KEYS.push(`lift@${t}`, `lift-down@${t}`);
 for (const t of [0, 1]) TOD_KEYS.push(`gup@${t}`, `gup-down@${t}`);
 // The Deep Core (renderer/tools/install_deepcore.py): the tower and its yard (its wheels, one set, are graded in code).
 for (const t of [0, 1]) TOD_KEYS.push(`deepcore@${t}`);
+// The Atmosphere Engine (renderer/tools/install_atmos.py): the cooling tower, its fans and control house.
+for (const t of [0, 1]) TOD_KEYS.push(`atmos@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);

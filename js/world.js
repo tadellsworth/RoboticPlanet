@@ -2510,6 +2510,7 @@ function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
   if (BDEFS[type].gup && !gupWinOn()) return S && S.mission ? 'No Great Uplink in this mission.' : S && S.settings && S.settings.upWin ? 'No Great Uplink here: no sky to transmit to.' : 'The Great Uplink win is off in this game (game setup, beside Victory).';
+  if (BDEFS[type].atmos && !atmosOpen()) return `The Atmosphere Engine opens ${Math.round(ATMOS.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(ATMOS.at - S.time))}.`;
   if (BDEFS[type].deepcore && !deepOpen()) return `The Deep Core opens ${Math.round(DEEP.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(DEEP.at - S.time))}.`;
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
@@ -2524,6 +2525,9 @@ function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn()
 
 /** Can the Deep Core be built yet (DEEP.at s into a free-play game; at once in a mission that teaches it)? */
 function deepOpen() { return !!S && (!!S.mission || S.time >= DEEP.at); }
+
+/** Can the Atmosphere Engine be built yet (ATMOS.at s into a free-play game; at once in a mission that teaches it)? */
+function atmosOpen() { return !!S && (!!S.mission || S.time >= ATMOS.at); }
 
 /** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
 function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
@@ -2644,7 +2648,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
-    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, fires: [],
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, green: {}, aeFade: [], fires: [],
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
@@ -2791,7 +2795,9 @@ function hollowOn() { return !!(S && S.hollow); }
  */
 function worldBan(type) {
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
+  if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
   if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].atmos) return 'No Atmosphere Engine in the Hollow: there is no sky down here to make weather in.';
   if (BDEFS[type] && BDEFS[type].gup) return 'No Great Uplink in the Hollow: there is no sky down here to transmit to.';
   if (BDEFS[type] && BDEFS[type].lift) return 'No Orbital Lift in the Hollow: the cavern roof stands between the anchor and the sky.';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
@@ -5168,6 +5174,7 @@ function destroyBuilding(b, burn, quiet) {
   if (burn && b.built && !quiet && typeof scarBuildingDown === 'function') scarBuildingDown(b); // (its rubble stays: War scars)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
   if (shaft) deepShaft(b);
+  if (BDEFS[b.type].atmos && b.built && typeof atmosGone === 'function') atmosGone(b); // (its land stays changed; its calm and its hold on the Bloom fade)
 }
 
 /* ------------------------------------------------------------------ messages & effects */
@@ -5390,6 +5397,9 @@ function checkSave(o) {
   // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
   if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
   if (o.wildOwner != null && !(Number.isInteger(o.wildOwner) && o.wildOwner >= 0 && o.wildOwner < o.players.length)) bad();
+  // The land Atmosphere Engines changed (tile: stage 1 to 4) and the calm of fallen ones fading (ATMOS).
+  if (o.green != null && !(obj(o.green) && Object.keys(o.green).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && [1, 2, 3, 4].includes(o.green[k])))) bad();
+  if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k]))))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
@@ -5457,6 +5467,11 @@ function checkSave(o) {
     if (b.dcSrc != null && !['', 'gen', 'reactor'].includes(b.dcSrc)) bad();
     if (b.dcAcc != null && !(obj(b.dcAcc) && Object.keys(b.dcAcc).every((g) => ['ore', 'crystal', 'uranium'].includes(g) && Number.isFinite(b.dcAcc[g])))) bad();
     if (b.shaft != null && !owner(b.shaft)) bad();
+    // (the Atmosphere Engine: its powered time, stage, the spread of its change, its power and Fuel, its calls)
+    for (const k of ['aeT', 'aeStage', 'aeP', 'aeFuel', 'aeU', 'aeGenT', 'aeCall', 'aeCallN', 'aeWarn', 'aeWith', 'aeSeed', 'aeUr']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.aeStage != null && ![0, 1, 2, 3, 4].includes(b.aeStage)) bad();
+    if (b.aeSrc != null && !['', 'gen', 'reactor'].includes(b.aeSrc)) bad();
+    if (b.aeGens != null && !(Array.isArray(b.aeGens) && b.aeGens.length <= 4 && b.aeGens.every(Number.isInteger))) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
@@ -5491,6 +5506,7 @@ function checkSave(o) {
   if (o.mission) {
     const M = o.mission;
     if (!obj(M) || ![0, 1, 2, 3, 4].includes(M.diff) || (!M.lv5 && M.diff > 2)) bad();
+    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
     if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
@@ -5611,6 +5627,8 @@ function deserializeGame(json) {
   o.over = o.over || {};
   o.scorch = o.scorch || {};
   o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
+  o.green = o.green && typeof o.green === 'object' && !Array.isArray(o.green) ? o.green : {}; // the land an Atmosphere Engine changed (saves from before it: none)
+  o.aeFade = Array.isArray(o.aeFade) ? o.aeFade : [];
   o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
   for (const k of SPARSE_LAYERS) o[k] = Array.isArray(o[k]) ? sparseIn(o[k], o.W * o.H) : null; // (War scars: made below for a save from before)

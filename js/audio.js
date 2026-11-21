@@ -250,7 +250,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
-  deepstage: 3,
+  deepstage: 3, atmosstage: 4,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -271,6 +271,7 @@ const BLAST_SIZE = {
   citychime: 1.6, cityclock: 0.5, // (Arrival City's tram-stop chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
   deepstage: 1.8, // (a Deep Core reaching a new depth: heard off screen, near by)
+  atmosstage: 1.8, // (an Atmosphere Engine reaching a new stage: heard off screen, near by)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
@@ -925,6 +926,13 @@ function sfx(name, dest, y, dur) {
       _tone(41.2, 3.2, 'triangle', 0.035, 38, 0.6, D);
       _tone(82.4 * 1.004, 2.6, 'sine', 0.012, 79, 0.9, D);
       break;
+    // An Atmosphere Engine reaching a new stage: a long breath of air through its fans, a soft rising open fifth over
+    // it, and the patter of the first rain.
+    case 'atmosstage':
+      _noise(2.6, 0.05, { type: 'bandpass', freq: 520, delay: 0, dest: D });
+      for (const [f, dl] of [[196, 0.2], [293.7, 0.6], [392, 1.0]]) { _tone(f, 2.4, 'sine', 0.03, f * 1.002, dl, D); _tone(f * 2.003, 1.6, 'sine', 0.008, null, dl + 0.05, D); }
+      _noise(2.2, 0.025, { type: 'highpass', freq: 2600, delay: 1.1, dest: D });
+      break;
     // An Orbital Lift's climber setting off: a rising electric whine, and the clack of its clamps passing the first joints.
     case 'liftclimb':
       _tone(180, 2.2, 'sawtooth', 0.018, 900, 0, D);
@@ -1126,6 +1134,36 @@ function deepHum(k, stage) {
   const t = ac.currentTime;
   DEEPHUM.o.g.gain.setTargetAtTime(0.045 * k, t, 0.8);
   DEEPHUM.o.a.frequency.setTargetAtTime([49, 43.6, 36.7][Math.max(0, Math.min(2, (stage || 1) - 1))], t, 2);
+}
+
+/*
+ * An Atmosphere Engine at work on screen: the rush of air up its shell, a soft roar of its intake fans (a slow swell in
+ * it), and from Rain on a hiss of rain round it (k 0..1 by how near the middle of the screen it is; 0 stops it).
+ */
+const AEHUM = { o: null };
+function atmosHum(k, stage) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (AEHUM.o) { const t = ac.currentTime, h = AEHUM.o; AEHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.n.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!AEHUM.o) {
+    const g = ac.createGain(), lp = ac.createBiquadFilter(), hp = ac.createBiquadFilter(), gr = ac.createGain(), ga = ac.createGain();
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; n.loop = true;
+    lp.type = 'lowpass'; lp.frequency.value = 420; hp.type = 'highpass'; hp.frequency.value = 3200;
+    const l = ac.createOscillator(), lg = ac.createGain(); l.type = 'sine'; l.frequency.value = 0.18; lg.gain.value = 0.25; ga.gain.value = 0.75;
+    l.connect(lg).connect(ga.gain);
+    n.connect(lp).connect(ga).connect(g); n.connect(hp).connect(gr).connect(g); gr.gain.value = 0;
+    g.connect(AUDIO.natureBus); g.gain.value = 0.0001;
+    n.start(); l.start();
+    AEHUM.o = { n, l, g, gr };
+  }
+  const t = ac.currentTime;
+  AEHUM.o.g.gain.setTargetAtTime(0.05 * k, t, 0.8);
+  AEHUM.o.gr.gain.setTargetAtTime((stage || 1) >= 2 ? 0.18 : 0, t, 2);
 }
 
 /*
@@ -1348,6 +1386,16 @@ function audioTick(dt) {
       if (k > dk) { dk = k; ds = b.dcStage || 1; }
     }
     deepHum(dk, ds);
+    // An Atmosphere Engine at work on screen: the air through it, and its rain from stage 2.
+    let ak = 0, as = 1;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !b.working || b.type !== 'atmos') continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -120 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > ak) { ak = k; as = b.aeStage || 1; }
+    }
+    atmosHum(ak, as);
     // Burning oil on screen (js/warfx.js): its roar, from the loudest well, a little more with more of them.
     let ok = 0, op = 0, on = 0;
     if (live && typeof R !== 'undefined' && R.wfx && R.wfx.of === S && R.wfx.oil && R.wfx.oil.length) for (const e of R.wfx.oil) {

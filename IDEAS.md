@@ -71,6 +71,42 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     - The Hollow's "each stage counts double" is read as every call twice as big (Brutes too).
     - The mission *Dry Ground* teaches the Murmur briefly before First Contact (Quiet, four warbots), as the sheet put it
       in Industry and Trade; its Crystal goal counts what the Core brings up (12, 20 or 30 by level).
+  - **The Atmosphere Engine: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, its own section "The
+    Atmosphere Engine: terraforming"; the missions *Rain* (end of Growing the Colony), *Seed Vault* and *Under the Bloom*
+    (First Contact, after What Comes Up) and *Landing Zone* (War, after Aimed the Other Way)). Look A, the Rain Tower
+    (`renderer/b/atmos.js`; the plume, its night light and the rain in code), the sheet's numbers (50 Cement, 40 Alloy,
+    24 Chips, 30 Crystal, 20 Fiber, 360 s, armor 100, 4 × 4, from 20 minutes, one per colony; 2 Generators, a Fuel a
+    minute each, or a Reactor, a Uranium every 6 minutes; Calm 8, Rain 12, Green 16, Garden 20 tiles at 0, 6, 16 and 28
+    minutes of power) and the (R) answers: everyone's circle, green stays green when it falls, the Murmur first every
+    night and Sappers at each new stage, no exits in the Garden, the Steward's project and the Herald's burning, no
+    terraforming win yet. Read into the sheet, for the owner to confirm:
+    - Key **N** on the Mega tab (A pans). Its own How to play section, with a pointer from Megastructures.
+    - Its hold (Calm, the Bloom kept out, no exits) lasts while it stands, powered or not; only the growing needs power.
+      Each stage's change spreads out from its foot at a quarter tile a second; the ground already changed moves up a
+      stage at once.
+    - Calm lifts the dust storm's slow-down for robots inside its circle; Missiles stay grounded (the storm is still in
+      the sky), and the storm's haze on screen is unchanged.
+    - Rain makes the ground fertile (`S.fert`) except under deposits, Ramps and burned soil; it is drawn as damp dark
+      earth with sprouts, not farm furrows. Puddles are not drawn; a drizzle falls round the tower at night.
+    - "The Bloom stops spreading" is read as no Murmur tunnel dug into its Rain; "withers back a tile a minute" as one
+      tile of the Bloom (tunnel or Bloom vein) a minute, the nearest the Engine first; the Garden clears all of it at
+      once and caves in any exit there.
+    - "Trees and groves seed themselves" is a stalk grove (Fiber) every 20 seconds on open Garden ground, 24 in its circle
+      at most (the map's own count), and young trees drawn on Garden ground; deer and songbirds come to any patch of
+      Garden (looks only).
+    - Burned soil stays burned, even in a Garden; burning greened ground removes its green.
+    - "They go for it first" is a standing Engine drawing every pack from 20 tiles further than anything else, and an
+      Active strike's first target; Sappers: one after Rain, two after Green and Garden, on Quiet too, none with the
+      Murmur off. No other raid size is added.
+    - Dismantled, it fades like a destroyed one. Damage doesn't slow it (no half-armor rule as on the Deep Core).
+    - Rivals: "barren" is The Rust and Cinderlands (the sheet's "ash" read as Cinderlands), from about 21 minutes; the
+      Herald sends up to 2 Torches every 2 minutes to fertile ground of a foe's Engine where no gun covers it (no Napalm).
+    - The missions follow the sketches with these changes: *Under the Bloom* has the usual nights (not longer) and its
+      "survey road" goal is "push the Bloom back" by tiles; *Landing Zone* is on a Small map with the share to green by
+      level (25, 32, 40%: the sheet's 40 at Commander; stage 3 or more counts, burned ground doesn't) and its deer herd
+      is the Garden's wildlife; *Seed Vault* draws the Pathfinder's hull in code as a mission landmark (LORE.md's open
+      question about the wreck is otherwise untouched), its seed stock four crates of Fiber, and its storm is the Endless
+      dust storm modifier.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
@@ -805,7 +841,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     - The robots a drop brings come whatever the bot limit (they are the Carrier's, not the Foundry's).
     The notes as filed: A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
     Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
-  - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
+  - **Atmosphere Engine: BUILT (Nov 21 2026; see the design sheet's entry above).** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
     work; the Murmur hate it and go for it.
   - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission

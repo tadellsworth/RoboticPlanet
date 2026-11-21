@@ -659,6 +659,23 @@ python3 tools/install_gup.py      # writes the WebP files into ../art, prints GU
 
 The Uplink composes like a building (`compose.py`). The game draws it by `GUP_FRAME` (art-manifest.js) over the middle
 of its square, and its signal from `GUP_MARKS` (`gupAt` in `js/render.js`).
+## The Atmosphere Engine
+
+The owner's look A, the Rain Tower (Nov 21 2026; IDEAS.md, "Megastructures"). `b/atmos.js` is the 4 x 4 cooling tower on
+its own 40 x 40 pad, framed like Arrival City (`longPad(40, 40)`, `frameCompoundOpts({ half: 20.12, width: 0.62, cy:
+0.66 })`, the shadow camera widened): the shell turned on a lathe, its column ring and air intake, the waist band and
+team stripe, the throat and rim lamps, six fan drums, the control house. Nothing moves in the art. Marks `throat` (where
+the game's plume rises), `band`, `bandL`, `bandR` (the waist band's front and ends) and `rimL`, `rimR` (the red lamps).
+Run from this folder:
+
+```
+bash tools/render_atmos.sh [out]    # the Engine for both teams at every time of day (~6 min)
+python3 tools/install_atmos.py      # writes the WebP files into ../art, prints ATMOS_FRAME and ATMOS_MARKS
+```
+
+The game draws it by `ATMOS_FRAME` (art-manifest.js) over the middle of its square, and the plume, its night light and
+the rain from `ATMOS_MARKS` (`drawAtmos`, `drawAtmosPlumes` in js/render.js).
+
 ## The Deep Core
 
 The owner's look A, the Headframe (Nov 21 2026; IDEAS.md, "Megastructures"). `b/deepcore.js` is the 3 x 3 winding tower

@@ -1727,6 +1727,24 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 30: the Atmosphere Engine (installed)
+
+The owner's look **A** from the megastructure design sheet (Nov 21 2026), the "Rain Tower". Rendered with
+`renderer/b/atmos.js` at every time of day for both teams by `renderer/tools/render_atmos.sh`;
+`renderer/tools/install_atmos.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Atmosphere
+Engine"). Framed like Arrival City (`ATMOS_FRAME`), the biggest of the megastructures: the shell rises about two tiles
+over its square on screen, and the plume twice that again. The plume is the whole idea, so it is drawn in code and moves.
+Flavor: "Scheduled in the Pathfinder's plan for T−10. Started late. Running to plan."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `atmos@0`, `atmos@1` (+ morning, evening, night) | A 4 × 4 hazard-edged concrete pad; one great concrete cooling-tower shell (a hyperboloid, wider at the foot, pour lines and rain streaks) on a ring of raking X-braced columns with the dark air intake between them; a blue-grey waist band (lit cyan at night) over a thin team stripe; the dark throat with a rim walkway and two red lamps; six intake fan drums with grilles and pipes to the shell; a low control house at the front left (team band, lit windows at night); a fuel line, a power cabinet, crates and two light masts | `renderer/b/atmos.js` |
+| (code) | The plume | `drawAtmosPlumes` (`ATMOS_MARKS.throat`): a dozen soft white puffs rising out of the throat, swelling and drifting east, graded for the time of day; thinner and slower while it has no power |
+| (code) | Night | pale cyan light from inside the throat up the plume, the waist band's glow (`bandL`, `bandR`, `band`), the rim lamps blinking (`rimL`, `rimR`); dark when the Murmur cut it |
+| (code) | Rain | from stage 2, a drizzle at night within about 7 tiles of the tower |
+| (code) | The changed land | `drawGreen`, in the ground tiles: Calm a little cleaner, Rain damp dark earth with sprouts, Green grass, Garden deep grass with flowers and young trees |
+| (code) | Seed Vault's hull | `drawPathfinderHull`: a long white lander hull half-buried in drift sand, its Accord stripe faded, the vault hatch open |
+
 ### Batch 29: the Deep Core (installed)
 
 The owner's look **A** from the megastructure design sheet (Nov 21 2026), the "Headframe". Rendered with

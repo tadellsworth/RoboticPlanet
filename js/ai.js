@@ -2226,7 +2226,7 @@ const AI_MEGA = { lanceAt: 900, domeAt: 1020, cityAt: 720, liftAt: 900, heraldLi
  * under the cap.
  */
 const AI_MEGA_CAP = { weapons: 1, total: 2 };
-const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main', atmos: 'main' };
 const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'lift', balanced: 'city', raider: null, rusher: 'lift' };
 
 /** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
@@ -2250,7 +2250,7 @@ function aiMegaRoom(p, kind) {
  * Rival p's main megastructure project ('city', 'lift', 'gup' or null): its doctrine's, or Arrival City for anyone in
  * Domination; with the Great Uplink win on (gupWinOn) the Steward's is the Great Uplink (it believes the arks are only late).
  */
-function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[st] || null; }
+function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : st === 'balanced' && aiAtmosHome() ? 'atmos' : AI_MEGA_MAIN[st] || null; }
 
 /**
  * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
@@ -2340,6 +2340,7 @@ function aiMega(p, me, lander, canBuild) {
   aiLiftAmbush(p);
   aiGup(p, me, lander, canBuild);
   aiDeep(p, me, lander, canBuild);
+  aiAtmos(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2414,6 +2415,73 @@ function aiDeep(p, me, lander, canBuild) {
   const r = spot && placeSite(p, 'deepcore', spot[0], spot[1]);
   if (r && r.ok) { P.deepAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
 }
+/*
+ * The Atmosphere Engine (ATMOS). The Steward's main project in place of Arrival City (aiMegaMain) on a barren home (The
+ * Rust, Cinderlands) or with Planetary events on (aiAtmosHome), from ATMOS.aiAt s once its economy runs (a Bot Foundry,
+ * half its Cement and Crystal and its Fiber in hand): near its Command Base, with its 2 Generators going up beside it,
+ * their goods first, and again as one is lost. And the Herald, its clock frozen at "Arrival in one day", sees a foe's
+ * greening as overgrowth on the landing zone: every ATMOS.burnEvery s, up to ATMOS.burnN of its Torches with full tanks
+ * go to burn the fertile ground a foe's Engine has made (its Rain or more), where no gun of theirs covers it.
+ */
+function aiAtmosHome() { return !worldBan('atmos') && (!!S.events || biome() === 'desert' || biome() === 'volcanic'); }
+function aiAtmos(p, me, lander, canBuild) {
+  const P = S.players[p];
+  if (P.style === 'rusher') aiAtmosBurn(p);
+  const e = me.find((b) => BDEFS[b.type].atmos);
+  if (e) {
+    if (!e.built && !e.prio) { e.prio = 'high'; e.sitePrio = 1; }
+    const gens = me.filter((b) => b.type === 'generator' && footDist(e, b.x + 0.5, b.y + 0.5) <= ATMOS.reach + 0.5), have = playerGoods(p), c = BDEFS.generator.cost;
+    if (gens.length < ATMOS.gens && !atmosReactor(e) && canBuild && lander && have.cement >= c.cement && have.alloy >= c.alloy && S.time - (P.aeLook ?? -999) >= AI_MEGA.look / 4) {
+      P.aeLook = S.time;
+      const spot = aiMegaSpot(p, 'generator', [e], ATMOS.reach, lander, 0), r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    return;
+  }
+  if (aiMegaMain(p) !== 'atmos' || !canBuild || !lander || S.time < ATMOS.aiAt || megaBlocked(p, 'atmos') || worldBan('atmos') || !aiMegaRoom(p, 'main')) return;
+  const have = playerGoods(p), k = BDEFS.atmos.cost;
+  if (!me.some((b) => b.built && BDEFS[b.type].bots) || have.cement < k.cement / 2 || have.crystal < k.crystal / 2 || have.fiber < k.fiber / 2 || S.time - (P.aeLook ?? -999) < AI_MEGA.look) return;
+  P.aeLook = S.time;
+  const ok = (i, j) => i >= 2 && j >= 2 && i + 5 < S.W && j + 5 < S.H && [[i - 1, j], [i, j - 1], [i - 1, j - 1]].some(([a, b]) => { const t = tIdx(a, b); return walkable(t) && !S.bAt[t]; });
+  const spot = aiMegaSpot(p, 'atmos', [lander], 10, lander, -1, ok);
+  const r = spot && placeSite(p, 'atmos', spot[0], spot[1]);
+  if (r && r.ok) { P.aeAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+/** The Herald's Torches go to burn a foe's greening (see aiAtmos): the fertile ground nearest a foe's Engine, out of its guns' reach. */
+function aiAtmosBurn(p) {
+  const P = S.players[p];
+  if (S.time - (P.aeBurn ?? -999) < ATMOS.burnEvery) return;
+  const eng = S.buildings.find((b) => !b.dead && b.built && BDEFS[b.type].atmos && b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner) && (b.aeStage || 0) >= 2);
+  if (!eng) return;
+  P.aeBurn = S.time;
+  const torches = [];
+  for (const u of S.bots) {
+    if (torches.length >= ATMOS.burnN) break;
+    if (u.dead || u.owner !== p || !BOTS[u.type].flame || !scorchReady(u) || u.fight || (u.task && u.task.type !== 'guard' && u.task.type !== 'idle' && u.task.type !== 'hold')) continue;
+    const at = u.inside ? getE(u.inside) : null;
+    if (at && !freeToGo(u, at)) continue;
+    torches.push(u);
+  }
+  if (!torches.length) return;
+  const c = bCentre(eng), R = atmosReach(eng), taken = new Set();
+  for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'scorch') taken.add(v.task.tile);
+  for (const u of torches) {
+    let best = -1, bd = Infinity;
+    for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!(S.green[t] >= 2) || taken.has(t) || scorchTileWhy(t) || gunCovers(p, t)) continue;
+      const d = dist2(i, j, u.x, u.y);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best < 0) break;
+    taken.add(best);
+    exitBuilding(u);
+    u.task = { type: 'scorch', tile: best }; u.path = null;
+    P.stats.aeBurnSent = (P.stats.aeBurnSent || 0) + 1;
+  }
+}
+
 /** Rival p's warbots stand by its Deep Core through a night it has called the Murmur for, and go home at dawn. */
 function aiDeepGuard(p, core) {
   const P = S.players[p], night = murmurNight(S.time);
@@ -4047,7 +4115,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
         if (rivalLandNear(p, i, j, type === 'outpost' || dock ? 3 : AI_CLEAR_OF_RIVAL)) continue;
         out = true;
       }
-      if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
+      if (S.fert[j * S.W + i] && !(S.green && S.green[j * S.W + i]) && type !== 'farm') continue; // keep fertile soil for farming (not an Atmosphere Engine's: that's everywhere round it)
       if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
       if (radAt(i + 0.5, j + 0.5, 1.5)) continue; // (nor in or right beside a radiation zone: RAD)

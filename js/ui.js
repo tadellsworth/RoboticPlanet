@@ -2109,7 +2109,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans)
+  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans. The Atmosphere Engine: N, for eNgine; A pans)
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
@@ -7301,6 +7301,8 @@ function ownedText(type) {
   if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
   if (BDEFS[type].lift && worldBan(type)) return 'No sky down here';
   if (BDEFS[type].deepcore && !deepOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(DEEP.at / 60)}:00`;
+  if (BDEFS[type].atmos && worldBan(type)) return biome() === 'lunar' ? 'No air on the moon' : 'No sky down here';
+  if (BDEFS[type].atmos && !atmosOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(ATMOS.at / 60)}:00`;
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -7914,6 +7916,17 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Power</span><span>${b.dcSrc === 'reactor' ? 'A Nuclear Reactor in reach (no Uranium used)' : b.dcSrc === 'gen' ? `A Generator in reach: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute` : `<b>None</b>: a Generator with Fuel within ${DEEP.reach} tiles, or a Nuclear Reactor`}</span></div>`);
       }
       if (b.dcCall && murmurCfg()) parts.push(`<div class="kv"><span>Heard below</span><span><b class="err">${b.dcCall >= 3 ? 'The next night the Deep answers: Brutes, and a new tunnel exit by it' : 'The next night a bigger raid comes for it'}</b></span></div>`);
+    }
+    if (def.atmos && b.built) {
+      // Its four stages as lamps (Calm, Rain, Green, Garden), how far its change has spread, and the time to the next.
+      const st = b.aeStage || 1, T = b.aeT || 0, lamps = [1, 2, 3, 4].map((k) => `<span class="ae-lamp ae-l${k}${k <= st ? ' on' : ''}" title="Stage ${k}: ${ATMOS_STAGE_NAMES[k - 1]}, ${ATMOS.r[k - 1]} tiles"></span>`).join('');
+      const nx = st < 4 ? ATMOS.stages[st] : 0, f = st < 4 ? (T - ATMOS.stages[st - 1]) / (nx - ATMOS.stages[st - 1]) : 1;
+      parts.push(`<div class="kv"><span>Stage</span><span>${lamps} ${st}, ${ATMOS_STAGE_NAMES[st - 1]}${st < 4 ? `: ${ATMOS_STAGE_NAMES[st]} after ${fmtSecs(nx - T)} more of power` : ': the last'}</span></div><div class="bar"><div style="width:${Math.round(Math.max(0, Math.min(1, f)) * 100)}%;background:#7ee08a"></div></div>`);
+      const what = ['no dust storm', 'rain at night, barren ground fertile, the Bloom held back', 'grass, crops a quarter faster, the Bloom withering', 'groves seeding themselves, no Bloom and no Murmur exit'];
+      parts.push(`<div class="kv"><span>Its circle</span><span>${Math.round(atmosReach(b))} of ${ATMOS.r[st - 1]} tiles round it (for everyone in it): ${what.slice(0, st).join('; ')}</span></div>`);
+      if (mine) parts.push(`<div class="kv"><span>Power</span><span>${b.aeSrc === 'reactor' ? `A Nuclear Reactor in reach: a Uranium every ${Math.round(ATMOS.uEvery / 60)} minutes` : b.aeSrc === 'gen' ? `${ATMOS.gens} Generators in reach: a Fuel a minute from each` : `<b>None</b>: ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor. Its land stays as it is`}</span></div>`);
+      if (b.aeCall && murmurCfg()) parts.push(`<div class="kv"><span>The Bloom</span><span><b class="err">Fights back the next night: ${ATMOS.sappers[b.aeCall - 1]} Sapper${ATMOS.sappers[b.aeCall - 1] === 1 ? '' : 's'} will dig in under it</b></span></div>`);
+      else if (murmurCfg()) parts.push(`<div class="kv"><span>The Murmur</span><span>They hate it: every night they go for it first</span></div>`);
     }
     if (def.city && b.built) {
       const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;

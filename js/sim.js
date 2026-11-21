@@ -62,6 +62,7 @@ function simStep(dt) {
   if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
+  if (S.tick % 30 === 19) atmosTick(); // (the Atmosphere Engines' land: ATMOS)
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step. In Teams, interleave seats from both sides (0, 2, 1, 3)
@@ -112,7 +113,7 @@ function growStalks(dt) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME));
+    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 ? ATMOS.crop : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (an Atmosphere Engine's Green: crops a quarter faster)
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -1648,7 +1649,7 @@ function moveAlong(u, dt) {
       if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
     }
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
-    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed(u.x, u.y) * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -4174,6 +4175,7 @@ function updateBuilding(b, dt) {
   else if (def.city) updateCity(b, dt);
   else if (def.lift) updateLift(b, dt);
   else if (def.deepcore) updateDeep(b, dt);
+  else if (def.atmos) updateAtmos(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -4266,13 +4268,13 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
   }
-  const core = deepFeeds(b); // (a Deep Core takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel)
-  if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding the Deep Core: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
+  const core = deepFeeds(b) ? 'the Deep Core' : atmosFeeds(b) ? 'the Atmosphere Engine' : ''; // (a Deep Core or an Atmosphere Engine takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel, ATMOS.genFuel)
+  if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding ${core}: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
   if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
   if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
   if (!((b.energy || 0) > 0)) {
@@ -5516,6 +5518,7 @@ function scorchSoil(t, by, quiet) {
   const who = soilHolder(t), i = t % S.W, j = (t / S.W) | 0;
   S.fert[t] = 0;
   (S.burnt || (S.burnt = {}))[t] = 1;
+  if (S.green && S.green[t]) { delete S.green[t]; const Q = by >= 0 ? S.players[by] : null; if (Q) Q.stats.burnedGreen = (Q.stats.burnedGreen || 0) + 1; } // (an Atmosphere Engine's greening, burned)
   if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; }
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj); // (the soil's edges round it)
@@ -10144,7 +10147,7 @@ function eventNow(type) {
   return E && S.time >= E.t0 && (!type || E.type === type) ? E : null;
 }
 /** Bot speed in a dust storm. */
-function evSpeed() { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 ? DUST_SPEED : 1; }
+function evSpeed(x, y) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && atmosAt(x, y) >= 1) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside)
 /** Battery drain in a solar flare. */
 function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
 
@@ -10532,7 +10535,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * evSpeed(u.x, u.y) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -11535,6 +11538,7 @@ function murmurTick() {
   const into = x - NIGHT_FROM;
   while ((M.wave || 0) < C.waves && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; if (smart) murmurCraftWave(n, C, M.wave); else murmurWave(n, C); }
   deepCalls(n, C); // (a Deep Core that went deeper: the night's raid that comes for it)
+  atmosCalls(n); // (an Atmosphere Engine that reached a new stage: the Sappers that dig in under it)
   if (smart) murmurPlansTick();
 }
 
@@ -11636,6 +11640,7 @@ function murmurPower(e) {
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
     else if (BDEFS[b.type].lift && b.working) charge += 2;
     else if (BDEFS[b.type].deepcore) charge += 2; // (a Deep Core at work: like a Generator's)
+    else if (BDEFS[b.type].atmos) charge += 3; // (an Atmosphere Engine at work: the Murmur hate it)
     else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
@@ -11651,6 +11656,7 @@ function chargeWorth(e) {
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
   if (def.lift && e.working) return 3;
   if (def.deepcore && e.working) return 3; // (a Deep Core at work draws them like a Generator)
+  if (def.atmos) return 6; // (an Atmosphere Engine standing: the Murmur hate it, and go for it first: atmosLure)
   if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
@@ -11697,7 +11703,7 @@ function murmurDig(r, k, b) {
     const i = hx + di, j = hy + dj;
     if (!inMap(i, j)) continue;
     const t = j * W + i;
-    if (!tunnelable(t)) continue;
+    if (!tunnelable(t) || atmosAt(i + 0.5, j + 0.5) >= 2) continue; // (not into an Atmosphere Engine's Rain: the Bloom can't spread there)
     const s = dist(i, j, gx, gy) + hash2(t, b.id, S.mur.lastNight || 0) * 1.3 + (S.tun[t] ? 0.7 : 0);
     if (s < bs) { bs = s; best = t; }
   }
@@ -11730,7 +11736,7 @@ function murmurOpenExit(b) {
     if (S.tun[t] !== k) continue;
     const i = t % W, j = (t / W) | 0;
     if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t)) continue;
-    if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound)
+    if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5) || atmosGardenAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound, nor in an Atmosphere Engine's Garden)
     if (exits.some((e) => dist2(e.x, e.y, i, j) < 16) || shut.some((s) => dist2(s.x, s.y, i, j) < 9)) continue;
     let near = Infinity, base = Infinity;
     for (const e of blds) {
@@ -12036,10 +12042,10 @@ function murmurPlan(p, n, round, exits) {
     const def = BDEFS[e.type];
     if (!e.built || def.barrier || def.viaduct || def.wild || e.type === 'lander' || calmB(e)) continue;
     const nb = nearNest(e.x, e.y), nd = dist(nb.x, nb.y, e.x, e.y);
-    if (nd > MURMUR.reach + 6 || murmurZoneBy(e) !== murmurZoneBy(nb)) continue;
+    if (nd > MURMUR.reach + 6 + (atmosLure(e) ? ATMOS.lure : 0) || murmurZoneBy(e) !== murmurZoneBy(nb)) continue;
     let crowd = 0;
     for (const o of mine) if (o !== e && dist2(o.x, o.y, e.x, e.y) < 36) crowd++;
-    const s = chargeWorth(e) * 2 + (veinLure(e) ? 4 : 0) + Math.max(0, 4 - crowd * 0.6) - murmurGunAt(e.x + 0.5, e.y + 0.5, 3) * 7
+    const s = chargeWorth(e) * 2 + (veinLure(e) ? 4 : 0) + (atmosLure(e) ? 60 : 0) + Math.max(0, 4 - crowd * 0.6) - murmurGunAt(e.x + 0.5, e.y + 0.5, 3) * 7
       - murmurMem('kill', e.x, e.y) * 2 + murmurMem('fed', e.x, e.y) * 1.5 - nd * 0.05 + hash2(e.id, n * 3 + round, 71) * 1.2;
     targets.push({ e, nb, s });
   }
@@ -12741,9 +12747,9 @@ function murmurPrey(x, y, r) {
   for (const e of S.buildings) {
     if (e.dead || e.owner < 0 || e.owner === wo || calmB(e)) continue;
     // (A Harvester cutting Bloom veins draws them most, from VEIN.reach further out: veinLure.)
-    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e);
-    if (d2 > (lure ? sq(r + VEIN.reach) : r2)) continue;
-    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
+    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e), ae = atmosLure(e);
+    if (d2 > (ae ? sq(r + ATMOS.lure) : lure ? sq(r + VEIN.reach) : r2)) continue;
+    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) + (ae ? 40 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
     if (s > bs) { bs = s; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   for (const v of S.bots) {
@@ -17473,6 +17479,9 @@ function hashState() {
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
+  for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); }
+  if (S.mission && S.mission.greenWant) { int(S.mission.greenPct || 0); int(S.mission.greenRun || 0); }
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
@@ -17519,6 +17528,7 @@ function hashState() {
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].deepcore) { int(b.id); num(b.dcT || 0); int(b.dcStage || 0); obj(b.dcAcc); str(b.dcSrc); num(b.dcFuel || 0); int(b.dcGen || 0); num(b.dcGenT || 0); int(b.dcCall || 0); int(b.dcCallN || 0); int(b.dcWarn || 0); int(b.dcHeldN || 0); }
+    if (BDEFS[b.type].atmos) { int(b.id); num(b.aeT || 0); int(b.aeStage || 0); num(b.aeP || 0); str(b.aeSrc); num(b.aeFuel || 0); for (const g of b.aeGens || []) int(g); num(b.aeGenT || 0); num(b.aeU || 0); int(b.aeUr || 0); num(b.aeWith || 0); num(b.aeSeed || 0); int(b.aeCall || 0); int(b.aeCallN || 0); int(b.aeWarn || 0); }
     if (b.shaft !== undefined) { int(b.id); int(b.shaft); int(b.capper || 0); num(b.capT || 0); int(b.capPaid || 0); } // (a fallen Deep Core's open shaft)
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
@@ -19369,7 +19379,7 @@ function deepExit(b, nest, n) {
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j), d = footDist(b, i + 0.5, j + 0.5);
     if (d < 2 || dist(i + 0.5, j + 0.5, c.x, c.y) > R) continue;
-    if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t) || calmAt(i + 0.5, j + 0.5)) continue;
+    if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t) || calmAt(i + 0.5, j + 0.5) || atmosGardenAt(i + 0.5, j + 0.5)) continue;
     if (exits.some((e) => dist2(e.x, e.y, i, j) < 16)) continue;
     const s = -Math.abs(d - 5) + hash2(t, b.id, n) * 1.5;
     if (s > bs) { bs = s; best = t; }
@@ -19441,4 +19451,273 @@ function doCap(u, t, dt) {
   addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
   postMsg(p, 'The Deep Core\'s old shaft is capped: the Murmur can\'t come up through it any more.', e.x, e.y, 'good');
   u.task = null; u.idleT = 0;
+}
+
+/* ------------------------------------------------------------------ the Atmosphere Engine */
+
+/*
+ * The Atmosphere Engine (ATMOS; BDEFS.atmos). b.aeT: s of powered work; b.aeStage: its stage (1..4, from aeT: atmosStageAt);
+ * b.aeP: how far (tiles from its middle) its change has spread so far (up to ATMOS.r of its stage); b.aeSrc: its power now
+ * ('gen', 'reactor' or ''); b.aeFuel: s left of the Fuel it last took from its Generators (b.aeGens their ids, b.aeGenT until
+ * when they count as feeding it); b.aeU: s left of the Uranium it last took from a Reactor. b.aeWith: s toward the next
+ * tile of Bloom withering (Green); b.aeSeed: s toward the next grove (Garden). The Murmur: b.aeCall the stage that calls
+ * Sappers (2..4), on night b.aeCallN; b.aeWarn: its owner was told at dusk. The land: S.green (tile: the stage that reached
+ * it, kept for good); S.aeFade: fallen Engines' calm fading ({ x, y, r, st, t0 }).
+ */
+
+/** The stage an Engine with `t` s of power is at (1 to 4). */
+function atmosStageAt(t) { let st = 1; for (let k = 1; k < ATMOS.stages.length; k++) if (t >= ATMOS.stages[k]) st = k + 1; return st; }
+
+/** How far Engine b's change reaches now (tiles from its middle). */
+function atmosReach(b) { return Math.min(ATMOS.r[(b.aeStage || 1) - 1], b.aeP || 0); }
+
+/** Generators of b's owner within ATMOS.reach of its square, on and with a whole Fuel in stock. */
+function atmosGens(b) {
+  const out = [];
+  for (const g of S.buildings) {
+    if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'generator' || g.paused || murmurCutOn(g)) continue;
+    if (footDist(b, g.x + 0.5, g.y + 0.5) <= ATMOS.reach + 0.5 && (g.stock.fuel || 0) >= 1) out.push(g);
+  }
+  return out;
+}
+
+/** A Nuclear Reactor of b's owner within ATMOS.reach of it (built, on) with Uranium or Enriched Uranium in it, or null. */
+function atmosReactor(b) {
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) <= ATMOS.reach + 0.5 && (r.stock.uranium || 0) + (r.stock.fissile || 0) > 0) return r;
+  }
+  return null;
+}
+
+/** Are the Generators Engine b took its Fuel from still there for it (built, on, in reach)? */
+function atmosGensHeld(b) {
+  return (b.aeGens || []).length >= ATMOS.gens && b.aeGens.every((id) => { const g = getE(id); return g && !g.dead && g.built && !g.paused && !murmurCutOn(g) && footDist(b, g.x + 0.5, g.y + 0.5) <= ATMOS.reach + 0.5; });
+}
+
+/** What powers Engine b now: 'gen' (its Generators' Fuel, paid or there to take), 'reactor' (Uranium paid or there), or ''. */
+function atmosPower(b) {
+  if (murmurCutOn(b) || b.paused || b.cut) return '';
+  if ((b.aeFuel || 0) > 0 && atmosGensHeld(b)) return 'gen';
+  const ur = (b.aeU || 0) > 0 && b.aeUr ? getE(b.aeUr) : null;
+  if (ur && !ur.dead && ur.built && !ur.paused && !murmurCutOn(ur) && footDist(b, ur.x + 0.5, ur.y + 0.5) <= ATMOS.reach + 0.5) return 'reactor';
+  if (atmosGens(b).length >= ATMOS.gens) return 'gen';
+  if (atmosReactor(b)) return 'reactor';
+  return '';
+}
+
+/** Is Generator g feeding an Atmosphere Engine its Fuel now (it runs for it: see updateGenerator)? */
+function atmosFeeds(g) {
+  for (const c of S.buildings) if (!c.dead && c.built && c.owner === g.owner && BDEFS[c.type].atmos && (c.aeGenT || 0) > S.time && (c.aeGens || []).includes(g.id)) return true;
+  return false;
+}
+
+/** The Atmosphere Engine, each tick: its power, its stage, how far its change has spread, and what it does there. */
+function updateAtmos(b, dt) {
+  if (!b.aeStage) b.aeStage = atmosStageAt(b.aeT || 0);
+  atmosWarn(b);
+  const src = atmosPower(b);
+  b.aeSrc = src;
+  b.working = false;
+  const reach = Math.round(atmosReach(b)), name = ATMOS_STAGE_NAMES[b.aeStage - 1];
+  if (!src) {
+    b.status = murmurCutOn(b) ? `Dark: the Murmur cut its power. ${name}, ${reach} tiles round it, kept; it grows again at dawn.`
+      : `Stopped (${name}, ${reach} tiles round it, kept): no power. ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor`;
+    return;
+  }
+  if (src === 'gen') {
+    if ((b.aeFuel || 0) <= 0 || !atmosGensHeld(b)) {
+      const gs = atmosGens(b).slice(0, ATMOS.gens);
+      if (gs.length < ATMOS.gens) { b.status = `Stopped: its Generators are out of Fuel (it takes a Fuel a minute from each of ${ATMOS.gens})`; return; }
+      for (const g of gs) { bump(g.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); }
+      b.aeGens = gs.map((g) => g.id); b.aeFuel = ATMOS.genFuel;
+    }
+    b.aeFuel -= dt;
+    b.aeGenT = S.time + 1.2;
+  } else {
+    if ((b.aeU || 0) <= 0) {
+      const r = atmosReactor(b);
+      const g = (r.stock.uranium || 0) >= 1 ? 'uranium' : 'fissile';
+      bump(r.stock, g, -1); usedGood(b.owner, g, 1);
+      b.aeU = g === 'uranium' ? ATMOS.uEvery : 2 * ATMOS.uEvery; b.aeUr = r.id;
+    }
+    b.aeU -= dt;
+  }
+  b.working = true;
+  b.aeT = (b.aeT || 0) + dt * (S.players[b.owner] ? S.players[b.owner].mult : 1);
+  const st = atmosStageAt(b.aeT);
+  if (st > b.aeStage) atmosStage(b, st);
+  const R = ATMOS.r[b.aeStage - 1];
+  b.aeP = Math.min(R, (b.aeP || 0) + ATMOS.spread * dt);
+  if (b.aeStage >= 3) {
+    b.aeWith = (b.aeWith || 0) + dt;
+    if (b.aeWith >= ATMOS.wither) { b.aeWith -= ATMOS.wither; atmosWither(b, 1); }
+  }
+  if (b.aeStage >= 4) {
+    b.aeSeed = (b.aeSeed || 0) + dt;
+    if (b.aeSeed >= ATMOS.seedEvery) { b.aeSeed -= ATMOS.seedEvery; atmosSeed(b); }
+  }
+  const next = b.aeStage < 4 ? ATMOS.stages[b.aeStage] - b.aeT : 0;
+  b.status = `${ATMOS_STAGE_NAMES[b.aeStage - 1]}, ${Math.round(atmosReach(b))} of ${R} tiles round it` + (src === 'reactor' ? ', on Reactor power' : '') +
+    (b.aeStage < 4 ? `: ${ATMOS_STAGE_NAMES[b.aeStage]} in ${fmtSecs(next)}` : ': the garden is growing');
+}
+
+/** Engine b reaches stage `st`: its owner is told; with the Murmur on, Sappers dig in under it the next night. */
+function atmosStage(b, st) {
+  b.aeStage = st;
+  const P = S.players[b.owner], c = bCentre(b);
+  if (P) P.stats.atmosStage = Math.max(P.stats.atmosStage || 0, st);
+  logEvent({ t: S.time, k: 'atmos', p: b.owner, g: st });
+  addFx('ring', c.x, c.y, { color: st >= 3 ? '#7ee08a' : '#9fdcff', r: 3 });
+  sfx('atmosstage', c.x, c.y);
+  const heard = !!murmurCfg() && !!(S.mur && (S.mur.nests || []).some((id) => { const n = getE(id); return n && !n.dead; })) && ATMOS.sappers[st - 1] > 0;
+  if (heard) { b.aeCall = st; b.aeCallN = murmurNights(S.time) + 1; b.aeWarn = 0; }
+  const what = st === 2 ? 'It rains round it at night, the barren ground there is fertile now (Bio Farms work anywhere in it), and the Bloom stops spreading.'
+    : st === 3 ? 'Grass spreads, crops there grow a quarter faster, and the Bloom withers back.' : 'Groves seed themselves, the Bloom is gone, and no Murmur exit can open in it.';
+  postMsg(b.owner, `Your Atmosphere Engine reached stage ${st}, ${ATMOS_STAGE_NAMES[st - 1]} (${ATMOS.r[st - 1]} tiles): ${what}${heard ? ' The Bloom will fight back: the next night Sappers dig in under it.' : ''}`, c.x, c.y, heard ? 'warn' : 'good');
+}
+
+/** At dusk before Engine b's call: its owner is told that tonight Sappers come for it. */
+function atmosWarn(b) {
+  if (!b.aeCall || b.aeWarn || !murmurCfg() || murmurNight(S.time)) return;
+  if (murmurNights(S.time) + 1 < (b.aeCallN || 0) || dayClock(S.time) < NIGHT_FROM - MURMUR.warn) return;
+  b.aeWarn = 1;
+  postMsg(b.owner, 'Tonight the Bloom fights back: Sappers will dig in under your Atmosphere Engine. Guard it.', b.x + 2, b.y + 2, 'warn');
+}
+
+/** The Sappers of every Engine's call, each tick of a night (from murmurTick): a minute in, from the exit nearest it. */
+function atmosCalls(n) {
+  const M = S.mur;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.aeCall || !BDEFS[b.type].atmos || n < (b.aeCallN || 0) || S.time < (M.at || 0) + 50) continue;
+    const st = b.aeCall, k = ATMOS.sappers[st - 1] || 0;
+    b.aeCall = 0; b.aeWarn = 0;
+    const c = bCentre(b);
+    let nest = null, bd = Infinity;
+    for (const id of M.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+    if (!nest || !k) continue;
+    const ex = murmurNearExit(c.x, c.y, 60), from = ex || nest, home = ex ? getE(ex.nest) || nest : nest;
+    const at = murmurStand(c.x, c.y) || { x: b.x - 1, y: b.y - 1 };
+    for (let q = 0; q < k; q++) {
+      const u = spawnCritter(from, 'sapper', { type: 'raid', role: 'sap', focus: b.id, x: at.x, y: at.y, until: S.time + 600, night: 1 });
+      u.nest = home.id; if (ex) u.exit = ex.id;
+      u.pose = 'dig'; u.poseT = 0; u.charge = 0.3;
+    }
+    addFx('dust', from.x + 0.5, from.y + 0.5, { r: 0.9 });
+    logEvent({ t: S.time, k: 'atmosCall', p: b.owner, g: st });
+    postMsg(b.owner, `The Bloom fights back: ${k === 1 ? 'a Sapper is' : `${k} Sappers are`} digging in under your Atmosphere Engine!`, from.x, from.y, 'bad');
+    if (isMe(b.owner)) sfx('alert');
+  }
+}
+
+/** Every Engine's land, once a second (from simStep): its change spread out over the ground, the Bloom kept out, fades run down. */
+function atmosTick() {
+  if (S.aeFade && S.aeFade.length) S.aeFade = S.aeFade.filter((f) => S.time - f.t0 < ATMOS.fade);
+  // (a mission that counts the greened land: its share, and how long it has held what the mission wants)
+  if (S.mission && S.mission.greenWant) { const g = atmosGreened(); S.mission.greenPct = g.of ? Math.floor((100 * g.n) / g.of) : 0; S.mission.greenRun = S.mission.greenPct >= S.mission.greenWant ? (S.mission.greenRun || 0) + 1 : 0; }
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
+    atmosPaint(b);
+    if (b.aeStage >= 4) atmosWither(b, Infinity); // (the Garden: no Bloom at all, and no exit)
+  }
+}
+
+/** Mark the ground Engine b's change has reached with its stage (S.green): from Rain fertile, unless burned for good. */
+function atmosPaint(b) {
+  const c = bCentre(b), R = atmosReach(b), st = b.aeStage || 1;
+  if (R <= 0) return;
+  S.green = S.green || {};
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, c.x, c.y) > R * R) continue;
+    const t = tIdx(i, j);
+    if ((S.green[t] || 0) >= st || S.terrain[t] !== T_GROUND || burntSoil(t) || (S.lava && S.lava[t]) || (S.tidal && S.tidal[t])) continue;
+    S.green[t] = st;
+    if (st >= 2 && !S.fert[t] && !S.ramp[t] && (!S.res[t] || S.res[t] === R_STALK || S.res[t] === R_CROP)) S.fert[t] = 1;
+    markDirty(i, j);
+  }
+}
+
+/**
+ * The Bloom withering round Engine b (Green and Garden): up to `n` tiles of it within its reach, the nearest its middle
+ * first: a tunnel (S.tun) or a Bloom vein. With n Infinity (the Garden), all of it, and any tunnel exit there caves in.
+ */
+function atmosWither(b, n) {
+  const c = bCentre(b), R = atmosReach(b), cand = [];
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, c.x, c.y);
+    if (d > R * R || !((S.tun && S.tun[t]) || S.res[t] === R_VEIN)) continue;
+    cand.push([d, t]);
+  }
+  if (n === Infinity) for (const e of S.buildings) if (!e.dead && e.type === 'burrow' && dist2(e.x + 0.5, e.y + 0.5, c.x, c.y) <= R * R) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 }); destroyBuilding(e, false, true); }
+  if (!cand.length) return;
+  cand.sort((a, d) => a[0] - d[0] || a[1] - d[1]);
+  for (let k = 0; k < Math.min(n, cand.length); k++) {
+    const t = cand[k][1];
+    if (S.tun && S.tun[t]) { S.tun[t] = 0; if (S.mur) S.mur.ver = (S.mur.ver || 0) + 1; }
+    if (S.res[t] === R_VEIN) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; }
+    markDirty(t % S.W, (t / S.W) | 0);
+  }
+  const P = S.players[b.owner];
+  if (P && n !== Infinity) P.stats.atmosWither = (P.stats.atmosWither || 0) + 1;
+}
+
+/** The Garden seeds a grove (a stalk grove: Fiber) on open ground in Engine b's reach, up to ATMOS.groves there. */
+function atmosSeed(b) {
+  const c = bCentre(b), R = atmosReach(b);
+  let have = 0, best = -1, bs = -1;
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, c.x, c.y) > R * R) continue;
+    const t = tIdx(i, j);
+    if (S.res[t] === R_STALK) { have++; continue; }
+    if (S.green[t] !== 4 || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || S.resRes[t] || footDist(b, i + 0.5, j + 0.5) < 3) continue;
+    const s = hash2(t, b.id, Math.floor(S.time / ATMOS.seedEvery));
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (have >= ATMOS.groves || best < 0) return;
+  S.res[best] = R_STALK; S.amt[best] = RES[R_STALK].amount; S.grow[best] = 0;
+  markDirty(best % S.W, (best / S.W) | 0);
+  const P = S.players[b.owner];
+  if (P) P.stats.atmosGroves = (P.stats.atmosGroves || 0) + 1;
+}
+
+/** Engine b is gone (destroyBuilding): what it changed stays; its calm and its hold on the Bloom fade over ATMOS.fade s. */
+function atmosGone(b) {
+  const c = bCentre(b), R = atmosReach(b);
+  if (R > 0 && b.aeStage) (S.aeFade = S.aeFade || []).push({ x: c.x, y: c.y, r: R, st: b.aeStage, t0: S.time });
+  logEvent({ t: S.time, k: 'atmosLost', p: b.owner, g: b.aeStage || 1 });
+  const P = S.players[b.owner];
+  if (P && !b.gone) postMsg(b.owner, 'Your Atmosphere Engine is gone. The land it changed stays green, but the storms and the Bloom will come back in at its edges.', c.x, c.y, 'lost');
+}
+
+/*
+ * Where the Engines hold the weather and the Bloom, this tick: each standing one with a stage (its reach), and each fallen
+ * one's, shrinking to nothing over ATMOS.fade s. { x, y, r, st, id }. Worked out once a tick (bots ask it in a dust storm).
+ */
+let ATMOS_HOLD = { of: null, tick: -1, list: [] };
+function atmosHolds() {
+  if (ATMOS_HOLD.of === S && ATMOS_HOLD.tick === S.tick) return ATMOS_HOLD.list;
+  const list = [];
+  for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].atmos && b.aeStage) { const c = bCentre(b), r = atmosReach(b); if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id }); }
+  for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0 }); }
+  ATMOS_HOLD = { of: S, tick: S.tick, list };
+  return list;
+}
+/** The highest stage of an Engine's hold over (x, y): 1 calm (no dust storm), 2 the Bloom can't spread, 4 no exit. 0 none. */
+function atmosAt(x, y) {
+  if (!S.buildings.length) return 0;
+  let st = 0;
+  for (const h of atmosHolds()) if (h.st > st && dist2(x, y, h.x, h.y) <= h.r * h.r) st = h.st;
+  return st;
+}
+/** Does building e draw the Murmur first (an Atmosphere Engine standing: they hate it, and come from ATMOS.lure tiles further)? */
+function atmosLure(e) { return !!(e.built && BDEFS[e.type].atmos); }
+/** Is (x, y) in an Engine's Garden, where no Murmur exit can open? */
+function atmosGardenAt(x, y) { const H = atmosHolds(); return H.length > 0 && H.some((h) => h.st >= 4) && atmosAt(x, y) >= 4; }
+
+/** How much of the land (ground tiles) has an Engine greened (stage 3 or more, not burned since)? { n, of } */
+function atmosGreened() {
+  let n = 0, of = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) if (S.terrain[t] === T_GROUND) { of++; if ((S.green[t] || 0) >= 3) n++; }
+  return { n, of };
 }
