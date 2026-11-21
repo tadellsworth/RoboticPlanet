@@ -10581,33 +10581,67 @@ function drawLanceLine(ctx, ox, oy, z, b, i, j, bright) {
 }
 
 /**
- * Arrival City: its art (city@T), or battle-damaged while it's down (city-down@T: dark, scorched, broken), and at dusk its
- * lights coming on tier by tier, on a timer (cityLights). A stub (the build menu, a site's ghost) is drawn whole.
+ * Arrival City (the owner's look A, Four Blocks round a Square): its art (city@T), or knocked down by fighting
+ * (city-down@T: windows dark and broken, panels cracked, the C of WELCOME fallen), and at dusk its lights coming on
+ * on a timer (cityLights): the lamps first, then the windows floor by floor, WELCOME HOME and the clock last, the LED
+ * strips round its roofs in its owner's colour. Down, what still burns (WEL OME HOME, the clock) flickers.
+ * A stub (the build menu, a site's ghost) is drawn whole.
  */
 function drawCity(ctx, cx, cy, s, owner, b) {
   const down = !!(b && b.built && b.cDown);
   const art = (down && artFor('city-down', owner)) || artFor('city', owner);
   if (!art) { drawMegaPlain(ctx, 'city', cx, cy, s, owner, b); return; }
   drawArt(ctx, art, cx, cy, s);
-  if (b && b.id && b.built && !down && !b.cDry && !nightDark(b)) cityLights(ctx, cx, cy, s);
+  if (b && b.id && b.built && !b.cDry && !nightDark(b)) cityLights(ctx, cx, cy, s, owner, down, b.id);
 }
 /**
  * How far each of Arrival City's four tiers of lights is on (0..1) at the light now (TOD.state.lights): the street lamps
- * first as dusk falls, then the terraces floor by floor, the atrium and its clock last, all on together by night.
+ * first as dusk falls, then the windows floor by floor, the top floors, the letters and the clock last, all on together by night.
  */
 function cityLightLevel(k) { const on = TOD.active ? TOD.state.lights || 0 : 0; return Math.max(0, Math.min(1, (on - 0.08 - k * 0.16) / 0.16)); }
-function cityLights(ctx, cx, cy, s) {
+function cityLights(ctx, cx, cy, s, owner, down, id) {
   if (!TOD.active || R.inMap) return;
   const ga = ctx.globalAlpha;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  if (down) { // (the wreck: the letters still lit but one, and the clock, on a failing circuit; steady on Graphics Saver)
+    const a = cityLightLevel(3), art = ART['city-lit-down'];
+    if (a > 0.01 && art) {
+      const t = R.time * 7 + id * 1.7, f = gfx().fx < 1 ? 0.8 : Math.sin(t) * Math.sin(t * 0.37 + 1) > 0.55 ? 0.15 : 0.75 + 0.25 * Math.sin(t * 3.1);
+      ctx.globalAlpha = ga * a * f; drawArtRaw(ctx, art, cx, cy, s);
+    }
+    ctx.restore(); return;
+  }
   for (let k = 0; k < 4; k++) {
     const a = cityLightLevel(k), art = ART['city-lit-' + k];
     if (a <= 0.01 || !art) continue;
     ctx.globalAlpha = ga * a;
     drawArtRaw(ctx, art, cx, cy, s);
   }
+  // the LED strips round the roofs, in the owner colony's colour (a capture changes it), with the street lamps
+  const a = cityLightLevel(0), led = ART['city-led'];
+  if (a > 0.01 && led && led.img) {
+    const img = cityLedTint(led, PLAYER_COLORS[owner] || '#ffffff', s * (led.scale || 1) * (R.drawScale || 1));
+    if (img) { const sz = s * (led.scale || 1); ctx.globalAlpha = ga * a; ctx.drawImage(img, cx - led.anchor[0] * sz, cy - led.anchor[1] * sz, sz, sz); }
+  }
   ctx.restore();
+}
+/** Arrival City's LED light (white) tinted in a colony's colour, made once per colour and size step and kept. */
+const CITY_LED = new Map();
+function cityLedTint(art, col, px) {
+  const src = artMip(art, px);
+  if (!src || !src.width) return null;
+  const key = col + '|' + src.width;
+  let c = CITY_LED.get(key);
+  if (c) return c;
+  c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height); // (its colour, its light's shape)
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.35; g.drawImage(src, 0, 0); // (a whiter core)
+  if (CITY_LED.size > 24) CITY_LED.clear();
+  CITY_LED.set(key, c);
+  return c;
 }
 
 /** Arrival City being taken (b.cCap of CITY.cap s by b.cBy): a ring round it filling in the taker's colour, and its flag. */
@@ -10937,9 +10971,11 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
   ctx.fillStyle = 'rgba(20,14,10,0.3)'; roundRect(ctx, cx - w / 2 + s * 0.08, cy - w / 2 + s * 0.12, w, w, s * 0.2); ctx.fill();
   ctx.fillStyle = THEME.hull; roundRect(ctx, cx - w / 2, cy - w / 2, w, w, s * 0.2); ctx.fill();
   ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.stroke();
-  if (type === 'city') { // (three stepped terraces, a lit atrium)
-    for (let k = 1; k <= 3; k++) { const ww = w * (1 - k * 0.22); ctx.fillStyle = k % 2 ? THEME.hullHi : THEME.hull; roundRect(ctx, cx - ww / 2, cy - ww / 2 - k * s * 0.15, ww, ww, s * 0.12); ctx.fill(); }
-    ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  if (type === 'city') { // (four blocks round a square, the clock in the middle)
+    const h = w / 2, t = w * 0.13;
+    ctx.fillStyle = THEME.hullHi;
+    for (const [x, y, ww, hh] of [[-h, -h, w, t * 1.2], [-h, -h + t * 1.6, t, w - t * 3.4], [h - t, -h + t * 1.6, t, w - t * 3.4], [-h, h - t, w, t]]) { ctx.fillRect(cx + x, cy + y - s * 0.15, ww, hh); }
+    ctx.fillStyle = '#ffd58a'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();
   } else if (type === 'gup') { // (a big white dish, tilted to the sky)
     ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();

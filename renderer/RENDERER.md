@@ -607,15 +607,17 @@ dome are drawn in code (`js/render.js`, the megastructures) from `LANCE_ART`.
 
 ## Arrival City
 
-The owner's look A, the Terraced Arcology (Nov 2026; IDEAS.md, "Megastructures"). `b/city.js` is a 4 x 4 building on its
-own 40 x 40 plaza (framed wide with `frameCompoundOpts`: the plaza's 40 units across 0.64 of the frame; the sun's
-shadow camera widened to the whole square). Its window rows are textures on each terrace's faces (one canvas for the
-wall, one for its windows' light). `state=down` is the battle-damaged City. `part=lit&tier=k` (k 0..3) renders only
-tier k's lights as glowing (in the glow pass): 0 the street, 1-3 the terraces from the bottom, the atrium and clock
-with the third. Every other render has those lights off. Marks `clock`, `atrium` and `station`. Run from this folder:
+The owner's look A from the second sheet, Four Blocks round a Square (Nov 21 2026, replacing the Terraced Arcology;
+IDEAS.md, "Megastructures"). `b/city.js` is a 4 x 4 building on its own 40 x 40 plaza (framed wide with
+`frameCompoundOpts`: the plaza's 40 units across 0.64 of the frame; the sun's shadow camera widened to the whole
+square): four panel blocks round a square. Its panel grids are textures on each block's faces (one canvas for the
+wall, one for its windows' light). `state=down` is the battle-damaged City. `part=lit&tier=k` renders only tier k's
+lights as glowing (in the glow pass): 0 the street and square, 1-3 the windows floor by floor (WELCOME HOME, the clock
+and the Ring with the third), 4 the LED strips in white, 5 (with `state=down`) what still burns on the wreck. Every
+other render has those lights off but the masts' red lights. Marks `clock`, `sign` and `stop`. Run from this folder:
 
 ```
-sh tools/render_city.sh [out]     # the City and the damaged City for both teams at every time of day, the 4 light tiers (~10 min)
+sh tools/render_city.sh [out]     # the City and the damaged City for both teams at every time of day, the 6 light layers (~10 min)
 python3 tools/install_city.py     # writes the WebP files into ../art, prints CITY_FRAME
 ```
 

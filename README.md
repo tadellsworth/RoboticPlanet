@@ -2259,7 +2259,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     down and burns no Crystal; turned back on (`setPaused`) it stays down for `warm` (30) s, `b.dWarm`, as long as a
     nuke's flight, so it can't be raised on seeing a launch.
   - **Arrival City** (`BDEFS.city`, `CITY`; key C; 60 Cement, 30 Alloy, 15 Chips, 24 Fiber; 300 s; 4 × 4; the owner's
-    look A, the Terraced Arcology, Nov 2026). It opens `CITY.at` (15 min) into a free-play game (`cityOpen`; a mission
+    look A, Nov 2026; its look since Nov 21 the second sheet's A, Four Blocks round a Square). It opens `CITY.at` (15 min) into a free-play game (`cityOpen`; a mission
     with `mega`: at once) and is banned on Argos, the Lunar biome (`worldBan`). **Arrival drive** (`cityBoost(owner, x,
     y)`): its owner's work within `reach` (8) tiles of its middle goes `boost` (20%) faster: `produce` (factories, the
     Oil Pump, the Bot Foundry), the gather/farm/plant timer in `doStaff` and `doBuild`'s site progress; half that while
@@ -2277,9 +2277,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (2.5) tiles of its walls (`footDist`), none of its owner's side there, count `b.cCap` up to `cap` (20) s for `b.cBy`
     (contested or empty, it runs back), then `cityTaken`: owner, land, boost and Domination count change sides
     (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, count, taker,
-    Fuel and dark. Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): `city@T`,
-    `city-down@T` (every time of day) and four light layers `city-lit-0..3` that `drawCity`/`cityLights` add at dusk
-    tier by tier on a timer (`cityLightLevel`: lamps, then the terraces, the atrium and clock last), a warm pool and
+    Fuel and dark. Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): four prefab panel blocks
+    of raw concrete round a square (lawns, deer, a fountain, the Arrival clock on a stele ringed like Ithaca I, an empty
+    tram at its stop, WELCOME HOME on the north roof): `city@T`, `city-down@T` (every time of day: dark broken windows,
+    cracked and fallen panels, a corner blown out, the C fallen) and four light layers `city-lit-0..3` that
+    `drawCity`/`cityLights` add at dusk tier by tier on a timer (`cityLightLevel`: lamps, then the windows floor by
+    floor, the top floors, WELCOME HOME, the clock and the Ring last), `city-led` (the LED strips round its roofs, white,
+    tinted in the owner's colour once per colour and size: `cityLedTint`; on with the lamps), `city-lit-down` (what still
+    burns on the wreck, WEL OME HOME and the clock, flickering; steady on Graphics Saver), a warm pool and
     a wide glow (`drawCityGlow`), its reach and land when placing or selected (`drawRanges`), a ring filling in the
     taker's colour (`drawCityTaking`). Sound: `cityHum` (an empty-city drone on the Ambience volume, near one on screen),
     `cityclock` (its clock striking now and then) and `citychime` (the station chime when it's taken or lit again).

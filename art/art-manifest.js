@@ -246,11 +246,13 @@ const ART_MANIFEST = {
   // the charge rings' glow and the cut are drawn in code (js/render.js, the megastructures).
   ...Object.fromEntries([0, 1].flatMap((t) => [[`lance@${t}`, { src: `buildings/lance@${t}.webp`, ...LANCE_FRAME }], [`dome@${t}`, { src: `buildings/dome@${t}.webp`, ...DOME_FRAME }]])),
   ...Object.fromEntries(Array.from({ length: 16 }, (_, k) => [`lance-head-${k}`, { src: `buildings/lance-head-${k}.webp`, ...LANCE_FRAME }])),
-  // Arrival City (renderer/b/city.js, the owner's look A, the Terraced Arcology, installed by tools/install_city.py): the
-  // 4 x 4 City and the City knocked down (battle-damaged, dark), framed wide (CITY_FRAME), and its four tiers of lights
-  // (light to add, one set for every team and time of day: drawCity lights them tier by tier at dusk, on a timer).
+  // Arrival City (renderer/b/city.js, the owner's look A, Four Blocks round a Square, installed by tools/install_city.py):
+  // the 4 x 4 City and the City knocked down (battle-damaged, dark), framed wide (CITY_FRAME); its four tiers of lights
+  // (light to add, one set for every team and time of day: drawCity lights them tier by tier at dusk, on a timer), the
+  // LED strips round its roofs in white (tinted in the owner's colour in code), and what still burns on the wreck.
   ...Object.fromEntries([0, 1].flatMap((t) => [[`city@${t}`, { src: `buildings/city@${t}.webp`, ...CITY_FRAME }], [`city-down@${t}`, { src: `buildings/city-down@${t}.webp`, ...CITY_FRAME }]])),
-  ...Object.fromEntries([0, 1, 2, 3].map((k) => [`city-lit-${k}`, { src: `buildings/city-lit-${k}.webp`, ...CITY_FRAME }])),
+  ...Object.fromEntries(['0', '1', '2', '3', 'down'].map((k) => [`city-lit-${k}`, { src: `buildings/city-lit-${k}.webp`, ...CITY_FRAME }])),
+  'city-led': { src: 'buildings/city-led.webp', ...CITY_FRAME },
   // The Orbital Lift (renderer/b/lift.js, the owner's look A, the Beacon Cable, installed by tools/install_lift.py): the
   // 3 x 3 anchor pad, and the pad below 30% of its armor (battle-damaged), framed wide (LIFT_FRAME). The cable above its
   // foot, its climbers and lights, its shadow and its fall are drawn in code (js/render.js, the Orbital Lift).

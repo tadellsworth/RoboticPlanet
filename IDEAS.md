@@ -37,6 +37,10 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   **B Piston Battery**. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
+  - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright
+    (art: `renderer/b/city.js`), the LED strips lit in the owner colony's colour (`city-led`, tinted in code), WELCOME
+    HOME on the roof, WEL OME HOME flickering on the wreck (`city-lit-down`). No rules changed. Open: whether the side
+    blocks should show their courtyard faces (the camera sees only their roofs and south gables), and a lit mosaic.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).

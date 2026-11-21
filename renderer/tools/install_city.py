@@ -1,14 +1,17 @@
-"""Writes Arrival City's art (b/city.js, the owner's look A, "Terraced Arcology") into the game's art folder as WebP, from
+"""Writes Arrival City's art (b/city.js, the owner's look A, "Four Blocks round a Square") into the game's art folder as WebP, from
 the renders tools/render_city.sh makes. Run from renderer/:
     python3 tools/install_city.py [<game>/art]
 
   buildings/city@T.webp          the City, 4 x 4, 512, framed wide, its lights off (windows dark glass, lamps unlit)
-  buildings/city-down@T.webp     knocked down to 0: scorched, a corner blown out, glass broken, the clock dark
+  buildings/city-down@T.webp     knocked down by fighting: windows dark and broken, panels cracked, a corner blown out
   tod/<time>/...                 the same, re-lit for morning, evening and night
-  buildings/city-lit-K.webp      the lights of tier K (0 the street lamps, station, tram and welcome sign; 1 the first
-                                 terrace's windows and the school; 2 the second's; 3 the third's, the atrium and the
-                                 Arrival clock), the glow pass bloomed, as light to add ('lighter'): its colour divided
-                                 by its alpha, so colour x alpha is the light. One set for every team and time of day.
+  buildings/city-lit-K.webp      the lights of tier K (0 the lamps, the fountain, the tram and its stop; 1 the ground and
+                                 first floors' windows and the lobbies; 2 the second and third floors'; 3 the top floors',
+                                 WELCOME HOME, the Arrival clock and the Ring), the glow pass bloomed, as light to add
+                                 ('lighter'): its colour divided by its alpha, so colour x alpha is the light. One set
+                                 for every team and time of day.
+  buildings/city-led.webp        the LED strips round the roofs, white (the game tints them in the owner's colour)
+  buildings/city-lit-down.webp   what still burns on the wreck: WEL OME HOME and the clock (the game flickers it)
 
 It prints CITY_FRAME (art/art-manifest.js: the frame's scale in tiles and its anchor, the middle of the square).
 """
@@ -52,8 +55,9 @@ def lights(name):
     return Image.fromarray(np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8), 'RGBA')
 
 
-for k in range(4):
+for k in ('0', '1', '2', '3', 'down'):
     save(lights(f'city-lit-{k}'), f'buildings/city-lit-{k}.webp', q=86)
+save(lights('city-led'), 'buildings/city-led.webp', q=86)
 
 g = json.load(open(f'{OUT}/day/city@0.geom.json'))
 sc = round(1 / (g['padTop'][2][0] - g['padTop'][3][0]), 4)

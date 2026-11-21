@@ -973,8 +973,8 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * takes `warm` s to come up (b.dWarm), as long as a nuke's flight, so it can't be flicked on when a launch is seen.
  */
 /*
- * Arrival City (BDEFS.city): a 4 x 4 terraced arcology of homes, parks, a school and a station, built for colonists who
- * never came (the owner's look A, Nov 2026). It opens `at` s into a free-play game (a mission that teaches it: at once).
+ * Arrival City (BDEFS.city): a 4 x 4 square of four panel apartment blocks round a green, with a tram stop, built for
+ * colonists who never came (the owner's look A, Nov 2026; its look since Nov 21, Four Blocks round a Square). It opens `at` s into a free-play game (a mission that teaches it: at once).
  * Every factory, gatherer, Oil Pump and Bot Foundry of its owner's within `reach` tiles of its middle works `boost`
  * faster, and Workers build that much faster there (cityBoost). It holds `land` tiles of land round its middle as an
  * Outpost does (a military claim), and in Domination every tile of that ring counts twice (cityLand). Its lights burn a
@@ -1365,7 +1365,7 @@ const BDEFS = {
   },
   city: {
     name: 'Arrival City', short: 'City',
-    desc: 'A 4 by 4 terraced arcology built for the colonists: homes, gardens, a school and a station, all finished and all empty, with the Arrival clock in its glass atrium. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
+    desc: 'A 4 by 4 square built for the colonists: four concrete apartment blocks round a green, a tram waiting at the stop, all finished and all empty, with the Arrival clock on its stele in the middle and WELCOME HOME on the roof. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
     cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 300,
   },
   lift: {

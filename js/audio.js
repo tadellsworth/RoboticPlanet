@@ -259,7 +259,7 @@ const BLAST_SIZE = {
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
   drizzle: 0.4, // (the Ring drizzle: a soft whoosh, heard only on screen)
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
-  citychime: 1.6, cityclock: 0.5, // (Arrival City's station chime, taken or repaired, heard off screen; its clock's chime only on it)
+  citychime: 1.6, cityclock: 0.5, // (Arrival City's tram-stop chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
@@ -903,7 +903,7 @@ function sfx(name, dest, y, dur) {
       for (let k = 0; k < 10; k++) _tone(1800 + Math.random() * 2600, 0.05, 'square', 0.012, null, 0.05 + Math.random() * 1.2, D);
       _noise(1.6, 0.08, { type: 'lowpass', freq: 300, to: 60, delay: 0.1, dest: D });
       break;
-    // Arrival City changing hands, or lit again: the recorded station chime, four soft bell notes rising, for no one.
+    // Arrival City changing hands, or lit again: the recorded tram-stop chime, four soft bell notes rising, for no one.
     case 'citychime':
       for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
       break;
@@ -961,7 +961,7 @@ function sfx(name, dest, y, dur) {
     case 'gupanswer':
       _tone(587.3, 5.5, 'sine', 0.06, null, 0, D); _tone(880, 4.2, 'sine', 0.012, null, 0.6, D); _tone(293.7, 5, 'sine', 0.02, null, 0.2, D);
       break;
-    // The Arrival clock striking: two slow, low bell notes from the atrium, the second a little lower, fading long.
+    // The Arrival clock striking: two slow, low bell notes from the stele in the square, the second a little lower, fading long.
     case 'cityclock':
       for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
       break;
@@ -1021,8 +1021,8 @@ function lanceHum(k, near) {
 }
 
 /*
- * Arrival City on screen, lit: the hum of an empty city (the low drone of its services running, a soft wind through
- * the terraces), as loud as it is near the middle of the screen (k 0..1; 0 stops it). On the Ambience volume.
+ * Arrival City on screen, lit: the hum of an empty city (the low drone of its services running, a soft wind between
+ * the blocks), as loud as it is near the middle of the screen (k 0..1; 0 stops it). On the Ambience volume.
  */
 const CITYHUM = { o: null };
 function cityHum(k) {
