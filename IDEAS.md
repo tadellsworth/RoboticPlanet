@@ -12,6 +12,13 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## The owner's notes, Nov 21 2026 (for later)
+
+- **Lance of Corvane cooling down:** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
+  normal look as the reload runs out (drawn from its reload clock; red at its hottest just after the shot).
+- **Mass Driver sound:** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
+  building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
+
 ## Sunsets per biome (built Nov 20 2026; open questions)
 
 Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's
