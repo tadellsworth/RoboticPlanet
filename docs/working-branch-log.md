@@ -287,3 +287,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Replaced the dusk bat’s generic flight shape with jointed wing membranes, a tail web and a distinct head. Gave each bat its own turn rhythm and linked its wing asymmetry to the bank angle.
 - Verified on a generated Rust map in Chromium with dusk lighting, including natural spawning, finite motion and game-scale rendering.
+
+### Hawks, vultures, crows and ravens
+
+- Replaced the shared bird silhouette with distinct wing and tail profiles, including a hawk’s rusty fan, fingered vulture wings, a crow’s fan tail and a raven’s wedge tail. Each uses its own flap and glide cadence. Updated the perched crow too.
+- Verified the flight and shadow silhouettes in Chromium and made before-and-after views at close-up and game scale.

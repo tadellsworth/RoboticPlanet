@@ -1469,6 +1469,34 @@ function owlFace(m) {
   return { offset: turn * 0.094, half: 0.074 - 0.027 * Math.abs(turn) };
 }
 
+// Span, wrist and tail proportions keep silhouettes distinct even when markings are too small to draw.
+const SOARING_BIRDS = {
+  hawk: {
+    span: 0.91, wrist: 0.096, tip: -0.148, chord: 0.37, fingers: true, sweep: 0.16,
+    tail: -0.536, tailWidth: 0.160, tailColor: '#a66c4d', body: 0.292, breadth: 0.118,
+    head: 0.190, headLength: 0.104, headWidth: 0.076, bill: 0.048,
+    cadence: 0.41, flapShare: 0.21, rollRate: 0.68, roll: 0.086,
+  },
+  vulture: {
+    span: 1.07, wrist: 0.081, tip: -0.20, chord: 0.41, fingers: true, sweep: 0.105,
+    tail: -0.642, tailWidth: 0.098, body: 0.316, breadth: 0.106,
+    head: 0.214, headLength: 0.070, headWidth: 0.054, bill: 0.049,
+    cadence: 0.25, flapShare: 0.10, rollRate: 1.52, roll: 0.142,
+  },
+  crow: {
+    span: 0.83, wrist: 0.107, tip: -0.32, chord: 0.36, fingers: false, sweep: 0.22,
+    tail: -0.619, tailWidth: 0.132, body: 0.282, breadth: 0.097,
+    head: 0.183, headLength: 0.112, headWidth: 0.066, bill: 0.103,
+    cadence: 1.12, flapShare: 0.78, rollRate: 0.97, roll: 0.069,
+  },
+  raven: {
+    span: 0.96, wrist: 0.096, tip: -0.353, chord: 0.38, fingers: true, sweep: 0.20,
+    tail: -0.676, tailWidth: 0.133, body: 0.292, breadth: 0.107,
+    head: 0.193, headLength: 0.120, headWidth: 0.075, bill: 0.115,
+    cadence: 0.77, flapShare: 0.48, rollRate: 0.86, roll: 0.084,
+  },
+};
+
 const FAUNA_DRAW = {
   /** A small bird: perched (seen side on, a plump body, head, tail; breast lighter) or in flight (faunaWings). */
   bird(ctx, x, y, s, m, a, air) {
@@ -2820,20 +2848,26 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** A crow on a dead tree, side on: black, tail down, a flick of the wings now and then. */
+  /** A perched crow keeps a heavy bill, glossy mantle and a broad tail below the branch. */
   crow(ctx, x, y, s, m, a, air) {
-    const col = a.K.col;
-    if (air) { faunaWings(ctx, x, y, s * 1.8, m.f, m.ph, col, air); return; }
-    const d = faunaSide(m), flap = m.flap !== undefined && FAUNA.t - m.flap < 0.6, tilt = Math.sin(m.look || 0) * 0.3;
-    ctx.save(); ctx.translate(x, y); ctx.scale(d, 1);
-    ctx.fillStyle = faunaCol(col[0]);
-    ctx.beginPath(); faunaEll(ctx, 0, -s * 0.25, s * 0.28, s * 0.15, -0.45);
-    ctx.moveTo(-s * 0.16, -s * 0.16); ctx.lineTo(-s * 0.42, s * 0.06); ctx.lineTo(-s * 0.3, s * 0.08); ctx.closePath();
-    faunaEll(ctx, s * 0.22, -s * 0.45, s * 0.12, s * 0.1, tilt);
-    if (flap) { ctx.moveTo(-s * 0.05, -s * 0.35); ctx.lineTo(-s * 0.2, -s * 0.75); ctx.lineTo(s * 0.12, -s * 0.38); ctx.closePath(); }
-    ctx.fill();
-    ctx.strokeStyle = faunaCol(col[1]); ctx.lineWidth = Math.max(0.7, s * 0.06);
-    ctx.beginPath(); ctx.moveTo(s * 0.3, -s * 0.46); ctx.lineTo(s * 0.46, -s * 0.42 + tilt * s * 0.2); ctx.stroke();
+    if (air) { FAUNA_DRAW.raptor(ctx, x, y, s, m, a, air); return; }
+    const [black, sheen, dark] = a.K.col, tilt = Math.sin(m.look || 0) * 0.27;
+    ctx.save(); ctx.translate(x, y); ctx.scale(faunaSide(m) * s, s);
+    ctx.strokeStyle = faunaCol(dark); ctx.lineWidth = Math.max(0.029, 0.38 / s); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-0.048, -0.169); ctx.lineTo(-0.062, -0.006); ctx.lineTo(0.030, -0.008);
+    ctx.moveTo(0.053, -0.152); ctx.lineTo(0.058, -0.023); ctx.lineTo(0.131, -0.016); ctx.stroke();
+    ctx.fillStyle = faunaCol(dark); ctx.beginPath(); ctx.moveTo(-0.167, -0.287); ctx.lineTo(-0.423, -0.112);
+    ctx.quadraticCurveTo(-0.405, -0.067, -0.369, -0.045); ctx.lineTo(-0.098, -0.187); ctx.fill();
+    ctx.fillStyle = faunaCol(black); ctx.beginPath(); faunaEll(ctx, -0.033, -0.264, 0.246, 0.122, -0.31); ctx.fill();
+    ctx.fillStyle = faunaCol(sheen, 0, 0.71); ctx.beginPath(); faunaEll(ctx, -0.125, -0.266, 0.160, 0.052, -0.36); ctx.fill();
+    ctx.translate(0.192, -0.389); ctx.rotate(tilt);
+    ctx.fillStyle = faunaCol(black); ctx.beginPath(); faunaEll(ctx, 0, 0, 0.137, 0.110, 0); ctx.fill();
+    ctx.fillStyle = faunaCol(dark); ctx.beginPath(); ctx.moveTo(0.064, -0.067);
+    ctx.quadraticCurveTo(0.202, -0.054, 0.263, 0.006);
+    ctx.quadraticCurveTo(0.211, 0.053, 0.066, 0.047); ctx.fill();
+    if (s >= 11) {
+      ctx.fillStyle = faunaCol('#9a9196'); ctx.beginPath(); faunaEll(ctx, 0.062, -0.047, 0.015, 0.011, 0); ctx.fill();
+    }
     ctx.restore();
   },
 
@@ -2938,10 +2972,74 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** A big bird on the air: a vulture, a hawk, a crow or a raven, gliding round (a few beats now and then). */
+  /** Soaring hawks, vultures and corvids use distinct planforms, strokes and tail shapes. */
   raptor(ctx, x, y, s, m, a, part) {
-    const beat = Math.sin(m.ph * 0.5) > 0.85;
-    faunaWings(ctx, x, y, s, m.f, beat ? m.ph * 7 : 0, a.K.col, part === 'shadow' ? 'shadow' : true, { glide: !beat, broad: true, band: a.kind === 'vulture' || a.kind === 'hawk' });
+    const kind = a.kind === 'crow1' ? 'crow' : a.kind;
+    const form = SOARING_BIRDS[kind] || SOARING_BIRDS.crow;
+    const [back, pale, dark] = a.K.col, shadow = part === 'shadow';
+    const cycle = ((m.ph * form.cadence) % 1 + 1) % 1;
+    const lift = cycle < form.flapShare ? Math.sin((cycle / form.flapShare) * Math.PI * 2) : 0;
+    const flap = Math.abs(lift), sweep = lift * form.sweep;
+    const turn = Math.sign(a.w || 0) * 0.055 + Math.sin(m.ph * form.rollRate) * form.roll;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+
+    for (const side of [-1, 1]) {
+      const span = side * (form.span * (1 - flap * 0.39) + side * turn);
+      const wrist = form.wrist - sweep * 0.19, tip = form.tip - sweep, chord = form.chord;
+      // Feather tips follow the same outer silhouette in both the air and shadow passes.
+      ctx.fillStyle = shadow ? '#111' : faunaCol(back);
+      ctx.beginPath(); ctx.moveTo(0.161, side * 0.075);
+      ctx.bezierCurveTo(0.254, span * 0.23, wrist + 0.109, span * 0.42, wrist, span * 0.61);
+      ctx.quadraticCurveTo(tip + 0.16, span * 0.86, tip, span);
+      if (form.fingers) {
+        ctx.quadraticCurveTo(tip - 0.073, span * 1.034, tip - 0.092, span * 0.969);
+        ctx.lineTo(tip - 0.058, span * 0.900); ctx.lineTo(tip - 0.166, span * 0.917);
+        ctx.quadraticCurveTo(tip - 0.230, span * 0.918, tip - 0.231, span * 0.860);
+        ctx.lineTo(tip - 0.183, span * 0.794); ctx.lineTo(tip - 0.291, span * 0.808);
+        ctx.quadraticCurveTo(tip - 0.337, span * 0.802, tip - 0.332, span * 0.748);
+        ctx.lineTo(tip - 0.294, span * 0.695); ctx.lineTo(tip - 0.368, span * 0.679);
+      } else {
+        ctx.quadraticCurveTo(tip - 0.148, span * 0.988, tip - 0.218, span * 0.726);
+      }
+      ctx.quadraticCurveTo(-chord - 0.067, span * 0.55, -chord, span * 0.38);
+      ctx.quadraticCurveTo(-chord - 0.025, side * 0.134, -0.244, side * 0.041); ctx.fill();
+      if (shadow) continue;
+      ctx.fillStyle = faunaCol(kind === 'vulture' ? '#817668' : pale, 0, kind === 'hawk' ? 0.76 : 0.71);
+      ctx.beginPath(); ctx.moveTo(-0.019, side * 0.078);
+      ctx.quadraticCurveTo(wrist - 0.088, span * 0.47, tip + 0.008, span * 0.74);
+      ctx.quadraticCurveTo(tip - 0.126, span * 0.711, -chord + 0.047, span * 0.437);
+      ctx.quadraticCurveTo(-chord + 0.020, side * 0.152, -0.194, side * 0.073); ctx.fill();
+      if (s >= 12) {
+        ctx.strokeStyle = faunaCol(dark, 0, 0.50); ctx.lineWidth = 0.018; ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let k = 0; k < 4; k++) {
+          const at = 0.25 + k * 0.13;
+          ctx.moveTo(wrist - 0.177 - k * 0.047, span * (at - 0.12));
+          ctx.quadraticCurveTo(-chord + 0.072, span * at, -chord + 0.016 - k * 0.012, span * (at + 0.028));
+        }
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = shadow ? '#111' : faunaCol(form.tailColor || dark);
+    ctx.beginPath(); ctx.moveTo(-0.174, -0.081); ctx.lineTo(form.tail + 0.061, -form.tailWidth);
+    if (kind === 'raven') {
+      ctx.lineTo(form.tail - 0.097, 0); ctx.lineTo(form.tail + 0.061, form.tailWidth);
+    } else ctx.quadraticCurveTo(form.tail - (kind === 'crow' ? 0.036 : 0.078), 0, form.tail + 0.061, form.tailWidth);
+    ctx.lineTo(-0.174, 0.081); ctx.fill();
+    ctx.fillStyle = shadow ? '#111' : faunaCol(back);
+    ctx.beginPath(); faunaEll(ctx, -0.086, 0, form.body, form.breadth, 0); ctx.fill();
+
+    if (!shadow && kind === 'vulture') {
+      ctx.fillStyle = faunaCol('#a49b83'); ctx.beginPath(); faunaEll(ctx, 0.106, 0, 0.053, 0.065, 0); ctx.fill();
+    }
+    ctx.fillStyle = shadow ? '#111' : faunaCol(kind === 'vulture' ? '#a65e50' : back);
+    ctx.beginPath(); faunaEll(ctx, form.head, 0, form.headLength, form.headWidth, 0); ctx.fill();
+    ctx.fillStyle = shadow ? '#111' : faunaCol(kind === 'vulture' || kind === 'hawk' ? '#a28d66' : dark);
+    ctx.beginPath(); ctx.moveTo(form.head + form.headLength * 0.65, -form.headWidth * 0.64);
+    ctx.quadraticCurveTo(form.head + form.headLength + form.bill * 0.5, -form.headWidth * 0.50, form.head + form.headLength + form.bill, 0);
+    ctx.quadraticCurveTo(form.head + form.headLength + form.bill * 0.31, form.headWidth * 0.55, form.head + form.headLength * 0.66, form.headWidth * 0.62); ctx.fill();
+    ctx.restore();
   },
 };
 

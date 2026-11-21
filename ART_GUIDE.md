@@ -1905,3 +1905,8 @@ crouched body and a long bound. Dry-biome hares have sandy coats. Polar hares ke
 Dusk bats have dark brown bodies and scalloped membranes stretched along visible wing fingers.
 Each bat varies its wingbeat and banks into turns. The wings compress asymmetrically during a
 bank, so the motion reads at game scale.
+
+Soaring birds have species-specific profiles in `SOARING_BIRDS`. Hawks have broad wings and a broad
+rust-colored fan. Vultures rock gently on long, fingered wings. Crows beat more often and spread a
+rounded fan, while ravens coast longer between beats and show a wedge tail. Both the flight and shadow
+draws use the same outlines.
