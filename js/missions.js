@@ -1508,7 +1508,7 @@ const MISSIONS = [
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Make</b> (<kbd>2</kbd>) → <b>Ammo Plant</b> (<kbd>I</kbd>). It rests at 24 Ammo: tap it → Stock limit <b>+</b>.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='armory'], #goods .res-chip[data-g='ammo']" },
       { kind: 'built', type: 'repair', n: 1,
-        hint: '<b>Build</b> → <b>Defend</b> (<kbd>4</kbd>) → <b>Repair Station</b> (<kbd>E</kbd>): hurt robots come to it.',
+        hint: '<b>Build</b> → <b>Defend</b> (<kbd>4</kbd>) → <b>Repair Station</b> (<kbd>R</kbd>): hurt robots come to it.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='repair']" },
       { kind: 'rallyPoint', n: 1, text: 'Set a rally point for new warbots', at: 'outpost',
         count: (P) => (P.rallyPost && rallyPostOf(0) ? 1 : 0),
@@ -1676,7 +1676,7 @@ const MISSIONS = [
     id: 'lance', name: 'Aimed the Other Way', chapter: 'War',
     brief: 'The archive\'s last pages hold an orbital defence, a city, a lift to the Carrier and a dish aimed home. Build them, and fire along their depots.',
     intro: [
-      'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot.',
+      'A <b>Shield Dome</b> stops what falls on your base from outside: Missiles, bombs, shells, a nuke, one Lance shot. Turn it off to save Crystal, but it takes 30 seconds to come back up.',
       'It burns a Crystal every 20 seconds and needs a <b>Generator</b> with Fuel within 4 tiles.',
       'The <b>Lance of Corvane</b> fires a beam across the whole map. It needs 2 Generators with Fuel by its pit.',
       'It charges for 90 seconds, and everyone hears it. Everything on the line goes, yours too.',

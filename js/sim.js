@@ -4144,7 +4144,9 @@ function updateBuilding(b, dt) {
   if (def.gup) updateGup(b, dt); // (first: cut off or paused, its transmission runs back as without power)
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
+    if (def.dome) b.dUp = 0;
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
+      : def.dome ? `Off: the dome is down and saves its Crystal (turned on, it takes ${DOME.warm} s to come up)`
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
   }
@@ -9371,7 +9373,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -9380,6 +9382,8 @@ function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.bur
  */
 function setPaused(b, paused) {
   if (b.dead || !pausable(b)) return;
+  if (BDEFS[b.type].dome && b.paused && !paused) b.dWarm = S.time + DOME.warm; // (a Shield Dome turned back on takes DOME.warm s to come up)
+  if (BDEFS[b.type].dome && paused) { b.dUp = 0; delete b.dWarm; }
   b.paused = !!paused;
   if (b.paused && BDEFS[b.type].staff) unstaff(b);
   if (b.paused) { b.working = false; b.chg = 0; }
@@ -17415,7 +17419,7 @@ function hashState() {
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
-    if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); }
+    if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); num(b.dWarm || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
@@ -18032,6 +18036,10 @@ function updateDome(b, dt) {
     postMsg(b.owner, 'Your Shield Dome is back up.', b.x, b.y, 'good');
   }
   const pow = domePowered(b), cry = (b.dCry || 0) > 0 || (b.stock.crystal || 0) > 0;
+  if (b.dWarm) {
+    if (S.time < b.dWarm) { b.dUp = 0; b.working = false; b.status = `Powering up: the dome comes up in ${fmtSecs(b.dWarm - S.time)}` + (!pow ? ' (once it has power)' : !cry ? ' (once it has Crystal)' : ''); return; }
+    delete b.dWarm;
+  }
   const was = b.dUp;
   b.dUp = pow && cry ? 1 : 0;
   b.working = !!b.dUp;
