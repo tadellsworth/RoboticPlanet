@@ -464,7 +464,7 @@ function duskSky(ctx, ox, oy, z) {
   ctx.globalAlpha = a * 0.19 * (1 - 0.5 * duskSmooth(0.7, 1, D.h)); // (0.26 till Nov 21: a bit much)
   ctx.fillStyle = g;
   if (D.dir > 0) ctx.fillRect(0, 0, Math.min(R.w, sx + rr * 0.8), R.h); else ctx.fillRect(Math.max(0, sx - rr * 0.8), 0, R.w, R.h); // (beyond, it has faded)
-  if (D.B.shafts) duskShafts(ctx, D, sx, sy, a);
+  // (light shafts: off for now, the owner, Nov 21 2026; duskShafts is kept for later)
   if (D.B.ring) duskRing(ctx, z, D);
   if (D.B.motes) duskMotes(ctx, z, D, a);
   ctx.restore();

@@ -2717,7 +2717,7 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   through fire colours and deepens to magenta and violet; dawn runs the other way, gentler and cooler. Corvane sets in
   the west and rises in the east, so the ground is lit from that side of the screen and falls into a cool long shade on
   the far side, and robots' drop shadows stretch and turn violet (`duskShadowLength`, `duskShadowRgb`). Each biome has
-  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts,
+  its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts (off for now: the owner, Nov 21 2026),
   plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
   `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
   Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
