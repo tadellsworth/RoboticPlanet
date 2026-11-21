@@ -1151,7 +1151,7 @@ function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land, accepts) 
     if (u.dead || !foes(u.owner, owner) || u.inside || u.dropping || u.under || BOTS[u.type].air) continue; // nothing shoots aircraft yet (nor a Sapper underground)
     if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
     if (ownLand && !isArmy(u) && foes(S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))], owner)) continue;
-    const d = dist2(u.x, u.y, x, y);
+    const br = BOTS[u.type].behemoth ? HARROW.r : 0, d = br ? sq(Math.max(0, Math.sqrt(dist2(u.x, u.y, x, y)) - br)) : dist2(u.x, u.y, x, y); // (the Harrow: in reach of its body, not its middle)
     if (d > bd && !(preferWar && d <= bwd)) continue;
     if ((accepts && !accepts(u)) || calmAt(u.x, u.y)) continue; // nothing shoots on a Trade Post's ground
     if (d <= bd) { bd = d; best = u; }
@@ -4854,7 +4854,7 @@ function updateTurret(b, def, dt) {
   shotFx(m.x - dcos(b.aim) * 0.32, m.y - dsin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
   sfx('pulse');
   const gun = def.gun || BDEFS.turret.gun;
-  damageBot(target, gun.damage, b.x + 0.5, b.y + 0.5);
+  damageBot(target, gun.damage, b.x + 0.5, b.y + 0.5, false, true);
   b.cd = gun.reload * auraRate(b);
   b.chg = 0;
   b.shotAt = S.time; // (the charge-up art's discharge frame)
@@ -4879,7 +4879,7 @@ function bunkerFire(b, def, dt) {
     const u = getE(id);
     if (!u || u.dead || target.dead || !useAmmo(u)) continue;
     const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;
-    damageBot(target, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)), cx, cy);
+    damageBot(target, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)), cx, cy, false, true);
     // One gun each side of the slit (the muzzles in the Bunker's art: 219 and 293, 373.5 px of its 512 canvas at scale 1.2).
     shotFx(cx + (fired ? 0.087 : -0.087), cy + 0.137, target.x, target.y, { color: PLAYER_COLORS[b.owner] });
     fired++;
@@ -5363,7 +5363,7 @@ function skirmShoot(u, v, power) {
   if (isMe(u.owner) || isMe(v.owner)) sfx('hit');
   if (!useAmmo(u)) { addFx('spark', (u.x + v.x) / 2, (u.y + v.y) / 2, { color: PLAYER_COLORS[u.owner] }); return; }
   const mul = SKIRM.bonus[v.type] || (!isArmy(v) ? SKIRM.soft : 1);
-  damageBot(v, Math.max(1, SKIRM.dmg * mul * power), u.x, u.y);
+  damageBot(v, Math.max(1, SKIRM.dmg * mul * power), u.x, u.y, false, true);
   shotFx(u.x, u.y, v.x, v.y, { color: PLAYER_COLORS[u.owner] });
 }
 
@@ -5481,7 +5481,7 @@ function railAct(u, foe, power, bld) {
     u.rc = 0;
     if (u.cd > 0) return true;
     u.cd = RAIL.sideReload; u.fought = 1;
-    damageBot(foe, RAIL.side * power, u.x, u.y);
+    damageBot(foe, RAIL.side * power, u.x, u.y, false, true);
     shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
     if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
     return true;
@@ -5786,10 +5786,12 @@ function formPlace(u, lead, gx, gy, dl, key) {
 /** Is bot u up in the air (a plane in flight, a robot on its parachute), out of reach of anything on the ground? */
 function aloft(u) { return !!(u.dropping || u.under || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)); } // (u.under: a Sapper underground, out of reach too)
 
-/** Bot u takes `dmg` (from (sx, sy), for a Bulwark's shield). Nothing hurts it on a Trade Post's ground (calmAt) but the planet itself (`nat`: Ringfall, the ground giving way). */
-function damageBot(u, dmg, sx, sy, nat) {
+/** Bot u takes `dmg` (from (sx, sy), for a Bulwark's shield). Nothing hurts it on a Trade Post's ground (calmAt) but the planet itself (`nat`: Ringfall, the ground giving way). `small`: small arms (a quarter of it to the Harrow). */
+function damageBot(u, dmg, sx, sy, nat, small) {
   if (aloft(u)) return; // up in the air: out of reach
   if (!nat && calmAt(u.x, u.y)) return;
+  // (the Harrow: small arms do HARROW.small of their damage; a heavy blow makes it flinch)
+  if (BOTS[u.type].behemoth) { if (small) dmg *= HARROW.small; if (dmg >= 6 && u.task && u.task.ph === 'go' && u.pose !== 'hurt') murmurPose(u, 'hurt'); }
   if (sx !== undefined && SHIELDS.length) { dmg = shieldBlock(u, sx, sy, dmg); if (dmg <= 0) return; }
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
@@ -6957,7 +6959,7 @@ function startReload(u, t) {
 
 /** Can this unit use its weapon from here? Torches need to close to flame range. */
 function armyInRange(u, foe) {
-  const bt = BOTS[u.type], d = dist2(u.x, u.y, foe.x, foe.y);
+  const bt = BOTS[u.type], br = botBodyR(foe), d = br ? sq(Math.max(0, Math.sqrt(dist2(u.x, u.y, foe.x, foe.y)) - br)) : dist2(u.x, u.y, foe.x, foe.y);
   if (d <= sq(bt.range || WARBOT_RANGE)) return true;
   return !bt.flame && ((d <= sq(WARBOT_RANGE_BLOCKED) && !clearLine(u.x, u.y, foe.x, foe.y)) ||
     (d <= sq(WARBOT_RANGE_GAP) && overGap(u, foe)));
@@ -7120,7 +7122,7 @@ function warbotAct(u, dt) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
         u.cd = BULWARK.reload * pin;
         if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
-        damageBot(foe, BULWARK.dmg * power, u.x, u.y);
+        damageBot(foe, BULWARK.dmg * power, u.x, u.y, false, true);
         for (const sd of [-1, 1]) shotFx(u.x + dcos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + dsin((u.shAim ?? 0) + sd * 1.57) * 0.08, foe.x, foe.y, { color: '#c89bff', pulse: true });
         u.fought = 1;
       } else {
@@ -7128,7 +7130,7 @@ function warbotAct(u, dt) {
         u.face = datan2(foe.y - u.y, foe.x - u.x);
         if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
         if (useAmmo(u)) {
-          damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)), u.x, u.y);
+          damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)), u.x, u.y, false, true);
           shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
         } else addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] }); // a scuffle, no rounds
         u.fought = 1;
@@ -7556,11 +7558,18 @@ function ammoNear(u) {
 /* ------------------------------------------------------------------ the Howitzer */
 
 /** Can Howitzer u fire at building b (a rival's, standing)? */
-function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && foes(b.owner, u.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out && !calmB(b); }
+function rocketTarget(u, b) { if (b && b.ent === 'u') return isHarrow(b) && !b.dead && b.task && b.task.ph !== 'up' && !calmAt(b.x, b.y); return b && !b.dead && b.owner >= 0 && foes(b.owner, u.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out && !calmB(b); }
 
 /** An enemy building in reach of a parked, loaded Howitzer: forts and guns first, then the nearest. */
 function rocketTargetNear(u) {
   let best = null, bs = -Infinity;
+  for (const h of S.bots) { // (a Harrow in reach first: the gun's best use)
+    if (!rocketTarget(u, h)) continue;
+    const d = dist(u.x, u.y, h.x, h.y);
+    if (d > ROCKET.range - 0.25 || d < ROCKET.min) continue;
+    if (20 - d * 0.2 > bs) { bs = 20 - d * 0.2; best = h; }
+  }
+  if (best) return best;
   for (const b of S.buildings) {
     if (!rocketTarget(u, b) || !b.built) continue;
     const d = dist(u.x, u.y, b.x + 0.5, b.y + 0.5);
@@ -7758,7 +7767,7 @@ function updateRocket(u, dt) {
       u.task = { type: 'rearm', bld: d.id, back: t.auto ? 0 : b.id };
       return;
     }
-    const cx = b.x + 0.5, cy = b.y + 0.5, d = dist(u.x, u.y, cx, cy);
+    const cx = b.ent === 'u' ? b.x : b.x + 0.5, cy = b.ent === 'u' ? b.y : b.y + 0.5, d = dist(u.x, u.y, cx, cy);
     if (d <= ROCKET.range - 0.25 && d >= ROCKET.min) {
       // In reach: stop, dig in, then bring the gun to bear and fire salvo after salvo.
       u.path = null; u.vel = 0; u.drive = 0;
@@ -7839,7 +7848,8 @@ function updateRocket(u, dt) {
 /** Rocket truck u fires one rocket at building b: it lands within ROCKET.scatter of the middle of b's tile. */
 function launchRocket(u, b) {
   const k = S.tick + u.id * 7 + u.rockets;
-  const x1 = b.x + 0.5 + (hash2(k, u.id, 3) - 0.5) * 2 * ROCKET.scatter, y1 = b.y + 0.5 + (hash2(u.id, k, 5) - 0.5) * 2 * ROCKET.scatter;
+  const bx = b.ent === 'u' ? b.x : b.x + 0.5, by = b.ent === 'u' ? b.y : b.y + 0.5; // (a Harrow: at its middle)
+  const x1 = bx + (hash2(k, u.id, 3) - 0.5) * 2 * ROCKET.scatter, y1 = by + (hash2(u.id, k, 5) - 0.5) * 2 * ROCKET.scatter;
   const d = dist(u.x, u.y, x1, y1);
   const mx = u.x + dcos(u.face) * 0.26, my = u.y + dsin(u.face) * 0.26; // the raised barrel's end (its muzzle mark, dug in: 0.34 of the sprite ahead)
   S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(1.2, d / ROCKET.speed), x0: mx, y0: my, x1, y1 });
@@ -7847,7 +7857,7 @@ function launchRocket(u, b) {
   addFx('flash', mx, my, { r: 0.6, life: 0.12 });
   addFx('smoke', mx, my, { r: 0.55, life: 1.6 });
   addFx('smoke', u.x - dcos(u.face) * 0.3, u.y - dsin(u.face) * 0.3, { r: 0.4, life: 1.1 }); // dust kicked up by the recoil
-  if (isMe(u.owner) || isMe(b.owner)) sfx('howitzer');
+  if (isMe(u.owner) || (b.ent !== 'u' && isMe(b.owner))) sfx('howitzer');
 }
 
 /** Does a Howitzer's shell do ROCKET.fortMul damage to building b (a defence or an Outpost)? */
@@ -7860,8 +7870,8 @@ function rocketImpact(m) {
   scarBlast(m.x1, m.y1, 0.85);
   sfx('howitzerhit', m.x1, m.y1);
   const b = getE(m.target);
-  if (b && !b.dead && b.owner >= 0 && foes(b.owner, m.owner)) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
-  const direct = !!(b && !b.dead && foes(b.owner, m.owner) && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
+  if (b && b.ent !== 'u' && !b.dead && b.owner >= 0 && foes(b.owner, m.owner)) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
+  const direct = !!(b && b.ent !== 'u' && !b.dead && foes(b.owner, m.owner) && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
   if (direct) rocketHit(b, ROCKET.damage * (rocketFort(b) ? ROCKET.fortMul : 1), m.owner);
   // Splash on what's round it (the target too, on a near miss: a defence takes fortMul of it there as well).
   const s2 = ROCKET.splash * ROCKET.splash;
@@ -7870,6 +7880,7 @@ function rocketImpact(m) {
     rocketHit(e, ROCKET.splashBld * (e === b && rocketFort(e) ? ROCKET.fortMul : 1), m.owner);
   }
   for (const u of S.bots) if (!u.dead && !u.inside && foes(u.owner, m.owner) && !BOTS[u.type].wild && dist2(u.x, u.y, m.x1, m.y1) <= s2) damageBot(u, ROCKET.botDamage);
+  for (const u of S.bots) if (!u.dead && isHarrow(u) && dist2(u.x, u.y, m.x1, m.y1) <= sq(ROCKET.splash + HARROW.r)) damageBot(u, ROCKET.damage * ROCKET.fortMul); // (a Harrow: the shell's full weight)
 }
 
 function rocketHit(b, dmg, by) {
@@ -8778,9 +8789,9 @@ function missileImpact(m) {
   }
   const hitU = m.bot ? getE(m.bot) : null; // (the robot it was locked onto takes the full hit if it's still under it)
   const direct = hitU && !hitU.dead && !hitU.inside && dist2(hitU.x, hitU.y, m.x1, m.y1) <= 0.6 * 0.6 ? hitU : null;
-  if (direct) { hitByNow(direct.owner, m.owner); damageBot(direct, md.damage); }
+  if (direct) { hitByNow(direct.owner, m.owner); damageBot(direct, isHarrow(direct) ? HARROW.missile : md.damage); }
   for (const u of S.bots) {
-    if (u !== direct && !u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
+    if (u !== direct && !u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= sq(md.splash + botBodyR(u))) damageBot(u, isHarrow(u) ? HARROW.missile : md.botDamage);
   }
   // The blast craters the roads around it.
   const ci = Math.floor(m.x1), cj = Math.floor(m.y1), R0 = Math.ceil(MISSILE_ROAD);
@@ -11229,6 +11240,7 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
+  if (b.type === 'mound') harrowMound(b); // (almost down: two Harrows burst out of it)
   const tier = deepSurgeTier(b);
   if (tier && (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0))) {
     const surge = DEEP_SURGES[tier - 1];
@@ -11320,6 +11332,7 @@ function bruteTarget(u, r) {
 
 /** One creature's turn: guard its nest, or run its raid, fighting whatever it catches. */
 function updateCritter(u, dt) {
+  if (BOTS[u.type].behemoth) { harrowTick(u, dt); return; } // (the Harrow: see harrowTick)
   const bt = BOTS[u.type], nest = getE(u.nest);
   u.cd -= dt;
   u.moved = 0; u.fought = 0;
@@ -11538,11 +11551,13 @@ function murmurTick() {
       : 'The Murmur are stirring: night falls soon, and they come up through their tunnels. Bring your bots in close and man the guns.', undefined, undefined, 'warn');
     if (!S.players[ME] || !S.players[ME].absent) sfx('alert');
     if (murmurSmart()) murmurDusk(n + 1); // (Active: tonight's plans, and the watchers)
+    harrowRoll(n + 1); // (a long game on Active: the Harrow's one roll)
   }
   if (night && !M.night) murmurNightfall(n);
   else if (!night && M.night) murmurDawn();
   M.night = night ? 1 : 0;
   murmurDieback();
+  harrowMarks();
   const smart = murmurSmart();
   if (smart) murmurDeadTick();
   if (!night) return;
@@ -11601,6 +11616,7 @@ function murmurNightfall(n) {
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
+  harrowNight(n); // (the rolled Harrow, on its night)
   // A Sundering Ray they heard: its owner is told they come for it tonight.
   for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].sunder && b.sLure === n) postMsg(b.owner, 'The Murmur heard the Sundering Ray. Tonight the nests near it come for it first, in bigger packs: guard it.', b.x + 1, b.y + 1, 'warn');
 }
@@ -12743,6 +12759,408 @@ function murmurSpitHit(b) {
 }
 /** Is gun b shorted out by a Spitter just now (it doesn't fire)? */
 function shorted(b) { return !!(b && b.shortT && b.shortT > S.time); } // (render.js asks too: one copy, here)
+
+/* ------------------------------------------------------------------ the Harrow (the behemoth) */
+
+/**
+ * The Harrow (BOTS.harrow, HARROW in js/defs.js): the biggest of the Murmur. It comes up out of a cave-in crater
+ * (pose 'up', HARROW.up s), then walks at its colony (task 'harrow': p, the colony; tb, the building it's after; ph,
+ * 'up', 'go' or 'slam'; path and pi, its route as tiles), battering whatever stands in its way, tearing up the ground it
+ * walks over (harrowFurrow) and now and then rearing and slamming the ground (harrowSlam). Scuttlers ride on its back
+ * (u.riders) and drop off when it slams. Dead, it lies a while as a husk (S.mur.husks) and leaves a Crystal hoard;
+ * after HARROW.stay s it goes back down. It comes: on the Hollow when the Deep's mound breaks (harrowMound), in a long
+ * game on Active on a seeded night (harrowRoll, harrowNight), and wherever a mission or campaign calls spawnHarrow.
+ * State: the bot's task and pose, u.riders, S.mur.hw ({ roll, night, done, mound }), S.mur.craters, S.mur.cracks and
+ * S.mur.husks (where the drawing puts its crater, the slam's broken ground and the dead): all saved, checked by
+ * checkSave and in hashState.
+ */
+function isHarrow(u) { return !!(u && u.ent === 'u' && BOTS[u.type] && BOTS[u.type].behemoth); }
+/** How much further than its middle a shot reaches it: its body's half-width (only the Harrow's is big). */
+function botBodyR(u) { return u && BOTS[u.type] && BOTS[u.type].behemoth ? HARROW.r : 0; }
+/** Buildings it never wrecks (they have to be captured): a Command Base, Keep, megastructure or Arrival City; it knocks them down to HARROW.floor of their armor and walks on. */
+function harrowSpares(b) { const d = BDEFS[b.type]; return b.type === 'lander' || !!d.keep || !!d.mega || !!d.city; }
+/** The least armor it leaves building b with (0: none, it's wrecked). */
+function harrowFloor(b) { return harrowSpares(b) ? Math.max(1, Math.round(BDEFS[b.type].armor * HARROW.floor)) : 0; }
+/** Is building b a colony's, for the Harrow to go for (not the Murmur's, not on a Trade Post's ground)? */
+function harrowFoe(b) { return !!b && !b.dead && b.owner >= 0 && !isWild(b.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !calmB(b); }
+/** The Murmur's state for the Harrow (S.mur.hw and its lists), made if missing. */
+function harrowState() {
+  const M = S.mur || (S.mur = {});
+  if (!M.hw) M.hw = { roll: 0, night: 0, done: 0, mound: 0 };
+  for (const k of ['craters', 'cracks', 'husks']) if (!Array.isArray(M[k])) M[k] = [];
+  return M;
+}
+/** The live nest nearest (x, y), for its pack and its tunnel (null if none). */
+function harrowNest(x, y) {
+  let best = null, bd = Infinity;
+  for (const id of (S.mur && S.mur.nests) || []) { const b = getE(id); if (!b || b.dead) continue; const d = dist2(b.x + 0.5, b.y + 0.5, x, y); if (d < bd) { bd = d; best = b; } }
+  return best;
+}
+/** Open ground a Harrow can stand on at tile (i, j) (its middle). */
+function harrowGround(t) { return (S.terrain[t] === T_GROUND && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t])) || !!(S.ford && S.ford[t]); }
+
+/**
+ * A Harrow comes up out of the ground at (x, y) (tiles) and goes for colony p: a cave-in crater there, its pack with it
+ * (when a nest is left to send one: o.nest, else the nearest), and every colony told. o: { nest, noEscort, quiet }.
+ * Returns the Harrow, or null where it can't (no Murmur in the game, or no ground there). Missions and the campaigns
+ * call this; the Hollow's mound and the Active roll do too.
+ */
+function spawnHarrow(x, y, p, o = {}) {
+  if (!S.wildlife || !S.players[p]) return null;
+  murmurLayer();
+  const M = harrowState();
+  let i = clamp(Math.floor(x), 0, S.W - 1), j = clamp(Math.floor(y), 0, S.H - 1);
+  if (!harrowGround(tIdx(i, j))) { // (the nearest open ground)
+    let best = null, bd = Infinity;
+    for (let r = 1; r <= 6 && !best; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      const a = i + di, b = j + dj;
+      if (!inMap(a, b) || !harrowGround(tIdx(a, b))) continue;
+      const d = di * di + dj * dj; if (d < bd) { bd = d; best = [a, b]; }
+    }
+    if (!best) return null;
+    [i, j] = best;
+  }
+  const nest = o.nest ? getE(o.nest) : harrowNest(i + 0.5, j + 0.5);
+  const u = addBot(wildOwner(), 'harrow', i, j);
+  u.nest = nest && !nest.dead ? nest.id : 0;
+  u.pose = 'up'; u.poseT = 0; u.charge = 0.9; u.riders = u.nest ? HARROW.riders : 0;
+  u.task = { type: 'harrow', p, tb: 0, ph: 'up', born: Math.round(S.time * 1000) / 1000, slamAt: S.time + HARROW.up + 4 };
+  const L = getE(S.players[p].lander);
+  if (L) u.face = datan2(L.y + 0.5 - u.y, L.x + 0.5 - u.x);
+  // the ground caves in round it: crushed where it comes up (Walls, roads and all)
+  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+    const a = i + di, b = j + dj;
+    if (!inMap(a, b) || di * di + dj * dj > 5) continue;
+    const t = tIdx(a, b), e = S.bAt[t] ? getE(S.bAt[t]) : null;
+    if (e && harrowFoe(e)) { if (harrowSpares(e)) e.armor = Math.max(harrowFloor(e), e.armor - HARROW.slamBld); else destroyBuilding(e, true); }
+    if (S.road[t] && !crossTile(t) && !S.bAt[t]) wreckRoad(t, wayOwner(t), '');
+    if (S.rail && S.rail[t]) setRail(t, false);
+    if (S.pipe && S.pipe[t]) setPipe(t, 0);
+  }
+  M.craters.push({ x: i, y: j, t: Math.round(S.time * 1000) / 1000 });
+  if (M.craters.length > 16) M.craters.shift();
+  addFx('ring', i + 0.5, j + 0.5, { color: WILD_COLOR, r: 3.5, life: 1.4 });
+  for (let k = 0; k < 6; k++) addFx('dust', i + 0.5 + (hash2(u.id, k, 3) - 0.5) * 3, j + 0.5 + (hash2(u.id, k, 4) - 0.5) * 3, { r: 1.2 });
+  sfx('harrow', i + 0.5, j + 0.5);
+  // its pack, up with it, for the colony
+  if (u.nest && !o.noEscort && L) {
+    const from = { id: u.nest, x: i, y: j };
+    for (const type in HARROW.escort) for (let k = 0; k < HARROW.escort[type]; k++) {
+      const v = spawnCritter(from, type, { type: 'raid', x: L.x, y: L.y, until: S.time + HARROW.stay, night: 1 });
+      v.x += (hash2(v.id, k, 7) - 0.5) * 2.4; v.y += (hash2(v.id, k, 8) - 0.5) * 2.4;
+    }
+  }
+  if (!o.quiet) for (const P of S.players) {
+    if (P.absent || P.out || isWild(P.id)) continue;
+    postMsg(P.id, P.id === p ? 'A Harrow has broken out of the ground and is coming for your colony! The biggest of the Murmur: small arms barely scratch it. Gather a real army in the open, spread out, with Railgunners, Howitzers and Torches.'
+      : `A Harrow has broken out of the ground, heading for ${playerName(p)}.`, i, j, P.id === p ? 'lost' : 'warn');
+  }
+  return u;
+}
+
+/** Colony robots out in the open within r tiles of (x, y) (not aboard anything, not flying). */
+function harrowBotsNear(x, y, r) {
+  const out = [];
+  for (const v of S.bots) if (!v.dead && !v.inside && v.owner >= 0 && !isWild(v.owner) && !BOTS[v.type].air && !aloft(v) && dist2(v.x, v.y, x, y) <= r * r && !calmAt(v.x, v.y)) out.push(v);
+  return out;
+}
+/** Colony buildings with their middle within r tiles (plus half their size) of (x, y). */
+function harrowBuildingsNear(x, y, r) {
+  const out = [];
+  for (const b of S.buildings) { if (!harrowFoe(b)) continue; const c = bCentre(b), F = (BDEFS[b.type].foot || 1) / 2; if (dist2(c.x, c.y, x, y) <= sq(r + F)) out.push(b); }
+  return out;
+}
+
+/** What it goes for: its colony's building scoring most on charge (and the Command Base), less the way there; another colony's when its own has none. */
+function harrowTarget(u) {
+  const t = u.task, H = HARROW;
+  const pick = (ok) => {
+    let best = null, bs = -Infinity;
+    for (const b of S.buildings) {
+      if (!harrowFoe(b) || !ok(b) || (harrowSpares(b) && b.armor <= harrowFloor(b))) continue;
+      const c = bCentre(b), s = chargeWorth(b) * H.charge + (b.type === 'lander' ? 2 : 0) - dist(c.x, c.y, u.x, u.y) * H.far;
+      if (s > bs || (s === bs && best && b.id < best.id)) { bs = s; best = b; }
+    }
+    return best;
+  };
+  const P = S.players[t.p];
+  let b = P && !P.out ? pick((e) => e.owner === t.p) : null;
+  if (!b) { b = pick(() => true); if (b) t.p = b.owner; }
+  return b;
+}
+
+/**
+ * Its route to tile (gi, gj): over open ground only (round cliffs, water, lava), through buildings (it batters them
+ * down as it comes to them). Tile indices from the tile after its own to the goal, or null.
+ */
+function harrowPath(si, sj, gi, gj) {
+  const W = S.W, H = S.H, N = W * H, start = sj * W + si, goal = gj * W + gi;
+  if (start === goal) return [];
+  const g = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), closed = new Uint8Array(N), heap = new MinHeap();
+  const h = (i, j) => { const dx = Math.abs(i - gi), dy = Math.abs(j - gj); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
+  g[start] = 0; heap.push(start, h(si, sj));
+  const ok = (t) => t === goal || harrowGround(t);
+  while (heap.size) {
+    const cur = heap.pop();
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    if (cur === goal) break;
+    const ci = cur % W, cj = (cur / W) | 0;
+    for (const [di, dj, c] of [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]]) {
+      const ni = ci + di, nj = cj + dj;
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+      const nt = nj * W + ni;
+      if (closed[nt] || !ok(nt)) continue;
+      if (di && dj) { const a = cj * W + ni, b = nj * W + ci; if (!harrowGround(a) || !harrowGround(b) || !canStep(cur, a) || !canStep(a, nt) || !canStep(cur, b) || !canStep(b, nt)) continue; }
+      else if (!canStep(cur, nt)) continue;
+      const ng = g[cur] + c + (S.bAt[nt] ? 2 : 0); // (round a building where it's as short: it batters through where it isn't)
+      if (ng < g[nt]) { g[nt] = ng; from[nt] = cur; heap.push(nt, ng + h(ni, nj)); }
+    }
+  }
+  if (!closed[goal]) return null;
+  const out = [];
+  for (let t = goal; t !== start; t = from[t]) out.push(t);
+  return out.reverse();
+}
+
+/** One blow at building b (in its way, or what it came for): Walls and Gates go fast; a Command Base, Keep or megastructure is never knocked below 1. */
+function harrowBatter(u, b) {
+  const H = HARROW, c = bCentre(b);
+  u.path = null; u.fought = 1;
+  u.face = datan2(c.y - u.y, c.x - u.x);
+  if (u.cd > 0) return;
+  u.cd = H.every;
+  addFx('dust', (u.x + c.x) / 2, (u.y + c.y) / 2, { r: 0.8 });
+  addFx('spark', (u.x + c.x) / 2, (u.y + c.y) / 2, { color: '#c77dff' });
+  b.lastHit = S.time; b.wildHit = S.time;
+  const P = S.players[b.owner]; if (P) { const R = P.raided || (P.raided = {}); R.x = c.x; R.y = c.y; R.t = S.time; }
+  const charged = chargeWorth(b) >= 3;
+  b.armor -= H.smash * (BDEFS[b.type].barrier ? 2 : 1) * (b.built ? 1 : 2);
+  if (b.armor <= harrowFloor(b)) {
+    if (harrowSpares(b)) { b.armor = Math.min(BDEFS[b.type].armor, Math.max(b.armor, harrowFloor(b))); u.task.tb = 0; u.task.path = null; }
+    else {
+      postMsg(b.owner, `A Harrow crushed your ${BDEFS[b.type].name}!`, b.x, b.y, 'lost');
+      destroyBuilding(b, true);
+      if (charged) u.hp = Math.min(u.maxHp, u.hp + HARROW.feed); // (it feeds as it goes)
+      u.task.path = null;
+    }
+  } else if (S.time - (b.lastAlert || -99) > 12) {
+    b.lastAlert = S.time;
+    postMsg(b.owner, `A Harrow is battering your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
+    if (isMe(b.owner)) sfx('alert');
+  }
+}
+
+/** The ground it walks over: the roads, track and pipes on its tile and the tiles beside it torn up, and its nest's tunnel down the middle. */
+function harrowFurrow(u) {
+  const ci = Math.floor(u.x), cj = Math.floor(u.y), M = S.mur, nest = u.nest ? getE(u.nest) : null;
+  const k = nest && !nest.dead && M.nests ? M.nests.indexOf(nest.id) + 1 : 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (S.bAt[t]) continue;
+    if (S.road[t] && !crossTile(t)) wreckRoad(t, wayOwner(t), 'A Harrow is tearing up your roads');
+    if (S.rail && S.rail[t]) setRail(t, false);
+    if (S.pipe && S.pipe[t]) setPipe(t, 0);
+    if (S.plan[t]) cancelPlan(t);
+    if (k && !di && !dj && S.tun && !S.tun[t] && tunnelable(t)) { S.tun[t] = k; M.ver = (M.ver || 0) + 1; } // (one ridge down the middle of its path)
+  }
+}
+
+/** The slam: robots within slamR stunned and hurt, buildings dented (Walls, Gates, roads, track and pipes torn out), the riders jumping off. */
+function harrowSlam(u) {
+  const H = HARROW, M = harrowState(), x = u.x + dcos(u.face) * 1.2, y = u.y + dsin(u.face) * 1.2;
+  const hit = new Set();
+  for (const v of harrowBotsNear(x, y, H.slamR)) {
+    hit.add(v.owner);
+    damageBot(v, H.slamBot);
+    if (!v.dead) { v.stunT = Math.round((S.time + H.stun) * 1000) / 1000; v.cd = Math.max(v.cd || 0, H.stun); v.path = null; }
+  }
+  for (const b of harrowBuildingsNear(x, y, H.slamR)) {
+    hit.add(b.owner);
+    b.lastHit = S.time; b.wildHit = S.time;
+    if (BDEFS[b.type].barrier) { destroyBuilding(b, true); continue; }
+    if (harrowSpares(b)) b.armor = Math.max(Math.min(b.armor, harrowFloor(b)), b.armor - H.slamBld); else { b.armor -= H.slamBld; if (b.armor <= 0) destroyBuilding(b, true); }
+  }
+  const R0 = Math.ceil(H.slamR), ci = Math.floor(x), cj = Math.floor(y);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j) || di * di + dj * dj > H.slamR * H.slamR) continue;
+    const t = tIdx(i, j);
+    if (S.bAt[t]) continue;
+    if (S.road[t] && !crossTile(t)) wreckRoad(t, wayOwner(t), '');
+    if (S.rail && S.rail[t]) setRail(t, false);
+    if (S.pipe && S.pipe[t]) setPipe(t, 0);
+  }
+  M.cracks.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, t: Math.round(S.time * 1000) / 1000 });
+  if (M.cracks.length > 12) M.cracks.shift();
+  addFx('ring', x, y, { color: WILD_COLOR, r: H.slamR + 0.5, life: 0.9 });
+  addFx('flash', x, y, { r: 1.4, life: 0.2 });
+  for (let k = 0; k < 8; k++) { const a = k * 0.785 + hash2(u.id, k, S.tick) * 0.4; addFx('dust', x + dcos(a) * 2, y + dsin(a) * 2, { r: 1 }); }
+  sfx('harrowslam', x, y);
+  // the riders jump off
+  const nest = u.nest ? getE(u.nest) : null;
+  if (nest && !nest.dead) for (let k = 0; k < H.drop && (u.riders || 0) > 0; k++) {
+    u.riders--;
+    const tb = getE(u.task.tb), v = spawnCritter({ id: nest.id, x: Math.floor(u.x), y: Math.floor(u.y) }, 'scuttler', { type: 'raid', x: tb ? tb.x : Math.floor(x), y: tb ? tb.y : Math.floor(y), until: S.time + 300, night: 1 });
+    v.x = u.x + (hash2(v.id, 1, 9) - 0.5) * 2; v.y = u.y + (hash2(v.id, 2, 9) - 0.5) * 2;
+  }
+  for (const p of hit) if (S.players[p] && S.time - (S.players[p].slamMsg || -99) > 20) { S.players[p].slamMsg = S.time; postMsg(p, 'The Harrow slammed the ground: your robots near it are stunned, and the Walls and roads there are gone.', ci, cj, 'bad'); }
+}
+
+/** It goes back down (its time up, or nothing left to go for): a crater where it went. */
+function harrowDown(u, why) {
+  const M = harrowState();
+  M.craters.push({ x: Math.floor(u.x), y: Math.floor(u.y), t: Math.round(S.time * 1000) / 1000 });
+  if (M.craters.length > 16) M.craters.shift();
+  addFx('dust', u.x, u.y, { r: 2 });
+  for (const P of S.players) if (!P.absent && !P.out && !isWild(P.id)) postMsg(P.id, why || 'The Harrow went back down into the ground.', Math.floor(u.x), Math.floor(u.y), 'info');
+  despawnCritter(u);
+}
+
+/** Killed: it lies where it fell a while (S.mur.husks), its riders scatter, and a hoard of Crystal spills out of it. */
+function harrowDied(u) {
+  const M = harrowState(), H = HARROW;
+  M.husks.push({ x: Math.round(u.x * 100) / 100, y: Math.round(u.y * 100) / 100, a: Math.round((u.face || 0) * 1000) / 1000, t: Math.round(S.time * 1000) / 1000 });
+  if (M.husks.length > 8) M.husks.shift();
+  M.slain = M.slain || {}; M.slain.harrow = (M.slain.harrow || 0) + 1;
+  const nest = u.nest ? getE(u.nest) : null;
+  if (nest && !nest.dead) for (let k = 0; k < (u.riders || 0); k++) spawnCritter({ id: nest.id, x: Math.floor(u.x), y: Math.floor(u.y) }, 'scuttler', { type: 'home' });
+  u.riders = 0;
+  addLoot(Math.floor(u.x), Math.floor(u.y), { crystal: H.loot });
+  addFx('ring', u.x, u.y, { color: WILD_COLOR, r: 3, life: 1.6 });
+  for (let k = 0; k < 6; k++) addFx('dust', u.x + (hash2(u.id, k, 11) - 0.5) * 3, u.y + (hash2(u.id, k, 12) - 0.5) * 3, { r: 1.3 });
+  sfx('harrowdown', u.x, u.y);
+  let by = -1, bd = 100; // (the colony whose army stood nearest: its kill)
+  for (const v of S.bots) if (!v.dead && isArmy(v) && v.owner >= 0 && !isWild(v.owner)) { const d = dist2(v.x, v.y, u.x, u.y); if (d < bd) { bd = d; by = v.owner; } }
+  if (by >= 0 && S.players[by]) S.players[by].stats.harrows = (S.players[by].stats.harrows || 0) + 1;
+  for (const P of S.players) if (!P.absent && !P.out && !isWild(P.id)) postMsg(P.id, P.id === by ? 'The Harrow is down! Its Crystal hoard lies where it fell: send a Worker for it.' : 'The Harrow is down.', Math.floor(u.x), Math.floor(u.y), P.id === by ? 'good' : 'info');
+}
+
+/** One Harrow's turn (from updateCritter): coming up, then on at its colony, battering, slamming and tearing up the ground. */
+function harrowTick(u, dt) {
+  const H = HARROW, t = u.task && u.task.type === 'harrow' ? u.task : (u.task = { type: 'harrow', p: 0, tb: 0, ph: 'go', born: S.time, slamAt: S.time });
+  u.cd -= dt; u.moved = 0; u.fought = 0;
+  u.poseT = (u.poseT || 0) + dt;
+  if (t.ph === 'up') { if (u.poseT >= H.up) { t.ph = 'go'; murmurPose(u, 'walk'); } return; }
+  if (t.ph === 'slam') {
+    u.path = null;
+    if (!t.hit && u.poseT >= H.rear) { t.hit = 1; harrowSlam(u); }
+    if (u.poseT >= H.rear + 0.6) { t.ph = 'go'; t.hit = 0; t.slamAt = S.time + H.slamEvery; murmurPose(u, 'walk'); }
+    return;
+  }
+  if (S.time - t.born > H.stay) { harrowDown(u); return; }
+  if (u.pose === 'hurt' && u.poseT > 0.45) murmurPose(u, 'walk');
+  // the slam: when enough of a colony is round it
+  if (S.time >= (t.slamAt || 0)) {
+    const fx = u.x + dcos(u.face) * 1.2, fy = u.y + dsin(u.face) * 1.2;
+    if (harrowBotsNear(fx, fy, H.slamR).length + harrowBuildingsNear(fx, fy, H.slamR).length >= H.slamMin) { t.ph = 'slam'; t.hit = 0; murmurPose(u, 'slam'); u.path = null; return; }
+  }
+  // a hand at a robot within reach
+  if (u.cd <= 0) {
+    let v = null, bd = H.reach * H.reach;
+    for (const w of harrowBotsNear(u.x, u.y, H.reach)) { const d = dist2(w.x, w.y, u.x, u.y); if (d < bd || (d === bd && v && w.id < v.id)) { bd = d; v = w; } }
+    if (v) {
+      u.cd = H.every; u.fought = 1; u.face = datan2(v.y - u.y, v.x - u.x);
+      addFx('spark', (u.x + v.x) / 2, (u.y + v.y) / 2, { color: '#c77dff' });
+      damageBot(v, H.bite);
+      if (isMe(v.owner)) sfx('hit');
+      return;
+    }
+  }
+  // what it's after
+  let b = t.tb ? getE(t.tb) : null;
+  if (!b || !harrowFoe(b) || (harrowSpares(b) && b.armor <= harrowFloor(b)) || S.time >= (t.re || 0)) {
+    const nb = harrowTarget(u);
+    if (!nb) { harrowDown(u, 'The Harrow found nothing left to break, and went back down into the ground.'); return; }
+    if (!b || nb.id !== b.id) t.path = null;
+    b = nb; t.tb = nb.id; t.re = S.time + H.repath;
+  }
+  const c = bCentre(b), F = (BDEFS[b.type].foot || 1) / 2;
+  if (dist(u.x, u.y, c.x, c.y) <= H.reach + F) { harrowBatter(u, b); return; }
+  // on along its route; what stands in the way it batters down
+  if (!t.path || t.pi >= t.path.length) {
+    const p = harrowPath(Math.floor(u.x), Math.floor(u.y), Math.floor(c.x), Math.floor(c.y));
+    if (!p) { t.tb = 0; t.re = 0; t.miss = (t.miss || 0) + 1; if (t.miss > 4) harrowDown(u); return; }
+    t.path = p; t.pi = 0; t.miss = 0;
+  }
+  const nt = t.path[t.pi];
+  if (nt === undefined) { t.path = null; return; }
+  const blk = S.bAt[nt] ? getE(S.bAt[nt]) : null;
+  if (blk && harrowFoe(blk) && blk.id !== b.id && !(harrowSpares(blk) && blk.armor <= harrowFloor(blk))) { harrowBatter(u, blk); return; }
+  const tx = (nt % S.W) + 0.5, ty = ((nt / S.W) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
+  const s = Math.min(d, BOTS.harrow.speed * dt);
+  const before = tIdx(Math.floor(u.x), Math.floor(u.y));
+  if (d > 1e-4) { u.x += (dx / d) * s; u.y += (dy / d) * s; u.face = datan2(dy, dx); u.moved = 1; }
+  if (d - s < 0.05) t.pi++;
+  if (tIdx(Math.floor(u.x), Math.floor(u.y)) !== before) harrowFurrow(u);
+}
+
+/** The Hollow: the Deep's mound under HARROW.mound of its armor: two burst out of it (one for each colony, three or four on a bigger map), once. */
+function harrowMound(b) {
+  if (!S.wildlife || b.type !== 'mound' || b.dead) return;
+  const M = harrowState();
+  if (M.hw.mound || b.armor > BDEFS.mound.armor * HARROW.mound) return;
+  M.hw.mound = 1;
+  const cs = bCentre(b);
+  for (const P of S.players) {
+    if (P.absent || P.out || isWild(P.id)) continue;
+    const L = getE(P.lander);
+    if (!L) continue;
+    const a = datan2(L.y + 0.5 - cs.y, L.x + 0.5 - cs.x);
+    spawnHarrow(cs.x + dcos(a) * 4, cs.y + dsin(a) * 4, P.id, { nest: b.id });
+  }
+}
+
+/** A long game on Active: one roll from the game's seed at the dusk warning of night HARROW.rollNight; on a hit, the night it comes (seeded, HARROW.nights). */
+function harrowRoll(n) {
+  const M = harrowState(), H = HARROW;
+  if (M.hw.roll || n < H.rollNight || murmurLevel() !== 'active' || S.hollow || !harrowNest(0, 0)) return;
+  if (S.mission && !S.mission.harrowRoll) return; // (missions bring it themselves)
+  const r = hash2(S.seed >>> 0, 0x4a77, 61);
+  M.hw.roll = r < H.chance ? 2 : 1;
+  if (M.hw.roll === 2) M.hw.night = Math.max(n, H.nights[0] + Math.floor(hash2(S.seed >>> 0, 0x4a78, 67) * (H.nights[1] - H.nights[0] + 1)));
+}
+
+/** Nightfall of night n: the rolled Harrow comes up, through an exit of the nest grown most (or beside it), for the colony holding most charge. */
+function harrowNight(n) {
+  const M = harrowState();
+  if (M.hw.roll !== 2 || M.hw.done || n < M.hw.night) return;
+  let nest = null;
+  for (const id of M.nests || []) { const b = getE(id); if (!b || b.dead) continue; if (!nest || b.level > nest.level || (b.level === nest.level && b.born < nest.born) || (b.level === nest.level && b.born === nest.born && b.id < nest.id)) nest = b; }
+  if (!nest) return;
+  let p = -1, best = -1;
+  for (const P of S.players) {
+    if (P.absent || P.out || isWild(P.id)) continue;
+    let s = 0; for (const b of S.buildings) if (!b.dead && b.owner === P.id) s += chargeWorth(b);
+    if (s > best) { best = s; p = P.id; }
+  }
+  if (p < 0) return;
+  let at = { x: nest.x + 0.5, y: nest.y + 0.5 };
+  const L = getE(S.players[p].lander);
+  const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === nest.id);
+  if (exits.length && L) { exits.sort((a, c) => dist2(a.x, a.y, L.x, L.y) - dist2(c.x, c.y, L.x, L.y) || a.id - c.id); at = { x: exits[0].x + 0.5, y: exits[0].y + 0.5 }; }
+  else if (L) { const a = datan2(L.y - nest.y, L.x - nest.x); at = { x: nest.x + 0.5 + dcos(a) * 4, y: nest.y + 0.5 + dsin(a) * 4 }; }
+  if (spawnHarrow(at.x, at.y, p, { nest: nest.id })) M.hw.done = 1;
+}
+
+/** Its marks: craters fade after HARROW.crater s, broken ground after 20 s, the dead after HARROW.husk s. And a mission's own Harrow (S.mission.harrowAt: when it comes up, out of the nest nearest the colony). */
+function harrowMarks() {
+  if (S.mission && S.mission.harrowAt && S.time >= S.mission.harrowAt) {
+    const M0 = harrowState(), L = getE(S.players[0].lander);
+    if (!M0.hw.done && L) {
+      const nest = harrowNest(L.x + 0.5, L.y + 0.5), a = nest ? datan2(L.y - nest.y, L.x - nest.x) : 0;
+      if (nest && spawnHarrow(nest.x + 0.5 + dcos(a) * 4, nest.y + 0.5 + dsin(a) * 4, 0, { nest: nest.id })) M0.hw.done = 1;
+    }
+    S.mission.harrowAt = 0;
+  }
+  const M = S.mur;
+  if (!M || !M.hw) return;
+  M.craters = M.craters.filter((c) => S.time - c.t < HARROW.crater);
+  M.cracks = M.cracks.filter((c) => S.time - c.t < 20);
+  M.husks = M.husks.filter((c) => S.time - c.t < HARROW.husk);
+}
 
 /** A Sapper's strike (role 'sap'): dig in, go under to (t.x, t.y) as its nest's tunnel, come up, then fight. */
 function murmurSapStep(u, t, dt) {
@@ -14156,7 +14574,7 @@ function trainGuns(u, dt) {
       addFx('pulsebeam', mx, my, { x2: tg.x, y2: tg.y, color, life: 0.35, seed: S.tick + u.id });
       addFx('pulsehit', tg.x, tg.y, { color, life: 0.35, seed: S.tick + u.id * 3 });
       if (isMe(u.owner) || isMe(tg.owner)) sfx('pulse');
-      damageBot(tg, A.pulse.damage, x, y);
+      damageBot(tg, A.pulse.damage, x, y, false, true);
       u.pcd = A.pulse.reload;
     } else u.pcd = 0.3;
   }
@@ -17312,7 +17730,7 @@ function updateMinigun(b, def, dt) {
       bump(b.stock, 'ammo', -1); usedGood(b.owner, 'ammo', 1); b.rounds = g.rounds;
     }
     b.rounds--;
-    damageBot(target, g.damage, b.x + 0.5, b.y + 0.5);
+    damageBot(target, g.damage, b.x + 0.5, b.y + 0.5, false, true);
     target.pinT = S.time + MINIGUN_PIN.time;
     fired++;
   }
@@ -17552,6 +17970,9 @@ function hashState() {
     for (const d of S.mur.dark || []) { int(d.x); int(d.y); num(d.until); }
   }
   for (const u of S.bots) if (u.pose !== undefined) { int(u.id); str(u.pose); num(u.charge || 0); int(u.under || 0); } // (the Murmur's other forms)
+  // The Harrow: its task, its riders, when it comes and the marks it leaves.
+  for (const u of S.bots) if (u.task && u.task.type === 'harrow') { const t = u.task; int(u.id); int(t.p); int(t.tb || 0); str(t.ph); num(t.slamAt); num(t.born); num(t.re || 0); int(t.pi || 0); int(t.path ? t.path.length : -1); int(t.hit || 0); int(t.miss || 0); int(u.riders || 0); }
+  if (S.mur && S.mur.hw) { const w = S.mur.hw; int(w.roll); int(w.night); int(w.done); int(w.mound); for (const k of ['craters', 'cracks', 'husks']) for (const c of S.mur[k] || []) { num(c.x); num(c.y); num(c.t); } }
   for (const b of S.buildings) if (b.br) for (const r of b.br) { int(r.h); int(r.g); num(r.k); }
   if (S.tremor) { num(S.tremor.next); int(S.tremor.n); for (const r of S.tremor.rock) { int(r.x); int(r.y); } } // (the Hollow's tremors)
   for (const b of S.buildings) if (b.veinT !== undefined) { int(b.id); num(b.veinT); } // (Harvesters cutting Bloom veins, which draws the Murmur)

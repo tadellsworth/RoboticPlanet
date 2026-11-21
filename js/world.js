@@ -5034,6 +5034,8 @@ function killBot(bot, quiet) {
   S.players[bot.owner].stats.lost++;
   if (wasFerry && typeof ferryChanged === 'function') ferryChanged(); // its line stops
   if (BOTS[bot.type].airship && typeof airChanged === 'function') airChanged(); // (its line may have no Airship left)
+  // The Harrow: it lies where it fell a while, and its hoard spills out (harrowDied).
+  if (BOTS[bot.type].behemoth && !quiet && typeof harrowDied === 'function') { harrowDied(bot); return; }
   // One of the Murmur on Active: no blast, no fire; the body lies where it fell until they drag it off (murmurBody).
   if (BOTS[bot.type].wild && !quiet && typeof murmurBody === 'function' && murmurBody(bot)) return;
   if (!quiet && typeof scarBotDown === 'function') scarBotDown(bot); // (its scrap stays where it fell: War scars)
@@ -5416,6 +5418,10 @@ function checkSave(o) {
     if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
     if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();
     if (M.dark != null && !(Array.isArray(M.dark) && M.dark.length < 256 && M.dark.every((d) => nums(d, ['x', 'y', 'r', 'until'])))) bad();
+    // The Harrow (HARROW): when it comes (roll 0 not yet, 1 not this game, 2 on night `night`; done; the mound's came)
+    // and the marks it leaves (its craters, the slams' broken ground, its dead): numbers on the map.
+    if (M.hw != null && !(obj(M.hw) && [0, 1, 2].includes(M.hw.roll) && Number.isInteger(M.hw.night) && M.hw.night >= 0 && [0, 1].includes(M.hw.done) && [0, 1].includes(M.hw.mound))) bad();
+    for (const k of ['craters', 'cracks', 'husks']) if (M[k] != null && !(Array.isArray(M[k]) && M[k].length <= 16 && M[k].every((c) => obj(c) && ['x', 'y', 't'].every((q) => Number.isFinite(c[q])) && c.x >= -1 && c.y >= -1 && c.x <= o.W && c.y <= o.H && (c.a == null || Number.isFinite(c.a))))) bad();
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
@@ -5495,11 +5501,19 @@ function checkSave(o) {
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag)) ||
-    (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
+    (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up', 'slam', 'hurt'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
   for (const u of o.bots) {
     if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
     if (u.stunT != null && !Number.isFinite(u.stunT)) bad(); // (stunned by a Sundering Ray's Quake)
+    // The Harrow: its task (its colony, what it's after, its phase, its route as tiles) and the Scuttlers on its back.
+    if (u.riders != null && !(Number.isInteger(u.riders) && u.riders >= 0 && u.riders <= HARROW.riders)) bad();
+    if (u.task?.type === 'harrow') {
+      const t = u.task;
+      if (u.type !== 'harrow' || !Number.isInteger(t.p) || !o.players[t.p] || !['up', 'go', 'slam'].includes(t.ph) || !['born', 'slamAt'].every((k) => Number.isFinite(t[k]))) bad();
+      for (const k of ['tb', 're', 'pi', 'hit', 'miss']) if (t[k] != null && !Number.isFinite(t[k])) bad();
+      if (t.path != null && !(Array.isArray(t.path) && t.path.length <= o.W * o.H && t.path.every((q) => Number.isInteger(q) && q >= 0 && q < o.W * o.H))) bad();
+    } else if (u.type === 'harrow' && u.task != null) bad();
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
@@ -5521,7 +5535,7 @@ function checkSave(o) {
   if (o.mission) {
     const M = o.mission;
     if (!obj(M) || ![0, 1, 2, 3, 4].includes(M.diff) || (!M.lv5 && M.diff > 2)) bad();
-    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY', 'stormCalm', 'calmRun']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
+    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY', 'stormCalm', 'calmRun', 'harrowAt']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
     if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }

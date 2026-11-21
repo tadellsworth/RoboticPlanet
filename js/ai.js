@@ -1464,6 +1464,7 @@ function aiMurmur(p, lvl, lander, smart) {
   if (smart && night && (P.homeGuard || 0) < 2) P.homeGuard = 2;
   if (S.time < (P.murT || 0)) return;
   P.murT = S.time + AI_MURMUR_EVERY;
+  if (aiHarrow(p)) return; // (a Harrow coming: the whole army against it, nothing sent off in small squads)
   const mine = S.buildings.filter((b) => !b.dead && b.owner === p);
   const near = (e, r) => { let bd = r * r + 1; for (const b of mine) { const d = dist2(b.x, b.y, e.x, e.y); if (d < bd) bd = d; } return Math.sqrt(bd); };
   const going = new Map();
@@ -1505,6 +1506,47 @@ function aiMurmur(p, lvl, lander, smart) {
   const rich = riches.has(nest.id), need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
   if (aiMurmurStrike(p, nest, need + 2, need + 2, false, rich) || !rich) return;
   if (!(P.massFor && S.time <= P.massFor.until && P.massFor.need >= need + 2)) P.massFor = { need: need + 2, until: S.time + 120 };
+}
+
+/**
+ * A Harrow coming for colony p (going for it, or within HARROW.aiReach tiles of its buildings): its army gathers on one
+ * rally flag in its way, every warbot it can spare (the rear garrisons too), a few tiles ahead of it on the way to what
+ * it's after (or by that, if it's already close), the flag moved as it comes; it masses more (P.massFor) and sends no
+ * small squads at exits or nests meanwhile. Its Howitzers take it on by themselves (rocketTargetNear). The flag comes
+ * down when the Harrow is gone. True while one is coming.
+ */
+function aiHarrow(p) {
+  const P = S.players[p];
+  let h = null, hd = Infinity;
+  for (const u of S.bots) {
+    if (u.dead || !isHarrow(u) || !u.task) continue;
+    let d = u.task.p === p ? 0 : Infinity;
+    if (d) for (const b of S.buildings) if (!b.dead && b.owner === p) d = Math.min(d, dist(b.x + 0.5, b.y + 0.5, u.x, u.y));
+    if (d <= HARROW.aiReach && (d < hd || (d === hd && h && u.id < h.id))) { hd = d; h = u; }
+  }
+  if (!h) {
+    if (P.hwRally) { if (rallyById(P.hwRally.id)) recallRally(P.hwRally.id); P.hwRally = null; }
+    return false;
+  }
+  if (!(P.massFor && S.time <= P.massFor.until && P.massFor.need >= HARROW.aiNeed + 4)) P.massFor = { need: HARROW.aiNeed + 4, until: S.time + 120 };
+  const tb = getE(h.task.tb), L = getE(P.lander), aim = tb && !tb.dead && tb.owner === p ? bCentre(tb) : L ? { x: L.x + 0.5, y: L.y + 0.5 } : null;
+  if (!aim) return true;
+  const d = dist(h.x, h.y, aim.x, aim.y), k = d > 10 ? 7 / d : 0;
+  let gx = Math.floor(d > 10 ? h.x + (aim.x - h.x) * k : aim.x), gy = Math.floor(d > 10 ? h.y + (aim.y - h.y) * k : aim.y);
+  // (open ground for the flag, near there)
+  let spot = null;
+  for (let r = 0; r <= 4 && !spot; r++) for (let dj = -r; dj <= r && !spot; dj++) for (let di = -r; di <= r && !spot; di++) {
+    const i = gx + di, j = gy + dj;
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== homeZone(p)) continue;
+    spot = [i, j];
+  }
+  if (!spot) return true;
+  const old = P.hwRally && rallyById(P.hwRally.id);
+  // (the flag moves with it, its army with the flag, until the fight is on there)
+  if (old && dist(old.x, old.y, h.x, h.y) > 6) { old.x = spot[0] + 0.5; old.y = spot[1] + 0.5; }
+  const res = sendToRally(p, old ? Math.floor(old.x) : spot[0], old ? Math.floor(old.y) : spot[1], 99, true, true);
+  if (!old) P.hwRally = res && res.rally ? { id: res.rally.id, t: S.time } : null;
+  return true;
 }
 
 /**

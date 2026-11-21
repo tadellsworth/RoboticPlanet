@@ -252,6 +252,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
   sundercharge: 2, sunderthud: 0.12, sunderfire: 1, sunderquake: 0.8,
   deepstage: 3, atmosstage: 4, stormbolt: 1,
+  harrow: 4, harrowslam: 1.5, harrowdown: 3,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -676,6 +677,29 @@ function sfx(name, dest, y, dur) {
       _noise(tail, 0.028 + 0.012 * tier, { type: 'lowpass', freq: f * 4, to: f * 1.25, attack: 0.23, dest: D });
       break;
     }
+    // The Harrow: breaking out of the ground (a long rising groan of rock, the ground giving way, a sub-bass roar under
+    // a hoarse breath), its slam (a crushing thud and the ground cracking), and coming down for good (a long falling groan).
+    case 'harrow':
+      _noise(3.6, 0.3, { freq: 90, to: 260, attack: 1.2, dest: D });
+      _noise(1.4, 0.22, { type: 'bandpass', freq: 600, to: 150, q: 0.9, attack: 0.05, delay: 1.6, dest: D });
+      _tone(36, 3.4, 'sine', 0.24, 52, 0.2, D);
+      _tone(72, 2.2, 'sawtooth', 0.03, 58, 1.4, D);
+      rubble(D, far);
+      duckMusic(0.35, 3.5);
+      break;
+    case 'harrowslam':
+      _tone(44, 0.9, 'sine', 0.3, 24, 0, D);
+      _noise(0.08, 0.3, { type: 'lowpass', freq: 900, attack: 0.001, dest: D });
+      _noise(1.2, 0.16, { type: 'bandpass', freq: 900, to: 220, q: 1.2, attack: 0.02, delay: 0.05, dest: D });
+      rubble(D, far);
+      duckMusic(0.5, 1.2);
+      break;
+    case 'harrowdown':
+      _tone(58, 3.2, 'sine', 0.2, 26, 0, D);
+      _noise(3, 0.16, { freq: 260, to: 60, attack: 0.1, dest: D });
+      rubble(D, far);
+      duckMusic(0.45, 2.5);
+      break;
     case 'beacon': if (typeof ambHum === 'function') ambHum(D); break; // (a Command Base's beacon coming on at dusk: js/ambient.js)
     // Coming down on you: a bomb's whistle as it falls, a missile's roar as it dives in (each ending as it hits).
     case 'bombfall': incoming(D, 'bomb', BOMBER.fall / spd); break;
@@ -2345,6 +2369,7 @@ function musicMood() {
   for (const u of S.bots) {
     if (u.dead || u.inside) continue;
     if (BOTS[u.type] && BOTS[u.type].wild) {
+      if (BOTS[u.type].behemoth && u.task && u.task.p === ME) { wild += MUSIC_MURMUR; continue; } // (a Harrow coming for you: Night Murmurs)
       if (S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === ME) { wild++; continue; }
       mine = mine || S.buildings.filter((b) => !b.dead && b.owner === ME);
       if (mine.some((b) => dist2(b.x + 0.5, b.y + 0.5, u.x, u.y) < MUSIC_MURMUR_NEAR * MUSIC_MURMUR_NEAR)) wild++;

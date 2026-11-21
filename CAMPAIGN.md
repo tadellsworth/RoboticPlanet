@@ -109,7 +109,9 @@ The war turns serious, and the colony reaches for home. Every answer it gets is 
 The colony learns the truth, the Murmur rise from what the war left behind, and the last fight is over a signal no one will answer.
 
 The behemoth, the biggest Murmur form, which only an army can bring down, appears in Act III's missions (owner, Nov 21
-2026; its design sheet is on the roadmap).
+2026): the **Harrow**, built (README, "The Harrow"). Act III's missions call `spawnHarrow(x, y, p)` (js/sim.js) for it,
+or set `S.mission.harrowAt` (the time it comes up, as the mission *The Harrow* does); in *The Deep* (14) the mound itself
+sends two when it's almost down.
 
 ### 11. What the War Feeds
 

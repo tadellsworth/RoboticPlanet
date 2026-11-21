@@ -555,7 +555,7 @@ function drawMurmurLights(ctx, ox, oy, z, items) {
     if (e.pose === 'under' && !murmurInSight(e)) continue;
     const L = MURMUR_LOOK[e.type] || MURMUR_LOOK.scuttler, id = e.id || 0;
     const pulse = e.pose === 'feed' ? 0.9 + 0.3 * Math.max(0, Math.sin(R.time * 8 + id)) : 0.85 + 0.15 * Math.sin(R.time * 2.4 + id * 1.7);
-    const k = (0.15 + 0.85 * murmurCharge(e)) * pulse * (e.pose === 'under' ? 0.45 : 1), sz = z * L.size * 2.4;
+    const k = (0.15 + 0.85 * murmurCharge(e)) * pulse * (e.pose === 'under' ? 0.45 : 1) * (L.light ? 1.4 : 1), sz = z * (L.light || L.size * 2.4);
     ctx.globalAlpha = ga * Math.min(1, 0.8 * k);
     ctx.drawImage(img, ox + e.x * z - sz / 2, oy + e.y * z - sz / 2, sz, sz);
   }

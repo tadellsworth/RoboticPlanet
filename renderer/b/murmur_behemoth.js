@@ -23,7 +23,9 @@ import { PAL, coat, plan, face, centreOn, scuttler } from './murmur_moles.js';
 
 const P = new URLSearchParams(location.search);
 const C = P.get('c') || 'harrow', HI = +(P.get('hi') || 0), HERO = !!+(P.get('hero') || 0);
-export const config = { pad: false, size: [1024, 2048, 2048][HI] };
+// ?px=: the render size (the game's frames: 1280, composed to 640)
+export const config = { pad: false, size: +(P.get('px') || 0) || [1024, 2048, 2048][HI] };
+const GAME = !!+(P.get('game') || 0);   // the game's frames: every pose centred on the body like the walk, the ground effects left to the game
 export const W = 18, FRAME_TILES = 6.0;
 const SC = 1.5;                                                         // the models are built in Brute-sized units, then grown
 
@@ -216,7 +218,9 @@ function harrow(ctx) {
   const { L, K, G, f, pose } = ctx, X = XB(K), still = pose !== 'walk';
   const furM = K.fur('#161317', { coarse: true, sheen: 0.95, sheenColor: '#6a6274', rough: 0.9, ns: 1.0 });
   const skinM = K.flesh('#7c6e78', { rough: 0.62 }), nailM = K.keratin('#d4c8b2', 0.5), toothM = K.keratin('#e2d4ae', 0.35);
-  const rearing = pose === 'rear', slam = pose === 'slam', fall = pose === 'fall', emerge = pose === 'emerge';
+  if (pose === 'crater') { crater(ctx, { RI: 2.6, RP: 3.2, RO: 5.4, glow: 0.5 }); return null; }   // the cave-in crater it leaves
+  if (pose === 'cracks') { broken(ctx, { cx: 0, cz: 0, r: 5.6, n: 12, glow: 1, clods: 140, air: 0 }); return null; }   // the slam's broken ground
+  const rearing = pose === 'rear', slam = pose === 'slam', fall = pose === 'fall', emerge = pose === 'emerge', hurt = pose === 'hurt';
   // the body is built in B, turned about the hips for the rear, the slam and the fall
   const B = L.group(0, 0, 0, 0, G);
   const body = K.loft(B, plan({ x0: -4.1, x1: 3.5, w: 2.25, h: 1.95, b: 0.95, cy: 1.5, hip: 0.72, rise: 0.72, head: 0.5, drop: 0.5 }), furM, { lump: 0.045, seed: 21, uv: 2.4, p: 2.45 });
@@ -243,9 +247,9 @@ function harrow(ctx) {
   for (const [x, a, r] of [[-0.8, 1.15, 0.48], [-1.0, -1.2, 0.5], [-2.4, 1.1, 0.42], [-2.6, -1.05, 0.4], [0.2, 1.25, 0.36], [0.3, -1.25, 0.34], [-3.3, 0.9, 0.3], [-3.4, -0.9, 0.3]])
     K.geodeOn(B, body, x, a, r, X, { up: 0.2, lean: 0.15, spires: r > 0.4 ? 1 : 0, collarMat: furM, sx: 1.2, open: 0.8 });
   // ---- the head: a heavy wedge, the star on the end, the jaws open under it on a lit throat, the incisors
-  const st = fall ? { open: 0.25, glow: 0.05 } : rearing ? { open: 1, glow: 1 } : slam ? { open: 0.9, glow: 0.8 } : { open: 0.55, glow: 0.35 };
+  const st = fall ? { open: 0.25, glow: 0.05 } : hurt ? { open: 0.08, glow: 0.15 } : rearing ? { open: 1, glow: 1 } : slam ? { open: 0.9, glow: 0.8 } : { open: 0.55, glow: 0.35 };
   face(L, K, B, { base: [3.1, 0.98, 0], tip: [3.75, 0.9, 0], r: 0.5, r0: 0.3, len: 0.75, tilt: 0.25, pose: '', pal: PAL.base, seed: 13, star: st });
-  const jaw = L.group(2.9, 0.62, 0, 0, B); jaw.rotation.z = rearing ? -0.55 : fall ? -0.3 : -0.32;
+  const jaw = L.group(2.9, 0.62, 0, 0, B); jaw.rotation.z = rearing || hurt ? -0.6 : fall ? -0.3 : -0.32;
   K.seg(jaw, [0.42, -0.05, 0], 0.55, 0.16, 0.48, K.flesh('#5a4650', { rough: 0.5 }), { lump: 0.04, flat: 0.2 });
   K.seg(jaw, [0.45, 0.06, 0], 0.46, 0.05, 0.38, K.flesh('#3e2630', { rough: 0.4, cc: 0.3 }), { lump: 0.02 });
   throat({ ...ctx, G: B }, B, [3.3, 0.6, 0], 0.32, [1, 0, 0], fall ? 0.08 : 1);
@@ -260,13 +264,17 @@ function harrow(ctx) {
   if (rearing) pivot(K, B, hipPose, 0.58);
   if (slam) pivot(K, B, hipPose, -0.08);
   if (fall) { pivot(K, B, [0, 0, 0], -0.04, 0.42); B.position.y -= 0.55; }
-  if (emerge) { pivot(K, B, [0, 0, 0], 0.5); B.position.x -= 1.4; B.position.y -= 2.3; emergeHole(ctx, 2.6); }
+  // coming up (f=0: the ground bursting, only its spires and hands through; 1: head and shoulders out; 2: climbing out)
+  const EM = [[0.75, -0.6, -3.6], [0.5, -1.4, -2.3], [0.28, -0.5, -1.25]][Math.min(2, f)];
+  if (emerge) { pivot(K, B, [0, 0, 0], EM[0]); B.position.x += EM[1]; B.position.y += EM[2]; emergeHole(ctx, 2.6); }
+  if (hurt) { pivot(K, B, hipPose, -0.07, -0.13); }   // (it flinches: head down, rolled away from the hit)
   for (const s of [-1, 1]) {
     // hands: walking, rowing; rearing, raised high and spread; slamming, flat on the broken ground ahead; dying, limp
     const fore = { side: s, f, hand: 2.9, armR: 0.92, fat: 1.12, stride: 0.34, lift: 0.3, skin: skinM, arm: furM, nailMat: nailM, splay: 0.58, tilt: 0.5 };
-    if (emerge) { const w = toParent(K, G, B, [3.0, 0.45, s * 2.9]); K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: w, splay: 0.85, tilt: 0.45, droop: 0.3, curl: 0.4 }); continue; }
+    if (emerge) { const w = toParent(K, G, B, [[2.2, 0.6, s * 2.7], [3.0, 0.45, s * 2.9], [3.6, 0.3, s * 2.4]][Math.min(2, f)]); K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: w, splay: 0.85, tilt: 0.45, droop: 0.3, curl: 0.4 }); continue; }
     if (rearing) K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: [2.9, 2.6, s * 2.1], splay: 0.75, tilt: 1.25, droop: -0.5, curl: 0.45 });
     else if (slam) { const w = toParent(K, G, B, [4.25, 0.32, s * 2.0]); K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: w, splay: 0.7, tilt: 0.35, droop: 0.3, curl: 0.35 }); }
+    else if (hurt) K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: [2.4, 0.5, s * 1.9], splay: 0.9, tilt: 0.6, droop: 0.15, curl: 0.55 });
     else if (fall) K.forelimb(B, { ...fore, plant: true, shoulder: [1.75, 1.2, s * 0.9], wrist: [3.0, s > 0 ? 0.9 : 0.25, s * 1.9], splay: 0.9, tilt: s > 0 ? 1.2 : 0.2, droop: 0.1, curl: 0.1 });
     else K.forelimb(B, { ...fore, shoulder: [1.75, 1.2, s * 0.9], wrist: [2.6, 0.75, s * 1.4] });
     // hind legs: on the ground, whatever the body does
@@ -274,8 +282,8 @@ function harrow(ctx) {
     K.hindlimb(still ? G : B, { side: s, f, plant: still, hip: still ? hip : [-3.0, 1.1, s * 0.95], foot: [-3.5, 0.2, s * 1.75], len: 0.95, r: 0.5, stride: 0.3, lift: 0.22, skin: skinM, leg: furM, clawMat: nailM, out: 0.65 });
   }
   // ---- what it does to the ground
-  if (slam) broken(ctx, { cx: 4.0, cz: 0, r: 3.6, n: 11, glow: 1, clods: 160, air: 50, dust: 22 });
-  if (rearing) { clods(ctx, { cx: 1.5, cz: 0, r0: 2.2, r1: 3.5, n: 30, air: 18, airH: 2.5 }); dust({ ...ctx }, { cx: 0.5, cz: 0, r: 3.5, n: 10, op: 0.4 }); }
+  if (slam && !GAME) broken(ctx, { cx: 4.0, cz: 0, r: 3.6, n: 11, glow: 1, clods: 160, air: 50, dust: 22 });
+  if (rearing && !GAME) { clods(ctx, { cx: 1.5, cz: 0, r0: 2.2, r1: 3.5, n: 30, air: 18, airH: 2.5 }); dust({ ...ctx }, { cx: 0.5, cz: 0, r: 3.5, n: 10, op: 0.4 }); }
   if (pose === 'walk') {
     // the furrow it leaves: the ground under its tread heaved and broken (its own frames: drawn under it in the game)
   }
@@ -283,9 +291,9 @@ function harrow(ctx) {
     // spires broken off in the fall, lying dead beside it; dust settling
     const dead = { ...X, k: 0.04 };
     for (const [x, z, a] of [[-1.2, 2.9, 0.4], [0.4, 3.1, -0.3], [-2.4, 2.7, 0.9]]) K.cluster(G, [x, 0.1, z], [Math.cos(a), 0.15, Math.sin(a)], 3, 1.3, 0.22, dead, 0.4, { collar: false });
-    dust(ctx, { cx: -0.5, cz: 0.5, r: 4.2, n: 16, op: 0.45, y: 0.2, h: 1.2 });
+    if (!GAME) dust(ctx, { cx: -0.5, cz: 0.5, r: 4.2, n: 16, op: 0.45, y: 0.2, h: 1.2 });
   }
-  if (slam) { centreOn(K, G, [body.mesh]); G.position.x -= 2.4; return null; }
+  if (slam && !GAME) { centreOn(K, G, [body.mesh]); G.position.x -= 2.4; return null; }
   return emerge ? null : body;
 }
 

@@ -35,7 +35,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*)) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -2057,7 +2057,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `tunnel-exit-collapsed`).
   - **How they're drawn** (`drawCritter`; art from `renderer/b/murmur_moles.js`). Each form true to the others' size,
     but the Brute shrunk to fit the map (`MURMUR_LOOK`, the sprite's width in tiles): Scuttler 0.62, Spitter 0.73,
-    Leech 0.81, Brute 0.82, Sapper 0.9, with a shadow turned with it. Four walking frames each, and the forms' actions
+    Leech 0.81, Brute 0.82, Sapper 0.9, the Harrow 6 (its own takes on the poses, `HARROW_POSES`: rearing and the
+    slam, flinching, coming up; the Scuttlers on its back drawn over it, `drawHarrowRiders`; its crater, the slam's
+    broken ground and its dead on the ground, `drawHarrowMarks`; its light pool 9 tiles, `L.light`; a pulsing violet ring
+    on the minimap), with a shadow turned with it. Four walking frames each, and the forms' actions
     as loops timed by `u.poseT` (`MURMUR_POSES`, `murmurFrame`): the Leech feeding (`u.pose` `feed`: the star pulsing,
     the sac swelling), the Spitter spitting (`spit`: wind-up, the spit, recoil, recovering), the Sapper digging in
     (`dig`), under the ground (`under`: only the heave of soil shows) and coming up (`up`: the ground bursting, played
@@ -2160,6 +2163,50 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     each kind are counted (`S.mur.slain`). The rival: warbots to a rally flag where an underground Sapper will come up
     (`aiMurmur`, one at a time, called home after 40 s: `P.sapRally`); a shorted gun counts as a place to cover
     (`P.murCut` → `aiMurCut`, another Pulse Turret there). Missions: *What Comes Up* (First Contact).
+  - **The Harrow, the behemoth (rare and late).** `harrow` in `BOTS` (wild, `behemoth`), its numbers in `HARROW` in
+    `js/defs.js`, the section after the Sapper's in `js/sim.js` (`spawnHarrow`, `harrowTick`, `harrowSlam`,
+    `harrowFurrow`, `harrowBatter`, `harrowPath`, `harrowTarget`, `harrowDied`, `harrowDown`, `harrowMound`,
+    `harrowRoll`, `harrowNight`, `harrowMarks`), `aiHarrow` in `js/ai.js`. The biggest of the Murmur, drawn 6 tiles
+    across (its body about 4.5 by 3). **When it comes:** (1) the Hollow: the Deep's mound under `mound` (a quarter) of its
+    armor (`updateNest` → `harrowMound`): two burst out of it, 4 tiles out toward each colony's Command Base, one for
+    each colony, once a game (`S.mur.hw.mound`); (2) a long game on Active (not the Hollow, not a mission unless it sets
+    `harrowRoll`): at the dusk warning of night `rollNight` (6, about 70 minutes in: *proposed, awaiting the owner's
+    confirmation*), one roll from the seed (`hash2(S.seed, …)` < `chance`, 0.5: `S.mur.hw.roll` 2, or 1 for no), and on a
+    hit a seeded night in `nights` (6 to 8, `S.mur.hw.night`); at that nightfall (`harrowNight`) it comes up through the
+    exit of the nest grown most nearest its colony (or 4 tiles out of the nest), at the colony holding most charge
+    (`chargeWorth`), once (`S.mur.hw.done`); (3) `spawnHarrow(x, y, p, { nest, noEscort, quiet })` for missions and the
+    campaigns (CAMPAIGN.md, CONTINGENCY.md), and a mission's `S.mission.harrowAt` (*The Harrow*). It needs the Murmur
+    in the game (`S.wildlife`); its pack and riders need a nest left. **Coming up** (pose `up`, `up` s): a cave-in
+    crater (`S.mur.craters`, drawn `crater` s) crushes what's within 2 tiles (Walls, roads, track and pipes), and its
+    pack (`escort`: 6 Scuttlers, 2 Brutes) comes up raiding the Command Base; every colony is told, its target loudest
+    (`sfx('harrow')`), and the music goes to Night Murmurs (`musicMood`). **Its walk** (task `harrow`: `p`, `tb`,
+    `ph` 'up' | 'go' | 'slam', `path`/`pi`, `re`, `slamAt`, `born`): at `speed` (Worker × 0.45) along its own route
+    (`harrowPath`: A* over open ground and fords only, round cliffs, water and lava, through buildings), to what its
+    colony holds the most charge (`harrowTarget`: `charge` per point of `chargeWorth`, the Command Base +2, less `far`
+    a tile; re-picked every `repath` s; another colony's when its own has none); what stands on its route it batters
+    (`harrowBatter`: `smash` armor every `every` s, a Wall or Gate twice that; it feeds, `feed` health back, on a
+    building of charge 3 it wrecks); a Command Base, Keep, megastructure or Arrival City only down to `floor` (half)
+    of its armor (`harrowSpares`, `harrowFloor`), then on to the next. A robot within `reach` takes `bite` (10) every
+    `every` s. **The furrow** (`harrowFurrow`, each tile it enters): its tile and the 8 round it lose their road (not a
+    bridge or tunnel), track, pipe and plans, and become its nest's tunnel (`S.tun`). **The slam** (`harrowSlam`,
+    `ph` 'slam', pose `slam`: rearing `rear` s, then the blow): every `slamEvery` s with `slamMin` of a colony's robots
+    and buildings within `slamR` (3) tiles of a point 1.2 ahead of it: robots take `slamBot` (6) and are stunned
+    `stun` (3) s (`stunT`, as a Quake's), Walls and Gates go, other buildings lose `slamBld` (25), roads, track and
+    pipes are torn up, `drop` (2) of its `riders` (6) jump off as Scuttlers raiding its target, and the broken ground
+    is drawn 20 s (`S.mur.cracks`). **Its hide** (`damageBot`'s `small`): small arms do `small` (a quarter): warbots,
+    Bulwarks, a Railgunner's sidearm, Skirmishers, Pulse Turrets, Bunkers, Minigun Nests, a train's guns; the rest in
+    full; a Missile `missile` (60). Shots reach its body's edge (`r`, 1.5: `nearestEnemyBot`, `armyInRange`), and
+    Howitzers take it on by themselves (`rocketTargetNear`, `rocketTarget` with a bot; a shell within `r` of it does
+    `ROCKET.damage × fortMul`). A heavy blow (6 or more) makes it flinch (pose `hurt`). **Dead** (`killBot` →
+    `harrowDied`): no body to drag; it lies `husk` s (`S.mur.husks`, the dying art), its riders scatter home, a Crystal
+    hoard of `loot` (40) spills (`addLoot`), the colony whose army stood nearest is credited (`stats.harrows`), and
+    `S.mur.slain.harrow` counts. After `stay` (15 min) up it goes back down (`harrowDown`, a crater). **The rival**
+    (`aiHarrow`, at the top of `aiMurmur`): with one going for it or within `aiReach` (30) tiles, one rally flag
+    (`P.hwRally`) a few tiles ahead of it on the way to what it's after (by that, once it's within 10), every warbot it
+    can spare sent there (the rear too), the flag moved with it until the fight is on, `P.massFor` raised to `aiNeed` + 4,
+    and no exit or nest strikes meanwhile; the flag comes down when it's gone. Saved: the task, `u.riders`, `S.mur.hw`,
+    `craters`, `cracks`, `husks` (checkSave; hashState). Mission: First Contact's *The Harrow*. Tests:
+    `lh/harrow-test.js` (the kit).
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,

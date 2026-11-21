@@ -29,6 +29,18 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
      colony with three or four). **And late in both campaigns** (the owner, Nov 21): the Main Campaign's Act III, and Contingency late in a
      run or with the Murmur meter high. **And in long ordinary games on Active** (the owner, Nov 21): past a set
      point, a 50% chance it comes, rolled from the game's seed so it stays rare. Which point: **night 6, proposed, awaiting the owner's confirmation** (one seeded roll at its dusk warning; on a hit it comes on a seeded night from 6 to 8).
+     **BUILT (Nov 21 2026): the Harrow** (README, "The Harrow"; How to play, The Harrow; ART_GUIDE Batch 31; the
+     mission *The Harrow* in First Contact; `lh/harrow-test.js`). Numbers measured, not the sheet's guess: **240 health**
+     with small arms at a quarter (960 points of small-arms fire; the sheet's ~1,400 came before robots' ammo was
+     counted: a 20-robot army fires about 250 points, heavy and quarter-strength, before it must reload). Open: the
+     roll's night (6: **proposed, awaiting the owner's confirmation**); whether a second roll comes much later; whether
+     its crater should stay a tunnel exit; whether Arc Casters should heal it (the sheet's Bearer idea, not used).
+     **BUILT (Nov 21 2026): the Harrow** (README, "The Harrow"; How to play, The Harrow; ART_GUIDE Batch 31; the
+     mission *The Harrow* in First Contact; `lh/harrow-test.js`). Numbers measured, not the sheet's guess: **240 health**
+     with small arms at a quarter (960 points of small-arms fire; the sheet said ~1,400 health before robots' ammo was
+     counted: a 20-robot army fires about 250 heavy and quarter-strength points before it must reload). Open: the roll's
+     night (6: **proposed, awaiting the owner's confirmation**); whether a second roll comes much later; whether its
+     crater should stay a tunnel exit; whether Arc Casters should heal it (the sheet's Bearer idea, not used).
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).

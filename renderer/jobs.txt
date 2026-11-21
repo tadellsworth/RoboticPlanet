@@ -2364,3 +2364,56 @@ art/tod/night/buildings/mdriver-e@1.png	main	massdriver::#ff5a6e:mdriver-e@1:c=d
 art/tod/night/buildings/mdriver-w@1.png	main	massdriver::#ff5a6e:mdriver-w@1:c=driver&dir=w&tod=night	compose.py
 art/tod/night/buildings/mdriver-n@1.png	main	massdriver::#ff5a6e:mdriver-n@1:c=driver&dir=n&tod=night	compose.py
 art/tod/night/buildings/mdriver-s@1.png	main	massdriver::#ff5a6e:mdriver-s@1:c=driver&dir=s&tod=night	compose.py
+## The Harrow (all times of day): 1280 px composed to 640, tools/render_harrow.sh then tools/install_harrow.py (ART_GUIDE.md, Batch 31)
+art/units/harrow-f0.png	main	murmur_behemoth:::harrow-f0:c=harrow&pose=walk&f=0&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-f0.png	main	murmur_behemoth:::harrow-f0--morning:c=harrow&pose=walk&f=0&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-f0.png	main	murmur_behemoth:::harrow-f0--evening:c=harrow&pose=walk&f=0&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-f0.png	main	murmur_behemoth:::harrow-f0--night:c=harrow&pose=walk&f=0&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-f1.png	main	murmur_behemoth:::harrow-f1:c=harrow&pose=walk&f=1&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-f1.png	main	murmur_behemoth:::harrow-f1--morning:c=harrow&pose=walk&f=1&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-f1.png	main	murmur_behemoth:::harrow-f1--evening:c=harrow&pose=walk&f=1&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-f1.png	main	murmur_behemoth:::harrow-f1--night:c=harrow&pose=walk&f=1&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-f2.png	main	murmur_behemoth:::harrow-f2:c=harrow&pose=walk&f=2&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-f2.png	main	murmur_behemoth:::harrow-f2--morning:c=harrow&pose=walk&f=2&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-f2.png	main	murmur_behemoth:::harrow-f2--evening:c=harrow&pose=walk&f=2&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-f2.png	main	murmur_behemoth:::harrow-f2--night:c=harrow&pose=walk&f=2&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-f3.png	main	murmur_behemoth:::harrow-f3:c=harrow&pose=walk&f=3&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-f3.png	main	murmur_behemoth:::harrow-f3--morning:c=harrow&pose=walk&f=3&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-f3.png	main	murmur_behemoth:::harrow-f3--evening:c=harrow&pose=walk&f=3&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-f3.png	main	murmur_behemoth:::harrow-f3--night:c=harrow&pose=walk&f=3&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-slam-f0.png	main	murmur_behemoth:::harrow-slam-f0:c=harrow&pose=rear&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-slam-f0.png	main	murmur_behemoth:::harrow-slam-f0--morning:c=harrow&pose=rear&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-slam-f0.png	main	murmur_behemoth:::harrow-slam-f0--evening:c=harrow&pose=rear&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-slam-f0.png	main	murmur_behemoth:::harrow-slam-f0--night:c=harrow&pose=rear&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-slam-f1.png	main	murmur_behemoth:::harrow-slam-f1:c=harrow&pose=slam&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-slam-f1.png	main	murmur_behemoth:::harrow-slam-f1--morning:c=harrow&pose=slam&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-slam-f1.png	main	murmur_behemoth:::harrow-slam-f1--evening:c=harrow&pose=slam&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-slam-f1.png	main	murmur_behemoth:::harrow-slam-f1--night:c=harrow&pose=slam&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-hurt-f0.png	main	murmur_behemoth:::harrow-hurt-f0:c=harrow&pose=hurt&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-hurt-f0.png	main	murmur_behemoth:::harrow-hurt-f0--morning:c=harrow&pose=hurt&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-hurt-f0.png	main	murmur_behemoth:::harrow-hurt-f0--evening:c=harrow&pose=hurt&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-hurt-f0.png	main	murmur_behemoth:::harrow-hurt-f0--night:c=harrow&pose=hurt&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-fall-f0.png	main	murmur_behemoth:::harrow-fall-f0:c=harrow&pose=fall&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-fall-f0.png	main	murmur_behemoth:::harrow-fall-f0--morning:c=harrow&pose=fall&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-fall-f0.png	main	murmur_behemoth:::harrow-fall-f0--evening:c=harrow&pose=fall&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-fall-f0.png	main	murmur_behemoth:::harrow-fall-f0--night:c=harrow&pose=fall&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-up-f0.png	main	murmur_behemoth:::harrow-up-f0:c=harrow&pose=emerge&f=0&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-up-f0.png	main	murmur_behemoth:::harrow-up-f0--morning:c=harrow&pose=emerge&f=0&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-up-f0.png	main	murmur_behemoth:::harrow-up-f0--evening:c=harrow&pose=emerge&f=0&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-up-f0.png	main	murmur_behemoth:::harrow-up-f0--night:c=harrow&pose=emerge&f=0&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-up-f1.png	main	murmur_behemoth:::harrow-up-f1:c=harrow&pose=emerge&f=1&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-up-f1.png	main	murmur_behemoth:::harrow-up-f1--morning:c=harrow&pose=emerge&f=1&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-up-f1.png	main	murmur_behemoth:::harrow-up-f1--evening:c=harrow&pose=emerge&f=1&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-up-f1.png	main	murmur_behemoth:::harrow-up-f1--night:c=harrow&pose=emerge&f=1&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-up-f2.png	main	murmur_behemoth:::harrow-up-f2:c=harrow&pose=emerge&f=2&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-up-f2.png	main	murmur_behemoth:::harrow-up-f2--morning:c=harrow&pose=emerge&f=2&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-up-f2.png	main	murmur_behemoth:::harrow-up-f2--evening:c=harrow&pose=emerge&f=2&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-up-f2.png	main	murmur_behemoth:::harrow-up-f2--night:c=harrow&pose=emerge&f=2&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-crater.png	main	murmur_behemoth:::harrow-crater:c=harrow&pose=crater&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-crater.png	main	murmur_behemoth:::harrow-crater--morning:c=harrow&pose=crater&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-crater.png	main	murmur_behemoth:::harrow-crater--evening:c=harrow&pose=crater&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-crater.png	main	murmur_behemoth:::harrow-crater--night:c=harrow&pose=crater&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/units/harrow-cracks.png	main	murmur_behemoth:::harrow-cracks:c=harrow&pose=cracks&game=1&px=1280&charge=0.3	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/morning/units/harrow-cracks.png	main	murmur_behemoth:::harrow-cracks--morning:c=harrow&pose=cracks&game=1&px=1280&charge=0.3&tod=morning	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/evening/units/harrow-cracks.png	main	murmur_behemoth:::harrow-cracks--evening:c=harrow&pose=cracks&game=1&px=1280&charge=0.3&tod=evening	compose_any.py --b1 8 --b2 25 --glow 1.4
+art/tod/night/units/harrow-cracks.png	main	murmur_behemoth:::harrow-cracks--night:c=harrow&pose=cracks&game=1&px=1280&charge=0.3&tod=night	compose_any.py --b1 8 --b2 25 --glow 1.4

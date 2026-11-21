@@ -240,6 +240,10 @@ const BOTS = {
     desc: 'A Murmur that hangs back behind the Brutes and spits conductive slurry at a gun or a Wall from a few tiles off: it eats at it, and a gun it hits shorts out for a few seconds and fires at nothing.' },
   sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
     desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
+  // The behemoth (HARROW; harrowTick in js/sim.js): the biggest of the Murmur, late and rare (the Hollow's mound, the
+  // campaigns, now and then a long game on Active). Not a nest's: it walks at a colony and only a real army stops it.
+  harrow:   { name: 'Harrow', plural: 'Harrows', speed: WORKER_SPEED * 0.45, hp: 240, wild: true, bite: 10, behemoth: true,
+    desc: 'The biggest of the Murmur: a badger-mole the size of a hill, its back a mantle of crystal plate. It walks straight at a colony and the ground breaks under it: the roads, track and pipes it walks over are torn up, and every few seconds it rears and slams the ground, stunning every robot within 3 tiles and breaking the Walls, guns and buildings there. Small arms (warbots, Bulwarks, Skirmishers, turrets, Minigun Nests, Bunkers) do a quarter of their damage to it; Railgunners, Howitzers, Mortars, Rockets, Torches, bombs and Missiles do it all. Scuttlers ride on its back and drop off when it slams, and a pack comes with it. Only a real army brings it down: meet it in the open, spread out, before it reaches your walls.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
@@ -1950,6 +1954,29 @@ const MURMUR = {
  * logic (the Murmur's nights: murmurNight) reads it through todPhase from the game's own clock, the same on every
  * device; how it looks (js/daynight.js) is a display setting kept on each device, which the game never reads.
  */
+/**
+ * The Harrow, the behemoth (BOTS.harrow; harrowTick and the rest in js/sim.js, after the Murmur's forms). Its body is
+ * about 4.5 by 3 tiles: shots reach it `r` tiles further than its middle. Small arms (warbots, Bulwarks, Skirmishers,
+ * turrets, Minigun Nests, Bunkers, a train's guns) do `small` of their damage; everything heavier does it all, and a
+ * Missile does `missile`. It walks at its colony's Command Base and what holds the most charge (`charge` per point of
+ * chargeWorth against `far` a tile of the way), battering what's in its way: `smash` armor a blow every `every` s
+ * (Walls and Gates twice that), and `bite` to a robot within `reach` tiles. Every `slamEvery` s, with `slamMin` of a
+ * colony's robots and buildings within `slamR` tiles, it rears for `rear` s and slams: robots there take `slamBot` and
+ * are stunned `stun` s, buildings lose `slamBld` armor, and roads, track, pipes, Walls and Gates there are torn out;
+ * `drop` of the Scuttlers riding on its back (`riders` at the start) jump off. The tiles it walks over (3 wide) lose
+ * their road, track or pipe and become its nest's tunnel. A pack of `escort` comes up with it. It comes up for `up` s
+ * out of a cave-in crater (`crater` s it stays on the map), and after `stay` s up it goes back down. A Command Base,
+ * Keep, megastructure or Arrival City is never knocked below `floor` of its armor: it walks on to the next. Dead, it lies `husk` s and
+ * leaves a Crystal hoard of `loot`. When it comes: the Hollow's mound under `mound` of its armor (two, one a colony);
+ * in a long game on Active one roll at the dusk warning of night `rollNight` (`chance`), on a hit on a seeded night of
+ * `nights`; the campaigns call spawnHarrow. The rival gathers `aiNeed` armed robots ahead of it before it fights.
+ */
+const HARROW = {
+  r: 1.5, small: 0.25, missile: 60, charge: 3, far: 0.25, smash: 10, every: 2.5, bite: 10, reach: 2.4,
+  slamEvery: 9, slamMin: 3, slamR: 3, rear: 1.2, slamBot: 6, stun: 3, slamBld: 25, riders: 6, drop: 2,
+  escort: { scuttler: 6, brute: 2 }, floor: 0.5, feed: 30, up: 2.7, crater: 900, stay: 900, husk: 60, loot: 40, repath: 12,
+  mound: 0.25, rollNight: 6, chance: 0.5, nights: [6, 8], aiNeed: 12, aiReach: 30,
+};
 const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day', 'evening', 0.5], ['evening', 1.5], ['evening', 'night', 0.5], ['night', 3], ['night', 'morning', 0.5]];
 const TOD_LEN = TOD_CYCLE.reduce((n, p) => n + p[p.length - 1], 0) * 60;
 /** Where game time t (seconds) falls in the day: { a, b, f } (f, 0 to 1, from a to b, smoothed). */
@@ -2169,6 +2196,7 @@ const FLAVOR = {
   leech: 'The lights dim as it drinks. Logged as a fault, three times, before anyone looked.',
   spitter: 'The residue is conductive. The Lab would like a sample that is not still moving.',
   sapper: 'The Walls were rated for anything that comes over them.',
+  harrow: 'The roads were built for buses. It does not use them.',
   // Neutral ground (not buildings anyone owns)
   post: 'Accord rates honoured. The ledger is still open.',
   uplink: 'Transmitting. No response. Transmitting.',

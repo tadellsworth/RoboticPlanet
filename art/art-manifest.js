@@ -367,8 +367,12 @@ const ART_MANIFEST = {
   // ground (the heave) and coming up. Every frame has a glow image (<key>-glow: its crystal's light alone, added over it
   // as bright as it's charged). 256x256, straight down, facing right; re-lit sets in tod/<time>/bots (MURMUR_TOD_KEYS).
   ...(() => {
-    const o = {}, F = { scuttler: { '': 4 }, brute: { '': 4 }, leech: { '': 4, feed: 4 }, spitter: { '': 4, spit: 4 }, sapper: { '': 4, dig: 4, under: 4, up: 5 } };
+    const o = {}, F = { scuttler: { '': 4 }, brute: { '': 4 }, leech: { '': 4, feed: 4 }, spitter: { '': 4, spit: 4 }, sapper: { '': 4, dig: 4, under: 4, up: 5 },
+      harrow: { '': 4, slam: 2, hurt: 1, fall: 1, up: 3 } };
     for (const c in F) for (const p in F[c]) for (let f = 0; f < F[c][p]; f++) { const k = `${c}-${p ? p + '-' : ''}f${f}`; o[k] = `bots/${k}.webp`; o[k + '-glow'] = `bots/${k}-glow.webp`; }
+    // (the Harrow's, 640x640, drawn 6 tiles across: renderer/b/murmur_behemoth.js; and the marks it leaves on the
+    // ground, the cave-in crater where it came up and the slam's broken ground, both with their light)
+    for (const k of ['harrow-crater', 'harrow-cracks']) { o[k] = `bots/${k}.webp`; o[k + '-glow'] = `bots/${k}-glow.webp`; }
     return o;
   })(),
   // The Spitter's volley in flight (pointing right, drawn 0.6 of a tile across; its glow added at night) and its hit

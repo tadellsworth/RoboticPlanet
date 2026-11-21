@@ -1564,6 +1564,30 @@ one burns. Everything else is drawn in code: the violet light on the ground roun
 shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
 (`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
 
+### Batch 31: the Harrow, the behemoth (installed)
+
+The owner chose direction A of the behemoth sheet (design/behemoth/BEHEMOTH-SHEET.md): **the Harrow**, the walking siege
+mound, with two borrowings (Scuttlers riding in its spine crack, a cave-in crater where it comes up). Rendered with
+`renderer/b/murmur_behemoth.js` (`c=harrow&game=1`: every pose centred on the body like the walk, the ground effects
+left to the game) at 1280 and composed to 640 by `renderer/tools/render_harrow.sh`, hungry (`charge=0.3`), at every
+time of day; `renderer/tools/install_harrow.py` writes the WebP files and the glow images. In the Murmur's lazy bundle
+with the rest of them (`MURMUR_ART`, `MURMUR_TOD_KEYS`, `dist/murmur.js`).
+
+| Keys | What | How it's drawn |
+|---|---|---|
+| `harrow-f0…3` | Walking: a badger-mole the size of a hill, its back a mantle of banded geode plate split down the spine where a ridge of crystal spires stands, the core lit through seams in the plate, plated neck and flanks, hands the size of a Hauler, the jaws open on a lit throat. 640×640, straight down, facing right, the frame 18 world units | `MURMUR_LOOK.harrow`: 6 tiles across (its body about 4.5 by 3), turned to face, a shadow 4.2 by 2.5 tiles under it, 3 walking frames a second |
+| `harrow-slam-f0`, `-f1` | Rearing (the front of it up, hands raised and spread, the star flared) and the slam (hands flat on the ground ahead) | `HARROW_POSES.slam`: `HARROW.rear` s, then 0.6 s; its glow flaring |
+| `harrow-hurt-f0` | Flinching: head down, rolled away, the star clenched, the jaws wide | `hurt`, after a blow of 6 or more; its glow stuttering |
+| `harrow-fall-f0` | Dying: rolled onto its side, limbs limp, the light gone, spires broken off beside it | Its body where it fell (`S.mur.husks`), fading out over its last 10 s |
+| `harrow-up-f0…2` | Coming up out of the ground: the ground bursting with only its spires and hands through, head and shoulders out, climbing out; a crater of broken earth, torn slabs and lit cracks round it | `up`, `HARROW.up` s, once |
+| `harrow-crater` | The cave-in crater it leaves: a dark throat, a heaped rim, torn slabs, cracks lit faintly | On the ground where it came up (`S.mur.craters`), 6 tiles, fading over its last minute (`HARROW.crater` s); its light at dusk and night |
+| `harrow-cracks` | The slam's broken ground: a disc of split earth, the cracks lit violet, slabs heaved up | Where it slammed (`S.mur.cracks`), 6 tiles, fading in 20 s, its light strongest at first |
+| `<every key above>-glow` | The crystal's light alone: the night glow pass, bloomed, one gain for every frame | Added over it as bright as it's charged, by day faint and full at night |
+
+Drawn in code: its light pool at dusk and night (9 tiles across, `L.light`), the Scuttlers riding on its back
+(`drawHarrowRiders`: the Scuttler's own art, half size, curled along its spine, one fewer each time two jump off), its hp
+bar (2.4 tiles wide) and its ring on the minimap. The slam's dust, ring and flash are the game's own effects.
+
 ### Batch 18: the Airship and the Mooring Mast (installed)
 
 The owner chose direction C from the design sheet (`renderer/preview/airship_sheet.py`): the **armoured blimp** and the

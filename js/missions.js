@@ -1764,6 +1764,47 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-hold' },
     ],
   },
+  // The Harrow: the biggest of the Murmur comes up out of the ground and walks at the colony; an army gathered in its
+  // way, spread out, with the heavy weapons that hurt it, brings it down before it reaches the Generators.
+  {
+    id: 'harrowhunt', name: 'The Harrow', chapter: 'First Contact',
+    brief: 'Ground radar: one return, very large, rising. Gather your army in its way, bring it down, and keep the Generators lit.',
+    intro: [
+      'The <b>Harrow</b> is the biggest of the Murmur, bigger than your Command Base. It walks straight at the colony\'s power.',
+      'Small arms (warbots, Bulwarks, turrets) do a quarter of their damage to it. <b>Railgunners</b>, <b>Howitzers</b> and <b>Torches</b> do it all.',
+      'Every few seconds it rears and <b>slams</b> the ground: robots within 3 tiles are stunned and Walls and roads there are gone. Spread out.',
+      'Scuttlers ride on its back and drop off when it slams, and a pack comes up with it. Meet it in the open, before your walls.',
+    ],
+    mode: 'colony', seed: 5531, size: 1, rough: 1, rich: 3, biome: 'desert', war: true, murmur: 'active', limit: [0, 0, 25],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 5);
+      const P = S.players[0], L = getE(P.lander);
+      // (the Generators on the far side of the base from the nest it comes out of)
+      const nest = harrowNest(L.x + 0.5, L.y + 0.5), a = nest ? datan2(L.y - nest.y, L.x - nest.x) : 0;
+      for (const g of ['generator', 'generator']) preBuild(0, g, Math.round(L.x + dcos(a) * 5), Math.round(L.y + dsin(a) * 5), { road: true, stock: { fuel: 6 } });
+      const army = { warbot: mPick([14, 12, 10], diff), bulwark: 3, railgunner: mPick([6, 5, 4], diff), torch: 2, rocket: mPick([3, 3, 2], diff) };
+      for (const type in army) for (let k = 0; k < army[type]; k++) { const u = addBot(0, type, L.x, L.y); if (BOTS[type].siege) { u.x = L.x + 1.5 + k; u.y = L.y + 2.5; } else enterBuilding(u, L); }
+      P.stats.startBots = P.stats.bots;
+      L.stock.ammo = 60; L.stock.crystal += 20; L.stock.fuel += 20;
+      // It comes up out of the nest nearest the colony, a few minutes in (sooner the harder).
+      S.mission.harrowAt = mPick([240, 180, 150], diff);
+    },
+    goals: [
+      { kind: 'harrowFlag', n: 12, text: 'Gather {n} robots on a Hold ground flag',
+        count: (P, S) => Math.max(0, ...S.rallies.filter((r) => r.owner === 0).map((r) => rallyMembers(r.id).length)),
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) on open ground out past your base.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'harrowDown', n: 1, text: 'Bring the Harrow down',
+        count: (P, S) => (S.mur && S.mur.slain && S.mur.slain.harrow) || 0,
+        focus: (S) => S.bots.find((u) => !u.dead && u.type === 'harrow') || null,
+        hint: 'Move the flag into its path. Spread out; <b>Railgunners</b> and <b>Howitzers</b> hit it hardest.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'gensStand', n: 2, text: 'Keep both Generators standing until it\'s down', hold: true,
+        count: (P, S) => (S.mur && S.mur.slain && S.mur.slain.harrow ? S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'generator').length : 0),
+        hint: 'It goes for the power. Keep the fight away from the <b>Generators</b>.',
+        ui: '#btn-attack' },
+    ],
+  },
   // Chapter 7, War. Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.
   {
     id: 'supply', name: 'Supply Lines', chapter: 'War',

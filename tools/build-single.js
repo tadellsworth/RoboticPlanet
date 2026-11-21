@@ -21,7 +21,7 @@ const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic'
 const lazyBiomeOf = (key) => LAZY_BIOMES.find((b) => key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) || null;
 // The Murmur's art goes in a bundle of its own too (dist/murmur.js: the day art and each time of day's re-lit set,
 // loaded in a game with the Murmur: see ensureMurmurArt), its manifest entries likewise left without the data.
-const murmurArtKey = (key) => /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/.test(key); // (as js/render.js: MURMUR_ART)
+const murmurArtKey = (key) => /^(scuttler|brute|leech|spitter|sapper|harrow)-|^fx-spit/.test(key); // (as js/render.js: MURMUR_ART)
 // Every other image goes in one of four bundles beside the page too (dist/art-<group>.js: buildings, bots, effects, and
 // the rest: tiles, resources, roads, rail, bridges, the canyon, pipes, markers and the Desert's biome art), all loaded as
 // the page starts (see loadArt), so the page holds the code alone and can't fill up again as art is added.

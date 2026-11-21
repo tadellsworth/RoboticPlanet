@@ -335,7 +335,7 @@ function ensureBiomeArt(b) {
  * with the Murmur (ensureMurmurArt, from applyBiome), and their re-lit sets for the time of day with it (MURMUR_TOD_KEYS:
  * see todMurmurIn). In a single-file copy it's a bundle beside the page (murmur.js: the day art and each time's set).
  */
-const MURMUR_ART = /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/;
+const MURMUR_ART = /^(scuttler|brute|leech|spitter|sapper|harrow)-|^fx-spit/;
 const _murmurArt = { state: '' };
 function murmurArtKey(key) { return MURMUR_ART.test(key); }
 function ensureMurmurArt() {
@@ -4830,6 +4830,29 @@ function drawTunnels(ctx, ox, oy, z) {
     const age = S.time - d.t, a = clamp((MURMUR.craft.bodyLast - age) / 3, 0, 1);
     if (a > 0) drawMurmurBody(ctx, ox + d.x * z, oy + d.y * z, z, d.type, a, hash2(d.id, 3, 7) * Math.PI * 2);
   }
+  drawHarrowMarks(ctx, ox, oy, z);
+}
+
+/**
+ * The Harrow's marks on the ground (S.mur.craters, cracks, husks: see harrowState): the cave-in crater where it came up
+ * (fading over its last minute), the slam's broken ground (its cracks lit, fading in 20 s), and where one fell, its
+ * body lying dark (the dying art), sinking in its last 10 s. The crater and cracks' light is added at dusk and night.
+ */
+function drawHarrowMarks(ctx, ox, oy, z) {
+  const M = S.mur;
+  if (!M || !M.hw) return;
+  const W = z * MURMUR_LOOK.harrow.size, n = fxNight(), ga = ctx.globalAlpha;
+  const mark = (key, x, y, a, rot, glow) => {
+    const art = ART[key];
+    if (!art || a <= 0) return;
+    ctx.globalAlpha = ga * a; drawArt(ctx, art, ox + x * z, oy + y * z, W, rot);
+    const g = ART[key + '-glow'];
+    if (g && glow > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga * a * glow * (0.25 + 0.75 * n); drawArtRaw(ctx, g, ox + x * z, oy + y * z, W, rot); ctx.restore(); }
+    ctx.globalAlpha = ga;
+  };
+  for (const c of M.craters || []) { const age = S.time - c.t; mark('harrow-crater', c.x + 0.5, c.y + 0.5, clamp((HARROW.crater - age) / 60, 0, 1) * clamp(age / 1.5, 0, 1), hash2(c.x, c.y, 5) * 6.28, clamp(1 - age / 240, 0.2, 1)); }
+  for (const c of M.cracks || []) { const age = S.time - c.t; mark('harrow-cracks', c.x, c.y, clamp((20 - age) / 6, 0, 1), hash2(Math.round(c.x * 7), Math.round(c.y * 7), 3) * 6.28, clamp(1 - age / 12, 0, 1) * 1.4); }
+  for (const c of M.husks || []) { const age = S.time - c.t; mark('harrow-fall-f0', c.x, c.y, clamp((HARROW.husk - age) / 10, 0, 1), c.a || 0, clamp(1 - age / 8, 0, 1) * 0.6); }
 }
 
 /** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
@@ -5040,6 +5063,15 @@ const MURMUR_LOOK = {
   leech: { size: 0.81, sh: [0.24, 0.16], walk: 6 },
   sapper: { size: 0.9, sh: [0.3, 0.12], walk: 7 },
   brute: { size: 0.82, sh: [0.29, 0.17], walk: 6 },
+  // The Harrow (renderer/b/murmur_behemoth.js, frame 18 world units): drawn 6 tiles across, its body about 4.5 by 3; its
+  // light pool `light` tiles across (not size x 2.4: it would cover a base), its hp bar `bar` tiles wide.
+  harrow: { size: 6, sh: [2.1, 1.25], walk: 3, light: 9, bar: 2.4 },
+};
+/** The Harrow's own takes on the actions (its frames: harrow-<key>-f<n>): rearing then slamming, flinching, coming up out of its crater. */
+const HARROW_POSES = {
+  slam: { key: 'slam', n: 2, times: [HARROW.rear, 0.6] },
+  hurt: { key: 'hurt', n: 1, dt: 1 },
+  up: { key: 'up', n: 3, dt: HARROW.up / 3, once: true },
 };
 /**
  * Their actions (u.pose, timed by u.poseT): art <type>-<key>-f<n>, n frames, each dt seconds (or each its own: times),
@@ -5057,7 +5089,7 @@ const MURMUR_POSES = {
 
 /** Which of its frames a creature shows now: { key, k (the frame), pose (its MURMUR_POSES entry, if acting) }. */
 function murmurFrame(u) {
-  const P = u.pose && MURMUR_POSES[u.pose];
+  const P = u.pose && ((u.type === 'harrow' && HARROW_POSES[u.pose]) || MURMUR_POSES[u.pose]);
   if (P) {
     const t = typeof u.poseT === 'number' ? u.poseT : R.time + (u.id || 0) * 0.37;
     let k = 0;
@@ -5088,6 +5120,8 @@ function murmurGlow(ctx, u, fr, x, y, w, face) {
   let pulse = 0.8 + 0.2 * Math.sin(R.time * 2.4 + id * 1.7);
   if (u.pose === 'feed') pulse = 0.85 + 0.3 * Math.max(0, Math.sin(R.time * 8 + id));
   else if (u.pose === 'spit' && fr.pose) pulse = [1.25, 1.35, 0.55, 0.8][fr.k] || 1;
+  else if (u.type === 'harrow' && u.pose === 'slam' && fr.pose) pulse = fr.k ? 1.5 : 1.15; // (the Harrow slamming: its core flares)
+  else if (u.type === 'harrow' && u.pose === 'hurt') pulse = 0.5 + 0.5 * Math.abs(Math.sin(R.time * 18)); // (flinching: its light stutters)
   else if (u.pose === 'under') pulse = 0.45 + 0.75 * Math.pow(Math.max(0, Math.sin(R.time * 2.7 + id * 2.3)), 8) + 0.2 * Math.max(0, Math.sin(R.time * 4.1 + id));
   const a = (0.22 + 0.78 * fxNight()) * (0.12 + 0.88 * Math.pow(ch, 0.9)) * pulse;
   if (a < 0.02) return;
@@ -5155,6 +5189,7 @@ function drawCritter(ctx, u, x, y, s) {
   if (art) {
     drawArt(ctx, art, x, y, w, face);
     murmurGlow(ctx, u, fr, x, y, w, face);
+    if (u.riders > 0 && u.pose !== 'up') drawHarrowRiders(ctx, u, x, y, s, face);
   } else if (under) {
     // (no art yet: a mound of heaved earth)
     ctx.save(); ctx.translate(x, y); ctx.rotate(face);
@@ -5189,7 +5224,18 @@ function drawCritter(ctx, u, x, y, s) {
     ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
-  { const bw = s * 0.34 * L.sh[0] / 0.17; hpBar(ctx, u.id, u.hp / u.maxHp, x - bw / 2, y - s * Math.max(0.24, L.sh[0] * 1.3), bw, Math.max(2, s * 0.05)); }
+  { const bw = L.bar ? s * L.bar : s * 0.34 * L.sh[0] / 0.17; hpBar(ctx, u.id, u.hp / u.maxHp, x - bw / 2, y - s * (L.bar ? 1.9 : Math.max(0.24, L.sh[0] * 1.3)), bw, Math.max(2, s * (L.bar ? 0.08 : 0.05))); }
+}
+
+/** The Scuttlers riding in the Harrow's spine crack (u.riders), curled among the crystal, a twitch now and then. */
+function drawHarrowRiders(ctx, u, x, y, s, face) {
+  const art = ART['scuttler-f0'];
+  if (!art) return;
+  const spots = [[-0.2, 0.18], [0.35, -0.14], [-0.75, -0.12], [0.85, 0.12], [-1.2, 0.15], [1.25, -0.1]];
+  for (let k = 0; k < Math.min(u.riders, spots.length); k++) {
+    const [a, b] = spots[k], c = Math.cos(face), sn = Math.sin(face), tw = Math.sin(R.time * 3 + k * 1.9 + u.id) > 0.92 ? 0.25 : 0;
+    drawArt(ctx, art, x + (a * c - b * sn) * s, y + (a * sn + b * c) * s, s * 0.5, face + (k % 2 ? 0.6 : -0.6) + tw);
+  }
 }
 
 /** The fresh ridge each Sapper under the ground leaves behind it (its last few tiles, kept here as it goes: once it's through, the game's tunnels take over). */
@@ -9061,6 +9107,13 @@ function renderMinimap() {
     const x = (b.x + 0.5) * sx, y = (b.y + 0.5) * sy, r = Math.max(2.4, sx * 1.1);
     ctx.fillStyle = '#1a0d1c'; ctx.strokeStyle = WILD_COLOR; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // A Harrow: a big violet ring pulsing round it, so it's seen coming from anywhere on the map.
+  for (const u of S.bots) {
+    if (u.dead || u.type !== 'harrow') continue;
+    const x = u.x * sx, y = u.y * sy, f = (R.time * 1.4) % 1;
+    ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(x, y, Math.max(3.2, sx * 1.8), 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 2; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, Math.max(4, sx * 2) + f * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
   // The Hollow's breaches: soft pools of pale gold, the only daylight down there.
   if (S.hollow) for (const b of S.hollow.breaches) {

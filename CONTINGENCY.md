@@ -172,7 +172,8 @@ Cards used mid-battle need sim orders (lockstep) and a small card bar in the bat
   - level 1: Quiet;
   - level 2: Active;
   - level 3: Active, with a nest near each landing. At a high meter, or late in a run, the behemoth (the biggest Murmur
-    form, which only an army can bring down) appears (owner, Nov 21).
+    form, which only an army can bring down) appears (owner, Nov 21): the **Harrow**, built (README, "The Harrow"). The
+    battle calls `spawnHarrow(x, y, p)` (js/sim.js) for it, at a nest's exit toward the landing.
 - **Surges.** A level-3 territory can send a surge into a neighbor someone holds. That's a battle against the Murmur
   only: survive until dawn.
 - **Clearing.** Win a battle in a territory, or keep a Command Group there for a turn, and its infestation drops by 1.

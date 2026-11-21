@@ -511,6 +511,18 @@ python3 preview/behemoth_sheet.py out/beh out/preview/beh out/sheet
 node preview/shoot.js out/sheet out/sheet/overview.html out/sheet/harrow.html out/sheet/maw.html out/sheet/bearer.html
 ```
 
+## The Harrow (installed)
+
+The game's Harrow (ART_GUIDE.md, Batch 31) is the sheet's direction A rendered with `c=harrow&game=1` (every pose
+centred on the body like the walk, the slam's broken ground left to its own frame) and `px=1280`, hungry
+(`charge=0.3`). New for it: `pose=hurt`, `pose=emerge&f=0..2` (coming up), `pose=crater` (the crater alone) and
+`pose=cracks` (the slam's broken ground alone). From this folder:
+
+```
+tools/render_harrow.sh out/harrow                 # every frame at every time of day, composed (--b1 8 --b2 25 --glow 1.4)
+python3 tools/install_harrow.py out/harrow ../art # the WebP sprites and their glow images
+```
+
 ## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake (the stake since retired: Batch 20)
 
 `tools/render_install.sh` renders everything the game uses from the two sets above (one job at a time), and
