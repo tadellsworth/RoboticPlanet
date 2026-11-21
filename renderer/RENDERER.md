@@ -642,6 +642,24 @@ python3 tools/install_lift.py     # writes the WebP files into ../art, prints LI
 The Lift composes like a building (`compose.py`). The game draws it by `LIFT_FRAME` (art-manifest.js) over the middle of
 its square, and its cable from `LIFT_MARKS.foot` (`liftFoot` in `js/render.js`).
 
+## The Sundering Ray
+
+The owner's look B, the Piston Battery (Nov 2026; IDEAS.md, "Megastructures"; the plan for how it works there too).
+`b/sunder.js` is the 3 x 3 Ray on its own 30 x 30 pad, framed like the Lance (`longPad(30, 30)`, `frameCompoundOpts({
+half: 15.12, width: 0.62, cy: 0.56 })`). `part=base` is the pad and block with the bore tower, its ram bores and plate
+sockets empty; `part=site&stage=1|2` its two construction stages; `part=ram&side=-1|1&e=0|1|2` a great ram alone at three
+heights and `part=plate&k=0..5&e=0|1` a ram plate alone, seated or raised, each on the same frame with the pad hidden, so
+the game lays them over the base and pumps them. Marks: `bore`, `top`, `stackW`, `stackE`, `ramW`, `ramE`,
+`plate0`..`plate5`. Run from this folder:
+
+```
+bash tools/render_sunder.sh [times of day]   # 24 renders a time of day: base and stages for both teams, rams, plates (~12 min each)
+python3 tools/install_sunder.py              # writes the WebP files into ../art, prints SUNDER_FRAME and SUNDER_MARKS
+```
+
+It composes like a building (`compose.py`). The game draws it by `SUNDER_FRAME` (art-manifest.js) over the middle of its
+square and the glow, smoke, dust and its ripple from `SUNDER_MARKS` (`js/render.js`, the Sundering Ray).
+
 ## The Great Uplink
 
 The owner's look A, the Dish Array (Nov 2026; IDEAS.md, "Megastructures"). `b/gup.js` is the 3 x 3 dish array on its

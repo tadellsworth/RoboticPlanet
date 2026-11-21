@@ -282,6 +282,7 @@ function fxShake(ox, oy, z) {
     let s = 0;
     if (f.type === 'nuke' && f.t < 0.9) s = 11 * (1 - f.t / 0.9);
     else if (f.type === 'boom' && (f.r || 0) >= 0.9 && f.t < 0.35) s = Math.min(6, (f.r || 1) * 2.4) * (1 - f.t / 0.35);
+    else if (f.type === 'sunderhit' && f.t < 1.4) s = (f.deep ? 5 : 7) * (1 - f.t / 1.4); // (a Sundering Ray's blow landing: the ground jumps near it)
     else if (f.type === 'quake') { a = Math.max(a, (f.amp || 2) * Math.min(1, f.t * 2, (f.life - f.t) / 1.5) * (0.7 + 0.3 * Math.sin(S.time * 23))); continue; } // the ground itself shaking: everywhere on screen
     if (!s) continue;
     const sx = ox + f.x * z, sy = oy + f.y * z, d = Math.hypot(sx - R.w / 2, sy - R.h / 2) / Math.max(R.w, R.h);

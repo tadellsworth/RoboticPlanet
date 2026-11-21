@@ -46,6 +46,7 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.cans && S.cans.length) updateCans(dt);
   if (S.liftFalls && S.liftFalls.length) updateLiftFalls(dt); // (an Orbital Lift's cable coming down)
+  if (S.sunders && S.sunders.length) updateSunderWaves(); // (a Sundering Ray's ripple through the ground, and its marks)
   if (S.rads && S.rads.length && S.tick % 15 === 8) updateRads(15 * dt); // (radiation: fallout and wrecked Reactors)
   if (S.ruins && S.ruins.length && S.tick % 30 === 14) ruinTidy();
   if (S.fires && S.fires.length) updateFires();
@@ -2163,6 +2164,15 @@ function dispatch(p) {
       if (u) assignFix(u, b);
     }
   }
+  // 1c) Roads and track a Sundering Ray's Quake cracked: a Worker mends each patch (sunderMendSpots).
+  if (S.crkN > 0) for (const t of sunderMendSpots(p)) {
+    if (!idle.length) return;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (P.danger && dangerAt(p, i, j)) continue;
+    const u = take(i, j, 'build');
+    if (u && nearSoon(u, { x: i, y: j })) { idle.push(u); continue; }
+    if (u) assignMend(u, t);
+  }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
   const staffQueue = blds.filter((b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
@@ -3365,6 +3375,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
   else if (t.type === 'magfix') doMagFix(u, t, dt);
+  else if (t.type === 'mend') doMend(u, t, dt);
   else if (t.type === 'repair') {
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner) { u.task = null; u.path = null; }
@@ -4022,7 +4033,7 @@ function doStaff(u, t, dt) {
       if (t.lay >= 0) { paverLay(u, b, t, dt); return; }
       u.busy = 1;
       b.working = true;
-      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5) * radWork(b); // (faster by Arrival City, slower in a radiation zone)
+      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5) * radWork(b) * (b.crack ? SUNDER.crackWork : 1); // (faster by Arrival City, slower in a radiation zone or on cracked foundations)
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
@@ -4161,7 +4172,9 @@ function updateBuilding(b, dt) {
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
   else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';
   else if (def.viaduct) b.status = 'Open to traffic';
+  if (b.crack && b.armor >= def.armor - 0.01) b.crack = 0; // (a Quake's cracked foundations: mended once repaired to full)
   if (def.lance) updateLance(b, dt);
+  else if (def.sunder) updateSunder(b, dt);
   else if (def.dome) updateDome(b, dt);
   else if (def.city) updateCity(b, dt);
   else if (def.lift) updateLift(b, dt);
@@ -4319,9 +4332,9 @@ function produce(b, def, dt) {
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
   const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '');
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '') + (b.crack ? ', at half speed: its foundations are cracked (repair it to full)' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b) * (b.crack ? SUNDER.crackWork : 1); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) {
@@ -5769,6 +5782,7 @@ function damageBot(u, dmg, sx, sy, nat) {
 function hitBuilding(b, dmg, by) {
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   dmg = keepShield(b, dmg);
+  if (b.crack && BDEFS[b.type].barrier) dmg *= SUNDER.wallTakes; // (a Wall or Gate a Quake cracked, until repaired to full)
   b.armor -= dmg;
   b.lastHit = S.time;
   if (by >= 0 && foes(by, b.owner)) {
@@ -10521,7 +10535,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -11560,6 +11574,8 @@ function murmurNightfall(n) {
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
+  // A Sundering Ray they heard: its owner is told they come for it tonight.
+  for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].sunder && b.sLure === n) postMsg(b.owner, 'The Murmur heard the Sundering Ray. Tonight the nests near it come for it first, in bigger packs: guard it.', b.x + 1, b.y + 1, 'warn');
 }
 
 /**
@@ -11621,6 +11637,7 @@ function murmurPower(e) {
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
+    else if (BDEFS[b.type].sunder && b.sOn) charge += 5; // (a Sundering Ray winding up: the ground itself drums)
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
     else if (BDEFS[b.type].lift && b.working) charge += 2;
     else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
@@ -11635,6 +11652,7 @@ function chargeWorth(e) {
   const def = BDEFS[e.type];
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
+  if (def.sunder && e.sOn) return 6; // (a Sundering Ray winding up: they feel every stroke)
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
   if (def.lift && e.working) return 3;
   if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
@@ -11717,6 +11735,7 @@ function murmurOpenExit(b) {
     const i = t % W, j = (t / W) | 0;
     if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t)) continue;
     if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound)
+    if (sunderSealed(i, j)) continue; // (a Sundering Ray's Strike the Deep sealed it: SUNDER.sealNights nights)
     if (exits.some((e) => dist2(e.x, e.y, i, j) < 16) || shut.some((s) => dist2(s.x, s.y, i, j) < 9)) continue;
     let near = Infinity, base = Infinity;
     for (const e of blds) {
@@ -11791,15 +11810,17 @@ function murmurWave(n, C) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead) continue;
-    const g = murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
-    if (!g || up + made + size > room) continue;
-    for (let k = 0; k < size; k++) {
+    if (nest.sQuiet === n) continue; // (shaken by a Sundering Ray's Strike the Deep: no raid from it tonight)
+    // (a Sundering Ray they heard within SUNDER.lure tiles: they go for it first)
+    const lure = sunderLure(nest, n), g = lure ? { x: lure.x + 1, y: lure.y + 2, owner: lure.owner } : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey), sz = lure ? sunderPack(size) : size;
+    if (!g || up + made + sz > room) continue;
+    for (let k = 0; k < sz; k++) {
       const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: g.x, y: g.y, until, night: 1 });
       u.nest = nest.id; u.exit = e.id;
       made++;
     }
     addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
-    if (g.owner >= 0) { const T = told[g.owner] || (told[g.owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
+    if (g.owner >= 0) { const T = told[g.owner] || (told[g.owner] = { n: 0, x: e.x, y: e.y }); T.n += sz; }
   }
   for (const p in told) {
     const T = told[p];
@@ -12151,6 +12172,21 @@ function murmurCraftWave(n, C, wave) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead || up + size > room) continue;
+    if (nest.sQuiet === n) continue; // (shaken by a Sundering Ray's Strike the Deep: no raid from it tonight)
+    // A Sundering Ray they heard within SUNDER.lure tiles: this exit's pack goes for it first, half again bigger.
+    const lure = sunderLure(nest, n);
+    if (lure && murmurRoute(e, lure.x + 1, lure.y + 2, SUNDER.lure * 1.6)) {
+      const sz = Math.min(sunderPack(size), room - up), task = { type: 'raid', x: lure.x + 1, y: lure.y + 2, until, night: 1 };
+      for (let k = 0; k < sz; k++) {
+        const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
+        u.nest = nest.id; u.exit = e.id;
+        up++;
+      }
+      addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
+      const T = told[lure.owner] || (told[lure.owner] = { n: 0, x: e.x, y: e.y }); T.n += sz;
+      packs.push({ e, nest, pl: null, task, owner: lure.owner });
+      continue;
+    }
     const dr = draws.get(e.id), pl = dr && dr.k < K.joinMost ? dr.pl : null;
     const g = pl ? null : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
     if (!pl && (!g || dr?.pl.p === g.owner || !murmurRoute(e, g.x, g.y))) continue;
@@ -17501,6 +17537,8 @@ function hashState() {
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
+    if (BDEFS[b.type].sunder) { int(b.id); int(b.sOn || 0); num(b.sCharge || 0); num(b.sReload || 0); int(b.sAim ? b.sAim[0] : -1); int(b.sAim ? b.sAim[1] : -1); str(b.sMode); str(b.sSrc); int(b.sReactor || 0); num(b.sTime || 0); int(b.sUseR ? 1 : 0); int(b.sLure || 0); }
+    if (b.crack || b.sQuiet) { int(b.id); int(b.crack || 0); int(b.sQuiet || 0); } // (a Quake's cracked foundations; a nest a Strike the Deep shook)
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); num(b.dWarm || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
@@ -17510,6 +17548,11 @@ function hashState() {
   for (const f of S.liftFalls || []) { int(f.id); int(f.d); num(f.t); int(f.k); int(f.n); int(f.by); int(f.hit.length); }
   if (!S.crater) for (const s of S.scrap || []) if (s.cb) { int(s.id); num(s.x); num(s.y); num(s.n); }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
+  // The Sundering Ray's ripples, the cracked roads and track, the stunned robots and the sealed ground.
+  for (const w of S.sunders || []) { int(w.id); int(w.o); str(w.m); num(w.x1); num(w.y1); num(w.at); num(w.f); int(w.done); }
+  if (S.crk) { int(S.crkN || 0); for (let t = 0; t < S.crk.length; t++) if (S.crk[t]) int(t); }
+  for (const u of S.bots) if (u.stunT) { int(u.id); num(u.stunT); }
+  for (const e of (S.mur && S.mur.seal) || []) { num(e.x); num(e.y); num(e.r); int(e.n); }
   for (const z of S.rads || []) { int(z.id); num(z.x); num(z.y); num(z.r); num(z.cr); num(z.t0); num(z.life); int(z.k); } // (radiation zones: radAdd)
   for (const r of S.ruins || []) { int(r.id); int(r.x); int(r.y); num(r.t); } // (breached Reactors: reactorDown)
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
@@ -19175,3 +19218,389 @@ function gupLive() { return S.buildings.filter((b) => !b.dead && b.built && b.gO
 
 /** The furthest-along Great Uplink transmitting that belongs to a foe of p's, or null. */
 function gupFoeLive(p) { return gupLive().find((b) => b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner)) || null; }
+
+/* ------------------------------------------------------------------ megastructures: the Sundering Ray */
+
+/*
+ * The Sundering Ray (SUNDER; BDEFS.sunder). b.sMode: 'deep' (Strike the Deep) or 'quake'; b.sAim: the tile it's aimed at
+ * ([i, j]); b.sOn: winding up; b.sCharge: how far (s); b.sTime: how long this wind-up takes; b.sSrc: what powers it ('gen',
+ * or 'reactor' with b.sReactor its id: the Uranium went in as it started); b.sReload: s until it can wind up again;
+ * b.sShot: when it last fired; b.sUseR: Use Reactor; b.sLure: the night the Murmur come for it (they heard its blow).
+ * A blow is a ripple running through the ground (S.sunders: { id, o, b, m, x0, y0, x1, y1, t, at, f, done }), and lands
+ * at `at` (sunderLand). Its marks: b.crack on a building (foundations cracked: half speed, until repaired to full; a
+ * Wall's: double damage), S.crk on a tile (a cracked road or track: half speed until a Worker mends it, S.crkN of them),
+ * u.stunT on a robot (stunned), nest.sQuiet (the night a struck nest sends no raid), S.mur.seal ({ x, y, r, n }: no exit
+ * opens in that circle through night n).
+ */
+
+/** Can a Sundering Ray be built yet (SUNDER.at s into a free-play game; at once in a mission that teaches it)? */
+function sunderOpen() { return !!S && (!!S.mission || S.time >= SUNDER.at); }
+
+/** A Nuclear Reactor of b's owner within SUNDER.reach of it (built, on) with a blow in it, the one with the most; or null. */
+function sunderReactor(b) {
+  let best = null, bn = 0;
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) > SUNDER.reach + 0.5) continue;
+    const n = Math.floor((r.stock.uranium || 0) / SUNDER.uranium) + (r.stock.fissile || 0);
+    if (n > bn) { bn = n; best = r; }
+  }
+  return best;
+}
+
+/** What could power a wind-up of Ray b now: 'gen', 'reactor' or '' (as lancePower: the Generators, unless Use Reactor is on). */
+function sunderPower(b) {
+  if (murmurCutOn(b)) return '';
+  const gens = megaGens(b, SUNDER.reach).length >= SUNDER.gens, r = sunderReactor(b);
+  if (r && (b.sUseR || !gens)) return 'reactor';
+  return gens ? 'gen' : '';
+}
+
+/** How long Ray b's wind-up takes: the one under way, else what its power now would take. */
+function sunderTime(b) {
+  if (b.sOn) return b.sTime || SUNDER.charge;
+  return sunderPower(b) === 'reactor' ? SUNDER.reactorCharge : SUNDER.charge;
+}
+
+/** Is Strike the Deep there to be had in this game (the Murmur on: never on Argos)? */
+function sunderDeepOn() { return wildOn() && murmurLevel() !== 'off'; }
+
+/** Why Ray b can't start a wind-up now ('' if it can). */
+function sunderBlocked(b) {
+  if (!b || b.dead || !b.built) return 'The Sundering Ray is not built yet.';
+  if (b.sReload > 0) return `Reloading: it can wind up again in ${fmtSecs(b.sReload)}.`;
+  if (!sunderPower(b)) return `No power: it needs ${SUNDER.gens} Generators with Fuel within ${SUNDER.reach} tiles, or a Nuclear Reactor there with ${SUNDER.uranium} Uranium (or an Enriched Uranium) in it.`;
+  return '';
+}
+
+/** Can Ray b strike tile (i, j) with blow `mode` ('deep' or 'quake')? '' or why not. */
+function sunderAimBlocked(b, i, j, mode) {
+  if (!b || b.dead || !b.built) return 'The Sundering Ray is not built yet.';
+  if (mode !== 'deep' && mode !== 'quake') return 'Pick Strike the Deep or Quake.';
+  if (!inMap(i, j)) return 'Off the map.';
+  if (mode === 'deep') return sunderDeepOn() ? '' : 'No Murmur in this game: Strike the Deep has nothing to strike. A Quake still works.';
+  const c = bCentre(b);
+  if (dist(c.x, c.y, i + 0.5, j + 0.5) > SUNDER.range) return `Too far: a Quake reaches ${SUNDER.range} tiles from the Ray.`;
+  return '';
+}
+
+/** Is Ray b's aim fixed now (a Quake's ring has shown: the last SUNDER.warn s of the wind-up)? */
+function sunderLocked(b) { return !!(b.sOn && b.sMode === 'quake' && b.sAim && sunderTime(b) - (b.sCharge || 0) <= SUNDER.warn); }
+
+/**
+ * Aim Ray b's blow `mode` at tile (i, j) (an order: sunderAim). Not winding up, it starts now (with power, reloaded);
+ * winding up, it turns to the new aim, until a Quake's ring has shown. '' or why not.
+ */
+function setSunderAim(b, i, j, mode) {
+  const why = sunderAimBlocked(b, i, j, mode);
+  if (why) return why;
+  if (sunderLocked(b)) return 'The ring is showing: the aim is fixed now.';
+  if (!b.sOn) {
+    const no = sunderBlocked(b);
+    if (no) return no;
+    b.sMode = mode; b.sAim = [i | 0, j | 0];
+    sunderStart(b);
+    return '';
+  }
+  b.sMode = mode; b.sAim = [i | 0, j | 0];
+  return '';
+}
+
+/** Ray b starts winding up: a Reactor's Uranium goes in now; everyone hears it. */
+function sunderStart(b) {
+  const src = sunderPower(b);
+  b.sOn = 1; b.sCharge = 0; b.sSrc = src; b.sTime = src === 'reactor' ? SUNDER.reactorCharge : SUNDER.charge;
+  if (src === 'reactor') {
+    const r = sunderReactor(b), g = (r.stock.uranium || 0) >= SUNDER.uranium ? 'uranium' : 'fissile', n = g === 'uranium' ? SUNDER.uranium : 1;
+    bump(r.stock, g, -n); usedGood(b.owner, g, n);
+    b.sReactor = r.id;
+  } else b.sReactor = 0;
+  const c = bCentre(b), what = b.sMode === 'deep' ? 'Strike the Deep' : 'a Quake';
+  sfx('sundercharge', c.x, c.y);
+  postMsg(b.owner, `The Sundering Ray is winding up${src === 'reactor' ? ' on Reactor power' : ''} for ${what}: it fires in ${b.sTime} seconds. The Murmur will hear it.`, b.x + 1, b.y + 1, 'info');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is winding up the Sundering Ray! A deep thudding: it fires in ${b.sTime} seconds.`, b.x + 1, b.y + 1, 'bad');
+  logEvent({ t: S.time, k: 'sunder', p: b.owner });
+}
+
+/** Call off Ray b's wind-up (an order: sunderStop, or its power lost). */
+function sunderStop(b, why) {
+  if (!b.sOn) return;
+  b.sOn = 0; b.sCharge = 0; b.sSrc = ''; b.sReactor = 0; b.sTime = 0;
+  if (why) postMsg(b.owner, why, b.x + 1, b.y + 1, 'bad');
+}
+
+/** Is the power Ray b's wind-up started with still there? */
+function sunderStillPowered(b) {
+  if (murmurCutOn(b)) return false;
+  if (b.sSrc === 'reactor') { const r = getE(b.sReactor); return !!(r && !r.dead && r.built && r.owner === b.owner); }
+  return megaGens(b, SUNDER.reach).length >= SUNDER.gens;
+}
+
+/** The Sundering Ray, each tick: the wind-up and the blow. */
+function updateSunder(b, dt) {
+  if (b.sReload > 0) b.sReload = Math.max(0, b.sReload - dt);
+  if (!b.sOn) {
+    b.working = false;
+    b.status = b.sReload > 0 ? `Reloading: ready to wind up in ${fmtSecs(b.sReload)}` : sunderPower(b) ? 'Ready: tap Strike the Deep or Quake, then a spot on the map'
+      : `No power: ${SUNDER.gens} Generators with Fuel within ${SUNDER.reach} tiles, or a Nuclear Reactor with ${SUNDER.uranium} Uranium or an Enriched Uranium`;
+    return;
+  }
+  if (!sunderStillPowered(b)) {
+    sunderStop(b, b.sSrc === 'reactor' ? 'The Sundering Ray lost its Reactor: the blow is lost.' : 'The Sundering Ray lost its power (its Generators are wrecked or out of Fuel): the blow is lost.');
+    b.status = 'Blow lost: no power';
+    return;
+  }
+  b.working = true;
+  if (b.sSrc === 'gen') {
+    const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / SUNDER.genFuel - 1);
+    for (const g of megaGens(b, SUNDER.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
+  }
+  const T = sunderTime(b), was = b.sCharge || 0;
+  b.sCharge = Math.min(T, was + dt);
+  if (b.sCharge < T) {
+    b.status = `Winding up${b.sSrc === 'reactor' ? ' on Reactor power' : ''} for ${b.sMode === 'deep' ? 'Strike the Deep' : 'a Quake'}: fires in ${fmtSecs(T - b.sCharge)}`;
+    // A Quake's ring shows on the ground for everyone for its last SUNDER.warn s: the aim is fixed from then.
+    if (b.sMode === 'quake' && b.sAim && was < T - SUNDER.warn && b.sCharge >= T - SUNDER.warn) {
+      for (const P of S.players) {
+        if (P.absent || P.out || isWild(P.id)) continue;
+        const hit = S.buildings.some((e) => !e.dead && e.owner === P.id && dist2(e.x + 0.5, e.y + 0.5, b.sAim[0] + 0.5, b.sAim[1] + 0.5) <= sq(SUNDER.quake + 1));
+        if (P.id === b.owner) postMsg(P.id, `The Quake's ring is on the ground: it lands in ${SUNDER.warn} seconds.`, b.sAim[0], b.sAim[1], 'info');
+        else if (hit) { postMsg(P.id, `A Sundering Ray's Quake is coming down on your colony in ${SUNDER.warn} seconds! Get your robots out of the ring.`, b.sAim[0], b.sAim[1], 'bad'); if (isMe(P.id)) sfx('alert'); }
+      }
+    }
+    return;
+  }
+  if (!b.sAim || !b.sMode) { b.status = 'Wound up: tap Strike the Deep or Quake, then a spot'; return; }
+  sunderFire(b);
+}
+
+/** Ray b fires: the bore charge goes off, the plates slam, and a ripple sets out through the ground to its aim. */
+function sunderFire(b) {
+  const c = bCentre(b), x1 = b.sAim[0] + 0.5, y1 = b.sAim[1] + 0.5, d = dist(c.x, c.y, x1, y1);
+  const travel = clamp(d / SUNDER.speed, SUNDER.travelMin, SUNDER.travelMax);
+  b.sReload = b.sSrc === 'reactor' ? SUNDER.reactorReload : SUNDER.reload; b.sShot = S.time;
+  b.sOn = 0; b.sCharge = 0; b.sSrc = ''; b.sReactor = 0; b.sTime = 0; b.working = false;
+  // The Murmur hear every blow: the next night (n + 1, whatever the hour now) they come for it.
+  if (wildOn()) b.sLure = murmurNights(S.time) + 1;
+  S.sunders = S.sunders || [];
+  S.sunderSeq = (S.sunderSeq || 0) + 1;
+  S.sunders.push({ id: S.sunderSeq, o: b.owner, b: b.id, m: b.sMode, x0: Math.round(c.x * 100) / 100, y0: Math.round(c.y * 100) / 100, x1, y1, t: S.time, at: Math.round((S.time + travel) * 1000) / 1000, f: 0, done: 0 });
+  const P = S.players[b.owner];
+  if (P) { P.stats.sunder = (P.stats.sunder || 0) + 1; if (b.sMode === 'deep') P.stats.sunderDeep = (P.stats.sunderDeep || 0) + 1; else P.stats.sunderQuake = (P.stats.sunderQuake || 0) + 1; }
+  sfx('sunderfire', c.x, c.y);
+  logEvent({ t: S.time, k: 'sunderFire', p: b.owner, m: b.sMode });
+}
+
+/** The ripples in the ground, each tick: tunnels under the path cave in as one passes; it lands at its time; old marks go. */
+function updateSunderWaves() {
+  for (const w of S.sunders) {
+    if (w.done) continue;
+    const len = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) || 1, f = Math.min(1, (S.time - w.t) / Math.max(0.001, w.at - w.t));
+    // The tunnels a tile either side of its path, as far as it has come.
+    if (S.tun && f > w.f) {
+      const ux = (w.x1 - w.x0) / len, uy = (w.y1 - w.y0) / len;
+      let caved = 0;
+      for (let s = w.f * len; s <= f * len; s += 0.5) {
+        const x = w.x0 + ux * s, y = w.y0 + uy * s;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const i = Math.floor(x) + di, j = Math.floor(y) + dj;
+          if (!inMap(i, j)) continue;
+          const t = tIdx(i, j);
+          if (S.tun[t] && !sunderRoot(t)) { S.tun[t] = 0; caved++; }
+        }
+      }
+      if (caved) S.mur.ver++;
+    }
+    w.f = f;
+    if (S.time >= w.at) { w.done = 1; sunderLand(w); }
+  }
+  // (the last SUNDER.keep blows' cracks stay on the ground for SUNDER.scar s: looks only)
+  if (S.sunders.length > SUNDER.keep || S.sunders.some((w) => w.done && S.time - w.at > SUNDER.scar)) {
+    S.sunders = S.sunders.filter((w) => !w.done || S.time - w.at <= SUNDER.scar);
+    while (S.sunders.length > SUNDER.keep && S.sunders[0].done) S.sunders.shift();
+  }
+}
+
+/** Is tile t a nest's own tile (the root of its network: it stays)? */
+function sunderRoot(t) { const b = getE(S.bAt[t]); return !!(b && !b.dead && isNestB(b)); }
+
+/** Every tunnel tile within r of (x, y) caves in (nests' own tiles stay). How many. */
+function sunderCave(x, y, r) {
+  if (!S.tun) return 0;
+  let n = 0;
+  const R = Math.ceil(r);
+  for (let j = Math.floor(y) - R; j <= Math.floor(y) + R; j++) for (let i = Math.floor(x) - R; i <= Math.floor(x) + R; i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, x, y) > r * r) continue;
+    const t = tIdx(i, j);
+    if (S.tun[t] && !sunderRoot(t)) { S.tun[t] = 0; n++; }
+  }
+  if (n) S.mur.ver++;
+  return n;
+}
+
+/** Is a tunnel exit barred at tile (i, j) for now (a Strike the Deep's seal)? */
+function sunderSealed(i, j) {
+  const seal = S.mur && S.mur.seal;
+  if (!seal || !seal.length) return false;
+  const n = murmurNights(S.time);
+  return seal.some((s) => n <= s.n && dist2(s.x, s.y, i + 0.5, j + 0.5) <= s.r * s.r);
+}
+
+/** The Ray (if any) that nest `nest` sends its packs at first on night n: a lured one within SUNDER.lure tiles of it. */
+function sunderLure(nest, n) {
+  let best = null, bd = SUNDER.lure * SUNDER.lure;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].sunder || b.sLure !== n) continue;
+    const c = bCentre(b), d = dist2(c.x, c.y, nest.x + 0.5, nest.y + 0.5);
+    if (d <= bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** How big a pack lured to a Ray is: half again on Active, as ever on Quiet. */
+function sunderPack(size) { return murmurSmart() ? Math.ceil(size * SUNDER.packMul) : size; }
+
+/** A ripple w lands: Strike the Deep on the Murmur, or a Quake on whatever is there. */
+function sunderLand(w) {
+  const x = w.x1, y = w.y1, deep = w.m === 'deep', r = deep ? SUNDER.deep : SUNDER.quake, by = w.o, P = S.players[by];
+  addFx('sunderhit', x, y, { life: 4, r, deep: deep ? 1 : 0 });
+  sfx('sunderquake', x, y);
+  const caved = sunderCave(x, y, r);
+  // Exits in the circle collapse (Strike the Deep seals it for SUNDER.sealNights nights).
+  let exits = 0;
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || dist2(e.x + 0.5, e.y + 0.5, x, y) > r * r) continue;
+    exits++;
+    S.mur.shut.push({ x: e.x, y: e.y, until: S.time + MURMUR.shut });
+    addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1 });
+    destroyBuilding(e, false);
+  }
+  if (exits && P) P.stats.collapsed = (P.stats.collapsed || 0) + exits;
+  let nests = 0, sappers = 0;
+  if (deep && S.mur) {
+    const n = murmurNights(S.time);
+    S.mur.seal = (S.mur.seal || []).filter((s) => s.n >= n);
+    S.mur.seal.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, r, n: n + SUNDER.sealNights });
+    for (const b of S.buildings) {
+      if (b.dead || !isNestB(b) || dist2(b.x + 0.5, b.y + 0.5, x, y) > r * r) continue;
+      b.armor = Math.max(1, b.armor - BDEFS[b.type].armor * SUNDER.nestHit);
+      b.lastHit = S.time;
+      b.sQuiet = n + 1;
+      nests++;
+      addFx('dustcloud', b.x + 0.5, b.y + 0.5, { r: 1.4, life: 2.4 });
+    }
+    for (const u of S.bots) if (!u.dead && u.under && dist2(u.x, u.y, x, y) <= r * r) { sappers++; killBot(u); }
+    if (P) { P.stats.sunderNests = (P.stats.sunderNests || 0) + nests; P.stats.sunderExits = (P.stats.sunderExits || 0) + exits; }
+  }
+  // A Quake: the colonies' buildings, roads, track, Walls and robots in the circle. (A Shield Dome doesn't stop it.)
+  const hurt = S.players.map(() => 0), stunned = S.players.map(() => 0);
+  let roads = 0;
+  if (!deep) {
+    for (const e of S.buildings) {
+      if (e.dead || !e.built || BDEFS[e.type].wild || e.owner < 0 || calmB(e) || footDist(e, x, y) > r) continue;
+      const def = BDEFS[e.type], base = e.type === 'lander' || def.keep, take = def.armor * (base ? SUNDER.baseDmg : SUNDER.dmg);
+      e.armor = Math.min(e.armor, Math.max(def.armor * SUNDER.floor, e.armor - take));
+      e.crack = 1; e.lastHit = S.time;
+      if (foes(e.owner, by)) hitByNow(e.owner, by);
+      if (hurt[e.owner] !== undefined) hurt[e.owner]++;
+    }
+    S.crk = S.crk || new Uint8Array(S.W * S.H);
+    const R = Math.ceil(r);
+    for (let j = Math.floor(y) - R; j <= Math.floor(y) + R; j++) for (let i = Math.floor(x) - R; i <= Math.floor(x) + R; i++) {
+      if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, x, y) > r * r) continue;
+      const t = tIdx(i, j);
+      if ((S.road[t] || (S.rail && S.rail[t])) && !S.crk[t] && !calmAt(i + 0.5, j + 0.5)) { S.crk[t] = 1; roads++; }
+    }
+    S.crkN = (S.crkN || 0) + roads;
+    for (const u of S.bots) {
+      if (u.dead || u.inside || aloft(u) || BOTS[u.type].wild || BOTS[u.type].sea || dist2(u.x, u.y, x, y) > r * r) continue;
+      u.stunT = Math.round((S.time + SUNDER.stun) * 1000) / 1000;
+      u.cd = Math.max(u.cd || 0, SUNDER.stun);
+      if (stunned[u.owner] !== undefined) stunned[u.owner]++;
+    }
+  }
+  // In the Hollow, rock comes down from the roof inside the circle (the tremors' rockfall, a few seconds on).
+  if (S.tremor && S.hollow) {
+    for (let k = 0, n = 0; k < SUNDER.rocks * 6 && n < SUNDER.rocks; k++) { // (on the cavern floor: a few tries for each)
+      const a = hash2(w.id, k, 911) * Math.PI * 2, rr = Math.sqrt(hash2(w.id, k, 912)) * r * 0.9;
+      const i = Math.floor(x + Math.cos(a) * rr), j = Math.floor(y + Math.sin(a) * rr);
+      if (!inMap(i, j) || S.terrain[tIdx(i, j)] !== T_GROUND) continue;
+      S.tremor.rock.push({ x: i, y: j, at: Math.round((S.time + 2 + n * 1.5) * 1000) / 1000 });
+      n++;
+    }
+    S.tremor.dust = Math.max(S.tremor.dust || 0, S.time + 6);
+  }
+  // Who hears of it.
+  const at = [Math.floor(x), Math.floor(y)];
+  for (const Q of S.players) {
+    const p = Q.id;
+    if (Q.absent || Q.out || isWild(p)) continue;
+    if (p === by) {
+      postMsg(p, deep ? `Strike the Deep: ${caved} tunnel tile${caved === 1 ? '' : 's'} caved in, ${exits} exit${exits === 1 ? '' : 's'} sealed for ${SUNDER.sealNights} nights${nests ? `, ${nests} nest${nests === 1 ? '' : 's'} shaken (no raid from ${nests === 1 ? 'it' : 'them'} tomorrow night)` : ''}${sappers ? `, ${sappers} Sapper${sappers === 1 ? '' : 's'} crushed` : ''}. The Murmur heard it: the next night they come for the Ray.`
+        : `The Quake landed: ${hurt.reduce((a, n, q) => a + (q === p ? 0 : n), 0)} rival building${hurt.reduce((a, n, q) => a + (q === p ? 0 : n), 0) === 1 ? '' : 's'} cracked${hurt[p] ? `, and ${hurt[p]} of your own` : ''}${roads ? `; ${roads} tiles of road and track cracked` : ''}.`, at[0], at[1], 'good');
+    } else if (!deep && (hurt[p] || stunned[p])) {
+      postMsg(p, `A Quake hit your colony: ${hurt[p]} building${hurt[p] === 1 ? '' : 's'} cracked (half speed until repaired to full), roads cracked until your Workers mend them.`, at[0], at[1], 'lost');
+      if (isMe(p)) sfx('alert');
+    } else if (deep && S.owner[tIdx(Math.min(S.W - 1, Math.max(0, at[0])), Math.min(S.H - 1, Math.max(0, at[1])))] === p) {
+      postMsg(p, `${playerName(by, true)} struck the deep under your land: the Murmur's tunnels there caved in.`, at[0], at[1], 'info');
+    }
+  }
+  logEvent({ t: S.time, k: 'sunderLand', p: by, m: w.m });
+}
+
+/** The cracked roads and track a Worker of p's could mend, a few patches apart (unclaimed, on p's ways). */
+function sunderMendSpots(p) {
+  if (!S.crk || !(S.crkN > 0)) return [];
+  const claimed = [];
+  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'mend') claimed.push(u.task.tile);
+  const out = [];
+  let n = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) {
+    if (!S.crk[t]) continue;
+    if (!S.road[t] && !(S.rail && S.rail[t])) { S.crk[t] = 0; continue; } // (the road is gone: nothing to mend)
+    n++;
+    if (out.length >= 3) continue;
+    const o = S.road[t] ? wayOwner(t) : S.owner[t];
+    if (o !== p) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (claimed.concat(out).some((c) => Math.abs((c % S.W) - i) <= 2 && Math.abs(((c / S.W) | 0) - j) <= 2)) continue;
+    out.push(t);
+  }
+  S.crkN = n;
+  return out;
+}
+
+/** Worker u goes to mend the cracked road or track at tile t. */
+function assignMend(u, t) {
+  cancelTask(u);
+  u.task = { type: 'mend', tile: t, phase: 'go', t: 0 };
+  if (!goTo(u, t % S.W, (t / S.W) | 0)) cancelTask(u);
+}
+
+/** A Worker mending cracks: there, it works SUNDER.mend s and mends the 3 x 3 patch round the tile. */
+function doMend(u, t, dt) {
+  if (!S.crk || !S.crk[t.tile]) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') { if (moveAlong(u, dt)) t.phase = 'work'; return; }
+  if (mustRecharge(u)) { cancelTask(u); return; }
+  u.busy = 1;
+  t.t = (t.t || 0) + dt * S.players[u.owner].mult * batFactor(u);
+  if (t.t < SUNDER.mend) return;
+  const i0 = t.tile % S.W, j0 = (t.tile / S.W) | 0;
+  let n = 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!inMap(i0 + di, j0 + dj)) continue;
+    const q = tIdx(i0 + di, j0 + dj);
+    if (S.crk[q]) { S.crk[q] = 0; n++; markDirty(i0 + di, j0 + dj); }
+  }
+  S.crkN = Math.max(0, (S.crkN || 0) - n);
+  const P = S.players[u.owner];
+  if (P) P.stats.mended = (P.stats.mended || 0) + n;
+  u.task = null; u.idleT = 0;
+}
+
+/** Robot u's pace on cracked ground and stunned: SUNDER.crackSpeed on a cracked road or track, 0 while stunned. */
+function sunderPace(u) {
+  if (u.stunT && u.stunT > S.time) return 0;
+  if (S.crk && S.crkN > 0) { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (t >= 0 && t < S.crk.length && S.crk[t]) return SUNDER.crackSpeed; }
+  return 1;
+}

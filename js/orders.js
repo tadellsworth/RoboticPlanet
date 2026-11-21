@@ -418,6 +418,12 @@ const ORDERS = {
   gupBegin(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupBegin(b) : 'That Great Uplink is gone.'; },
   /** Stand down Great Uplink `id`'s transmission: its progress is lost. '' or why not. */
   gupStop(p, id) { const b = ownB(p, id); return b && BDEFS[b.type].gup ? gupStop(b) : 'That Great Uplink is gone.'; },
+  /** Aim Sundering Ray `id`'s blow `mode` ('deep': Strike the Deep, 'quake') at tile (i, j): it winds up (or, winding up, turns to it). '' or why not. */
+  sunderAim(p, id, i, j, mode) { const b = ownB(p, id); return b && BDEFS[b.type].sunder ? setSunderAim(b, i | 0, j | 0, mode === 'deep' ? 'deep' : 'quake') : 'That Sundering Ray is gone.'; },
+  /** Sundering Ray `id`'s Use Reactor switch (as the Lance's). */
+  sunderReactor(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].sunder) b.sUseR = !!on; },
+  /** Call off Sundering Ray `id`'s wind-up (the blow is lost). */
+  sunderStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].sunder && b.sOn) { sunderStop(b); b.sAim = null; } },
   /** Call off Lance `id`'s charge (the charge is lost). */
   lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },

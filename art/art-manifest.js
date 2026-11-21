@@ -67,6 +67,7 @@ const LANCE_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }, DOME_FRAME = { scale:
 const CITY_FRAME = { scale: 6.5789, anchor: [0.5, 0.6] }; // (Arrival City's wide frame: see tools/install_city.py)
 const LIFT_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Orbital Lift's wide frame, as the Lance's: see tools/install_lift.py)
 const GUP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (the Great Uplink's wide frame, as the Lift's: see tools/install_gup.py)
+const SUNDER_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Sundering Ray's wide frame, as the Lance's: see tools/install_sunder.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
@@ -260,6 +261,13 @@ const ART_MANIFEST = {
   // The Great Uplink (renderer/b/gup.js, the owner's look A, the Dish Array, installed by tools/install_gup.py): the
   // dish array, whole and below 30% of its armor; its transmission is drawn in code (drawGupSignals).
   ...Object.fromEntries([0, 1].flatMap((t) => [[`gup@${t}`, { src: `buildings/gup@${t}.webp`, ...GUP_FRAME }], [`gup-down@${t}`, { src: `buildings/gup-down@${t}.webp`, ...GUP_FRAME }]])),
+  // The Sundering Ray (renderer/b/sunder.js, the owner's look B, the Piston Battery, installed by tools/install_sunder.py):
+  // the pad and block with its bore tower, and its two construction stages, framed wide (SUNDER_FRAME); its moving parts
+  // each their own layer on the same frame, no team colour: the two great rams at three heights and the six ram plates
+  // seated or raised (drawSunder pumps them in code, and draws the glow, the smoke, the ripple and the cracks).
+  ...Object.fromEntries([0, 1].flatMap((t) => ['sunder', 'sunder-site1', 'sunder-site2'].map((k) => [`${k}@${t}`, { src: `buildings/${k}@${t}.webp`, ...SUNDER_FRAME }]))),
+  ...Object.fromEntries(['w', 'e'].flatMap((w) => [0, 1, 2].map((e) => [`sunder-ram-${w}-${e}`, { src: `buildings/sunder-ram-${w}-${e}.webp`, ...SUNDER_FRAME }]))),
+  ...Object.fromEntries([0, 1, 2, 3, 4, 5].flatMap((k) => [0, 1].map((e) => [`sunder-plate-${k}-${e}`, { src: `buildings/sunder-plate-${k}-${e}.webp`, ...SUNDER_FRAME }]))),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

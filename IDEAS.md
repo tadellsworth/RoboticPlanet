@@ -44,6 +44,22 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   robots staggering as it passes; it arrives a moment later (sound through rock), which gives the target its warning
   naturally. On arrival the ground heaves and cracks spread in a circle; Murmur tunnels cave in along the path and at
   the target. Keeps the approved Piston Battery look.
+  - **The Sundering Ray: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, Megastructures and The Murmur; the
+    First Contact mission *Something Keeps Time*). Short name **Ray**, key **Y** on the Mega tab (L is the Lance's; D pans
+    the map, S too; the Deep Core is free to take any of E, K or P). The Piston Battery as the plan above has it: three
+    hydraulic rams in a block round the bore tower over a shot hole, two stacks, six ram plates in a row before it
+    (`renderer/b/sunder.js`); the rams pump in turn and the plates drum, faster to the blow; at the blow the plates slam
+    in a timed ripple, the far side from the aim first; a bulge runs through the ground with dust and cracks behind it,
+    caving in tunnels a tile either side of its path; on landing the ground heaves in rings and cracks spread (fading
+    over 5 minutes). Every other answer the sheet's recommendation and its numbers. Decided here, for the owner to check:
+    the ripple runs 10 tiles a second (1.5 to 6 s on the way, so a Quake's target has the ring's 20 s and a moment more);
+    a Quake's aim is fixed once its ring shows (else the warning means nothing); a Quake cracks the colony's own
+    buildings too (as the Lance's line burns its own), but nothing on a Trade Post's ground; a Strike the Deep's seal
+    runs through the second night after the blow; cracked roads are mended by idle Workers by themselves, a 3 × 3 patch
+    in 4 s (no Cement), cracked foundations by the ordinary paid Repair; stunned robots neither move nor fire for 4 s;
+    the AI Warden picks it from 15 minutes in (when its pick is still open), as its one weapon, no Nuclear Silo then.
+    Open: whether the Murmur should also go for it on the night of a blow struck after dark (now: only the next night),
+    and the balance audit's look at its numbers.
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
   - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright

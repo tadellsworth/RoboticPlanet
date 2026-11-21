@@ -535,7 +535,7 @@ function aiThink(p) {
     const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
     const nuke = [];
     if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
-    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2 && P.megaPick !== 'lance') nuke.push(['nukesilo', 1]); // (not when it chose the Lance: aiMegaPick)
+    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2 && P.megaPick !== 'lance' && P.megaPick !== 'sunder') nuke.push(['nukesilo', 1]); // (not when it chose the Lance: aiMegaPick)
     plan = plan.slice(0, k).concat(nuke, plan.slice(k));
   }
   // Under attack at the front: a Bunker, a Mortar Pit or a Disruptor Tower beside the fort that is being hit
@@ -2226,7 +2226,7 @@ const AI_MEGA = { lanceAt: 900, domeAt: 1020, cityAt: 720, liftAt: 900, heraldLi
  * under the cap.
  */
 const AI_MEGA_CAP = { weapons: 1, total: 2 };
-const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', sunder: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
 const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'lift', balanced: 'city', raider: null, rusher: 'lift' };
 
 /** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
@@ -2333,6 +2333,8 @@ function aiUraniumFed(p, me) {
 function aiMega(p, me, lander, canBuild) {
   if (!megaOn() || S.mode === 'colony') return;
   const P = S.players[p];
+  // The Warden's other answer: the Sundering Ray, when the Murmur dig toward it (aiSunder: its own pick, build and use).
+  aiSunder(p, me, lander, canBuild);
   // The choice, once it has a Reactor fed with Uranium, late in the game.
   if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon')) P.megaPick = aiMegaPick(p);
   aiCity(p, me, lander, canBuild);
@@ -4533,4 +4535,106 @@ function allyShipsTick() {
     allySay(s.from, s.to, 'arrived', b.x, b.y, { n: s.n, g: goodN(s.g, s.n).toLowerCase(), who: callsign(s.from), b: BDEFS[b.type].name });
   }
   S.allyShips = left;
+}
+
+/* ------------------------------------------------------------------ the Sundering Ray (SUNDER) */
+
+/*
+ * The Sundering Ray for a rival (the design sheet: it is the rival's one weapon, the pick of the Lance of Corvane, the
+ * nukes or the Ray). The Warden picks it (P.megaPick 'sunder') from AI_SUNDER.pickAt s in when the Murmur are Active and
+ * a nest's tunnels reach within AI_SUNDER.near tiles of its Command Base; it goes up near home with its 2 Generators. It
+ * strikes the deep over the nest closest to home after a night the Murmur raided it (or once its tunnels come that
+ * close), by day, and the night after a blow keeps AI_SUNDER.guard warbots at the Ray. Any rival that owns one Quakes a
+ * foe's cluster of buildings and roads within reach (at least AI_SUNDER.worth) just before a push (its next attack due
+ * within the wind-up), so its army arrives while the Walls are cracked.
+ */
+const AI_SUNDER = { pickAt: 900, near: 12, guard: 6, worth: 5, look: 20, think: 5 };
+
+/** Does a nest's tunnel come within r tiles of (x, y)? The nest it belongs to, the nearest such, or null. */
+function aiTunnelNear(x, y, r) {
+  if (!S.tun || !S.mur) return null;
+  let best = null, bd = r * r;
+  for (let j = Math.max(0, Math.floor(y - r)); j <= Math.min(S.H - 1, Math.ceil(y + r)); j++) for (let i = Math.max(0, Math.floor(x - r)); i <= Math.min(S.W - 1, Math.ceil(x + r)); i++) {
+    const t = tIdx(i, j);
+    if (!S.tun[t]) continue;
+    const d = dist2(i + 0.5, j + 0.5, x, y);
+    if (d > bd) continue;
+    const n = tunnelNest(t);
+    if (n) { bd = d; best = n; }
+  }
+  return best;
+}
+
+/** Where rival p's Quake from Ray b would do the most: the foe's buildings and road tiles in a circle within reach. { i, j, s } or null. */
+function aiQuakeSpot(p, b) {
+  const c = bCentre(b), R2 = SUNDER.quake * SUNDER.quake;
+  const theirs = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && !isWild(e.owner) && !calmB(e) && dist(c.x, c.y, e.x + 0.5, e.y + 0.5) <= SUNDER.range + SUNDER.quake);
+  const mine = S.buildings.filter((e) => !e.dead && e.built && (e.owner === p || (e.owner >= 0 && !foes(e.owner, p))) && dist(c.x, c.y, e.x + 0.5, e.y + 0.5) <= SUNDER.range + SUNDER.quake);
+  let best = null;
+  for (const e of theirs) {
+    const i = e.x, j = e.y;
+    if (sunderAimBlocked(b, i, j, 'quake')) continue;
+    let s = 0;
+    for (const o of theirs) if (dist2(o.x + 0.5, o.y + 0.5, i + 0.5, j + 0.5) <= R2) s += BDEFS[o.type].barrier ? 0.5 : DEFENCE_TYPES.has(o.type) || o.type === 'lander' ? 2 : 1;
+    for (const o of mine) if (dist2(o.x + 0.5, o.y + 0.5, i + 0.5, j + 0.5) <= R2) s -= 3;
+    for (let dj = -SUNDER.quake; dj <= SUNDER.quake; dj += 2) for (let di = -SUNDER.quake; di <= SUNDER.quake; di += 2) {
+      if (!inMap(i + di, j + dj) || di * di + dj * dj > R2) continue;
+      const t = tIdx(i + di, j + dj);
+      if (S.road[t] && foes(wayOwner(t), p)) s += 0.25;
+    }
+    if (!best || s > best.s) best = { i, j, s };
+  }
+  return best;
+}
+
+/** Rival p and the Sundering Ray, each think: the pick (the Warden), building it and its Generators, its blows and its guard. */
+function aiSunder(p, me, lander, canBuild) {
+  const P = S.players[p];
+  if (!lander || worldBan('sunder')) return;
+  const ray = me.find((b) => BDEFS[b.type].sunder);
+  if (!P.megaPick && P.style === 'turtle' && murmurLevel() === 'active' && S.time >= AI_SUNDER.pickAt && aiMegaRoom(p, 'weapon') && aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near)) {
+    P.megaPick = 'sunder'; P.megaWhy = 'the Murmur dig toward its base';
+  }
+  if (!ray) {
+    if (P.megaPick !== 'sunder' || !canBuild || megaBlocked(p, 'sunder') || !aiHalfway(p, 'sunder') || S.time - (P.sunderLook ?? -999) < AI_SUNDER.look) return;
+    P.sunderLook = S.time;
+    const spot = aiMegaSpot(p, 'sunder', [lander], 10, lander, -1);
+    const r = spot && placeSite(p, 'sunder', spot[0], spot[1]);
+    if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; P.sunderAt = Math.round(S.time); }
+    return;
+  }
+  if (!ray.built) { if (!ray.prio) { ray.prio = 'high'; ray.sitePrio = 1; } return; }
+  // Its two Generators, again as any is lost.
+  const gens = me.filter((b) => b.type === 'generator' && footDist(ray, b.x + 0.5, b.y + 0.5) <= SUNDER.reach + 0.5), have = playerGoods(p), gc = BDEFS.generator.cost;
+  if (gens.length < SUNDER.gens && canBuild && have.cement >= gc.cement && have.alloy >= gc.alloy && S.time - (P.sunderLook ?? -999) >= AI_SUNDER.look / 4) {
+    P.sunderLook = S.time;
+    const spot = aiMegaSpot(p, 'generator', [ray], SUNDER.reach, lander, 0);
+    const r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+    if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+  }
+  ray.sUseR = false; // (the Uranium is kept for whatever else wants it)
+  // The night after a blow: a guard at the Ray, once a night.
+  const n = murmurNights(S.time), lureNight = ray.sLure && (ray.sLure === n + 1 || (ray.sLure === n && murmurNight(S.time)));
+  if (lureNight && P.sunderGuard !== ray.sLure && aiArmyNear(p, ray, 6) < AI_SUNDER.guard) {
+    const c = bCentre(ray), i = Math.round(c.x), j = Math.round(c.y + 2.5);
+    const sp = aiSpare(p, { x: i, y: j }, false);
+    if (sp.n >= 2) { const { sent } = sendToRally(p, i, j, Math.min(AI_SUNDER.guard, sp.n)); if (sent) P.sunderGuard = ray.sLure; }
+  }
+  if (ray.sOn || S.time - (P.sunderT || -99) < AI_SUNDER.think) return;
+  P.sunderT = S.time;
+  if (sunderBlocked(ray)) return;
+  // Strike the Deep: by day, over the nest closest to home once the Murmur raided it (or their tunnels are that close).
+  if (sunderDeepOn() && !murmurNight(S.time)) {
+    const raided = P.hitBy && (P.hitBy[wildOwner()] || -999) > S.time - TOD_LEN, near = aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near);
+    if (raided || near) {
+      let nest = near;
+      if (!nest) { let bd = Infinity; for (const b of S.buildings) if (!b.dead && isNestB(b)) { const d = dist2(b.x, b.y, lander.x, lander.y); if (d < bd) { bd = d; nest = b; } } }
+      if (nest && !setSunderAim(ray, nest.x, nest.y, 'deep')) { P.sunderDeeps = (P.sunderDeeps || 0) + 1; return; }
+    }
+  }
+  // A Quake just before a push: its next attack due within the wind-up and the ripple's way there.
+  if (S.mode !== 'colony' && P.nextAttack - S.time <= sunderTime(ray) + SUNDER.travelMax + 10) {
+    const q = aiQuakeSpot(p, ray);
+    if (q && q.s >= AI_SUNDER.worth && !setSunderAim(ray, q.i, q.j, 'quake')) P.sunderQuakes = (P.sunderQuakes || 0) + 1;
+  }
 }
