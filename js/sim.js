@@ -46,6 +46,8 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.cans && S.cans.length) updateCans(dt);
   if (S.liftFalls && S.liftFalls.length) updateLiftFalls(dt); // (an Orbital Lift's cable coming down)
+  if (S.rads && S.rads.length && S.tick % 15 === 8) updateRads(15 * dt); // (radiation: fallout and wrecked Reactors)
+  if (S.ruins && S.ruins.length && S.tick % 30 === 14) ruinTidy();
   if (S.fires && S.fires.length) updateFires();
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
@@ -1178,6 +1180,7 @@ function routeOpts(u) {
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
   if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
+  if (isArmy(u) && !u.fight && S.players[u.owner] && S.players[u.owner].ai && S.rads && S.rads.length) o.rad = true; // (a rival's army marches round radiation where it can)
   if (bt.wild && u.task && u.task.night && !u.fight && murmurSmart()) o.coverMap = murmurGunMap(); // (Active: the Murmur keep out of the colonies' guns where they can)
   return o;
 }
@@ -2869,7 +2872,7 @@ function nextPaveTile(u, p, maxD) {
   let best = -1, bs = Infinity;
   for (let k = 0; k < n; k++) {
     const t = M.tiles[k];
-    if (skip[t] > S.time || hotFor(p, t)) continue; // (not where an enemy gun reaches, or enemy warbots are about)
+    if (skip[t] > S.time || hotFor(p, t) || radTile(t)) continue; // (not where an enemy gun reaches, or enemy warbots are about)
     if (P.danger && dangerAt(p, t % W, (t / W) | 0)) continue; // (nor, a rival AI's, where its robots were just shot down)
     if (M.stand[k] < 0) continue; // (off this ground; a bridge or tunnel with nowhere on it to build from)
     const i = t % W, j = (t / W) | 0;
@@ -3557,7 +3560,7 @@ function doBuild(u, t, dt) {
   const def = BDEFS[s.type];
   const cap = siteFrac(s);
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5)) / (s.buildTime || def.buildTime)); // (faster by Arrival City)
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
     if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
@@ -3633,7 +3636,7 @@ function findFace(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i, d = dist2(i, j, b.x, b.y);
-      if (d > r2 || d >= bd || S.zone[t] !== zone || S.resRes[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner) || !rockFace(t) || hotFor(b.owner, t)) continue;
+      if (d > r2 || d >= bd || S.zone[t] !== zone || S.resRes[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner) || !rockFace(t) || hotFor(b.owner, t) || radTile(t)) continue;
       bd = d; best = t;
     }
   }
@@ -3666,7 +3669,7 @@ function findNode(b, type, radius) {
       const t = j * S.W + i;
       if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
-      if (hotFor(b.owner, t)) continue; // nor where an enemy gun reaches (or enemy warbots are about)
+      if (hotFor(b.owner, t) || radTile(t)) continue; // nor where an enemy gun reaches (or enemy warbots are about)
       if ((type === R_STALK || type === R_CROP || type === R_VEIN) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || (near.length === 4 && d >= near[3][0])) continue;
@@ -3698,7 +3701,7 @@ function findPlantSpot(b, radius) {
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
       if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
-      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
+      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!inMap(i + di, j + dj)) continue;
@@ -3723,7 +3726,7 @@ function findCropSpot(b, radius) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
       if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue;
-      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
+      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
     }
@@ -3751,7 +3754,7 @@ function findPaveSpot(b, x, y) {
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
   while (head < tail) {
     const t = q[head++];
-    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && wayOwner(t) === b.owner && !hotFor(b.owner, t)) return t;
+    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && wayOwner(t) === b.owner && !hotFor(b.owner, t) && !radTile(t)) return t;
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && canStep(t, u)) push(u);
   }
@@ -4018,7 +4021,7 @@ function doStaff(u, t, dt) {
       if (t.lay >= 0) { paverLay(u, b, t, dt); return; }
       u.busy = 1;
       b.working = true;
-      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5); // (faster by Arrival City)
+      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5) * radWork(b); // (faster by Arrival City, slower in a radiation zone)
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
@@ -4313,9 +4316,9 @@ function produce(b, def, dt) {
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
   const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '');
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city; // (a third slower while its Lance charges; faster by Arrival City)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) {
@@ -8861,6 +8864,7 @@ function nukeImpact(m) {
   if (domeCatch(cx, cy, m.owner, 'nuke')) { if (S.evac) for (const p in S.evac) S.evac[p] = (S.evac[p] || []).filter((e) => e.x !== cx || e.y !== cy); return; } // (a Shield Dome takes it, and drops)
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
+  radAdd(cx, cy, 'nuke', m.owner); // (its fallout: a radiation zone a tile past the blast, shrinking over minutes; RAD)
   scarNuke(cx, cy, NUKE.radius); // (a glassed crater field: see War scars)
   sfx('nuke', cx, cy);
   const lost = S.players.map(() => 0), direct = [];
@@ -8913,6 +8917,7 @@ function nukeImpact(m) {
     postMsg(p, mine ? `Nuclear strike! ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
       : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'lost');
   }
+  postMsg(ME, `Fallout: radiation lingers ${RAD.nuke.r} tiles round the blast for about ${Math.round(RAD.nuke.life / 60)} minutes. Robots in it sicken, work there slows and nothing can be built.`, ci, cj, 'warn');
   // A Command Base hit squarely is gone, and its colony with it: what's left of it goes to the colony that fired
   // (as when a Command Base is captured), and the base itself is rubble.
   for (const b of direct) {
@@ -8922,6 +8927,132 @@ function nukeImpact(m) {
     destroyBuilding(b, true);
     computeTerritory();
   }
+}
+
+/* ------------------------------------------------------------------ radiation */
+
+/*
+ * Radiation (RAD in js/defs.js). Each zone in S.rads: { id, x, y (its middle), r (its radius at first), cr (its radius
+ * now), t0 (when it began), life (s), k (0 a wrecked Reactor, 1 a nuclear blast's fallout), o (whose Reactor or missile) }.
+ * Its radius shrinks steadily from r to nothing over its life; cr is set every half second (updateRads), so everything
+ * that reads a zone (radAt, radMap) sees the same circle on every device and after a load, whenever it asks.
+ * The Reactor's ruin (S.ruins: { id, x, y, t (when it fell), o }) is only looks to the rules: it glows for RAD.glow s and
+ * stays, cold, until something is built or laid over its tile (ruinTidy).
+ */
+let RADMAP = { s: null, n: -1, m: null };
+
+/** A radiation zone of kind 'reactor' or 'nuke' (RAD[kind]) round (x, y), from player `owner`'s Reactor or missile. */
+function radAdd(x, y, kind, owner) {
+  const k = RAD[kind];
+  S.rads = S.rads || [];
+  S.rads.push({ id: S.nextId++, x, y, r: k.r, cr: k.r, t0: S.time, life: k.life, k: kind === 'nuke' ? 1 : 0, o: owner });
+  if (S.rads.length > RAD.max) S.rads.shift();
+  S.radN = (S.radN || 0) + 1;
+}
+
+/** Every half second: the zones shrink (and go), and every robot out in the open in one takes its dose (radDose). */
+function updateRads(dt) {
+  const keep = [];
+  for (const z of S.rads) {
+    const q = (S.time - z.t0) / z.life;
+    if (q >= 1) continue;
+    z.cr = Math.round(z.r * (1 - q) * 1000) / 1000;
+    keep.push(z);
+  }
+  S.rads = keep;
+  S.radN = (S.radN || 0) + 1;
+  if (!keep.length) return;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || aloft(u) || BOTS[u.type].magpod || BOTS[u.type].air) continue; // (indoors, or up in the air: out of it)
+    const k = radDose(u.x, u.y);
+    if (k > 0) damageBot(u, BOTS[u.type].hp * RAD.hurt * k * dt);
+  }
+}
+
+/** How hard the radiation is at (x, y): 1 at a zone's middle, RAD.edge at its rim, 0 outside every zone. */
+function radDose(x, y) {
+  let best = 0;
+  for (const z of S.rads || []) {
+    if (!(z.cr > 0)) continue;
+    const d2 = dist2(x, y, z.x, z.y);
+    if (d2 > z.cr * z.cr) continue;
+    best = Math.max(best, 1 - (1 - RAD.edge) * Math.sqrt(d2) / z.cr);
+  }
+  return best;
+}
+
+/** Is (x, y) inside a radiation zone (`pad` tiles further out: a margin)? */
+function radAt(x, y, pad) {
+  if (!S.rads || !S.rads.length) return false;
+  for (const z of S.rads) { const r = (z.cr || 0) + (pad || 0); if (z.cr > 0 && dist2(x, y, z.x, z.y) <= r * r) return true; }
+  return false;
+}
+
+/** Building b's speed in the radiation: RAD.work inside a zone, else 1. */
+function radWork(b) { return S.rads && S.rads.length && radAt(b.x + 0.5, b.y + 0.5) ? RAD.work : 1; }
+
+/** The tiles in a radiation zone (1), worked out again whenever the zones change (S.radN). */
+function radMap() {
+  const N = S.W * S.H;
+  if (RADMAP.s === S && RADMAP.n === S.radN && RADMAP.m && RADMAP.m.length === N) return RADMAP.m;
+  const m = RADMAP.m && RADMAP.m.length === N ? RADMAP.m : new Uint8Array(N);
+  m.fill(0);
+  for (const z of S.rads || []) {
+    if (!(z.cr > 0)) continue;
+    const R2 = z.cr * z.cr;
+    for (let j = Math.max(0, Math.floor(z.y - z.cr)); j <= Math.min(S.H - 1, Math.floor(z.y + z.cr)); j++)
+      for (let i = Math.max(0, Math.floor(z.x - z.cr)); i <= Math.min(S.W - 1, Math.floor(z.x + z.cr)); i++)
+        if (dist2(i + 0.5, j + 0.5, z.x, z.y) <= R2) m[j * S.W + i] = 1;
+  }
+  RADMAP = { s: S, n: S.radN, m };
+  return m;
+}
+
+/** Is tile t in a radiation zone? (Quick when there are none.) */
+function radTile(t) { return !!(S.rads && S.rads.length) && radMap()[t] === 1; }
+
+/** How many seconds until tile (i, j) is out of every zone over it (0: it is now). */
+function radClearIn(i, j) {
+  let t = 0;
+  for (const z of S.rads || []) {
+    if (!(z.cr > 0)) continue;
+    const d = dist(i + 0.5, j + 0.5, z.x, z.y);
+    if (d <= z.cr) t = Math.max(t, z.t0 + z.life * (1 - d / z.r) - S.time);
+  }
+  return Math.max(0, Math.ceil(t));
+}
+
+/** Why nothing goes on tile (i, j) now: it's in a radiation zone ('' when it isn't). */
+function radWhy(i, j) {
+  if (!radAt(i + 0.5, j + 0.5)) return '';
+  const n = radClearIn(i, j);
+  return `Radiation: this ground is too hot to build on${n > 0 ? ` for about ${n >= 90 ? Math.round(n / 60) + ' more minutes' : n + ' more seconds'}` : ''}. The zone shrinks as it cools.`;
+}
+
+/**
+ * Reactor b is being destroyed (destroyBuilding, by force, built). Brought down by a foe (liftKiller: the foe who hit its
+ * colony just now), its core is breached: a ruin (S.ruins) and a radiation zone round it. Dismantled, moved, or wrecked by
+ * its own side or the ground, it was shut down safely: nothing.
+ */
+function reactorDown(b) {
+  const by = liftKiller(b);
+  if (by < 0) return;
+  S.ruins = S.ruins || [];
+  S.ruins.push({ id: S.nextId++, x: b.x, y: b.y, t: S.time, o: b.owner });
+  if (S.ruins.length > RAD.ruins) S.ruins.shift();
+  radAdd(b.x + 0.5, b.y + 0.5, 'reactor', b.owner);
+  const mins = Math.round(RAD.reactor.life / 60);
+  for (const Q of S.players) {
+    if (Q.absent || Q.out || isWild(Q.id)) continue;
+    postMsg(Q.id, Q.id === b.owner ? `Reactor core breached: your Nuclear Reactor is destroyed, and radiation spreads ${RAD.reactor.r} tiles round it for about ${mins} minutes. Robots in it sicken, work there slows and nothing can be built.`
+      : `${playerName(b.owner, true)}'s Nuclear Reactor is breached: a radiation zone ${RAD.reactor.r} tiles round it for about ${mins} minutes.`, b.x, b.y, Q.id === b.owner ? 'lost' : 'warn');
+  }
+  logEvent({ t: S.time, k: 'reactorDown', p: b.owner, q: by });
+}
+
+/** A reactor ruin goes once something is built, laid or planned over its tile (or the ground there is gone). */
+function ruinTidy() {
+  S.ruins = S.ruins.filter((r) => { const t = tIdx(r.x, r.y); return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !S.plan[t] && !(S.rail && S.rail[t]); });
 }
 
 /* ------------------------------------------------------------------ player commands */
@@ -17293,6 +17424,8 @@ function hashState() {
   for (const f of S.liftFalls || []) { int(f.id); int(f.d); num(f.t); int(f.k); int(f.n); int(f.by); int(f.hit.length); }
   if (!S.crater) for (const s of S.scrap || []) if (s.cb) { int(s.id); num(s.x); num(s.y); num(s.n); }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
+  for (const z of S.rads || []) { int(z.id); num(z.x); num(z.y); num(z.r); num(z.cr); num(z.t0); num(z.life); int(z.k); } // (radiation zones: radAdd)
+  for (const r of S.ruins || []) { int(r.id); int(r.x); int(r.y); num(r.t); } // (breached Reactors: reactorDown)
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
   if (S.drizzle) { // (the Ring drizzle: its clock, its deposits, the pieces in the sky)
     const D = S.drizzle;

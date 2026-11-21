@@ -6533,6 +6533,7 @@ function render(dtReal) {
     }
   }
   drawScorch(ctx, ox, oy, z);
+  if (typeof drawRadGround === 'function') drawRadGround(ctx, ox, oy, z, v0, v1); // (radiation zones: dead grass, the haze, the edge: js/radfx.js)
   drawDecals(ctx, ox, oy, z, inView);
   drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
   drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
@@ -6614,6 +6615,7 @@ function render(dtReal) {
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
+  if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
   let under = null;
@@ -6673,6 +6675,7 @@ function render(dtReal) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'pillar') { drawPillar(ctx, ox + (e.x + 0.5) * z, oy + e.y * z, z, e.x, e.y); continue; }
+    if (e.ent === 'ruin') { drawRadRuin(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
@@ -6842,6 +6845,7 @@ function render(dtReal) {
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
+  if (typeof drawRadAir === 'function') drawRadAir(ctx, ox, oy, z, v0, v1); // (radiation: motes, robots sickening, a hot ruin's smoke and light column, the Geiger crackle: js/radfx.js)
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
@@ -8904,6 +8908,7 @@ function renderMinimap() {
     ctx.fillRect(x, y, w, h);
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
   }
+  if (typeof drawRadMinimap === 'function') drawRadMinimap(ctx, sx, sy); // (radiation zones and breached Reactors: js/radfx.js)
   // Trade routes: each Terminal's lane (the way its convoys drive), dashed in its owner's colour (a rival's fainter:
   // a raider's map), and the convoys on them, gold dots (flashing red when one was hit just now).
   for (const b of S.buildings) {

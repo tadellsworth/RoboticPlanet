@@ -26,6 +26,19 @@ Sunsets and sunrises). Open:
   rest of the frame (measured in a software-rendered browser); if that shows up on real phones, Saver's colour grade alone
   could become Auto's too while frames are slow.
 
+## Radiation: open questions (built Nov 21 2026)
+
+Nuclear fallout and breached Reactors leave shrinking radiation zones that hurt robots, halve work and keep building out
+(`RAD`, `js/radfx.js`; see README, Nuclear race). Open:
+- A Shield Dome stops the nuke it catches, and with it the fallout, but it doesn't keep out a zone already on the ground
+  (fallout drifting in under it). Should a raised Dome shelter what's under it from a zone too, at a Crystal cost?
+- Fallout drifting with the wind (the clouds' wind, `ambWind`) rather than a still circle: it would need the wind as game
+  state.
+- Ways to clean it up faster: a decontamination crew or building, or rain washing it out sooner.
+- The rival weighs its own buildings in the fallout when it aims a nuke, but not the fallout itself in the Lance-or-nukes
+  choice (it slows the enemy's rebuilding and its own march in alike). Worth a point either way after more games?
+- A cold ruin is only looks: should Haulers salvage it for Alloy like other scrap, or should it stay as a monument?
+
 ## The war on the land: open questions (built Nov 20 2026)
 
 Smoke columns, creeping fires, ash and embers, shockwaves and the scars healing are in (`js/warfx.js`, looks only; see

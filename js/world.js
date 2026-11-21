@@ -2656,7 +2656,7 @@ function newGame(opts) {
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], cans: [], liftFalls: [], loot: [],
+    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], cans: [], liftFalls: [], rads: [], ruins: [], loot: [],
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -3669,6 +3669,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
   if (S.tidal && S.tidal[t]) return { ok: false, reason: 'Tidal flats: the sea covers this at high tide.' };
   if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
+  if (typeof radAt === 'function' && radAt(i + 0.5, j + 0.5)) return { ok: false, reason: radWhy(i, j) };
   if (liftWreckAt(t)) return { ok: false, reason: LIFT_WRECK_WHY };
   // (A rival keeps its buildings off its own Orbital Lift's fall line: aiOnLiftLine.)
   if (!def.lift && S.players[owner] && S.players[owner].ai && typeof aiOnLiftLine === 'function' && aiOnLiftLine(owner, t)) return { ok: false, reason: 'That is on its Orbital Lift\'s fall line.' };
@@ -3783,7 +3784,7 @@ function footPlace(owner, type, i, j, skipBlockCheck, dir) {
     const t = tIdx(a, c);
     if (a === i && c === j) continue;
     const why = S.terrain[t] !== T_GROUND ? 'the ground there is not buildable' : (S.tidal && S.tidal[t]) ? 'the sea covers part of it at high tide'
-      : scorched(t) ? 'part of it is still scorched' : S.owner[t] !== owner ? 'all of it must stand on your own land' : S.bAt[t] ? 'there is a building in the way'
+      : scorched(t) ? 'part of it is still scorched' : typeof radAt === 'function' && radAt(a + 0.5, c + 0.5) ? 'part of it is in a radiation zone' : S.owner[t] !== owner ? 'all of it must stand on your own land' : S.bAt[t] ? 'there is a building in the way'
       : S.res[t] ? 'there are resources in the way' : (S.road[t] || S.plan[t]) ? 'there is a road in the way' : (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) ? 'there is track in the way'
       : S.ramp[t] ? 'part of it is on a slope' : S.elev[t] !== lv ? 'it needs level ground' : runwayAt(t) ? 'an Airfield\'s runway is in the way'
       : calmAt(a + 0.5, c + 0.5) || postAt(t) || uplinkAt(t) ? 'neutral ground is in the way' : (S.pipe && S.pipe[t]) ? 'a pipeline is in the way' : liftWreckAt(t) ? 'fallen cable lies across it (Haulers cut it up first)' : '';
@@ -5096,6 +5097,8 @@ function destroyBuilding(b, burn, quiet) {
   if (BDEFS[b.type].city && b.built && !b.gone && typeof cityDown === 'function') { b.armor = 0; cityDown(b, -1); return; }
   // An Orbital Lift destroyed by force: a foe's doing, its cable falls along its line (liftDown); a climber on it is lost.
   if (BDEFS[b.type].lift && b.built && typeof liftDown === 'function') liftDown(b, !!burn);
+  // A Nuclear Reactor destroyed by a foe: its core is breached, a ruin and a radiation zone (reactorDown, RAD).
+  if (b.type === 'reactor' && b.built && burn && typeof reactorDown === 'function') reactorDown(b);
   // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
   if (b.moving && typeof cancelMove === 'function') cancelMove(b);
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; }
@@ -5493,6 +5496,10 @@ function checkSave(o) {
   // Orbital Lift cables coming down (S.liftFalls, see liftFall): numbers, a direction, owners, the anchor on the map.
   if (o.liftFalls != null && !(Array.isArray(o.liftFalls) && o.liftFalls.length <= 64 && o.liftFalls.every((f) => obj(f) && ['id', 't', 'k', 'sp', 'n', 'ax', 'ay'].every((k) => Number.isFinite(f[k])) &&
     Number.isInteger(f.d) && f.d >= 0 && f.d < 8 && owner(f.o) && Number.isFinite(f.by) && f.ax >= 0 && f.ay >= 0 && f.ax < o.W && f.ay < o.H && f.n >= 0 && f.n <= o.W + o.H))) bad();
+  // Radiation zones and reactor ruins (S.rads, S.ruins: see radAdd, reactorDown): numbers, owners, places on the map.
+  if (o.rads != null && !(Array.isArray(o.rads) && o.rads.length <= 4 * RAD.max && o.rads.every((z) => onMap(z) && ['id', 'r', 'cr', 't0', 'life'].every((k) => Number.isFinite(z[k])) &&
+    z.r > 0 && z.r <= 32 && z.life > 0 && (z.k === 0 || z.k === 1) && owner(z.o)))) bad();
+  if (o.ruins != null && !(Array.isArray(o.ruins) && o.ruins.length <= 4 * RAD.ruins && o.ruins.every((r) => onMap(r) && Number.isInteger(r.x) && Number.isInteger(r.y) && Number.isFinite(r.id) && Number.isFinite(r.t) && owner(r.o)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
     Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
@@ -5608,6 +5615,7 @@ function deserializeGame(json) {
   o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
   o.cuts = o.cuts || []; // (saves from before the Lance of Corvane: no cuts; their settings have no Megastructures: off, see megaOn)
   o.liftFalls = o.liftFalls || []; // (saves from before the Orbital Lift: no cable coming down)
+  o.rads = o.rads || []; o.ruins = o.ruins || []; // (saves from before radiation: no zones, no ruins)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   // The rest works on S. A save that fails part-way leaves the game that was running as it was.

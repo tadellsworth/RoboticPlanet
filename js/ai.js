@@ -2256,7 +2256,8 @@ const AI_MEGA_LEAN = { tycoon: 2, turtle: 1, balanced: 0, raider: -1, rusher: -2
  * through them, as wide as the Lance's core, hits two or more buildings more than the best blast), a point for the nukes when they're bunched (the
  * other way round), a point for the Lance when the enemy has a Shield Dome (it swallows a nuke whole; a Lance line can
  * pass beside it, or knock it down and come again), and a point for the Lance when Uranium is scarce (a nuke takes 12, a
- * Lance shot 2). More than 0: the Lance; otherwise the nukes.
+ * Lance shot 2). More than 0: the Lance; otherwise the nukes. (A nuke's fallout, RAD, isn't weighed: it slows the enemy's
+ * rebuilding where it lands, and slows this rival's own march in to capture as much; a Lance shot leaves none.)
  */
 function aiMegaPick(p) {
   const P = S.players[p], enemy = rivalOf(p), L = getE(P.lander);
@@ -2579,14 +2580,16 @@ function aiDomed(p, x, y) {
  * take (military buildings and the Command Base count extra), minus our own buildings caught in it.
  */
 function aiFireNuke(p, silo) {
-  const R2 = NUKE.radius * NUKE.radius, enemy = rivalOf(p);
+  const R2 = NUKE.radius * NUKE.radius, F2 = RAD.nuke.r * RAD.nuke.r, enemy = rivalOf(p);
   let best = null, bs = 3;
   for (const c of S.buildings) {
     if (c.dead || c.owner !== enemy || dist(silo.x, silo.y, c.x, c.y) > NUKE.range) continue;
     let s = 0;
     for (const b of S.buildings) {
-      if (b.dead || dist2(b.x, b.y, c.x, c.y) > R2) continue;
+      const d2 = b.dead ? Infinity : dist2(b.x, b.y, c.x, c.y);
+      if (d2 > F2) continue;
       const w = b.type === 'lander' ? 6 : BDEFS[b.type].mil ? 3 : b.type === 'nukesilo' || b.type === 'reactor' ? 5 : 1;
+      if (d2 > R2) { if (b.owner === p) s -= w; continue; } // (its own just past the blast: in the fallout, slowed for minutes)
       s += b.owner === enemy ? w : -w * 2;
     }
     if (c.type === 'lander') s += 40; // (a direct hit on its Command Base ends the enemy colony)
@@ -3921,6 +3924,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
+      if (radAt(i + 0.5, j + 0.5, 1.5)) continue; // (nor in or right beside a radiation zone: RAD)
       if (nests.length && nests.some((n) => dist2(n.x, n.y, i, j) < nestClear2)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       let rc = Infinity;

@@ -50,6 +50,7 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  *   their armor), so it goes round a short way and plans to shoot through a long one.
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  * opts.coverMap: the same from a map of its own (1 where a gun reaches): the Murmur's on Active (murmurGunMap).
+ * opts.rad: tiles in a radiation zone cost RAD.path more (a rival's army on the march); with `avoidFor` set they always do.
  * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
  * opts.lane: the bot's speed factor along an Express lane (laneSpeed), 0 or unset for a bot barred from them: it may
  *   only step onto a lane across its direction (crossing it, at an overpass or a ramp), never along it.
@@ -66,6 +67,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const airOk = who !== undefined && !(opts && opts.noAir) && airLines().size > 0; // (Workers and Warbots ride Airship lines)
   const lineTile = (t) => (ferryOk && ferryLink(t) >= 0) || (airOk && airLink(t) >= 0); // a Port or Mast where a ride starts
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;
+  const rad = (opts && opts.rad) || (avoidFor !== undefined && avoidFor >= 0) ? (S.rads && S.rads.length && typeof radMap === 'function' ? radMap() : null) : null; // (radiation: robots that don't fight, and a rival's army, go round)
   const cover = opts && opts.coverMap ? opts.coverMap : opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
   const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
   if (!inMap(gx, gy)) return null;
@@ -114,6 +116,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     let e = 0;
     if (avoidFor !== undefined) { const o = S.owner[t]; if (o >= 0 && o !== avoidFor) e += 6; if (guns && guns[t]) e += DANGER_COST; }
     if (cover && (cover[t] & 1)) e += COVER_COST;
+    if (rad && rad[t]) e += RAD.path;
     return e;
   };
   let expanded = 0;
@@ -155,6 +158,8 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; if (guns && guns[nt]) ng += DANGER_COST; }
       // The army keeps out of the enemy's guns where the way round is short.
       if (cover && (cover[nt] & 1)) ng += COVER_COST * dir[2];
+      // Radiation: robots that don't fight (and a rival's army) go round a zone where the way round is short, in if sent there.
+      if (rad && rad[nt]) ng += RAD.path * dir[2];
       if (stamp[nt] !== gen || ng < g[nt]) {
         stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
         heap.push(nt, ng + h(ni, nj));

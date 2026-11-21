@@ -626,6 +626,7 @@
           <a href="#hs-army" data-jump="hs-army">Fighting and the army</a>
           <a href="#hs-defence" data-jump="hs-defence">Defences and walls</a>
           <a href="#hs-missiles" data-jump="hs-missiles">Missiles and nukes</a>
+          <a href="#hs-radiation" data-jump="hs-radiation">Radiation</a>
           <a href="#hs-mega" data-jump="hs-mega">Megastructures: the Lance, the Dome, Arrival City, the Orbital Lift, the Great Uplink</a>
           <a href="#hs-airsea" data-jump="hs-airsea">Air and sea war</a>
           <a href="#hs-scars" data-jump="hs-scars">War scars</a>
@@ -1034,11 +1035,24 @@
         <p><b>Nuclear race</b> (a new-game option, on by default): a few single deposits of glowing green <b>Uranium</b> lie out across the planet: whoever holds them can build the bomb first.</p>
         <ul class="chain">
           <li>An <b>Ore Mine</b> within 4 tiles of a deposit digs it before any ore.</li>
-          <li>A <b>Nuclear Reactor</b> (Make tab; 6 Cement, 6 Alloy, 3 Chips) enriches it: 2 Uranium make 1 Enriched Uranium.</li>
+          <li>A <b>Nuclear Reactor</b> (Make tab; 6 Cement, 6 Alloy, 3 Chips) enriches it: 2 Uranium make 1 Enriched Uranium. If a rival destroys it, its core is breached: it is left a smoking ruin with a broken stack and a <b>radiation zone</b> 4 tiles round it for 5 minutes (see Radiation). Dismantled or moved, it shuts down safely.</li>
           <li>A <b>Nuclear Silo</b> (Defend tab; 8 Cement, 6 Alloy, 4 Chips) builds one nuclear missile at a time from 6 Enriched Uranium, 4 Alloy and 2 Chips, a minute's work once the parts are in: 12 Uranium a bomb. Rivals are told when one is finished.</li>
         </ul>
-        <p>Tap the Silo and press <b>Aim nuclear missile</b>: its 40-tile range shows. Tap a spot to see the 6-tile blast, then <b>Launch</b>. It takes 30 seconds to land, and the target is warned at once, with the blast ring on their map and a <b>Nuclear missile incoming</b> card. Press <b>Evacuate</b> on it and every robot in the ring, garrisons and workers inside buildings included, runs out to safe ground until it's over. Everything inside is wiped out: buildings, robots, roads and pipes, yours included. The ground stays scorched for 4 minutes, and nothing can be built or laid on it until it cools.</p>
+        <p>Tap the Silo and press <b>Aim nuclear missile</b>: its 40-tile range shows. Tap a spot to see the 6-tile blast, then <b>Launch</b>. It takes 30 seconds to land, and the target is warned at once, with the blast ring on their map and a <b>Nuclear missile incoming</b> card. Press <b>Evacuate</b> on it and every robot in the ring, garrisons and workers inside buildings included, runs out to safe ground until it's over. Everything inside is wiped out: buildings, robots, roads and pipes, yours included. The ground stays scorched for 4 minutes, and nothing can be built or laid on it until it cools. Its fallout leaves a <b>radiation zone</b> 7 tiles round where it landed, a tile past the blast, for 5½ minutes (see Radiation), unless a Shield Dome stopped it.</p>
         <p>A Command Base caught in the blast keeps 1 armour and loses its garrison. But a nuclear missile that lands within 2 tiles of a Command Base destroys it outright and knocks that colony out of the game, and everything it had left goes to whoever fired. The rival aims for Command Bases, so watch for that card.</p>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
+      <section id="hs-radiation">
+        <h3>Radiation</h3>
+        <p>A nuclear strike's fallout and a breached <b>Nuclear Reactor</b> leave a <b>radiation zone</b> on the ground: a sickly green-yellow haze over dead grey grass, with a dashed yellow ring (and a small radiation sign) marking its edge. It shows on the minimap too. A zone shrinks steadily as it cools and is gone on its own: a nuke's after <b>5½ minutes</b> (7 tiles round where it landed at first), a Reactor's after <b>5 minutes</b> (4 tiles round it).</p>
+        <ul class="chain">
+          <li><b>Robots</b> out in it lose health: 2% of their full health a second at its middle, half that at its edge. One walking straight through loses a little; one left standing in it dies in about a minute. Robots inside buildings, and aircraft in flight, are safe. Hurt robots glow green, and with one of them selected (or the camera over a zone) you hear a faint Geiger crackle.</li>
+          <li><b>Buildings</b> in it work at half speed: factories, gatherers, Bot Foundries and sites going up. Their panel says <b>slowed by radiation</b>.</li>
+          <li><b>Workers, Haulers</b> and the rest that don't fight go round a zone where the way round is short, and take no gathering or paving inside one. Jobs you give them inside (a site already there, a building that needs a worker) they still go to. The rival does the same, keeps its new sites out, and marches its army round zones where it can.</li>
+          <li><b>Nothing new is built</b> in a zone: placing a building there is refused with how long until that ground is clear.</li>
+          <li>A breached <b>Reactor</b> smokes and, at night, sends a column of green and blue light up into the sky for about 5 minutes, then goes cold. Its ruin stays until something is built over it.</li>
+        </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -1054,7 +1068,7 @@
         </ul>
         <p><b>The Shield Dome</b> (<kbd>H</kbd> on the Mega tab; 2 by 2 tiles; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; about 3 minutes): an emitter that raises a faint blue dome of hexagon panels <b>9 tiles</b> round it. Tap it to see its reach.</p>
         <ul class="chain">
-          <li><b>What it stops</b> from outside: Missiles, nuclear missiles (it takes one whole, and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, a rival's Mass Driver canisters, falling rock in the Hollow, and one Lance shot (the beam stops at its edge). Its panels flash where something hits.</li>
+          <li><b>What it stops</b> from outside: Missiles, nuclear missiles (it takes one whole, and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, a rival's Mass Driver canisters, falling rock in the Hollow, and one Lance shot (the beam stops at its edge). Its panels flash where something hits. A nuke it stops leaves no fallout, but the dome doesn't keep out radiation already on the ground.</li>
           <li><b>What it doesn't:</b> warbots, Torches and Bulwarks walk straight in, and guns fire through it at close range (a Mortar inside it fires freely). A war on a domed base turns from bombardment into a ground assault.</li>
           <li><b>Strength 100.</b> A Missile takes 25, a bomb or napalm 10, a shell 3, Ringfall 25, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second. At 0 it drops, and comes back after a minute at 40.</li>
           <li><b>Running it.</b> While up it burns a <b>Crystal</b> every 20 seconds (Haulers bring them; it holds 6) and needs a <b>Generator</b> with Fuel within 4 tiles. Without either it's down. Allowed everywhere, the Hollow included.</li>
@@ -1857,6 +1871,7 @@
 <script src="js/warfx.js"></script>
 <script src="js/nature.js"></script>
 <script src="js/menuplanet.js"></script>
+<script src="js/radfx.js"></script>
 <script src="js/input.js"></script>
 <script src="js/cursor.js"></script>
 <script src="js/ui.js"></script>
