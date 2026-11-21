@@ -135,7 +135,7 @@ function aiAnswers(p, wb, army) {
  * Is player q fielding a blob: at least AI_BLOB.bulwarks Bulwarks and AI_BLOB.army robots in its army? (A rival that sees
  * one builds Mortar Pits toward it, a Howitzer more when it can, and Arc Casters and Railgunners: aiAnswers.)
  */
-const AI_BLOB = { bulwarks: 2, army: 12, mortars: 2, wait: 360 };
+const AI_BLOB = { bulwarks: 2, army: 12, mortars: 4, wait: 360 };
 function aiBlob(q) {
   if (q === undefined || q < 0 || !S.players[q]) return false;
   let b = 0, n = 0;
@@ -208,26 +208,40 @@ function aiFortWalls(p) {
 }
 
 /**
- * A Turtle walls its base in: a square ring six tiles out from its Command Base, a Wall on each
- * free tile and a Gate where a road crosses, a few pieces at a time while Cement allows.
+ * A Turtle walls its base in: a square ring six tiles out from its Command Base, a Wall on each free tile and a Gate
+ * where a road crosses, a few pieces at a time while Cement allows, the side facing its rival first, and no more than
+ * AI_TURTLE_WALLS pieces standing in all (Chokepoint mouths included). (Balance audit, Nov 2026: with no cap it sank
+ * its Cement into 26 to 39 pieces by 18 minutes, built two turrets of its six, fell behind on Outposts and won 1.5 games
+ * in 16.)
  */
+const AI_TURTLE_WALLS = 16, AI_TURTLE_KEEP = 3;
 function aiTurtleWalls(p) {
   if (!aiStyle(p).walls || !warOn() || S.time < 360) return;
   const P = S.players[p];
+  // (Not before its land has AI_TURTLE_KEEP Outposts: its Cement and Workers went into the ring while its first
+  // Outposts waited for roads, and it fell behind on land and income for good.)
+  if (S.buildings.reduce((n, b) => n + (!b.dead && b.built && b.owner === p && b.type === 'outpost' ? 1 : 0), 0) < AI_TURTLE_KEEP) return;
   if (S.time - (P.wallT || 0) < 20) return;
   P.wallT = S.time;
   const L = getE(P.lander);
   if (!L || L.owner !== p || spendable(p).cement < 30) return;
-  const R = 6;
+  let have = 0;
+  for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].barrier) have++;
+  if (have >= AI_TURTLE_WALLS) return;
+  const R = 6, R0 = S.players[rivalOf(p)], F = R0 && getE(R0.lander), ring = [];
+  for (let d = -R; d <= R; d++) ring.push([L.x + d, L.y - R], [L.x + d, L.y + R], [L.x - R, L.y + d], [L.x + R, L.y + d]);
+  if (F) {
+    const fa = datan2(F.y - L.y, F.x - L.x), off = ([i, j]) => Math.abs(wrapAngle(datan2(j - L.y, i - L.x) - fa));
+    ring.sort((a, c) => off(a) - off(c) || a[1] - c[1] || a[0] - c[0]);
+  }
   let placed = 0;
-  for (let d = -R; d <= R && placed < 3; d++) {
-    for (const [i, j] of [[L.x + d, L.y - R], [L.x + d, L.y + R], [L.x - R, L.y + d], [L.x + R, L.y + d]]) {
-      if (placed >= 3 || !inMap(i, j)) continue;
-      const t = tIdx(i, j);
-      if (S.bAt[t] || S.owner[t] !== p || S.terrain[t] !== T_GROUND) continue;
-      const kind = S.road[t] || S.plan[t] ? 'gate' : 'wall';
-      if (canPlace(p, kind, i, j).ok) { placeSite(p, kind, i, j); placed++; }
-    }
+  for (const [i, j] of ring) {
+    if (placed >= 3 || have + placed >= AI_TURTLE_WALLS) break;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (S.bAt[t] || S.owner[t] !== p || S.terrain[t] !== T_GROUND) continue;
+    const kind = S.road[t] || S.plan[t] ? 'gate' : 'wall';
+    if (canPlace(p, kind, i, j).ok) { placeSite(p, kind, i, j); placed++; }
   }
 }
 
@@ -480,6 +494,9 @@ function aiThink(p) {
   // every eight minutes after, up to three. When one is due it goes first and holds its goods (see defence).
   const keepAt = AI_DEFENCE_AT + (st.walls ? 120 : 600);
   let wantKeeps = S.mode === 'colony' || S.time < keepAt ? 0 : st.walls ? Math.min(3, 1 + Math.floor((S.time - keepAt) / 480)) : 1;
+  // (A Turtle's first Keep waits for AI_TURTLE_KEEP turrets and Outposts: put first at seven minutes, its site held the
+  // Alloy and a site slot for minutes while its Bot Foundry took every bar, and its turrets and Outposts never came.)
+  if (st.walls && !counts.keep && ((counts.turret || 0) < AI_TURTLE_KEEP || (counts.outpost || 0) < AI_TURTLE_KEEP)) wantKeeps = 0;
   // A Keep site given up (it waited too long for goods, or for a road) isn't tried again for five minutes.
   if (S.time - (S.players[p].keepFail ?? -999) < 300) wantKeeps = Math.min(wantKeeps, counts.keep || 0);
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
@@ -557,9 +574,9 @@ function aiThink(p) {
   }
   // A rival fielding a blob behind Bulwarks (aiBlob): Mortar Pits, whose shells come down over any shield, by its fort
   // nearest that rival's Command Base, aimed out along the way the blob would come (7 to 10 tiles off, see
-  // aiSearchSpot): one every three minutes, up to AI_BLOB.mortars from this (and three Mortar Pits in all).
+  // aiSearchSpot): one every three minutes, up to AI_BLOB.mortars from this (and no more than that, or three, Mortar Pits in all).
   if (S.mode !== 'colony' && warOn() && S.time > AI_DEFENCE_AT && !few && !(P.defWant && S.time < P.defWant.until) &&
-      S.time - (P.blobMortAt ?? -999) > 180 && (counts.mortar || 0) < 3 && (P.blobMortN || 0) < AI_BLOB.mortars && aiBlob(rivalOf(p))) {
+      S.time - (P.blobMortAt ?? -999) > 180 && (counts.mortar || 0) < Math.max(3, AI_BLOB.mortars) && (P.blobMortN || 0) < AI_BLOB.mortars && aiBlob(rivalOf(p))) {
     const R0 = S.players[rivalOf(p)], foeL = R0 && getE(R0.lander);
     const front = foeL && me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker).sort((a, c) => dist2(a.x, a.y, foeL.x, foeL.y) - dist2(c.x, c.y, foeL.x, foeL.y) || a.id - c.id)[0];
     if (front) {
@@ -768,6 +785,9 @@ function aiThink(p) {
   // Warden's a minute late, behind the Refinery and the rest of the plan.
   const firstTurret = S.mode !== 'colony' && !counts.turret;
   if (firstTurret && st.turrets && S.time > defAt && counts.foundry) plan = [['turret', 1]].concat(plan);
+  // (A Warden's next turrets, up to its six, go first too as each falls due: behind the plan's Mines, Outposts and Keep
+  // it had two of the six it promises by 18 minutes.)
+  else if (st.turrets && !firstTurret && (counts.turret || 0) < turretsWanted && counts.foundry && !me.some((b) => b.type === 'turret' && !b.built)) plan = [['turret', turretsWanted]].concat(plan);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (type === 'turret' && firstTurret && S.time <= defAt && !aiMurCut(P)) continue;
@@ -2191,7 +2211,7 @@ function aiFlood(p, from, seen, bottom, early) {
  * Nuclear Silo, an Airfield or bombers) puts up a Shield Dome by a Generator near its Command Base. Either goes up once it
  * has half its cost in hand (aiHalfway), the site filling as the rest comes in.
  */
-const AI_MEGA = { lanceAt: 1080, domeAt: 1200, cityAt: 900, liftAt: 1080, heraldLift: 1320, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3,
+const AI_MEGA = { lanceAt: 900, domeAt: 1020, cityAt: 720, liftAt: 900, heraldLift: 1140, uranium: 4, worth: 6, think: 5, look: 20, reactorAt: 780, uReach: 3,
   liftSpare: 60, liftKeep: 40, liftShort: { alloy: 15, chip: 8 }, liftWorth: 4, ambush: 6,
   gupAt: 1320, gupGuard: 6, gupJam: 45 };
 
@@ -3586,6 +3606,7 @@ function aiMissileKnot(p, L, silo) {
  * it keeps the factory fed (P.feedMissiles pauses the Foundry) until its silos are nearly full.
  * Returns the building type it is saving for, or null.
  */
+const AI_MISSILE_GAP = 4; // (an Architect's missile programme starts with its army no more than this behind its rival's)
 function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   const P = S.players[p], lvl = aiLevel(p), st = aiStyle(p);
   P.feedMissiles = false;
@@ -3610,11 +3631,13 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   // A Tycoon goes for missiles sooner, with fewer warbots at home, once its Bot Foundry runs. The
   // others start no sooner than a Balanced rival would (a Rusher spends on warbots instead).
   const base = DIFFICULTY[S.difficulty];
-  // An Architect's starts from ten minutes, once its army is two up on its rival's (five at least), with two workers to
-  // spare (four was more than its extra Smelter and Chip Fab left it). (From five minutes with an army level with its
-  // rival's, it spent the Alloy on Silos early and was stormed; waiting for an army up to its target, it hardly began.)
+  // An Architect's starts from ten minutes, once its army is within AI_MISSILE_GAP of its rival's (four at least), with two
+  // workers to spare (four was more than its extra Smelter and Chip Fab left it). (From five minutes with an army level
+  // with its rival's, it spent the Alloy on Silos early and was stormed. Waiting for an army two up on its rival's, under
+  // pressure it put its Silos up at 24 minutes on average, after most games were over, and fired 6 Missiles in 40
+  // games: the balance audit of Nov 2026. Its description promises them 8 to 16 minutes in.)
   const ready = (st.missiles
-    ? S.time >= Math.max(base.grace * 0.8, 600) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(5, foeArmy + 2)
+    ? S.time >= Math.max(base.grace * 0.8, 600) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(4, foeArmy - AI_MISSILE_GAP)
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
     (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? 2 : 4);
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }

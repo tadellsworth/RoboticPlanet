@@ -166,16 +166,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Chip Fab | Crystal + Alloy → **Chip** |
 | Bot Foundry | Alloy + Chip → a new **Worker**, **Warbot**, **Bulwark**, **Torch**, **Skirmisher**, **Arc Caster** or **Railgunner** (and the vehicles) |
 | Outpost | Holds a wide ring of land (buildings inside it can't be cut off; defences can go there) and garrisons Warbots |
-| Pulse Turret | Turns to aim and shoots enemy bots, 5 tiles out; uses Crystal as ammo (3 Cement, 3 Alloy) |
-| Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; claims no land; wrecked, not captured |
-| Disruptor Tower | A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
+| Pulse Turret | Turns to aim and shoots enemy bots, 5 tiles out, 5 a shot every 1.3 s, armor 20 (12 and 4 a shot before the November 2026 balance pass); uses Crystal as ammo (3 Cement, 3 Alloy) |
+| Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; armor 40 (was 32); claims no land; wrecked, not captured |
+| Disruptor Tower | 4 Cement, 3 Alloy (no Crystal since the November 2026 balance pass). A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
+| Minigun Nest | 2 Cement, 2 Alloy (1 Alloy before the November 2026 balance pass: six of them were the cheapest wall of fire in the game). Spins up and hoses the nearest enemy robot within 3½ tiles, twelve rounds a second, pinning what it hits; Ammo, 60 rounds each |
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles, up to 6 robots a shell (`most`); 3 shells per Ammo |
 | Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) that houses 25 warbots, 6 of them firing from cover (`slots`, 4 tiles); claims land; roads pass through it like an Outpost (`passTile`); captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Warden up to three) |
 | Bulwark (Foundry, 3 rounds of parts) | Shield robot (`BULWARK`, `shieldBlock`, `bulwarkTick`): a frontal shield (±1.0 rad) soaks 40 damage from shots at it or at the 6 of its owner's robots nearest it within 2.1 tiles behind its line (`BULWARK.coverMax`, `shieldCovers`: by distance, then id, rebuilt each step with `SHIELDS` into `w.covIds`; the rest behind it get no cover; selected, it rings them faintly), regenerates 4/s after 2.5 s without a hit, fails for 8 s when worn out (back at 35%; it was 50, 6 s and 2.6 rad/s before the Skirmisher, Arc Caster and Railgunner); shells, bombs, Missiles and blasts from above, and fire from the side or behind, get past; a Disruptor pulse drains 14. Turns (1.8 rad/s) to face the robot it fights, else the nearest armed enemy: two coming from different sides get round it. Twin blasters, 1 a shot every 0.9 s, no Ammo. Leads its group (`escortMove`, `formPlace`, `FORM`): warbots and Torches on the same attack or flag each take a place in its lee (Torches at its back, warbots in rows of 3, 0.6 tiles apart, 1.05 tiles behind and 0.6 more a row, square to its heading) and keep pace with it (no faster than it goes, a little faster the further off their place), until it's within 2.6 tiles of the goal, they can already shoot the target, it's fighting a robot, or it hasn't got a tile nearer in 4 s (held up): then they fight as usual. (They used to stop dead whenever they got ahead of it: the squad stuttered, bunched to 0.1 tiles apart, and stood idle while it fought.) 30 health |
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (a facing shield stops only half of it, `shieldPass` 0.5, and that half burns the shield twice as fast, `shieldMul` 2) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). **Scorch the earth** (its panel, X; the selection bar with Torches selected; the `scorch` order, `orderScorch`): with its tank at least `scorchMin` (90%) full it walks to a patch of fertile soil (`scorchTileWhy`), stops within `scorchReach` (1.3) tiles, sprays its whole tank into it over `scorch` (3) s (task `scorch`, `doScorch`) and the soil burns for good (`scorchSoil`); then it refills (`scorchDone`). A group takes a patch each, nearest Torch first, within `scorchSpread` (3) tiles of the one tapped. 18 health |
-| Skirmisher (Foundry, 1 round) | Fast flanker (`SKIRM`, `skirmFlank`, `skirmShoot`): speed 1.55, 10 health, reach 1.3. A foe behind an enemy Bulwark's shield (`shieldAt`) it runs round to a spot 0.8 of its reach off the foe, 0.6 rad past the edge of the shield's arc (the side it's on; a pack splits by id), shooting anything open on the way. 2 a shot every 0.75 s (Ammo, as a warbot), ×2 on a Bulwark, ×1.5 on a Railgunner, Arc Caster or Howitzer, ×1.5 on robots that aren't army. It hunts those kinds within 4.5 tiles first (`armyPick`). Dash (`u.dashT`, `speedMul`): ×2.2 speed for 0.9 s, every 6 s, setting off round a shield or closing on a foe over 2.5 tiles off |
+| Skirmisher (Foundry, 1 round) | Fast flanker (`SKIRM`, `skirmFlank`, `skirmShoot`): speed 1.55, 9 health (10 before the November 2026 balance pass), reach 1.3. A foe behind an enemy Bulwark's shield (`shieldAt`) it runs round to a spot 0.8 of its reach off the foe, 0.6 rad past the edge of the shield's arc (the side it's on; a pack splits by id), shooting anything open on the way. 2 a shot every 0.75 s (Ammo, as a warbot), ×2 on a Bulwark, ×1.5 on a Railgunner, Arc Caster or Howitzer, ×1.5 on robots that aren't army. It hunts those kinds within 4.5 tiles first (`armyPick`). Dash (`u.dashT`, `speedMul`): ×2.2 speed for 0.9 s, every 6 s, setting off round a shield or closing on a foe over 2.5 tiles off |
 | Arc Caster (Foundry, 2 rounds) | Chain lightning (`ARC`, `arcFire`, `arcHit`): 12 health, speed 0.85, reach 2. Every 1.7 s a bolt: 2.6 to its target, then to the nearest enemy robot within 1.7 tiles of the last one hit, up to 3 jumps, ×0.75 each. A Bulwark's shield in the way takes ×3 the bolt; what's left once it fails gets through. Buildings 1.5 (×1.2 defences). Capacitors (`u.gel`, `botTank`): 10 bolts, refilled 5 a Crystal at storage (`fuelPoint`, `reloadArmy`, the Torch's refill). Picks the foe with most others packed round it |
-| Railgunner (Foundry, 3 rounds) | Piercing long gun (`RAIL`, `railAct`, `railFire`): 16 health, speed 0.7, reach 5. Charges 0.8 s (`u.rc`, aim kept in `u.rcX/rcY`: it fires where the target was, so a quick robot can dodge), then a slug along that line out to its reach: 10 to the first enemy robot within 0.4 of it, ×0.6 each after, up to 4; a Bulwark's shield in the way takes the slug and passes 80% of it on, and a Bulwark takes ×1.7. Reload 5 s. Closer than 1.6 tiles: a sidearm, 1 every 1.1 s. Buildings from 4.5 tiles: 4 (×1.5 defences). Ammo: 4 slugs, 2 an Ammo (`botMag`, `botAmmoShots`). Picks Bulwarks, then the toughest in reach |
+| Railgunner (Foundry, 3 rounds) | Piercing long gun (`RAIL`, `railAct`, `railFire`): 16 health, speed 0.7, reach 5. Charges 0.8 s (`u.rc`, aim kept in `u.rcX/rcY`: it fires where the target was, so a quick robot can dodge), then a slug along that line out to its reach: 10 to the first enemy robot within 0.4 of it, ×0.6 each after, up to 4; a Bulwark's shield in the way takes the slug and passes 80% of it on, and a Bulwark takes ×1.7. Reload 5 s. Closer than 1.6 tiles: a sidearm, 1 every 1.1 s. Buildings from 5.5 tiles (`RAIL.bldReach`; was 4.5), out of a Pulse Turret's 5: 4 (×1.5 defences). Ammo: 4 slugs, 2 an Ammo (`botMag`, `botAmmoShots`). Picks Bulwarks, then the toughest in reach |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Maglev Terminal | 8 Cement, 6 Alloy, 3 Chips, one tile: storage at the end of a **Maglev line**, or a hub of up to three (Paths → Maglev: see Maglev lines below); its Pod bay builds Maglev Pods; a Generator within 4 tiles powers it |
@@ -202,7 +203,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles; can be turned off (30 s to come back up) |
-| Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 15 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
+| Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
@@ -1115,6 +1116,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
   (A rival's warbots keep the older rules: badly hurt, they pull out for repairs even mid-fight, and on the way to
   resupply they fight what they meet. Its army lives on being mended.)
+- **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
+  army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
+  not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own
+  speed that matches (applied in `speedMul`, counted in `walkTime`). It ends, robot by robot, on contact: a fight, a
+  hit in the last 2 s, enemy land under it, within `PACE_CONTACT` (6) tiles of its target or flag, or an armed foe that
+  close; then each fights at its own speed. In the task, so a new order ends it and a save keeps it. (Audit: with
+  every army robot at one speed, the W+S+A+R mix went from −.27 to −.02 at 24 parts.)
 - **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
   `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
   one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
@@ -1645,7 +1653,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   period, attack threshold, army growth and raid rate (the attack threshold stays between 3 and `AI_THRESHOLD_MAX`, 9:
   an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
-  (`aiTurtleWalls`) and a turret more every four minutes (up to six), its first at two and a half minutes, ahead of the
+  (`aiTurtleWalls`: once it has `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS`
+  (16) pieces standing, Chokepoint mouths included; its first Keep waits for 3 turrets and 3 Outposts) and a turret more
+  every four minutes (up to six; each one due goes first in its plan), its first at two and a half minutes, ahead of the
   rest of its plan (the other doctrines' first waits for five, `AI_DEFENCE_AT`). It marches only in one big push (`aiPush`,
   `push`): before 22 minutes (`AI_PUSH_AT`) only with twice its attack threshold and half as many again as its rival's
   army and two more; from then on with its threshold and two more than its rival's (after a push, as many as that push
@@ -1773,7 +1783,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   half its army at most; an Arc Caster only with 3 Crystal in hand, a Railgunner with 4 Ammo.
   **Against a blob** (`aiBlob`, `AI_BLOB`: a rival with 2 Bulwarks or more and 12 robots in its army): Mortar Pits (their
   shells come down over shields) by its fort nearest that rival's Command Base, aimed out along the way the blob would
-  come, one every 3 minutes, up to 2 from this and 3 in all (`P.blobMortAt`, `P.blobMortN`, through `P.defWant` with
+  come, one every 3 minutes, up to 4 from this and 4 in all (2 and 3 before the November 2026 balance pass) (`P.blobMortAt`, `P.blobMortN`, through `P.defWant` with
   `blob`: its site goes past the usual limit on sites and up as soon as the Cement is there, and waits up to
   `AI_BLOB.wait` (6 min) for its Alloy: `blobFirst`); and one
   Howitzer more for its attacks (`wantRockets`, at most 3; the Howitzer is switched off for now).
@@ -1827,8 +1837,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `P.raid.convoy`), out of the guns' reach and never on a Trade Post's ground. Its attacks put a working building, Fuel
   Station or Depot that little guards ahead of a fort. The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs (and a second Crystal Tap) and goes for Missile Silos (up to
-  three) once its Bot Foundry runs: its programme (`aiMissilePlan`) starts from ten minutes once it has two warbots
-  more than its rival (five at least) and two workers to spare; the Missile Factory and then each Silo (the next once
+  three) once its Bot Foundry runs: its programme (`aiMissilePlan`) starts from ten minutes once its army is no more
+  than `AI_MISSILE_GAP` (4) behind its rival's (four at least; two ahead, as it was, put its Silos at 24 minutes on
+  average under pressure: November 2026 balance pass) and two workers to spare; the Missile Factory and then each Silo (the next once
   the ones it has hold a Missile each) go down as soon as the Cement is there, one past its site limit, its first Ammo
   Plant and turret still going ahead; its Bot Foundry rests for them only while it has three warbots more than its
   rival, the factory rests while no Silo has room or its army is more than two behind its rival's, and from
@@ -2224,7 +2235,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
-  - **The Lance of Corvane** (`BDEFS.lance`, `LANCE`; key L; 40 Cement, 30 Alloy, 15 Chips, 10 Crystal; 240 s to
+  - **The Lance of Corvane** (`BDEFS.lance`, `LANCE`; key L; 40 Cement, 30 Alloy, 15 Chips, 10 Crystal; 160 s to
     build). Its panel's **Aim the Lance**, then a tap anywhere (the `lanceAim` order, `setLanceAim`; `lanceStop` stands
     it down): it charges for `LANCE.charge` (90) s and fires. Power (`lancePower`): `LANCE.gens` (2) Generators with
     Fuel within `LANCE.reach` (4) tiles of its square (`megaGens`), each burning a Fuel every `genFuel` (30) s while it
@@ -2248,7 +2259,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - The Lance's gun turns toward its aim at 0.35 rad/s (`updateLance`, `b.aim`); its art has 16 ways, and the render
     turns the nearest one the rest of the way about the turntable (`lanceTwist`), so it points exactly along the shot
     and swings smoothly (Nov 21 2026).
-  - **The Shield Dome** (`BDEFS.dome`, `DOME`; key H; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; 180 s). Up while it
+  - **The Shield Dome** (`BDEFS.dome`, `DOME`; key H; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; 120 s). Up while it
     has power (a Generator with Fuel within `reach` 4) and Crystal (one every `crystal` 20 s, `cap` 6, hauled as its
     ammo): `updateDome`, `b.dUp`. `domeCatch(x, y, by, kind, sx, sy)` in each impact (`missileImpact`, `nukeImpact`,
     `bombImpact` and napalm, `shellImpact` and `rocketImpact` from guns outside it, `meteorImpact`, `rockfall`, a rival
@@ -2258,8 +2269,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     the dome's surface, shimmering, flashing where hit, breaking up as it drops. Pausable (`pausable`): turned off it's
     down and burns no Crystal; turned back on (`setPaused`) it stays down for `warm` (30) s, `b.dWarm`, as long as a
     nuke's flight, so it can't be raised on seeing a launch.
-  - **Arrival City** (`BDEFS.city`, `CITY`; key C; 60 Cement, 30 Alloy, 15 Chips, 24 Fiber; 300 s; 4 × 4; the owner's
-    look A, Nov 2026; its look since Nov 21 the second sheet's A, Four Blocks round a Square). It opens `CITY.at` (15 min) into a free-play game (`cityOpen`; a mission
+  - **Arrival City** (`BDEFS.city`, `CITY`; key C; 60 Cement, 30 Alloy, 15 Chips, 24 Fiber; 200 s; 4 × 4; the owner's
+    look A, Nov 2026; its look since Nov 21 the second sheet's A, Four Blocks round a Square). It opens `CITY.at` (12 min; 15 before the November 2026 balance pass) into a free-play game (`cityOpen`; a mission
     with `mega`: at once) and is banned on Argos, the Lunar biome (`worldBan`). **Arrival drive** (`cityBoost(owner, x,
     y)`): its owner's work within `reach` (8) tiles of its middle goes `boost` (20%) faster: `produce` (factories, the
     Oil Pump, the Bot Foundry), the gather/farm/plant timer in `doStaff` and `doBuild`'s site progress; half that while
@@ -2288,7 +2299,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     a wide glow (`drawCityGlow`), its reach and land when placing or selected (`drawRanges`), a ring filling in the
     taker's colour (`drawCityTaking`). Sound: `cityHum` (an empty-city drone on the Ambience volume, near one on screen),
     `cityclock` (its clock striking now and then) and `citychime` (the station chime when it's taken or lit again).
-  - **The Orbital Lift** (`BDEFS.lift`, `LIFT`; key O; 60 Cement, 44 Alloy, 26 Chips, 20 Crystal; 330 s; 3 × 3; armor
+  - **The Orbital Lift** (`BDEFS.lift`, `LIFT`; key O; 60 Cement, 44 Alloy, 26 Chips, 20 Crystal; 220 s; 3 × 3; armor
     90; the owner's look A, the Beacon Cable, Nov 2026). **Fall line**: placed with a direction, `b.lfDir` 0..7
     (`LIFT_DIRS`, east then clockwise; R turns it while placing: `UI.liftDir`, `liftTurn`; the `place` order's axis
     argument carries it, and `liftDir` turns a site's), `liftLen()` tiles (half the map's width for its size: 15, 20, 25,
@@ -2331,7 +2342,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`drawCableWreck`), sparking for `sparks` (60) s. Sound (`js/audio.js`): `liftHum` (the cable's held note, a whine
     while a climber moves), `liftclimb`, `liftland`, `liftgroan`, `liftsnap`, `liftimpact`. Its panel: `renderLiftSection`
     (the six lamps, Call down on Z X C V, Restock the Carrier).
-  - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 300 s; 3 × 3; armor 120;
+  - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 200 s; 3 × 3; armor 120;
     the owner's look A, the Dish Array, Nov 2026). Only in a game with the **Great Uplink win** on (`gupWinOn`:
     `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu
     leaves it out otherwise). Its panel's **Begin transmission** (`gupBegin` order and function; `gupBlocked` why not;
@@ -2365,8 +2376,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
-    and Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 22 min; none for the
-    Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (18 min)
+    and Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 19 min; none for the
+    Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (15 min)
     once it has a Bot Foundry and half its Cement and Crystal (`aiLiftFunds`), with its line over the fewest of its own
     buildings, toward open ground, never its Command Base (`aiLiftSpot`), and keeps its other buildings off that line
     (`aiOnLiftLine`, in `canPlace`). Built, `aiLiftUse` calls a Security detail when attacked or before a push, Alloy or
@@ -2381,7 +2392,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     garrisons too as for a storm (up to 30), to a flag within 3 tiles of it every `gupJam` (45) s while none is there or on the way (its first target the nearest gun,
     then the Uplink), `aiMarch` takes it as a march target scored 30 better, Missiles score it 40 more, a bomber 30, and
     the Lance weighs a line through it at 14 (`aiLanceWorth`). `aiCity`
-    places it from `AI_MEGA.cityAt` (15 min) once it has a Bot Foundry and half the City's Cement and Fiber
+    places it from `AI_MEGA.cityAt` (12 min) once it has a Bot Foundry and half the City's Cement and Fiber
     (`aiCityFunds`: its Alloy and Chips never pile up), where its reach covers the most of its factories and gatherers
     near its Command Base (`aiCitySpot`), its site first for goods (`prio` 'high'), never given up. `aiMarch` treats a
     foe's City as a march target like a fort (scored 2 better, 6 in Domination: the prize), its flag going for the City.
@@ -2393,7 +2404,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Reactor sat tenth in the plan and waited behind every Outpost, Mine and Harvester the colony wanted, with its price
     in hand: in long games both rivals held Uranium from 10 minutes on and never built one, so the choice below almost
     never came up.)
-  - **The rivals** (`aiMega` in `js/ai.js`, `AI_MEGA`): from `lanceAt` (18 min; it was 25, and most games were over by then), in a Nuclear race, with a Reactor
+  - **The rivals** (`aiMega` in `js/ai.js`, `AI_MEGA`): from `lanceAt` (15 min; it was 25, then 18, and most games were over by then), in a Nuclear race, with a Reactor
     and Uranium to feed it, a rival picks once (`aiMegaPick`, `P.megaPick`, the reasons in `P.megaWhy`) between the
     Lance and the nukes: its doctrine's lean (`AI_MEGA_LEAN`: Architect +2, Warden +1, Steward 0, Salvager −1, Herald
     −2), +1 for the Lance when its enemy's buildings lie strung out (the best line through them takes 2 or more more than
@@ -2403,7 +2414,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
     (`aiLanceWorth`: its foes' buildings and army in the core, 0.3 of that for those only in the scorched edge, its own side's six times over, 5 for dropping a foe's Dome), if worth
     `worth` (6). From `domeAt`
-    (20 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
+    (17 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
     Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base (a Generator first if it has none),
     once it has half of either one's cost in hand (`aiHalfway`: the site fills as the rest comes in, and is never given
     up); its

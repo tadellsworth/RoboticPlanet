@@ -6949,6 +6949,8 @@ function advanceOnBot(u, foe, dt) {
 function warbotAct(u, dt) {
   u.cd -= dt;
   const t = u.task;
+  // Marching with its group (marchTogether): at the slowest one's pace until it meets the enemy.
+  if (t && t.pace && (u.fight || S.time - (u.hurtT ?? -99) < 2 || (S.tick % 4 === u.id % 4 && paceContact(u, t)))) delete t.pace;
   // On its way to be recycled: it marches to the Foundry, fighting nothing on the way.
   if (t && t.type === 'recycle') { u.fight = 0; doRecycle(u, t, dt); return; }
   const defending = t && t.type === 'defend';
@@ -8082,7 +8084,7 @@ function rallyAvailable(owner, i, j, rear) {
 
 /** About how long (seconds) bot u takes to walk route p (tiles, as findPath gives them) from where it stands: by road and slope speeds, no traffic. */
 function walkTime(u, p) {
-  const W = S.W, v = BOTS[u.type].speed;
+  const W = S.W, v = BOTS[u.type].speed * (u.task?.pace || 1); // (marching together: see marchTogether)
   let t = 0, pi = Math.floor(u.x), pj = Math.floor(u.y);
   for (const k of p) {
     const i = k % W, j = (k / W) | 0;
@@ -8090,6 +8092,35 @@ function walkTime(u, p) {
     pi = i; pj = j;
   }
   return t;
+}
+
+/**
+ * Marching together (the owner's rule from the November 2026 balance pass): army robots `us`, sent off together (a
+ * selection's move or attack, a rally flag, an attack from garrisons; the player's and the rival's alike, not a chase or
+ * a raid sent with `hurry`), move at the pace of the slowest among them: each faster one's task gets `pace`, the share
+ * of its own speed that matches the slowest's (speedMul, walkTime). It lasts until it meets the enemy (paceContact):
+ * then each fights at its own speed. (Measured: robots of speeds 0.7 to 1.55 arriving one by one made a mixed army
+ * lose to a pure one of the same cost, -.27 at 24 parts; arriving together, about even.) In the task, so a new order
+ * ends it, and saved with the game.
+ */
+const PACE_CONTACT = 6;
+function marchTogether(us) {
+  let v = Infinity, n = 0;
+  for (const u of us) if (isArmy(u) && u.task) { v = Math.min(v, BOTS[u.type].speed); n++; }
+  if (n < 2) return;
+  for (const u of us) {
+    if (!isArmy(u) || !u.task) continue;
+    const m = v / BOTS[u.type].speed;
+    if (m < 0.999) u.task.pace = m; else delete u.task.pace;
+  }
+}
+/** Has army robot u, marching at its group's pace on task t, met the enemy: on enemy land, near where it was sent, or an armed foe near? */
+function paceContact(u, t) {
+  const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  if (o >= 0 && o !== u.owner && foes(o, u.owner)) return true;
+  const g = t.type === 'attack' ? getE(t.target) : t.type === 'hold' ? rallyById(t.rally) : null;
+  if (!g || dist2(u.x, u.y, g.x, g.y) <= PACE_CONTACT * PACE_CONTACT) return true;
+  return !!nearestEnemyBot(u.owner, u.x, u.y, PACE_CONTACT, false, false, true, armedThreat);
 }
 
 /**
@@ -8219,6 +8250,7 @@ function sendToRally(owner, i, j, count, rear, hurry, lead) {
     }
   }
   if (!sent) { cleanRallies(); return { sent, rally: r }; }
+  if (!hurry) marchTogether(squad);
   if (!hurry && (rear || !S.players[owner].ai)) paceOrder(owner, squad, i, j);
   return { sent, rally: r, breach: breachCheck(owner, squad, i, j) };
 }
@@ -8301,6 +8333,7 @@ function orderMove(owner, ids, i, j, result) {
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
+  marchTogether(bots);
   breachCheck(owner, bots, i, j);
   return bots.length;
 }
@@ -8345,6 +8378,7 @@ function orderAttack(owner, ids, target) {
   if (!target || target.dead || !foes(target.owner, owner) || calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
+  marchTogether(bots);
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
   return bots.length;
 }
@@ -9147,6 +9181,7 @@ function sendAttack(owner, target, count, all, hurry, lead) {
       }
     }
   }
+  if (!hurry) marchTogether(squad);
   if (!hurry) paceOrder(owner, squad, target.x, target.y);
   if (sent) breachCheck(owner, squad, target.x, target.y, true); // (the rival can ask beforehand: attackBreach)
   return sent;
@@ -10486,7 +10521,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -17407,7 +17442,7 @@ function hashState() {
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
-    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
+    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0); num(u.task && u.task.pace); // (marching together: marchTogether)
     if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
     if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }

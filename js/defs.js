@@ -222,7 +222,7 @@ const BOTS = {
   torch:   { name: 'Torch', plural: 'Torches', speed: WARBOT_SPEED * 0.9, hp: 18, war: true, army: true, flame: true, parts: 2, range: 1.9,
     desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
   // The three answers to a Bulwark blob (see SKIRM, ARC and RAIL): they garrison, rally, attack, reload and get repaired like warbots.
-  skirmisher: { name: 'Skirmisher', plural: 'Skirmishers', speed: WARBOT_SPEED * 1.55, hp: 10, war: true, army: true, flank: true, parts: 1, range: 1.3,
+  skirmisher: { name: 'Skirmisher', plural: 'Skirmishers', speed: WARBOT_SPEED * 1.55, hp: 9, war: true, army: true, flank: true, parts: 1, range: 1.3,
     desc: 'A fast, light raider on four big tyres. It runs round a Bulwark\'s shield and shoots it in the side or the back (double damage), and hunts Railgunners, Arc Casters and Howitzers (half again) and Workers before warbots. Every few seconds it dashes. It shoots Ammo like a warbot but has little armour: massed warbots and Minigun Nests cut it down.' },
   arccaster: { name: 'Arc Caster', plural: 'Arc Casters', speed: WARBOT_SPEED * 0.85, hp: 12, war: true, army: true, arc: true, parts: 2, range: 2.0,
     desc: 'Throws chain lightning: each bolt hits one enemy robot and jumps on to up to three more close by, weaker each jump, so it punishes robots packed together. Lightning eats a Bulwark\'s shield three times as fast as gunfire. Its capacitors hold 10 bolts and recharge with Crystal (5 bolts each) at your Command Base or a Depot. Short reach and thin armour: Skirmishers that get in close tear it apart.' },
@@ -549,7 +549,7 @@ const TRAIN_ARMOR = {
   fit: 12,      // seconds the station's yard takes to fit it
   hp: 40,       // extra hit points (a Freight Train has 30)
   takes: 0.6,   // the share of any damage it takes
-  pulse: { range: 4.5, damage: 4, reload: 1.6 }, // (a Pulse Turret: 5 tiles, 4 a shot, every 1.3 s)
+  pulse: { range: 4.5, damage: 4, reload: 1.6 }, // (a Pulse Turret: 5 tiles, 5 a shot, every 1.3 s)
   flak: { range: 6, reload: 1.5 },               // one shell a time (a Flak Gun: 7 tiles, two every second)
 };
 const PLANE_BURN = 2.2, PLANE_FILL = { cargoplane: 20, bomber: 40, airship: 20 }, AIRFIELD_FUEL = 12, AIR_TYPICAL = 30;
@@ -985,7 +985,7 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * after `cap` s (b.cCap; it changes hands, land, bonus and all). Repaired to `back` of its armor it is up again.
  * Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
  */
-const CITY = { at: 900, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
+const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
 /*
  * The Orbital Lift (BDEFS.lift; the owner's look A, the Beacon Cable, Nov 2026): a 3 x 3 anchor pad with a cable up to
  * its colony's Carrier in orbit. As it is placed, R turns its fall line (b.lfDir, one of 8 directions: LIFT_DIRS): a
@@ -1178,17 +1178,17 @@ const BDEFS = {
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
-    cost: { cement: 3, alloy: 3 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
-    gun: { damage: 4, reload: 1.3 }, // (was 1.1 s: toned down a touch)
+    cost: { cement: 3, alloy: 3 }, ammo: 'crystal', range: 5, armor: 20, buildTime: 10, war: true,
+    gun: { damage: 5, reload: 1.3 }, // (was 1.1 s: toned down a touch)
   },
   // Defences that work alongside the Pulse Turret (see BUNKER, and `disrupt` and `mortar` below).
   bunker: {
     name: 'Bunker', desc: 'A concrete pillbox for 2 warbots. From behind its walls they shoot enemy robots within 3½ tiles with their own Ammo (it keeps a little to reload them) and recharge, and nothing can shoot them back until the Bunker falls. It claims no land, so it can go anywhere in your territory: on a wall line, beside a Gate, at a bridgehead. Shot down, it\'s wrecked and its warbots walk out.',
-    cost: { cement: 6, alloy: 2 }, mil: true, bunker: true, terr: 0, garrison: 2, armor: 32, buildTime: 14, ammoStock: 4, range: 3.5, war: true,
+    cost: { cement: 6, alloy: 2 }, mil: true, bunker: true, terr: 0, garrison: 2, armor: 40, buildTime: 14, ammoStock: 4, range: 3.5, war: true,
   },
   disruptor: {
     name: 'Disruptor Tower', desc: 'Every few seconds it sends out a pulse that jams the guns of enemy robots within 4½ tiles for 2 seconds and drains their batteries: drained warbots slow down, hit at half power and have to go home to recharge. It kills nothing itself, so pair it with a turret or a Bunker. It burns Fuel (one for every 4 pulses), only while enemies are in range.',
-    cost: { cement: 4, alloy: 3, crystal: 3 }, ammo: 'fuel', ammoCap: 4, range: 4.5, armor: 12, buildTime: 12, war: true,
+    cost: { cement: 4, alloy: 3 }, ammo: 'fuel', ammoCap: 4, range: 4.5, armor: 12, buildTime: 12, war: true,
     disrupt: { every: 2.5, drain: 10, perFuel: 4, jam: 2 },
   },
   mortar: {
@@ -1204,7 +1204,7 @@ const BDEFS = {
   // The Minigun Nest (see MINIGUN): a cheap rotary gun that spins up and hoses enemy robots with tracer rounds.
   minigun: {
     name: 'Minigun Nest', desc: 'A cheap, short-range deterrent: a six-barrel rotary gun on an armoured mount. It spins up, then hoses the nearest enemy robot in the open within 3½ tiles with a stream of tracer rounds: each does little, but it fires twelve a second, and every robot it hits is pinned down (it moves at half speed and shoots slower for a moment). Great against swarms of workers, haulers and creatures; slower to bring down a warbot than a Pulse Turret. Fires Ammo (60 rounds each).',
-    cost: { cement: 2, alloy: 1 }, ammo: 'ammo', ammoCap: 4, range: 3.5, armor: 12, buildTime: 6, war: true,
+    cost: { cement: 2, alloy: 2 }, ammo: 'ammo', ammoCap: 4, range: 3.5, armor: 12, buildTime: 6, war: true,
     minigun: { rate: 12, damage: 0.2, rounds: 60, spin: 0.5, turn: 4.5 },
   },
   // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
@@ -1356,27 +1356,27 @@ const BDEFS = {
   lance: {
     name: 'Lance of Corvane', short: 'Lance',
     desc: 'A planet-scale laser cannon: a long barrel on a turntable in a 3 by 3 gun pit. Tap Aim on its panel, then any spot on the map: it charges for 90 seconds (your colony\'s lights dim and its factories slow by a third, a glow climbs the barrel and everyone hears it), then fires a beam in a straight line from the gun through that spot right across the map. Everything its 2-tile core touches is destroyed, whoever it belongs to: buildings (a Command Base or Keep only drops to its floor, as with Missiles), robots, Walls; a tile either side is scorched (half armor or health, nothing destroyed); water boils to steam and the ground is scarred by a trench for good. It fires only with power: 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it charges) or a Nuclear Reactor with 2 Uranium (or 1 Enriched Uranium) in it. Wreck its power and the charge is lost. A dust storm holds the shot; a Shield Dome on the line takes it. 4 minutes to reload. One per colony. Not in the Hollow.',
-    cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 240, war: true,
+    cost: { cement: 40, alloy: 30, chip: 15, crystal: 10 }, lance: true, mega: true, foot: 3, armor: 70, buildTime: 160, war: true,
   },
   dome: {
     name: 'Shield Dome', short: 'Dome',
     desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. Turn it off to save Crystal: turned back on, it takes 30 seconds to come up. One per colony.',
-    cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 180, war: true,
+    cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 120, war: true,
   },
   city: {
     name: 'Arrival City', short: 'City',
     desc: 'A 4 by 4 square built for the colonists: four concrete apartment blocks round a green, a tram waiting at the stop, all finished and all empty, with the Arrival clock on its stele in the middle and WELCOME HOME on the roof. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
-    cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 300,
+    cost: { cement: 60, alloy: 30, chip: 15, fiber: 24 }, city: true, mega: true, foot: 4, fuelCap: 6, armor: 80, buildTime: 200,
   },
   lift: {
     name: 'Orbital Lift', short: 'Lift',
     desc: 'A space elevator: a 3 by 3 anchor pad and a lit cable up to your Carrier in orbit. As you place it, press R to turn its fall line (half the map\'s width, shown on the map), which must not cross another colony\'s land. On its panel, Call down a climber with one of four loads: a Security detail (6 Warbots, 2 Bulwarks), a Work crew (6 Workers, 2 Freight Trucks), 30 Alloy or 18 Chips. It takes 45 seconds and every colony hears it coming; then 6 minutes before the next. The Carrier holds 6 drops. Restock the Carrier: tick goods to send up (Haulers bring what you hold beyond the reserve you set); every 30 that go up put a drop back and make the next drop half again bigger (up to double). Each climb burns 2 Fuel from a Generator within 4 tiles. If an enemy destroys it, the cable comes down along its fall line, crushing what lies there and leaving wreckage Haulers cut up for Alloy. One per colony. Not in the Hollow; on Argos it falls slowly.',
-    cost: { cement: 60, alloy: 44, chip: 26, crystal: 20 }, lift: true, mega: true, foot: 3, armor: 90, buildTime: 330,
+    cost: { cement: 60, alloy: 44, chip: 26, crystal: 20 }, lift: true, mega: true, foot: 3, armor: 90, buildTime: 220,
   },
   gup: {
     name: 'Great Uplink',
     desc: 'A 3 by 3 dish array built to talk to home, and a second way to win. Only in a game with the Great Uplink win switched on (game setup, beside Victory) and Megastructures on. Its panel\'s Begin transmission opens 25 minutes into a game and needs 3 Generators with Fuel within 4 tiles, each burning a Fuel every 30 seconds while it transmits. Hold the transmission for 8 minutes and you make contact: your colony (and your team) wins. Any armed warbot of another colony within 3 tiles jams it; jammed or without power its clock stops and runs back at half speed. Destroyed, the transmission is lost and a rebuilt one starts from zero. Every colony sees the countdown and where it is. One per colony. Not in the Hollow.',
-    cost: { cement: 50, alloy: 40, chip: 30, crystal: 24 }, gup: true, mega: true, foot: 3, armor: 120, buildTime: 300,
+    cost: { cement: 50, alloy: 40, chip: 30, crystal: 24 }, gup: true, mega: true, foot: 3, armor: 120, buildTime: 200,
   },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
@@ -1506,7 +1506,7 @@ const ARC = { reload: 1.7, dmg: 2.6, jump: 1.7, jumps: 3, fall: 0.75, shieldMul:
  * (`fort` times that to a defence or Wall) from `bldReach` tiles. Ammo: BOTS.railgunner.mag slugs, ammoShots an Ammo.
  */
 const RAIL = { charge: 0.8, dmg: 10, width: 0.4, fall: 0.6, pierce: 4, through: 0.8, armor: 1.7, reload: 5, min: 1.6, side: 1, sideReload: 1.1,
-  bld: 4, fort: 1.5, bldReach: 4.5 };
+  bld: 4, fort: 1.5, bldReach: 5.5 };
 /** Shots a gun robot of kind k holds (a Railgunner's slugs: BOTS[k].mag; else a warbot's WARBOT_AMMO), and shots an Ammo gives it. */
 function botMag(k) { return (BOTS[k] && BOTS[k].mag) || WARBOT_AMMO; }
 function botAmmoShots(k) { return (BOTS[k] && BOTS[k].ammoShots) || AMMO_SHOTS; }
@@ -1572,14 +1572,14 @@ const PERSONALITIES = {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
     tag: 'walls in, then comes late in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
+    play: 'Fortifies first: an early Pulse Turret, then one more every four minutes, up to six. Once it holds three Outposts it walls in its Command Base, the side facing you first (Gates on its roads, 16 pieces at most), and with three turrets as well it starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
     weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
       surrender: ['Relief has not arrived.', 'Post abandoned. Day {day}. Relief has not arrived.'],
     },
-    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true, push: true,
+    grace: 1.5, threshold: 1.5, army: 1.0, raids: 0.3, turrets: true, walls: true, push: true,
   },
   raider: {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
