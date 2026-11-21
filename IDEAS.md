@@ -981,6 +981,19 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
   shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
+  **The air war (owner, Nov 21: save for later).** Proposed roster, in build order:
+  - **Interceptor** (a fighter from the Airfield): shoots down bombers and Airships and escorts your own bombers, so
+    bombers meet a counter in the air and not only guns on the ground. The core air-combat unit.
+  - **Radar Station** (a building): sees aircraft coming early (an alert), and Flak Guns near it fire further.
+  - **Gunship / Attack Drone**: circles a spot for a while strafing warbots; close support, not a one-off strike.
+  - **Transport Helicopter**: drops a small band of warbots anywhere, over walls and cliffs; slow and fragile, a raid tool
+    beside the Ferry's beach landings.
+  - **SAM Launcher** (a building, or mobile): long-range missiles, a hard hit and a slow reload; beats Gunships and
+    Airships, while fast Interceptors can slip it.
+  - **Repair Drone**: hovers over damaged robots and mends them in the field.
+  - **Carrier** (late, joins the naval war): a ship that launches and refuels aircraft.
+  Counters: Interceptor beats bombers and Gunships; Flak and SAM beat low Interceptors; Gunship beats warbots; Radar
+  makes every air defence better. First pair to build: Interceptor + Radar Station.
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.
