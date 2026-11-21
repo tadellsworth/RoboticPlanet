@@ -38,6 +38,20 @@ minute with the full-output and robot-limit warnings, and five named save slots 
   set can reach a few MB. If browsers start refusing, the slots could move to IndexedDB.
 - Tapping a whole message (not just its Go chip) to go there would stop taps reaching the map beneath it; kept to Go.
 
+## Polish round 2 (built Nov 21 2026; open questions)
+
+Reach rings, health bars (with a Settings switch), +N goods popups, a ? on panels, the Idle button (,), Surrender and
+Rematch are in the game (`js/polish.js`; see the README). Still open:
+- **Rematch in multiplayer.** The lobby has no way back from a finished game (each device leaves to the menu), so
+  Rematch is single-player only. A host-side "Rematch" that reopens the lobby with the same settings and seed, waiting
+  for everyone to tap ready, would fit; worth it?
+- **Surrender with teams:** it gives up only your colony, so your ally fights on (and you watch). Should it ask the
+  team, or offer the ally your colony instead of the rival?
+- **−N popups** where construction spends goods were left out to keep the map quiet. Worth a try, or the +N ones off
+  by a switch of their own?
+- Rings for a big picked army are skipped above 12 robots (dozens of rings were noise). A single outline round their
+  combined reach could replace them.
+
 ## Sunsets per biome (built Nov 20 2026; open questions)
 
 Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's

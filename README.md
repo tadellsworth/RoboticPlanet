@@ -1391,6 +1391,29 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stores (`def.out`, storage aside) hold 90% or more of what they can for 20 s gets an amber ring and a message with Go
   (at most every 3 minutes a good; it clears below 75%). At 90% of the robot limit the robot counter turns amber with
   the count against the limit, with a message at 90% and another at the limit.
+- **Polish round 2** (`js/polish.js`, interface only but for Surrender):
+  - **Reach rings**: pointing at any colony's defence (a building with `range` or `missile`) draws its `drawRanges` ring
+    at 55%; an armed robot hovered, the robot whose panel is open and the picked army (up to 12) get a faint ring of
+    `unitReach` (an army robot's `range` or `WARBOT_RANGE`, a Howitzer's `ROCKET.range` with `ROCKET.min` dashed). A
+    building picked or being placed keeps its own rings as before. None in photo mode.
+  - **Health bars** (`hpBar` in `js/render.js`, used by every robot, ship, plane, critter and building bar): shown while
+    damaged, green over 60%, amber over 30%, red below; what's picked always shows one (faint when whole). The Settings
+    switch **Health bars** (`R.hpBars`, `terrafall.hpbars`, on by default) hides the rest.
+  - **+N popups** (`samplePops`, `drawGoodsPops`): twice a second your built storage and producers in view are diffed
+    (storage: every good; a producer: its `make`/`out` goods); gains add up per building, and each building shows at
+    most one popup every 2.5 s (its top two goods, "+3 ▪"), 7 at once, 1.8 s each. Not on Graphics Saver, zoomed out
+    below 16 px a tile, in photo or Observer mode.
+  - **?** in a building's or robot's panel title (`panelHelp`, from `openSheet`): How to play at `helpTopic(type)`:
+    `TOPIC_FIX`, else the section naming it most (bold counts triple); other panels use `PANEL_TOPICS`.
+  - **Idle** (bottom bar in a war, **,**): `idleArmy` (your army robots and Howitzers out in the open with no task or
+    a `hold`/`park` one, not fighting or moving) grouped within 5 tiles, biggest first; each press picks the next group
+    (`selectBots`) and centres on it. The badge counts them (`polishHudTick`).
+  - **Surrender** (pause menu, tap twice; Versus only, not missions or Observer): the order `surrender` (js/orders.js)
+    gives the colony up to `surrenderTo(p)` (`beatenBy`, as a computer rival's surrender) through `surrender`/`eliminate`,
+    so in multiplayer it lands on every device on the same tick; the end screen reads "You surrendered to …".
+  - **Rematch** (end screen): `UI.lastGame` holds the options `startNewGame` used (or the mission and difficulty) for the
+    game being played; Rematch calls `startNewGame(opts)` again (no new random pick), or `startMission`. Hidden in
+    multiplayer, Observer mode, after a loaded game and after a lost or final mission (Try again / Play it again).
 - **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
   and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
@@ -2636,7 +2659,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   R is Ore Mine on Gather and Refinery on Make; on All a card shows "2 C"; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
-  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
+  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
   recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
@@ -3049,6 +3072,7 @@ js/watch.js               Observer mode: computer colonies play while you watch,
 js/scout.js               scout reports in your own games: what a computer rival starts doing, as a message with Go
 js/blueprint.js           blueprints: a block of buildings and its roads kept on the device, placed again through orders
 js/qol.js                 interface helpers: camera spots, recent alerts (J), goods a minute and warnings, save slots and Continue
+js/polish.js              interface helpers: reach rings, health bars switch, +N popups, panel ?, Idle (,), Surrender, Rematch
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools

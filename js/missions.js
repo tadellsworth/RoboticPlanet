@@ -242,7 +242,7 @@ const MISSIONS = [
     intro: [
       'Drag to look around (with a mouse: right-drag or W A S D); pinch or scroll to zoom.',
       'A new building starts as a site: Haulers bring its materials from the Command Base, then a Worker builds it.',
-      'Haulers only drive on roads, so every building needs a road to storage.',
+      'Haulers only drive on roads, so every building needs a road to storage. Tap anything for its panel; its <b>?</b> explains it.',
       'Your goals sit at the top; the glowing button is the one to press next. Space pauses, H finds your base.',
       'The Fuel Station by your base keeps the robots charged. More on that soon.',
     ],
@@ -1353,7 +1353,7 @@ const MISSIONS = [
       '<b>Versus</b>: another colony shares this moon. Capture its Command Base and the planet is yours.',
       'This rival only defends itself. Red is theirs, blue is yours. Each Ammo reloads a warbot\'s 5 shots.',
       'Army (<kbd>Q</kbd>) → Attack, then tap an enemy building or robot. Or tap a building → Send warbots (Q).',
-      'With a mouse: drag a box round warbots and right-click; Ctrl+1-9 saves a group. <kbd>C</kbd> calls them home.',
+      'With a mouse: drag a box round warbots and right-click; Ctrl+1-9 saves a group. <kbd>C</kbd> calls them home; <b>Idle</b> (<kbd>,</kbd>) finds any left standing.',
       'A colony holds 90 robots, and you landed with Workers to spare: <b>recycle</b> them at the Bot Foundry for Alloy.',
     ],
     mode: 'versus', seed: 20103, size: 0, rough: 1, rich: 3, biome: 'lunar', players: 2, style: 'balanced',
