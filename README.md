@@ -8,7 +8,12 @@ how goods move.
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes), or pick a
   faster **Victory** on the new-game screen: **Domination** (hold most of the land for 3 minutes) or **Uplinks** (hold
   neutral relay towers for a total of 5 minutes). A rival that's clearly beaten surrenders.
-  The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **doctrine**
+  The rival is **Settler**, **Pioneer**, **Colonist**, **Commander** or **Warlord** (easiest to hardest; `DIFFICULTY` in
+  `js/defs.js`; the keys stay `easy`, `medium`, `normal`, `hard`, so old saves, settings and multiplayer setups keep
+  their level, and `warlord` is the fifth: mult 1.6, grace 100 s, threshold 3, 4 sites, thinks every 1 s, 12 more of
+  every good; `diffAtLeast(k)` counts it as Hard wherever the code asks for Hard or Normal and up, raids every 90 s
+  in `RAID_GAP`). Notes below that say Easy, Medium, Normal or Hard mean those keys: Settler, Pioneer, Colonist and
+  Commander. The rival has a **doctrine**
   (Rival doctrine: the Steward, balanced, by default, or Random, the Warden (turtle), Salvager (raider), Herald (rusher)
   or Architect (tycoon); with three or four players one for each rival if you like; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
@@ -28,15 +33,21 @@ how goods move.
   packs coming up through their exits to raid every colony alike (see The Murmur below).
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
-  (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
+  (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*)) and **War** (Ammo and
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
-  from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
-  ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
+  from the start. Missions have the rivals' five levels, Settler to Warlord (`MISSION_DIFFS` is `DIFF_ORDER`; a
+  mission's `diff` is its index, Colonist the default); values tuned on the old three levels stay written
+  `[Settler, Colonist, Commander]` and `mPick` reads them for five (Pioneer between the first two, Warlord half a step
+  past Commander, a rival level up; a five-long array sets each level), `mLimit` the clock (Pioneer has Settler's,
+  Warlord Commander's), and the Command Base starts with ×1.5, 1.25, 1, 0.75 or 0.6 of its goods. Finishing one ticks it
+  off at that level (saved by its `id`, so a reworked mission keeps its ticks; `loadCampaign` moves ticks from the old
+  Easy, Normal and Hard onto Settler, Colonist and Commander once, marking the save `lv: 5`, and a game saved in a
+  mission before then loads at the matching level, `lv5`), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
   level per difficulty, `style`, `rivalBonus`, `passive`), `limit` (minutes per difficulty), switches for what
   missions otherwise leave out (`war`, `lab`, `events`, `wildlife`, `nuke`), `pressOn` (the rival's trade convoys keep to
@@ -88,8 +99,8 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
-and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Shield
-Dome, Arrival City, the Orbital Lift and the Great Uplink; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), the **Great Uplink win** (beside Victory, off by default, Versus only: a second way to win alongside any Victory, teams too; greyed out without Megastructures or on the Hollow; `UI.menu.upwin`, `S.settings.upWin`, `gupWinOn`; carried in the lobby's and lockstep's settings and in Observer mode; a mission's `upWin`; a save from before it loads with it off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Sundering Ray, the
+Shield Dome, Arrival City, the Orbital Lift, the Deep Core, the Atmosphere Engine and the Great Uplink; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), the **Great Uplink win** (beside Victory, off by default, Versus only: a second way to win alongside any Victory, teams too; greyed out without Megastructures or on the Hollow; `UI.menu.upwin`, `S.settings.upWin`, `gupWinOn`; carried in the lobby's and lockstep's settings and in Observer mode; a mission's `upWin`; a save from before it loads with it off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -138,10 +149,10 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Easy, Medium, Normal and Hard
+In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Settler, Pioneer, Colonist, Commander and Warlord
 apply to all computer colonies from that point in the match. In multiplayer only the host can send the
 `rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
-and production without changing stock already on the map. Missions keep their selected difficulty.
+and production without changing stock already on the map. Missions keep the level picked in the mission list.
 
 Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 Besides the autosave there are five named **save slots** (pause menu **Save → Slots**, main menu **Saved games**), and
@@ -202,9 +213,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
+| Sundering Ray | 50 Cement, 30 Alloy, 12 Chips, 8 Crystal, 3 × 3 tiles, armor 90, one per colony (Megastructures), from 18 minutes in, everywhere (on Argos a Quake weapon only): winds up 60 s (40 on a Reactor; reload 5 min, 4) on 2 Generators with Fuel within 4 tiles or a Reactor with 1 Uranium a blow, then a ripple through the ground: Strike the Deep (anywhere, with the Murmur on) caves in every tunnel in a 16-tile circle, seals its exits for 2 nights, takes a third off its nests and stops their next raid; a Quake (within 30 tiles) takes 40% of full armor off every building in a 5-tile circle (never below 10%; a Command Base or Keep 20%), cracks their foundations (half speed until repaired), roads, track and Walls, stuns robots; a Shield Dome doesn't stop it; the Murmur come for it the next night (see Megastructures below) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles; can be turned off (30 s to come back up) |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
+| Deep Core | 60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 3 × 3 tiles, armor 100, one per colony (Megastructures), from 20 minutes in: a winding tower over a shaft that goes deeper while it has power (a Generator within 4 tiles, a Fuel a minute, or a Reactor, no Uranium): 6 Ore a minute; after 6 minutes 8 Ore and 3 Crystal; 10 minutes later 10 Ore, 4 Crystal and a Uranium every 4 minutes; never runs dry; 30 of each in its hoppers for Haulers; the Murmur raid it the night after each stage, and its open shaft is their exit once it's destroyed (see Megastructures below) |
+| Atmosphere Engine | 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20 Fiber, 4 × 4 tiles, armor 100, one per colony (Megastructures), from 20 minutes in, not on Argos or in the Hollow: a cooling-tower shell venting a plume that changes the land round it while it has power (2 Generators within 4 tiles, a Fuel a minute from each, or a Reactor, a Uranium every 6 minutes): Calm at once (8 tiles, no dust storm), Rain after 6 minutes (12 tiles, the ground fertile, the Bloom held), Green 10 minutes later (16 tiles, crops a quarter faster, the Bloom withering), Garden 12 minutes after that (20 tiles, groves, no Bloom, no Murmur exit). The land changes for everyone in its circle, but the calm and the faster crops are its owner's (and allies'); from Rain enemy robots in it wade through mud at half speed, and while it has power enemy Torches can't burn there. From Rain its **Storm Front** (panel, F): a 5-tile storm set anywhere clear of its own circle and of other Engines' (moved a minute after), while it has power: enemy robots 60% speed, sites 60%, guns 75% reach under it; from Green their crops stop and wither after 3 minutes; at the Garden lightning on one of their buildings about once a minute (15% armor, never below 30%). No storm in any Engine's circle; it ends when its Engine falls. The Murmur go for it first; Sappers the night after each stage. Destroyed, the land stays changed; its hold fades over 10 minutes |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
@@ -1957,8 +1971,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
   **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
-  Ithaca I, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
+  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
+  Ithaca I, The atlas, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
@@ -1968,7 +1982,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
-  `renderer/post/lore_planet.py`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
+  `renderer/post/lore_planet.py`), `art/lore/atlas.webp` (the atlas, LORE.md: The atlas, made by `tools/atlas/atlas.py`;
+  on The atlas page a tap enlarges it over the whole screen to pan with a finger, a tap or Esc closing it, as does a page
+  turn: `.lore-zoom` in `initLore`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
   `art/lore/murmur-<class>.webp` (night renders of the Murmur built to LORE.md's art brief, `renderer/b/murmur_moles.js`
   with `hero=1`, cropped by `renderer/post/murmur_lore.py`), and the game's own Command Base, Trade Post, Uplink
   and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
@@ -2241,7 +2257,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
-  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3 or 3)
+  `late`: drawn after All, key **6**; L the Lance, Y the Sundering Ray, H the Dome, C Arrival City, O the Orbital Lift, N the Atmosphere Engine, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 3, 2, 4, 3, 4, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -2352,6 +2368,124 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`drawCableWreck`), sparking for `sparks` (60) s. Sound (`js/audio.js`): `liftHum` (the cable's held note, a whine
     while a climber moves), `liftclimb`, `liftland`, `liftgroan`, `liftsnap`, `liftimpact`. Its panel: `renderLiftSection`
     (the six lamps, Call down on Z X C V, Restock the Carrier).
+  - **The Deep Core** (`BDEFS.deepcore`, `DEEP`; key E (D pans); 60 Cement, 40 Alloy, 20 Chips, 10 Crystal; 300 s; 3 × 3;
+    armor 100; the owner's look A, the Headframe, and the sheet's numbers, Nov 21 2026). Opens `DEEP.at` (20 min) into a
+    free-play game (`deepOpen`; at once in a mission). `updateDeep`: power from a Nuclear Reactor within `reach` (4) tiles
+    (`deepReactor`; no Uranium used) or a Generator there with Fuel (`deepGen`): it takes a Fuel from it every `genFuel`
+    (60) s itself (`b.dcFuel`, `b.dcGen`; the Core isn't in the Generator's own reach list, and a Generator feeding one
+    runs for it: `deepFeeds` in `updateGenerator`); `b.dcSrc` says which. Without power (or cut by the Murmur, or turned off:
+    `pausable`, a raid already called still comes) nothing happens and `b.dcT` (seconds of depth) is kept. Powered it is `working`; above `weak` (half) of its armor `b.dcT`
+    grows; `deepStageAt` gives the stage from `stages` [0, 360, 960] (`b.dcStage`; `deepDeeper` on reaching one: told,
+    `logEvent` `deep`, `P.stats.deepStage`). It brings up `out[stage - 1]` a minute (6 Ore; 8 Ore, 3 Crystal; 10 Ore, 4
+    Crystal, 0.25 Uranium) times the colony's `mult`, half below `weak` (`deepRates`; no Crystal on Argos), into its own
+    stock (`b.dcAcc` the fractions; `def.out` 30 of each, Haulers take it as from any producer; full, that good waits),
+    counted in `P.stats.deepOre`, `deepCrystal`, `deepUranium`. The Murmur: at work it is `chargeWorth` 3 and adds to
+    `murmurPower` like a Generator. A stage reached with the Murmur on and a nest standing sets `b.dcCall` (the stage)
+    for night `b.dcCallN` (the next one): `deepWarn` tells its owner at dusk, and `deepCalls` (from `murmurTick`, 50 s into
+    that night) sends a pack for it (`raid` with `focus` the Core) of `call` (1.5) times the night's (`MURMUR` `pack`),
+    `hollow` (2) times that in the Hollow, from the exit nearest it; at stage 3 first `deepExit` opens a new exit within
+    `exitR` (8) tiles of it (open, reachable, `exitRoom`; for good, until collapsed) and `breakers` (2) Brutes more come
+    (`logEvent` `deepCall`); at dawn, still standing, `deepHeld` counts `P.stats.deepHeld`. Destroyed by force
+    (`destroyBuilding`), its stock is lost (no crates) and so is its depth; with the Murmur on, `deepShaft` puts a tunnel
+    exit (`burrow`, `e.shaft` its colony, the nearest nest's) on its middle tile, and that colony's Workers cap it by
+    themselves (the worker pass, `deepShaftsFor`, `assignCap`, task `capshaft`, `doCap`: `capCement` (4) Cement taken from
+    storage once, `e.capPaid`; `capT` (20) s of work, `e.capT`; `P.stats.shaftsCapped`), or warbots collapse it as any
+    exit. Saved with the building (`dcT`, `dcStage`, `dcAcc`, `dcSrc`, `dcFuel`, `dcGen`, `dcGenT`, `dcCall`, `dcCallN`,
+    `dcWarn`, `dcHeldN`; on a shaft `shaft`, `capper`, `capT`, `capPaid`); `hashState` covers them. Its panel (the dynamic
+    part of the building sheet): the gauge's three lamps and a bar to the next stage, what it brings up, its hoppers, its
+    power and the coming call. Art: `renderer/b/deepcore.js` (`tools/render_deepcore.sh`, `tools/install_deepcore.py`):
+    `deepcore@T` (the tower without its wheels) at every time of day, framed as the Lift (`DEEP_FRAME`), and the wheels
+    alone, `deepcore-work-0`…`7` (through 60 degrees, one set for every team), drawn over it by `drawDeep`: turning at 8
+    frames a second while it works, standing where they stopped when not (`DEEP_WHEEL`, looks only). In code
+    (`deepLights`, from `DEEP_MARKS`): the violet glow rising out of the shaft from stage 2, brighter and pulsing at stage
+    3, faint by day (`deepGlow`), the gauge's lamps (the next one blinking while it works toward it), the floodlit wheels at
+    night, and its light pools. Sound (`js/audio.js`): `deepHum` (its winding engine and drill on screen, sinking with each
+    stage; the wheels' clank) and `deepstage` (a stage reached). Rivals: `aiDeep` (outside `AI_MEGA_KIND`, so never under
+    the cap): any rival, from `DEEP.aiAt` (30 min), once it has dug Ore and none of its Ore Mines has any left in reach,
+    half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
+    a Generator then going up beside it; `aiMegaSpot`), the goods of both first; `aiDeepGuard` rallies up to 8 warbots by it before dusk on a call
+    night (`P.deepRally`, called back at dawn). The Salvager marches on a foe's stage-3 Core (`aiMarch`).
+  - **The Atmosphere Engine** (`BDEFS.atmos`, `ATMOS`; key N (A pans); 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20
+    Fiber; 360 s; 4 × 4; armor 100; the owner's look A, the Rain Tower, and the sheet's numbers, Nov 21 2026). Opens
+    `ATMOS.at` (20 min) into a free-play game (`atmosOpen`; at once in a mission); `worldBan` keeps it off Argos and out of
+    the Hollow. `updateAtmos`: power from `gens` (2) Generators with a whole Fuel within `reach` (4) tiles (`atmosGens`;
+    it takes a Fuel from each every `genFuel` (60) s itself, `b.aeFuel`, `b.aeGens`, `b.aeGenT`; it isn't in a
+    Generator's own reach list, and a Generator feeding it runs for it: `atmosFeeds` in `updateGenerator`), or a Nuclear
+    Reactor there with Uranium (`atmosReactor`; a Uranium every `uEvery` (360) s, an Enriched one for two: `b.aeU`,
+    `b.aeUr`); `atmosPower`, `b.aeSrc`. Unpowered (or cut by the Murmur) nothing grows. Powered, `b.aeT` (s of power,
+    times the colony's `mult`) gives the stage (`atmosStageAt` from `stages` [0, 360, 960, 1680]; `atmosStage` on
+    reaching one: told, `logEvent` `atmos`, `P.stats.atmosStage`, the `atmosstage` sound), and its change spreads out
+    from its middle at `spread` (0.25) tiles a second to `r` [8, 12, 16, 20] of its stage (`b.aeP`, `atmosReach`).
+    The land (`atmosTick`, once a second): `atmosPaint` marks every ground tile in its reach with the stage in `S.green`
+    (a sparse map, tile → 1 to 4, kept for good; not on burned soil, lava or the tide), and from Rain sets `S.fert`
+    (Bio Farms plant it like any fertile soil; the soil stays when the Engine goes). Green: crops on `S.green` ≥ 3 grow
+    `crop` (1.25) times as fast (`growStalks`) when the crop's holder (`soilHolder`) is the owner's or an ally's
+    (`atmosOwnAt`); every `wither` (60) s `atmosWither` takes the nearest tile of the Bloom in
+    its reach (a tunnel, `S.tun`, or a Bloom vein; `P.stats.atmosWither`). Garden: all of it at once, any tunnel exit
+    in it caves in, and every `seedEvery` (20) s `atmosSeed` puts a stalk grove on open Garden ground, `groves` (24) in
+    its reach at most (`P.stats.atmosGroves`). Its hold (`atmosHolds`, worked out once a tick; `atmosAt(x, y)` the
+    highest stage over a spot; each hold carries its owner `p` and `on`, its power): Calm, no dust storm for its owner
+    and allies (`evSpeed(x, y, p)` → `atmosOwnAt`, from `speedMul` and a ship's speed; with no `p`, anyone's); Rain, no
+    tunnel dug in (`murmurDig`); Garden, no exit opens (`atmosGardenAt` in `murmurOpenExit` and `deepExit`). Destroyed
+    or dismantled (`destroyBuilding` → `atmosGone`), `S.green` and the soil stay, and its hold goes into `S.aeFade`
+    ({ x, y, r, st, t0, p }), shrinking to nothing over `fade` (600) s. **The circle is its owner's:** from Rain a
+    foe's robots and vehicles in a standing Engine's circle move at `mud` (0.5) speed (`atmosMud` in `speedMul`; not
+    the Murmur, aircraft or ships; `atmosFoeAt`), and while it has power (`b.working`) a foe's Torches are rained out
+    there (`atmosRainAt`): `scorchTileWhy(t, by)` refuses the tile, and their flames leave no burns (`scarBurn`) or fire.
+    **Its Storm Front** (`STORM`): the order `atmosStorm` (`setAtmosStorm`; `atmosStormBlocked`: from Rain, with power,
+    on the map, `cd` (60) s after the last, the centre at least its stage's radius + `r` (5) from its middle, not inside
+    another standing Engine's reach) sets `b.aeStorm` ([i, j]) and `b.aeStormT`; `atmosStormOff` calls it off. It is up
+    while the Engine stands at Rain or later with power (`atmosStormOn`; listed in `atmosHolds` → `atmosStorms`), and
+    over a spot for a foe of its owner unless the spot is in any Engine's hold (`stormOver`, `stormOverB`): robots
+    `slow` (0.6, `atmosMud`), building sites `build` (0.6, `stormWork` in the builders' progress), guns `range` (0.75:
+    `auraRange` takes the rest off `def.range`, so every gun's reach and `gunReach` follow). From Green, `atmosDrought`
+    (from `atmosTick`) counts a foe's crops under it (holder by `soilHolder`) in `S.drought` (tile → s, rebuilt each
+    second: a crop out from under it starts again); `growStalks` skips them, and at `drought` (180) s they wither (the
+    soil stays; `P.stats.droughtCrops`). At the Garden every `boltEvery` (60) s of power (`b.aeBolt`) `stormBolt` picks
+    one of the foes' buildings under it with `hash2(b.id, b.aeBoltN, S.seed)` and takes `boltDmg` (0.15) of its armor,
+    never below `boltFloor` (0.3) (fx `stormbolt`, sound `stormbolt`, `P.stats.bolts`). Destroyed, `atmosGone` ends it
+    and tells the colonies under it. Saved in `aeStorm`, `aeStormT`, `aeBolt`, `aeBoltN` and `S.drought` (checked by
+    `checkSave`; a storm only on a Rain Engine, on the map) and hashed. Drawn by `drawAtmosStorms` (a dark cloud turning
+    over the spot from `wxCloud` billows, its shadow and dashed rim, rain under it; lit blue-grey at night; it rolls in
+    and breaks up over a few seconds) and, aiming, `drawStormAim`; the panel's **Storm Front** button (`sh-storm`, F)
+    aims it through `startAim` (anywhere: the Engine's kept-clear circle shown), **Call the storm off** (`sh-stormoff`,
+    C); a building of yours under a rival's storm says so on its panel. The Murmur: `chargeWorth` 6 and `murmurPower` +3
+    whether it works or not; `atmosLure` puts it first for a pack (`murmurPrey`, from `lure` (20) tiles further out, +40)
+    and for an Active strike (`murmurPlan`, +60, from further out); each stage from Rain, with the Murmur on and a nest
+    standing, sets `b.aeCall` for the next night (`b.aeCallN`): `atmosWarn` at dusk, and `atmosCalls` (from `murmurTick`,
+    50 s into the night) sends `sappers` [0, 1, 2, 2] Sappers from the exit nearest it to dig in under it (`raid`,
+    `role: 'sap'`; `logEvent` `atmosCall`). Burned soil (`scorchSoil`) loses its `S.green` (`P.stats.burnedGreen` for the
+    burner). Saved with the building (`aeT`, `aeStage`, `aeP`, `aeSrc`, `aeFuel`, `aeGens`, `aeGenT`, `aeU`, `aeUr`,
+    `aeWith`, `aeSeed`, `aeCall`, `aeCallN`, `aeWarn`) and in `S.green`, `S.aeFade` (checked by `checkSave`); `hashState`
+    covers them, and a mission's `greenPct`, `greenRun`. Its panel: four stage lamps and a bar to the next, its circle,
+    its power and the coming Sappers. Placing it shows the four circles and its Generators' reach. Art:
+    `renderer/b/atmos.js` (`tools/render_atmos.sh`, `tools/install_atmos.py`): `atmos@T` at every time of day, framed as
+    Arrival City (`ATMOS_FRAME`); in code (`drawAtmosPlumes`, from `ATMOS_MARKS`): the plume (puffs rising from the throat
+    and drifting east, thinner unpowered), at night lit cyan from the throat, the waist band's glow and the rim lamps'
+    blink, and from Rain a drizzle round it at night; its light pools. The changed land is drawn in the ground tiles
+    (`drawGreen`: Calm a little cleaner, Rain damp dark earth with sprouts, Green grass, Garden deep grass with flowers and
+    young trees). Wildlife (`js/wildlife.js`): a cell with a dozen Garden tiles gets deer and songbirds (`hab.garden`),
+    whatever its biome. Sound: `atmosHum` (the air through it on screen; rain from stage 2) and `atmosstage`. Rivals
+    (`aiAtmos`): the Steward's main project (`aiMegaMain` → 'atmos', `AI_MEGA_KIND` main) in place of Arrival City when
+    `aiAtmosHome` (The Rust or Cinderlands, or Planetary events on), from `ATMOS.aiAt` (21 min), with half its Cement and
+    Crystal and its Fiber in hand, near its Command Base, its 2 Generators going up beside it. The Herald (`aiAtmosBurn`):
+    every `burnEvery` (120) s, up to `burnN` (2) of its Torches with full tanks go to scorch the fertile ground nearest a
+    foe's Engine at Rain or more, where no gun of the foe's covers it (`P.stats.aeBurnSent`); rained out of a powered
+    Engine's circle they go for a Generator feeding it (or its Reactor) instead (`P.stats.aeCutSent`). Any rival with
+    an Engine at Rain and power sets its Storm Front (`aiAtmosStorm`, every `AI_STORM.think` (20) s, `aiStormSpot`,
+    `aiStormScore`): a warlike one (Herald, Salvager, Warden, or any at Warlord) over the foe's guns when its next attack
+    is within `AI_STORM.soon` (75) s, the Steward and the Architect over the foe's farms and crops, otherwise over the
+    foe's base; it moves the storm only to a clearly better spot (`P.stormWant`). The rival AI's building
+    spots no longer keep Engine-made soil free for farms. Missions: *Rain* (Growing the Colony), *Seed Vault* and
+    *Under the Bloom* (First Contact), *Landing Zone* and *Overcast* (War); helpers `aeOwn`, `aeFarms`, `aeKit`, `AE_BUILT`,
+    `aeStageGoal`, `aeOpenNear`; a mission's `greenWant` makes `atmosTick` count the greened share of the land
+    (`atmosGreened`: stage 3 or more) in `S.mission.greenPct` and the seconds it has held (`greenRun`); Seed Vault's
+    hull (`S.mission.hullX`, `hullY`) is drawn by `drawPathfinderHull`, its seed stock four crates of Fiber that never rot.
+    *Overcast* (after Landing Zone): a Steward on The Rust with its Engine already at Rain (Green from Colonist) behind
+    its base (`ocEngine`), its 2 Generators full and a Tanker, its storm over your Command Base; goals: break it
+    (`stormBrokenFor(0)`: no foe Engine standing, or your own Engine's circle over your Command Base), hold the sky
+    3, 4 or 5 minutes (`S.mission.stormCalm` makes `atmosTick` count `calmRun`, hashed and checked), and send a Storm
+    Front of your own (`P.stats.storms`).
   - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 200 s; 3 × 3; armor 120;
     the owner's look A, the Dish Array, Nov 2026). Only in a game with the **Great Uplink win** on (`gupWinOn`:
     `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu
@@ -2383,9 +2517,57 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     out from it. Sound (`js/audio.js`): `gupbegin` (heard by all), `guppulse` (its slow pulse, with it on screen), in the
     last `echo` (20) s with the Murmur in the game `gupecho` (the ground repeating it back), and at contact `gupSilence`:
     the music falls silent, then one answering tone (`gupanswer`).
+  - **The Sundering Ray** (`BDEFS.sunder`, `SUNDER`; key Y, short name Ray; 50 Cement, 30 Alloy, 12 Chips, 8 Crystal;
+    240 s; 3 × 3; armor 90; from `SUNDER.at`, 18 minutes, at once in a mission, `sunderOpen`; everywhere, the Hollow
+    too). The owner's look B from the design sheet (the Piston Battery; drawn on the sheet as the Seismic Lance, renamed
+    Nov 21 2026) as the owner's plan in IDEAS.md has it: a phased array, three hydraulic rams in a concrete block round a
+    bore tower over a shot hole, and six ram plates in the ground. Its panel's **Strike the Deep** (F) and **Quake** (Q),
+    then a tap (the `sunderAim` order with the blow, `setSunderAim`; `sunderStop` stands it down, the blow lost;
+    `sunderReactor` its Use Reactor switch, `b.sUseR`). It winds up `charge` (60) s on `gens` (2) Generators with Fuel
+    within `reach` (4) tiles, burning a Fuel every `genFuel` (30) s each, or `reactorCharge` (40) s on a Reactor with
+    `uranium` (1) Uranium or an Enriched Uranium, taken as it starts (`sunderPower`, `sunderReactor`, `sunderTime`); lose
+    the power and the blow is lost (`sunderStillPowered`). Then `reload` (300) s, `reactorReload` (240) on a Reactor.
+    State on the building: `sMode` ('deep' or 'quake'), `sAim`, `sOn`, `sCharge`, `sTime`, `sSrc`, `sReactor`, `sReload`,
+    `sShot`, `sLure`. A Quake's aim is fixed for the last `warn` (20) s, when its ring shows for everyone
+    (`sunderLocked`); a Quake reaches `range` (30) tiles from the middle of the square, Strike the Deep anywhere but only
+    with the Murmur on (`sunderDeepOn`: greyed out on Argos). The blow is a ripple (`sunderFire`, S.sunders: `{ id, o,
+    b, m, x0, y0, x1, y1, t, at, f, done }`) running `speed` (10) tiles a second, between `travelMin` (1.5) and
+    `travelMax` (6) s on the way, caving in the tunnels a tile either side of its path as it goes
+    (`updateSunderWaves`), and landing at `at` (`sunderLand`): every tunnel in its circle caves in (`sunderCave`; the
+    nests' own tiles stay, `sunderRoot`), every exit in it collapses. **Strike the Deep** (`deep`, 16 tiles): the circle
+    is sealed (`S.mur.seal`, `{ x, y, r, n }`, through night n + `sealNights` (2): `sunderSealed` in `murmurOpenExit`),
+    every nest in it loses `nestHit` (a third) of its full armor, never below 1, and sends no raid the next night
+    (`b.sQuiet`, skipped by `murmurWave` and `murmurCraftWave`), a Sapper underground in it dies. **Quake** (`quake`, 5
+    tiles): every colony building in it (whosever; not on a Trade Post's ground) loses `dmg` (40%) of its full armor,
+    never below `floor` (10%) of it (a Command Base or Keep `baseDmg`, 20%), and its foundations crack (`b.crack`: it
+    works at `crackWork` (half) speed, in `produce` and the gatherers, until repaired to full; a Wall or Gate takes
+    `wallTakes` (2) times the damage, `hitBuilding`); roads and track crack (`S.crk`, a sparse layer like War scars',
+    `S.crkN` of them: robots on them at `crackSpeed`, half, `sunderPace` in `speedMul`) until a Worker mends them (the
+    dispatcher's step 1c, `sunderMendSpots`, the `mend` task, `doMend`: `mend` (4) s a 3 × 3 patch); robots there are
+    stunned `stun` (4) s (`u.stunT`: no moving, no firing), unhurt; aircraft untouched. Nothing calls `domeCatch`: a Shield
+    Dome doesn't stop it. In the Hollow each blow brings `rocks` (3) rocks down from the roof inside its circle (the
+    tremors' `S.tremor.rock`, a few seconds on). Winding up draws the Murmur like the Lance's charge (`chargeWorth`,
+    `murmurPower`); after a blow `b.sLure` is the next night, when every nest within `lure` (40) tiles sends its packs at
+    it first (`sunderLure`), `packMul` (1.5) times bigger on Active, as ever on Quiet (`sunderPack`), and its owner is told
+    at nightfall. Saved and in `hashState`; `checkSave` checks it all; an older save has none. The art
+    (`renderer/b/sunder.js`, `tools/render_sunder.sh`, `tools/install_sunder.py`): the pad and block with the bore tower
+    (`sunder@T`), two construction stages (`sunder-site1@T`, `sunder-site2@T`: the footing and shot-hole rig, then the
+    block cast and the tower in scaffolding, `drawSunderSite`), and its moving parts each on the same frame
+    (`SUNDER_FRAME`): the rams at three heights (`sunder-ram-w|e-0..2`) and the plates seated or raised
+    (`sunder-plate-K-0|1`). In code (`js/render.js`, the Sundering Ray, from `SUNDER_MARKS`): winding up, the rams pump
+    in turn and the plates drum down the row, faster as it nears the blow (`sunderAnim`, `sunderPhase`), dust off the
+    plates, the shot hole glowing, the stacks breathing orange smoke; the blow's flash and the plates slamming in a
+    ripple, the far side from the aim first (`sunderOrder`); the ripple's bulge running through the ground with dust and
+    a line of cracks behind it, the heave on landing, the cracks spreading through the circle and fading over `scar`
+    (300) s (`drawSunderGround`), cracked roads, the Quake's ring (for everyone in its last 20 s; its own side sees the
+    aim all the way), cracks on cracked buildings and sparks round stunned robots (`drawSunderAir`); aiming draws the
+    circle, a Quake's reach and the tunnels it would cave in (`drawSunderAim`). Sound (`js/audio.js`): `sundercharge`,
+    `sunderthud` at every stroke of its rams (heard by everyone, in time with them), `sunderfire`, `sunderquake`.
+    Flavor: "Piling rig for the arrival district’s foundations. Something under the district keeps time with it."
+    Mission: First Contact's *Something Keeps Time*.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
-    one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
-    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or
+    one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
+    Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or
     from 18 minutes (`aiMissileFirst`), and the Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 19 min; none for the
     Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (15 min)
     once it has a Bot Foundry and half its Cement and Crystal (`aiLiftFunds`), with its line over the fewest of its own
@@ -2423,7 +2605,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     goes within reach of its Reactor, on the enemy's side of it so its own buildings stay off its lines (`aiMegaSpot`;
     with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
     (`aiLanceWorth`: its foes' buildings and army in the core, 0.3 of that for those only in the scorched edge, its own side's six times over, 5 for dropping a foe's Dome), if worth
-    `worth` (6). From `domeAt`
+    `worth` (6). The Sundering Ray (`aiSunder`, `AI_SUNDER`, kind 'weapon' in `AI_MEGA_KIND`): a Warden picks it as its
+    one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min) when the Murmur are Active and a
+    nest's tunnels reach within `near` (12) tiles of its Command Base (`aiTunnelNear`); it goes up near home
+    (`aiMegaSpot`, its goods first) with its 2 Generators going down with the site (again as any is lost), Use Reactor
+    off. By day, after a night the Murmur raided it (or with their tunnels that close, or every `every` (2) nights while
+    that nest is within 40 tiles of home: `P.sunderNight`), it strikes the deep over the nest closest to home; the night after a blow it keeps `guard` (6) warbots at the Ray (a rally); any rival with a Ray Quakes the spot
+    worth the most within reach (`aiQuakeSpot`: a foe's buildings, defences and roads in the circle, its own side's
+    taken off, at least `worth` 5) when its next attack is due within the wind-up, so its army arrives while the Walls
+    are cracked. From `domeAt`
     (17 min), or at once against a Lance going up, a rival threatened from afar (a Lance, a Missile or Nuclear Silo, an
     Airfield or bombers) puts up a Shield Dome by a Generator nearest its Command Base (a Generator first if it has none),
     once it has half of either one's cost in hand (`aiHalfway`: the site fills as the rest comes in, and is never given
@@ -2576,7 +2766,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
   always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
-  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer.
+  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer. Settings
+  also has **Menu background** (Classic / Planet: see The main menu under Looks). **From the main menu**: the
+  **Settings** pill (`#m-settings`, a gear, among Records, Observer, Lore and Feedback) opens the same view on its own
+  over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
+  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the pill.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -2816,7 +3010,7 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts (off for now: the owner, Nov 21 2026),
   plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
   `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
-  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
+  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead (bowed, its middle leading, as on a round world: `D.lineAt`, `duskNightPath`), and the
   Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
   it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
   `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
@@ -2938,7 +3132,13 @@ clouds' drift (`natureCloudTime`).
 - **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
   beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
   `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
-  turning as it goes; its face is a coral world from a fixed seed (`mplMakeMap`, a few rows a frame at launch), shaded per
+  turning west to east as it goes (the land moves to the right); its face is the atlas (LORE.md: The atlas):
+  `art/lore/ithaca-map.webp`, the atlas made small by `tools/atlas/atlas.py` (`menu_map`: 512×256, no labels or borders,
+  the regions' colours blended at their seams, the ringfall belt's craters), its alpha the colonies' night lights (towns
+  along the coasts and in the territories' hearts; `mplAtlas` reads it; inline as `window.ITHACA_MAP` in the one-file
+  build). The clouds are made from a fixed seed (`mplMakeMap`, a few rows a frame at launch), and so is a face of its own
+  (the old coral patchwork) until the picture comes, at most `MPLANET.atlasWait` seconds, or if it can't be had (a page
+  opened from a file, whose canvas can't be read). It is shaded per
   pixel in a small image from its normals (`mplShade`, with Argos's shadow where the line from Argos away from the star
   meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
   vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
@@ -2950,7 +3150,10 @@ clouds' drift (`natureCloudTime`).
   every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
   (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
   background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
-  `drawNeeded`).
+  `drawNeeded`). Only with **Menu background** on **Planet** (`menuBg` / `setMenuBg`, kept on the device as
+  `terrafall.menubg`): on **Classic**, the default, the menu shows the demo game through its dimmed gradient as before
+  Nov 21 2026, and the canvas and map aren't even made (`mplMake` runs the first time Planet is wanted); switching to
+  Classic stops the frames (`cancelAnimationFrame`) and hides the canvas at once.
 
 ### Cloud shadows, remains and beacons
 
@@ -3118,7 +3321,9 @@ js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
 js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
-art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
+art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
+                          face (ithaca-map.webp, the atlas made small)
+tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,

@@ -61,7 +61,10 @@ function musicLevel() { return AUDIO.music * MUSIC_LEVEL * ((typeof MUSIC !== 'u
 
 /** Browsers only start audio from a tap or key press: called on the first one (and on Start). */
 function audioUnlock() {
-  if (AUDIO.ctx) { if (AUDIO.ctx.state === 'suspended' && !document.hidden) AUDIO.ctx.resume(); return; }
+  // A context can be 'suspended', or 'interrupted' (Safari, after a call, Siri or another app took the sound), and
+  // only a tap brings it back; one the browser 'closed' is built afresh.
+  if (AUDIO.ctx && AUDIO.ctx.state === 'closed') { AUDIO.ctx = null; if (typeof MUSIC !== 'undefined' && MUSIC.timer) { clearInterval(MUSIC.timer); MUSIC.timer = 0; } }
+  if (AUDIO.ctx) { if (AUDIO.ctx.state !== 'running' && !document.hidden) { const r = AUDIO.ctx.resume(); if (r && r.catch) r.catch(() => {}); } return; }
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -79,8 +82,13 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   // Nothing plays while the game is in the background.
   document.addEventListener('visibilitychange', () => {
     if (!AUDIO.ctx) return;
-    if (document.hidden) AUDIO.ctx.suspend(); else AUDIO.ctx.resume();
+    const r = document.hidden ? AUDIO.ctx.suspend() : AUDIO.ctx.resume();
+    if (r && r.catch) r.catch(() => {});
   });
+  // Back from the app switcher (pageshow) or a window regaining focus: try again (a tap does it if this can't).
+  const back = () => { if (AUDIO.ctx && AUDIO.ctx.state !== 'running' && AUDIO.ctx.state !== 'closed' && !document.hidden) { const r = AUDIO.ctx.resume(); if (r && r.catch) r.catch(() => {}); } };
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', back);
 }
 
 /*
@@ -242,6 +250,8 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
+  sundercharge: 2, sunderthud: 0.12, sunderfire: 1, sunderquake: 0.8,
+  deepstage: 3, atmosstage: 4, stormbolt: 1,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -261,6 +271,10 @@ const BLAST_SIZE = {
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
   citychime: 1.6, cityclock: 0.5, // (Arrival City's tram-stop chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
+  sundercharge: 3, sunderthud: 2.6, sunderfire: 3, sunderquake: 2.4, // (the Sundering Ray's thudding is heard by everyone, as the Lance's charge; its blow landing far off)
+  deepstage: 1.8, // (a Deep Core reaching a new depth: heard off screen, near by)
+  atmosstage: 1.8, // (an Atmosphere Engine reaching a new stage: heard off screen, near by)
+  stormbolt: 1.6, // (lightning out of a Storm Front: a crack and a roll, heard off screen near by)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
@@ -885,6 +899,36 @@ function sfx(name, dest, y, dur) {
       blast(D, { size: 2.2, far: Math.min(far, 0.4), gain: 0.7, delay: 0.05, deep: true });
       duckMusic(0.3, 3);
       break;
+    // The Sundering Ray starts its wind-up: the hydraulic pumps kicking in, a hiss of pressure building in the lines.
+    case 'sundercharge':
+      _noise(0.14, 0.12, { type: 'lowpass', freq: 380, dest: D }); _tone(55, 0.5, 'square', 0.03, 38, 0, D);
+      _noise(1.8, 0.05, { type: 'bandpass', freq: 1800, to: 3400, q: 2, attack: 0.2, delay: 0.2, dest: D });
+      _tone(48, 2.2, 'sawtooth', 0.025, 70, 0.3, D);
+      break;
+    // One stroke of a great ram: a deep, heavy thud through the ground, a clank of steel on its seat, a short gasp of hydraulics.
+    case 'sunderthud':
+      _tone(52, 0.38, 'sine', 0.22, 30, 0, D); _tone(104, 0.12, 'triangle', 0.06, 50, 0, D);
+      _noise(0.16, 0.12, { type: 'lowpass', freq: 260, to: 90, attack: 0.003, dest: D });
+      _noise(0.06, 0.03, { type: 'bandpass', freq: 1600, q: 3, attack: 0.001, delay: 0.01, dest: D });
+      _noise(0.22, 0.025, { type: 'highpass', freq: 2600, attack: 0.02, delay: 0.12, dest: D });
+      break;
+    // The blow: the bore charge going off under the tower, the six plates slamming in a rolling ripple, a long low shudder.
+    case 'sunderfire':
+      _noise(0.1, 0.35, { type: 'lowpass', freq: 900, to: 200, attack: 0.002, dest: D });
+      _tone(38, 1.8, 'sine', 0.32, 22, 0, D);
+      for (let k = 0; k < 6; k++) { _tone(60 - k * 2, 0.22, 'sine', 0.16, 34, 0.1 + k * 0.07, D); _noise(0.08, 0.06, { type: 'lowpass', freq: 320, delay: 0.1 + k * 0.07, dest: D }); }
+      _noise(2.6, 0.14, { type: 'lowpass', freq: 160, to: 50, attack: 0.3, delay: 0.3, dest: D });
+      blast(D, { size: 1.8, far: Math.min(far, 0.5), gain: 0.55, delay: 0.02, deep: true });
+      duckMusic(0.4, 2.5);
+      break;
+    // The ripple lands: the quake's rumble rolling up out of the ground, stone cracking, rubble settling.
+    case 'sunderquake':
+      _noise(3.2, 0.3, { type: 'lowpass', freq: 140, to: 40, attack: 0.25, dest: D });
+      _tone(31, 2.8, 'sine', 0.28, 24, 0, D); _tone(46, 2.2, 'triangle', 0.08, 30, 0.1, D);
+      for (let k = 0; k < 7; k++) _noise(0.05, 0.06, { type: 'bandpass', freq: 900 + Math.random() * 1600, q: 2, attack: 0.001, delay: 0.15 + Math.random() * 1.6, dest: D });
+      _noise(1.4, 0.06, { type: 'bandpass', freq: 500, to: 220, q: 0.8, attack: 0.1, delay: 1.2, dest: D });
+      duckMusic(0.5, 2.5);
+      break;
     // Something strikes a Shield Dome: a low resonant thrum through the field, and a glassy shimmer on top.
     case 'domehit': {
       const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
@@ -906,6 +950,28 @@ function sfx(name, dest, y, dur) {
     // Arrival City changing hands, or lit again: the recorded tram-stop chime, four soft bell notes rising, for no one.
     case 'citychime':
       for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
+      break;
+    // A Deep Core reaching a new depth: the drill breaking through, a deep thud and a long falling rumble, and under it a
+    // low note from further down that holds a moment longer than it should.
+    case 'deepstage':
+      _tone(55, 0.7, 'sine', 0.16, 34, 0, D);
+      _noise(1.6, 0.09, { type: 'lowpass', freq: 260, delay: 0.05, dest: D });
+      _tone(41.2, 3.2, 'triangle', 0.035, 38, 0.6, D);
+      _tone(82.4 * 1.004, 2.6, 'sine', 0.012, 79, 0.9, D);
+      break;
+    // An Atmosphere Engine reaching a new stage: a long breath of air through its fans, a soft rising open fifth over
+    // it, and the patter of the first rain.
+    // Lightning out of a Storm Front striking a building: a sharp crack right on top of it, then the thunder's long roll.
+    case 'stormbolt':
+      _noise(0.12, 0.16, { type: 'highpass', freq: 1400, delay: 0, dest: D });
+      _noise(0.35, 0.12, { type: 'lowpass', freq: 2200, to: 600, attack: 0.005, delay: 0.02, dest: D });
+      _noise(3.2, 0.09, { type: 'lowpass', freq: 300, to: 60, attack: 0.25, delay: 0.15, dest: D });
+      _noise(2.2, 0.05, { type: 'lowpass', freq: 170, to: 50, attack: 0.4, delay: 0.9, dest: D });
+      break;
+    case 'atmosstage':
+      _noise(2.6, 0.05, { type: 'bandpass', freq: 520, delay: 0, dest: D });
+      for (const [f, dl] of [[196, 0.2], [293.7, 0.6], [392, 1.0]]) { _tone(f, 2.4, 'sine', 0.03, f * 1.002, dl, D); _tone(f * 2.003, 1.6, 'sine', 0.008, null, dl + 0.05, D); }
+      _noise(2.2, 0.025, { type: 'highpass', freq: 2600, delay: 1.1, dest: D });
       break;
     // An Orbital Lift's climber setting off: a rising electric whine, and the clack of its clamps passing the first joints.
     case 'liftclimb':
@@ -1074,6 +1140,70 @@ function liftHum(k, w) {
   LIFTHUM.o.g.gain.setTargetAtTime(0.03 * k, t, 0.8);
   LIFTHUM.o.gw.gain.setTargetAtTime(0.05 * (w || 0), t, 0.4);
   LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
+}
+
+/*
+ * A Deep Core at work on screen: its winding engine and the drill far down the shaft. A low drone that sinks with each
+ * stage (the shaft deeper), a grinding band of noise, and the winding wheels' slow clank (a pulse on the noise) as the
+ * ropes run (k 0..1 by how near the middle of the screen it is; 0 stops it). On the ambience volume, like the Lift's.
+ */
+const DEEPHUM = { o: null };
+function deepHum(k, stage) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (DEEPHUM.o) { const t = ac.currentTime, h = DEEPHUM.o; DEEPHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.n.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!DEEPHUM.o) {
+    const a = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter(), bp = ac.createBiquadFilter(), gn = ac.createGain(), ga = ac.createGain();
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; n.loop = true;
+    a.type = 'sawtooth'; a.frequency.value = 49; lp.type = 'lowpass'; lp.frequency.value = 260;
+    bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = 2.2;
+    // the wheels' clank: a slow square pulse swinging the grinding band's level
+    const l = ac.createOscillator(), lg = ac.createGain(); l.type = 'square'; l.frequency.value = 1.4; lg.gain.value = 0.35; gn.gain.value = 0.45;
+    l.connect(lg).connect(gn.gain);
+    ga.gain.value = 0.5;
+    a.connect(ga).connect(lp); n.connect(bp).connect(gn).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); n.start(); l.start();
+    DEEPHUM.o = { a, n, l, g };
+  }
+  const t = ac.currentTime;
+  DEEPHUM.o.g.gain.setTargetAtTime(0.045 * k, t, 0.8);
+  DEEPHUM.o.a.frequency.setTargetAtTime([49, 43.6, 36.7][Math.max(0, Math.min(2, (stage || 1) - 1))], t, 2);
+}
+
+/*
+ * An Atmosphere Engine at work on screen: the rush of air up its shell, a soft roar of its intake fans (a slow swell in
+ * it), and from Rain on a hiss of rain round it (k 0..1 by how near the middle of the screen it is; 0 stops it).
+ */
+const AEHUM = { o: null };
+function atmosHum(k, stage) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (AEHUM.o) { const t = ac.currentTime, h = AEHUM.o; AEHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.n.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!AEHUM.o) {
+    const g = ac.createGain(), lp = ac.createBiquadFilter(), hp = ac.createBiquadFilter(), gr = ac.createGain(), ga = ac.createGain();
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; n.loop = true;
+    lp.type = 'lowpass'; lp.frequency.value = 420; hp.type = 'highpass'; hp.frequency.value = 3200;
+    const l = ac.createOscillator(), lg = ac.createGain(); l.type = 'sine'; l.frequency.value = 0.18; lg.gain.value = 0.25; ga.gain.value = 0.75;
+    l.connect(lg).connect(ga.gain);
+    n.connect(lp).connect(ga).connect(g); n.connect(hp).connect(gr).connect(g); gr.gain.value = 0;
+    g.connect(AUDIO.natureBus); g.gain.value = 0.0001;
+    n.start(); l.start();
+    AEHUM.o = { n, l, g, gr };
+  }
+  const t = ac.currentTime;
+  AEHUM.o.g.gain.setTargetAtTime(0.05 * k, t, 0.8);
+  AEHUM.o.gr.gain.setTargetAtTime((stage || 1) >= 2 ? 0.18 : 0, t, 2);
 }
 
 /*
@@ -1257,6 +1387,17 @@ function audioTick(dt) {
   // Paused: the music sounds far away.
   const muffle = !!(inGame && UI.paused);
   if (muffle !== WORLD.muffled) { WORLD.muffled = muffle; AUDIO.musicLP.frequency.setTargetAtTime(muffle ? 900 : 18000, ac.currentTime, 0.25); }
+  // A Sundering Ray winding up anywhere: a deep thud at every stroke of its rams, in time with them (sunderPhase).
+  if (inGame && !UI.paused && S.winner < 0) {
+    const was = WORLD.sray && WORLD.sray.of === S ? WORLD.sray : { of: S }, now = { of: S };
+    for (const b of S.buildings) {
+      if (b.dead || !b.sOn || !BDEFS[b.type].sunder) continue;
+      const k = Math.floor(sunderPhase(b) * 2);
+      if (was[b.id] !== undefined && k !== was[b.id]) { const c = bCentre(b); sfx('sunderthud', c.x, c.y); }
+      now[b.id] = k;
+    }
+    WORLD.sray = now;
+  }
   WORLD.bt = (WORLD.bt || 0) - dt;
   if (WORLD.bt <= 0) {
     const live = !!(inGame && !UI.paused && S.winner < 0);
@@ -1286,6 +1427,26 @@ function audioTick(dt) {
       if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
     }
     liftHum(lk, lw);
+    // A Deep Core at work on screen: its winding engine and drill, deeper with each stage.
+    let dk = 0, ds = 1;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !b.working || !BDEFS[b.type].deepcore) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -120 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > dk) { dk = k; ds = b.dcStage || 1; }
+    }
+    deepHum(dk, ds);
+    // An Atmosphere Engine at work on screen: the air through it, and its rain from stage 2.
+    let ak = 0, as = 1;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !b.working || b.type !== 'atmos') continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -120 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > ak) { ak = k; as = b.aeStage || 1; }
+    }
+    atmosHum(ak, as);
     // Burning oil on screen (js/warfx.js): its roar, from the loudest well, a little more with more of them.
     let ok = 0, op = 0, on = 0;
     if (live && typeof R !== 'undefined' && R.wfx && R.wfx.of === S && R.wfx.oil && R.wfx.oil.length) for (const e of R.wfx.oil) {

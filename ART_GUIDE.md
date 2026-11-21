@@ -1481,11 +1481,13 @@ slow, tell Claude Code: each effect's length is one number in the code.
 
 The main menu's Lore guide (`#screen-lore` in `index.html`) shows a few pictures of its own. They are plain `<img>`
 tags (with `data-src`, loaded when the guide first opens), not manifest keys: to change one, replace the file at the
-same size, or point the tag at a new one. Keep them small (WebP; the whole set is under 400 KB).
+same size, or point the tag at a new one. Keep them small (WebP; the atlas, the largest, is about 250 KB).
 
 | File | Size | What, and how it was made |
 |---|---|---|
 | `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
+| `lore/atlas.webp` | 2400×1620 | The atlas of Ithaca I (LORE.md: The atlas, approved by the owner): every region, territory, sea and named place, the ringfall belt, Argos in the corner. Made by `tools/atlas/atlas.py` (writes `tools/atlas/out/ithaca-atlas.png`, then WebP); shown on the guide's The atlas page, a tap enlarging it. `lore/atlas-globe.webp` (1760×680): three views of the globe from it (`tools/atlas/globe.py`). |
+| `lore/ithaca-map.webp` | 512×256 | Not in the guide: the menu planet's face (`js/menuplanet.js`), the atlas made small, equirectangular (longitude −180° at the left edge), with no labels or borders, the regions blended at their seams and the craters drawn twice as wide. Its alpha holds the night lights (255 none, 254–225 ever brighter). Written by `tools/atlas/atlas.py` itself (`menu_map`), about 15 KB; inline in the one-file build (`window.ITHACA_MAP`). |
 | `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
 | `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Sapper at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
 
@@ -1727,6 +1729,45 @@ their square on the frame's anchor.
 | (code) | The Lance's charge, beam and cut | `drawLanceCharge`: the eight rings light one by one, orange to gold, as the charge climbs (the leading one pulsing), all white-hot when full, the lens gathering light (marks for each way in `LANCE_ART`, from the install); `drawLanceBeams`: for 2½ s a white-hot core in orange and red glow from the muzzle across the map, flickering flares along it, the light it throws on the ground, and at night a warm flash over the whole screen; `drawCuts`: the trench for good (a scorched band, a charred furrow, glassy flecks), glowing white, then orange, then dull red as it cools over 45 s, with steam rising off water it crossed for 40 s |
 | (code) | The dome | `drawDomes`: the dome's outline (the front half of its ground circle, an ellipse over it), faintly filled pale blue, brighter at the rim; a lattice of hexagon panels on its surface with a shimmer drifting over it; panels flashing and a ring spreading where something hits; flickering when weak, breaking up as it drops; a soft blue light under it at night |
 
+### Batch 30: the Atmosphere Engine (installed)
+
+The owner's look **A** from the megastructure design sheet (Nov 21 2026), the "Rain Tower". Rendered with
+`renderer/b/atmos.js` at every time of day for both teams by `renderer/tools/render_atmos.sh`;
+`renderer/tools/install_atmos.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Atmosphere
+Engine"). Framed like Arrival City (`ATMOS_FRAME`), the biggest of the megastructures: the shell rises about two tiles
+over its square on screen, and the plume twice that again. The plume is the whole idea, so it is drawn in code and moves.
+Flavor: "Scheduled in the Pathfinder's plan for T−10. Started late. Running to plan."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `atmos@0`, `atmos@1` (+ morning, evening, night) | A 4 × 4 hazard-edged concrete pad; one great concrete cooling-tower shell (a hyperboloid, wider at the foot, pour lines and rain streaks) on a ring of raking X-braced columns with the dark air intake between them; a blue-grey waist band (lit cyan at night) over a thin team stripe; the dark throat with a rim walkway and two red lamps; six intake fan drums with grilles and pipes to the shell; a low control house at the front left (team band, lit windows at night); a fuel line, a power cabinet, crates and two light masts | `renderer/b/atmos.js` |
+| (code) | The plume | `drawAtmosPlumes` (`ATMOS_MARKS.throat`): a dozen soft white puffs rising out of the throat, swelling and drifting east, graded for the time of day; thinner and slower while it has no power |
+| (code) | Night | pale cyan light from inside the throat up the plume, the waist band's glow (`bandL`, `bandR`, `band`), the rim lamps blinking (`rimL`, `rimR`); dark when the Murmur cut it |
+| (code) | Rain | from stage 2, a drizzle at night within about 7 tiles of the tower |
+| (code) | The changed land | `drawGreen`, in the ground tiles: Calm a little cleaner, Rain damp dark earth with sprouts, Green grass, Garden deep grass with flowers and young trees |
+| (code) | The Storm Front | `drawAtmosStorms`: over the storm's spot, three spiral arms of heaped billows (from `wxCloud`: a dark underside, a slate body, paler tops; blue-grey and dimmer at night) wound round a dense heart and turning slowly, their shadow on the ground, a dashed rim at its 5-tile edge, rain streaks falling all over it; it rolls in over 3 s and breaks up over 2; at the Garden a flash in the cloud now and then. Aiming: `drawStormAim` (the Engine's kept-clear circle in green, the storm's circle at the pointer) |
+| (code) | Lightning | fx `stormbolt`: a jagged white-blue bolt from high above down to the building (`boltPath`, a branch), flickering twice, and a white-blue flash where it lands |
+| (code) | Seed Vault's hull | `drawPathfinderHull`: a long white lander hull half-buried in drift sand, its Accord stripe faded, the vault hatch open |
+
+### Batch 29: the Deep Core (installed)
+
+The owner's look **A** from the megastructure design sheet (Nov 21 2026), the "Headframe". Rendered with
+`renderer/b/deepcore.js` at every time of day for both teams by `renderer/tools/render_deepcore.sh`;
+`renderer/tools/install_deepcore.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Deep Core").
+Framed like the Lift (`DEEP_FRAME`), sized to stand with the other 3 × 3 megastructures: its tower is the tallest thing
+on the pad, as tall on screen as the Lift's cable stub and twice the Uplink's dish. What moves and what tells its depth
+is drawn in code, so it reads at any zoom. Flavor: "Core sample rig, rated to 40 kilometres. The survey filed the lower
+readings as instrument error."
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `deepcore@0`, `deepcore@1` (+ morning, evening, night) | A 3 × 3 hazard-edged concrete pad; a raised concrete shaft collar with a hazard-ringed dark square shaft and its cage guides; a red steel lattice winding tower (four legs braced in X's) rising to a sheave deck with a team-colour fascia and a railing, two raking back legs down to the winding house; floodlights on the deck aimed at the wheels (white at dusk and night) and a red beacon; the ropes from the wheels into the shaft and to the winding house, a long white shed with a hipped roof, a team band under its eaves, a lit window band at night; a skip bin on the tower and a covered conveyor down to three hoppers (rust ORE, violet CRY, green U, labelled, team-colour rims) with chutes where Haulers load; the depth gauge, a grey cabinet with three dark lamp sockets; a spoil heap of broken rock in the north-west corner; a fuel line and crates. No wheels: the game draws them | `drawDeep` |
+| `deepcore-work-0`…`deepcore-work-7` (day only, graded for the time of day; no team colour, one set for every team) | The two spoked red winding wheels alone (six spokes, a pale tab on the rim so the turning reads), frame k turned k/8 of 60 degrees, the left one way and the right the other; every other surface depth only | `drawDeep`: 8 frames a second while it works, held where they stopped when it doesn't (`DEEP_WHEEL`) |
+| (code) | The shaft's glow | `deepLights` (`DEEP_MARKS.shaft`): from stage 2 a violet pool in the shaft's mouth and a column of violet light rising out of it, pulsing slowly; at stage 3 bigger, brighter and quicker; faint by day, full at night (`deepGlow`); its light pool on the ground at night too |
+| (code) | The gauge | three violet lamps at `DEEP_MARKS.g1`…`g3`, one lit per stage, the next blinking while it works toward it |
+| (code) | Floodlit wheels | soft white light over `wheelL` and `wheelR` at dusk and night (dark when the Murmur cut it) |
+| (code) | Under construction | the generic megastructure site (`drawMegaSite`): the tower rising out of its dashed footprint as the work goes on |
+
 ### Batch 28: the Great Uplink (installed)
 
 The owner's look **A** from the design sheet (Nov 20 2026), the "Dish Array". Rendered with `renderer/b/gup.js` at every
@@ -1745,6 +1786,28 @@ Transmitting on all channels. Listening on all channels."
 | (code) | Jammed | the glow and the beam turned red, flickering a dozen times a second, the beam jittering and its pulse broken into pieces; no ring |
 | (code) | No power | the glow down to a slow red blink, no beam |
 | (code) | Minimap | rings in its owner's colour pulsing out from it while it transmits, red while it stalls |
+
+### Batch 28: the Sundering Ray (installed)
+
+The owner's look **B** from the design sheet (Nov 21 2026), the "Piston Battery" (drawn on the sheet as the Seismic
+Lance; renamed the Sundering Ray), with the owner's plan for how it works (IDEAS.md): a phased array of hydraulic rams
+round a bore tower. Rendered with `renderer/b/sunder.js` at every time of day by `renderer/tools/render_sunder.sh`;
+`renderer/tools/install_sunder.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Sundering
+Ray"). Framed like the Lance (`SUNDER_FRAME`). The parts that move are each their own image on the same frame, so the
+game pumps them; the glow, smoke, dust, the ripple and the cracks are drawn in code.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `sunder@0`, `sunder@1` (+ morning, evening, night) | A 3 × 3 hazard-edged pad; a long dark-concrete block at the back, ribbed, a team stripe along its face and a hazard band at its foot, a steel tread deck with two empty ram bores (orange collars, bolt circles) and white accumulators; in the middle the bore tower over the shot hole: a steel casing in a four-legged lattice, braced, a crown deck with a team band, a yellow sheave and a red beacon; two stacks at the back corners (orange-lit mouths at night); an orange manifold with lines down to six steel-rimmed plate sockets in a row; the control cabin (lit window band, team stripe) and the pump house at the front; amber lamps, floodlights, a team light strip | the art |
+| `sunder-site1@T` | Going up: the block's formwork and rebar, the shot hole drilled with the rig over it, pallets and a heap of spoil | under 45% built; `drawSunderSite` |
+| `sunder-site2@T` | Going up: the block cast, the bores open, the tower's legs half up in scaffolding, a crawler crane leaning over | 45% to 85%; then the finished art rises over it |
+| `sunder-ram-w-0..2`, `sunder-ram-e-0..2` (+ times of day) | A great ram alone, west or east, its head down, half up or full up on its chrome rod: a dark steel cylinder with an orange band and a bolted crown. No team colour | `drawSunder` by `sunderAnim` |
+| `sunder-plate-K-0`, `sunder-plate-K-1` | Ram plate K alone, seated or raised on its two orange lift rams | the same |
+| (code) | The wind-up | the rams pump in turn and the plates drum down the row, faster as it nears the blow (`sunderPhase`); dust lifts off each plate as it comes down; the shot hole glows orange under the tower; the stacks breathe orange smoke, glowing at night |
+| (code) | The blow | a white-hot flash and a column of dust out of the shot hole; the rams slam down, the plates slam in a ripple, the far side from the aim first (`sunderOrder`) |
+| (code) | The ripple | `drawSunderGround`: a bulge running through the ground (a light crest, its shadow behind, a bright arc at its front: amber for a Quake, violet for Strike the Deep at night), a line of small cracks left along its path; `drawSunderAir`: dust kicked up along it |
+| (code) | The landing | rings of heaved ground out to the circle's edge; cracks spreading from the middle, branching, fading over 5 minutes; on Strike the Deep, the caved-in pits (violet-lit at night) |
+| (code) | The marks | cracked roads and track (dark zigzags, until mended), cracks up the walls of cracked buildings, sparks circling stunned robots, the Quake's red ring for its last 20 s (its own side sees the aim, dashed, all the way) |
 
 ### Batch 27: the Orbital Lift (installed)
 
@@ -1848,9 +1911,10 @@ redrawn as images:
 - **The main menu: Corvane's system** (only what LORE.md has in the sky). Beside the card (across the top on a phone),
   Corvane glows orange-white with a breathing corona, a thin anamorphic streak and faint lens rings, flaring now and then.
   Ithaca I goes round it on a slow, flattened orbit (four minutes), bigger on the near side, passing behind the star's
-  glare on the far side, its lit side always toward Corvane: a coral world of red deserts, green forest, Emberwood's
-  gold, ash, the violet Bloom, seas and polar ice under a layer of cloud, a warm band at the terminator, and on the night
-  side the colonies' lights along the coasts. The war is down there, kept distant: small orange-white bursts in a few
+  glare on the far side, its lit side always toward Corvane, turning west to east. Its face is the atlas (LORE.md: The
+  atlas; `art/lore/ithaca-map.webp`): the three continents and their seas, the regions' colours blended softly across
+  their seams, the ringfall belt's craters, polar ice, under a layer of cloud, a warm band at the terminator, and on the
+  night side the colonies' lights along the coasts and in the territories' hearts (few in the Bloom, none on the ice). The war is down there, kept distant: small orange-white bursts in a few
   fronts near the lights, a red glow (and by day a smudge of smoke) where they fought, now and then a missile's thin
   line arcing between colonies and a brighter strike with a fading ring; after a few minutes on the menu, rarely, a
   nuclear blast (a white flash lighting the night side and the Ring, a pale ring spreading, an orange glow fading over

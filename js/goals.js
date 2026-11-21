@@ -387,18 +387,19 @@ function metaRecordsTick() {
  */
 const ACHIEVEMENTS = [
   { id: 'win', name: 'Command authority transferred', text: 'Win a game against the computer.' },
-  { id: 'win-hard', name: 'Probability revised', text: 'Win against a Hard rival.' },
-  { id: 'no-turret', name: 'Open roads', text: 'Win against a Normal or Hard rival without building a Pulse Turret.' },
-  { id: 'storm', name: 'Full escort', text: `Capture a rival Command Base with ${STORM_MIN} or more of your warbots round it (not on Easy).` },
+  { id: 'win-hard', name: 'Probability revised', text: 'Win against a Commander rival (or a Warlord).' },
+  { id: 'win-warlord', name: 'No further instructions', text: 'Win against a Warlord rival.' },
+  { id: 'no-turret', name: 'Open roads', text: 'Win against a Colonist rival or harder without building a Pulse Turret.' },
+  { id: 'storm', name: 'Full escort', text: `Capture a rival Command Base with ${STORM_MIN} or more of your warbots round it (not against a Settler).` },
   { id: 'ffa', name: 'Last colony standing', text: 'Win a free-for-all against two or three rivals.' },
   { id: 'domination', name: 'Settlement priority', text: 'Win by Domination.', lore: 'ls-standards' },
   { id: 'uplinks', name: 'One voice', text: 'Win on the Uplinks.', lore: 'ls-neutral' },
   { id: 'shapes', name: 'Survey complete', text: 'Win on every map type.', of: () => SHAPE_PRESETS.length, have: (R0) => SHAPE_PRESETS.filter((s) => R0.shapes[s.name]).length },
-  { id: 'beat-balanced', name: 'The roads are finished', text: 'Beat a Steward, Medium or harder.', lore: 'ls-doctrines' },
-  { id: 'beat-turtle', name: 'Relief has not arrived', text: 'Beat a Warden, Medium or harder.', lore: 'ls-doctrines' },
-  { id: 'beat-raider', name: 'It was yours anyway', text: 'Beat a Salvager, Medium or harder.', lore: 'ls-doctrines' },
-  { id: 'beat-rusher', name: 'Arrival in one d—', text: 'Beat a Herald, Medium or harder.', lore: 'ls-doctrines' },
-  { id: 'beat-tycoon', name: 'Mind the paving', text: 'Beat an Architect, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-balanced', name: 'The roads are finished', text: 'Beat a Steward, Pioneer or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-turtle', name: 'Relief has not arrived', text: 'Beat a Warden, Pioneer or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-raider', name: 'It was yours anyway', text: 'Beat a Salvager, Pioneer or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-rusher', name: 'Arrival in one d—', text: 'Beat a Herald, Pioneer or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-tycoon', name: 'Mind the paving', text: 'Beat an Architect, Pioneer or harder.', lore: 'ls-doctrines' },
   { id: 'beat-all', name: 'Every doctrine answered', text: 'Beat all five rival doctrines.', lore: 'ls-doctrines', of: () => PERSONALITY_ORDER.length, have: (R0) => PERSONALITY_ORDER.filter((k) => R0.beaten[k]).length },
   { id: 'ropeway', name: 'Cable crossing', text: 'Run your first Ropeway.' },
   { id: 'train', name: 'Timetable', text: 'Run your first Freight Train.' },
@@ -537,8 +538,9 @@ function metaGameOver() {
         if (diff !== 'easy') for (const Q of S.players) if (!Q.absent && Q.ai && foes(Q.id, ME) && isDoctrine(Q.style)) R0.beaten[Q.style] = 1;
         META.recDirty = true;
         metaEarn('win');
-        if (diff === 'hard') metaEarn('win-hard');
-        if ((diff === 'normal' || diff === 'hard') && !g.f.turret) metaEarn('no-turret');
+        if (diffAtLeast('hard', diff)) metaEarn('win-hard');
+        if (diff === 'warlord') metaEarn('win-warlord');
+        if (diffAtLeast('normal', diff) && !g.f.turret) metaEarn('no-turret');
         if (nColonies() > 2 && !S.teams) metaEarn('ffa');
         if (S.endHow === 'domination') metaEarn('domination');
         if (S.endHow === 'uplinks') metaEarn('uplinks');

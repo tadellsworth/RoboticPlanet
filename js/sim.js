@@ -46,6 +46,7 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.cans && S.cans.length) updateCans(dt);
   if (S.liftFalls && S.liftFalls.length) updateLiftFalls(dt); // (an Orbital Lift's cable coming down)
+  if (S.sunders && S.sunders.length) updateSunderWaves(); // (a Sundering Ray's ripple through the ground, and its marks)
   if (S.rads && S.rads.length && S.tick % 15 === 8) updateRads(15 * dt); // (radiation: fallout and wrecked Reactors)
   if (S.ruins && S.ruins.length && S.tick % 30 === 14) ruinTidy();
   if (S.fires && S.fires.length) updateFires();
@@ -62,6 +63,7 @@ function simStep(dt) {
   if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
+  if (S.tick % 30 === 19) atmosTick(); // (the Atmosphere Engines' land: ATMOS)
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step. In Teams, interleave seats from both sides (0, 2, 1, 3)
@@ -111,8 +113,9 @@ function growStalks(dt) {
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
+    if (r === R_CROP && S.drought && S.drought[t]) continue; // (under a foe's Storm Front from Green: the drought, see atmosDrought)
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME));
+    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 && atmosOwnAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, soilHolder(t)) ? ATMOS.crop : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (an Atmosphere Engine's Green: its owner's crops a quarter faster)
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -1648,7 +1651,7 @@ function moveAlong(u, dt) {
       if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
     }
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
-    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed(u.x, u.y, u.owner) * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -2162,6 +2165,22 @@ function dispatch(p) {
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       if (u) assignFix(u, b);
     }
+  }
+  // 1c) Roads and track a Sundering Ray's Quake cracked: a Worker mends each patch (sunderMendSpots).
+  if (S.crkN > 0) for (const t of sunderMendSpots(p)) {
+    if (!idle.length) return;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (P.danger && dangerAt(p, i, j)) continue;
+    const u = take(i, j, 'build');
+    if (u && nearSoon(u, { x: i, y: j })) { idle.push(u); continue; }
+    if (u) assignMend(u, t);
+  }
+  // 1d) A Worker to cap each open shaft of a fallen Deep Core of ours (the Murmur's way up: deepShaft), with the Cement for it.
+  for (const e of deepShaftsFor(p)) {
+    if (!idle.length) return;
+    if ((!e.capPaid && playerGoods(p).cement < DEEP.capCement) || (P.danger && dangerAt(p, e.x, e.y))) continue;
+    const u = take(e.x, e.y, 'build');
+    if (u) assignCap(u, e);
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
   const staffQueue = blds.filter((b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
@@ -3365,6 +3384,8 @@ function updateWorker(u, dt) {
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
   else if (t.type === 'magfix') doMagFix(u, t, dt);
+  else if (t.type === 'mend') doMend(u, t, dt);
+  else if (t.type === 'capshaft') doCap(u, t, dt);
   else if (t.type === 'repair') {
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner) { u.task = null; u.path = null; }
@@ -3561,7 +3582,7 @@ function doBuild(u, t, dt) {
   const def = BDEFS[s.type];
   const cap = siteFrac(s);
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone)
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s) * stormWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone or under a foe's Storm Front)
     u.busy = 1;
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
     if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
@@ -4022,7 +4043,7 @@ function doStaff(u, t, dt) {
       if (t.lay >= 0) { paverLay(u, b, t, dt); return; }
       u.busy = 1;
       b.working = true;
-      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5) * radWork(b); // (faster by Arrival City, slower in a radiation zone)
+      t.timer -= dt * mult * batFactor(u) * cityBoost(b.owner, b.x + 0.5, b.y + 0.5) * radWork(b) * (b.crack ? SUNDER.crackWork : 1); // (faster by Arrival City, slower in a radiation zone or on cracked foundations)
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
@@ -4146,7 +4167,9 @@ function updateBuilding(b, dt) {
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
     if (def.dome) b.dUp = 0;
+    if (def.deepcore) { deepHeld(b); deepWarn(b); } // (turned off, a raid it has already called still comes)
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
+      : def.deepcore ? 'Off: not digging and burning no Fuel, its depth kept (the Murmur aren\'t drawn to it while it\'s off)'
       : def.dome ? `Off: the dome is down and saves its Crystal (turned on, it takes ${DOME.warm} s to come up)`
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
@@ -4161,10 +4184,14 @@ function updateBuilding(b, dt) {
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
   else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';
   else if (def.viaduct) b.status = 'Open to traffic';
+  if (b.crack && b.armor >= def.armor - 0.01) b.crack = 0; // (a Quake's cracked foundations: mended once repaired to full)
   if (def.lance) updateLance(b, dt);
+  else if (def.sunder) updateSunder(b, dt);
   else if (def.dome) updateDome(b, dt);
   else if (def.city) updateCity(b, dt);
   else if (def.lift) updateLift(b, dt);
+  else if (def.deepcore) updateDeep(b, dt);
+  else if (def.atmos) updateAtmos(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -4257,11 +4284,13 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
   }
+  const core = deepFeeds(b) ? 'the Deep Core' : atmosFeeds(b) ? 'the Atmosphere Engine' : ''; // (a Deep Core or an Atmosphere Engine takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel, ATMOS.genFuel)
+  if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding ${core}: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
   if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
   if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
   if (!((b.energy || 0) > 0)) {
@@ -4319,9 +4348,9 @@ function produce(b, def, dt) {
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
   const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
-  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '');
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '') + (b.crack ? ', at half speed: its foundations are cracked (repair it to full)' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b) * (b.crack ? SUNDER.crackWork : 1); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) {
@@ -4753,7 +4782,7 @@ function keepOver(b) {
   return null;
 }
 /** Extra reach (tiles) and reload factor a defence gets from a Keep's aura. */
-function auraRange(b) { return keepOver(b) ? KEEP.range : 0; }
+function auraRange(b) { return (keepOver(b) ? KEEP.range : 0) - (stormOverB(b) ? (BDEFS[b.type].range || 0) * (1 - STORM.range) : 0); } // (under a foe's Storm Front its guns reach STORM.range as far)
 function auraRate(b) { return keepOver(b) ? KEEP.rate : 1; }
 /** Damage to building b after a Keep's aura: Walls and Gates in it take a third less. */
 function keepShield(b, dmg) { return BDEFS[b.type].barrier && keepOver(b) ? dmg / KEEP.wallMul : dmg; }
@@ -5225,10 +5254,10 @@ function torchFire(u, tx, ty, power, bld) {
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
     hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1), u.owner);
-    if (hash2(u.id, S.tick, 11) < 0.12) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
+    if (hash2(u.id, S.tick, 11) < 0.12 && !atmosRainAt(bld.x + 0.5, bld.y + 0.5, u.owner)) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
-  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars)
+  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); if (!atmosRainAt(u.x + ca * f, u.y + sa * f, u.owner)) scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars; none in a foe's Engine's rain)
   if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
   if (u.gel <= 0 && isMe(u.owner)) {
     const P = S.players[ME];
@@ -5505,6 +5534,7 @@ function scorchSoil(t, by, quiet) {
   const who = soilHolder(t), i = t % S.W, j = (t / S.W) | 0;
   S.fert[t] = 0;
   (S.burnt || (S.burnt = {}))[t] = 1;
+  if (S.green && S.green[t]) { delete S.green[t]; const Q = by >= 0 ? S.players[by] : null; if (Q) Q.stats.burnedGreen = (Q.stats.burnedGreen || 0) + 1; } // (an Atmosphere Engine's greening, burned)
   if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; }
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj); // (the soil's edges round it)
@@ -5517,12 +5547,16 @@ function scorchSoil(t, by, quiet) {
   return true;
 }
 
-/** Why the soil at tile t can't be scorched, or '' if it can: fertile soil (open, or with a crop on it) with no building on it. */
-function scorchTileWhy(t) {
+/**
+ * Why the soil at tile t can't be scorched (by player `by`'s Torches, if given), or '' if it can: fertile soil (open, or
+ * with a crop on it) with no building on it, and not in the rain of a foe's powered Atmosphere Engine (atmosRainAt).
+ */
+function scorchTileWhy(t, by) {
   if (!(t >= 0 && t < S.W * S.H)) return 'Outside the map.';
   if (burntSoil(t)) return 'That soil is burned already.';
   if (!S.fert[t] || S.terrain[t] !== T_GROUND) return 'Pick fertile soil: the dark farmland Bio Farms grow crops on.';
   if (S.bAt[t]) return 'A building stands on it.';
+  if (by !== undefined && by >= 0 && atmosRainAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, by)) return 'It is raining there: an Atmosphere Engine\'s rain puts the fire out. Cut its power first.';
   return '';
 }
 
@@ -5538,7 +5572,7 @@ function orderScorch(owner, ids, i, j) {
   if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return { n: 0, why: 'Outside the map.' };
   const torches = orderable(owner, Array.isArray(ids) ? ids : []).filter((u) => BOTS[u.type].flame);
   if (!torches.length) return { n: 0, why: 'Pick one of your Torches.' };
-  const why = scorchTileWhy(tIdx(i, j));
+  const why = scorchTileWhy(tIdx(i, j), owner);
   if (why) return { n: 0, why };
   const ready = torches.filter(scorchReady);
   if (!ready.length) return { n: 0, why: `It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): let it refill with Fuel at storage or a Fuel Station first.` };
@@ -5548,7 +5582,7 @@ function orderScorch(owner, ids, i, j) {
   for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
     if (!inMap(i + di, j + dj) || di * di + dj * dj > R * R + 0.5) continue;
     const t = tIdx(i + di, j + dj);
-    if (!taken.has(t) && !scorchTileWhy(t)) tiles.push([di * di + dj * dj, t]);
+    if (!taken.has(t) && !scorchTileWhy(t, owner)) tiles.push([di * di + dj * dj, t]);
   }
   tiles.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let n = 0;
@@ -5580,7 +5614,7 @@ function doScorch(u, t, dt) {
   const i = t.tile % S.W, j = (t.tile / S.W) | 0, x = i + 0.5, y = j + 0.5;
   if (!(t.spray > 0)) {
     // (The patch was burned by another, or built on, or its tank ran dry on the way: the job's over.)
-    if (scorchTileWhy(t.tile) || !scorchReady(u)) { scorchDone(u); return; }
+    if (scorchTileWhy(t.tile, u.owner) || !scorchReady(u)) { scorchDone(u); return; }
     if (dist2(u.x, u.y, x, y) > TORCH.scorchReach * TORCH.scorchReach) {
       const r = travel(u, i, j, dt);
       if (r === null) { scorchDone(u); return; }
@@ -5769,6 +5803,7 @@ function damageBot(u, dmg, sx, sy, nat) {
 function hitBuilding(b, dmg, by) {
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   dmg = keepShield(b, dmg);
+  if (b.crack && BDEFS[b.type].barrier) dmg *= SUNDER.wallTakes; // (a Wall or Gate a Quake cracked, until repaired to full)
   b.armor -= dmg;
   b.lastHit = S.time;
   if (by >= 0 && foes(by, b.owner)) {
@@ -9456,7 +9491,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -10137,7 +10172,7 @@ function eventNow(type) {
   return E && S.time >= E.t0 && (!type || E.type === type) ? E : null;
 }
 /** Bot speed in a dust storm. */
-function evSpeed() { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 ? DUST_SPEED : 1; }
+function evSpeed(x, y, p) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && (p === undefined ? atmosAt(x, y) >= 1 : atmosOwnAt(x, y, p))) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside, for its owner and allies)
 /** Battery drain in a solar flare. */
 function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
 
@@ -10525,7 +10560,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -11527,6 +11562,8 @@ function murmurTick() {
   // second well into the night.
   const into = x - NIGHT_FROM;
   while ((M.wave || 0) < C.waves && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; if (smart) murmurCraftWave(n, C, M.wave); else murmurWave(n, C); }
+  deepCalls(n, C); // (a Deep Core that went deeper: the night's raid that comes for it)
+  atmosCalls(n); // (an Atmosphere Engine that reached a new stage: the Sappers that dig in under it)
   if (smart) murmurPlansTick();
 }
 
@@ -11564,6 +11601,8 @@ function murmurNightfall(n) {
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
+  // A Sundering Ray they heard: its owner is told they come for it tonight.
+  for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].sunder && b.sLure === n) postMsg(b.owner, 'The Murmur heard the Sundering Ray. Tonight the nests near it come for it first, in bigger packs: guard it.', b.x + 1, b.y + 1, 'warn');
 }
 
 /**
@@ -11625,8 +11664,11 @@ function murmurPower(e) {
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
     if (b.type === 'generator' || b.type === 'reactor') charge += 2;
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
+    else if (BDEFS[b.type].sunder && b.sOn) charge += 5; // (a Sundering Ray winding up: the ground itself drums)
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
     else if (BDEFS[b.type].lift && b.working) charge += 2;
+    else if (BDEFS[b.type].deepcore) charge += 2; // (a Deep Core at work: like a Generator's)
+    else if (BDEFS[b.type].atmos) charge += 3; // (an Atmosphere Engine at work: the Murmur hate it)
     else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
@@ -11639,8 +11681,11 @@ function chargeWorth(e) {
   const def = BDEFS[e.type];
   if (!e.built) return 0.5;
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
+  if (def.sunder && e.sOn) return 6; // (a Sundering Ray winding up: they feel every stroke)
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
   if (def.lift && e.working) return 3;
+  if (def.deepcore && e.working) return 3; // (a Deep Core at work draws them like a Generator)
+  if (def.atmos) return 6; // (an Atmosphere Engine standing: the Murmur hate it, and go for it first: atmosLure)
   if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
@@ -11687,7 +11732,7 @@ function murmurDig(r, k, b) {
     const i = hx + di, j = hy + dj;
     if (!inMap(i, j)) continue;
     const t = j * W + i;
-    if (!tunnelable(t)) continue;
+    if (!tunnelable(t) || atmosAt(i + 0.5, j + 0.5) >= 2) continue; // (not into an Atmosphere Engine's Rain: the Bloom can't spread there)
     const s = dist(i, j, gx, gy) + hash2(t, b.id, S.mur.lastNight || 0) * 1.3 + (S.tun[t] ? 0.7 : 0);
     if (s < bs) { bs = s; best = t; }
   }
@@ -11720,7 +11765,8 @@ function murmurOpenExit(b) {
     if (S.tun[t] !== k) continue;
     const i = t % W, j = (t / W) | 0;
     if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t)) continue;
-    if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound)
+    if (dist2(i, j, b.x, b.y) < 7 || calmAt(i + 0.5, j + 0.5) || atmosGardenAt(i + 0.5, j + 0.5)) continue; // (not right on the nest's mound, nor in an Atmosphere Engine's Garden)
+    if (sunderSealed(i, j)) continue; // (a Sundering Ray's Strike the Deep sealed it: SUNDER.sealNights nights)
     if (exits.some((e) => dist2(e.x, e.y, i, j) < 16) || shut.some((s) => dist2(s.x, s.y, i, j) < 9)) continue;
     let near = Infinity, base = Infinity;
     for (const e of blds) {
@@ -11795,15 +11841,17 @@ function murmurWave(n, C) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead) continue;
-    const g = murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
-    if (!g || up + made + size > room) continue;
-    for (let k = 0; k < size; k++) {
+    if (nest.sQuiet === n) continue; // (shaken by a Sundering Ray's Strike the Deep: no raid from it tonight)
+    // (a Sundering Ray they heard within SUNDER.lure tiles: they go for it first)
+    const lure = sunderLure(nest, n), g = lure ? { x: lure.x + 1, y: lure.y + 2, owner: lure.owner } : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey), sz = lure ? sunderPack(size) : size;
+    if (!g || up + made + sz > room) continue;
+    for (let k = 0; k < sz; k++) {
       const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: g.x, y: g.y, until, night: 1 });
       u.nest = nest.id; u.exit = e.id;
       made++;
     }
     addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
-    if (g.owner >= 0) { const T = told[g.owner] || (told[g.owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
+    if (g.owner >= 0) { const T = told[g.owner] || (told[g.owner] = { n: 0, x: e.x, y: e.y }); T.n += sz; }
   }
   for (const p in told) {
     const T = told[p];
@@ -12026,10 +12074,10 @@ function murmurPlan(p, n, round, exits) {
     const def = BDEFS[e.type];
     if (!e.built || def.barrier || def.viaduct || def.wild || e.type === 'lander' || calmB(e)) continue;
     const nb = nearNest(e.x, e.y), nd = dist(nb.x, nb.y, e.x, e.y);
-    if (nd > MURMUR.reach + 6 || murmurZoneBy(e) !== murmurZoneBy(nb)) continue;
+    if (nd > MURMUR.reach + 6 + (atmosLure(e) ? ATMOS.lure : 0) || murmurZoneBy(e) !== murmurZoneBy(nb)) continue;
     let crowd = 0;
     for (const o of mine) if (o !== e && dist2(o.x, o.y, e.x, e.y) < 36) crowd++;
-    const s = chargeWorth(e) * 2 + (veinLure(e) ? 4 : 0) + Math.max(0, 4 - crowd * 0.6) - murmurGunAt(e.x + 0.5, e.y + 0.5, 3) * 7
+    const s = chargeWorth(e) * 2 + (veinLure(e) ? 4 : 0) + (atmosLure(e) ? 60 : 0) + Math.max(0, 4 - crowd * 0.6) - murmurGunAt(e.x + 0.5, e.y + 0.5, 3) * 7
       - murmurMem('kill', e.x, e.y) * 2 + murmurMem('fed', e.x, e.y) * 1.5 - nd * 0.05 + hash2(e.id, n * 3 + round, 71) * 1.2;
     targets.push({ e, nb, s });
   }
@@ -12155,6 +12203,21 @@ function murmurCraftWave(n, C, wave) {
     if (e.dead || e.type !== 'burrow') continue;
     const nest = getE(e.nest);
     if (!nest || nest.dead || up + size > room) continue;
+    if (nest.sQuiet === n) continue; // (shaken by a Sundering Ray's Strike the Deep: no raid from it tonight)
+    // A Sundering Ray they heard within SUNDER.lure tiles: this exit's pack goes for it first, half again bigger.
+    const lure = sunderLure(nest, n);
+    if (lure && murmurRoute(e, lure.x + 1, lure.y + 2, SUNDER.lure * 1.6)) {
+      const sz = Math.min(sunderPack(size), room - up), task = { type: 'raid', x: lure.x + 1, y: lure.y + 2, until, night: 1 };
+      for (let k = 0; k < sz; k++) {
+        const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
+        u.nest = nest.id; u.exit = e.id;
+        up++;
+      }
+      addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
+      const T = told[lure.owner] || (told[lure.owner] = { n: 0, x: e.x, y: e.y }); T.n += sz;
+      packs.push({ e, nest, pl: null, task, owner: lure.owner });
+      continue;
+    }
     const dr = draws.get(e.id), pl = dr && dr.k < K.joinMost ? dr.pl : null;
     const g = pl ? null : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
     if (!pl && (!g || dr?.pl.p === g.owner || !murmurRoute(e, g.x, g.y))) continue;
@@ -12731,9 +12794,9 @@ function murmurPrey(x, y, r) {
   for (const e of S.buildings) {
     if (e.dead || e.owner < 0 || e.owner === wo || calmB(e)) continue;
     // (A Harvester cutting Bloom veins draws them most, from VEIN.reach further out: veinLure.)
-    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e);
-    if (d2 > (lure ? sq(r + VEIN.reach) : r2)) continue;
-    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
+    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e), ae = atmosLure(e);
+    if (d2 > (ae ? sq(r + ATMOS.lure) : lure ? sq(r + VEIN.reach) : r2)) continue;
+    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) + (ae ? 40 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
     if (s > bs) { bs = s; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   for (const v of S.bots) {
@@ -17463,6 +17526,11 @@ function hashState() {
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
+  for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
+  for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)
+  if (S.mission && S.mission.greenWant) { int(S.mission.greenPct || 0); int(S.mission.greenRun || 0); }
+  if (S.mission && S.mission.stormCalm) int(S.mission.calmRun || 0);
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
@@ -17505,15 +17573,25 @@ function hashState() {
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
+    if (BDEFS[b.type].sunder) { int(b.id); int(b.sOn || 0); num(b.sCharge || 0); num(b.sReload || 0); int(b.sAim ? b.sAim[0] : -1); int(b.sAim ? b.sAim[1] : -1); str(b.sMode); str(b.sSrc); int(b.sReactor || 0); num(b.sTime || 0); int(b.sUseR ? 1 : 0); int(b.sLure || 0); }
+    if (b.crack || b.sQuiet) { int(b.id); int(b.crack || 0); int(b.sQuiet || 0); } // (a Quake's cracked foundations; a nest a Strike the Deep shook)
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); num(b.dWarm || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
+    if (BDEFS[b.type].deepcore) { int(b.id); num(b.dcT || 0); int(b.dcStage || 0); obj(b.dcAcc); str(b.dcSrc); num(b.dcFuel || 0); int(b.dcGen || 0); num(b.dcGenT || 0); int(b.dcCall || 0); int(b.dcCallN || 0); int(b.dcWarn || 0); int(b.dcHeldN || 0); }
+    if (BDEFS[b.type].atmos) { int(b.id); num(b.aeT || 0); int(b.aeStage || 0); num(b.aeP || 0); str(b.aeSrc); num(b.aeFuel || 0); for (const g of b.aeGens || []) int(g); num(b.aeGenT || 0); num(b.aeU || 0); int(b.aeUr || 0); num(b.aeWith || 0); num(b.aeSeed || 0); int(b.aeCall || 0); int(b.aeCallN || 0); int(b.aeWarn || 0); int(b.aeStorm ? b.aeStorm[0] : -1); int(b.aeStorm ? b.aeStorm[1] : -1); num(b.aeStormT ?? -1); num(b.aeBolt || 0); int(b.aeBoltN || 0); }
+    if (b.shaft !== undefined) { int(b.id); int(b.shaft); int(b.capper || 0); num(b.capT || 0); int(b.capPaid || 0); } // (a fallen Deep Core's open shaft)
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
   // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
   for (const f of S.liftFalls || []) { int(f.id); int(f.d); num(f.t); int(f.k); int(f.n); int(f.by); int(f.hit.length); }
   if (!S.crater) for (const s of S.scrap || []) if (s.cb) { int(s.id); num(s.x); num(s.y); num(s.n); }
   for (const c of S.cuts || []) { num(c.x1); num(c.y1); num(c.t); }
+  // The Sundering Ray's ripples, the cracked roads and track, the stunned robots and the sealed ground.
+  for (const w of S.sunders || []) { int(w.id); int(w.o); str(w.m); num(w.x1); num(w.y1); num(w.at); num(w.f); int(w.done); }
+  if (S.crk) { int(S.crkN || 0); for (let t = 0; t < S.crk.length; t++) if (S.crk[t]) int(t); }
+  for (const u of S.bots) if (u.stunT) { int(u.id); num(u.stunT); }
+  for (const e of (S.mur && S.mur.seal) || []) { num(e.x); num(e.y); num(e.r); int(e.n); }
   for (const z of S.rads || []) { int(z.id); num(z.x); num(z.y); num(z.r); num(z.cr); num(z.t0); num(z.life); int(z.k); } // (radiation zones: radAdd)
   for (const r of S.ruins || []) { int(r.id); int(r.x); int(r.y); num(r.t); } // (breached Reactors: reactorDown)
   for (const P of S.players) if (P.dimUntil) { int(P.id); num(P.dimUntil); }
@@ -19179,3 +19257,1092 @@ function gupLive() { return S.buildings.filter((b) => !b.dead && b.built && b.gO
 
 /** The furthest-along Great Uplink transmitting that belongs to a foe of p's, or null. */
 function gupFoeLive(p) { return gupLive().find((b) => b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner)) || null; }
+
+/* ------------------------------------------------------------------ megastructures: the Sundering Ray */
+
+/*
+ * The Sundering Ray (SUNDER; BDEFS.sunder). b.sMode: 'deep' (Strike the Deep) or 'quake'; b.sAim: the tile it's aimed at
+ * ([i, j]); b.sOn: winding up; b.sCharge: how far (s); b.sTime: how long this wind-up takes; b.sSrc: what powers it ('gen',
+ * or 'reactor' with b.sReactor its id: the Uranium went in as it started); b.sReload: s until it can wind up again;
+ * b.sShot: when it last fired; b.sUseR: Use Reactor; b.sLure: the night the Murmur come for it (they heard its blow).
+ * A blow is a ripple running through the ground (S.sunders: { id, o, b, m, x0, y0, x1, y1, t, at, f, done }), and lands
+ * at `at` (sunderLand). Its marks: b.crack on a building (foundations cracked: half speed, until repaired to full; a
+ * Wall's: double damage), S.crk on a tile (a cracked road or track: half speed until a Worker mends it, S.crkN of them),
+ * u.stunT on a robot (stunned), nest.sQuiet (the night a struck nest sends no raid), S.mur.seal ({ x, y, r, n }: no exit
+ * opens in that circle through night n).
+ */
+
+/** Can a Sundering Ray be built yet (SUNDER.at s into a free-play game; at once in a mission that teaches it)? */
+function sunderOpen() { return !!S && (!!S.mission || S.time >= SUNDER.at); }
+
+/** A Nuclear Reactor of b's owner within SUNDER.reach of it (built, on) with a blow in it, the one with the most; or null. */
+function sunderReactor(b) {
+  let best = null, bn = 0;
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) > SUNDER.reach + 0.5) continue;
+    const n = Math.floor((r.stock.uranium || 0) / SUNDER.uranium) + (r.stock.fissile || 0);
+    if (n > bn) { bn = n; best = r; }
+  }
+  return best;
+}
+
+/** What could power a wind-up of Ray b now: 'gen', 'reactor' or '' (as lancePower: the Generators, unless Use Reactor is on). */
+function sunderPower(b) {
+  if (murmurCutOn(b)) return '';
+  const gens = megaGens(b, SUNDER.reach).length >= SUNDER.gens, r = sunderReactor(b);
+  if (r && (b.sUseR || !gens)) return 'reactor';
+  return gens ? 'gen' : '';
+}
+
+/** How long Ray b's wind-up takes: the one under way, else what its power now would take. */
+function sunderTime(b) {
+  if (b.sOn) return b.sTime || SUNDER.charge;
+  return sunderPower(b) === 'reactor' ? SUNDER.reactorCharge : SUNDER.charge;
+}
+
+/** Is Strike the Deep there to be had in this game (the Murmur on: never on Argos)? */
+function sunderDeepOn() { return wildOn() && murmurLevel() !== 'off'; }
+
+/** Why Ray b can't start a wind-up now ('' if it can). */
+function sunderBlocked(b) {
+  if (!b || b.dead || !b.built) return 'The Sundering Ray is not built yet.';
+  if (b.sReload > 0) return `Reloading: it can wind up again in ${fmtSecs(b.sReload)}.`;
+  if (!sunderPower(b)) return `No power: it needs ${SUNDER.gens} Generators with Fuel within ${SUNDER.reach} tiles, or a Nuclear Reactor there with ${SUNDER.uranium} Uranium (or an Enriched Uranium) in it.`;
+  return '';
+}
+
+/** Can Ray b strike tile (i, j) with blow `mode` ('deep' or 'quake')? '' or why not. */
+function sunderAimBlocked(b, i, j, mode) {
+  if (!b || b.dead || !b.built) return 'The Sundering Ray is not built yet.';
+  if (mode !== 'deep' && mode !== 'quake') return 'Pick Strike the Deep or Quake.';
+  if (!inMap(i, j)) return 'Off the map.';
+  if (mode === 'deep') return sunderDeepOn() ? '' : 'No Murmur in this game: Strike the Deep has nothing to strike. A Quake still works.';
+  const c = bCentre(b);
+  if (dist(c.x, c.y, i + 0.5, j + 0.5) > SUNDER.range) return `Too far: a Quake reaches ${SUNDER.range} tiles from the Ray.`;
+  return '';
+}
+
+/** Is Ray b's aim fixed now (a Quake's ring has shown: the last SUNDER.warn s of the wind-up)? */
+function sunderLocked(b) { return !!(b.sOn && b.sMode === 'quake' && b.sAim && sunderTime(b) - (b.sCharge || 0) <= SUNDER.warn); }
+
+/**
+ * Aim Ray b's blow `mode` at tile (i, j) (an order: sunderAim). Not winding up, it starts now (with power, reloaded);
+ * winding up, it turns to the new aim, until a Quake's ring has shown. '' or why not.
+ */
+function setSunderAim(b, i, j, mode) {
+  const why = sunderAimBlocked(b, i, j, mode);
+  if (why) return why;
+  if (sunderLocked(b)) return 'The ring is showing: the aim is fixed now.';
+  if (!b.sOn) {
+    const no = sunderBlocked(b);
+    if (no) return no;
+    b.sMode = mode; b.sAim = [i | 0, j | 0];
+    sunderStart(b);
+    return '';
+  }
+  b.sMode = mode; b.sAim = [i | 0, j | 0];
+  return '';
+}
+
+/** Ray b starts winding up: a Reactor's Uranium goes in now; everyone hears it. */
+function sunderStart(b) {
+  const src = sunderPower(b);
+  b.sOn = 1; b.sCharge = 0; b.sSrc = src; b.sTime = src === 'reactor' ? SUNDER.reactorCharge : SUNDER.charge;
+  if (src === 'reactor') {
+    const r = sunderReactor(b), g = (r.stock.uranium || 0) >= SUNDER.uranium ? 'uranium' : 'fissile', n = g === 'uranium' ? SUNDER.uranium : 1;
+    bump(r.stock, g, -n); usedGood(b.owner, g, n);
+    b.sReactor = r.id;
+  } else b.sReactor = 0;
+  const c = bCentre(b), what = b.sMode === 'deep' ? 'Strike the Deep' : 'a Quake';
+  sfx('sundercharge', c.x, c.y);
+  postMsg(b.owner, `The Sundering Ray is winding up${src === 'reactor' ? ' on Reactor power' : ''} for ${what}: it fires in ${b.sTime} seconds. The Murmur will hear it.`, b.x + 1, b.y + 1, 'info');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out && !isWild(P.id)) postMsg(P.id, `${playerName(b.owner, true)} is winding up the Sundering Ray! A deep thudding: it fires in ${b.sTime} seconds.`, b.x + 1, b.y + 1, 'bad');
+  logEvent({ t: S.time, k: 'sunder', p: b.owner });
+}
+
+/** Call off Ray b's wind-up (an order: sunderStop, or its power lost). */
+function sunderStop(b, why) {
+  if (!b.sOn) return;
+  b.sOn = 0; b.sCharge = 0; b.sSrc = ''; b.sReactor = 0; b.sTime = 0;
+  if (why) postMsg(b.owner, why, b.x + 1, b.y + 1, 'bad');
+}
+
+/** Is the power Ray b's wind-up started with still there? */
+function sunderStillPowered(b) {
+  if (murmurCutOn(b)) return false;
+  if (b.sSrc === 'reactor') { const r = getE(b.sReactor); return !!(r && !r.dead && r.built && r.owner === b.owner); }
+  return megaGens(b, SUNDER.reach).length >= SUNDER.gens;
+}
+
+/** The Sundering Ray, each tick: the wind-up and the blow. */
+function updateSunder(b, dt) {
+  if (b.sReload > 0) b.sReload = Math.max(0, b.sReload - dt);
+  if (!b.sOn) {
+    b.working = false;
+    b.status = b.sReload > 0 ? `Reloading: ready to wind up in ${fmtSecs(b.sReload)}` : sunderPower(b) ? 'Ready: tap Strike the Deep or Quake, then a spot on the map'
+      : `No power: ${SUNDER.gens} Generators with Fuel within ${SUNDER.reach} tiles, or a Nuclear Reactor with ${SUNDER.uranium} Uranium or an Enriched Uranium`;
+    return;
+  }
+  if (!sunderStillPowered(b)) {
+    sunderStop(b, b.sSrc === 'reactor' ? 'The Sundering Ray lost its Reactor: the blow is lost.' : 'The Sundering Ray lost its power (its Generators are wrecked or out of Fuel): the blow is lost.');
+    b.status = 'Blow lost: no power';
+    return;
+  }
+  b.working = true;
+  if (b.sSrc === 'gen') {
+    const per = BDEFS.generator.burner.perFuel, extra = dt * Math.max(0, per / SUNDER.genFuel - 1);
+    for (const g of megaGens(b, SUNDER.reach)) if ((g.energy || 0) > 0) g.energy -= extra;
+  }
+  const T = sunderTime(b), was = b.sCharge || 0;
+  b.sCharge = Math.min(T, was + dt);
+  if (b.sCharge < T) {
+    b.status = `Winding up${b.sSrc === 'reactor' ? ' on Reactor power' : ''} for ${b.sMode === 'deep' ? 'Strike the Deep' : 'a Quake'}: fires in ${fmtSecs(T - b.sCharge)}`;
+    // A Quake's ring shows on the ground for everyone for its last SUNDER.warn s: the aim is fixed from then.
+    if (b.sMode === 'quake' && b.sAim && was < T - SUNDER.warn && b.sCharge >= T - SUNDER.warn) {
+      for (const P of S.players) {
+        if (P.absent || P.out || isWild(P.id)) continue;
+        const hit = S.buildings.some((e) => !e.dead && e.owner === P.id && dist2(e.x + 0.5, e.y + 0.5, b.sAim[0] + 0.5, b.sAim[1] + 0.5) <= sq(SUNDER.quake + 1));
+        if (P.id === b.owner) postMsg(P.id, `The Quake's ring is on the ground: it lands in ${SUNDER.warn} seconds.`, b.sAim[0], b.sAim[1], 'info');
+        else if (hit) { postMsg(P.id, `A Sundering Ray's Quake is coming down on your colony in ${SUNDER.warn} seconds! Get your robots out of the ring.`, b.sAim[0], b.sAim[1], 'bad'); if (isMe(P.id)) sfx('alert'); }
+      }
+    }
+    return;
+  }
+  if (!b.sAim || !b.sMode) { b.status = 'Wound up: tap Strike the Deep or Quake, then a spot'; return; }
+  sunderFire(b);
+}
+
+/** Ray b fires: the bore charge goes off, the plates slam, and a ripple sets out through the ground to its aim. */
+function sunderFire(b) {
+  const c = bCentre(b), x1 = b.sAim[0] + 0.5, y1 = b.sAim[1] + 0.5, d = dist(c.x, c.y, x1, y1);
+  const travel = clamp(d / SUNDER.speed, SUNDER.travelMin, SUNDER.travelMax);
+  b.sReload = b.sSrc === 'reactor' ? SUNDER.reactorReload : SUNDER.reload; b.sShot = S.time;
+  b.sOn = 0; b.sCharge = 0; b.sSrc = ''; b.sReactor = 0; b.sTime = 0; b.working = false;
+  // The Murmur hear every blow: the next night (n + 1, whatever the hour now) they come for it.
+  if (wildOn()) b.sLure = murmurNights(S.time) + 1;
+  S.sunders = S.sunders || [];
+  S.sunderSeq = (S.sunderSeq || 0) + 1;
+  S.sunders.push({ id: S.sunderSeq, o: b.owner, b: b.id, m: b.sMode, x0: Math.round(c.x * 100) / 100, y0: Math.round(c.y * 100) / 100, x1, y1, t: S.time, at: Math.round((S.time + travel) * 1000) / 1000, f: 0, done: 0 });
+  const P = S.players[b.owner];
+  if (P) { P.stats.sunder = (P.stats.sunder || 0) + 1; if (b.sMode === 'deep') P.stats.sunderDeep = (P.stats.sunderDeep || 0) + 1; else P.stats.sunderQuake = (P.stats.sunderQuake || 0) + 1; }
+  sfx('sunderfire', c.x, c.y);
+  logEvent({ t: S.time, k: 'sunderFire', p: b.owner, m: b.sMode });
+}
+
+/** The ripples in the ground, each tick: tunnels under the path cave in as one passes; it lands at its time; old marks go. */
+function updateSunderWaves() {
+  for (const w of S.sunders) {
+    if (w.done) continue;
+    const len = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) || 1, f = Math.min(1, (S.time - w.t) / Math.max(0.001, w.at - w.t));
+    // The tunnels a tile either side of its path, as far as it has come.
+    if (S.tun && f > w.f) {
+      const ux = (w.x1 - w.x0) / len, uy = (w.y1 - w.y0) / len;
+      let caved = 0;
+      for (let s = w.f * len; s <= f * len; s += 0.5) {
+        const x = w.x0 + ux * s, y = w.y0 + uy * s;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const i = Math.floor(x) + di, j = Math.floor(y) + dj;
+          if (!inMap(i, j)) continue;
+          const t = tIdx(i, j);
+          if (S.tun[t] && !sunderRoot(t)) { S.tun[t] = 0; caved++; }
+        }
+      }
+      if (caved) S.mur.ver++;
+    }
+    w.f = f;
+    if (S.time >= w.at) { w.done = 1; sunderLand(w); }
+  }
+  // (the last SUNDER.keep blows' cracks stay on the ground for SUNDER.scar s: looks only)
+  if (S.sunders.length > SUNDER.keep || S.sunders.some((w) => w.done && S.time - w.at > SUNDER.scar)) {
+    S.sunders = S.sunders.filter((w) => !w.done || S.time - w.at <= SUNDER.scar);
+    while (S.sunders.length > SUNDER.keep && S.sunders[0].done) S.sunders.shift();
+  }
+}
+
+/** Is tile t a nest's own tile (the root of its network: it stays)? */
+function sunderRoot(t) { const b = getE(S.bAt[t]); return !!(b && !b.dead && isNestB(b)); }
+
+/** Every tunnel tile within r of (x, y) caves in (nests' own tiles stay). How many. */
+function sunderCave(x, y, r) {
+  if (!S.tun) return 0;
+  let n = 0;
+  const R = Math.ceil(r);
+  for (let j = Math.floor(y) - R; j <= Math.floor(y) + R; j++) for (let i = Math.floor(x) - R; i <= Math.floor(x) + R; i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, x, y) > r * r) continue;
+    const t = tIdx(i, j);
+    if (S.tun[t] && !sunderRoot(t)) { S.tun[t] = 0; n++; }
+  }
+  if (n) S.mur.ver++;
+  return n;
+}
+
+/** Is a tunnel exit barred at tile (i, j) for now (a Strike the Deep's seal)? */
+function sunderSealed(i, j) {
+  const seal = S.mur && S.mur.seal;
+  if (!seal || !seal.length) return false;
+  const n = murmurNights(S.time);
+  return seal.some((s) => n <= s.n && dist2(s.x, s.y, i + 0.5, j + 0.5) <= s.r * s.r);
+}
+
+/** The Ray (if any) that nest `nest` sends its packs at first on night n: a lured one within SUNDER.lure tiles of it. */
+function sunderLure(nest, n) {
+  let best = null, bd = SUNDER.lure * SUNDER.lure;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].sunder || b.sLure !== n) continue;
+    const c = bCentre(b), d = dist2(c.x, c.y, nest.x + 0.5, nest.y + 0.5);
+    if (d <= bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** How big a pack lured to a Ray is: half again on Active, as ever on Quiet. */
+function sunderPack(size) { return murmurSmart() ? Math.ceil(size * SUNDER.packMul) : size; }
+
+/** A ripple w lands: Strike the Deep on the Murmur, or a Quake on whatever is there. */
+function sunderLand(w) {
+  const x = w.x1, y = w.y1, deep = w.m === 'deep', r = deep ? SUNDER.deep : SUNDER.quake, by = w.o, P = S.players[by];
+  addFx('sunderhit', x, y, { life: 4, r, deep: deep ? 1 : 0 });
+  sfx('sunderquake', x, y);
+  const caved = sunderCave(x, y, r);
+  // Exits in the circle collapse (Strike the Deep seals it for SUNDER.sealNights nights).
+  let exits = 0;
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || dist2(e.x + 0.5, e.y + 0.5, x, y) > r * r) continue;
+    exits++;
+    S.mur.shut.push({ x: e.x, y: e.y, until: S.time + MURMUR.shut });
+    addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1 });
+    destroyBuilding(e, false);
+  }
+  if (exits && P) P.stats.collapsed = (P.stats.collapsed || 0) + exits;
+  let nests = 0, sappers = 0;
+  if (deep && S.mur) {
+    const n = murmurNights(S.time);
+    S.mur.seal = (S.mur.seal || []).filter((s) => s.n >= n);
+    S.mur.seal.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, r, n: n + SUNDER.sealNights });
+    for (const b of S.buildings) {
+      if (b.dead || !isNestB(b) || dist2(b.x + 0.5, b.y + 0.5, x, y) > r * r) continue;
+      b.armor = Math.max(1, b.armor - BDEFS[b.type].armor * SUNDER.nestHit);
+      b.lastHit = S.time;
+      b.sQuiet = n + 1;
+      nests++;
+      addFx('dustcloud', b.x + 0.5, b.y + 0.5, { r: 1.4, life: 2.4 });
+    }
+    for (const u of S.bots) if (!u.dead && u.under && dist2(u.x, u.y, x, y) <= r * r) { sappers++; killBot(u); }
+    if (P) { P.stats.sunderNests = (P.stats.sunderNests || 0) + nests; P.stats.sunderExits = (P.stats.sunderExits || 0) + exits; }
+  }
+  // A Quake: the colonies' buildings, roads, track, Walls and robots in the circle. (A Shield Dome doesn't stop it.)
+  const hurt = S.players.map(() => 0), stunned = S.players.map(() => 0);
+  let roads = 0;
+  if (!deep) {
+    for (const e of S.buildings) {
+      if (e.dead || !e.built || BDEFS[e.type].wild || e.owner < 0 || calmB(e) || footDist(e, x, y) > r) continue;
+      const def = BDEFS[e.type], base = e.type === 'lander' || def.keep, take = def.armor * (base ? SUNDER.baseDmg : SUNDER.dmg);
+      e.armor = Math.min(e.armor, Math.max(def.armor * SUNDER.floor, e.armor - take));
+      e.crack = 1; e.lastHit = S.time;
+      if (foes(e.owner, by)) hitByNow(e.owner, by);
+      if (hurt[e.owner] !== undefined) hurt[e.owner]++;
+    }
+    S.crk = S.crk || new Uint8Array(S.W * S.H);
+    const R = Math.ceil(r);
+    for (let j = Math.floor(y) - R; j <= Math.floor(y) + R; j++) for (let i = Math.floor(x) - R; i <= Math.floor(x) + R; i++) {
+      if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, x, y) > r * r) continue;
+      const t = tIdx(i, j);
+      if ((S.road[t] || (S.rail && S.rail[t])) && !S.crk[t] && !calmAt(i + 0.5, j + 0.5)) { S.crk[t] = 1; roads++; }
+    }
+    S.crkN = (S.crkN || 0) + roads;
+    for (const u of S.bots) {
+      if (u.dead || u.inside || aloft(u) || BOTS[u.type].wild || BOTS[u.type].sea || dist2(u.x, u.y, x, y) > r * r) continue;
+      u.stunT = Math.round((S.time + SUNDER.stun) * 1000) / 1000;
+      u.cd = Math.max(u.cd || 0, SUNDER.stun);
+      if (stunned[u.owner] !== undefined) stunned[u.owner]++;
+    }
+  }
+  // In the Hollow, rock comes down from the roof inside the circle (the tremors' rockfall, a few seconds on).
+  if (S.tremor && S.hollow) {
+    for (let k = 0, n = 0; k < SUNDER.rocks * 6 && n < SUNDER.rocks; k++) { // (on the cavern floor: a few tries for each)
+      const a = hash2(w.id, k, 911) * Math.PI * 2, rr = Math.sqrt(hash2(w.id, k, 912)) * r * 0.9;
+      const i = Math.floor(x + Math.cos(a) * rr), j = Math.floor(y + Math.sin(a) * rr);
+      if (!inMap(i, j) || S.terrain[tIdx(i, j)] !== T_GROUND) continue;
+      S.tremor.rock.push({ x: i, y: j, at: Math.round((S.time + 2 + n * 1.5) * 1000) / 1000 });
+      n++;
+    }
+    S.tremor.dust = Math.max(S.tremor.dust || 0, S.time + 6);
+  }
+  // Who hears of it.
+  const at = [Math.floor(x), Math.floor(y)];
+  for (const Q of S.players) {
+    const p = Q.id;
+    if (Q.absent || Q.out || isWild(p)) continue;
+    if (p === by) {
+      postMsg(p, deep ? `Strike the Deep: ${caved} tunnel tile${caved === 1 ? '' : 's'} caved in, ${exits} exit${exits === 1 ? '' : 's'} sealed for ${SUNDER.sealNights} nights${nests ? `, ${nests} nest${nests === 1 ? '' : 's'} shaken (no raid from ${nests === 1 ? 'it' : 'them'} tomorrow night)` : ''}${sappers ? `, ${sappers} Sapper${sappers === 1 ? '' : 's'} crushed` : ''}. The Murmur heard it: the next night they come for the Ray.`
+        : `The Quake landed: ${hurt.reduce((a, n, q) => a + (q === p ? 0 : n), 0)} rival building${hurt.reduce((a, n, q) => a + (q === p ? 0 : n), 0) === 1 ? '' : 's'} cracked${hurt[p] ? `, and ${hurt[p]} of your own` : ''}${roads ? `; ${roads} tiles of road and track cracked` : ''}.`, at[0], at[1], 'good');
+    } else if (!deep && (hurt[p] || stunned[p])) {
+      postMsg(p, `A Quake hit your colony: ${hurt[p]} building${hurt[p] === 1 ? '' : 's'} cracked (half speed until repaired to full), roads cracked until your Workers mend them.`, at[0], at[1], 'lost');
+      if (isMe(p)) sfx('alert');
+    } else if (deep && S.owner[tIdx(Math.min(S.W - 1, Math.max(0, at[0])), Math.min(S.H - 1, Math.max(0, at[1])))] === p) {
+      postMsg(p, `${playerName(by, true)} struck the deep under your land: the Murmur's tunnels there caved in.`, at[0], at[1], 'info');
+    }
+  }
+  logEvent({ t: S.time, k: 'sunderLand', p: by, m: w.m });
+}
+
+/** The cracked roads and track a Worker of p's could mend, a few patches apart (unclaimed, on p's ways). */
+function sunderMendSpots(p) {
+  if (!S.crk || !(S.crkN > 0)) return [];
+  const claimed = [];
+  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'mend') claimed.push(u.task.tile);
+  const out = [];
+  let n = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) {
+    if (!S.crk[t]) continue;
+    if (!S.road[t] && !(S.rail && S.rail[t])) { S.crk[t] = 0; continue; } // (the road is gone: nothing to mend)
+    n++;
+    if (out.length >= 3) continue;
+    const o = S.road[t] ? wayOwner(t) : S.owner[t];
+    if (o !== p) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (claimed.concat(out).some((c) => Math.abs((c % S.W) - i) <= 2 && Math.abs(((c / S.W) | 0) - j) <= 2)) continue;
+    out.push(t);
+  }
+  S.crkN = n;
+  return out;
+}
+
+/** Worker u goes to mend the cracked road or track at tile t. */
+function assignMend(u, t) {
+  cancelTask(u);
+  u.task = { type: 'mend', tile: t, phase: 'go', t: 0 };
+  if (!goTo(u, t % S.W, (t / S.W) | 0)) cancelTask(u);
+}
+
+/** A Worker mending cracks: there, it works SUNDER.mend s and mends the 3 x 3 patch round the tile. */
+function doMend(u, t, dt) {
+  if (!S.crk || !S.crk[t.tile]) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') { if (moveAlong(u, dt)) t.phase = 'work'; return; }
+  if (mustRecharge(u)) { cancelTask(u); return; }
+  u.busy = 1;
+  t.t = (t.t || 0) + dt * S.players[u.owner].mult * batFactor(u);
+  if (t.t < SUNDER.mend) return;
+  const i0 = t.tile % S.W, j0 = (t.tile / S.W) | 0;
+  let n = 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!inMap(i0 + di, j0 + dj)) continue;
+    const q = tIdx(i0 + di, j0 + dj);
+    if (S.crk[q]) { S.crk[q] = 0; n++; markDirty(i0 + di, j0 + dj); }
+  }
+  S.crkN = Math.max(0, (S.crkN || 0) - n);
+  const P = S.players[u.owner];
+  if (P) P.stats.mended = (P.stats.mended || 0) + n;
+  u.task = null; u.idleT = 0;
+}
+
+/** Robot u's pace on cracked ground and stunned: SUNDER.crackSpeed on a cracked road or track, 0 while stunned. */
+function sunderPace(u) {
+  if (u.stunT && u.stunT > S.time) return 0;
+  if (S.crk && S.crkN > 0) { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (t >= 0 && t < S.crk.length && S.crk[t]) return SUNDER.crackSpeed; }
+  return 1;
+}
+/* ------------------------------------------------------------------ the Deep Core */
+
+/*
+ * The Deep Core (DEEP; BDEFS.deepcore). b.dcT: s of depth (powered work while above DEEP.weak of its armor); b.dcStage:
+ * its stage (1..3, from dcT: deepStageAt); b.dcAcc: what it has brought up toward the next whole good of each; b.dcSrc:
+ * its power now ('gen', 'reactor' or ''); b.dcFuel: s left of the Fuel it last took from a Generator, b.dcGen that
+ * Generator (b.dcGenT: until when it counts as feeding it). The Murmur: b.dcCall the stage that calls them (2 or 3), on
+ * night b.dcCallN; b.dcWarn: its owner was told at dusk; b.dcHeldN: the night a call came up (at dawn, if it stands, it
+ * held). A fallen Core's open shaft is a Murmur exit (a burrow) with e.shaft its colony's id; e.capper the Worker capping
+ * it, e.capT s of that work, e.capPaid its Cement taken.
+ */
+const DEEP_STAGE_NAMES = ['bedrock', 'the buried ringfall', 'the deep seam'];
+
+/** The stage a Deep Core with `t` s of depth is at (1, 2 or 3). */
+function deepStageAt(t) { return t >= DEEP.stages[2] ? 3 : t >= DEEP.stages[1] ? 2 : 1; }
+
+/** What Deep Core b brings up a minute at its stage (no Crystal on Argos), before damage. */
+function deepRates(b) {
+  const out = Object.assign({}, DEEP.out[(b.dcStage || 1) - 1]);
+  if (biome() === 'lunar') delete out.crystal;
+  return out;
+}
+
+/** A Nuclear Reactor of b's owner within DEEP.reach of its square (built, on, not cut), or null. */
+function deepReactor(b) {
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) <= DEEP.reach + 0.5) return r;
+  }
+  return null;
+}
+
+/** A Generator of b's owner within DEEP.reach of its square with Fuel in stock to give it, or null. */
+function deepGen(b) { return megaGens(b, DEEP.reach).find((g) => (g.stock.fuel || 0) >= 1) || null; }
+
+/** What powers Deep Core b now: 'reactor' (one in reach: it uses no Uranium), 'gen' (Fuel it has, or a Generator's), or ''. */
+function deepPower(b) {
+  if (murmurCutOn(b)) return '';
+  if (deepReactor(b)) return 'reactor';
+  const g = b.dcGen && getE(b.dcGen);
+  if ((b.dcFuel || 0) > 0 && g && !g.dead && g.built && !g.paused && !murmurCutOn(g) && footDist(b, g.x + 0.5, g.y + 0.5) <= DEEP.reach + 0.5) return 'gen';
+  return deepGen(b) ? 'gen' : '';
+}
+
+/** Is Generator g feeding a Deep Core its Fuel now (it runs for it: see updateGenerator)? */
+function deepFeeds(g) {
+  for (const c of S.buildings) if (!c.dead && c.built && c.owner === g.owner && BDEFS[c.type].deepcore && c.dcGen === g.id && (c.dcGenT || 0) > S.time) return true;
+  return false;
+}
+
+/** The Deep Core, each tick: its power, its depth and stage, what it brings up, and the Murmur it calls. */
+function updateDeep(b, dt) {
+  const def = BDEFS[b.type], P = S.players[b.owner];
+  if (!b.dcStage) b.dcStage = deepStageAt(b.dcT || 0);
+  b.dcAcc = b.dcAcc || {};
+  deepHeld(b);
+  deepWarn(b);
+  const src = deepPower(b);
+  b.dcSrc = src;
+  b.working = false;
+  if (!src) {
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn, its depth kept.'
+      : `Stopped, its depth kept: no power (a Generator with Fuel within ${DEEP.reach} tiles, or a Nuclear Reactor)`;
+    return;
+  }
+  // On a Generator: a Fuel every DEEP.genFuel s, taken from it (it runs while it feeds the Core: see updateGenerator).
+  if (src === 'gen') {
+    if ((b.dcFuel || 0) <= 0) {
+      const g = deepGen(b);
+      if (!g) { b.status = 'Stopped, its depth kept: its Generator is out of Fuel (a Tanker brings it)'; return; }
+      bump(g.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
+      b.dcFuel = (b.dcFuel || 0) + DEEP.genFuel; b.dcGen = g.id;
+    }
+    b.dcFuel -= dt;
+    b.dcGenT = S.time + 1.2;
+  }
+  b.working = true;
+  const weak = b.armor < def.armor * DEEP.weak, k = (weak ? 0.5 : 1) * (P ? P.mult : 1);
+  if (!weak) b.dcT = (b.dcT || 0) + dt;
+  const st = deepStageAt(b.dcT || 0);
+  if (st > b.dcStage) deepDeeper(b, st);
+  const rates = deepRates(b), full = [];
+  for (const g in rates) {
+    b.dcAcc[g] = (b.dcAcc[g] || 0) + (rates[g] / 60) * dt * k;
+    while (b.dcAcc[g] >= 1) {
+      if ((b.stock[g] || 0) >= DEEP.cap) { b.dcAcc[g] = 1; full.push(GOOD[g].name); break; }
+      b.dcAcc[g] -= 1;
+      bump(b.stock, g, 1); madeGood(b.owner, g, 1);
+      if (P) { const key = 'deep' + g[0].toUpperCase() + g.slice(1); P.stats[key] = (P.stats[key] || 0) + 1; }
+    }
+  }
+  const per = Object.keys(rates).filter((g) => g !== 'uranium').map((g) => `${+(rates[g] * (weak ? 0.5 : 1)).toFixed(1)} ${GOOD[g].name}`).join(' and ');
+  const what = `${per} a minute` + (rates.uranium ? `, and a Uranium every ${Math.round(1 / (rates.uranium * (weak ? 0.5 : 1)))} minutes` : '');
+  const next = b.dcStage < 3 ? DEEP.stages[b.dcStage] - (b.dcT || 0) : 0;
+  b.status = (weak ? `Damaged: no deeper, and half the output (repair it above ${Math.round(DEEP.weak * 100)}%). ` : '') +
+    `Stage ${b.dcStage}, ${DEEP_STAGE_NAMES[b.dcStage - 1]}: ${what}` + (src === 'reactor' ? ' on Reactor power' : '') +
+    (b.dcStage < 3 ? (weak ? '' : `; stage ${b.dcStage + 1} in ${fmtSecs(next)}`) : '; at its deepest') + (full.length ? `. Full of ${full.join(' and ')}: Haulers take it` : '');
+}
+
+/** Deep Core b reaches stage `st`: its owner is told, and with the Murmur on, they will come for it the next night. */
+function deepDeeper(b, st) {
+  b.dcStage = st;
+  const P = S.players[b.owner], c = bCentre(b);
+  if (P) P.stats.deepStage = Math.max(P.stats.deepStage || 0, st);
+  logEvent({ t: S.time, k: 'deep', p: b.owner, g: st });
+  addFx('ring', c.x, c.y, { color: '#b07cff', r: 2.4 });
+  sfx('deepstage', c.x, c.y);
+  const heard = !!murmurCfg() && (S.mur && (S.mur.nests || []).some((id) => { const n = getE(id); return n && !n.dead; }));
+  if (heard) { b.dcCall = st; b.dcCallN = murmurNights(S.time) + 1; b.dcWarn = 0; }
+  const lunar = biome() === 'lunar';
+  postMsg(b.owner, st === 2
+    ? `Your Deep Core reached the buried ringfall (stage 2): ${lunar ? 'more Ore' : 'Crystal comes up with the Ore'} now.${heard ? ' Something below heard it: the next night a bigger raid comes for it.' : ''}`
+    : `Your Deep Core struck the deep seam (stage 3): a Uranium every 4 minutes now.${heard ? ' The next night, the Deep answers: Brutes, and a new tunnel exit near it.' : ''}`, c.x, c.y, heard ? 'warn' : 'good');
+}
+
+/** At dusk before Deep Core b's call: its owner is told that tonight they come for it. */
+function deepWarn(b) {
+  if (!b.dcCall || b.dcWarn || !murmurCfg() || murmurNight(S.time)) return;
+  if (murmurNights(S.time) + 1 < (b.dcCallN || 0) || dayClock(S.time) < NIGHT_FROM - MURMUR.warn) return;
+  b.dcWarn = 1;
+  postMsg(b.owner, b.dcCall >= 3 ? 'Tonight the Deep answers your Deep Core. Guard it: Brutes are coming, and a new exit will open near it.' : 'Tonight the Murmur come for your Deep Core, more of them than a night\'s pack. Guard it.', b.x + 1, b.y + 1, 'warn');
+}
+
+/** Dawn after the night a call came up for Deep Core b: still standing, it held (a mission counts it). */
+function deepHeld(b) {
+  if (!b.dcHeldN || murmurNight(S.time)) return;
+  b.dcHeldN = 0;
+  const P = S.players[b.owner];
+  if (P) P.stats.deepHeld = (P.stats.deepHeld || 0) + 1;
+  postMsg(b.owner, 'Dawn: your Deep Core stood through the night.', b.x + 1, b.y + 1, 'good');
+}
+
+/**
+ * The calls of every Deep Core, each tick of a night (from murmurTick): a minute into the night it was called for (b.dcCallN),
+ * a pack comes up for it, DEEP.call times a night's (in the Hollow DEEP.hollow times that again), from the exit nearest it;
+ * at stage 3 a new exit opens within DEEP.exitR tiles of it first, and DEEP.breakers Brutes more come with the pack.
+ */
+function deepCalls(n, C) {
+  const M = S.mur;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.dcCall || !BDEFS[b.type].deepcore || n < (b.dcCallN || 0) || S.time < (M.at || 0) + 50) continue;
+    const st = b.dcCall;
+    b.dcCall = 0; b.dcWarn = 0;
+    const c = bCentre(b);
+    let nest = null, bd = Infinity;
+    for (const id of M.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+    if (!nest) continue;
+    let ex = st >= 3 ? deepExit(b, nest, n) : null;
+    if (!ex) ex = murmurNearExit(c.x, c.y, 60);
+    const from = ex || nest, home = ex ? getE(ex.nest) || nest : nest;
+    const k = S.hollow ? DEEP.hollow : 1, size = Math.max(2, Math.round(murmurBy(C.pack, n) * DEEP.call * k));
+    const brutes = (n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0) + (st >= 3 ? DEEP.breakers * k : 0);
+    const task = { type: 'raid', focus: b.id, x: b.x, y: b.y, until: S.time + 600, night: 1 };
+    for (let q = 0; q < size + (st >= 3 ? DEEP.breakers * k : 0); q++) {
+      const u = spawnCritter(from, q < brutes ? 'brute' : 'scuttler', { ...task });
+      u.nest = home.id; if (ex) u.exit = ex.id;
+    }
+    addFx('dust', from.x + 0.5, from.y + 0.5, { r: 0.9 });
+    b.dcHeldN = n;
+    logEvent({ t: S.time, k: 'deepCall', p: b.owner, g: st });
+    postMsg(b.owner, `The Murmur are up for your Deep Core: ${size + (st >= 3 ? DEEP.breakers * k : 0)} of them${brutes ? ', Brutes among them' : ''}!`, from.x, from.y, 'bad');
+    if (isMe(b.owner)) sfx('alert');
+  }
+}
+
+/**
+ * A new tunnel exit for nest `nest` within DEEP.exitR tiles of Deep Core b (the Deep answering it, stage 3): on open level
+ * ground a colony's robots can walk to, not a road, building, resource or ramp, clear of other exits; about five tiles from
+ * its square. Returns it, or null where there's nowhere.
+ */
+function deepExit(b, nest, n) {
+  const c = bCentre(b), R = DEEP.exitR, reach = murmurReach(), exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow');
+  let best = -1, bs = -Infinity;
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = footDist(b, i + 0.5, j + 0.5);
+    if (d < 2 || dist(i + 0.5, j + 0.5, c.x, c.y) > R) continue;
+    if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t) || calmAt(i + 0.5, j + 0.5) || atmosGardenAt(i + 0.5, j + 0.5)) continue;
+    if (exits.some((e) => dist2(e.x, e.y, i, j) < 16)) continue;
+    const s = -Math.abs(d - 5) + hash2(t, b.id, n) * 1.5;
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (best < 0) return null;
+  const e = addBuilding(wildOwner(), 'burrow', best % S.W, (best / S.W) | 0, true);
+  e.nest = nest.id; e.armor = MURMUR.exitArmor;
+  addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1 });
+  postMsg(b.owner, 'Something below answered your Deep Core: a new tunnel exit opened beside it. Send warbots to collapse it.', e.x, e.y, 'warn');
+  return e;
+}
+
+/**
+ * Deep Core b was destroyed by force (destroyBuilding): its depth and stock are gone, and with the Murmur on its open
+ * shaft becomes their exit (a burrow at its middle tile, e.shaft its colony) until a Worker caps it (deepCapStep).
+ */
+function deepShaft(b) {
+  const P = S.players[b.owner], c = bCentre(b), i = Math.floor(c.x), j = Math.floor(c.y);
+  let nest = null, bd = Infinity;
+  if (murmurCfg() && S.mur) for (const id of S.mur.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+  logEvent({ t: S.time, k: 'deepLost', p: b.owner, g: b.dcStage || 1 });
+  if (!nest || !inMap(i, j) || S.bAt[tIdx(i, j)] || S.terrain[tIdx(i, j)] !== T_GROUND) {
+    if (P) postMsg(b.owner, 'Your Deep Core is gone, and its depth with it: a new one starts at bedrock.', i, j, 'lost');
+    return;
+  }
+  const e = addBuilding(wildOwner(), 'burrow', i, j, true);
+  e.nest = nest.id; e.armor = MURMUR.exitArmor; e.shaft = b.owner;
+  addFx('dust', i + 0.5, j + 0.5, { r: 1.4 });
+  if (P) postMsg(b.owner, `Your Deep Core is gone, its depth with it, and its open shaft is a way up for the Murmur. A Worker caps it (${DEEP.capCement} Cement), or warbots cave it in.`, i, j, 'lost');
+}
+
+/** The open shafts of fallen Deep Cores that colony p's Workers cap: theirs, not yet being capped by someone alive. */
+function deepShaftsFor(p) {
+  const out = [];
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || e.shaft !== p) continue;
+    const u = e.capper && getE(e.capper);
+    if (u && !u.dead && u.task && u.task.type === 'capshaft' && u.task.bld === e.id) continue;
+    out.push(e);
+  }
+  return out;
+}
+
+/** Worker u goes to cap shaft e (its Cement is taken from storage now, once). */
+function assignCap(u, e) {
+  cancelTask(u);
+  if (!e.capPaid) { takeGood(u.owner, 'cement', DEEP.capCement); e.capPaid = 1; }
+  u.task = { type: 'capshaft', bld: e.id, phase: 'go' };
+  e.capper = u.id;
+  if (!goTo(u, e.x, e.y)) { cancelTask(u); u.task = null; e.capper = 0; }
+}
+
+/** A Worker capping a fallen Deep Core's shaft: walk over, then DEEP.capT s of work, and the shaft is sealed. */
+function doCap(u, t, dt) {
+  const e = getE(t.bld);
+  if (!e || e.dead || e.capper !== u.id) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') {
+    if (moveAlong(u, dt) || dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) < 2.3) { t.phase = 'work'; u.path = null; }
+    return;
+  }
+  if (mustRecharge(u)) { e.capper = 0; u.task = null; return; }
+  u.busy = 1;
+  e.capT = (e.capT || 0) + dt * S.players[u.owner].mult * batFactor(u);
+  if (e.capT < DEEP.capT) return;
+  const p = e.shaft, P = S.players[p];
+  if (P) P.stats.shaftsCapped = (P.stats.shaftsCapped || 0) + 1;
+  destroyBuilding(e, false, true);
+  addFx('ring', e.x + 0.5, e.y + 0.5, { color: '#7ee08a' });
+  addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
+  postMsg(p, 'The Deep Core\'s old shaft is capped: the Murmur can\'t come up through it any more.', e.x, e.y, 'good');
+  u.task = null; u.idleT = 0;
+}
+
+/* ------------------------------------------------------------------ the Atmosphere Engine */
+
+/*
+ * The Atmosphere Engine (ATMOS; BDEFS.atmos). b.aeT: s of powered work; b.aeStage: its stage (1..4, from aeT: atmosStageAt);
+ * b.aeP: how far (tiles from its middle) its change has spread so far (up to ATMOS.r of its stage); b.aeSrc: its power now
+ * ('gen', 'reactor' or ''); b.aeFuel: s left of the Fuel it last took from its Generators (b.aeGens their ids, b.aeGenT until
+ * when they count as feeding it); b.aeU: s left of the Uranium it last took from a Reactor. b.aeWith: s toward the next
+ * tile of Bloom withering (Green); b.aeSeed: s toward the next grove (Garden). The Murmur: b.aeCall the stage that calls
+ * Sappers (2..4), on night b.aeCallN; b.aeWarn: its owner was told at dusk. The land: S.green (tile: the stage that reached
+ * it, kept for good); S.aeFade: fallen Engines' calm fading ({ x, y, r, st, t0 }).
+ */
+
+/** The stage an Engine with `t` s of power is at (1 to 4). */
+function atmosStageAt(t) { let st = 1; for (let k = 1; k < ATMOS.stages.length; k++) if (t >= ATMOS.stages[k]) st = k + 1; return st; }
+
+/** How far Engine b's change reaches now (tiles from its middle). */
+function atmosReach(b) { return Math.min(ATMOS.r[(b.aeStage || 1) - 1], b.aeP || 0); }
+
+/** Generators of b's owner within ATMOS.reach of its square, on and with a whole Fuel in stock. */
+function atmosGens(b) {
+  const out = [];
+  for (const g of S.buildings) {
+    if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'generator' || g.paused || murmurCutOn(g)) continue;
+    if (footDist(b, g.x + 0.5, g.y + 0.5) <= ATMOS.reach + 0.5 && (g.stock.fuel || 0) >= 1) out.push(g);
+  }
+  return out;
+}
+
+/** A Nuclear Reactor of b's owner within ATMOS.reach of it (built, on) with Uranium or Enriched Uranium in it, or null. */
+function atmosReactor(b) {
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) <= ATMOS.reach + 0.5 && (r.stock.uranium || 0) + (r.stock.fissile || 0) > 0) return r;
+  }
+  return null;
+}
+
+/** Are the Generators Engine b took its Fuel from still there for it (built, on, in reach)? */
+function atmosGensHeld(b) {
+  return (b.aeGens || []).length >= ATMOS.gens && b.aeGens.every((id) => { const g = getE(id); return g && !g.dead && g.built && !g.paused && !murmurCutOn(g) && footDist(b, g.x + 0.5, g.y + 0.5) <= ATMOS.reach + 0.5; });
+}
+
+/** What powers Engine b now: 'gen' (its Generators' Fuel, paid or there to take), 'reactor' (Uranium paid or there), or ''. */
+function atmosPower(b) {
+  if (murmurCutOn(b) || b.paused || b.cut) return '';
+  if ((b.aeFuel || 0) > 0 && atmosGensHeld(b)) return 'gen';
+  const ur = (b.aeU || 0) > 0 && b.aeUr ? getE(b.aeUr) : null;
+  if (ur && !ur.dead && ur.built && !ur.paused && !murmurCutOn(ur) && footDist(b, ur.x + 0.5, ur.y + 0.5) <= ATMOS.reach + 0.5) return 'reactor';
+  if (atmosGens(b).length >= ATMOS.gens) return 'gen';
+  if (atmosReactor(b)) return 'reactor';
+  return '';
+}
+
+/** Is Generator g feeding an Atmosphere Engine its Fuel now (it runs for it: see updateGenerator)? */
+function atmosFeeds(g) {
+  for (const c of S.buildings) if (!c.dead && c.built && c.owner === g.owner && BDEFS[c.type].atmos && (c.aeGenT || 0) > S.time && (c.aeGens || []).includes(g.id)) return true;
+  return false;
+}
+
+/** The Atmosphere Engine, each tick: its power, its stage, how far its change has spread, and what it does there. */
+function updateAtmos(b, dt) {
+  if (!b.aeStage) b.aeStage = atmosStageAt(b.aeT || 0);
+  atmosWarn(b);
+  const src = atmosPower(b);
+  b.aeSrc = src;
+  b.working = false;
+  const reach = Math.round(atmosReach(b)), name = ATMOS_STAGE_NAMES[b.aeStage - 1];
+  if (!src) {
+    b.status = murmurCutOn(b) ? `Dark: the Murmur cut its power. ${name}, ${reach} tiles round it, kept; it grows again at dawn.`
+      : `Stopped (${name}, ${reach} tiles round it, kept): no power. ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor`;
+    return;
+  }
+  if (src === 'gen') {
+    if ((b.aeFuel || 0) <= 0 || !atmosGensHeld(b)) {
+      const gs = atmosGens(b).slice(0, ATMOS.gens);
+      if (gs.length < ATMOS.gens) { b.status = `Stopped: its Generators are out of Fuel (it takes a Fuel a minute from each of ${ATMOS.gens})`; return; }
+      for (const g of gs) { bump(g.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); }
+      b.aeGens = gs.map((g) => g.id); b.aeFuel = ATMOS.genFuel;
+    }
+    b.aeFuel -= dt;
+    b.aeGenT = S.time + 1.2;
+  } else {
+    if ((b.aeU || 0) <= 0) {
+      const r = atmosReactor(b);
+      const g = (r.stock.uranium || 0) >= 1 ? 'uranium' : 'fissile';
+      bump(r.stock, g, -1); usedGood(b.owner, g, 1);
+      b.aeU = g === 'uranium' ? ATMOS.uEvery : 2 * ATMOS.uEvery; b.aeUr = r.id;
+    }
+    b.aeU -= dt;
+  }
+  b.working = true;
+  b.aeT = (b.aeT || 0) + dt * (S.players[b.owner] ? S.players[b.owner].mult : 1);
+  const st = atmosStageAt(b.aeT);
+  if (st > b.aeStage) atmosStage(b, st);
+  const R = ATMOS.r[b.aeStage - 1];
+  b.aeP = Math.min(R, (b.aeP || 0) + ATMOS.spread * dt);
+  if (b.aeStage >= 3) {
+    b.aeWith = (b.aeWith || 0) + dt;
+    if (b.aeWith >= ATMOS.wither) { b.aeWith -= ATMOS.wither; atmosWither(b, 1); }
+  }
+  if (b.aeStage >= 4) {
+    b.aeSeed = (b.aeSeed || 0) + dt;
+    if (b.aeSeed >= ATMOS.seedEvery) { b.aeSeed -= ATMOS.seedEvery; atmosSeed(b); }
+  }
+  // Its Storm Front at the Garden: lightning, every STORM.boltEvery s of power (stormBolt).
+  if (b.aeStorm && b.aeStage >= 4) {
+    b.aeBolt = (b.aeBolt || 0) + dt;
+    if (b.aeBolt >= STORM.boltEvery) { b.aeBolt -= STORM.boltEvery; stormBolt(b); }
+  }
+  const next = b.aeStage < 4 ? ATMOS.stages[b.aeStage] - b.aeT : 0;
+  b.status = `${ATMOS_STAGE_NAMES[b.aeStage - 1]}, ${Math.round(atmosReach(b))} of ${R} tiles round it` + (src === 'reactor' ? ', on Reactor power' : '') +
+    (b.aeStage < 4 ? `: ${ATMOS_STAGE_NAMES[b.aeStage]} in ${fmtSecs(next)}` : ': the garden is growing') + (b.aeStorm && b.aeStage >= 2 ? '. Its storm front is out' : '');
+}
+
+/** Engine b reaches stage `st`: its owner is told; with the Murmur on, Sappers dig in under it the next night. */
+function atmosStage(b, st) {
+  b.aeStage = st;
+  const P = S.players[b.owner], c = bCentre(b);
+  if (P) P.stats.atmosStage = Math.max(P.stats.atmosStage || 0, st);
+  logEvent({ t: S.time, k: 'atmos', p: b.owner, g: st });
+  addFx('ring', c.x, c.y, { color: st >= 3 ? '#7ee08a' : '#9fdcff', r: 3 });
+  sfx('atmosstage', c.x, c.y);
+  const heard = !!murmurCfg() && !!(S.mur && (S.mur.nests || []).some((id) => { const n = getE(id); return n && !n.dead; })) && ATMOS.sappers[st - 1] > 0;
+  if (heard) { b.aeCall = st; b.aeCallN = murmurNights(S.time) + 1; b.aeWarn = 0; }
+  const what = st === 2 ? 'It rains round it at night, the barren ground there is fertile now (Bio Farms work anywhere in it), and the Bloom stops spreading.'
+    : st === 3 ? 'Grass spreads, crops there grow a quarter faster, and the Bloom withers back.' : 'Groves seed themselves, the Bloom is gone, and no Murmur exit can open in it.';
+  postMsg(b.owner, `Your Atmosphere Engine reached stage ${st}, ${ATMOS_STAGE_NAMES[st - 1]} (${ATMOS.r[st - 1]} tiles): ${what}${heard ? ' The Bloom will fight back: the next night Sappers dig in under it.' : ''}`, c.x, c.y, heard ? 'warn' : 'good');
+}
+
+/** At dusk before Engine b's call: its owner is told that tonight Sappers come for it. */
+function atmosWarn(b) {
+  if (!b.aeCall || b.aeWarn || !murmurCfg() || murmurNight(S.time)) return;
+  if (murmurNights(S.time) + 1 < (b.aeCallN || 0) || dayClock(S.time) < NIGHT_FROM - MURMUR.warn) return;
+  b.aeWarn = 1;
+  postMsg(b.owner, 'Tonight the Bloom fights back: Sappers will dig in under your Atmosphere Engine. Guard it.', b.x + 2, b.y + 2, 'warn');
+}
+
+/** The Sappers of every Engine's call, each tick of a night (from murmurTick): a minute in, from the exit nearest it. */
+function atmosCalls(n) {
+  const M = S.mur;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.aeCall || !BDEFS[b.type].atmos || n < (b.aeCallN || 0) || S.time < (M.at || 0) + 50) continue;
+    const st = b.aeCall, k = ATMOS.sappers[st - 1] || 0;
+    b.aeCall = 0; b.aeWarn = 0;
+    const c = bCentre(b);
+    let nest = null, bd = Infinity;
+    for (const id of M.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+    if (!nest || !k) continue;
+    const ex = murmurNearExit(c.x, c.y, 60), from = ex || nest, home = ex ? getE(ex.nest) || nest : nest;
+    const at = murmurStand(c.x, c.y) || { x: b.x - 1, y: b.y - 1 };
+    for (let q = 0; q < k; q++) {
+      const u = spawnCritter(from, 'sapper', { type: 'raid', role: 'sap', focus: b.id, x: at.x, y: at.y, until: S.time + 600, night: 1 });
+      u.nest = home.id; if (ex) u.exit = ex.id;
+      u.pose = 'dig'; u.poseT = 0; u.charge = 0.3;
+    }
+    addFx('dust', from.x + 0.5, from.y + 0.5, { r: 0.9 });
+    logEvent({ t: S.time, k: 'atmosCall', p: b.owner, g: st });
+    postMsg(b.owner, `The Bloom fights back: ${k === 1 ? 'a Sapper is' : `${k} Sappers are`} digging in under your Atmosphere Engine!`, from.x, from.y, 'bad');
+    if (isMe(b.owner)) sfx('alert');
+  }
+}
+
+/** Every Engine's land, once a second (from simStep): its change spread out over the ground, the Bloom kept out, fades run down. */
+function atmosTick() {
+  if (S.aeFade && S.aeFade.length) S.aeFade = S.aeFade.filter((f) => S.time - f.t0 < ATMOS.fade);
+  // (a mission that counts the greened land: its share, and how long it has held what the mission wants)
+  if (S.mission && S.mission.greenWant) { const g = atmosGreened(); S.mission.greenPct = g.of ? Math.floor((100 * g.n) / g.of) : 0; S.mission.greenRun = S.mission.greenPct >= S.mission.greenWant ? (S.mission.greenRun || 0) + 1 : 0; }
+  // (a mission with a rival's storm over the player's base: how long its sky has been held since the storm was broken)
+  if (S.mission && S.mission.stormCalm) S.mission.calmRun = stormBrokenFor(0) ? (S.mission.calmRun || 0) + 1 : 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
+    atmosPaint(b);
+    if (b.aeStage >= 4) atmosWither(b, Infinity); // (the Garden: no Bloom at all, and no exit)
+  }
+  if (atmosStorms().length || (S.drought && Object.keys(S.drought).length)) atmosDrought();
+}
+
+/** Mark the ground Engine b's change has reached with its stage (S.green): from Rain fertile, unless burned for good. */
+function atmosPaint(b) {
+  const c = bCentre(b), R = atmosReach(b), st = b.aeStage || 1;
+  if (R <= 0) return;
+  S.green = S.green || {};
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, c.x, c.y) > R * R) continue;
+    const t = tIdx(i, j);
+    if ((S.green[t] || 0) >= st || S.terrain[t] !== T_GROUND || burntSoil(t) || (S.lava && S.lava[t]) || (S.tidal && S.tidal[t])) continue;
+    S.green[t] = st;
+    if (st >= 2 && !S.fert[t] && !S.ramp[t] && (!S.res[t] || S.res[t] === R_STALK || S.res[t] === R_CROP)) S.fert[t] = 1;
+    markDirty(i, j);
+  }
+}
+
+/**
+ * The Bloom withering round Engine b (Green and Garden): up to `n` tiles of it within its reach, the nearest its middle
+ * first: a tunnel (S.tun) or a Bloom vein. With n Infinity (the Garden), all of it, and any tunnel exit there caves in.
+ */
+function atmosWither(b, n) {
+  const c = bCentre(b), R = atmosReach(b), cand = [];
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, c.x, c.y);
+    if (d > R * R || !((S.tun && S.tun[t]) || S.res[t] === R_VEIN)) continue;
+    cand.push([d, t]);
+  }
+  if (n === Infinity) for (const e of S.buildings) if (!e.dead && e.type === 'burrow' && dist2(e.x + 0.5, e.y + 0.5, c.x, c.y) <= R * R) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 }); destroyBuilding(e, false, true); }
+  if (!cand.length) return;
+  cand.sort((a, d) => a[0] - d[0] || a[1] - d[1]);
+  for (let k = 0; k < Math.min(n, cand.length); k++) {
+    const t = cand[k][1];
+    if (S.tun && S.tun[t]) { S.tun[t] = 0; if (S.mur) S.mur.ver = (S.mur.ver || 0) + 1; }
+    if (S.res[t] === R_VEIN) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; }
+    markDirty(t % S.W, (t / S.W) | 0);
+  }
+  const P = S.players[b.owner];
+  if (P && n !== Infinity) P.stats.atmosWither = (P.stats.atmosWither || 0) + 1;
+}
+
+/** The Garden seeds a grove (a stalk grove: Fiber) on open ground in Engine b's reach, up to ATMOS.groves there. */
+function atmosSeed(b) {
+  const c = bCentre(b), R = atmosReach(b);
+  let have = 0, best = -1, bs = -1;
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, c.x, c.y) > R * R) continue;
+    const t = tIdx(i, j);
+    if (S.res[t] === R_STALK) { have++; continue; }
+    if (S.green[t] !== 4 || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || S.resRes[t] || footDist(b, i + 0.5, j + 0.5) < 3) continue;
+    const s = hash2(t, b.id, Math.floor(S.time / ATMOS.seedEvery));
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (have >= ATMOS.groves || best < 0) return;
+  S.res[best] = R_STALK; S.amt[best] = RES[R_STALK].amount; S.grow[best] = 0;
+  markDirty(best % S.W, (best / S.W) | 0);
+  const P = S.players[b.owner];
+  if (P) P.stats.atmosGroves = (P.stats.atmosGroves || 0) + 1;
+}
+
+/** Engine b is gone (destroyBuilding): what it changed stays; its calm and its hold on the Bloom fade over ATMOS.fade s. */
+function atmosGone(b) {
+  const c = bCentre(b), R = atmosReach(b);
+  if (R > 0 && b.aeStage) (S.aeFade = S.aeFade || []).push({ x: c.x, y: c.y, r: R, st: b.aeStage, t0: S.time, p: b.owner });
+  logEvent({ t: S.time, k: 'atmosLost', p: b.owner, g: b.aeStage || 1 });
+  const P = S.players[b.owner];
+  if (P && !b.gone) postMsg(b.owner, `Your Atmosphere Engine is gone${b.aeStorm ? ', and its storm front with it' : ''}. The land it changed stays green, but the storms and the Bloom will come back in at its edges.`, c.x, c.y, 'lost');
+  // Its storm front ends at once: the colonies under it are told.
+  if (b.aeStorm && (b.aeStage || 0) >= 2) for (const Q of S.players) {
+    if (Q.out || isWild(Q.id) || !foes(Q.id, b.owner) || !S.buildings.some((e) => !e.dead && e.owner === Q.id && dist2(e.x + 0.5, e.y + 0.5, b.aeStorm[0] + 0.5, b.aeStorm[1] + 0.5) <= sq(STORM.r + 1))) continue;
+    postMsg(Q.id, 'The storm over your colony breaks up: the Atmosphere Engine that held it is gone.', b.aeStorm[0], b.aeStorm[1], 'good');
+  }
+  b.aeStorm = null;
+}
+
+/*
+ * Where the Engines hold the weather and the Bloom, this tick: each standing one with a stage (its reach), and each fallen
+ * one's, shrinking to nothing over ATMOS.fade s. { x, y, r, st, id, p (its owner; -1 unknown), on (it has power) }. And
+ * the Storm Fronts up (atmosStormOn): { x, y, r, p, st, id }. Worked out once a tick (every bot asks it as it moves).
+ */
+let ATMOS_HOLD = { of: null, tick: -1, list: [], storms: [] };
+function atmosHolds() {
+  if (ATMOS_HOLD.of === S && ATMOS_HOLD.tick === S.tick) return ATMOS_HOLD.list;
+  const list = [], storms = [];
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
+    const c = bCentre(b), r = atmosReach(b);
+    if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id, p: b.owner, on: !!b.working });
+    if (atmosStormOn(b)) storms.push({ x: b.aeStorm[0] + 0.5, y: b.aeStorm[1] + 0.5, r: STORM.r, p: b.owner, st: b.aeStage, id: b.id });
+  }
+  for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0, p: f.p ?? -1, on: false }); }
+  ATMOS_HOLD = { of: S, tick: S.tick, list, storms };
+  return list;
+}
+/** The Storm Fronts up this tick (see atmosHolds). */
+function atmosStorms() { atmosHolds(); return ATMOS_HOLD.storms; }
+/** The highest stage of an Engine's hold over (x, y): 1 calm (no dust storm), 2 the Bloom can't spread, 4 no exit. 0 none. */
+function atmosAt(x, y) {
+  if (!S.buildings.length) return 0;
+  let st = 0;
+  for (const h of atmosHolds()) if (h.st > st && dist2(x, y, h.x, h.y) <= h.r * h.r) st = h.st;
+  return st;
+}
+/** Does building e draw the Murmur first (an Atmosphere Engine standing: they hate it, and come from ATMOS.lure tiles further)? */
+function atmosLure(e) { return !!(e.built && BDEFS[e.type].atmos); }
+/** Is (x, y) in an Engine's Garden, where no Murmur exit can open? */
+function atmosGardenAt(x, y) { const H = atmosHolds(); return H.length > 0 && H.some((h) => h.st >= 4) && atmosAt(x, y) >= 4; }
+
+/** How much of the land (ground tiles) has an Engine greened (stage 3 or more, not burned since)? { n, of } */
+function atmosGreened() {
+  let n = 0, of = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) if (S.terrain[t] === T_GROUND) { of++; if ((S.green[t] || 0) >= 3) n++; }
+  return { n, of };
+}
+
+/* ------------------------------------------------------------------ the circle is its owner's, and the Storm Front */
+
+/*
+ * The circle is its owner's (the owner's approval, Nov 21 2026): the calm in a dust storm (evSpeed) and the faster crops
+ * on Green (growStalks) are for the Engine's owner and allies; a foe's robots on its ground wade through mud from Rain
+ * (atmosMud), and while it has power a foe's Torches can't burn there (atmosRainAt). Its Storm Front (STORM): b.aeStorm,
+ * the tile it is centred on, set by an order (atmosStorm: setAtmosStorm) from Rain; b.aeStormT when it was last set (the
+ * STORM.cd wait); b.aeBolt, s of power toward the next lightning (Garden), b.aeBoltN how many have come (the seed for the
+ * pick). S.drought (tile: s a foe's crop there has been under a storm from Green; see atmosDrought).
+ */
+
+/** Is (x, y) in the circle of an Engine (standing, or a fallen one's fading hold) of player p or one of p's allies? */
+function atmosOwnAt(x, y, p) {
+  if (!(p >= 0) || !S.buildings.length) return false;
+  for (const h of atmosHolds()) if (h.p >= 0 && !foes(h.p, p) && dist2(x, y, h.x, h.y) <= h.r * h.r) return true;
+  return false;
+}
+/** The hold of a standing Engine of a foe of player p over (x, y), at stage `st` or later (and with power, if `on`), or null. */
+function atmosFoeAt(x, y, p, st, on) {
+  if (!S.buildings.length) return null;
+  for (const h of atmosHolds()) if (h.id && h.st >= st && (!on || h.on) && h.p >= 0 && foes(h.p, p) && dist2(x, y, h.x, h.y) <= h.r * h.r) return h;
+  return null;
+}
+/** Is it raining on (x, y) for player p's Torches: in the circle of a foe's Engine at Rain or later, with power? (no burning there) */
+function atmosRainAt(x, y, p) { return p >= 0 && !isWild(p) && !!atmosFoeAt(x, y, p, 2, true); }
+/**
+ * Robot or vehicle u's pace in the weather a foe made: on a foe's Engine's ground from Rain, the mud (ATMOS.mud); under a
+ * foe's Storm Front, STORM.slow. Not the Murmur, aircraft or ships.
+ */
+function atmosMud(u) {
+  if (!S.buildings.length || (!atmosHolds().length && !ATMOS_HOLD.storms.length)) return 1;
+  if (!(u.owner >= 0) || isWild(u.owner) || BOTS[u.type].air || BOTS[u.type].sea || BOTS[u.type].wild) return 1;
+  if (atmosFoeAt(u.x, u.y, u.owner, 2, false)) return ATMOS.mud;
+  return stormOver(u.x, u.y, u.owner) ? STORM.slow : 1;
+}
+
+/** Is Engine b's Storm Front up now (set, at Rain or later, the Engine standing with power)? */
+function atmosStormOn(b) { return !!(b && !b.dead && b.built && b.aeStorm && (b.aeStage || 0) >= 2 && b.working); }
+/** The Storm Front of a foe of player p over (x, y), or null; none inside any Engine's circle (the calm: atmosAt). */
+function stormOver(x, y, p) {
+  const L = atmosStorms();
+  if (!L.length || !(p >= 0) || isWild(p)) return null;
+  for (const s of L) if (foes(s.p, p) && dist2(x, y, s.x, s.y) <= s.r * s.r) return atmosAt(x, y) >= 1 ? null : s;
+  return null;
+}
+/** Is building (or site) b under a foe's Storm Front? */
+function stormOverB(b) { if (!atmosStorms().length) return null; const c = bCentre(b); return stormOver(c.x, c.y, b.owner); }
+/** How fast site s goes up for its builders: STORM.build under a foe's Storm Front. */
+function stormWork(s) { return stormOverB(s) ? STORM.build : 1; }
+
+/** Why Engine b can't set its Storm Front down centred on tile (i, j), or '' if it can. */
+function atmosStormBlocked(b, i, j) {
+  if (!b || b.dead || !BDEFS[b.type].atmos) return 'That Atmosphere Engine is gone.';
+  if (!b.built) return 'The Atmosphere Engine isn\'t finished yet.';
+  if ((b.aeStage || 1) < 2) return `The Storm Front comes with stage 2, Rain: ${fmtSecs(Math.max(1, Math.ceil(ATMOS.stages[1] - (b.aeT || 0))))} more of power.`;
+  if (!b.aeSrc) return `It has no power: ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor.`;
+  if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Pick a spot on the map.';
+  const left = STORM.cd - (S.time - (b.aeStormT ?? -1e9));
+  if (left > 0) return `The sky is still turning: the storm can be moved again in ${fmtSecs(Math.ceil(left))}.`;
+  const c = bCentre(b), x = i + 0.5, y = j + 0.5, R = ATMOS.r[(b.aeStage || 1) - 1];
+  if (dist(c.x, c.y, x, y) < R + STORM.r) return `Too close to its own circle: the storm must stay clear of the ${R} tiles round the Engine (${R + STORM.r} from its middle).`;
+  for (const e of S.buildings) {
+    if (e === b || e.dead || !e.built || !BDEFS[e.type].atmos || !e.aeStage) continue;
+    const ec = bCentre(e), r = atmosReach(e);
+    if (r > 0 && dist2(ec.x, ec.y, x, y) <= r * r) return 'Another Atmosphere Engine holds the sky there: its circle stays calm.';
+  }
+  return '';
+}
+/** Set Engine b's Storm Front down centred on tile (i, j) (an order: atmosStorm). '' or why not. */
+function setAtmosStorm(b, i, j) {
+  const why = atmosStormBlocked(b, i, j);
+  if (why) return why;
+  b.aeStorm = [i, j]; b.aeStormT = S.time;
+  const P = S.players[b.owner];
+  if (P) P.stats.storms = (P.stats.storms || 0) + 1;
+  logEvent({ t: S.time, k: 'storm', p: b.owner, g: b.aeStage || 2 });
+  addFx('ring', i + 0.5, j + 0.5, { color: '#7c8ba8', r: STORM.r, life: 1.2 });
+  // The colonies under it are told (once in a while each).
+  for (const Q of S.players) {
+    if (Q.out || isWild(Q.id) || !foes(Q.id, b.owner) || S.time - (Q.stormMsg ?? -999) < 60) continue;
+    if (!S.buildings.some((e) => !e.dead && e.owner === Q.id && dist2(e.x + 0.5, e.y + 0.5, i + 0.5, j + 0.5) <= sq(STORM.r + 1))) continue;
+    Q.stormMsg = S.time;
+    postMsg(Q.id, `A storm front from ${playerName(b.owner)}'s Atmosphere Engine has settled over your colony: your robots slow, your sites go up slower and your guns reach less under it. Destroy the Engine, or calm the sky with one of your own.`, i, j, 'bad');
+    if (isMe(Q.id)) sfx('alert');
+  }
+  return '';
+}
+/** Call Engine b's Storm Front off (an order: atmosStormOff). The wait to set it down again stays. */
+function atmosStormOff(b) { if (b && b.aeStorm) b.aeStorm = null; }
+
+/**
+ * The drought (once a second, from atmosTick): a foe's crops under a Storm Front from Green stop growing (S.drought marks
+ * them: growStalks skips them) and after STORM.drought s under it wither, the soil left as it was. Out from under it, a
+ * crop's count starts again.
+ */
+function atmosDrought() {
+  const old = S.drought || {}, D = {};
+  for (const s of atmosStorms()) {
+    if (s.st < 3) continue;
+    for (let j = Math.floor(s.y - s.r); j <= Math.ceil(s.y + s.r); j++) for (let i = Math.floor(s.x - s.r); i <= Math.ceil(s.x + s.r); i++) {
+      if (!inMap(i, j) || dist2(i + 0.5, j + 0.5, s.x, s.y) > s.r * s.r) continue;
+      const t = tIdx(i, j);
+      if (S.res[t] !== R_CROP || D[t] || atmosAt(i + 0.5, j + 0.5) >= 1) continue;
+      const who = soilHolder(t);
+      if (!(who >= 0) || isWild(who) || !foes(s.p, who)) continue;
+      D[t] = (old[t] || 0) + 1;
+      if (D[t] === 1) {
+        const Q = S.players[who];
+        if (Q && S.time - (Q.droughtMsg ?? -999) > 120) { Q.droughtMsg = S.time; postMsg(who, `A rival's storm sits over your fields: the crops under it have stopped growing, and wither in ${Math.round(STORM.drought / 60)} minutes.`, i, j, 'bad'); }
+      }
+      if (D[t] >= STORM.drought) {
+        delete D[t];
+        S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0;
+        markDirty(i, j);
+        const P = S.players[s.p];
+        if (P) P.stats.droughtCrops = (P.stats.droughtCrops || 0) + 1;
+      }
+    }
+  }
+  S.drought = D;
+}
+
+/**
+ * Lightning out of Engine b's Storm Front (the Garden, every STORM.boltEvery s of power): one of the buildings of its
+ * owner's foes under it, picked by the seed (hash2 with b.aeBoltN), loses STORM.boltDmg of its armor, never below
+ * STORM.boltFloor (a scorch, not a wreck). None under it: the bolt is lost.
+ */
+function stormBolt(b) {
+  b.aeBoltN = (b.aeBoltN || 0) + 1;
+  if (!atmosStormOn(b)) return;
+  const x = b.aeStorm[0] + 0.5, y = b.aeStorm[1] + 0.5, R2 = STORM.r * STORM.r, cand = [];
+  for (const e of S.buildings) {
+    if (e.dead || !e.built || !(e.owner >= 0) || isWild(e.owner) || !foes(b.owner, e.owner) || BDEFS[e.type].wild) continue;
+    const c = bCentre(e);
+    if (dist2(c.x, c.y, x, y) > R2 || atmosAt(c.x, c.y) >= 1) continue;
+    cand.push(e);
+  }
+  if (!cand.length) return;
+  const e = cand[Math.floor(hash2(b.id, b.aeBoltN, S.seed | 0) * cand.length)], max = BDEFS[e.type].armor || 1, c = bCentre(e);
+  const before = e.armor;
+  e.armor = Math.max(Math.min(e.armor, max * STORM.boltFloor), e.armor - max * STORM.boltDmg);
+  e.lastHit = S.time;
+  addFx('stormbolt', c.x, c.y, { life: 0.8, seed: b.aeBoltN });
+  sfx('stormbolt', c.x, c.y);
+  const P = S.players[b.owner], Q = S.players[e.owner];
+  if (P) P.stats.bolts = (P.stats.bolts || 0) + 1;
+  logEvent({ t: S.time, k: 'bolt', p: b.owner, q: e.owner, b: e.type });
+  if (Q && before - e.armor > 0 && S.time - (Q.boltMsg ?? -999) > 45) { Q.boltMsg = S.time; postMsg(e.owner, `Lightning from a rival's storm struck your ${BDEFS[e.type].name}.`, e.x, e.y, 'bad'); }
+}
+
+/**
+ * Is the sky over player p's Command Base its own: no foe's Atmosphere Engine standing (built or going up), or p's own
+ * (or an ally's) Engine's circle over it, where no storm can be? (Overcast's goals.)
+ */
+function stormBrokenFor(p) {
+  const L = S.players[p] ? getE(S.players[p].lander) : null;
+  if (!L || L.dead) return false;
+  if (!S.buildings.some((e) => !e.dead && BDEFS[e.type].atmos && e.owner >= 0 && foes(e.owner, p))) return true;
+  const c = bCentre(L);
+  return S.buildings.some((e) => !e.dead && e.built && BDEFS[e.type].atmos && !foes(e.owner, p)) && atmosOwnAt(c.x, c.y, p);
+}

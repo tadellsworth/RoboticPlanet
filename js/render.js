@@ -1224,8 +1224,10 @@ function paintTile(ctx, i, j, other, blend) {
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
-  if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
+  const aeG = terr === T_GROUND && S.green ? S.green[t] || 0 : 0; // (an Atmosphere Engine's land: drawGreen)
+  if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t] && aeG < 2) drawFertile(ctx, i, j, x, y);
   else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
+  if (aeG && !S.ramp[t]) drawGreen(ctx, i, j, x, y, t, aeG);
   if (terr === T_GROUND && !S.burnt?.[t] && SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon && canyonMeadow(t)) {
     const green = (S.fert[t] ? 0.46 : 0.24) * (0.75 + fbm(i / 3, j / 3, S.seed % 100000, 2) * 0.5);
     ctx.fillStyle = `rgba(101,153,57,${green})`;
@@ -2835,6 +2837,43 @@ function drawFertile(ctx, i, j, x, y) {
 }
 
 /**
+ * The land an Atmosphere Engine changed (S.green: the stage that reached it; see atmosPaint), drawn in code: Calm, the dust
+ * settled (a little cleaner and darker); Rain, damp dark earth with the first sprouts; Green, grass; Garden, deep grass
+ * with flowers and, here and there, a young tree. Soft-edged where it meets unchanged ground, mottled so the circle
+ * doesn't read as tiles.
+ */
+function drawGreen(ctx, i, j, x, y, t, lv) {
+  const G = (di, dj) => (inMap(i + di, j + dj) ? S.green[tIdx(i + di, j + dj)] || 0 : 0);
+  const n = 0.75 + fbm(i / 3.5, j / 3.5, (S.seed % 100000) + 77, 2) * 0.5, h = (k) => hash2(i * 7 + k, j * 13 - k, 9101);
+  const edge = [G(-1, 0), G(1, 0), G(0, -1), G(0, 1)].filter((v) => v < Math.min(lv, 3)).length;
+  const k = edge ? 0.7 : 1;
+  if (lv === 1) { ctx.fillStyle = `rgba(40,46,38,${0.1 * n * k})`; ctx.fillRect(x, y, TP, TP); return; }
+  // Rain: damp, darker earth; the first sprouts
+  ctx.fillStyle = `rgba(52,42,26,${0.32 * n * k})`; ctx.fillRect(x, y, TP, TP);
+  if (lv === 2) {
+    ctx.fillStyle = `rgba(110,170,70,${0.55 * k})`;
+    for (let q = 0; q < 5; q++) if (h(q) < 0.6) ctx.fillRect(x + 2 + h(q + 10) * (TP - 4), y + 2 + h(q + 20) * (TP - 4), 2, 2);
+    return;
+  }
+  // Green and Garden: grass, mottled, with blades
+  ctx.fillStyle = lv >= 4 ? `rgba(74,140,52,${0.66 * n * k})` : `rgba(98,152,60,${0.5 * n * k})`;
+  ctx.fillRect(x, y, TP, TP);
+  ctx.fillStyle = lv >= 4 ? 'rgba(40,92,30,0.5)' : 'rgba(60,110,40,0.42)';
+  for (let q = 0; q < 9; q++) { const bx = x + 1 + h(q + 30) * (TP - 3), by = y + 2 + h(q + 40) * (TP - 5); ctx.fillRect(bx, by, 1.5, 3); }
+  if (lv < 4) return;
+  // the Garden: flowers, and now and then a young tree (its shade, its crown)
+  const fl = ['#f4e46a', '#ffffff', '#e48ab0', '#a8c8ff'];
+  for (let q = 0; q < 4; q++) if (h(q + 50) < 0.55) { ctx.fillStyle = fl[Math.floor(h(q + 60) * 4)]; ctx.fillRect(x + 2 + h(q + 70) * (TP - 5), y + 2 + h(q + 80) * (TP - 5), 2, 2); }
+  if (h(99) < 0.09 && !S.road[t] && !S.res[t] && !S.bAt[t]) {
+    const tx = x + 8 + h(91) * 16, ty = y + 10 + h(92) * 12, r = 6 + h(93) * 4;
+    ctx.fillStyle = 'rgba(10,30,8,0.35)'; ctx.beginPath(); ctx.ellipse(tx + 3, ty + r * 0.6, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3d22'; ctx.fillRect(tx - 1, ty - 2, 2, r * 0.8);
+    ctx.fillStyle = '#2f6e2a'; ctx.beginPath(); ctx.arc(tx, ty - r * 0.6, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,190,80,0.55)'; ctx.beginPath(); ctx.arc(tx - r * 0.3, ty - r * 0.9, r * 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
  * Burned soil (fertile soil scorched for good by napalm or a Torch: see scorchSoil): charred black earth, the old
  * furrows burnt darker, flecked with grey ash and a few rust-brown cinders. Drawn in code (no art).
  */
@@ -3065,6 +3104,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const t = R.time;
   const working = b && b.working;
   if (b && !b.built) {
+    if (type === 'sunder') { drawSunderSite(ctx, cx, cy, s, owner, b); return; }
     if (BDEFS[type] && BDEFS[type].foot) { drawMegaSite(ctx, type, cx, cy, s, owner, b); return; }
     drawSite(ctx, type, cx, cy, s, owner, b); return;
   }
@@ -3072,6 +3112,9 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'sunder') { drawSunder(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'deepcore') { drawDeep(ctx, cx, cy, s, owner, b); return; }
+  if (type === 'atmos') { drawAtmos(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
@@ -6545,6 +6588,7 @@ function render(dtReal) {
   if (typeof drawRadGround === 'function') drawRadGround(ctx, ox, oy, z, v0, v1); // (radiation zones: dead grass, the haze, the edge: js/radfx.js)
   drawDecals(ctx, ox, oy, z, inView);
   drawCuts(ctx, ox, oy, z); // (the Lance of Corvane's trenches, glowing as they cool)
+  drawSunderGround(ctx, ox, oy, z, v0, v1); // (the Sundering Ray: its ripples, cracks, cracked roads and the Quake's ring)
   drawLiftLines(ctx, ox, oy, z); // (the Orbital Lifts' shadows along their fall lines, and fresh cable sparking)
   drawScarPuddles(ctx, ox, oy, z, v0, v1); // (rain in the battlefield's craters: War scars)
   if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
@@ -6672,8 +6716,10 @@ function render(dtReal) {
       if (e.owner >= 0 && lanceDim(e.owner) && e.type !== 'lance') dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + e.id) + 0.08 * Math.sin(R.time * 7.3 + e.id * 3);
       if (dim < 1) ctx.globalAlpha *= dim;
       if (e.type === 'lift') { const c4 = [[0.2, 0.2], [2.8, 0.2], [0.2, 2.8], [2.8, 2.8]]; const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * 0.55; for (const [a, c] of c4) pool(ox + (e.x + a) * z, oy + (e.y + c) * z, z * 1.1, '#f4f8ff'); pool(ox + pc.x * z, oy + pc.y * z, z * 1.8, PLAYER_COLORS[e.owner] || '#ffd9a0'); ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Orbital Lift: white floodlights at its pad's corners, its owner's glow under the cable)
+      if (e.type === 'atmos' && e.built) { const ga0 = ctx.globalAlpha, M = ATMOS_MARKS; ctx.globalAlpha = ga0 * 0.55; pool(ox + pc.x * z, oy + (pc.y + 0.6) * z, z * 2.8, '#f4f8ff'); if (e.working || (e.aeStage || 0) >= 2) { ctx.globalAlpha = ga0 * 0.5; pool(ox + (pc.x + M.throat[0]) * z, oy + (pc.y + M.throat[1] + 0.8) * z, z * 2.4, '#8fe8ff'); } ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Atmosphere Engine: its floods, and the plume's cyan from its throat)
+      if (e.type === 'deepcore' && e.built) { const ga0 = ctx.globalAlpha, M = DEEP_MARKS, gk = deepGlow(e.dcStage || 1); ctx.globalAlpha = ga0 * 0.5; pool(ox + pc.x * z, oy + (pc.y - 0.3) * z, z * 2.2, '#f4f8ff'); if (gk > 0) { ctx.globalAlpha = ga0 * gk; pool(ox + (pc.x + M.shaft[0]) * z, oy + (pc.y + M.shaft[1]) * z, z * 1.8, '#a46cff'); } ctx.globalAlpha = ga0; if (dim < 1) ctx.globalAlpha /= dim; continue; } // (the Deep Core: its floods, and the violet of its shaft as deep as it is)
       if (e.type === 'city') { if (!e.cDown && !e.cDry) { const k = cityLightLevel(0); if (k > 0.01) { ctx.globalAlpha *= k; pool(ox + pc.x * z, oy + pc.y * z, z * 5.4, '#ffd9a0'); ctx.globalAlpha /= k; } } if (dim < 1) ctx.globalAlpha /= dim; continue; } // (Arrival City: its own warm light, as its lamps come on; dark while it's down)
-      pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : e.type === 'lance' && e.lOn ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      pool(ox + pc.x * z, oy + pc.y * z, z * size, BDEFS[e.type].wild ? '#a46cff' : (e.type === 'lance' && e.lOn) || (e.type === 'sunder' && e.sOn) ? '#ff8a3a' : e.type === 'dome' && e.dUp ? '#7cc4ff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
       if (dim < 1) ctx.globalAlpha /= dim;
     }
     drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
@@ -6765,6 +6811,9 @@ function render(dtReal) {
   drawLanceBeams(ctx, ox, oy, z); // (the Lance's beam across the map)
   drawLiftCables(ctx, ox, oy, z); // (the Orbital Lifts' cables rising up the screen, and a cable coming down)
   drawGupSignals(ctx, ox, oy, z); // (the Great Uplinks: rim lights at night; transmitting, the dish's glow and its beam)
+  drawAtmosPlumes(ctx, ox, oy, z); // (the Atmosphere Engines: their plumes, lit at night, and the rain round them)
+  drawAtmosStorms(ctx, ox, oy, z); // (their Storm Fronts: a dark cloud turning over the spot, rain under it, everyone sees it)
+  drawSunderAir(ctx, ox, oy, z); // (the Sundering Ray: dust along its ripple, cracked buildings, stunned robots)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (typeof duskSky === 'function') duskSky(ctx, ox, oy, z); // (the sunset's grade, glare, shafts, the Ring and the motes over everything standing: js/sunset.js)
@@ -6841,6 +6890,7 @@ function render(dtReal) {
   }
 
   drawRopeways(ctx, ox, oy, z);
+  if (S.mission && S.mission.hullX != null) drawPathfinderHull(ctx, ox, oy, z); // (Seed Vault: the Pathfinder's hull, half-buried)
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
@@ -7982,6 +8032,20 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
     ctx.beginPath(); ctx.arc(cx, cy, (CITY.land + 0.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= 0.7;
     return;
   }
+  if (def.atmos) { // (the Atmosphere Engine: its four stages' circles round its middle, and its Generators' reach)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]), st = b && BDEFS[b.type].atmos ? b.aeStage || 0 : 0;
+    ctx.lineWidth = 1.5; ctx.setLineDash([z * 0.4, z * 0.25]);
+    for (let k = 0; k < 4; k++) { ctx.strokeStyle = ['rgba(200,225,240,0.75)', 'rgba(127,214,255,0.8)', 'rgba(143,224,138,0.8)', 'rgba(63,191,90,0.85)'][k]; ctx.globalAlpha *= k < st ? 1 : 0.5; ctx.beginPath(); ctx.arc(cx, cy, ATMOS.r[k] * z, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha /= k < st ? 1 : 0.5; }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.beginPath(); ctx.arc(cx, cy, (ATMOS.reach + def.foot / 2) * z, 0, Math.PI * 2); ctx.stroke();
+    return;
+  }
+  if (def.sunder) { // (its power's reach round the square, and a Quake's reach, faint)
+    const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
+    ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (SUNDER.reach + def.foot / 2) * z, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,150,90,0.35)'; ctx.setLineDash([z * 0.5, z * 0.4]); ctx.beginPath(); ctx.arc(cx, cy, SUNDER.range * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
   if (def.dome || def.lance) {
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
     if (def.dome) { ctx.fillStyle = 'rgba(120,200,255,0.07)'; ctx.strokeStyle = 'rgba(150,215,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.25]); ctx.beginPath(); ctx.arc(cx, cy, DOME.radius * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); }
@@ -8109,6 +8173,8 @@ function drawAim(ctx, ox, oy, z) {
   const silo = getE(typeof UI !== 'undefined' ? UI.aimSilo : 0);
   if (!silo) return;
   if (BDEFS[silo.type].lance) { const sp = R.aim || R.aimHover; if (sp && !lanceAimBlocked(silo, sp.i, sp.j)) drawLanceLine(ctx, ox, oy, z, silo, sp.i, sp.j, true); return; }
+  if (BDEFS[silo.type].sunder) { drawSunderAim(ctx, ox, oy, z, silo); return; }
+  if (BDEFS[silo.type].atmos) { drawStormAim(ctx, ox, oy, z, silo); return; }
   const nuke = !!BDEFS[silo.type].nukeSilo;
   const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;
@@ -8161,6 +8227,24 @@ function drawCrate(ctx, cx, cy, s, g) {
   ctx.beginPath(); ctx.moveTo(cx - s / 2, cy - s / 2); ctx.lineTo(cx + s / 2, cy + s / 2); ctx.stroke();
   ctx.fillStyle = (GOOD[g] && GOOD[g].color) || '#fff';
   ctx.beginPath(); ctx.arc(cx, cy, s * 0.24, 0, Math.PI * 2); ctx.fill();
+}
+
+/**
+ * The Pathfinder's hull (a mission landmark, Seed Vault): a long white lander hull lying half-buried in the dunes, its
+ * Accord stripe faded, a vault hatch open in its side, drift sand banked against it. Drawn in code.
+ */
+function drawPathfinderHull(ctx, ox, oy, z) {
+  const x = ox + (S.mission.hullX + 0.5) * z, y = oy + (S.mission.hullY + 0.5) * z, w = z * 2.6, h = z * 0.95;
+  ctx.save();
+  ctx.fillStyle = 'rgba(30,20,10,0.3)'; ctx.beginPath(); ctx.ellipse(x + z * 0.2, y + z * 0.35, w * 1.05, h * 0.75, -0.25, 0, Math.PI * 2); ctx.fill();
+  ctx.translate(x, y); ctx.rotate(-0.25);
+  const g = ctx.createLinearGradient(0, -h, 0, h);
+  g.addColorStop(0, '#f2f0ea'); g.addColorStop(0.55, '#c9c5bb'); g.addColorStop(1, '#8f897d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, Math.PI, 0); ctx.lineTo(w, h * 0.15); ctx.lineTo(-w, h * 0.15); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(90,110,150,0.55)'; ctx.fillRect(-w * 0.75, -h * 0.42, w * 1.4, h * 0.12); // (the faded Accord stripe)
+  ctx.fillStyle = '#2a2622'; ctx.fillRect(-w * 0.12, -h * 0.25, w * 0.26, h * 0.35); // (the vault hatch, open)
+  ctx.fillStyle = 'rgba(214,186,140,0.9)'; ctx.beginPath(); ctx.ellipse(-w * 0.55, h * 0.15, w * 0.6, h * 0.35, 0.1, Math.PI, 0); ctx.fill(); ctx.beginPath(); ctx.ellipse(w * 0.7, h * 0.18, w * 0.45, h * 0.3, -0.1, Math.PI, 0); ctx.fill();
+  ctx.restore();
 }
 
 /** Loot piles: a few crates (more for a bigger pile) with a count, fading in their last half minute. */
@@ -8480,7 +8564,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
-    if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake' || f.type === 'domehit' || f.type === 'domefall') continue; // (a Shield Dome's: see drawDomes) // see drawAirLayer (a quake only shakes the screen: see fxShake)
+    if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake' || f.type === 'sunderhit' || f.type === 'domehit' || f.type === 'domefall') continue; // (a Shield Dome's: see drawDomes) // see drawAirLayer (a quake only shakes the screen: see fxShake)
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
@@ -8750,6 +8834,25 @@ function drawEffects(ctx, ox, oy, z) {
         ctx.globalAlpha = 0.8 * Math.max(0, 1 - k * 2);
         ctx.fillStyle = '#ff7a2e';
         for (let n = 0; n < 5; n++) { const a = n * 1.26 + f.x; ctx.beginPath(); ctx.arc(x + Math.cos(a) * z * 0.35, y + Math.sin(a) * z * 0.25, z * 0.05, 0, Math.PI * 2); ctx.fill(); }
+        break;
+      }
+      case 'stormbolt': {
+        // Lightning out of a Storm Front (stormBolt): a jagged bolt from high up to the building, flickering twice, a
+        // white-blue flash where it lands, and the afterglow fading.
+        const on = f.t < 0.08 || (f.t > 0.16 && f.t < 0.24) ? 1 : f.t < 0.3 ? 0.35 : 0;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        fxGlow(ctx, x, y, z * (1.6 + k), '#bcd4ff', 0.75 * (1 - k));
+        if (on > 0) {
+          const sx = x + (hash2(f.seed | 0, 1, 77) - 0.5) * z * 3, sy = y - z * 9;
+          ctx.globalAlpha = on;
+          ctx.strokeStyle = 'rgba(170,200,255,0.55)'; ctx.lineWidth = Math.max(3, z * 0.22);
+          ctx.beginPath(); boltPath(ctx, sx, sy, x, y, z * 0.5, (f.seed | 0) * 13 + 5, 9); ctx.stroke();
+          ctx.strokeStyle = '#f4f8ff'; ctx.lineWidth = Math.max(1.2, z * 0.07);
+          ctx.beginPath(); boltPath(ctx, sx, sy, x, y, z * 0.5, (f.seed | 0) * 13 + 5, 9); ctx.stroke();
+          ctx.beginPath(); boltPath(ctx, x + (sx - x) * 0.5, y + (sy - y) * 0.5, x + z * 1.2, y - z * 2.5, z * 0.3, (f.seed | 0) * 13 + 9, 4); ctx.stroke();
+        }
+        ctx.restore();
         break;
       }
       case 'ring': {
@@ -10675,6 +10778,139 @@ function drawLift(ctx, cx, cy, s, owner, b) {
 }
 
 /*
+ * The Atmosphere Engine (the owner's look A, the Rain Tower): its pad, its cooling-tower shell, the intake fans round its
+ * foot and its lit waist band (atmos@T, every time of day), drawn whole; the plume, its night light and the rain are drawn
+ * in code over everything standing (drawAtmosPlumes): the plume is the whole idea, you can see from anywhere that this
+ * thing makes weather.
+ */
+/** Where the Engine's parts are on screen, in tiles from its square's middle (tools/install_atmos.py prints them). */
+const ATMOS_MARKS = { rimL: [-1.016, -2.005], rimR: [1.294, -2.005], throat: [0.137, -2.087], band: [0.135, -0.607], bandL: [-0.882, -1.47], bandR: [1.144, -1.47], throatW: 1.0 };
+function drawAtmos(ctx, cx, cy, s, owner, b) {
+  const art = artFor('atmos', owner);
+  if (!art) { drawMegaPlain(ctx, 'atmos', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+}
+/** Every Atmosphere Engine's plume on the screen, drifting downwind; at night lit pale cyan from the throat, its waist band and rim lights; rain round it from stage 2. */
+function drawAtmosPlumes(ctx, ox, oy, z) {
+  const night = TOD.active ? Math.min(1, TOD.state.lights || 0) : 0, mul = TOD.active && TOD.state.mul ? TOD.state.mul : [1, 1, 1], M = ATMOS_MARKS;
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'atmos' || !b.built) continue;
+    const c = bCentre(b), X = ox + c.x * z, Y = oy + c.y * z;
+    if (X < -z * 14 || X > R.w + z * 14 || Y < -z * 4 || Y - z * 16 > R.h + z * 4) continue;
+    const tx = X + M.throat[0] * z, ty = Y + M.throat[1] * z, on = b.working ? 1 : 0.35, st = b.aeStage || 1, dark = nightDark(b);
+    ctx.save();
+    // The plume: puffs rising out of the throat, swelling and drifting east as they go, thinner when it stops.
+    const N = gfx().fx < 1 ? 7 : 12, H = z * (6 + 2 * on), lit = dark ? 0 : night * 0.75, cy = [150, 215, 235], tint = (v, k) => Math.round(clamp(v * mul[k] * (1 - lit) + cy[k] * (0.55 + 0.45 * v / 255) * lit, 0, 255)); // (at night lit pale cyan from the throat)
+    for (let q = N - 1; q >= 0; q--) {
+      const p = ((R.time * (0.05 + 0.03 * on) + q / N + b.id * 0.137) % 1), w = Math.pow(p, 1.4);
+      const px = tx + w * z * 3.2 + Math.sin(R.time * 0.6 + q * 1.7) * z * 0.12 * p, py = ty - p * H;
+      const r = z * M.throatW * (0.75 + 1.9 * p) * (0.75 + 0.25 * on), a = Math.pow(1 - p, 1.3) * (p < 0.08 ? p / 0.08 : 1) * (0.42 + 0.25 * on);
+      const g = ctx.createRadialGradient(px - r * 0.25, py - r * 0.3, r * 0.1, px, py, r);
+      g.addColorStop(0, `rgba(${tint(250, 0)},${tint(251, 1)},${tint(253, 2)},${a})`); g.addColorStop(0.65, `rgba(${tint(228, 0)},${tint(232, 1)},${tint(238, 2)},${a * 0.75})`); g.addColorStop(1, `rgba(${tint(215, 0)},${tint(220, 1)},${tint(228, 2)},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    if (night > 0.05 && !dark) {
+      // lit from inside the throat: pale cyan, strongest at its foot
+      const k = night * (0.35 + 0.65 * on), gr = z * 2.6, g = ctx.createRadialGradient(tx, ty - z * 0.6, 0, tx, ty - z * 0.8, gr);
+      g.addColorStop(0, `rgba(170,240,255,${0.55 * k})`); g.addColorStop(0.5, `rgba(90,200,240,${0.22 * k})`); g.addColorStop(1, 'rgba(60,160,220,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(tx + z * 0.4, ty - z * 1.2, gr, gr * 1.3, 0, 0, Math.PI * 2); ctx.fill();
+      // the waist band's glow: the front of the ring round its waist
+      const bcx = X + (M.bandL[0] + M.bandR[0]) / 2 * z, bcy = Y + M.bandL[1] * z, brx = (M.bandR[0] - M.bandL[0]) / 2 * z, bry = (M.band[1] - M.bandL[1]) * z;
+      ctx.strokeStyle = `rgba(120,220,255,${0.35 * night})`; ctx.lineWidth = Math.max(2, z * 0.22);
+      ctx.beginPath(); ctx.ellipse(bcx, bcy, brx, bry, 0, 0.08, Math.PI - 0.08); ctx.stroke();
+      // red lights on the rim, blinking together
+      if (Math.floor(R.time * 1.2 + b.id) % 2 === 0) for (const m of ['rimL', 'rimR']) {
+        const x = X + M[m][0] * z, y = Y + M[m][1] * z, r = Math.max(2, z * 0.16), gg = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+        gg.addColorStop(0, `rgba(255,90,60,${0.9 * night})`); gg.addColorStop(1, 'rgba(255,40,20,0)');
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, r * 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // Rain round it at night, from stage 2: soft drizzle falling in its circle near the tower.
+    if (st >= 2 && night > 0.3 && gfx().fx >= 1) {
+      const RR = Math.min(ATMOS.r[st - 1], 7) * z, n = 50;
+      ctx.strokeStyle = `rgba(190,215,235,${0.28 * night})`; ctx.lineWidth = Math.max(1, z * 0.025);
+      ctx.beginPath();
+      for (let q = 0; q < n; q++) {
+        const a = hash2(b.id, q, 3) * Math.PI * 2, d = Math.sqrt(hash2(b.id, q, 4)) * RR, f = (R.time * 0.9 + hash2(b.id, q, 5)) % 1;
+        const x = X + Math.cos(a) * d, y = Y + Math.sin(a) * d * 0.8 - (1 - f) * z * 1.2;
+        ctx.moveTo(x, y); ctx.lineTo(x - z * 0.05, y + z * 0.3);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/*
+ * The Deep Core (the owner's look A, the Headframe): its pad and winding tower (deepcore@T), and over it the two winding
+ * wheels (deepcore-work-0…7, through 60 degrees: six spokes), turning while it works and standing where they stopped
+ * when it doesn't. In code: the violet glow rising out of the shaft once it reaches the buried ringfall (stage 2),
+ * brighter and pulsing at stage 3, faint by day and strong at night (you can see from across the map how deep it is, and
+ * so can the Murmur); the gauge's three lamps, lit one per stage; the floodlit wheels at night. A stub (the build menu,
+ * a site's ghost) is drawn whole, its wheels still and its shaft dark.
+ */
+/** Where the Deep Core's parts are on screen, in tiles from its square's middle (tools/install_deepcore.py prints them). */
+const DEEP_MARKS = { shaft: [-0.235, -0.24], wheelL: [-0.524, -1.501], wheelR: [-0.011, -1.501], beacon: [-0.264, -1.627], g1: [0.775, 0.72], g2: [0.779, 0.683], g3: [0.782, 0.644] };
+const DEEP_WHEEL = new Map(); // (each Core's wheel frame where it stopped: looks only)
+function drawDeep(ctx, cx, cy, s, owner, b) {
+  const art = artFor('deepcore', owner);
+  if (!art) { drawMegaPlain(ctx, 'deepcore', cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+  const live = !!(b && b.id && b.built);
+  let f = 0;
+  if (live) {
+    if (DEEP_WHEEL.size > 64) DEEP_WHEEL.clear();
+    f = b.working ? Math.floor(R.time * 8) % 8 : DEEP_WHEEL.get(b.id) || 0;
+    DEEP_WHEEL.set(b.id, f);
+  }
+  const w = ART['deepcore-work-' + f];
+  if (w) drawArt(ctx, w, cx, cy, s);
+  if (live) deepLights(ctx, b, cx, cy, s);
+}
+/** How strongly the Deep Core's shaft glows at stage st now (0 at bedrock): faint by day, full at night. */
+function deepGlow(st) {
+  if (st < 2) return 0;
+  const night = TOD.active ? Math.min(1, TOD.state.lights || 0) : 0;
+  return (st >= 3 ? 1 : 0.55) * (0.3 + 0.7 * night);
+}
+function deepLights(ctx, b, cx, cy, s) {
+  if (R.inMap) return;
+  const st = b.dcStage || 1, M = DEEP_MARKS, P = (k) => [cx + M[k][0] * s, cy + M[k][1] * s];
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // the shaft: a violet pool in its mouth and a column of light rising out of it, pulsing slowly (faster at stage 3)
+  const k = deepGlow(st) * (gfx().fx < 1 ? 1 : 0.85 + 0.15 * Math.sin(R.time * (st >= 3 ? 2.2 : 1.1) + b.id));
+  if (k > 0.01) {
+    const [x, y] = P('shaft'), r = s * (st >= 3 ? 0.42 : 0.32);
+    let g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(214,170,255,${0.9 * k})`); g.addColorStop(0.35, `rgba(160,96,255,${0.55 * k})`); g.addColorStop(1, 'rgba(110,50,220,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    const h = s * (st >= 3 ? 2.2 : 1.5), cw = s * (st >= 3 ? 0.2 : 0.14);
+    g = ctx.createLinearGradient(x, y, x, y - h);
+    g.addColorStop(0, `rgba(176,120,255,${0.5 * k})`); g.addColorStop(0.5, `rgba(140,80,255,${0.18 * k})`); g.addColorStop(1, 'rgba(120,60,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - cw, y); ctx.lineTo(x - cw * 0.5, y - h); ctx.lineTo(x + cw * 0.5, y - h); ctx.lineTo(x + cw, y); ctx.closePath(); ctx.fill();
+  }
+  // the gauge: a lamp lit for each stage reached (the next one blinking while it works toward it)
+  for (let n = 1; n <= 3; n++) {
+    const [x, y] = P('g' + n), on = n <= st ? 1 : n === st + 1 && b.working ? (Math.sin(R.time * 5) > 0.6 ? 0.35 : 0) : 0;
+    if (!on) continue;
+    const r = Math.max(1, s * 0.03), g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    g.addColorStop(0, `rgba(230,200,255,${on})`); g.addColorStop(0.3, `rgba(170,110,255,${0.8 * on})`); g.addColorStop(1, 'rgba(140,80,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+  }
+  // the floodlit wheels at night (dark while the Murmur cut it, or in a blackout)
+  const lit = TOD.active ? Math.max(0, Math.min(1, ((TOD.state.lights || 0) - 0.2) / 0.5)) : 0;
+  if (lit > 0.01 && !nightDark(b)) for (const m of ['wheelL', 'wheelR']) {
+    const [x, y] = P(m), r = s * 0.75, g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(240,244,255,${0.22 * lit})`); g.addColorStop(1, 'rgba(240,244,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/*
  * The Great Uplink (the owner's look A, the Dish Array): its pad (gup@T, battle-damaged below 30%: gup-down@T), and in
  * code (drawGupSignals) its signal: red lights blinking round the dish's rim at night; while it transmits, a glow in its
  * owner's colour swelling in the bowl with each pulse (GUP.pulse s), a pale beam rising straight up the screen from the
@@ -10981,6 +11217,15 @@ function drawMegaPlain(ctx, type, cx, cy, s, owner, b) {
     ctx.fillStyle = '#eef0f2'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.2, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.35, s * 1.0, s * 0.74, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#41464c'; ctx.beginPath(); ctx.arc(cx, cy - s * 0.35, s * 0.15, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'atmos') { // (a cooling-tower shell, wider at the foot, its throat dark)
+    ctx.fillStyle = '#cfcac0'; ctx.beginPath(); ctx.moveTo(cx - s * 1.3, cy + s * 0.9); ctx.quadraticCurveTo(cx - s * 0.7, cy - s * 0.6, cx - s * 0.95, cy - s * 2.0); ctx.lineTo(cx + s * 0.95, cy - s * 2.0); ctx.quadraticCurveTo(cx + s * 0.7, cy - s * 0.6, cx + s * 1.3, cy + s * 0.9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a3f46'; ctx.beginPath(); ctx.ellipse(cx, cy - s * 2.0, s * 0.95, s * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3aa8d8'; ctx.lineWidth = Math.max(1.5, s * 0.08); ctx.beginPath(); ctx.moveTo(cx - s * 0.72, cy - s * 0.7); ctx.lineTo(cx + s * 0.72, cy - s * 0.7); ctx.stroke();
+  } else if (type === 'deepcore') { // (a red winding tower over a dark shaft, two wheels at its top)
+    ctx.fillStyle = '#16121c'; ctx.fillRect(cx - s * 0.35, cy - s * 0.25, s * 0.7, s * 0.5);
+    ctx.strokeStyle = '#a8342a'; ctx.lineWidth = Math.max(1.5, s * 0.1);
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.5, cy + s * 0.2); ctx.lineTo(cx - s * 0.3, cy - s * 1.6); ctx.lineTo(cx + s * 0.3, cy - s * 1.6); ctx.lineTo(cx + s * 0.5, cy + s * 0.2); ctx.stroke();
+    for (const dx of [-0.32, 0.32]) { ctx.beginPath(); ctx.arc(cx + dx * s, cy - s * 1.7, s * 0.28, 0, Math.PI * 2); ctx.stroke(); }
   } else if (type === 'lift') { // (an eight-sided collar where the cable is clamped)
     ctx.fillStyle = THEME.hullHi; ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2; ctx.lineTo(cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.7); } ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#e8eef5'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2); ctx.fill();
@@ -11040,6 +11285,7 @@ function drawStructureMarkers(ctx, b, x, y, s) {
       points = [[-0.25, MD_ART.cradle[1]], [0.25, MD_ART.cradle[1]]];
       color = '#7adfff'; intensity = mdArmsIn(b) ? 0.95 : 0.60; break;
     case 'lance': points = [[-0.60, 0.72], [0.60, 0.72]]; color = b.lOn ? '#ffd39c' : '#ffc17a'; break;
+    case 'sunder': points = [[-1.24, -0.32], [1.24, -0.32]]; color = b.sOn ? '#ffc070' : '#ffb347'; break;
     case 'dome':
       points = [[-0.37, 0.18], [0.37, 0.18]]; color = b.dUp ? '#8ee6ff' : '#d5a27a'; break;
     default: return;
@@ -11188,7 +11434,7 @@ function drawNapalmPick(ctx, ox, oy, z) {
 function drawScorchPick(ctx, ox, oy, z) {
   for (const [spot, picked] of [[R.aimHover, false], [R.scorchAt, true]]) {
     if (!spot || !inMap(spot.i, spot.j)) continue;
-    const ok = !scorchTileWhy(tIdx(spot.i, spot.j)), x = ox + spot.i * z, y = oy + spot.j * z;
+    const ok = !scorchTileWhy(tIdx(spot.i, spot.j), ME), x = ox + spot.i * z, y = oy + spot.j * z;
     if (ok) { ctx.fillStyle = `rgba(255,120,30,${picked ? 0.45 : 0.28})`; ctx.fillRect(x + 2, y + 2, z - 4, z - 4); }
     ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#ff9a3c' : 'rgba(255,154,60,0.75)';
     ctx.lineWidth = picked ? Math.max(2.5, z * 0.07) : 2;
@@ -11704,4 +11950,396 @@ function scarBlight(i, j, lasting) {
   let n = 0;
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (a >= 0 && b >= 0 && a < S.W && b < S.H) { const u = b * S.W + a; if (S.crater[u] || (lasting ? S.ash[u] > SCARS.light : S.ash[u])) n++; }
   return n;
+}
+
+/* ------------------------------------------------------------------ the Sundering Ray */
+
+/*
+ * The Sundering Ray (the owner's look B, the Piston Battery; renderer/b/sunder.js, tools/install_sunder.py): its pad
+ * and block with the bore tower (sunder@T; under construction sunder-site1@T, then sunder-site2@T), and over it its
+ * moving parts, each its own image: the two great rams at three heights (sunder-ram-w-0..2, sunder-ram-e-0..2) and the
+ * six ram plates seated or raised (sunder-plate-K-0|1). In code (sunderAnim): winding up, the rams pump in turn and the
+ * plates drum one after another, faster as it nears the blow, dust lifting off them, the shot hole glowing and the
+ * stacks breathing orange smoke; at the blow the bore charge flashes, the rams slam down and the plates slam in a timed
+ * ripple (the far side from the aim first: the delays steer the shock). Then the ripple through the ground
+ * (drawSunderGround: a bulge running to the target, cracks behind it, dust along it; on landing the ground heaves in
+ * rings, and cracks spread in the circle for SUNDER.scar s), the Quake's warning ring, cracked roads and track, and on
+ * cracked buildings and stunned robots their marks (drawSunderAir).
+ */
+/** Where the Ray's parts are on screen, in tiles from its square's middle (tools/install_sunder.py prints them). */
+const SUNDER_MARKS = { plate0: [-1.136, 0.534], plate1: [-0.682, 0.534], plate2: [-0.227, 0.534], plate3: [0.227, 0.534], plate4: [0.682, 0.534], plate5: [1.136, 0.534], ramW: [-0.744, -0.8], ramE: [0.744, -0.8], bore: [0.0, -0.833], top: [0.0, -1.826], stackW: [-1.163, -1.914], stackE: [1.163, -1.914] };
+/** Mark k of Ray b on screen, from (cx, cy) its square's middle at s px a tile. */
+function sunderMark(k, cx, cy, s) { const m = SUNDER_MARKS[k] || [0, 0]; return { x: cx + m[0] * s, y: cy + m[1] * s }; }
+
+/** The order the plates slam in for Ray b's last blow (0 first): the far side from its aim first. */
+function sunderOrder(b) {
+  const c = bCentre(b), a = b.sAim ? datan2(b.sAim[1] + 0.5 - c.y, b.sAim[0] + 0.5 - c.x) : 0, ux = Math.cos(a);
+  const xs = [0, 1, 2, 3, 4, 5].map((k) => SUNDER_MARKS['plate' + k][0] * ux);
+  const sorted = xs.slice().sort((p, q) => p - q);
+  return xs.map((v) => sorted.indexOf(v));
+}
+
+/**
+ * How Ray b's moving parts stand now: { w, e } the rams' heights (0..2), `plates` each 0 or 1, `bore` the shot hole's
+ * glow (0..1), `flash` the blow's flash, `smoke` the stacks' breath, `dust` the plates just come down (0..1 each).
+ */
+function sunderAnim(b) {
+  const out = { w: 0, e: 0, plates: [0, 0, 0, 0, 0, 0], dust: [0, 0, 0, 0, 0, 0], bore: 0, flash: 0, smoke: 0 };
+  if (!b || !b.built) return out;
+  const since = b.sShot !== undefined ? S.time - b.sShot : 99;
+  if (b.sOn) {
+    const k = clamp((b.sCharge || 0) / sunderTime(b), 0, 1), rate = SUNDER_RATE[0] + (SUNDER_RATE[1] - SUNDER_RATE[0]) * k;
+    const ph = sunderPhase(b) % 1;
+    out.w = ph < 0.5 ? 2 * Math.sin(Math.PI * ph * 2) : 0;
+    out.e = ph >= 0.5 ? 2 * Math.sin(Math.PI * (ph - 0.5) * 2) : 0;
+    for (let i = 0; i < 6; i++) {
+      const q = ((sunderPhase(b) * 1.5 - i / 6) % 1 + 1) % 1;
+      out.plates[i] = q < 0.16 ? 1 : 0;
+      out.dust[i] = q >= 0.16 && q < 0.5 ? 1 - (q - 0.16) / 0.34 : 0;
+    }
+    out.bore = 0.25 + 0.75 * k * (0.65 + 0.35 * Math.sin(R.time * rate * Math.PI * 2));
+    out.smoke = 0.4 + k;
+  } else if (since >= 0 && since < 3.2) {
+    const ord = sunderOrder(b);
+    out.w = out.e = since < 0.12 ? 2 : 0;
+    for (let i = 0; i < 6; i++) { const d = 0.1 + ord[i] * 0.07; out.plates[i] = since < d ? 1 : 0; out.dust[i] = since >= d && since < d + 1.4 ? 1 - (since - d) / 1.4 : 0; }
+    out.bore = since < 1.6 ? 1 - since / 1.6 : 0; out.flash = since < 0.5 ? 1 - since / 0.5 : 0; out.smoke = 1;
+  } else if (b.sReload > 0) out.smoke = 0.25;
+  return out;
+}
+/** The rams' strokes a second, from the start of a wind-up to the blow. */
+const SUNDER_RATE = [0.55, 2.2];
+/** How many strokes Ray b's wind-up has made (its rams' phase): the rate climbing with the charge, integrated. */
+function sunderPhase(b) {
+  const T = sunderTime(b), c = clamp(b.sCharge || 0, 0, T), a = SUNDER_RATE[0], d = SUNDER_RATE[1] - SUNDER_RATE[0];
+  return a * c + d * c * c / (2 * T);
+}
+
+function drawSunder(ctx, cx, cy, s, owner, b) {
+  const art = artFor('sunder', owner);
+  if (!art) { drawSunderPlain(ctx, cx, cy, s, owner, b); return; }
+  drawArt(ctx, art, cx, cy, s);
+  const A = sunderAnim(b), night = TOD.active ? TOD.state.lights || 0 : 0;
+  // the shot hole's glow under the tower (behind the rams), brightest at the blow
+  const bo = sunderMark('bore', cx, cy, s), glow = Math.max(A.bore * (0.45 + 0.55 * night), A.flash);
+  if (glow > 0.02) {
+    const g = ctx.createRadialGradient(bo.x, bo.y, 0, bo.x, bo.y, s * (0.5 + A.flash * 0.6));
+    g.addColorStop(0, `rgba(255,${200 + 55 * A.flash | 0},${120 + 120 * A.flash | 0},${0.85 * glow})`); g.addColorStop(0.5, `rgba(255,120,40,${0.45 * glow})`); g.addColorStop(1, 'rgba(255,90,30,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bo.x, bo.y, s * (0.5 + A.flash * 0.6), s * (0.3 + A.flash * 0.4), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  const ram = (k, h) => { const im = ART[`sunder-ram-${k}-${Math.max(0, Math.min(2, Math.round(h)))}`]; if (im) drawArt(ctx, im, cx, cy, s); };
+  ram('w', A.w); ram('e', A.e);
+  for (let i = 0; i < 6; i++) { const im = ART[`sunder-plate-${i}-${A.plates[i]}`]; if (im) drawArt(ctx, im, cx, cy, s); }
+  // dust lifting off the plates as each comes down
+  if (R.clean < 2) for (let i = 0; i < 6; i++) {
+    const d = A.dust[i];
+    if (d <= 0.02) continue;
+    const p = sunderMark('plate' + i, cx, cy, s), r = s * (0.18 + (1 - d) * 0.32);
+    ctx.fillStyle = `rgba(196,176,140,${0.42 * d})`;
+    for (const dx of [-0.6, 0, 0.6]) { ctx.beginPath(); ctx.ellipse(p.x + dx * r, p.y + s * 0.12 - (1 - d) * s * 0.12, r * 0.7, r * 0.42, 0, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // the stacks breathe orange smoke (glowing at night)
+  if (A.smoke > 0 && R.clean < 2) for (const k of ['stackW', 'stackE']) {
+    const p = sunderMark(k, cx, cy, s);
+    for (let n = 0; n < 4; n++) {
+      const q = ((R.time * 0.45 * (0.6 + A.smoke) + n / 4 + (k === 'stackE' ? 0.37 : 0)) % 1), r = s * (0.08 + q * 0.28);
+      const warm = 0.35 + 0.65 * night;
+      ctx.fillStyle = `rgba(${150 + 105 * warm | 0},${110 + 30 * warm | 0},${90 - 40 * warm | 0},${0.32 * (1 - q) * Math.min(1, A.smoke)})`;
+      ctx.beginPath(); ctx.arc(p.x + Math.sin(q * 5 + n) * s * 0.06, p.y - q * s * 0.9, r, 0, Math.PI * 2); ctx.fill();
+    }
+    if (night > 0.1) fxGlow(ctx, p.x, p.y, s * 0.16, '#ff8a3a', night * (0.4 + 0.4 * Math.min(1, A.smoke)));
+  }
+  // the blow: a white-hot flash and a column of dust out of the shot hole
+  if (A.flash > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(bo.x, bo.y - s * 0.6, 0, bo.x, bo.y - s * 0.6, s * 1.6);
+    g.addColorStop(0, `rgba(255,240,210,${0.7 * A.flash})`); g.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(bo.x - s * 1.6, bo.y - s * 2.2, s * 3.2, s * 3.2); ctx.restore();
+  }
+  if (b && b.built && b.sShot !== undefined && S.time - b.sShot < 2.5 && S.time >= b.sShot) {
+    const q = (S.time - b.sShot) / 2.5, top = sunderMark('top', cx, cy, s);
+    ctx.fillStyle = `rgba(170,150,120,${0.35 * (1 - q)})`;
+    for (let n = 0; n < 5; n++) { ctx.beginPath(); ctx.arc(top.x + (n - 2) * s * 0.12 * (1 + q), top.y + s * 0.4 - q * s * 1.2 - n * s * 0.05, s * (0.22 + q * 0.4), 0, Math.PI * 2); ctx.fill(); }
+  }
+}
+
+/** The Ray going up: the pad poured and the shot hole drilled, then the block cast and the tower in scaffolding, then whole. */
+function drawSunderSite(ctx, cx, cy, s, owner, b) {
+  const st1 = artFor('sunder-site1', owner), st2 = artFor('sunder-site2', owner), whole = artFor('sunder', owner);
+  if (!st1 || !st2 || !whole) { drawMegaSite(ctx, 'sunder', cx, cy, s, owner, b); return; }
+  const p = b.progress || 0, w = 3 * s, color = PLAYER_COLORS[owner];
+  // stage 1 to 45%, stage 2 to 85%, then the finished art rising over it
+  const fade = (art, k) => { if (k <= 0) return; const ga = ctx.globalAlpha; ctx.globalAlpha = ga * Math.min(1, k); drawArt(ctx, art, cx, cy, s); ctx.globalAlpha = ga; };
+  fade(st1, 1);
+  fade(st2, (p - 0.4) / 0.1);
+  if (p > 0.85) { ctx.save(); ctx.beginPath(); ctx.rect(cx - w * 1.5, cy + w * 0.5 - w * 1.6 * ((p - 0.85) / 0.15), w * 3, w * 3); ctx.clip(); drawArt(ctx, whole, cx, cy, s); ctx.restore(); }
+  const bw = w * 0.8;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(cx - bw / 2, cy + w * 0.46, bw, Math.max(3, s * 0.1));
+  ctx.fillStyle = color; ctx.fillRect(cx - bw / 2, cy + w * 0.46, bw * p, Math.max(3, s * 0.1));
+}
+
+/** The Ray before its art has loaded (or with none): a block with two rams and a tower, and the row of plates. */
+function drawSunderPlain(ctx, cx, cy, s, owner, b) {
+  const color = PLAYER_COLORS[owner], A = sunderAnim(b);
+  ctx.fillStyle = 'rgba(20,14,10,0.3)'; roundRect(ctx, cx - 1.38 * s, cy - 1.3 * s, 2.76 * s, 2.76 * s, s * 0.15); ctx.fill();
+  ctx.fillStyle = THEME.hull; roundRect(ctx, cx - 1.38 * s, cy - 1.38 * s, 2.76 * s, 2.76 * s, s * 0.15); ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.stroke();
+  ctx.fillStyle = THEME.hullHi; ctx.fillRect(cx - 1.25 * s, cy - 1.3 * s, 2.5 * s, 1.1 * s);
+  for (const [k, h] of [[-1, A.w], [1, A.e]]) { ctx.fillStyle = '#4f565c'; ctx.beginPath(); ctx.ellipse(cx + k * 0.76 * s, cy - 0.75 * s - h * 0.12 * s, 0.26 * s, 0.2 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#d6762a'; ctx.lineWidth = Math.max(1, s * 0.04); ctx.stroke(); }
+  ctx.fillStyle = '#3f454b'; ctx.fillRect(cx - 0.14 * s, cy - 1.9 * s, 0.28 * s, 1.15 * s);
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = A.plates[i] ? '#7a838b' : '#4f565c'; ctx.fillRect(cx + (-1.12 + i * 0.45) * s - 0.15 * s, cy + 0.45 * s - A.plates[i] * 0.08 * s, 0.3 * s, 0.3 * s); }
+}
+
+/** A deterministic jagged crack from (x, y) at angle a, `len` long, `n` kinks (world tiles): its points. */
+function sunderCrack(x, y, a, len, n, seed) {
+  const pts = [[x, y]];
+  let px = x, py = y;
+  for (let k = 1; k <= n; k++) {
+    const aa = a + (hash2(seed, k, 931) - 0.5) * 0.9, step = len / n;
+    px += Math.cos(aa) * step; py += Math.sin(aa) * step;
+    pts.push([px, py]);
+  }
+  return pts;
+}
+
+/** The Ray's marks on the ground: the ripples running out, the heave on landing, the cracks after, cracked roads, the Quake's ring. */
+function drawSunderGround(ctx, ox, oy, z, v0, v1) {
+  const W = S.sunders || [];
+  const night = TOD.active ? TOD.state.lights || 0 : 0;
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const line = (pts, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); for (const [k, p] of pts.entries()) { const X = ox + p[0] * z, Y = oy + p[1] * z; if (k) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); } ctx.stroke(); };
+  for (const w of W) {
+    if (Math.max(w.x0, w.x1) < v0.x - 20 || Math.min(w.x0, w.x1) > v1.x + 20 || Math.max(w.y0, w.y1) < v0.y - 20 || Math.min(w.y0, w.y1) > v1.y + 20) continue;
+    const deep = w.m === 'deep', r = deep ? SUNDER.deep : SUNDER.quake, len = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) || 1;
+    const ux = (w.x1 - w.x0) / len, uy = (w.y1 - w.y0) / len, nx = -uy, ny = ux;
+    const f = clamp((S.time - w.t) / Math.max(0.001, w.at - w.t), 0, 1), age = S.time - w.at;
+    const fade = age > 0 ? clamp(1 - age / SUNDER.scar, 0, 1) : 1;
+    // the line of small cracks the ripple left along its path
+    const tint = deep ? (night > 0.3 ? 'rgba(170,110,255,A)' : 'rgba(70,52,44,A)') : 'rgba(58,44,34,A)';
+    const segs = Math.max(2, Math.floor(len * f / 1.4));
+    for (let k = 0; k < segs; k++) {
+      const s0 = k * 1.4 + 0.6, off = (hash2(w.id, k, 941) - 0.5) * 0.8;
+      if (s0 > len * f) break;
+      const px = w.x0 + ux * s0 + nx * off, py = w.y0 + uy * s0 + ny * off;
+      line(sunderCrack(px, py, Math.atan2(uy, ux) + (hash2(w.id, k, 943) - 0.5) * 1.4, 0.9, 3, w.id * 97 + k), Math.max(1, z * 0.04), tint.replace('A', (0.55 * fade).toFixed(3)));
+    }
+    if (!w.done) {
+      // the bulge running through the ground: a light crest ahead, its shadow behind, dust lifting at its edges
+      const fx = w.x0 + (w.x1 - w.x0) * f, fy = w.y0 + (w.y1 - w.y0) * f, X = ox + fx * z, Y = oy + fy * z, a = Math.atan2(uy, ux);
+      ctx.save(); ctx.translate(X, Y); ctx.rotate(a);
+      const g = ctx.createLinearGradient(-z * 1.2, 0, z * 0.9, 0);
+      g.addColorStop(0, 'rgba(40,28,18,0)'); g.addColorStop(0.45, 'rgba(40,28,18,0.32)'); g.addColorStop(0.7, 'rgba(255,235,190,0.34)'); g.addColorStop(1, 'rgba(255,235,190,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, z * 1.2, z * 1.6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = deep ? `rgba(196,140,255,${0.45 + 0.35 * night})` : 'rgba(255,200,120,0.6)'; ctx.lineWidth = Math.max(1.5, z * 0.08);
+      ctx.beginPath(); ctx.arc(-z * 0.6, 0, z * 1.3, -0.7, 0.7); ctx.stroke();
+      ctx.restore();
+    } else if (age >= 0 && age < 3) {
+      // landing: the ground heaves in rings out to the circle's edge
+      for (let n = 0; n < 3; n++) {
+        const q = clamp((age - n * 0.35) / 1.6, 0, 1);
+        if (q <= 0 || q >= 1) continue;
+        ctx.strokeStyle = deep ? `rgba(200,150,255,${0.55 * (1 - q)})` : `rgba(255,214,150,${0.6 * (1 - q)})`; ctx.lineWidth = Math.max(2, z * (0.4 - n * 0.1) * (1 - q));
+        ctx.beginPath(); ctx.arc(ox + w.x1 * z, oy + w.y1 * z, r * q * z, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(30,20,12,${0.3 * (1 - q)})`; ctx.lineWidth = Math.max(1.5, z * 0.25 * (1 - q));
+        ctx.beginPath(); ctx.arc(ox + w.x1 * z, oy + w.y1 * z, Math.max(0, r * q - 0.4) * z, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    if (w.done && age >= 0 && fade > 0) {
+      // the cracks spreading out from where it landed (growing for a second), and on Strike the Deep the caved-in pits
+      const grow = clamp(age / 1.2, 0, 1), n = deep ? 16 : 11;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + hash2(w.id, k, 951) * 0.5, L = r * (0.55 + 0.45 * hash2(w.id, k, 953)) * grow;
+        const pts = sunderCrack(w.x1, w.y1, a, L, deep ? 7 : 5, w.id * 131 + k);
+        line(pts, Math.max(1.2, z * (deep ? 0.07 : 0.1)), `rgba(34,24,18,${0.6 * fade})`);
+        if (hash2(w.id, k, 955) < 0.6) { const m = pts[Math.min(pts.length - 1, 2 + (k % 3))]; line(sunderCrack(m[0], m[1], a + (hash2(w.id, k, 957) < 0.5 ? 0.8 : -0.8), L * 0.3, 3, w.id * 7 + k), Math.max(1, z * 0.05), `rgba(34,24,18,${0.45 * fade})`); }
+      }
+      if (deep) for (let k = 0; k < 14; k++) {
+        const a = hash2(w.id, k, 961) * Math.PI * 2, rr = Math.sqrt(hash2(w.id, k, 962)) * r * 0.95 * grow, px = ox + (w.x1 + Math.cos(a) * rr) * z, py = oy + (w.y1 + Math.sin(a) * rr) * z;
+        ctx.fillStyle = `rgba(28,20,16,${0.35 * fade})`; ctx.beginPath(); ctx.ellipse(px, py, z * 0.5, z * 0.3, a, 0, Math.PI * 2); ctx.fill();
+        if (night > 0.3) { ctx.fillStyle = `rgba(160,100,255,${0.12 * fade * night})`; ctx.beginPath(); ctx.ellipse(px, py, z * 0.3, z * 0.18, a, 0, Math.PI * 2); ctx.fill(); }
+      }
+    }
+  }
+  // Cracked roads and track: dark zigzags across each tile (until a Worker mends them).
+  if (S.crk && S.crkN > 0 && z >= 6) {
+    const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
+    ctx.strokeStyle = 'rgba(30,24,20,0.75)'; ctx.lineWidth = Math.max(1, z * 0.05);
+    ctx.beginPath();
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const t = j * S.W + i;
+      if (!S.crk[t]) continue;
+      const a = hash2(t, 3, 971) * Math.PI, x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z, c = Math.cos(a) * z * 0.42, sn = Math.sin(a) * z * 0.42;
+      ctx.moveTo(x - c, y - sn); ctx.lineTo(x - c * 0.3 + sn * 0.25, y - sn * 0.3 - c * 0.25); ctx.lineTo(x + c * 0.2 - sn * 0.2, y + sn * 0.2 + c * 0.2); ctx.lineTo(x + c, y + sn);
+    }
+    ctx.stroke();
+  }
+  // The Quake's ring, and the aim of a Ray winding up (its own side sees it all the way; everyone, the last SUNDER.warn s).
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].sunder || !b.sOn || !b.sAim) continue;
+    const T = sunderTime(b), left = T - (b.sCharge || 0), ours = b.owner === ME || !foes(b.owner, ME), warn = b.sMode === 'quake' && left <= SUNDER.warn;
+    if (!ours && !warn) continue;
+    const X = ox + (b.sAim[0] + 0.5) * z, Y = oy + (b.sAim[1] + 0.5) * z, r = (b.sMode === 'deep' ? SUNDER.deep : SUNDER.quake) * z;
+    if (warn) {
+      const p = 0.5 + 0.5 * Math.sin(R.time * (4 + 6 * (1 - left / SUNDER.warn)));
+      ctx.fillStyle = `rgba(255,80,40,${0.06 + 0.06 * p})`; ctx.strokeStyle = `rgba(255,90,50,${0.55 + 0.4 * p})`; ctx.lineWidth = Math.max(2, z * 0.12);
+      ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,190,120,${0.35 * p})`; ctx.lineWidth = Math.max(1, z * 0.05); ctx.beginPath(); ctx.arc(X, Y, r * (1 - ((R.time * 0.8) % 1)), 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.setLineDash([z * 0.5, z * 0.3]); ctx.lineDashOffset = -R.time * z;
+      ctx.strokeStyle = b.sMode === 'deep' ? 'rgba(190,140,255,0.75)' : 'rgba(255,190,110,0.75)'; ctx.lineWidth = Math.max(1.5, z * 0.07);
+      ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    }
+  }
+  ctx.restore();
+}
+
+/** Over everything standing: dust kicked up along a ripple, cracks on cracked buildings, stunned robots. */
+function drawSunderAir(ctx, ox, oy, z) {
+  const W = S.sunders || [];
+  ctx.save();
+  for (const w of W) {
+    if (w.done) continue;
+    const len = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) || 1, f = clamp((S.time - w.t) / Math.max(0.001, w.at - w.t), 0, 1);
+    for (let k = 0; k < 10; k++) {
+      const s0 = len * f - k * 0.7;
+      if (s0 < 0) break;
+      const q = k / 10, px = ox + (w.x0 + (w.x1 - w.x0) * s0 / len) * z, py = oy + (w.y0 + (w.y1 - w.y0) * s0 / len) * z, side = (hash2(w.id, k, 981) - 0.5) * z * 1.4;
+      ctx.fillStyle = `rgba(190,168,130,${0.28 * (1 - q)})`;
+      ctx.beginPath(); ctx.arc(px - ((w.y1 - w.y0) / len) * side, py + ((w.x1 - w.x0) / len) * side - q * z * 0.5, z * (0.25 + q * 0.4), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (z >= 6) {
+    const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
+    ctx.lineCap = 'round';
+    for (const b of S.buildings) {
+      if (b.dead || !b.crack || b.x < v0.x - 4 || b.x > v1.x + 4 || b.y < v0.y - 4 || b.y > v1.y + 4) continue;
+      const F = BDEFS[b.type].foot || 1, x0 = ox + b.x * z, y0 = oy + b.y * z, sz = F * z;
+      ctx.strokeStyle = 'rgba(25,18,14,0.7)'; ctx.lineWidth = Math.max(1, z * 0.045);
+      for (let k = 0; k < 2 + F; k++) {
+        const pts = sunderCrack(b.x + 0.15 + hash2(b.id, k, 991) * (F - 0.3), b.y + F * 0.75, -Math.PI / 2 + (hash2(b.id, k, 993) - 0.5) * 1.2, F * 0.45, 4, b.id * 11 + k);
+        ctx.beginPath(); for (const [n, p] of pts.entries()) { if (n) ctx.lineTo(ox + p[0] * z, oy + p[1] * z); else ctx.moveTo(ox + p[0] * z, oy + p[1] * z); } ctx.stroke();
+      }
+      void x0; void y0; void sz;
+    }
+    for (const u of S.bots) {
+      if (u.dead || u.inside || !(u.stunT > S.time)) continue;
+      const x = ox + u.x * z, y = oy + u.y * z - z * 0.55;
+      for (let k = 0; k < 3; k++) { const a = R.time * 5 + k * 2.09; ctx.fillStyle = 'rgba(255,230,140,0.9)'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * z * 0.22, y + Math.sin(a) * z * 0.08, Math.max(1.2, z * 0.05), 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  ctx.restore();
+}
+
+/** Aiming the Ray: Strike the Deep's circle anywhere; a Quake's reach round the Ray (all else dimmed) and its circle. */
+function drawSunderAim(ctx, ox, oy, z, b) {
+  const deep = typeof UI !== 'undefined' && UI.aimMode === 'deep', c = bCentre(b), cx = ox + c.x * z, cy = oy + c.y * z;
+  if (!deep) {
+    const rr = SUNDER.range * z;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,8,12,0.45)'; ctx.beginPath(); ctx.rect(0, 0, R.w, R.h); ctx.arc(cx, cy, rr, 0, Math.PI * 2, true); ctx.fill('evenodd');
+    ctx.strokeStyle = 'rgba(255,170,100,0.95)'; ctx.lineWidth = Math.max(2, z * 0.08); ctx.setLineDash([z * 0.5, z * 0.3]); ctx.lineDashOffset = -R.time * z;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.restore();
+  }
+  const sp = R.aim || R.aimHover;
+  if (!sp) return;
+  const ok = !sunderAimBlocked(b, sp.i, sp.j, deep ? 'deep' : 'quake'), px = ox + (sp.i + 0.5) * z, py = oy + (sp.j + 0.5) * z, r = (deep ? SUNDER.deep : SUNDER.quake) * z;
+  // the ray's path through the ground, a dashed line from the bore to the spot
+  ctx.save();
+  ctx.strokeStyle = ok ? 'rgba(255,207,74,0.7)' : 'rgba(200,200,200,0.4)'; ctx.lineWidth = Math.max(1.5, z * 0.06); ctx.setLineDash([z * 0.25, z * 0.2]);
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = !ok ? 'rgba(200,200,200,0.12)' : deep ? 'rgba(170,110,255,0.14)' : 'rgba(255,90,50,0.16)';
+  ctx.strokeStyle = !ok ? 'rgba(200,200,200,0.8)' : deep ? (R.aim ? '#c690ff' : 'rgba(198,144,255,0.8)') : (R.aim ? '#ff6a3a' : 'rgba(255,140,100,0.85)');
+  ctx.lineWidth = Math.max(2, z * 0.07);
+  ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // under Strike the Deep's circle, the Murmur's tunnels it would cave in
+  if (deep && ok && S.tun) {
+    ctx.fillStyle = 'rgba(200,150,255,0.35)';
+    const R0 = SUNDER.deep;
+    for (let j = sp.j - R0; j <= sp.j + R0; j++) for (let i = sp.i - R0; i <= sp.i + R0; i++) {
+      if (!inMap(i, j) || !S.tun[tIdx(i, j)] || dist2(i, j, sp.i, sp.j) > R0 * R0) continue;
+      ctx.fillRect(ox + i * z + z * 0.3, oy + j * z + z * 0.3, z * 0.4, z * 0.4);
+    }
+  }
+  const k = Math.max(6, z * 0.6);
+  ctx.beginPath(); ctx.moveTo(px - k, py); ctx.lineTo(px + k, py); ctx.moveTo(px, py - k); ctx.lineTo(px, py + k); ctx.stroke();
+  ctx.restore();
+}
+
+/*
+ * The Atmosphere Engines' Storm Fronts (STORM; atmosStormOn): over the spot, a dark cloud turning slowly round its middle
+ * (billows on two rings, the inner one faster), its shadow on the ground, a darker rim so its edge reads from far out,
+ * and rain under it. At night the cloud is lit a little from inside (blue-grey) so it still reads. It rolls in and
+ * breaks up over a few seconds (R.stormK). Everyone sees it.
+ */
+function drawAtmosStorms(ctx, ox, oy, z) {
+  const K = R.stormK || (R.stormK = {}), dt = Math.min(0.25, Math.max(0, R.time - (R.stormT ?? R.time)));
+  R.stormT = R.time;
+  const night = fxNight(), lite = gfx().fx < 1;
+  for (const b of S.buildings) {
+    if (b.type !== 'atmos') continue;
+    const on = atmosStormOn(b), k0 = K[b.id] || 0, k = on ? Math.min(1, k0 + dt / 3) : Math.max(0, k0 - dt / 2);
+    if (k <= 0 || !b.aeStorm) { delete K[b.id]; continue; }
+    K[b.id] = k;
+    const X = ox + (b.aeStorm[0] + 0.5) * z, Y = oy + (b.aeStorm[1] + 0.5) * z, r = STORM.r * z;
+    if (X < -r * 1.6 || X > R.w + r * 1.6 || Y < -r * 1.6 || Y > R.h + r * 1.6) continue;
+    ctx.save();
+    // the shadow on the ground, and the rim
+    const sh = ctx.createRadialGradient(X, Y, r * 0.2, X, Y, r * 1.12);
+    sh.addColorStop(0, `rgba(14,18,28,${(night ? 0.28 : 0.42) * k})`); sh.addColorStop(0.82, `rgba(14,18,28,${(night ? 0.22 : 0.34) * k})`); sh.addColorStop(1, 'rgba(14,18,28,0)');
+    ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(X, Y, r * 1.12, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = night ? `rgba(150,170,210,${0.35 * k})` : `rgba(30,36,50,${0.45 * k})`; ctx.lineWidth = Math.max(1.5, z * 0.12); ctx.setLineDash([z * 0.6, z * 0.35]); ctx.lineDashOffset = R.time * z * 0.4;
+    ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    // rain under it: slanted streaks falling all over the circle
+    ctx.strokeStyle = night ? `rgba(180,200,230,${0.4 * k})` : `rgba(210,222,240,${0.45 * k})`; ctx.lineWidth = Math.max(1, z * 0.03);
+    ctx.beginPath();
+    for (let q = 0, N = lite ? 60 : 130; q < N; q++) {
+      const a = hash2(b.id, q, 31) * Math.PI * 2, d = Math.sqrt(hash2(b.id, q, 32)) * r * 0.95, f = (R.time * 1.6 + hash2(b.id, q, 33)) % 1;
+      const x = X + Math.cos(a) * d + f * z * 0.3, y = Y + Math.sin(a) * d * 0.85 - (1 - f) * z * 1.4;
+      ctx.moveTo(x, y); ctx.lineTo(x - z * 0.12, y + z * 0.45);
+    }
+    ctx.stroke();
+    // the cloud: three spiral arms of billows wound round its middle, turning slowly; each billow a darker underside
+    // (its shadow side), its body and a paler top, so it reads as heaped cloud seen from above. At night darker, its
+    // tops lit a little blue-grey.
+    const under = wxCloud(night ? '18,22,34' : '30,34,44'), body = wxCloud(night ? '52,60,82' : '74,80,94'), tops = wxCloud(night ? '112,126,162' : '150,156,168');
+    const spin = R.time * 0.11 + b.id * 1.7, arms = 3, per = lite ? 5 : 8;
+    const puff = (x, y, w, a) => {
+      ctx.globalAlpha = 0.55 * a * k; ctx.drawImage(under, x - w * 0.5 + w * 0.08, y - w * 0.3 + w * 0.12, w, w * 0.62);
+      ctx.globalAlpha = 0.7 * a * k; ctx.drawImage(body, x - w * 0.5, y - w * 0.32, w, w * 0.62);
+      ctx.globalAlpha = (night ? 0.5 : 0.45) * a * k; ctx.drawImage(tops, x - w * 0.36 - w * 0.08, y - w * 0.3 - w * 0.08, w * 0.72, w * 0.42);
+    };
+    puff(X, Y - z * 1.6, r * 1.05, 0.9); // (its heart, densest)
+    for (let q = per - 1; q >= 0; q--) for (let arm = 0; arm < arms; arm++) {
+      const t = (q + 1) / per, a = spin + (arm / arms) * Math.PI * 2 + t * 2.4 + (hash2(b.id, q * 3 + arm, 41) - 0.5) * 0.3;
+      const d = r * (0.18 + 0.8 * t), w = r * (0.42 + 0.38 * t) * (0.85 + 0.3 * hash2(b.id, q * 3 + arm, 42));
+      puff(X + Math.cos(a) * d, Y + Math.sin(a) * d * 0.8 - z * 1.6, w, 1 - 0.35 * t);
+    }
+    ctx.globalAlpha = 1;
+    // lightning in the cloud now and then at the Garden (looks only: the strike itself is stormBolt's)
+    if ((b.aeStage || 0) >= 4) {
+      const n = Math.floor(R.time / 3.7 + b.id), ph = R.time / 3.7 + b.id - n;
+      if (hash2(b.id, n, 51) < 0.5 && ph < 0.06) { ctx.globalAlpha = k; ctx.globalCompositeOperation = 'lighter'; fxGlow(ctx, X + (hash2(b.id, n, 52) - 0.5) * r, Y - z * 1.6, r * 0.9, '#c8d8ff', 0.5); }
+    }
+    ctx.restore();
+  }
+}
+
+/** Aiming a Storm Front: the Engine's own circle kept clear (dimmed ring) and the storm's circle at the pointer. */
+function drawStormAim(ctx, ox, oy, z, b) {
+  const c = bCentre(b), st = b.aeStage || 2, cx = ox + c.x * z, cy = oy + c.y * z, keep = (ATMOS.r[st - 1] + STORM.r) * z;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(143,224,138,0.8)'; ctx.fillStyle = 'rgba(143,224,138,0.06)'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.5, z * 0.3]);
+  ctx.beginPath(); ctx.arc(cx, cy, keep, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+  const sp = R.aim || R.aimHover;
+  if (sp) {
+    const ok = !atmosStormBlocked(b, sp.i, sp.j), px = ox + (sp.i + 0.5) * z, py = oy + (sp.j + 0.5) * z, r = STORM.r * z;
+    ctx.fillStyle = ok ? 'rgba(60,70,96,0.3)' : 'rgba(200,200,200,0.12)';
+    ctx.strokeStyle = !ok ? 'rgba(200,200,200,0.8)' : R.aim ? '#9fb4e8' : 'rgba(159,180,232,0.85)';
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const k = Math.max(6, z * 0.6);
+    ctx.beginPath(); ctx.moveTo(px - k, py); ctx.lineTo(px + k, py); ctx.moveTo(px, py - k); ctx.lineTo(px, py + k); ctx.stroke();
+  }
+  ctx.restore();
 }

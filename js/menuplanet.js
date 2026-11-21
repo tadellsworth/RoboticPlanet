@@ -11,15 +11,22 @@
  * down into the atmosphere; now and then the Wren comes in on its supply loop from the edge of the system.
  *
  * Drawn on its own canvas (#menu-planet), under the menu card, with a soft vignette behind the card so it stays clear. The
- * planet's face (mplMakeMap) is made once from a fixed seed, a few rows a frame at launch; the sphere is shaded from it per
+ * planet's face is the atlas (LORE.md: The atlas): art/lore/ithaca-map.webp, made by tools/atlas/atlas.py, its colour the
+ * map and its alpha the colonies' lights (mplAtlas); its clouds, and the face itself if the picture can't be had, are
+ * made once from a fixed seed (mplMakeMap), a few rows a frame at launch; the sphere is shaded from it per
  * pixel in a small image; the sky, the star's glow and the flashes are sprites made once. A dozen frames a second at most,
  * fewer on Graphics Saver (with fewer flashes, and no ringfall, Wren or drifting stars); stopped while the menu is hidden
  * or the tab is in the background; near-still with reduced motion (no flashes: the fires just glow). While it shows, the
  * demo game behind the menu isn't drawn (menuPlanetCovers: main.js).
+ *
+ * Only with the Menu background setting on Planet (menuBg / setMenuBg, kept on this device; Settings, from the main menu
+ * or the pause menu). On Classic (the default) the menu shows the AI-vs-AI demo game through its dimmed gradient, as it
+ * always did, and none of this is made or run: no canvas, no map, no frames.
  */
 
 const MPLANET = {
-  texW: 512, texH: 256,   // the planet's map (longitude × latitude)
+  texW: 512, texH: 256,   // the planet's map (longitude × latitude), as the atlas picture (art/lore/ithaca-map.webp)
+  atlasWait: 3,           // seconds the planet waits for that picture at launch before it shows its own face
   res: 300,               // the most pixels across the shaded sphere is made at (it's drawn larger, smoothly)
   fps: 12, fpsSaver: 5,   // frames a second
   orbit: 240,             // seconds for Ithaca I to go once round Corvane
@@ -36,6 +43,20 @@ const MPLANET = {
 const MPL = { c: null, g: null, raf: 0, last: 0, t: 0, open: 0, map: null, sky: null, sphere: null, geo: null, w: 0, h: 0, dpr: 1, on: false,
   war: { fronts: [], fires: [], flashes: [], tracers: [], strikes: [], nextFront: 0, nextStrike: 20, nextTracer: 6, nuke: null, nextNuke: 0 },
   falls: [], nextFall: 4, spr: {} };
+
+/* The Menu background setting: 'classic' (the demo game, the default) or 'planet' (this). */
+const MENU_BG_KEY = 'terrafall.menubg';
+const MENU_BG = ['classic', 'planet'];
+let _menuBg = 'classic';
+try { const v = localStorage.getItem(MENU_BG_KEY); if (MENU_BG.includes(v)) _menuBg = v; } catch (e) { /* storage unavailable */ }
+function menuBg() { return _menuBg; }
+/** Pick the menu's background; it changes at once (the planet starts, or stops and is put away). */
+function setMenuBg(v) {
+  if (!MENU_BG.includes(v)) return;
+  _menuBg = v;
+  try { localStorage.setItem(MENU_BG_KEY, v); } catch (e) { /* storage unavailable */ }
+  if (typeof document !== 'undefined') mplWatch();
+}
 
 /** 3D value noise (0..1), for a seamless map on the sphere. */
 function mplNoise(x, y, z, seed) {
@@ -69,6 +90,10 @@ function mplMakeMap() {
     const lat = (0.5 - (j + 0.5) / H) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
     for (let i = 0; i < W; i++) {
       const lon = ((i + 0.5) / W) * Math.PI * 2, x = cl * Math.cos(lon), y = sl, z = cl * Math.sin(lon), t = j * W + i;
+      // cloud: drifting bands, thicker toward the mid-latitudes
+      const cn = mplFbm(x * 3.2 + 7, y * 6, z * 3.2, seed + 21, 3);
+      cloud[t] = clamp((cn - 0.52) * 3.2, 0, 1) * 220;
+      if (M.atlas === 'ok') continue; // (the face is the atlas's)
       // the nearest centre (and how near the next, for the seams between regions)
       let b1 = null, b2 = null, d1 = 9, d2 = 9;
       const q = 0.42, wx = x + q * (mplFbm(x * 2.5, y * 2.5, z * 2.5, seed + 5, 2) - 0.5), wy = y + q * (mplFbm(x * 2.5 + 9, y * 2.5, z * 2.5, seed + 6, 2) - 0.5), wz = z + q * (mplFbm(x * 2.5, y * 2.5 + 9, z * 2.5, seed + 7, 2) - 0.5);
@@ -98,15 +123,45 @@ function mplMakeMap() {
       const ice = clamp((Math.abs(lat) - 1.08 - 0.12 * (det - 0.5)) / 0.08, 0, 1);
       if (ice > 0) { r += (236 - r) * ice; g += (242 - g) * ice; bl += (248 - bl) * ice; lights[t] = 0; }
       tex[t * 3] = r; tex[t * 3 + 1] = g; tex[t * 3 + 2] = bl;
-      // cloud: drifting bands, thicker toward the mid-latitudes
-      const cn = mplFbm(x * 3.2 + 7, y * 6, z * 3.2, seed + 21, 3);
-      cloud[t] = clamp((cn - 0.52) * 3.2, 0, 1) * 220;
     }
   };
-  // Made a few rows at a time (step: ms of a frame), so the menu answers at once while it's made.
-  const M = { tex, cloud, lights, W, H, row: 0, done: false };
-  M.step = (ms) => { const t0 = performance.now(); while (M.row < H && performance.now() - t0 < ms) doRow(M.row++); M.done = M.row >= H; return M.done; };
+  // Made a few rows at a time (step: ms of a frame), so the menu answers at once while it's made. The atlas picture is
+  // asked for at once; until it comes (or if it can't: mplAtlas) the rows make a face of their own too, and the planet
+  // waits for it at most MPLANET.atlasWait seconds.
+  const M = { tex, cloud, lights, W, H, row: 0, done: false, atlas: 'wait', t0: performance.now() };
+  M.step = (ms) => {
+    const t0 = performance.now();
+    while (M.row < H && performance.now() - t0 < ms) doRow(M.row++);
+    M.done = M.row >= H && (M.atlas !== 'wait' || performance.now() - M.t0 > MPLANET.atlasWait * 1000);
+    return M.done;
+  };
+  mplAtlas(M);
   return M;
+}
+
+/** The face from the atlas picture (art/lore/ithaca-map.webp; in the one-file build, inline as window.ITHACA_MAP): its
+ * colour is the map (longitude −180° at the left edge, north up) and its alpha the night lights (255 none, 254 down to
+ * 225 ever brighter: towns along the coasts and in the territories' hearts, made by tools/atlas/atlas.py). M.atlas becomes
+ * 'ok', or 'no' (no picture, or a page opened from a file, whose canvas can't be read): then the rows' own face stays. */
+function mplAtlas(M) {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = M.W; c.height = M.H;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, M.W, M.H);
+      const d = g.getImageData(0, 0, M.W, M.H).data;
+      for (let t = 0; t < M.W * M.H; t++) {
+        const a = d[t * 4 + 3];
+        M.tex[t * 3] = d[t * 4]; M.tex[t * 3 + 1] = d[t * 4 + 1]; M.tex[t * 3 + 2] = d[t * 4 + 2];
+        M.lights[t] = a < 255 && a >= 200 ? Math.min(255, 140 + (254 - a) * 4) : 0;
+      }
+      M.atlas = 'ok';
+    } catch (e) { M.atlas = 'no'; }
+  };
+  img.onerror = () => { M.atlas = 'no'; };
+  img.src = (typeof window !== 'undefined' && window.ITHACA_MAP) || 'art/lore/ithaca-map.webp';
 }
 
 /** Sprites, made once: a soft disc in colour rgb with alpha falling to the edge (hard: a brighter core). */
@@ -175,7 +230,7 @@ function mplGeometry(n) {
 
 /** Where map point (u 0..1 round, lat) is on the sphere now: { x, y, z } (unit sphere, z toward you), turned by rot. */
 function mplOnSphere(u, lat, rot) {
-  const G = MPL.geo, lo = u * Math.PI * 2 - rot, cl = Math.cos(lat);
+  const G = MPL.geo, lo = u * Math.PI * 2 + rot, cl = Math.cos(lat);
   const px = cl * Math.sin(lo), z = cl * Math.cos(lo), py = -Math.sin(lat);
   return { x: px * G.ca - py * G.sa, y: px * G.sa + py * G.ca, z };
 }
@@ -209,8 +264,8 @@ function mplShade(t, st) {
     const e = G.edge[k];
     if (e < 0) continue;
     const lat = G.lat[k], v = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0));
-    let u = ((G.lon[k] + rot) / TAU) % 1; if (u < 0) u += 1;
-    let uc = ((G.lon[k] + crot) / TAU) % 1; if (uc < 0) uc += 1;
+    let u = ((G.lon[k] - rot) / TAU) % 1; if (u < 0) u += 1; // (it turns west to east: the land moves to the right)
+    let uc = ((G.lon[k] - crot) / TAU) % 1; if (uc < 0) uc += 1;
     const ti = v * W + ((u * W) | 0), tc = v * W + ((uc * W) | 0);
     const nx = G.nx[k], ny = G.ny[k], nz = G.nz[k];
     let s = nx * Lx + ny * Ly + nz * Lz;
@@ -545,18 +600,21 @@ function mplFrame(now) {
   mplDraw(dt, still, saver);
 }
 
-/** Start or stop the backdrop as the menu shows or hides, and as the tab comes and goes. */
+/** Start or stop the backdrop as the menu shows or hides, as the tab comes and goes, and with the Menu background setting. */
 function mplWatch() {
   const menu = document.getElementById('screen-menu');
-  const on = !!menu && !menu.hidden && !document.hidden;
+  if (!menu) return;
+  const want = _menuBg === 'planet';
+  if (want && !MPL.c) mplMake(menu);
+  const on = want && !menu.hidden && !document.hidden;
   MPL.on = on;
-  if (MPL.c) MPL.c.hidden = !menu || menu.hidden;
-  if (on && !MPL.raf) MPL.raf = requestAnimationFrame(mplFrame);
+  if (MPL.c) MPL.c.hidden = !want || menu.hidden;
+  if (!on && MPL.raf) { cancelAnimationFrame(MPL.raf); MPL.raf = 0; }
+  if (on && !MPL.raf) { MPL.last = 0; MPL.raf = requestAnimationFrame(mplFrame); }
 }
 
-function menuPlanetInit() {
-  const menu = document.getElementById('screen-menu');
-  if (!menu || MPL.c || typeof document.createElement !== 'function') return;
+/** The canvas and the planet's map: made the first time the Planet background is wanted (never on Classic). */
+function mplMake(menu) {
   const c = document.createElement('canvas');
   c.id = 'menu-planet';
   c.setAttribute('aria-hidden', 'true');
@@ -565,6 +623,13 @@ function menuPlanetInit() {
   MPL.map = mplMakeMap();
   MPL.t = 30;
   MPL.nukeNow = mplNuke; // (a debug hook: the rare blast, at once)
+}
+
+let _mplInit = false;
+function menuPlanetInit() {
+  const menu = document.getElementById('screen-menu');
+  if (!menu || _mplInit || typeof document.createElement !== 'function') return;
+  _mplInit = true;
   new MutationObserver(mplWatch).observe(menu, { attributes: true, attributeFilter: ['hidden'] });
   document.addEventListener('visibilitychange', mplWatch);
   mplWatch();

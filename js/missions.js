@@ -2,8 +2,8 @@
 /*
  * Terrafall — the mission campaign, which is also the tutorial: it starts with the very basics and, chapter by
  * chapter, teaches every part of the game. Missions are on hand-picked planets, each with its own goals, starting
- * conditions and hand-placed features, and three difficulty levels (Easy / Normal / Hard: bigger goals, tighter
- * clocks, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty, and
+ * conditions and hand-placed features, and the five difficulty levels rivals have (Settler, Pioneer, Colonist,
+ * Commander, Warlord: DIFFICULTY in js/defs.js; bigger goals, less in the Command Base, a clock, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty, and
  * the Missions list marks the first one not yet finished as Next up.
  *
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
@@ -16,14 +16,14 @@
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
  * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key, or 'random'),
- * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
- * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
- * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/mega (switch on what missions otherwise
+ * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [Settler, Colonist,
+ * Commander] (its level), rivalBonus (extra of every good in its Command Base), passive: [Settler, Colonist, Commander] (a rival that
+ * never attacks), limit (minutes per difficulty, 0 none: Pioneer has Settler's, Warlord Commander's), nuke/war/lab/events/mega (switch on what missions otherwise
  * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, Megastructures), pressOn (the rival's
  * trade convoys keep to schedule, out of a besieged base and past raiders: convoysPress), murmur ('quiet' or
  * 'active': the Murmur, with their nests, tunnels and nights; the older wildlife: true is Active), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
  * (1 to 4, met in any order, shown one at a time as the next goal) }.
- * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal: the
+ * A goal: { kind, n (one number or [Settler, Colonist, Commander]), hint (how to do it, shown while it's the next goal: the
  * real button names in <b> and keys in <kbd>), ui (CSS selector of the button(s) to light up meanwhile; when none is
  * on screen the button that opens them lights up, and for a panel button a ring pulses on the building to tap: `at`,
  * a building type, or the one the hint names), focus(S) (a specific target or { e, ui } for a goal with stages), text (its own objective text, "{n}" for the number, or [one, many] to
@@ -52,8 +52,38 @@
  */
 
 const CAMPAIGN_KEY = 'botfall.campaign';
-const MISSION_DIFFS = ['easy', 'normal', 'hard'];
-const MISSION_DIFF_NAMES = ['Easy', 'Normal', 'Hard'];
+/*
+ * The levels: a mission's `diff` is an index into DIFF_ORDER (0 Settler, 1 Pioneer, 2 Colonist, 3 Commander,
+ * 4 Warlord). Missions were tuned on three levels, and their per-level values ([a, b, c]: goal sizes, rival
+ * levels, clocks, setup numbers) stay written that way: a is Settler, b Colonist, c Commander (the old Easy, Normal
+ * and Hard), Pioneer falls between a and b, and Warlord goes half a step past c (one rival level up, a goal half
+ * again as much bigger). A five-long array gives each level its own value. mPick reads either.
+ */
+const MISSION_DIFFS = DIFF_ORDER;
+const MISSION_DIFF_NAMES = DIFF_ORDER.map((k) => DIFFICULTY[k].label);
+const MISSION_DIFF_DEFAULT = 2; // Colonist (the old Normal)
+/** Where the old three levels (Easy, Normal, Hard) went: progress and saves from before carry over. */
+const MISSION_OLD_DIFF = [0, 2, 3];
+
+function mPick(v, d) {
+  if (!Array.isArray(v)) return v;
+  if (v.length !== 3) return v[Math.min(d, v.length - 1)];
+  const [a, b, c] = v;
+  if (d === 0 || d === 2 || d === 3) return v[d === 0 ? 0 : d - 1];
+  if (typeof a === 'number') {
+    const int = Number.isInteger(a) && Number.isInteger(b) && Number.isInteger(c), floor = Math.min(a, b, c) >= 0 ? 0 : -Infinity;
+    if (d === 1) return int ? a + Math.trunc((b - a) / 2) : (a + b) / 2;
+    return Math.max(floor, int ? c + Math.ceil((c - b) / 2) : c + (c - b) / 2);
+  }
+  if (typeof a === 'string' && DIFFICULTY[a]) {
+    const i = (k) => DIFF_ORDER.indexOf(k);
+    return d === 1 ? DIFF_ORDER[Math.floor((i(a) + i(b)) / 2)] : DIFF_ORDER[Math.min(DIFF_ORDER.length - 1, i(c) + 1)];
+  }
+  return d === 1 ? a : c; // (a switch, passive: Pioneer as Settler, Warlord as Commander)
+}
+
+/** A mission's time limit at level d, in minutes (0 none): Pioneer keeps Settler's, Warlord Commander's. */
+function mLimit(def, d) { const L = def.limit || []; return (L.length === 5 ? L[d] : L[[0, 0, 1, 2, 2][d]]) || 0; }
 
 /* --- hand-placed features: helpers that edit a freshly generated map (generateMap's output) --- */
 
@@ -121,7 +151,7 @@ function arterialPairs(P, S, surfaced) {
  * Siege Breakers: the Warden's outer works, there from the start whatever it goes on to build itself (since the rival
  * AI got thriftier, the Easy Warden built two turrets and no Wall, its army was gone by minute 8, and "Take out 3 Walls
  * or turrets" was left with nothing to take out). A line of Wall across the way in from the player's side, 7 tiles
- * out from its Command Base and 7 long, with guns behind it: two Pulse Turrets, and a Minigun Nest on Normal and Hard.
+ * out from its Command Base and 7 long, with guns behind it: two Pulse Turrets, and a Minigun Nest from Colonist up.
  */
 function siegeWorks(S, diff) {
   const R = getE(S.players[1].lander), L = getE(S.players[0].lander);
@@ -134,7 +164,7 @@ function siegeWorks(S, diff) {
   const gun = (type, side, stock) => preBuild(1, type, Math.round(cx - fx * 2.5 + px * side), Math.round(cy - fy * 2.5 + py * side), { reach: 3, stock });
   gun('turret', -2, { crystal: 20 });
   gun('turret', 2, { crystal: 20 });
-  if (diff > 0) gun('minigun', 0, { ammo: 12 });
+  if (diff >= 2) gun('minigun', 0, { ammo: 12 });
   computeTerritory();
 }
 
@@ -234,6 +264,61 @@ function overseasPorts(P, S) {
 /* --- the campaign --- */
 
 // (Every mission is on Rich resources: the amount it was made and balanced with, before resources were lowered a notch.)
+/*
+ * The Atmosphere Engine's missions (Rain, Seed Vault, Under the Bloom, Landing Zone): the player's Engine, and how many
+ * of their Bio Farms stand on the land it changed (Rain or more).
+ */
+function aeOwn(S) { return S.buildings.find((b) => !b.dead && b.owner === 0 && BDEFS[b.type].atmos) || null; }
+function aeFarms(S) { return S.buildings.filter((b) => !b.dead && b.built && b.owner === 0 && b.type === 'farm' && S.green && S.green[tIdx(b.x, b.y)] >= 2).length; }
+/** Some of Command Base L's stock for the Engine and its two Generators (and their Fuel). */
+function aeKit(L, fiber) { L.stock.cement += 60; L.stock.alloy += 48; L.stock.chip += 26; L.stock.crystal += 32; L.stock.fiber = (L.stock.fiber || 0) + (fiber ?? 22); L.stock.fuel += 24; }
+/** Open level ground a robot can stand on, nearest (x, y) and at least 12 tiles from Command Base L: { x, y }. */
+function aeOpenNear(S, x, y, L) {
+  let best = { x, y }, bd = Infinity;
+  for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {
+    const t = tIdx(i, j), d = dist2(i, j, x, y);
+    if (d >= bd || S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.ramp[t] || dist2(i, j, L.x, L.y) < 144 || !walkable(t)) continue;
+    if (![[1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => walkable(tIdx(i + a, j + b)) && !S.res[tIdx(i + a, j + b)])) continue;
+    bd = d; best = { x: i, y: j };
+  }
+  return best;
+}
+const AE_BUILT = { kind: 'built', type: 'atmos', n: 1,
+  hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Mega</b> (<kbd>6</kbd>) → <b>Atmosphere Engine</b> (<kbd>N</kbd>). Then <b>Lay road</b> to it.',
+  ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='atmos'], #sh-layroad" };
+/**
+ * Overcast: rival E's Atmosphere Engine, built, at stage `st`, on its land as near its Command Base as there is room and
+ * far enough from the player's Command Base L for its storm to reach L; its two Generators beside it, full of Fuel.
+ */
+function ocEngine(S, E, L, st) {
+  const p = E.owner, far = ATMOS.r[st - 1] + STORM.r + 2;
+  // (open level ground for its 4 x 4 and a tile round it, its stone and groves cleared: the Steward made room for it)
+  const room = (i, j) => { for (let b = -1; b <= 4; b++) for (let a = -1; a <= 4; a++) { if (!inMap(i + a, j + b)) return false; const t = tIdx(i + a, j + b); if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.ramp[t] || S.road[t] || (S.owner[t] >= 0 && S.owner[t] !== p) || ((a >= 0 && a < 4 && b >= 0 && b < 4) && S.res[t] && S.res[t] !== R_BOULDER && S.res[t] !== R_STALK)) return false; } return true; };
+  let sp = null, bd = Infinity;
+  for (let j = 1; j < S.H - 5; j++) for (let i = 1; i < S.W - 5; i++) {
+    const d = dist(i + 2, j + 2, E.x + 0.5, E.y + 0.5);
+    if (d < 5 || d >= bd || dist(i + 2, j + 2, L.x + 0.5, L.y + 0.5) < far || !room(i, j)) continue;
+    bd = d; sp = [i, j];
+  }
+  if (!sp) return null;
+  for (let b = 0; b < 4; b++) for (let a = 0; a < 4; a++) { const t = tIdx(sp[0] + a, sp[1] + b); S.res[t] = R_NONE; S.amt[t] = 0; markDirty(sp[0] + a, sp[1] + b); }
+  const b = addBuilding(p, 'atmos', sp[0], sp[1], true);
+  b.aeT = ATMOS.stages[st - 1] + 1; b.aeStage = st; b.aeP = ATMOS.r[st - 1];
+  computeTerritory();
+  for (let n = 0; n < ATMOS.gens; n++) {
+    let g = null, gd = Infinity;
+    for (let j = b.y - 6; j <= b.y + 9; j++) for (let i = b.x - 6; i <= b.x + 9; i++) {
+      if (!inMap(i, j) || footDist(b, i + 0.5, j + 0.5) > ATMOS.reach || !canPlace(p, 'generator', i, j).ok) continue;
+      const d = dist2(i, j, E.x, E.y);
+      if (d < gd) { gd = d; g = [i, j]; }
+    }
+    if (g) { const G = addBuilding(p, 'generator', g[0], g[1], true); G.stock.fuel = BDEFS.generator.fuelCap; }
+  }
+  b.aeSrc = 'gen';
+  return b;
+}
+const aeStageGoal = (n, text, hint) => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui: '#btn-speed' });
+
 const MISSIONS = [
   // Chapter 1, First Steps. One idea at a time: your first building and road, Stone and Cement, batteries, and the first Alloy.
   {
@@ -422,7 +507,7 @@ const MISSIONS = [
     layout(m, W) { const b = m.bases[0]; placeFertile(m, W, b.x + 7, b.y - 3, 2.2); placeFertile(m, W, b.x - 8, b.y - 5, 1.8); },
     setup(S, diff) {
       const k = kit(S, KIT6, 4);
-      getE(S.players[0].lander).stock.fuel = [6, 3, 0][diff];
+      getE(S.players[0].lander).stock.fuel = mPick([6, 3, 0], diff);
       if (k.charger) k.charger.stock.fuel = 0;
     },
     goals: [
@@ -490,6 +575,39 @@ const MISSIONS = [
       { kind: 'made', good: 'ore', n: [20, 30, 40],
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Ore Mine</b> (<kbd>R</kbd>), by the rich veins past the old border. <b>Lay road</b>.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='mine'], #goods .res-chip[data-g='ore']" },
+    ],
+  },
+
+  // The Atmosphere Engine's teaching mission (the megastructure sheet's "Rain", Nov 2026): a dry Rust plateau. The Engine
+  // on two Generators calms the air, and at stage 2 it rains: the barren ground round it turns fertile for Bio Farms.
+  {
+    id: 'rain', name: 'Rain', chapter: 'Growing the Colony',
+    brief: 'A dry plateau, no farmland for miles. The Pathfinder left plans for an Atmosphere Engine: build it, and bring the rain.',
+    intro: [
+      'The <b>Atmosphere Engine</b> (Build, Mega, <kbd>N</kbd>) slowly changes the weather and the land round it.',
+      'It needs <b>2 Generators</b> with Fuel within 4 tiles: it takes a Fuel a minute from each. A Tanker brings it.',
+      'Stage 1, Calm, at once: no dust storm within 8 tiles. After 6 minutes of power, stage 2, Rain: 12 tiles.',
+      'In the Rain the barren ground turns fertile: a <b>Bio Farm</b> works anywhere in it. It is everyone\'s, whoever owns the land.',
+      'Unpowered, it stops growing; what it changed stays. Green and Garden come later, 10 and 12 minutes on.',
+    ],
+    mode: 'colony', seed: 5311, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, mega: true, limit: [0, 0, 30],
+    layout(m, W) { for (let t = 0; t < m.fert.length; t++) m.fert[t] = 0; }, // (no farmland anywhere: only the Engine's)
+    setup(S) {
+      kit(S, KIT6, 4);
+      const L = getE(S.players[0].lander);
+      aeKit(L); L.stock.cement += 30; L.stock.alloy += 10; // (and for the Bio Farms)
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+    },
+    goals: [
+      AE_BUILT,
+      { kind: 'atmosPower', n: 1, text: 'Power the Engine with 2 Generators', at: 'atmos',
+        count: (P, S) => { const e = aeOwn(S); return e && e.built && e.aeSrc ? 1 : 0; },
+        hint: '<b>Build</b> → <b>Make</b> (<kbd>2</kbd>) → <b>Generator</b> (<kbd>G</kbd>), two, within 4 tiles of the Engine.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Keep its Generators fed (a Tanker brings Fuel): 6 minutes of power. Speed up: <b>1×</b> (<kbd>]</kbd>).'),
+      { kind: 'atmosFarms', n: [3, 4, 4], text: 'Plant {n} Bio Farms on the new soil', at: 'atmos', count: (P, S) => aeFarms(S),
+        hint: '<b>Build</b> → <b>Gather</b> (<kbd>1</kbd>) → <b>Bio Farm</b> (<kbd>F</kbd>) on the dark wet ground round the Engine.',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='farm']" },
     ],
   },
 
@@ -1022,6 +1140,50 @@ const MISSIONS = [
     ],
   },
 
+  // The Deep Core (the megastructure sheet's mission idea, Nov 2026): an old planet whose veins are nearly dug out. The
+  // Core goes deeper while it has power and never runs dry, and every depth is heard below: a bigger raid the night
+  // after stage 2 (Quiet, so a first taste of the Murmur, with four warbots for it).
+  {
+    id: 'dryground', name: 'Dry Ground', chapter: 'Industry and Trade',
+    brief: 'An old landing site, its veins nearly dug out. Sink a Deep Core: it brings up Ore and Crystal that never run dry, but the ground hears it.',
+    intro: [
+      'The <b>Deep Core</b> (Build, Mega, <kbd>E</kbd>) needs a <b>Generator</b> with Fuel within 4 tiles: it takes a Fuel a minute.',
+      'It goes deeper while it has power. Stage 1: 6 Ore a minute. After 6 minutes, stage 2: 8 Ore and 3 Crystal.',
+      'Its hoppers hold 30 of each; lay a road to it and Haulers carry them off. It never runs dry.',
+      'The <b>Murmur</b> live below: at night they come up to raid, and every depth the Core reaches is heard.',
+      'The night after stage 2 a bigger raid comes for it. You have 4 <b>warbots</b>: stand them by it at dusk.',
+    ],
+    mode: 'colony', seed: 4417, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, mega: true, war: true, murmur: 'quiet', limit: [0, 0, 40],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const P = S.players[0], L = getE(P.lander);
+      // The veins are nearly gone: a dig or two left in each.
+      for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_ORE && S.amt[t] > 2) S.amt[t] = 2;
+      L.stock.cement += 70; L.stock.alloy += 45; L.stock.chip += 22; L.stock.crystal += 12; L.stock.fuel += 20; // (the Core's and its Generator's)
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generator's Fuel)
+      for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 30;
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'deepcore', n: 1,
+        hint: '<b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>), then <b>Mega</b> (<kbd>6</kbd>) → <b>Deep Core</b> (<kbd>E</kbd>) within 4 tiles.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='deepcore'], .bcard[data-t='generator']" },
+      { kind: 'deepStage', n: 2, text: 'Reach stage 2 of the Deep Core, the buried ringfall', at: 'deepcore',
+        count: (P) => P.stats.deepStage || 0,
+        hint: 'Keep its Generator fed (a Tanker brings Fuel): 6 minutes of power. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
+        ui: '#btn-speed' },
+      { kind: 'deepCrystal', n: [12, 20, 30], text: 'Bring up {n} Crystal from the Deep Core', at: 'deepcore',
+        count: (P) => P.stats.deepCrystal || 0,
+        hint: 'Tap the Core → <b>Lay road</b> (<kbd>R</kbd>) to storage: Haulers empty its hoppers, so they never fill up.',
+        ui: '#sh-layroad, #btn-speed' },
+      { kind: 'deepHeld', n: 1, text: 'Keep the Deep Core standing through the night the Murmur come for it', at: 'deepcore',
+        count: (P) => P.stats.deepHeld || 0,
+        hint: 'At dusk, <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the Core, and a <b>Pulse Turret</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).',
+        ui: "#btn-attack, #ar-hold, .bcard[data-t='turret']" },
+    ],
+  },
+
   // Chapter 5, Sea and Sky. Ports and ships between islands, Viaducts and Ropeways between mesas, a Crawler and an airlift.
   {
     id: 'harbour', name: 'Harbour', chapter: 'Sea and Sky',
@@ -1346,6 +1508,81 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-hold' },
     ],
   },
+  // The Atmosphere Engine's campaign sketches (the megastructure sheet, Nov 2026), built as missions. Seed Vault: a desert
+  // under a dust storm that never ends, the Pathfinder's hull half-buried in the middle with its seed stock; the Engine's
+  // calm is the only place to work. Light Murmur on Quiet.
+  {
+    id: 'seedvault', name: 'Seed Vault', chapter: 'First Contact',
+    brief: '"Pathfinder seed vault, bay 4. Contents viable. Sowing schedule: overdue." Fetch the seed stock and sow it in the calm.',
+    intro: [
+      'The dust storm here <b>never blows over</b>: bots crawl and Missiles are grounded, everywhere but inside an Atmosphere Engine\'s calm.',
+      'The <b>Pathfinder\'s hull</b> lies half-buried out in the dunes. Its seed vault\'s crates hold the Fiber the Engine needs.',
+      'Warbots on <b>Hold ground</b> by the hull carry the crates home. The Murmur are about at night (Quiet).',
+      'The Engine (Mega, <kbd>N</kbd>) needs 2 Generators. At stage 2, Rain, the ground round it turns fertile.',
+      'Sow it: Bio Farms in the calm. Each new stage, the Bloom fights back: Sappers dig in under the Engine the next night.',
+    ],
+    mode: 'colony', seed: 8821, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, mega: true, war: true, events: true, murmur: 'quiet', limit: [0, 0, 40],
+    layout(m, W) { for (let t = 0; t < m.fert.length; t++) m.fert[t] = 0; },
+    setup(S, diff) {
+      kit(S, KIT8, 4);
+      const P = S.players[0], L = getE(P.lander);
+      aeKit(L, 0); L.stock.fiber = 0; L.stock.cement += 30;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+      for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 30;
+      P.stats.startBots = P.stats.bots;
+      // The storm that never ends (the Endless dust storm), from a minute in.
+      S.settings.mods = ['dust']; S.events = true; S.event = null; S.nextEvent = 30;
+      // The hull: in the middle of the map (or as near as there is open ground), its crates of seed stock beside it.
+      const h = aeOpenNear(S, S.W >> 1, S.H >> 1, L);
+      S.mission.hullX = h.x; S.mission.hullY = h.y;
+      for (const [dx, dy] of [[1, 0], [-1, 1], [0, -1], [2, 1]]) { const i = h.x + dx, j = h.y + dy; if (inMap(i, j) && walkable(tIdx(i, j))) addLoot(i, j, { fiber: mPick([8, 7, 6], diff) }, true); }
+    },
+    goals: [
+      { kind: 'looted', n: 3, text: 'Bring home {n} crates of seed stock from the hull', count: (P) => P.stats.looted || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the hull: warbots carry its crates home.',
+        ui: '#btn-attack, #ar-hold' },
+      AE_BUILT,
+      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Two <b>Generators</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by it, fed: 6 minutes of power. Speed up: <b>1×</b>.'),
+      { kind: 'atmosFarms', n: [4, 5, 6], text: 'Sow the seed: {n} Bio Farms in the calm', at: 'atmos', count: (P, S) => aeFarms(S),
+        hint: '<b>Build</b> → <b>Gather</b> (<kbd>1</kbd>) → <b>Bio Farm</b> (<kbd>F</kbd>) on the wet ground round the Engine.',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='farm']" },
+    ],
+  },
+  // Under the Bloom: a clearing in the Bloom with the Murmur on Active, every raid aimed at the Engine, Sappers from Rain.
+  // Green it, push the Bloom back, and keep it standing to the Garden.
+  {
+    id: 'underbloom', name: 'Under the Bloom', chapter: 'First Contact',
+    brief: '"Survey corridor 2: overgrown. Native growth not in the Catalog." Green the clearing, push the Bloom back and hold.',
+    intro: [
+      'A clearing in the <b>Bloom</b>, the Murmur\'s own ground. They are on Active, and they hate the Engine: every night they go for it first.',
+      'Each new stage, the Bloom fights back: <b>Sappers</b> dig in under the Engine the next night. Catch them as they heave up.',
+      'At stage 2, Rain, the Bloom stops spreading in its circle. At stage 3, Green, it withers back a tile a minute.',
+      'At stage 4, the <b>Garden</b> (20 tiles), the Bloom is gone, and no tunnel exit can open in it.',
+      'Ring the Engine with <b>Pulse Turrets</b> and keep warbots by it at dusk.',
+    ],
+    mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 3, biome: 'alien', shape: 0, mega: true, war: true, murmur: 'active', limit: [0, 0, 50],
+    setup(S) {
+      kit(S, [...KIT8, 'armory'], 4);
+      const P = S.players[0], L = getE(P.lander);
+      aeKit(L); L.stock.cement += 40; L.stock.crystal += 12; L.stock.alloy += 10;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+      for (let k = 0; k < 6; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 40;
+      P.stats.startBots = P.stats.bots;
+    },
+    goals: [
+      AE_BUILT,
+      aeStageGoal(3, 'Reach stage 3 of the Engine, Green', 'Keep both Generators fed: 16 minutes of power. Ring it with <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).'),
+      { kind: 'bloomBack', n: [4, 6, 8], text: 'Push the Bloom back {n} tiles', at: 'atmos', count: (P) => P.stats.atmosWither || 0,
+        hint: 'At Green the Bloom withers back a tile a minute. Keep the power on: tap the Engine to see its stage.',
+        ui: '#btn-speed' },
+      { kind: 'atmosGarden', n: 1, text: 'Reach the Garden with the Engine standing', at: 'atmos', hold: true,
+        count: (P, S) => { const e = aeOwn(S); return e && e.built && e.aeStage >= 4 ? 1 : 0; },
+        hint: 'At dusk, <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the Engine: Sappers come up beside it.',
+        ui: '#btn-attack, #ar-hold' },
+    ],
+  },
   {
     id: 'livefire', name: 'Live Fire', chapter: 'First Contact',
     brief: 'Your first rival: a quiet colony with two empty Outposts. Learn to command warbots, then take its Command Base.',
@@ -1361,7 +1598,7 @@ const MISSIONS = [
     setup(S, diff) {
       const W = S.W, H = S.H, L = getE(S.players[0].lander), R = getE(S.players[1].lander);
       // More guards in the rival's Command Base (it starts with 4): taking it needs a real army.
-      for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
+      for (let k = 0; k < mPick([2, 4, 6], diff); k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       S.players[1].stats.startBots = S.players[1].stats.bots;
       // Two empty rival Outposts toward the middle, to practise on.
       preBuild(1, 'outpost', Math.floor(W / 2) - 5, Math.floor(H / 2) - 4, { reach: 8 });
@@ -1411,7 +1648,7 @@ const MISSIONS = [
       // Two rival Outposts on the rival's side of the contested fields, each with a few warbots on guard.
       for (const [x, y] of [[Math.floor(W / 2) - 5, Math.floor(H / 2) + 2], [Math.floor(W / 2) + 6, Math.floor(H / 2) + 3]]) {
         const o = preBuild(1, 'outpost', W - 1 - x, H - 1 - y, { reach: 4 });
-        if (o) for (let k = 0; k < [2, 3, 4][diff]; k++) enterBuilding(addBot(1, 'warbot', o.x, o.y), o);
+        if (o) for (let k = 0; k < mPick([2, 3, 4], diff); k++) enterBuilding(addBot(1, 'warbot', o.x, o.y), o);
       }
       P1.stats.startBots = P1.stats.bots;
       computeTerritory();
@@ -1453,11 +1690,11 @@ const MISSIONS = [
       // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (not before
       // 7 / 5½ / 4 minutes; played headless against a colony that follows the hints, its first assault hit at about
       // 8½ / 7½ / 4½ minutes, and 1 to 2½ minutes later on Easy and Normal before mission rivals had the rival's opening).
-      for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
+      for (let k = 0; k < mPick([2, 4, 6], diff); k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
-      P1.nextAttack = [420, 330, 240][diff];
+      P1.nextAttack = mPick([420, 330, 240], diff);
       // ...with a Bulwark at its head, and its assault comes whatever your guns (P.bold): this mission is about holding it.
-      for (let k = 0; k < [1, 1, 2][diff]; k++) enterBuilding(addBot(1, 'bulwark', R.x, R.y), R);
+      for (let k = 0; k < mPick([1, 1, 2], diff); k++) enterBuilding(addBot(1, 'bulwark', R.x, R.y), R);
       P1.bold = true;
     },
     goals: [
@@ -1484,6 +1721,49 @@ const MISSIONS = [
     ],
   },
 
+  // Something Keeps Time (the design sheet's mission for the Sundering Ray): the Murmur's tunnels already under the
+  // base, the Ray built, powered and fired over the nest that dug them, and the night it brings held.
+  {
+    id: 'keepstime', name: 'Something Keeps Time', chapter: 'First Contact',
+    brief: 'Tunnels are spreading under your base; the Bloom ridges already reach the Smelter. Build the Sundering Ray, strike the deep, and hold the night they answer.',
+    intro: [
+      'The <b>Sundering Ray</b> (Mega tab) is a phased array: rams in a row round a bore tower, steering a shock through the ground.',
+      'It needs <b>2 Generators</b> with Fuel within 4 tiles. It winds up for 60 seconds, and everyone hears it.',
+      '<b>Strike the Deep</b> caves in every tunnel in a 16-tile circle, seals the exits there for 2 nights and shakes the nests.',
+      'A <b>Quake</b> cracks a colony instead: buildings, roads and Walls in a 5-tile circle. A Shield Dome doesn\'t stop it.',
+      'The Murmur hear every blow. The next night the nests near it come for the Ray first, in bigger packs.',
+    ],
+    mode: 'colony', seed: 4417, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, mega: true, murmur: 'active', limit: [0, 0, 30],
+    setup(S) {
+      kit(S, [...KIT8, 'armory'], 5);
+      const P = S.players[0], L = getE(P.lander);
+      for (let k = 0; k < 6; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      P.stats.startBots = P.stats.bots;
+      L.stock.ammo = 40; L.stock.cement += 70; L.stock.alloy += 46; L.stock.chip += 18; L.stock.crystal += 14; L.stock.fuel += 24;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
+      // The nest nearest the colony has dug toward it for nights: its tunnels under the base, an exit open out there.
+      const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
+      if (near) { for (let k = 0; k < 3; k++) murmurPredig(near, 30, k === 2); S.mission.markNest = near.id; }
+    },
+    goals: [
+      { kind: 'built', type: 'sunder', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Mega</b> (<kbd>6</kbd>) → <b>Sundering Ray</b> (<kbd>Y</kbd>) near home. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='sunder'], #sh-layroad" },
+      { kind: 'rayPower', n: 1, text: 'Power the Ray with 2 Generators', at: 'sunder',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.built && b.owner === 0 && BDEFS[b.type].sunder && megaGens(b, SUNDER.reach).length >= SUNDER.gens).length,
+        hint: '<b>Make</b> (<kbd>B</kbd> <kbd>2</kbd>) → <b>Generator</b> (<kbd>G</kbd>), two within 4 tiles of the Ray. A Tanker brings Fuel.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      { kind: 'deepStruck', n: 1, text: 'Strike the Deep over the marked nest', at: 'sunder',
+        count: (P, S) => { const N = getE(S.mission && S.mission.markNest); return N && !N.dead && N.sQuiet ? 1 : N && N.dead ? 1 : 0; },
+        focus: (S) => getE(S.mission && S.mission.markNest) || null,
+        hint: 'Tap the Ray → <b>Strike the Deep</b> (<kbd>F</kbd>), tap the ringed nest, then <b>Strike</b>. Do it by day.',
+        ui: '#sh-sdeep' },
+      { kind: 'rayDawn', n: 1, text: 'Keep the Ray standing until dawn', at: 'sunder',
+        count: (P, S) => S.buildings.some((b) => !b.dead && b.built && b.owner === 0 && BDEFS[b.type].sunder && b.sLure && murmurNights(S.time) >= b.sLure && !murmurNight(S.time)) ? 1 : 0,
+        hint: 'They come for the Ray tonight: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it, and a <b>Pulse Turret</b>.',
+        ui: '#btn-attack, #ar-hold' },
+    ],
+  },
   // Chapter 7, War. Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.
   {
     id: 'supply', name: 'Supply Lines', chapter: 'War',
@@ -1601,7 +1881,7 @@ const MISSIONS = [
       const [fx, fy] = at(k0);
       const flag = { id: S.nextId++, owner: 1, x: fx + 0.5, y: fy + 0.5 };
       S.rallies.push(flag);
-      const pick = [...Array([1, 2, 2][diff]).fill('bulwark'), ...Array([2, 3, 4][diff]).fill('warbot')];
+      const pick = [...Array(mPick([1, 2, 2], diff)).fill('bulwark'), ...Array(mPick([2, 3, 4], diff)).fill('warbot')];
       pick.forEach((t, k) => { const u = addBot(1, t, fx - 1 + (k % 3), fy - 1 + Math.floor(k / 3)); u.task = { type: 'hold', rally: flag.id, slot: k }; });
       S.players[1].stats.startBots = S.players[1].stats.bots;
       // (No march or push of its own for the first quarter hour on Normal and Hard: since the doctrine retune of Nov 2026 a
@@ -1610,8 +1890,8 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
-        // (Torches: one on Easy, two on Normal and Hard; and a Bulwark.)
-        count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, [1, 2, 2][S.mission.diff]) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
+        // (Torches: one on Settler and Pioneer, two from Colonist up; and a Bulwark.)
+        count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, mPick([1, 2, 2], S.mission.diff)) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>, Bulwarks <b>+1</b>. Torches burn Fuel: keep some.',
         ui: "#sh-orders .order-row[data-k='torch'] [data-d='1'], #sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
       // The answers to a Bulwark: an Arc Caster's lightning wears its shield down three times as fast, a Skirmisher runs
@@ -1757,6 +2037,90 @@ const MISSIONS = [
         ui: '#sh-aim' },
     ],
   },
+  // Landing Zone: a valley where the Pathfinder's garden has gone to dust. The Herald, its clock frozen at T-1 day, sees
+  // the greening as overgrowth on its landing zone and sends Torches to burn it; the Murmur come up at night (Quiet).
+  {
+    id: 'landingzone', name: 'Landing Zone', chapter: 'War',
+    brief: '"Arrival in one day. Clearing the landing zone." Bring the valley back to green and hold it, whatever the Herald burns.',
+    intro: [
+      'The valley was the Pathfinder\'s garden once. Build the <b>Atmosphere Engine</b> and bring it to the <b>Garden</b>, stage 4.',
+      'The rival is a <b>Herald</b>: its clock stopped a day before Arrival. It sees your greening as overgrowth on its landing zone.',
+      'Its <b>Torches</b> come to burn the green: burned soil never grows again. While the Engine has power its rain puts them out.',
+      'So they go for its <b>Generators</b>: guard them. Its circle is yours: enemy robots wade through its mud. The Murmur come at night.',
+      'Green enough of the valley\'s land (the goal says how much), then hold it for 5 minutes.',
+    ],
+    mode: 'versus', seed: 6011, size: 0, rough: 1, rich: 3, biome: 'savanna', shape: 0, players: 2, style: 'rusher', mega: true, murmur: 'quiet',
+    rival: ['easy', 'easy', 'medium'], limit: [0, 0, 70],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4);
+      const P = S.players[0], L = getE(P.lander), P1 = S.players[1], E = getE(P1.lander);
+      aeKit(L); L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 10;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+      for (let k = 0; k < 6; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 40;
+      P.stats.startBots = P.stats.bots;
+      // The Herald's Torches, for the burning.
+      for (let k = 0; k < mPick([2, 3, 4], diff); k++) enterBuilding(addBot(1, 'torch', E.x, E.y), E);
+      P1.stats.startBots = P1.stats.bots;
+      S.mission.greenWant = mPick([25, 32, 40], diff);
+      // (room for the Engine on its land: the stone and groves round the Command Base cleared, their worth in the base)
+      for (let j = L.y - 10; j <= L.y + 10; j++) for (let i = L.x - 10; i <= L.x + 10; i++) { if (!inMap(i, j)) continue; const t = tIdx(i, j); if ((S.res[t] === R_BOULDER || S.res[t] === R_STALK) && !S.bAt[t]) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); } }
+      L.stock.stone = (L.stock.stone || 0) + 30; L.stock.fiber += 10;
+    },
+    goals: [
+      AE_BUILT,
+      aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power in all. Guard it at night; the Murmur hate it.'),
+      { kind: 'greened', n: [25, 32, 40], text: 'Green {n}% of the valley\'s land', at: 'atmos', count: (P, S) => S.mission.greenPct || 0,
+        hint: 'Stage 3 and 4 ground counts. Guard its Generators: <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>) by them.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']" },
+      { kind: 'greenHeld', n: 5, text: 'Hold it green for {n} minutes', count: (P, S) => Math.floor((S.mission.greenRun || 0) / 60),
+        hint: 'Torches cut its power to stop the rain: <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>) any that come.',
+        ui: '#btn-attack, #ar-attack' },
+    ],
+  },
+  // Overcast: the Steward next door built its Atmosphere Engine first and has turned the weather on you (the Engine's
+  // Storm Front, Nov 2026). Its storm sits over your Command Base from the start: break it (destroy their Engine, or build
+  // your own: any Engine's circle is calm sky), hold the sky, and learn the Storm Front by sending one back.
+  {
+    id: 'overcast', name: 'Overcast', chapter: 'War',
+    brief: '"Weather management, sector 4. Proceeding per schedule." The Steward has turned its Engine\'s rain on your colony. Break the storm.',
+    intro: [
+      'Your neighbour, a <b>Steward</b>, built its Atmosphere Engine first. Its <b>Storm Front</b> sits over your Command Base.',
+      'Under it your robots crawl, your sites go up slowly and your guns fall short. From Green, crops wither; at the Garden, lightning.',
+      'Break it: destroy their Engine, or build your own (Build, Mega, <kbd>N</kbd>). Any Engine\'s circle is calm sky: no storm gets in.',
+      'Then hold the sky. At stage 2, Rain, your Engine can send a storm back: not into their circle, but over the ground they cross.',
+      'It was built to bring the rain to the fields. Nobody wrote down who would aim it.',
+    ],
+    mode: 'versus', seed: 4419, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, players: 2, style: 'balanced', mega: true,
+    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 50],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4);
+      const P = S.players[0], L = getE(P.lander), P1 = S.players[1], E = getE(P1.lander);
+      aeKit(L); L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 10;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L);
+      for (let k = 0; k < 8; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 40;
+      P.stats.startBots = P.stats.bots;
+      // The Steward's Engine on the far side of its Command Base, at Rain (Green from Colonist), its two Generators fed,
+      // and its storm over your Command Base.
+      const st = mPick([2, 3, 3], diff), eng = ocEngine(S, E, L, st);
+      if (eng) { eng.aeStorm = [L.x, L.y]; eng.aeStormT = 0; }
+      bump(E.stock, 'fuel', 30); enterBuilding(addBot(1, 'tanker', E.x, E.y), E); // (Fuel for its Generators)
+      S.mission.stormCalm = 1;
+      P1.stats.startBots = P1.stats.bots;
+    },
+    goals: [
+      { kind: 'stormBroken', n: 1, text: 'Break the storm over your colony', count: (P, S) => (stormBrokenFor(0) ? 1 : 0),
+        hint: 'Attack their Engine: <b>Army</b> (<kbd>Q</kbd>). Or build your own, <kbd>B</kbd> <kbd>6</kbd> <kbd>N</kbd>: its circle is calm.',
+        ui: "#btn-attack, #btn-build, #build-tabs [data-g='mega'], .bcard[data-t='atmos']" },
+      { kind: 'skyHeld', n: [3, 4, 5], text: 'Hold the sky over your Command Base for {n} minutes', count: (P, S) => Math.floor((S.mission.calmRun || 0) / 60),
+        hint: 'Keep their Engine down, or yours standing: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'stormSent', n: 1, text: 'Send a Storm Front of your own', at: 'atmos', count: (P) => P.stats.storms || 0,
+        hint: 'At stage 2, Rain: tap your Engine → <b>Storm Front</b> (<kbd>F</kbd>), then a spot outside their calm circle.',
+        ui: '#sh-storm' },
+    ],
+  },
   {
     id: 'hill', name: 'King of the Hill', chapter: 'War',
     brief: 'Three vanguards, three Uplinks: whoever holds them speaks for Ithaca I. Hold two of the three for longer than both rivals.',
@@ -1815,7 +2179,7 @@ const MISSIONS = [
 /** For the Uplinks goals: how many Uplinks player 0 holds right now (its land covers them, and none is jammed). */
 function uplinksHeld(S) { return (S.uplinks || []).filter((u) => u.owner === 0 && !u.jam).length; }
 
-function goalNeed(g, diff) { return Array.isArray(g.n) ? g.n[diff] : g.n || 1; }
+function goalNeed(g, diff) { return mPick(g.n, diff) || 1; }
 
 /** A building's name for `n` of them: "a Quarry", "2 Quarries", "2 Cement Works". */
 function bldCount(type, n) {
@@ -1940,32 +2304,32 @@ function finishMission() {
   else { M.result = 'lost'; M.why = S.endHow === 'uplinks' && S.winner > 0 ? 'uplinks' : S.winner === 1 || S.players[0].out ? 'lander' : 'goals'; }
 }
 
-/** newGame options for mission k at difficulty diff (0 easy, 1 normal, 2 hard). */
+/** newGame options for mission k at level diff (an index into DIFF_ORDER: 0 Settler to 4 Warlord). */
 function missionOptions(k, diff) {
   const def = MISSIONS[k];
   return {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
-    difficulty: def.rival ? def.rival[diff] : 'normal',
+    difficulty: def.rival ? mPick(def.rival, diff) : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
     shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, upWin: !!def.upWin,
     layout: def.layout,
     setup(S) {
-      // Easy starts with more in the Command Base, Hard with less.
+      // Settler starts with more in the Command Base, Commander and Warlord with less.
       const L = getE(S.players[0].lander);
-      const k2 = [1.5, 1, 0.75][diff];
+      const k2 = [1.5, 1.25, 1, 0.75, 0.6][diff];
       for (const g in L.stock) L.stock[g] = Math.round(L.stock[g] * k2);
       if (def.rivalBonus && !S.players[1].absent) {
         const R2 = getE(S.players[1].lander);
-        for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
+        for (const g in R2.stock) R2.stock[g] += mPick(def.rivalBonus, diff);
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
+      S.mission = { k, id: def.id, diff, lv5: 1, limit: mLimit(def, diff) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
       if (def.victory && S.mode === 'versus') { S.victory = def.victory; if (def.victory === 'uplinks') placeUplinks(S.seed); }
-      // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
-      if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
+      // (A rival that never attacks, at the levels the mission says: passive [Settler, Colonist, Commander].)
+      if (def.passive && mPick(def.passive, diff)) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);
     },
   };
@@ -1977,8 +2341,18 @@ function missionOptions(k, diff) {
 function loadCampaign() {
   try {
     const c = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) || '{}');
-    return { unlocked: MISSIONS.length - 1, done: c.done || {} };
-  } catch (e) { return { unlocked: MISSIONS.length - 1, done: {} }; }
+    const done = c.done && typeof c.done === 'object' ? c.done : {};
+    // (Progress from the three old levels: Easy, Normal and Hard ticks move to Settler, Colonist and Commander.)
+    if (c.lv !== 5) {
+      for (const id in done) {
+        const old = Array.isArray(done[id]) ? done[id] : [], now = [false, false, false, false, false];
+        old.forEach((v, d) => { if (v && MISSION_OLD_DIFF[d] != null) now[MISSION_OLD_DIFF[d]] = true; });
+        done[id] = now;
+      }
+      saveCampaign({ lv: 5, unlocked: MISSIONS.length - 1, done });
+    }
+    return { lv: 5, unlocked: MISSIONS.length - 1, done };
+  } catch (e) { return { lv: 5, unlocked: MISSIONS.length - 1, done: {} }; }
 }
 
 function saveCampaign(c) {
@@ -1989,7 +2363,7 @@ function saveCampaign(c) {
 function completeMission(k, diff) {
   const c = loadCampaign();
   const id = MISSIONS[k].id;
-  c.done[id] = c.done[id] || [false, false, false];
+  c.done[id] = c.done[id] || [false, false, false, false, false];
   c.done[id][diff] = true;
   saveCampaign(c);
   return c;

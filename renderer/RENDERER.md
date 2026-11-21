@@ -642,6 +642,24 @@ python3 tools/install_lift.py     # writes the WebP files into ../art, prints LI
 The Lift composes like a building (`compose.py`). The game draws it by `LIFT_FRAME` (art-manifest.js) over the middle of
 its square, and its cable from `LIFT_MARKS.foot` (`liftFoot` in `js/render.js`).
 
+## The Sundering Ray
+
+The owner's look B, the Piston Battery (Nov 2026; IDEAS.md, "Megastructures"; the plan for how it works there too).
+`b/sunder.js` is the 3 x 3 Ray on its own 30 x 30 pad, framed like the Lance (`longPad(30, 30)`, `frameCompoundOpts({
+half: 15.12, width: 0.62, cy: 0.56 })`). `part=base` is the pad and block with the bore tower, its ram bores and plate
+sockets empty; `part=site&stage=1|2` its two construction stages; `part=ram&side=-1|1&e=0|1|2` a great ram alone at three
+heights and `part=plate&k=0..5&e=0|1` a ram plate alone, seated or raised, each on the same frame with the pad hidden, so
+the game lays them over the base and pumps them. Marks: `bore`, `top`, `stackW`, `stackE`, `ramW`, `ramE`,
+`plate0`..`plate5`. Run from this folder:
+
+```
+bash tools/render_sunder.sh [times of day]   # 24 renders a time of day: base and stages for both teams, rams, plates (~12 min each)
+python3 tools/install_sunder.py              # writes the WebP files into ../art, prints SUNDER_FRAME and SUNDER_MARKS
+```
+
+It composes like a building (`compose.py`). The game draws it by `SUNDER_FRAME` (art-manifest.js) over the middle of its
+square and the glow, smoke, dust and its ripple from `SUNDER_MARKS` (`js/render.js`, the Sundering Ray).
+
 ## The Great Uplink
 
 The owner's look A, the Dish Array (Nov 2026; IDEAS.md, "Megastructures"). `b/gup.js` is the 3 x 3 dish array on its
@@ -659,3 +677,39 @@ python3 tools/install_gup.py      # writes the WebP files into ../art, prints GU
 
 The Uplink composes like a building (`compose.py`). The game draws it by `GUP_FRAME` (art-manifest.js) over the middle
 of its square, and its signal from `GUP_MARKS` (`gupAt` in `js/render.js`).
+## The Atmosphere Engine
+
+The owner's look A, the Rain Tower (Nov 21 2026; IDEAS.md, "Megastructures"). `b/atmos.js` is the 4 x 4 cooling tower on
+its own 40 x 40 pad, framed like Arrival City (`longPad(40, 40)`, `frameCompoundOpts({ half: 20.12, width: 0.62, cy:
+0.66 })`, the shadow camera widened): the shell turned on a lathe, its column ring and air intake, the waist band and
+team stripe, the throat and rim lamps, six fan drums, the control house. Nothing moves in the art. Marks `throat` (where
+the game's plume rises), `band`, `bandL`, `bandR` (the waist band's front and ends) and `rimL`, `rimR` (the red lamps).
+Run from this folder:
+
+```
+bash tools/render_atmos.sh [out]    # the Engine for both teams at every time of day (~6 min)
+python3 tools/install_atmos.py      # writes the WebP files into ../art, prints ATMOS_FRAME and ATMOS_MARKS
+```
+
+The game draws it by `ATMOS_FRAME` (art-manifest.js) over the middle of its square, and the plume, its night light and
+the rain from `ATMOS_MARKS` (`drawAtmos`, `drawAtmosPlumes` in js/render.js).
+
+## The Deep Core
+
+The owner's look A, the Headframe (Nov 21 2026; IDEAS.md, "Megastructures"). `b/deepcore.js` is the 3 x 3 winding tower
+on its own 30 x 30 pad, framed like the Lift and the Uplink (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12,
+width: 0.62, cy: 0.6 })`): the shaft collar, the red lattice tower and its sheave deck, the winding house, the conveyor,
+three labelled hoppers, the depth gauge and the spoil heap. The plain render has no wheels; `part=work&f=k` is the two
+wheels alone (`worklib.js`'s `workLayer`), turned k/8 of 60 degrees (six spokes, so 8 frames loop), drawn over it by the
+game. Marks `shaft` (where the game's violet glow rises), `wheelL`, `wheelR`, `g1`, `g2`, `g3` (the gauge's lamps) and
+`beacon`. Run from this folder:
+
+```
+bash tools/render_deepcore.sh [out]    # the tower for both teams at every time of day, and the 8 wheel frames (~8 min)
+python3 tools/install_deepcore.py      # writes the WebP files into ../art, prints DEEP_FRAME and DEEP_MARKS
+```
+
+The Core composes like a building (`compose.py`). The game draws it by `DEEP_FRAME` (art-manifest.js) over the middle of
+its square, the wheels on top, and its glow, gauge and floodlights from `DEEP_MARKS` (`drawDeep`, `deepLights` in
+`js/render.js`).
+

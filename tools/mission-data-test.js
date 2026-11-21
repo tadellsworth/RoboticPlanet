@@ -34,7 +34,7 @@ const { missions, buildings, harbourSteps, airliftSteps, arterialRun } = vm.runI
       }
     },
     arterialRun() {
-      newGame(missionOptions(MISSIONS.findIndex((m) => m.id === 'arterial'), 2));
+      newGame(missionOptions(MISSIONS.findIndex((m) => m.id === 'arterial'), 3));
       const { x, north, south } = arterialRoute(getE(S.players[0].lander));
       const id = S.mission.arterialDepot;
       const express = [];
@@ -74,7 +74,7 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade harbour skyline airlift mooring bughunt hollow forms livefire border holdline supply convoy siege chain lance hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring bughunt hollow forms seedvault underbloom livefire border holdline keepstime supply convoy siege chain lance landingzone overcast hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 

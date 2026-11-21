@@ -44,17 +44,184 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   robots staggering as it passes; it arrives a moment later (sound through rock), which gives the target its warning
   naturally. On arrival the ground heaves and cracks spread in a circle; Murmur tunnels cave in along the path and at
   the target. Keeps the approved Piston Battery look.
+  - **The Sundering Ray: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, Megastructures and The Murmur; the
+    First Contact mission *Something Keeps Time*). Short name **Ray**, key **Y** on the Mega tab (L is the Lance's; D pans
+    the map, S too; the Deep Core is free to take any of E, K or P). The Piston Battery as the plan above has it: three
+    hydraulic rams in a block round the bore tower over a shot hole, two stacks, six ram plates in a row before it
+    (`renderer/b/sunder.js`); the rams pump in turn and the plates drum, faster to the blow; at the blow the plates slam
+    in a timed ripple, the far side from the aim first; a bulge runs through the ground with dust and cracks behind it,
+    caving in tunnels a tile either side of its path; on landing the ground heaves in rings and cracks spread (fading
+    over 5 minutes). Every other answer the sheet's recommendation and its numbers. Decided here, for the owner to check:
+    the ripple runs 10 tiles a second (1.5 to 6 s on the way, so a Quake's target has the ring's 20 s and a moment more);
+    a Quake's aim is fixed once its ring shows (else the warning means nothing); a Quake cracks the colony's own
+    buildings too (as the Lance's line burns its own), but nothing on a Trade Post's ground; a Strike the Deep's seal
+    runs through the second night after the blow; cracked roads are mended by idle Workers by themselves, a 3 × 3 patch
+    in 4 s (no Cement), cracked foundations by the ordinary paid Repair; stunned robots neither move nor fire for 4 s;
+    the AI Warden picks it from 15 minutes in (when its pick is still open), as its one weapon, no Nuclear Silo then, and besides striking after a raid strikes the nest nearest home every other day while it is within 40 tiles (with no raid it would never fire: Wardens seldom march into Quake range).
+    Open: whether the Murmur should also go for it on the night of a blow struck after dark (now: only the next night),
+    and the balance audit's look at its numbers.
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
   - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright
     (art: `renderer/b/city.js`), the LED strips lit in the owner colony's colour (`city-led`, tinted in code), WELCOME
     HOME on the roof, WEL OME HOME flickering on the wreck (`city-lit-down`). No rules changed. Open: whether the side
     blocks should show their courtyard faces (the camera sees only their roofs and south gables), and a lit mosaic.
+  - **The Deep Core: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, Megastructures; the new Industry and
+    Trade mission *Dry Ground*, after Trade Winds). Look A, the Headframe (`renderer/b/deepcore.js`: the wheels turn while
+    it works; the violet glow out of the shaft from stage 2, brighter at stage 3; the gauge's lamps), the name kept, and
+    the sheet's numbers (60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 300 s, armor 100, from 20 minutes, one per colony;
+    6 Ore; 8 Ore and 3 Crystal after 6 minutes of power; 10 Ore, 4 Crystal and a Uranium every 4 minutes 10 minutes
+    later; 30 of each in its hoppers; a Generator within 4 tiles burning a Fuel a minute, or a Reactor, no Uranium). The
+    Murmur: a raid half again a night's pack the night after stage 2; the night after stage 3 two more Brutes and a new
+    exit within 8 tiles; twice as big in the Hollow; nothing with them off. Destroyed: depth and stock lost, the shaft
+    their exit until a Worker caps it (20 s, 4 Cement). Rivals: never under the cap; any rival from 30 minutes once its
+    last Ore Mine is dry, guarding it on a call night; the Salvager marches on stage-3 Cores. Read into the sheet, for
+    the owner to confirm:
+    - "Breakers" in the sheet are the Brutes (LORE.md: the art brief's Breakers describe the Brute's size).
+    - A Worker caps the shaft by itself (no button), paying the 4 Cement from storage as it sets out; warbots can also
+      cave it in like any exit. Dismantled (not destroyed), a Core leaves no shaft.
+    - "A crater for 5 minutes" is not a separate rule: the shaft (with the Murmur on) is the lasting mark; with them off
+      the ground is free at once.
+    - The Core's output is multiplied by the colony's difficulty `mult`, like every producer; Arrival City's boost
+      doesn't reach it. It can be turned off on its panel like the Shield Dome (owner, Nov 21): no Fuel burned, depth kept.
+    - The Hollow's "each stage counts double" is read as every call twice as big (Brutes too).
+    - The mission *Dry Ground* teaches the Murmur briefly before First Contact (Quiet, four warbots), as the sheet put it
+      in Industry and Trade; its Crystal goal counts what the Core brings up (12, 20 or 30 by level).
+  - **The Atmosphere Engine: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, its own section "The
+    Atmosphere Engine: terraforming"; the missions *Rain* (end of Growing the Colony), *Seed Vault* and *Under the Bloom*
+    (First Contact, after What Comes Up) and *Landing Zone* (War, after Aimed the Other Way)). Look A, the Rain Tower
+    (`renderer/b/atmos.js`; the plume, its night light and the rain in code), the sheet's numbers (50 Cement, 40 Alloy,
+    24 Chips, 30 Crystal, 20 Fiber, 360 s, armor 100, 4 × 4, from 20 minutes, one per colony; 2 Generators, a Fuel a
+    minute each, or a Reactor, a Uranium every 6 minutes; Calm 8, Rain 12, Green 16, Garden 20 tiles at 0, 6, 16 and 28
+    minutes of power) and the (R) answers: everyone's circle (since made its owner's: below), green stays green when it falls, the Murmur first every
+    night and Sappers at each new stage, no exits in the Garden, the Steward's project and the Herald's burning, no
+    terraforming win yet. Read into the sheet, for the owner to confirm:
+    - Key **N** on the Mega tab (A pans). Its own How to play section, with a pointer from Megastructures.
+    - Its hold (Calm, the Bloom kept out, no exits) lasts while it stands, powered or not; only the growing needs power.
+      Each stage's change spreads out from its foot at a quarter tile a second; the ground already changed moves up a
+      stage at once.
+    - Calm lifts the dust storm's slow-down for robots inside its circle; Missiles stay grounded (the storm is still in
+      the sky), and the storm's haze on screen is unchanged.
+    - Rain makes the ground fertile (`S.fert`) except under deposits, Ramps and burned soil; it is drawn as damp dark
+      earth with sprouts, not farm furrows. Puddles are not drawn; a drizzle falls round the tower at night.
+    - "The Bloom stops spreading" is read as no Murmur tunnel dug into its Rain; "withers back a tile a minute" as one
+      tile of the Bloom (tunnel or Bloom vein) a minute, the nearest the Engine first; the Garden clears all of it at
+      once and caves in any exit there.
+    - "Trees and groves seed themselves" is a stalk grove (Fiber) every 20 seconds on open Garden ground, 24 in its circle
+      at most (the map's own count), and young trees drawn on Garden ground; deer and songbirds come to any patch of
+      Garden (looks only).
+    - Burned soil stays burned, even in a Garden; burning greened ground removes its green.
+    - "They go for it first" is a standing Engine drawing every pack from 20 tiles further than anything else, and an
+      Active strike's first target; Sappers: one after Rain, two after Green and Garden, on Quiet too, none with the
+      Murmur off. No other raid size is added.
+    - Dismantled, it fades like a destroyed one. Damage doesn't slow it (no half-armor rule as on the Deep Core).
+    - Rivals: "barren" is The Rust and Cinderlands (the sheet's "ash" read as Cinderlands), from about 21 minutes; the
+      Herald sends up to 2 Torches every 2 minutes to fertile ground of a foe's Engine where no gun covers it (no Napalm).
+    - The missions follow the sketches with these changes: *Under the Bloom* has the usual nights (not longer) and its
+      "survey road" goal is "push the Bloom back" by tiles; *Landing Zone* is on a Small map with the share to green by
+      level (25, 32, 40%: the sheet's 40 at Commander; stage 3 or more counts, burned ground doesn't) and its deer herd
+      is the Garden's wildlife; *Seed Vault* draws the Pathfinder's hull in code as a mission landmark (LORE.md's open
+      question about the wreck is otherwise untouched), its seed stock four crates of Fiber, and its storm is the Endless
+      dust storm modifier.
+  - **The Engine's new powers: BUILT (Nov 21 2026), the owner's five approved** (the circle is yours, Storm Front,
+    Drought, Lightning, rain puts out fire; README, How to play "The Atmosphere Engine", the guide; the new War mission
+    *Overcast*, after Landing Zone). Numbers: mud 50% speed; the storm 5 tiles round, robots 60% speed, sites 60%,
+    guns 75% reach, a minute before it moves again; crops wither after 3 minutes; lightning once a minute of power,
+    15% of the building's armor, never below 30%. **Decisions made for the owner to approve:**
+    - "The circle is yours" replaces "everyone's circle": the calm and the faster crops are the owner's and allies'
+      (a crop's owner: the Bio Farm it belongs to, else whose land it is); the land itself (fertile soil, the Bloom held
+      back, no exits) still changes for everyone in it. The mud starts at Rain (Calm is only calm), holds while the
+      Engine stands, powered or not, and slows robots and vehicles, not the Murmur, aircraft or ships. A fallen Engine's
+      fading hold keeps its calm for its owner, but no mud.
+    - The rain puts out fire only while the Engine has power: cut its power and Torches can burn the green again. So the
+      Herald's Torches, rained out, now go for a Generator feeding it (or its Reactor). Rained out means no scorching
+      the earth and no flame burns (War scars) in its circle; their flame still hurts buildings and robots there.
+      Napalm is unchanged (the brief named Torches).
+    - The Storm Front has no range limit (anywhere on the map, like Strike the Deep); its centre must be its stage's
+      radius plus 5 from the Engine's middle (17, 21, 25 tiles), and not inside another standing Engine's circle.
+      Nothing of any storm reaches inside any Engine's circle, its owner's included (a fallen one's fading hold too),
+      so a circle that grows into a storm set earlier is calm.
+    - Unpowered (or the Murmur's cut at night), the storm is gone at once and comes back where it was with power; it
+      rolls in and breaks up over a few seconds on screen. It can be called off on the panel; a new one waits out the
+      minute. No power, no new storm. Rivals' sites under it go up at 60% (a site's middle under the storm).
+    - The drought is crops only (Bio Farm crops, not Grove Planter stalks), counted while the crop sits continuously
+      under the storm; out from under it the count starts again. The soil stays fertile: the farm can replant.
+    - Lightning needs a foe's finished building under the storm; none there, the bolt is lost. It is picked from the
+      seed (no new random state). It never takes a building below 30%, so it never captures or wrecks anything.
+    - The rivals: "Warlord-type" is read as the warlike doctrines (Herald, Salvager, Warden) or any rival on the Warlord
+      level: over the foe's guns when its next attack is 75 seconds off or less. The Steward and the Architect go for
+      fields (farms and crops), anyone with nothing better for the base. It looks every 20 seconds and moves the storm
+      only to a clearly better spot. (Only the Steward builds the Engine on its own today.)
+    - *Overcast* (War, after Landing Zone): a Steward on The Rust with its Engine already at Rain (Green from Colonist),
+      its storm on your Command Base at the start (the Steward may move it to your fields). Goals: break it (their Engine
+      gone, or your own Engine's circle over your Command Base), hold the sky 3/4/5 minutes, and send a Storm Front of
+      your own, which is where the button is taught: Landing Zone has its four goals, and the other Engine missions are
+      Colony games with no foe to storm.
+    Open: balance (the 60/60/75 numbers and the minute's wait), whether the mud should also catch the Murmur, and
+    whether napalm should be rained out too.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
 - **Mass Driver sound (BUILT, Nov 21 2026: a deep charging hum, a crack and thump, a falling rush of air):** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
+
+## Five rival levels (built Nov 21 2026; open questions)
+
+The rival levels are now Settler, Pioneer, Colonist, Commander and Warlord (the owner's set C, "Frontier"; keys
+easy/medium/normal/hard plus `warlord`). Warlord: mult 1.6, grace 100 s, threshold 3, four sites, thinks every second,
+12 more of every good, raids every 90 s. In AI against AI (Standard, Steward against Steward, both seats, seeds 1 to 8)
+a Warlord beat a Commander in 12 of 16, every game decided (8 to 20 minutes; one Warlord took a base at 3½ minutes).
+- Is Warlord winnable by a strong human? Nobody has played it yet; if its first attack (from about 1½ minutes) is too
+  much, raise grace before the economy numbers.
+- Missions now use the same five levels (the owner's call, Nov 21 2026): old Easy, Normal and Hard are Settler,
+  Colonist and Commander, and their ticks moved there. Pioneer and Warlord values are worked out from the old three
+  (`mPick` in `js/missions.js`) and only Touchdown has been played through at Warlord: the tight clocks (Convoy's 13
+  minutes, with Warlord's bigger goals and a Normal rival) may need their own five-long values once played. The
+  future Main Campaign (CAMPAIGN.md) uses the same five.
+- Observer mode gives every colony one level; a level per colony (as diff5-aivai.js does) would make Warlord against
+  Commander a thing to watch.
+
+## Contingency: a repeatable planet-conquest campaign (the owner's idea, Nov 21 2026)
+
+A second campaign, apart from the Main Campaign and replayable: conquer Ithaca I region by region, as in Galactic
+Conquest from Star Wars Battlefront II (the inspiration only; the name and look are ours). In the lore, the vanguards'
+sealed contingency orders said "secure Ithaca I for us"; each run plays those orders out as a fresh what-if.
+**Order (the owner, Nov 21):** Deep Core, Sundering Ray, Atmosphere Engine, the top-tier Murmur unit and the smarter
+Murmur first; then **Contingency, before the Main Campaign** and other items.
+
+**The full plan is in CONTINGENCY.md** (Nov 21): the globe, turns, battles, Reserve, the Murmur, megastructures
+on the globe, winning, rival AI, screens, the build order and the questions still open.
+**Decided (the owner, Nov 21):** the name is **Contingency**; the planet map is **turn-based**; battles are
+**shorter** than a free game (about 15 to 25 minutes); **auto-resolve** is allowed for any battle.
+**Open:** factions. Either the four vanguard callsigns, each with a small perk from its Sponsor (COBALT cheaper and
+faster roads; VERMILION more Ore and Alloy; VIRIDIAN better Bio Farms and Agribots; TYRIAN better Trade Post rates),
+or those callsigns plus a choice among the rival doctrines. Also open: whether fleets on the map can be intercepted
+before they land, and whether a run ends on a fixed turn count.
+
+The design so far:
+- **The planet map:** the turning Ithaca I from the menu (js/menuplanet.js), reused as a globe you spin. It is cut
+  into about 20 to 30 territories grouped by the LORE.md regions: the Rust, Greenreach, Emberwood, the Long Grass,
+  Blackwater, the Polar Caps, Cinderlands, Steamwells, the Bloom and the Shoals. **Argos** is a front of its own,
+  reached from orbit, and the only ground with no Murmur. **The Shoals** are reached only by sea or air, so a coastal
+  Port territory is needed first. Each vanguard starts with a home territory.
+- **Turns:** every side moves its landing forces (Command Groups dropped from its Carrier) one territory at a time.
+  Moving into an enemy's territory starts a battle: a normal Terrafall match whose biome, map shape and size come from
+  that territory. Rivals attack you too, and you defend in a real match. Any battle can be auto-resolved.
+- **Territories pay:** each one adds supply to your Carrier between battles (the Rust Ore, Greenreach Fiber,
+  Steamwells Fuel, strike sites Crystal). Special places: the **Uplinks** (hold most of them to win), **Arrival City**,
+  **the Pathfinder's landing site** (a unique bonus), and the **Trade Posts** (neutral; nobody can take them). Fortified
+  territories keep some walls and turrets: the next battle there starts with them built.
+- **Between battles:** the Carrier's reserve stock buys upgrades (extra starting units, a second Command Base,
+  research done ahead) and one-use cards: an **orbital drop** (reinforcements mid-battle), a **called ringfall**
+  (a strike from the Ring), an **Accord ledger deal** (a cheap trade at a Trade Post), and a **Corvane flare** (enemy
+  batteries drain).
+- **The Murmur:** spread out from the Bloom and the Hollow between turns into territories nobody guards. Any vanguard
+  can push them back. Late in a run, an assault on the Hollow can be an optional major battle that pushes the Murmur
+  back for good.
+- **Winning:** hold most of the Uplinks for a set number of turns, or take every rival's home territory.
+- **Every run differs:** territory layout and resources are shuffled, rival doctrines are random, planet events come
+  (a ringfall season, a flare year), and difficulty runs from Settler to Warlord. A run is about 3 to 6 hours, saved
+  between battles. Later: 2 to 4 players on the same planet map, as allies or against each other.
 
 ## Polish round 1 (built Nov 21 2026; open questions)
 
@@ -644,7 +811,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
         10 minutes broke the stand-in player's siege before a shield went down; won again at 24:53 and 26:04).
   - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
     Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
-    and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
+    and, rarely, a nuclear blast. Since Nov 21 2026 it's a choice, **Menu background** in Settings (now also on the
+    main menu), and **Classic** (the demo game) is the default for now, the owner's call. Still open: whether Planet
+    becomes the default later; the other planets of the system (Ithaca I is the fourth; LORE.md names
     none), and whether the Wren's waystation could show at the system's edge.
   - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
     on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
@@ -661,7 +830,8 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
     so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
     the Sponsors did to Earth.
-  - **Sunlance** (weapon). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
+  - **Sunlance** (weapon; saved for later, the owner, Nov 21 2026: not in this round of megastructures, as the Lance of
+    Corvane already fills the beam-weapon role). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
     buildings in a line. By day only; useless in a dust storm, and a solar flare overloads and damages it. Night leaves
     you open, in step with the Murmur.
   - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
@@ -752,7 +922,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     - The robots a drop brings come whatever the bot limit (they are the Carrier's, not the Foundry's).
     The notes as filed: A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
     Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
-  - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
+  - **Atmosphere Engine: BUILT (Nov 21 2026; see the design sheet's entry above).** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
     work; the Murmur hate it and go for it.
   - **The Lance of Corvane: BUILT, Nov 20 2026** (README, "Megastructures"; How to play, Megastructures; the War mission
@@ -978,8 +1148,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
 - **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
-  forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
-  (held back for now); the rival running ferry lines.
+  forward Port stocked by Container Ship. Still open: the rival running ferry lines, and **the naval war** (owner,
+  Nov 21: add a **Warboat**, and expand fighting at sea). Proposed roster, in build order:
+  - **Warboat** (built at a Port): a fast armed patrol craft with a pulse cannon. It escorts convoys, hunts enemy
+    ships and Ferries, and lightly shells the shore. The core naval unit.
+  - **Coastal Battery** (a shore building): a heavy gun that outranges the Warboat, so a held coast is a real defence.
+  - **Diver**: a submersible drone, unseen until it surfaces to fire torpedoes at ships. It is spotted by Warboats
+    close by, or by a **Sonar Buoy** (a cheap placeable picket on the water).
+  - **Flak Corvette**: an anti-air escort that sails with convoys and Ferries against bombers and Airships.
+  - **Monitor**: a slow, heavily armoured shore-bombardment ship, like a Howitzer at sea, for breaking coastal forts.
+    Weak against Divers.
+  - **Sea mines** (dropped by a Warboat upgrade or a Mine Layer boat): close a channel or a Port mouth.
+  Rock-paper-scissors: Warboat beats Diver once found; Diver beats Monitor and cargo; Coastal Battery beats Warboat;
+  Monitor beats Coastal Battery; Flak Corvette guards the lot from the air. Needs: ship-vs-ship combat, the rival using
+  it (`aiNaval`), art sheets for the owner to pick from, Missions goals, and How to play.
 - **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **Vulcan Bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
@@ -996,6 +1178,19 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
   shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
+  **The air war (owner, Nov 21: save for later).** Proposed roster, in build order:
+  - **Interceptor** (a fighter from the Airfield): shoots down bombers and Airships and escorts your own bombers, so
+    bombers meet a counter in the air and not only guns on the ground. The core air-combat unit.
+  - **Radar Station** (a building): sees aircraft coming early (an alert), and Flak Guns near it fire further.
+  - **Gunship / Attack Drone**: circles a spot for a while strafing warbots; close support, not a one-off strike.
+  - **Transport Helicopter**: drops a small band of warbots anywhere, over walls and cliffs; slow and fragile, a raid tool
+    beside the Ferry's beach landings.
+  - **SAM Launcher** (a building, or mobile): long-range missiles, a hard hit and a slow reload; beats Gunships and
+    Airships, while fast Interceptors can slip it.
+  - **Repair Drone**: hovers over damaged robots and mends them in the field.
+  - **Carrier** (late, joins the naval war): a ship that launches and refuels aircraft.
+  Counters: Interceptor beats bombers and Gunships; Flak and SAM beat low Interceptors; Gunship beats warbots; Radar
+  makes every air defence better. First pair to build: Interceptor + Radar Station.
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.

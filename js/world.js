@@ -2501,7 +2501,7 @@ function mapDims(st) {
 }
 
 /**
- * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City, the Orbital Lift)? The Megastructures setting (on unless the
+ * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City, the Orbital Lift, the Deep Core)? The Megastructures setting (on unless the
  * game setup turned it off; a save from before it: off), and in a mission only one that teaches them (S.mission.mega).
  */
 function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission || !!S.mission.mega); }
@@ -2510,7 +2510,10 @@ function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
   if (BDEFS[type].gup && !gupWinOn()) return S && S.mission ? 'No Great Uplink in this mission.' : S && S.settings && S.settings.upWin ? 'No Great Uplink here: no sky to transmit to.' : 'The Great Uplink win is off in this game (game setup, beside Victory).';
+  if (BDEFS[type].atmos && !atmosOpen()) return `The Atmosphere Engine opens ${Math.round(ATMOS.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(ATMOS.at - S.time))}.`;
+  if (BDEFS[type].deepcore && !deepOpen()) return `The Deep Core opens ${Math.round(DEEP.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(DEEP.at - S.time))}.`;
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
+  if (BDEFS[type].sunder && !sunderOpen()) return `The Sundering Ray opens ${Math.round(SUNDER.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(SUNDER.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
 }
@@ -2520,6 +2523,12 @@ function megaBlocked(owner, type) {
  * off), with Megastructures on, in a Versus game (never Colony), and never in the Hollow, which has no sky.
  */
 function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow; }
+
+/** Can the Deep Core be built yet (DEEP.at s into a free-play game; at once in a mission that teaches it)? */
+function deepOpen() { return !!S && (!!S.mission || S.time >= DEEP.at); }
+
+/** Can the Atmosphere Engine be built yet (ATMOS.at s into a free-play game; at once in a mission that teaches it)? */
+function atmosOpen() { return !!S && (!!S.mission || S.time >= ATMOS.at); }
 
 /** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
 function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
@@ -2640,7 +2649,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
-    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, fires: [],
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), xdir: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, green: {}, aeFade: [], drought: {}, fires: [],
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
@@ -2787,7 +2796,9 @@ function hollowOn() { return !!(S && S.hollow); }
  */
 function worldBan(type) {
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
+  if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
   if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].atmos) return 'No Atmosphere Engine in the Hollow: there is no sky down here to make weather in.';
   if (BDEFS[type] && BDEFS[type].gup) return 'No Great Uplink in the Hollow: there is no sky down here to transmit to.';
   if (BDEFS[type] && BDEFS[type].lift) return 'No Orbital Lift in the Hollow: the cavern roof stands between the anchor and the sky.';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
@@ -5109,6 +5120,8 @@ function destroyBuilding(b, burn, quiet) {
   if (BDEFS[b.type].city && b.built && !b.gone && typeof cityDown === 'function') { b.armor = 0; cityDown(b, -1); return; }
   // An Orbital Lift destroyed by force: a foe's doing, its cable falls along its line (liftDown); a climber on it is lost.
   if (BDEFS[b.type].lift && b.built && typeof liftDown === 'function') liftDown(b, !!burn);
+  // A Deep Core destroyed by force: its depth and stock are lost, and its open shaft can become a Murmur exit (deepShaft, below).
+  const shaft = !!(BDEFS[b.type].deepcore && b.built && burn && !b.gone && typeof deepShaft === 'function');
   // A Nuclear Reactor destroyed by a foe: its core is breached, a ruin and a radiation zone (reactorDown, RAD).
   if (b.type === 'reactor' && b.built && burn && typeof reactorDown === 'function') reactorDown(b);
   // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
@@ -5118,7 +5131,7 @@ function destroyBuilding(b, burn, quiet) {
   const boom = burn && b.built && BDEFS[b.type].explodes && typeof burnLiquids === 'function' ? burnLiquids(b) : -1;
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect. A construction
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
-  if (typeof dropLoot === 'function' && (b.built || !burn)) dropLoot(b);
+  if (typeof dropLoot === 'function' && (b.built || !burn) && !shaft) dropLoot(b); // (a Deep Core's stock is lost with it)
   if (BDEFS[b.type].magterm) magTermDown(b);
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
@@ -5161,6 +5174,8 @@ function destroyBuilding(b, burn, quiet) {
   if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
   if (burn && b.built && !quiet && typeof scarBuildingDown === 'function') scarBuildingDown(b); // (its rubble stays: War scars)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
+  if (shaft) deepShaft(b);
+  if (BDEFS[b.type].atmos && b.built && typeof atmosGone === 'function') atmosGone(b); // (its land stays changed; its calm and its hold on the Bloom fade)
 }
 
 /* ------------------------------------------------------------------ messages & effects */
@@ -5337,7 +5352,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash'];
+const SPARSE_LAYERS = ['crater', 'ash', 'crk']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -5383,6 +5398,11 @@ function checkSave(o) {
   // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
   if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
   if (o.wildOwner != null && !(Number.isInteger(o.wildOwner) && o.wildOwner >= 0 && o.wildOwner < o.players.length)) bad();
+  // The land Atmosphere Engines changed (tile: stage 1 to 4) and the calm of fallen ones fading (ATMOS).
+  if (o.green != null && !(obj(o.green) && Object.keys(o.green).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && [1, 2, 3, 4].includes(o.green[k])))) bad();
+  if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k])) && (f.p == null || (Number.isInteger(f.p) && f.p >= -1 && f.p < o.players.length))))) bad();
+  // The drought under a Storm Front (tile: whole seconds a foe's crop there has been under it, short of STORM.drought).
+  if (o.drought != null && !(obj(o.drought) && Object.keys(o.drought).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && Number.isInteger(o.drought[k]) && o.drought[k] > 0 && o.drought[k] < STORM.drought))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
@@ -5396,6 +5416,7 @@ function checkSave(o) {
     if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
     if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();
     if (M.dark != null && !(Array.isArray(M.dark) && M.dark.length < 256 && M.dark.every((d) => nums(d, ['x', 'y', 'r', 'until'])))) bad();
+    if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
@@ -5440,10 +5461,31 @@ function checkSave(o) {
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
     for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // the Sundering Ray (see updateSunder): its aim and blow, wind-up, power and reload, the night it lured; a Quake's crack, a struck nest's quiet night
+    if (b.sAim != null && !(Array.isArray(b.sAim) && b.sAim.length === 2 && Number.isInteger(b.sAim[0]) && Number.isInteger(b.sAim[1]) && b.sAim[0] >= 0 && b.sAim[1] >= 0 && b.sAim[0] < o.W && b.sAim[1] < o.H)) bad();
+    if (b.sSrc != null && !['', 'gen', 'reactor'].includes(b.sSrc)) bad();
+    if (b.sMode != null && !['', 'deep', 'quake'].includes(b.sMode)) bad();
+    for (const k of ['sOn', 'sCharge', 'sReload', 'sReactor', 'sShot', 'sTime', 'sLure', 'sQuiet', 'crack']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // the Orbital Lift (see updateLift): its fall line, the Carrier's reserve, the climber and the goods it sends up
     // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
     if (b.gSrc != null && !['', 'gen', 'reactor'].includes(b.gSrc)) bad();
     for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest', 'gU']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // (the Deep Core: its depth, stage, fractions, power and calls; a fallen one's shaft: its colony and its capping)
+    for (const k of ['dcT', 'dcStage', 'dcFuel', 'dcGen', 'dcGenT', 'dcCall', 'dcCallN', 'dcWarn', 'dcHeldN', 'capper', 'capT', 'capPaid']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.dcStage != null && ![0, 1, 2, 3].includes(b.dcStage)) bad();
+    if (b.dcSrc != null && !['', 'gen', 'reactor'].includes(b.dcSrc)) bad();
+    if (b.dcAcc != null && !(obj(b.dcAcc) && Object.keys(b.dcAcc).every((g) => ['ore', 'crystal', 'uranium'].includes(g) && Number.isFinite(b.dcAcc[g])))) bad();
+    if (b.shaft != null && !owner(b.shaft)) bad();
+    // (the Atmosphere Engine: its powered time, stage, the spread of its change, its power and Fuel, its calls)
+    for (const k of ['aeT', 'aeStage', 'aeP', 'aeFuel', 'aeU', 'aeGenT', 'aeCall', 'aeCallN', 'aeWarn', 'aeWith', 'aeSeed', 'aeUr']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.aeStage != null && ![0, 1, 2, 3, 4].includes(b.aeStage)) bad();
+    if (b.aeSrc != null && !['', 'gen', 'reactor'].includes(b.aeSrc)) bad();
+    if (b.aeGens != null && !(Array.isArray(b.aeGens) && b.aeGens.length <= 4 && b.aeGens.every(Number.isInteger))) bad();
+    // (its Storm Front: the tile it's centred on, on the map, set only from Rain; when it was set; the lightning's count)
+    if (b.aeStorm != null && !(Array.isArray(b.aeStorm) && b.aeStorm.length === 2 && b.aeStorm.every(Number.isInteger) && b.aeStorm[0] >= 0 && b.aeStorm[1] >= 0 && b.aeStorm[0] < o.W && b.aeStorm[1] < o.H && BDEFS[b.type].atmos && (b.aeStage || 0) >= 2)) bad();
+    for (const k of ['aeStormT', 'aeBolt']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.aeBolt != null && !(b.aeBolt >= 0 && b.aeBolt <= STORM.boltEvery)) bad();
+    if (b.aeBoltN != null && !(Number.isInteger(b.aeBoltN) && b.aeBoltN >= 0)) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();
@@ -5457,6 +5499,7 @@ function checkSave(o) {
   for (const u of o.bots) {
     if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
+    if (u.stunT != null && !Number.isFinite(u.stunT)) bad(); // (stunned by a Sundering Ray's Quake)
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
@@ -5477,7 +5520,8 @@ function checkSave(o) {
   }
   if (o.mission) {
     const M = o.mission;
-    if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
+    if (!obj(M) || ![0, 1, 2, 3, 4].includes(M.diff) || (!M.lv5 && M.diff > 2)) bad();
+    for (const k of ['greenWant', 'greenPct', 'greenRun', 'hullX', 'hullY', 'stormCalm', 'calmRun']) if (M[k] != null && !Number.isFinite(M[k])) bad(); // (the Atmosphere Engine's missions)
     if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
@@ -5505,6 +5549,10 @@ function checkSave(o) {
   // The Lance of Corvane's cuts across the map (S.cuts, see lanceFire): numbers on the map.
   if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) && (c.w == null || (Number.isFinite(c.w) && c.w > 0 && c.w <= 8)) &&
     [c.x0, c.x1].every((x) => x >= -1 && x <= o.W + 1) && [c.y0, c.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
+  // The Sundering Ray's ripples and their marks (S.sunders, see sunderFire): numbers on the map, a blow's kind, owners.
+  if (o.sunders != null && !(Array.isArray(o.sunders) && o.sunders.length <= 4 * SUNDER.keep && o.sunders.every((w) => obj(w) && ['id', 'x0', 'y0', 'x1', 'y1', 't', 'at', 'f', 'b'].every((k) => Number.isFinite(w[k])) &&
+    (w.m === 'deep' || w.m === 'quake') && owner(w.o) && (w.done === 0 || w.done === 1) && [w.x0, w.x1].every((x) => x >= -1 && x <= o.W + 1) && [w.y0, w.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
+  for (const k of ['crkN', 'sunderSeq']) if (o[k] != null && !(Number.isSafeInteger(o[k]) && o[k] >= 0)) bad();
   // Orbital Lift cables coming down (S.liftFalls, see liftFall): numbers, a direction, owners, the anchor on the map.
   if (o.liftFalls != null && !(Array.isArray(o.liftFalls) && o.liftFalls.length <= 64 && o.liftFalls.every((f) => obj(f) && ['id', 't', 'k', 'sp', 'n', 'ax', 'ay'].every((k) => Number.isFinite(f[k])) &&
     Number.isInteger(f.d) && f.d >= 0 && f.d < 8 && owner(f.o) && Number.isFinite(f.by) && f.ax >= 0 && f.ay >= 0 && f.ax < o.W && f.ay < o.H && f.n >= 0 && f.n <= o.W + o.H))) bad();
@@ -5552,6 +5600,8 @@ function deserializeGame(json) {
   const o = JSON.parse(json);
   checkSave(o);
   o.difficulty = o.difficulty || 'normal';
+  // A mission saved when missions had three levels (Easy, Normal, Hard): now Settler, Colonist, Commander.
+  if (o.mission && !o.mission.lv5) { o.mission.diff = [0, 2, 3][o.mission.diff]; o.mission.lv5 = 1; }
   // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
   if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.
@@ -5596,6 +5646,9 @@ function deserializeGame(json) {
   o.over = o.over || {};
   o.scorch = o.scorch || {};
   o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
+  o.green = o.green && typeof o.green === 'object' && !Array.isArray(o.green) ? o.green : {}; // the land an Atmosphere Engine changed (saves from before it: none)
+  o.aeFade = Array.isArray(o.aeFade) ? o.aeFade : [];
+  o.drought = o.drought && typeof o.drought === 'object' && !Array.isArray(o.drought) ? o.drought : {}; // (crops under a Storm Front: saves from before it, none)
   o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
   for (const k of SPARSE_LAYERS) o[k] = Array.isArray(o[k]) ? sparseIn(o[k], o.W * o.H) : null; // (War scars: made below for a save from before)
@@ -5627,6 +5680,7 @@ function deserializeGame(json) {
   o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
   o.cuts = o.cuts || []; // (saves from before the Lance of Corvane: no cuts; their settings have no Megastructures: off, see megaOn)
   o.liftFalls = o.liftFalls || []; // (saves from before the Orbital Lift: no cable coming down)
+  o.sunders = o.sunders || []; // (saves from before the Sundering Ray: no ripples)
   o.rads = o.rads || []; o.ruins = o.ruins || []; // (saves from before radiation: no zones, no ruins)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();

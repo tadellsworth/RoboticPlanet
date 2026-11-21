@@ -477,7 +477,7 @@ function reportTip(won, moments) {
   if (worst && short[worst] >= 240 && SHORT_TIP[worst]) tips.push([short[worst] / 10, `${SHORT_TIP[worst]}. You were out of ${goodN(worst, 2)} for ${insDur(short[worst])} in all.`]);
   if ((st.lostAboard || 0) >= 15) tips.push([30 + st.lostAboard / 2, `guarding your supply roads: raiders destroyed robots carrying ${st.lostAboard} goods. An Outpost or a turret where they cross, or Walls with a Gate.`]);
   if (war && hadDef && (st.lostBld || 0) >= 8) tips.push([20 + st.lostBld, `more defences where the attacks came from: you lost ${st.lostBld} buildings in all. A Keep toughens the Walls and guns round it.`]);
-  if (won) tips.push([5, S.mission ? 'the next mission, or this one at a harder level.' : S.difficulty === 'hard' ? 'another map type or doctrine: every one plays differently.' : 'a harder rival: you won this one.']);
+  if (won) tips.push([5, S.mission ? 'the next mission, or this one at a harder level.' : S.difficulty === 'warlord' ? 'another map type or doctrine: every one plays differently.' : 'a harder rival: you won this one.']);
   tips.push([1, 'Statistics and graphs: flat stretches in your goods and output show where the colony stalled.']);
   tips.sort((a, c) => c[0] - a[0]);
   return `<div class="rp-tip"><b>Next time, try</b> ${insEsc(tips[0][1])}</div>`;

@@ -642,7 +642,7 @@ function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH,
  * unless you take the land back.
  */
 const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
-const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome']);
+const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome', 'sunder']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -1039,6 +1039,91 @@ const LIFT_GOODS = ['crystal', 'alloy', 'chip', 'fuel', 'cement', 'asphalt', 'am
 const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, rGens: 1, uEvery: 240, jam: 3, back: 0.5, alerts: [240, 120, 30], echo: 20, pulse: 2.4 };
 /** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
 const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
+/*
+ * The Sundering Ray (BDEFS.sunder; the owner's look B, the Piston Battery, Nov 2026; drawn on the sheet as the "Seismic
+ * Lance", renamed so it doesn't share the Lance of Corvane's name): a phased array. Three great hydraulic rams in a long
+ * concrete block round its bore tower over a deep shot hole, and a row of ram plates set in the ground before it. It
+ * winds up for `charge` s (`reactorCharge` on a Reactor), the rams pumping one after another, then fires: the bore
+ * charge goes off and the plates slam in a timed ripple whose tiny delays steer the shock one way, a ray through the
+ * earth. The ripple runs through the ground at `speed` tiles a second (between `travelMin` and `travelMax` s on the
+ * way), caving in the Murmur's tunnels a tile either side of its path, and lands:
+ *   Strike the Deep (on the Murmur; aimed anywhere, only with the Murmur on): in a `deep`-tile circle every tunnel caves
+ *     in, every exit is collapsed and sealed (none opens there for `sealNights` nights: S.mur.seal), every nest loses
+ *     `nestHit` of its full armor (never below 1) and sends no raid the next night (b.sQuiet), and a Sapper underground
+ *     there dies. The nests live and the tunnels grow back as ever.
+ *   Quake (on a colony; aimed within `range` tiles of its square): a ring shows on the ground for the last `warn` s of
+ *     the wind-up, for everyone (the aim is fixed then). In a `quake`-tile circle buildings, whosever, lose `dmg` of
+ *     their full armor but never drop below `floor` of it (a Command Base or Keep takes `baseDmg` of it); their
+ *     foundations crack (b.crack): they work at `crackWork` speed until repaired to full. Roads and track crack (S.crk:
+ *     robots on them move at `crackSpeed`) until a Worker mends them (`mend` s a patch of 3 x 3 tiles), Walls and Gates
+ *     crack (they take `wallTakes` times the damage until repaired to full), robots there are stunned for `stun` s and
+ *     take no damage; aircraft aren't touched. Any tunnels and exits there cave in too.
+ * A Shield Dome doesn't stop it: it comes through the ground. Power, as the Lance of Corvane's: `gens` Generators with
+ * Fuel within `reach` tiles (a Fuel every `genFuel` s each while it winds up) or a Nuclear Reactor there with `uranium`
+ * Uranium (or an Enriched Uranium) a blow; lose the power and the blow is lost. `reload` s (`reactorReload`) after a
+ * blow it can wind up again. Winding up draws the Murmur like the Lance's charge, and they hear every blow: the next
+ * night every nest within `lure` tiles sends its packs at it first, `packMul` times bigger (Active; normal size on
+ * Quiet: b.sLure). In the Hollow every blow also brings `rocks` rocks down from the roof inside its circle. Opens `at`
+ * s into a free-play game (at once in a mission that teaches it). One per colony; everywhere, on Argos (no Murmur) a
+ * Quake weapon only. Its cracks on the ground show for `scar` s (S.sunders keeps the last `keep` blows).
+ */
+const SUNDER = { at: 1080, charge: 60, reactorCharge: 40, reload: 300, reactorReload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 1,
+  deep: 16, quake: 5, range: 30, warn: 20, dmg: 0.4, floor: 0.1, baseDmg: 0.2, stun: 4, crackWork: 0.5, crackSpeed: 0.5, wallTakes: 2,
+  nestHit: 1 / 3, sealNights: 2, lure: 40, packMul: 1.5, speed: 10, travelMin: 1.5, travelMax: 6, mend: 4, rocks: 3, scar: 300, keep: 8, stroke: 0.55 };
+/*
+ * The Deep Core (BDEFS.deepcore; the owner's look A, the Headframe, Nov 21 2026): a 3 x 3 winding tower over a shaft that
+ * goes deeper by itself while it has power, bringing up Ore, then Crystal, then a little Uranium, and never running dry.
+ * It opens `at` s into a free-play game (a mission that teaches it: at once). Power: a Generator with Fuel within `reach`
+ * tiles of its square (the Core burns a Fuel from it every `genFuel` s while it works), or a Nuclear Reactor there (no
+ * Uranium used); without power it stops, output and depth both, but keeps the depth it has (b.dcT, s of powered work).
+ * Its stage (b.dcStage): 1 at once, 2 from `stages[1]` s of depth, 3 from `stages[2]`; `out[stage - 1]` is what it brings
+ * up a minute (Uranium 0.25: one every 4 minutes), into its own store, `cap` of each at most (full, that good stops);
+ * Haulers carry it off. On Argos (`lunar`) no Crystal. Below `weak` of its armor it goes no deeper and brings up half.
+ * The Murmur: it draws them each night like a working Generator; reaching stage 2 calls a raid for it the next night,
+ * `call` times a night's pack (b.dcCall, the night b.dcCallN); stage 3 calls one with `breakers` Brutes more, and opens a
+ * new exit within `exitR` tiles of it that night (for good, until caved in). In the Hollow (their home) every call is
+ * `hollow` times as big. With the Murmur off a stage costs nothing. Destroyed, its stock and depth are lost; with the
+ * Murmur on the open shaft becomes their exit (a burrow, e.shaft its colony's id) until a Worker of that colony caps it
+ * (`capT` s of work, `capCement` Cement from storage), or warbots cave it in. It never counts against a rival's two
+ * megastructures: any rival builds one once it is `aiAt` s in and its last Ore Mine has run dry. One per colony.
+ */
+const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ ore: 6 }, { ore: 8, crystal: 3 }, { ore: 10, crystal: 4, uranium: 0.25 }],
+  cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1800 };
+/*
+ * The Atmosphere Engine (BDEFS.atmos; the owner's look A, the Rain Tower, Nov 21 2026): a 4 x 4 cooling-tower shell that
+ * slowly changes the weather and the land round it, finishing the Pathfinder's work. It opens `at` s into a free-play game
+ * (a mission that teaches it: at once). Power: `gens` Generators with Fuel within `reach` tiles of its square, the Engine
+ * taking a Fuel from each every `genFuel` s (b.aeFuel: s left of the Fuel it last took; b.aeGens their ids), or a Nuclear
+ * Reactor there burning a Uranium every `uEvery` s (b.aeU). Without power it stops growing; what it changed stays.
+ * Its stages (b.aeStage, from b.aeT, s of powered work: `stages`): 1 Calm, 2 Rain, 3 Green, 4 Garden, reaching `r` tiles
+ * from its middle. Calm: no dust storm inside (bots at full speed). Rain: barren ground turns fertile (S.fert) and the
+ * Bloom stops spreading (no tunnel is dug in). Green: crops there grow `crop` times as fast and the Bloom withers back a
+ * tile every `wither` s (tunnels and Bloom veins). Garden: no Bloom, no Murmur exit, and groves seed themselves (one every
+ * `seedEvery` s, `groves` at most). The land each stage reaches is marked in S.green (tile: 1 to 4, kept for good), spread
+ * out from its foot at `spread` tiles a second. The circle is its owner's (and allies'): the calm in a dust storm and the
+ * faster crops are theirs only (atmosOwnAt), the land changes for everyone in it (fertile soil, the Bloom held back).
+ * From Rain, a foe's robots and vehicles on its ground move at `mud` speed (the mud: atmosMud), and while it has power
+ * a foe's Torches can't burn the ground or leave fires in it (the rain puts them out: atmosRainAt).
+ * The Murmur: they go for it first every night; each new stage, the next night `sappers[stage - 1]` Sappers dig in under it.
+ * Destroyed: what is green stays green; its calm and its hold on the Bloom shrink back to nothing over `fade` s (S.aeFade).
+ * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's on a barren home (The Rust,
+ * Cinderlands) or with Planetary events on, from `aiAt` s; the Herald sends Torches to burn a foe's greening.
+ */
+const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12, 16, 20], stages: [0, 360, 960, 1680], spread: 0.25,
+  crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2, mud: 0.5 };
+const ATMOS_STAGE_NAMES = ['Calm', 'Rain', 'Green', 'Garden'];
+/*
+ * The Engine's Storm Front (the owner's approval, Nov 21 2026): from Rain its owner sets a storm down anywhere on the map
+ * (an order: atmosStorm; b.aeStorm the tile it's centred on), `r` tiles round, while the Engine stands and has power (no
+ * power: the storm is gone until it has again, in the same place). Not where it would reach the Engine's own circle (its
+ * stage's full radius), nor centred in another Engine's circle; and nothing of it in any Engine's circle (the calm: two
+ * Engines contest the sky). It can be set down again `cd` s after the last time. Under it, for the owner's foes: robots
+ * and vehicles at `slow` speed, building sites go up at `build` speed, guns reach `range` as far. From Green, a foe's
+ * crops under it stop growing (the drought: S.drought, tile: s under it) and after `drought` s wither (the soil stays).
+ * At the Garden, every `boltEvery` s lightning strikes one of a foe's buildings under it (picked by the seed): `boltDmg`
+ * of its armor, never below `boltFloor`. Destroyed, the storm ends at once. Everyone sees it.
+ */
+const STORM = { r: 5, slow: 0.6, build: 0.6, range: 0.75, cd: 60, drought: 180, boltEvery: 60, boltDmg: 0.15, boltFloor: 0.3 };
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
 const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4, warm: 30,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
@@ -1363,6 +1448,11 @@ const BDEFS = {
     desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. Turn it off to save Crystal: turned back on, it takes 30 seconds to come up. One per colony.',
     cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 120, war: true,
   },
+  sunder: {
+    name: 'Sundering Ray', short: 'Ray',
+    desc: 'A phased array: three great hydraulic rams in a concrete block round a bore tower, and a row of ram plates in the ground before it, 3 by 3 tiles. Its panel aims one of two blows. Strike the Deep (with the Murmur on): aim anywhere; in a 16-tile circle every Murmur tunnel caves in, every tunnel exit is sealed for 2 nights, every nest loses a third of its armor and sends no raid the next night, and a Sapper underground there dies. Quake: aim within 30 tiles of it; a ring shows on the ground for 20 seconds first, seen by everyone, then in a 5-tile circle buildings lose 40% of their full armor but never drop below 10% (a Command Base or Keep half that), their cracked foundations work at half speed until repaired to full, roads and track crack (half speed until a Worker mends them), Walls take double damage until repaired, and robots are stunned for 4 seconds. It winds up for 60 seconds, the rams pumping one after another (everyone hears it), then the ripple runs through the ground to the target. It needs 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it winds up) or a Nuclear Reactor there with 1 Uranium a blow (40 s wind-up). 5 minutes to reload. A Shield Dome does not stop it. The Murmur hear every blow: the next night the nests within 40 tiles come for it first, in bigger packs. One per colony; opens 18 minutes into a game.',
+    cost: { cement: 50, alloy: 30, chip: 12, crystal: 8 }, sunder: true, mega: true, foot: 3, armor: 90, buildTime: 240, war: true,
+  },
   city: {
     name: 'Arrival City', short: 'City',
     desc: 'A 4 by 4 square built for the colonists: four concrete apartment blocks round a green, a tram waiting at the stop, all finished and all empty, with the Arrival clock on its stele in the middle and WELCOME HOME on the roof. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
@@ -1377,6 +1467,16 @@ const BDEFS = {
     name: 'Great Uplink',
     desc: 'A 3 by 3 dish array built to talk to home, and a second way to win. Only in a game with the Great Uplink win switched on (game setup, beside Victory) and Megastructures on. Its panel\'s Begin transmission opens 25 minutes into a game and needs 3 Generators with Fuel within 4 tiles, each burning a Fuel every 30 seconds while it transmits. Hold the transmission for 8 minutes and you make contact: your colony (and your team) wins. Any armed warbot of another colony within 3 tiles jams it; jammed or without power its clock stops and runs back at half speed. Destroyed, the transmission is lost and a rebuilt one starts from zero. Every colony sees the countdown and where it is. One per colony. Not in the Hollow.',
     cost: { cement: 50, alloy: 40, chip: 30, crystal: 24 }, gup: true, mega: true, foot: 3, armor: 120, buildTime: 200,
+  },
+  deepcore: {
+    name: 'Deep Core', short: 'Core',
+    desc: 'A huge drill into the crust under a red winding tower: it slowly brings up Ore, Crystal and a little Uranium, more the deeper it goes, and never runs dry. It goes deeper by itself while it has power: a Generator with Fuel within 4 tiles (it burns a Fuel a minute) or a Nuclear Reactor there (no Uranium used). Stage 1, at once: 6 Ore a minute. Stage 2, the buried ringfall, after 6 minutes of power: 8 Ore and 3 Crystal. Stage 3, the deep seam, 10 minutes later: 10 Ore, 4 Crystal and a Uranium every 4 minutes. It holds 30 of each; Haulers carry them off. Without power it stops but keeps its depth; below half its armor it goes no deeper and brings up half. Every depth is heard below: it draws the Murmur like a Generator, the night after stage 2 a bigger raid comes for it, and the night after stage 3 the Deep answers: two more Brutes, and a new tunnel exit near it. Destroyed, its depth and stock are lost, and with the Murmur on its open shaft is their way up until a Worker caps it (20 seconds, 4 Cement). On Argos, no Crystal. Opens 20 minutes into a game. One per colony.',
+    cost: { cement: 60, alloy: 40, chip: 20, crystal: 10 }, deepcore: true, mega: true, foot: 3, out: { ore: 30, crystal: 30, uranium: 30 }, armor: 100, buildTime: 300,
+  },
+  atmos: {
+    name: 'Atmosphere Engine', short: 'Engine',
+    desc: 'A terraforming tower: a great concrete cooling-tower shell with fans round its foot, venting a tall white plume. It slowly changes the weather and the land round it. It needs power: 2 Generators with Fuel within 4 tiles (it takes a Fuel a minute from each) or a Nuclear Reactor there (a Uranium every 6 minutes). Stage 1, Calm, at once: 8 tiles round it, no dust storm for you and your allies. Stage 2, Rain, after 6 minutes of power: 12 tiles, rain at night, barren ground turns fertile (Bio Farms work anywhere in it), the Bloom stops spreading there, enemy robots and vehicles in it wade through mud at half speed, and while it has power enemy Torches can\'t burn anything there. Stage 3, Green, 10 minutes later: 16 tiles of grass, your crops grow a quarter faster, the Bloom withers back a tile a minute. Stage 4, Garden, 12 minutes later: 20 tiles, groves seed themselves, no Bloom and no Murmur exit. From Rain its panel sends a Storm Front anywhere on the map (5 tiles round, not near its own circle nor inside another Engine\'s): under it enemy robots move at 60% speed, their sites go up at 60% and their guns reach three-quarters as far; from Green their crops stop growing and wither after 3 minutes; at the Garden lightning strikes one of their buildings about once a minute. A minute before it can be moved again; no power, no storm. Without power it stops growing; the land it changed stays. The Murmur hate it: they go for it first every night, and after each new stage Sappers dig in under it. Destroyed, its storm ends at once; what is green stays green, but the storms and the Bloom come back in over 10 minutes. Opens 20 minutes into a game. One per colony. Not on Argos or in the Hollow.',
+    cost: { cement: 50, alloy: 40, chip: 24, crystal: 30, fiber: 20 }, atmos: true, mega: true, foot: 4, armor: 100, buildTime: 360,
   },
   terminal: {
     name: 'Trade Terminal', desc: 'An off-world freight exchange docked at a neutral Trade Post. It runs one standing trade route that you set on its panel: send one good, bring back another, at the Post\'s market prices, until you change it. About every 2 minutes a convoy (a Road Train, or a Freight Train with track beside it) takes 15 of the good out and brings what they bought home. Raw goods sell low and cost three-quarters of their worth; made goods trade at a little over half; Fuel costs extra. Each run you sell of a good eases its price for a while. Turn on Escort and two warbots from the nearest garrison ride along. Nothing shoots on the Post\'s ground, so convoys are hit out on the road: guard the route. It docks within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
@@ -1409,7 +1509,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'gup', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -1417,7 +1517,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'gup'], late: true },
+  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -1526,12 +1626,20 @@ const TURRET_TURN = 2.4;   // radians per second a turret's head turns (about 14
 const TURRET_SWEEP = 0.35; // radians per second it sweeps while watching for targets
 const SHOTS_PER_AMMO = 4;
 
+/*
+ * The rival's level, easiest first (players see `label`, the Frontier names). The keys stay the old words (easy,
+ * medium, normal, hard: saves, settings, missions and multiplayer setups use them); warlord, the fifth, is harder
+ * than Hard. diffAtLeast(k) asks whether this game's level is k or harder (Warlord counts as Hard everywhere).
+ */
 const DIFFICULTY = {
-  easy:   { label: 'Easy',   mult: 0.7,  grace: 330, threshold: 7, maxSites: 1, think: 3.0, bonus: 0 },
-  medium: { label: 'Medium', mult: 0.85, grace: 275, threshold: 6, maxSites: 2, think: 2.5, bonus: 0 },
-  normal: { label: 'Normal', mult: 1.0,  grace: 220, threshold: 5, maxSites: 2, think: 2.0, bonus: 0 },
-  hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
+  easy:    { label: 'Settler',   mult: 0.7,  grace: 330, threshold: 7, maxSites: 1, think: 3.0, bonus: 0 },
+  medium:  { label: 'Pioneer',   mult: 0.85, grace: 275, threshold: 6, maxSites: 2, think: 2.5, bonus: 0 },
+  normal:  { label: 'Colonist',  mult: 1.0,  grace: 220, threshold: 5, maxSites: 2, think: 2.0, bonus: 0 },
+  hard:    { label: 'Commander', mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
+  warlord: { label: 'Warlord',   mult: 1.6,  grace: 100, threshold: 3, maxSites: 4, think: 1.0, bonus: 12 },
 };
+const DIFF_ORDER = Object.keys(DIFFICULTY);
+function diffAtLeast(k, d = S.difficulty) { return DIFF_ORDER.indexOf(d) >= DIFF_ORDER.indexOf(k); }
 
 /*
  * Rival doctrines (the code calls them personalities: `style` on a player, `PERSONALITIES` here). Every rival
@@ -1542,7 +1650,7 @@ const DIFFICULTY = {
  * Each scales the rival's difficulty settings: grace (when it starts attacking), threshold (warbots it gathers before
  * an attack), army (how fast its army grows; armyFrom, when it starts), raids (how often it raids; raidFirst, the
  * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls,
- * push (it marches only in one big push: aiPush), harass (raids that form up out of sight and go for the roads by its
+ * push (a big all-in push when its army outgrows its rival's: aiPush), harass (raids that form up out of sight and go for the roads by its
  * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
  * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
@@ -1557,7 +1665,7 @@ const PERSONALITIES = {
     name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
     tag: 'builds, defends and attacks in good measure',
     quote: 'This action has been logged for review by the Accord tribunal.',
-    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (on Normal). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
     weak: 'No great strength and no great weakness: a fair first opponent.',
     // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
     voice: {
@@ -1585,7 +1693,7 @@ const PERSONALITIES = {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
     tag: 'raids your roads, again and again',
     quote: 'Nothing\'s coming from home. Everything on the road is supply.',
-    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (at Colonist level) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
     weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags (massed warbots beat Skirmishers); while its bands are out, its base is open.',
     voice: {
       attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',
@@ -2016,9 +2124,12 @@ const FLAVOR = {
   magterm: 'Phase 2 transit. Platforms to passenger standard. Departures on time; the seats stay folded.',
   mdriver: 'Survey kit to supply settlements before the roads. The settlements never came. It still fires.',
   lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
+  sunder: 'Piling rig for the arrival district’s foundations. Something under the district keeps time with it.',
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
   city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
   lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
+  deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
+  atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
   catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',

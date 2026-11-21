@@ -213,7 +213,7 @@ function faunaNext(i, j, ter) {
 
 /** What cell (ci, cj) offers: tile lists by habitat (trees, open ground, shore, shallows, rock faces, shrubs, dead trees). */
 function faunaHab(ci, cj) {
-  const H = { tree: [], open: [], shore: [], shallow: [], water: [], rock: [], perch: [], dead: [], edge: [] };
+  const H = { tree: [], open: [], shore: [], shallow: [], water: [], rock: [], perch: [], dead: [], edge: [], garden: [] };
   const Lf = FAUNA.life || {}, W = S.W, i0 = ci * FAUNA_CELL, j0 = cj * FAUNA_CELL;
   for (let j = j0; j < Math.min(S.H, j0 + FAUNA_CELL); j++) for (let i = i0; i < Math.min(W, i0 + FAUNA_CELL); i++) {
     const t = j * W + i, ter = S.terrain[t];
@@ -230,6 +230,7 @@ function faunaHab(ci, cj) {
       if (k && Lf.dead && Lf.dead.includes(k)) H.dead.push(t);
       if (k && Lf.trees && Lf.trees.includes(k)) { H.tree.push(t); continue; }
       H.open.push(t);
+      if (S.green && S.green[t] >= 4) H.garden.push(t); // (an Atmosphere Engine's Garden: the Pathfinder's deer and birds come back to it)
       if (faunaNext(i, j, T_WATER)) H.shore.push(t);
       // (deer away from water: open ground by the trees)
       else if (Lf.trees && Lf.trees.length && faunaNearTree(i, j, Lf.trees)) H.edge.push(t);
@@ -263,6 +264,12 @@ function faunaRoster(c) {
       if (h(0) < K.p * (hab === K.alt ? 0.5 : 1)) out.push({ kind, K, hab, rank: h(1), thr: h(2), a: null, back: 0, fled: false });
     }
   });
+  // An Atmosphere Engine's Garden: deer and songbirds come in, whatever the land round it is (LORE.md, the garden).
+  if (c.hab.garden.length >= 12) for (const [kind, ki] of [['deer', 91], ['songbird', 92]]) {
+    const K = FAUNA_KINDS[kind], h = (s) => hash2(c.key, ki, seed + s);
+    if (K && !Lf.kinds.includes(kind) && h(0) < 0.8) out.push({ kind, K, hab: 'garden', rank: h(1) * 0.7, thr: h(2), a: null, back: 0, fled: false });
+  }
+  c.gardenN = c.hab.garden.length;
   return out;
 }
 
@@ -412,7 +419,7 @@ function faunaFrame(z, v0, v1) {
     if (!shown) { c.since = -1; continue; }
     if (c.since < 0) c.since = F.t;
     if (spawn) {
-      if (F.t - c.habAt > 6) { c.hab = faunaHab(ci, cj); c.habAt = F.t; } // (the colony builds over the land: looked at again now and then)
+      if (F.t - c.habAt > 6) { c.hab = faunaHab(ci, cj); c.habAt = F.t; if ((c.hab.garden.length >= 12) !== (c.gardenN >= 12)) { for (const e of c.roster) if (e.a) e.a.done = true; c.roster = faunaRoster(c); } } // (the colony builds over the land: looked at again now and then; a Garden grown there brings its animals)
       for (const e of c.roster) if (!e.a) faunaTrySpawn(c, e);
     }
   }

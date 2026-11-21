@@ -535,7 +535,7 @@ function aiThink(p) {
     const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
     const nuke = [];
     if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
-    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2 && P.megaPick !== 'lance') nuke.push(['nukesilo', 1]); // (not when it chose the Lance: aiMegaPick)
+    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2 && P.megaPick !== 'lance' && P.megaPick !== 'sunder') nuke.push(['nukesilo', 1]); // (not when it chose the Lance: aiMegaPick)
     plan = plan.slice(0, k).concat(nuke, plan.slice(k));
   }
   // Under attack at the front: a Bunker, a Mortar Pit or a Disruptor Tower beside the fort that is being hit
@@ -556,7 +556,7 @@ function aiThink(p) {
   // aiSearchSpot; its builder keeps out of their way), up to three, one at most every three minutes (P.parkAt: a raiding
   // besieger wrecked the sites as fast as they went up). Normal and Hard rivals, and a Warden (turtle) on any. (Nothing
   // answered a besieger parked just outside the guns.)
-  if ((S.difficulty === 'normal' || S.difficulty === 'hard' || st.walls) && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !few &&
+  if ((diffAtLeast('normal') || st.walls) && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !few &&
       !(P.defWant && S.time < P.defWant.until) && S.time - (P.defAt || -999) > 60 && S.time - (P.parkAt ?? -999) > 180 && (counts.mortar || 0) < 3) {
     let n = 0, sx = 0, sy = 0;
     for (const u of S.bots) {
@@ -1188,7 +1188,7 @@ function aiThink(p) {
     for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
     // An Architect on Normal or Hard rains them on what its rival lives on (aiMissileWorth), and under siege into the
     // army at its gates (aiMissileKnot).
-    const rain = !!st.missiles && (S.difficulty === 'normal' || S.difficulty === 'hard');
+    const rain = !!st.missiles && diffAtLeast('normal');
     if (rain && P.homeCall > S.time) for (const silo of me) {
       if (silo.type !== 'silo' || !siloReady(silo)) continue;
       const k = aiMissileKnot(p, lander, silo);
@@ -2235,7 +2235,7 @@ const AI_MEGA = { lanceAt: 900, domeAt: 1020, cityAt: 720, liftAt: 900, heraldLi
  * under the cap.
  */
 const AI_MEGA_CAP = { weapons: 1, total: 2 };
-const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main' };
+const AI_MEGA_KIND = { lance: 'weapon', nukesilo: 'weapon', sunder: 'weapon', dome: 'shield', city: 'main', lift: 'main', gup: 'main', atmos: 'main' };
 const AI_MEGA_MAIN = { tycoon: 'city', turtle: 'lift', balanced: 'city', raider: null, rusher: 'lift' };
 
 /** Rival p's megastructure projects so far: { weapons, total, has: the kinds of each type it has or has chosen }. */
@@ -2259,7 +2259,7 @@ function aiMegaRoom(p, kind) {
  * Rival p's main megastructure project ('city', 'lift', 'gup' or null): its doctrine's, or Arrival City for anyone in
  * Domination; with the Great Uplink win on (gupWinOn) the Steward's is the Great Uplink (it believes the arks are only late).
  */
-function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : AI_MEGA_MAIN[st] || null; }
+function aiMegaMain(p) { const st = S.players[p].style; return st === 'balanced' && gupWinOn() ? 'gup' : S.victory === 'domination' ? 'city' : st === 'balanced' && aiAtmosHome() ? 'atmos' : AI_MEGA_MAIN[st] || null; }
 
 /**
  * Uranium for the late game (a Nuclear race): from AI_MEGA.reactorAt s in, a rival with no Ore Mine on a Uranium
@@ -2342,12 +2342,16 @@ function aiUraniumFed(p, me) {
 function aiMega(p, me, lander, canBuild) {
   if (!megaOn() || S.mode === 'colony') return;
   const P = S.players[p];
+  // The Warden's other answer: the Sundering Ray, when the Murmur dig toward it (aiSunder: its own pick, build and use).
+  aiSunder(p, me, lander, canBuild);
   // The choice, once it has a Reactor fed with Uranium, late in the game.
   if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon')) P.megaPick = aiMegaPick(p);
   aiCity(p, me, lander, canBuild);
   aiLift(p, me, lander, canBuild);
   aiLiftAmbush(p);
   aiGup(p, me, lander, canBuild);
+  aiDeep(p, me, lander, canBuild);
+  aiAtmos(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2385,6 +2389,181 @@ function aiMega(p, me, lander, canBuild) {
     const spot = threat && aiMegaSpot(p, 'dome', gens, DOME.reach, lander);
     if (spot) placeSite(p, 'dome', spot[0], spot[1]);
   }
+}
+
+/*
+ * The Deep Core (DEEP), for any rival: it never counts against its two megastructures (it has no AI_MEGA_KIND). Once a
+ * game is DEEP.aiAt s in and its last Ore Mine has run dry (it has dug Ore, and none of its Mines has any left in reach),
+ * with half its Cement and Crystal in hand it puts one up by a Generator (or Reactor) near its Command Base, or near
+ * the Base with a Generator going up beside it, the goods of both first. Built, before dusk on a night the Core has called the Murmur for (b.dcCall), its spare warbots rally to
+ * it (P.deepRally), called back at dawn. (The Salvager goes for foes' stage-3 Cores: see the marches.)
+ */
+function aiDeep(p, me, lander, canBuild) {
+  const P = S.players[p], core = me.find((b) => BDEFS[b.type].deepcore);
+  if (core) {
+    if (!core.built && !core.prio) { core.prio = 'high'; core.sitePrio = 1; }
+    // (no power in reach of it: a Generator goes up beside it, its goods first)
+    if (!deepReactor(core) && !me.some((g) => g.type === 'generator' && footDist(core, g.x + 0.5, g.y + 0.5) <= DEEP.reach + 0.5) && aiAffordable(p, 'generator') && S.time - (P.deepLook ?? -999) >= AI_MEGA.look / 4) {
+      P.deepLook = S.time;
+      const g = aiMegaSpot(p, 'generator', [core], DEEP.reach, lander, 0), r = g && placeSite(p, 'generator', g[0], g[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    if (core.built) aiDeepGuard(p, core);
+    return;
+  }
+  if (P.deepRally) { recallRally(P.deepRally); P.deepRally = 0; }
+  if (!canBuild || !lander || S.time < DEEP.aiAt || worldBan('deepcore') || megaBlocked(p, 'deepcore')) return;
+  if (!((P.made && P.made.ore) > 0) || me.some((b) => b.type === 'mine' && b.built && !b.depleted)) return; // (its last Ore Mine has run dry)
+  // (half its Cement and Crystal in hand: its Alloy and Chips never pile up, going into warbots as made, so the site
+  // waits for those and gets them first, as Arrival City's does)
+  const have = playerGoods(p), c = BDEFS.deepcore.cost;
+  if (have.cement < c.cement / 2 || have.crystal < c.crystal / 2 || S.time - (P.deepLook ?? -999) < AI_MEGA.look) return;
+  P.deepLook = S.time;
+  const pow = me.filter((b) => b.built && (b.type === 'generator' || b.type === 'reactor') && dist2(b.x, b.y, lander.x, lander.y) <= 14 * 14);
+  // (clear of the map's edge, with open ground at its door, the corner its Workers and Haulers come to)
+  const ok = (i, j) => i >= 2 && j >= 2 && i + 4 < S.W && j + 4 < S.H && [[i - 1, j], [i, j - 1], [i - 1, j - 1]].some(([a, b]) => { const t = tIdx(a, b); return walkable(t) && !S.bAt[t]; });
+  const spot = (pow.length && aiMegaSpot(p, 'deepcore', pow, DEEP.reach, lander, -1, ok)) || aiMegaSpot(p, 'deepcore', [lander], 10, lander, -1, ok);
+  const r = spot && placeSite(p, 'deepcore', spot[0], spot[1]);
+  if (r && r.ok) { P.deepAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+/*
+ * The Atmosphere Engine (ATMOS). The Steward's main project in place of Arrival City (aiMegaMain) on a barren home (The
+ * Rust, Cinderlands) or with Planetary events on (aiAtmosHome), from ATMOS.aiAt s once its economy runs (a Bot Foundry,
+ * half its Cement and Crystal and its Fiber in hand): near its Command Base, with its 2 Generators going up beside it,
+ * their goods first, and again as one is lost. And the Herald, its clock frozen at "Arrival in one day", sees a foe's
+ * greening as overgrowth on the landing zone: every ATMOS.burnEvery s, up to ATMOS.burnN of its Torches with full tanks
+ * go to burn the fertile ground a foe's Engine has made (its Rain or more), where no gun of theirs covers it; while the
+ * Engine has power its rain puts their fire out there, so they go for its Generators (or Reactor) instead. Any rival with
+ * an Engine at Rain sets its Storm Front down (aiAtmosStorm).
+ */
+function aiAtmosHome() { return !worldBan('atmos') && (!!S.events || biome() === 'desert' || biome() === 'volcanic'); }
+function aiAtmos(p, me, lander, canBuild) {
+  const P = S.players[p];
+  if (P.style === 'rusher') aiAtmosBurn(p);
+  const e = me.find((b) => BDEFS[b.type].atmos);
+  if (e) {
+    if (!e.built && !e.prio) { e.prio = 'high'; e.sitePrio = 1; }
+    const gens = me.filter((b) => b.type === 'generator' && footDist(e, b.x + 0.5, b.y + 0.5) <= ATMOS.reach + 0.5), have = playerGoods(p), c = BDEFS.generator.cost;
+    if (gens.length < ATMOS.gens && !atmosReactor(e) && canBuild && lander && have.cement >= c.cement && have.alloy >= c.alloy && S.time - (P.aeLook ?? -999) >= AI_MEGA.look / 4) {
+      P.aeLook = S.time;
+      const spot = aiMegaSpot(p, 'generator', [e], ATMOS.reach, lander, 0), r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    aiAtmosStorm(p, e);
+    return;
+  }
+  if (aiMegaMain(p) !== 'atmos' || !canBuild || !lander || S.time < ATMOS.aiAt || megaBlocked(p, 'atmos') || worldBan('atmos') || !aiMegaRoom(p, 'main')) return;
+  const have = playerGoods(p), k = BDEFS.atmos.cost;
+  if (!me.some((b) => b.built && BDEFS[b.type].bots) || have.cement < k.cement / 2 || have.crystal < k.crystal / 2 || have.fiber < k.fiber / 2 || S.time - (P.aeLook ?? -999) < AI_MEGA.look) return;
+  P.aeLook = S.time;
+  const ok = (i, j) => i >= 2 && j >= 2 && i + 5 < S.W && j + 5 < S.H && [[i - 1, j], [i, j - 1], [i - 1, j - 1]].some(([a, b]) => { const t = tIdx(a, b); return walkable(t) && !S.bAt[t]; });
+  const spot = aiMegaSpot(p, 'atmos', [lander], 10, lander, -1, ok);
+  const r = spot && placeSite(p, 'atmos', spot[0], spot[1]);
+  if (r && r.ok) { P.aeAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+/** The Herald's Torches go to burn a foe's greening (see aiAtmos): the fertile ground nearest a foe's Engine, out of its guns' reach. */
+function aiAtmosBurn(p) {
+  const P = S.players[p];
+  if (S.time - (P.aeBurn ?? -999) < ATMOS.burnEvery) return;
+  const eng = S.buildings.find((b) => !b.dead && b.built && BDEFS[b.type].atmos && b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner) && (b.aeStage || 0) >= 2);
+  if (!eng) return;
+  P.aeBurn = S.time;
+  const torches = [];
+  for (const u of S.bots) {
+    if (torches.length >= ATMOS.burnN) break;
+    if (u.dead || u.owner !== p || !BOTS[u.type].flame || !scorchReady(u) || u.fight || (u.task && u.task.type !== 'guard' && u.task.type !== 'idle' && u.task.type !== 'hold')) continue;
+    const at = u.inside ? getE(u.inside) : null;
+    if (at && !freeToGo(u, at)) continue;
+    torches.push(u);
+  }
+  if (!torches.length) return;
+  const c = bCentre(eng), R = atmosReach(eng), taken = new Set();
+  for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'scorch') taken.add(v.task.tile);
+  for (const u of torches) {
+    let best = -1, bd = Infinity;
+    for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!(S.green[t] >= 2) || taken.has(t) || scorchTileWhy(t, p) || gunCovers(p, t)) continue;
+      const d = dist2(i, j, u.x, u.y);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best < 0) {
+      // Rained out: they go for what powers it (a Generator feeding it, or its Reactor), so the rain stops.
+      const pw = [...(eng.aeGens || []), eng.aeUr || 0].map(getE).find((g) => g && !g.dead && g.owner === eng.owner);
+      if (!pw || !atmosRainAt(c.x, c.y, p)) break;
+      exitBuilding(u);
+      u.task = { type: 'attack', target: pw.id }; u.path = null;
+      P.stats.aeCutSent = (P.stats.aeCutSent || 0) + 1;
+      continue;
+    }
+    taken.add(best);
+    exitBuilding(u);
+    u.task = { type: 'scorch', tile: best }; u.path = null;
+    P.stats.aeBurnSent = (P.stats.aeBurnSent || 0) + 1;
+  }
+}
+
+/*
+ * A rival's Storm Front (STORM): once its Engine is at Rain with power, every AI_STORM.think s it sets the storm where it
+ * hurts most: a warlike rival (the Herald, the Salvager, the Warden, or any at Warlord) over the foe's guns just before
+ * its next attack (AI_STORM.soon s off); the Steward and the Architect over the foe's fields; otherwise over the foe's
+ * base (as anyone does when the first has nothing to hit). It moves it only to a better spot.
+ */
+const AI_STORM = { think: 20, soon: 75 };
+function aiAtmosStorm(p, e) {
+  const P = S.players[p];
+  if (!e.built || (e.aeStage || 0) < 2 || !e.aeSrc || S.time - (P.stormT ?? -999) < AI_STORM.think || S.time - (e.aeStormT ?? -1e9) < STORM.cd) return;
+  P.stormT = S.time;
+  const st = P.style, war = st === 'rusher' || st === 'raider' || st === 'turtle' || diffAtLeast('warlord');
+  const want = war && S.mode !== 'colony' && P.nextAttack - S.time <= AI_STORM.soon ? 'guns' : st === 'balanced' || st === 'tycoon' ? 'fields' : 'base';
+  const spot = aiStormSpot(p, e, want) || (want !== 'base' ? aiStormSpot(p, e, 'base') : null);
+  if (!spot) return;
+  const now = e.aeStorm ? aiStormScore(p, e.aeStorm[0], e.aeStorm[1], spot.want) : -1;
+  if (e.aeStorm && spot.s <= now * 1.25 + 1) return; // (where it is will do)
+  if (!setAtmosStorm(e, spot.i, spot.j)) { P.stats.stormSet = (P.stats.stormSet || 0) + 1; P.stormWant = spot.want; }
+}
+/** How much a storm centred on (i, j) would hurt rival p's foes, for what it wants ('fields', 'guns' or 'base'). */
+function aiStormScore(p, i, j, want) {
+  const x = i + 0.5, y = j + 0.5, R2 = STORM.r * STORM.r;
+  let s = 0;
+  for (const o of S.buildings) {
+    if (o.dead || !(o.owner >= 0) || isWild(o.owner) || !foes(o.owner, p) || dist2(o.x + 0.5, o.y + 0.5, x, y) > R2 || atmosAt(o.x + 0.5, o.y + 0.5) >= 1) continue;
+    const def = BDEFS[o.type];
+    s += want === 'guns' ? (DEFENCE_TYPES.has(o.type) && !def.barrier ? 3 : def.barrier ? 0.5 : 0.25) : want === 'fields' ? (o.type === 'farm' ? 2 : 0.1) : (o.type === 'lander' ? 3 : o.built ? 1 : 1.5);
+  }
+  if (want === 'fields') for (let jj = j - STORM.r; jj <= j + STORM.r; jj++) for (let ii = i - STORM.r; ii <= i + STORM.r; ii++) {
+    if (!inMap(ii, jj) || dist2(ii + 0.5, jj + 0.5, x, y) > R2) continue;
+    const t = tIdx(ii, jj);
+    if (S.res[t] === R_CROP && atmosAt(ii + 0.5, jj + 0.5) < 1 && foes(S.owner[t], p) && S.owner[t] >= 0) s += 0.5;
+  }
+  return s;
+}
+/** The best spot for rival p's Storm Front from Engine e, for what it wants: { i, j, s, want } on a foe's building, or null. */
+function aiStormSpot(p, e, want) {
+  let best = null;
+  for (const o of S.buildings) {
+    if (o.dead || !(o.owner >= 0) || isWild(o.owner) || !foes(o.owner, p)) continue;
+    if (want === 'fields' ? o.type !== 'farm' : want === 'guns' ? !DEFENCE_TYPES.has(o.type) || BDEFS[o.type].barrier : false) continue;
+    if (atmosStormBlocked(e, o.x, o.y)) continue;
+    const s = aiStormScore(p, o.x, o.y, want);
+    if (s >= (want === 'base' ? 2 : 3) && (!best || s > best.s)) best = { i: o.x, j: o.y, s, want };
+  }
+  return best;
+}
+
+/** Rival p's warbots stand by its Deep Core through a night it has called the Murmur for, and go home at dawn. */
+function aiDeepGuard(p, core) {
+  const P = S.players[p], night = murmurNight(S.time);
+  if (core.dcCall && !night && murmurNights(S.time) + 1 >= (core.dcCallN || 0) && dayClock(S.time) >= NIGHT_FROM - MURMUR.warn - 30) {
+    if (P.deepRally || P.deepGuardN === core.dcCallN) return;
+    P.deepGuardN = core.dcCallN;
+    const c = bCentre(core), i = Math.floor(c.x), j = Math.floor(c.y) + 3;
+    const r = sendToRally(p, inMap(i, j) ? i : Math.floor(c.x), inMap(i, j) ? j : Math.floor(c.y), 8, false, true);
+    if (r && r.sent && r.rally) P.deepRally = r.rally.id;
+    return;
+  }
+  if (P.deepRally && !night && !core.dcCall && !core.dcHeldN) { recallRally(P.deepRally); P.deepRally = 0; }
 }
 
 /**
@@ -2561,9 +2740,9 @@ function aiHalfway(p, type, share = 0.5) {
 /**
  * A spot for megastructure `type` of p's within `reach` of one of `near` (its power), as close to its Command Base as can
  * be. `front` 1: rather on the enemy's side of what it's near (a Lance in front of its Reactor, so its own buildings
- * aren't on its lines of fire); -1: rather behind it (a Reactor behind its Lance).
+ * aren't on its lines of fire); -1: rather behind it (a Reactor behind its Lance). `ok(i, j)`, if given, must pass too.
  */
-function aiMegaSpot(p, type, near, reach, lander, front) {
+function aiMegaSpot(p, type, near, reach, lander, front, ok) {
   const F = BDEFS[type].foot || 1, E = front ? getE(S.players[rivalOf(p)] && S.players[rivalOf(p)].lander) : null;
   const eu = E ? (() => { const dx = E.x - lander.x, dy = E.y - lander.y, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; })() : null;
   let best = null, bs = Infinity;
@@ -2573,7 +2752,7 @@ function aiMegaSpot(p, type, near, reach, lander, front) {
       if (BDEFS[n.type].foot ? footDist(n, i + F / 2, j + F / 2) - F / 2 > reach : footDist({ type, x: i, y: j }, n.x + 0.5, n.y + 0.5) > reach) continue;
       let s = dist(i + F / 2, j + F / 2, lander.x + 0.5, lander.y + 0.5);
       if (eu) { const nc = BDEFS[n.type].foot ? bCentre(n) : { x: n.x + 0.5, y: n.y + 0.5 }, vx = i + F / 2 - nc.x, vy = j + F / 2 - nc.y, l = Math.hypot(vx, vy) || 1; s -= front * 8 * (vx * eu[0] + vy * eu[1]) / l; }
-      if (s >= bs || !canPlace(p, type, i, j).ok) continue;
+      if (s >= bs || (ok && !ok(i, j)) || !canPlace(p, type, i, j).ok) continue;
       bs = s; best = [i, j];
     }
   }
@@ -2801,7 +2980,7 @@ function aiSquad(sp, need, help) {
  * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
  * near it), and comes home: RAID_TIME after it gets there, or as soon as it is outnumbered.
  */
-const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120 };
+const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120, warlord: 90 };
 const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
 const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {
@@ -2936,7 +3115,7 @@ function aiRaidScorch(p) {
     for (let j = uj - R; j <= uj + R; j++) for (let i = ui - R; i <= ui + R; i++) {
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j), d = dist2(i, j, ui, uj);
-      if (d >= bd || !S.fert[t] || taken.has(t) || S.zone[t] !== zone || scorchTileWhy(t) || gunCovers(p, t)) continue;
+      if (d >= bd || !S.fert[t] || taken.has(t) || S.zone[t] !== zone || scorchTileWhy(t, p) || gunCovers(p, t)) continue;
       if (!farms.some((f) => dist2(f.x, f.y, i, j) <= r2)) continue;
       bd = d; best = t;
     }
@@ -3298,13 +3477,13 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   if (!storm || tgt) P.stormT = 0;
   if (!storm) for (const b of S.buildings) {
     // (Its forts, and the enemy's Arrival City: knocked down and held, it's theirs, land, bonus and all: see cityCapture.)
-    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth)) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
+    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth) || (BDEFS[b.type].deepcore && (b.dcStage || 1) >= 3 && P.style === 'raider')) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
     const at = !aiBeaten(P, b, 22) && spotBy(b);
     if (!at) continue;
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0) - (BDEFS[b.type].deepcore ? 3 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -3316,7 +3495,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
-      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup || BDEFS[tgt.type].deepcore ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
@@ -4035,7 +4214,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
         if (rivalLandNear(p, i, j, type === 'outpost' || dock ? 3 : AI_CLEAR_OF_RIVAL)) continue;
         out = true;
       }
-      if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
+      if (S.fert[j * S.W + i] && !(S.green && S.green[j * S.W + i]) && type !== 'farm') continue; // keep fertile soil for farming (not an Atmosphere Engine's: that's everywhere round it)
       if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
       if (radAt(i + 0.5, j + 0.5, 1.5)) continue; // (nor in or right beside a radiation zone: RAD)
@@ -4571,4 +4750,107 @@ function allyShipsTick() {
     allySay(s.from, s.to, 'arrived', b.x, b.y, { n: s.n, g: goodN(s.g, s.n).toLowerCase(), who: callsign(s.from), b: BDEFS[b.type].name });
   }
   S.allyShips = left;
+}
+
+/* ------------------------------------------------------------------ the Sundering Ray (SUNDER) */
+
+/*
+ * The Sundering Ray for a rival (the design sheet: it is the rival's one weapon, the pick of the Lance of Corvane, the
+ * nukes or the Ray). The Warden picks it (P.megaPick 'sunder') from AI_SUNDER.pickAt s in when the Murmur are Active and
+ * a nest's tunnels reach within AI_SUNDER.near tiles of its Command Base; it goes up near home with its 2 Generators. It
+ * strikes the deep over the nest closest to home after a night the Murmur raided it (or once its tunnels come that
+ * close, or every AI_SUNDER.every nights while that nest is within SUNDER.lure tiles of home), by day, and the night after a blow keeps AI_SUNDER.guard warbots at the Ray. Any rival that owns one Quakes a
+ * foe's cluster of buildings and roads within reach (at least AI_SUNDER.worth) just before a push (its next attack due
+ * within the wind-up), so its army arrives while the Walls are cracked.
+ */
+const AI_SUNDER = { pickAt: 900, near: 12, guard: 6, worth: 5, look: 20, think: 5, every: 2 };
+
+/** Does a nest's tunnel come within r tiles of (x, y)? The nest it belongs to, the nearest such, or null. */
+function aiTunnelNear(x, y, r) {
+  if (!S.tun || !S.mur) return null;
+  let best = null, bd = r * r;
+  for (let j = Math.max(0, Math.floor(y - r)); j <= Math.min(S.H - 1, Math.ceil(y + r)); j++) for (let i = Math.max(0, Math.floor(x - r)); i <= Math.min(S.W - 1, Math.ceil(x + r)); i++) {
+    const t = tIdx(i, j);
+    if (!S.tun[t]) continue;
+    const d = dist2(i + 0.5, j + 0.5, x, y);
+    if (d > bd) continue;
+    const n = tunnelNest(t);
+    if (n) { bd = d; best = n; }
+  }
+  return best;
+}
+
+/** Where rival p's Quake from Ray b would do the most: the foe's buildings and road tiles in a circle within reach. { i, j, s } or null. */
+function aiQuakeSpot(p, b) {
+  const c = bCentre(b), R2 = SUNDER.quake * SUNDER.quake;
+  const theirs = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && !isWild(e.owner) && !calmB(e) && dist(c.x, c.y, e.x + 0.5, e.y + 0.5) <= SUNDER.range + SUNDER.quake);
+  const mine = S.buildings.filter((e) => !e.dead && e.built && (e.owner === p || (e.owner >= 0 && !foes(e.owner, p))) && dist(c.x, c.y, e.x + 0.5, e.y + 0.5) <= SUNDER.range + SUNDER.quake);
+  let best = null;
+  for (const e of theirs) {
+    const i = e.x, j = e.y;
+    if (sunderAimBlocked(b, i, j, 'quake')) continue;
+    let s = 0;
+    for (const o of theirs) if (dist2(o.x + 0.5, o.y + 0.5, i + 0.5, j + 0.5) <= R2) s += BDEFS[o.type].barrier ? 0.5 : DEFENCE_TYPES.has(o.type) || o.type === 'lander' ? 2 : 1;
+    for (const o of mine) if (dist2(o.x + 0.5, o.y + 0.5, i + 0.5, j + 0.5) <= R2) s -= 3;
+    for (let dj = -SUNDER.quake; dj <= SUNDER.quake; dj += 2) for (let di = -SUNDER.quake; di <= SUNDER.quake; di += 2) {
+      if (!inMap(i + di, j + dj) || di * di + dj * dj > R2) continue;
+      const t = tIdx(i + di, j + dj);
+      if (S.road[t] && foes(wayOwner(t), p)) s += 0.25;
+    }
+    if (!best || s > best.s) best = { i, j, s };
+  }
+  return best;
+}
+
+/** Rival p and the Sundering Ray, each think: the pick (the Warden), building it and its Generators, its blows and its guard. */
+function aiSunder(p, me, lander, canBuild) {
+  const P = S.players[p];
+  if (!lander || worldBan('sunder')) return;
+  const ray = me.find((b) => BDEFS[b.type].sunder);
+  if (!P.megaPick && P.style === 'turtle' && murmurLevel() === 'active' && S.time >= AI_SUNDER.pickAt && aiMegaRoom(p, 'weapon') && aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near)) {
+    P.megaPick = 'sunder'; P.megaWhy = 'the Murmur dig toward its base';
+  }
+  if (!ray) {
+    if (P.megaPick !== 'sunder' || !canBuild || megaBlocked(p, 'sunder') || !aiHalfway(p, 'sunder') || S.time - (P.sunderLook ?? -999) < AI_SUNDER.look) return;
+    P.sunderLook = S.time;
+    const spot = aiMegaSpot(p, 'sunder', [lander], 10, lander, -1);
+    const r = spot && placeSite(p, 'sunder', spot[0], spot[1]);
+    if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; P.sunderAt = Math.round(S.time); }
+    return;
+  }
+  if (!ray.built && !ray.prio) { ray.prio = 'high'; ray.sitePrio = 1; }
+  // Its two Generators, with the site (their goods first), and again as any is lost.
+  const gens = me.filter((b) => b.type === 'generator' && footDist(ray, b.x + 0.5, b.y + 0.5) <= SUNDER.reach + 0.5), have = playerGoods(p), gc = BDEFS.generator.cost;
+  if (gens.length < SUNDER.gens && canBuild && have.cement >= gc.cement && have.alloy >= gc.alloy && S.time - (P.sunderLook ?? -999) >= AI_SUNDER.look / 4) {
+    P.sunderLook = S.time;
+    const spot = aiMegaSpot(p, 'generator', [ray], SUNDER.reach, lander, 0);
+    const r = spot && placeSite(p, 'generator', spot[0], spot[1]);
+    if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+  }
+  if (!ray.built) return;
+  ray.sUseR = false; // (the Uranium is kept for whatever else wants it)
+  // The night after a blow: a guard at the Ray, once a night.
+  const n = murmurNights(S.time), lureNight = ray.sLure && (ray.sLure === n + 1 || (ray.sLure === n && murmurNight(S.time)));
+  if (lureNight && P.sunderGuard !== ray.sLure && aiArmyNear(p, ray, 6) < AI_SUNDER.guard) {
+    const c = bCentre(ray), i = Math.round(c.x), j = Math.round(c.y + 2.5);
+    const sp = aiSpare(p, { x: i, y: j }, false);
+    if (sp.n >= 2) { const { sent } = sendToRally(p, i, j, Math.min(AI_SUNDER.guard, sp.n)); if (sent) P.sunderGuard = ray.sLure; }
+  }
+  if (ray.sOn || S.time - (P.sunderT || -99) < AI_SUNDER.think) return;
+  P.sunderT = S.time;
+  if (sunderBlocked(ray)) return;
+  // Strike the Deep: by day, over the nest closest to home once the Murmur raided it, or their tunnels come that close,
+  // or (keeping it down) every AI_SUNDER.every nights while that nest is within SUNDER.lure tiles of home.
+  if (sunderDeepOn() && !murmurNight(S.time)) {
+    const raided = P.hitBy && (P.hitBy[wildOwner()] || -999) > S.time - TOD_LEN, near = aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near);
+    let nest = near;
+    if (!nest) { let bd = Infinity; for (const b of S.buildings) if (!b.dead && isNestB(b)) { const d = dist2(b.x, b.y, lander.x, lander.y); if (d < bd) { bd = d; nest = b; } } }
+    const due = nest && n - (P.sunderNight ?? -99) >= AI_SUNDER.every && dist(nest.x, nest.y, lander.x, lander.y) <= SUNDER.lure;
+    if (nest && (raided || near || due) && !setSunderAim(ray, nest.x, nest.y, 'deep')) { P.sunderDeeps = (P.sunderDeeps || 0) + 1; P.sunderNight = n; return; }
+  }
+  // A Quake just before a push: its next attack due within the wind-up and the ripple's way there.
+  if (S.mode !== 'colony' && P.nextAttack - S.time <= sunderTime(ray) + SUNDER.travelMax + 10) {
+    const q = aiQuakeSpot(p, ray);
+    if (q && q.s >= AI_SUNDER.worth && !setSunderAim(ray, q.i, q.j, 'quake')) P.sunderQuakes = (P.sunderQuakes || 0) + 1;
+  }
 }
