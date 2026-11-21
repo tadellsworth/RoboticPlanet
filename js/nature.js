@@ -445,7 +445,7 @@ function natureFrost() {
   if (!k || !S || !weatherOn() || typeof TOD === 'undefined') return 0;
   const x = natDayPos();
   if (x === null) return 0;
-  const N0 = NIGHT_TO - 90, M1 = 90, D1 = 240; // (from 90 s before night ends; melting through the morning into the day)
+  const N0 = NIGHT_TO - 90, M1 = 30, D1 = 300; // (from 90 s before night ends; melting slowly from early morning to midday: the owner, Nov 21)
   let f = 0;
   if (x >= N0) f = (x - N0) / (TOD_LEN - N0);
   else if (x < M1) f = 1;
@@ -508,7 +508,8 @@ function natFrostLayers() {
 
 /** Frost over the land in view (and the plants and roads on it; not on open water), as heavy as `f` (0..1). */
 function natFrost(ctx, ox, oy, z, f) {
-  const L = natFrostLayers(), lv = f * 4, a = Math.min(3, Math.floor(lv)), b = Math.min(3, a + 1), mix = lv - a;
+  // (lv 0..1: the first layer fades in; above, each layer crossfades into the next, so nothing pops in or out)
+  const L = natFrostLayers(), lv = f * 4, k = Math.min(2, Math.max(0, Math.floor(lv - 1))), mix = clamp(lv - 1 - k, 0, 1);
   // Only the land: a rectangle for each run of land tiles along each row in view.
   const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const i0 = Math.max(0, Math.floor(v0.x)), i1 = Math.min(S.W - 1, Math.ceil(v1.x)), j0 = Math.max(0, Math.floor(v0.y)), j1 = Math.min(S.H - 1, Math.ceil(v1.y));
@@ -535,8 +536,8 @@ function natFrost(ctx, ox, oy, z, f) {
     ctx.globalAlpha = al; ctx.fillStyle = pat;
     ctx.fillRect(0, 0, R.w, R.h);
   };
-  draw(L[a], Math.min(1, lv)); // (each layer has all of the last one's crystals, and more)
-  if (a !== b && lv >= 1) draw(L[b], mix);
+  if (lv <= 1) draw(L[0], lv);
+  else { draw(L[k], 1 - mix); draw(L[k + 1], mix); } // (each layer has all of the last one's crystals, and more)
   ctx.restore();
 }
 
