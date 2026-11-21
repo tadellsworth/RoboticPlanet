@@ -1901,3 +1901,7 @@ The dolphin’s pitch follows its leap, with a swept dorsal fin, moving flukes a
 where it reenters the water. Gulls have gray mantles, black primaries and white wingtip spots.
 They bank while flying and pull their wings in as they approach the ground. Hares alternate a
 crouched body and a long bound. Dry-biome hares have sandy coats. Polar hares keep white coats.
+
+Dusk bats have dark brown bodies and scalloped membranes stretched along visible wing fingers.
+Each bat varies its wingbeat and banks into turns. The wings compress asymmetrically during a
+bank, so the motion reads at game scale.

@@ -2712,7 +2712,8 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
   have an ember-colored seam and ember moths show warm bands when they flap. Blackwater herons tuck their necks
   in flight and extend them to fish. Woodland owls have ear tufts, while snowy owls have rounded heads and pale
   barred feathers. Rock lizards dart with splayed feet and a swinging tail. Hares crouch before each bound with
-  their ears back, in sandy coats on dry ground and white coats on the Polar Caps. The Hollow has pale, blind crawlers, hinge-backs and cave sailwings with ragged translucent membranes. Argos is airless.
+  their ears back, in sandy coats on dry ground and white coats on the Polar Caps. Bats in the Rust make quick,
+  banked turns at dusk on dark, scalloped wings. The Hollow has pale, blind crawlers, hinge-backs and cave sailwings with ragged translucent membranes. Argos is airless.
 - **Where** (`faunaHab`, `faunaRoster`): seeded 8-tile cells hold local species. A road, railway or building reduces
   usable habitat within and around its footprint. Visible animals move away from new development and the occupied area
   stays quieter. Walkers may cross a road to leave the area. All wildlife remains display-only.

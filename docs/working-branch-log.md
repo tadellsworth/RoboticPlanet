@@ -282,3 +282,8 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Redrew dolphin breaches with a continuous pitch, a flexing tail and a splash fixed at reentry.
 - Gave gulls distinctive flight, landing and standing poses. Redrew hares with a crouch-to-bound motion and separate dry-biome and Polar Caps coats.
 - Verified the marine scheduler and game-scale artwork in Chromium, including dolphin launch and entry phases and the gull shadow.
+
+### Dusk bat redraw
+
+- Replaced the dusk bat’s generic flight shape with jointed wing membranes, a tail web and a distinct head. Gave each bat its own turn rhythm and linked its wing asymmetry to the bank angle.
+- Verified on a generated Rust map in Chromium with dusk lighting, including natural spawning, finite motion and game-scale rendering.

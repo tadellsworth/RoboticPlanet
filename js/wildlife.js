@@ -975,6 +975,7 @@ const FAUNA_MODES = {
       for (let k = 0; k < n; k++) {
         const m = faunaMember(at.x, at.y);
         m.r = 0.4 + Math.random() * 1.1; m.w = (1.2 + Math.random() * 1.4) * (Math.random() < 0.5 ? -1 : 1) * (a.K.slow ? 0.6 : 1); m.a = Math.random() * 6.3; m.h = 0.6 + Math.random() * 0.6;
+        if (a.kind === 'duskbat') m.turnPhase = m.ph;
         a.m.push(m);
       }
       a.vis = 0;
@@ -992,15 +993,24 @@ const FAUNA_MODES = {
         const to = lt && dist2(lt.x, lt.y, a.x, a.y) < 64 && Math.random() < 0.5 ? lt : faunaPick(a.cell.hab[a.hab], a.x, a.y, 5);
         if (to) { a.x = to.x; a.y = to.y; }
       }
+      const duskBat = a.kind === 'duskbat';
       for (const m of a.m) {
-        m.a += m.w * dt * (a.st === 'flee' ? 2 : 1);
+        const dart = duskBat ? Math.sin(F.t * 3.1 + m.turnPhase) : 0;
+        m.a += m.w * dt * (a.st === 'flee' ? 2 : 1) * (1 + 0.54 * dart * dart * dart);
         if (a.st === 'flee') m.r += dt * 4;
-        const wob = Math.sin(F.t * (a.K.slow ? 3 : 6) + m.ph) * 0.25;
-        const tx = a.x + Math.cos(m.a) * (m.r + wob), ty = a.y + Math.sin(m.a) * (m.r + wob) * 0.7;
+        const wobble = duskBat ? 0.23 * Math.sin(m.a * 2.15 + m.turnPhase) : Math.sin(F.t * (a.K.slow ? 3 : 6) + m.ph) * 0.25;
+        const tx = a.x + Math.cos(m.a) * (m.r + wobble), ty = a.y + Math.sin(m.a) * (m.r + wobble) * 0.7;
         const dx = tx - m.x, dy = ty - m.y, k = Math.min(1, dt * (a.K.slow ? 2 : 5));
         m.x += dx * k; m.y += dy * k;
-        if (Math.abs(dx) + Math.abs(dy) > 0.001) faunaTurn(m, Math.atan2(dy, dx), dt, 12);
-        m.ph += dt * (a.K.slow ? 22 : 30);
+        if (Math.abs(dx) + Math.abs(dy) > 0.001) {
+          const heading = Math.atan2(dy, dx);
+          if (duskBat) {
+            const roll = clamp(faunaWrap(heading - m.f) * 1.9, -1, 1);
+            m.bank = (m.bank || 0) + (roll - (m.bank || 0)) * Math.min(1, dt * 7);
+          }
+          faunaTurn(m, heading, dt, duskBat ? 15 : 12);
+        }
+        m.ph += dt * (duskBat ? 34 + dart * 6 : a.K.slow ? 22 : 30);
       }
       if (a.vis <= 0 && a.st !== 'live') a.out = true;
     },
@@ -2827,8 +2837,66 @@ const FAUNA_DRAW = {
     ctx.restore();
   },
 
-  /** A bat: dark jagged wings, beating fast. */
-  bat(ctx, x, y, s, m, a, part) { faunaWings(ctx, x, y, s, m.f, m.ph, a.K.col, part === 'shadow' ? 'shadow' : true, { broad: true, wing: true, lift: a.K.lift }); },
+  /** A bat's wing is a skin membrane stretched from the fingers to the hind leg. */
+  bat(ctx, x, y, s, m, a, part) {
+    const { col: [fur, web, shade], lift } = a.K, shadow = part === 'shadow';
+    const beat = Math.cos(m.ph), stroke = Math.sin(m.ph), bank = m.bank || 0;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(m.f); ctx.scale(s, s);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      const span = side * (0.43 + Math.abs(beat) * 0.37 - bank * side * 0.15);
+      const wrist = 0.158 + 0.09 * stroke, tip = -0.148 - 0.15 * stroke;
+      ctx.fillStyle = '#141017';
+      if (!shadow) {
+        const membrane = ctx.createLinearGradient(0.11, side * 0.08, -0.25, span);
+        membrane.addColorStop(0, faunaCol(shade, lift));
+        membrane.addColorStop(0.56, faunaCol(web, 0.38));
+        membrane.addColorStop(1, faunaCol('#675864', 0.42));
+        ctx.fillStyle = membrane;
+      }
+      ctx.beginPath(); ctx.moveTo(0.128, side * 0.071);
+      ctx.quadraticCurveTo(0.259, span * 0.29, wrist, span * 0.450);
+      ctx.quadraticCurveTo(wrist - 0.050, span * 0.647, tip, span);
+      ctx.quadraticCurveTo(tip + 0.032, span * 0.717, -0.399, span * 0.722);
+      ctx.quadraticCurveTo(-0.276, span * 0.561, -0.454, span * 0.407);
+      ctx.quadraticCurveTo(-0.333, span * 0.380, -0.399, side * 0.123);
+      ctx.quadraticCurveTo(-0.254, side * 0.104, -0.169, side * 0.062); ctx.fill();
+
+      if (!shadow && s >= 8) {
+        ctx.strokeStyle = faunaCol('#302630', lift, 0.79); ctx.lineWidth = 0.024;
+        ctx.beginPath(); ctx.moveTo(0.122, side * 0.071);
+        ctx.quadraticCurveTo(0.246, span * 0.29, wrist, span * 0.450);
+        ctx.quadraticCurveTo(wrist - 0.037, span * 0.635, tip, span);
+        ctx.moveTo(wrist, span * 0.450); ctx.quadraticCurveTo(-0.059, span * 0.635, -0.399, span * 0.722);
+        ctx.moveTo(wrist, span * 0.450); ctx.quadraticCurveTo(-0.133, span * 0.440, -0.454, span * 0.407);
+        ctx.moveTo(wrist, span * 0.450); ctx.quadraticCurveTo(-0.116, side * 0.200, -0.399, side * 0.123); ctx.stroke();
+        ctx.fillStyle = faunaCol(shade, lift); ctx.beginPath();
+        ctx.moveTo(wrist - 0.055, span * 0.385); ctx.lineTo(wrist + 0.093, span * 0.432);
+        ctx.lineTo(wrist + 0.020, span * 0.498); ctx.fill();
+      }
+    }
+
+    // Tail web, rounded body and prominent ears retain the silhouette as the wings fold.
+    ctx.fillStyle = shadow ? '#141017' : faunaCol(shade, lift);
+    ctx.beginPath(); ctx.moveTo(-0.177, -0.104); ctx.lineTo(-0.399, -0.123);
+    ctx.quadraticCurveTo(-0.423, 0, -0.528, 0);
+    ctx.quadraticCurveTo(-0.423, 0, -0.399, 0.123); ctx.lineTo(-0.177, 0.104); ctx.fill();
+    ctx.fillStyle = shadow ? '#141017' : faunaCol(fur, lift);
+    ctx.beginPath(); faunaEll(ctx, -0.050, 0, 0.225, 0.092, 0);
+    faunaEll(ctx, 0.154, 0, 0.104, 0.081, 0);
+    for (const side of [-1, 1]) {
+      ctx.moveTo(0.106, side * 0.054); ctx.quadraticCurveTo(0.142, side * 0.112, 0.265, side * 0.129);
+      ctx.quadraticCurveTo(0.271, side * 0.067, 0.222, side * 0.039); ctx.closePath();
+    }
+    ctx.fill();
+    if (!shadow && s >= 10) {
+      ctx.fillStyle = faunaCol(shade, lift); ctx.beginPath();
+      faunaEll(ctx, 0.227, 0, 0.055, 0.034, 0);
+      for (const side of [-1, 1]) faunaEll(ctx, 0.196, side * 0.045, 0.013, 0.010, 0);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
 
   /** Ember moth with paired charcoal wings, warm hindwings and pale bands that flicker in its wingbeat. */
   moth(ctx, x, y, s, m, a, part) {
