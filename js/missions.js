@@ -2,8 +2,8 @@
 /*
  * Terrafall — the mission campaign, which is also the tutorial: it starts with the very basics and, chapter by
  * chapter, teaches every part of the game. Missions are on hand-picked planets, each with its own goals, starting
- * conditions and hand-placed features, and three difficulty levels (Easy / Normal / Hard: bigger goals, tighter
- * clocks, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty, and
+ * conditions and hand-placed features, and the five difficulty levels rivals have (Settler, Pioneer, Colonist,
+ * Commander, Warlord: DIFFICULTY in js/defs.js; bigger goals, less in the Command Base, a clock, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty, and
  * the Missions list marks the first one not yet finished as Next up.
  *
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
@@ -16,14 +16,14 @@
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
  * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key, or 'random'),
- * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
- * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
- * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/mega (switch on what missions otherwise
+ * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [Settler, Colonist,
+ * Commander] (its level), rivalBonus (extra of every good in its Command Base), passive: [Settler, Colonist, Commander] (a rival that
+ * never attacks), limit (minutes per difficulty, 0 none: Pioneer has Settler's, Warlord Commander's), nuke/war/lab/events/mega (switch on what missions otherwise
  * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, Megastructures), pressOn (the rival's
  * trade convoys keep to schedule, out of a besieged base and past raiders: convoysPress), murmur ('quiet' or
  * 'active': the Murmur, with their nests, tunnels and nights; the older wildlife: true is Active), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
  * (1 to 4, met in any order, shown one at a time as the next goal) }.
- * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal: the
+ * A goal: { kind, n (one number or [Settler, Colonist, Commander]), hint (how to do it, shown while it's the next goal: the
  * real button names in <b> and keys in <kbd>), ui (CSS selector of the button(s) to light up meanwhile; when none is
  * on screen the button that opens them lights up, and for a panel button a ring pulses on the building to tap: `at`,
  * a building type, or the one the hint names), focus(S) (a specific target or { e, ui } for a goal with stages), text (its own objective text, "{n}" for the number, or [one, many] to
@@ -52,8 +52,38 @@
  */
 
 const CAMPAIGN_KEY = 'botfall.campaign';
-const MISSION_DIFFS = ['easy', 'normal', 'hard'];
-const MISSION_DIFF_NAMES = ['Easy', 'Normal', 'Hard'];
+/*
+ * The levels: a mission's `diff` is an index into DIFF_ORDER (0 Settler, 1 Pioneer, 2 Colonist, 3 Commander,
+ * 4 Warlord). Missions were tuned on three levels, and their per-level values ([a, b, c]: goal sizes, rival
+ * levels, clocks, setup numbers) stay written that way: a is Settler, b Colonist, c Commander (the old Easy, Normal
+ * and Hard), Pioneer falls between a and b, and Warlord goes half a step past c (one rival level up, a goal half
+ * again as much bigger). A five-long array gives each level its own value. mPick reads either.
+ */
+const MISSION_DIFFS = DIFF_ORDER;
+const MISSION_DIFF_NAMES = DIFF_ORDER.map((k) => DIFFICULTY[k].label);
+const MISSION_DIFF_DEFAULT = 2; // Colonist (the old Normal)
+/** Where the old three levels (Easy, Normal, Hard) went: progress and saves from before carry over. */
+const MISSION_OLD_DIFF = [0, 2, 3];
+
+function mPick(v, d) {
+  if (!Array.isArray(v)) return v;
+  if (v.length !== 3) return v[Math.min(d, v.length - 1)];
+  const [a, b, c] = v;
+  if (d === 0 || d === 2 || d === 3) return v[d === 0 ? 0 : d - 1];
+  if (typeof a === 'number') {
+    const int = Number.isInteger(a) && Number.isInteger(b) && Number.isInteger(c), floor = Math.min(a, b, c) >= 0 ? 0 : -Infinity;
+    if (d === 1) return int ? a + Math.trunc((b - a) / 2) : (a + b) / 2;
+    return Math.max(floor, int ? c + Math.ceil((c - b) / 2) : c + (c - b) / 2);
+  }
+  if (typeof a === 'string' && DIFFICULTY[a]) {
+    const i = (k) => DIFF_ORDER.indexOf(k);
+    return d === 1 ? DIFF_ORDER[Math.floor((i(a) + i(b)) / 2)] : DIFF_ORDER[Math.min(DIFF_ORDER.length - 1, i(c) + 1)];
+  }
+  return d === 1 ? a : c; // (a switch, passive: Pioneer as Settler, Warlord as Commander)
+}
+
+/** A mission's time limit at level d, in minutes (0 none): Pioneer keeps Settler's, Warlord Commander's. */
+function mLimit(def, d) { const L = def.limit || []; return (L.length === 5 ? L[d] : L[[0, 0, 1, 2, 2][d]]) || 0; }
 
 /* --- hand-placed features: helpers that edit a freshly generated map (generateMap's output) --- */
 
@@ -121,7 +151,7 @@ function arterialPairs(P, S, surfaced) {
  * Siege Breakers: the Warden's outer works, there from the start whatever it goes on to build itself (since the rival
  * AI got thriftier, the Easy Warden built two turrets and no Wall, its army was gone by minute 8, and "Take out 3 Walls
  * or turrets" was left with nothing to take out). A line of Wall across the way in from the player's side, 7 tiles
- * out from its Command Base and 7 long, with guns behind it: two Pulse Turrets, and a Minigun Nest on Normal and Hard.
+ * out from its Command Base and 7 long, with guns behind it: two Pulse Turrets, and a Minigun Nest from Colonist up.
  */
 function siegeWorks(S, diff) {
   const R = getE(S.players[1].lander), L = getE(S.players[0].lander);
@@ -134,7 +164,7 @@ function siegeWorks(S, diff) {
   const gun = (type, side, stock) => preBuild(1, type, Math.round(cx - fx * 2.5 + px * side), Math.round(cy - fy * 2.5 + py * side), { reach: 3, stock });
   gun('turret', -2, { crystal: 20 });
   gun('turret', 2, { crystal: 20 });
-  if (diff > 0) gun('minigun', 0, { ammo: 12 });
+  if (diff >= 2) gun('minigun', 0, { ammo: 12 });
   computeTerritory();
 }
 
@@ -422,7 +452,7 @@ const MISSIONS = [
     layout(m, W) { const b = m.bases[0]; placeFertile(m, W, b.x + 7, b.y - 3, 2.2); placeFertile(m, W, b.x - 8, b.y - 5, 1.8); },
     setup(S, diff) {
       const k = kit(S, KIT6, 4);
-      getE(S.players[0].lander).stock.fuel = [6, 3, 0][diff];
+      getE(S.players[0].lander).stock.fuel = mPick([6, 3, 0], diff);
       if (k.charger) k.charger.stock.fuel = 0;
     },
     goals: [
@@ -1361,7 +1391,7 @@ const MISSIONS = [
     setup(S, diff) {
       const W = S.W, H = S.H, L = getE(S.players[0].lander), R = getE(S.players[1].lander);
       // More guards in the rival's Command Base (it starts with 4): taking it needs a real army.
-      for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
+      for (let k = 0; k < mPick([2, 4, 6], diff); k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       S.players[1].stats.startBots = S.players[1].stats.bots;
       // Two empty rival Outposts toward the middle, to practise on.
       preBuild(1, 'outpost', Math.floor(W / 2) - 5, Math.floor(H / 2) - 4, { reach: 8 });
@@ -1411,7 +1441,7 @@ const MISSIONS = [
       // Two rival Outposts on the rival's side of the contested fields, each with a few warbots on guard.
       for (const [x, y] of [[Math.floor(W / 2) - 5, Math.floor(H / 2) + 2], [Math.floor(W / 2) + 6, Math.floor(H / 2) + 3]]) {
         const o = preBuild(1, 'outpost', W - 1 - x, H - 1 - y, { reach: 4 });
-        if (o) for (let k = 0; k < [2, 3, 4][diff]; k++) enterBuilding(addBot(1, 'warbot', o.x, o.y), o);
+        if (o) for (let k = 0; k < mPick([2, 3, 4], diff); k++) enterBuilding(addBot(1, 'warbot', o.x, o.y), o);
       }
       P1.stats.startBots = P1.stats.bots;
       computeTerritory();
@@ -1453,11 +1483,11 @@ const MISSIONS = [
       // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (not before
       // 7 / 5½ / 4 minutes; played headless against a colony that follows the hints, its first assault hit at about
       // 8½ / 7½ / 4½ minutes, and 1 to 2½ minutes later on Easy and Normal before mission rivals had the rival's opening).
-      for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
+      for (let k = 0; k < mPick([2, 4, 6], diff); k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
-      P1.nextAttack = [420, 330, 240][diff];
+      P1.nextAttack = mPick([420, 330, 240], diff);
       // ...with a Bulwark at its head, and its assault comes whatever your guns (P.bold): this mission is about holding it.
-      for (let k = 0; k < [1, 1, 2][diff]; k++) enterBuilding(addBot(1, 'bulwark', R.x, R.y), R);
+      for (let k = 0; k < mPick([1, 1, 2], diff); k++) enterBuilding(addBot(1, 'bulwark', R.x, R.y), R);
       P1.bold = true;
     },
     goals: [
@@ -1601,14 +1631,14 @@ const MISSIONS = [
       const [fx, fy] = at(k0);
       const flag = { id: S.nextId++, owner: 1, x: fx + 0.5, y: fy + 0.5 };
       S.rallies.push(flag);
-      const pick = [...Array([1, 2, 2][diff]).fill('bulwark'), ...Array([2, 3, 4][diff]).fill('warbot')];
+      const pick = [...Array(mPick([1, 2, 2], diff)).fill('bulwark'), ...Array(mPick([2, 3, 4], diff)).fill('warbot')];
       pick.forEach((t, k) => { const u = addBot(1, t, fx - 1 + (k % 3), fy - 1 + Math.floor(k / 3)); u.task = { type: 'hold', rally: flag.id, slot: k }; });
       S.players[1].stats.startBots = S.players[1].stats.bots;
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
-        // (Torches: one on Easy, two on Normal and Hard; and a Bulwark.)
-        count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, [1, 2, 2][S.mission.diff]) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
+        // (Torches: one on Settler and Pioneer, two from Colonist up; and a Bulwark.)
+        count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, mPick([1, 2, 2], S.mission.diff)) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>, Bulwarks <b>+1</b>. Torches burn Fuel: keep some.',
         ui: "#sh-orders .order-row[data-k='torch'] [data-d='1'], #sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
       // The answers to a Bulwark: an Arc Caster's lightning wears its shield down three times as fast, a Skirmisher runs
@@ -1812,7 +1842,7 @@ const MISSIONS = [
 /** For the Uplinks goals: how many Uplinks player 0 holds right now (its land covers them, and none is jammed). */
 function uplinksHeld(S) { return (S.uplinks || []).filter((u) => u.owner === 0 && !u.jam).length; }
 
-function goalNeed(g, diff) { return Array.isArray(g.n) ? g.n[diff] : g.n || 1; }
+function goalNeed(g, diff) { return mPick(g.n, diff) || 1; }
 
 /** A building's name for `n` of them: "a Quarry", "2 Quarries", "2 Cement Works". */
 function bldCount(type, n) {
@@ -1937,32 +1967,32 @@ function finishMission() {
   else { M.result = 'lost'; M.why = S.endHow === 'uplinks' && S.winner > 0 ? 'uplinks' : S.winner === 1 || S.players[0].out ? 'lander' : 'goals'; }
 }
 
-/** newGame options for mission k at difficulty diff (0 easy, 1 normal, 2 hard). */
+/** newGame options for mission k at level diff (an index into DIFF_ORDER: 0 Settler to 4 Warlord). */
 function missionOptions(k, diff) {
   const def = MISSIONS[k];
   return {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
-    difficulty: def.rival ? def.rival[diff] : 'normal',
+    difficulty: def.rival ? mPick(def.rival, diff) : 'normal',
     // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
     shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, upWin: !!def.upWin,
     layout: def.layout,
     setup(S) {
-      // Easy starts with more in the Command Base, Hard with less.
+      // Settler starts with more in the Command Base, Commander and Warlord with less.
       const L = getE(S.players[0].lander);
-      const k2 = [1.5, 1, 0.75][diff];
+      const k2 = [1.5, 1.25, 1, 0.75, 0.6][diff];
       for (const g in L.stock) L.stock[g] = Math.round(L.stock[g] * k2);
       if (def.rivalBonus && !S.players[1].absent) {
         const R2 = getE(S.players[1].lander);
-        for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
+        for (const g in R2.stock) R2.stock[g] += mPick(def.rivalBonus, diff);
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
+      S.mission = { k, id: def.id, diff, lv5: 1, limit: mLimit(def, diff) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
       if (def.victory && S.mode === 'versus') { S.victory = def.victory; if (def.victory === 'uplinks') placeUplinks(S.seed); }
-      // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
-      if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
+      // (A rival that never attacks, at the levels the mission says: passive [Settler, Colonist, Commander].)
+      if (def.passive && mPick(def.passive, diff)) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);
     },
   };
@@ -1974,8 +2004,18 @@ function missionOptions(k, diff) {
 function loadCampaign() {
   try {
     const c = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) || '{}');
-    return { unlocked: MISSIONS.length - 1, done: c.done || {} };
-  } catch (e) { return { unlocked: MISSIONS.length - 1, done: {} }; }
+    const done = c.done && typeof c.done === 'object' ? c.done : {};
+    // (Progress from the three old levels: Easy, Normal and Hard ticks move to Settler, Colonist and Commander.)
+    if (c.lv !== 5) {
+      for (const id in done) {
+        const old = Array.isArray(done[id]) ? done[id] : [], now = [false, false, false, false, false];
+        old.forEach((v, d) => { if (v && MISSION_OLD_DIFF[d] != null) now[MISSION_OLD_DIFF[d]] = true; });
+        done[id] = now;
+      }
+      saveCampaign({ lv: 5, unlocked: MISSIONS.length - 1, done });
+    }
+    return { lv: 5, unlocked: MISSIONS.length - 1, done };
+  } catch (e) { return { lv: 5, unlocked: MISSIONS.length - 1, done: {} }; }
 }
 
 function saveCampaign(c) {
@@ -1986,7 +2026,7 @@ function saveCampaign(c) {
 function completeMission(k, diff) {
   const c = loadCampaign();
   const id = MISSIONS[k].id;
-  c.done[id] = c.done[id] || [false, false, false];
+  c.done[id] = c.done[id] || [false, false, false, false, false];
   c.done[id][diff] = true;
   saveCampaign(c);
   return c;

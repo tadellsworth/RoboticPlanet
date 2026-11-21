@@ -64,8 +64,11 @@ easy/medium/normal/hard plus `warlord`). Warlord: mult 1.6, grace 100 s, thresho
 a Warlord beat a Commander in 12 of 16, every game decided (8 to 20 minutes; one Warlord took a base at 3½ minutes).
 - Is Warlord winnable by a strong human? Nobody has played it yet; if its first attack (from about 1½ minutes) is too
   much, raise grace before the economy numbers.
-- Missions keep their own Easy / Normal / Hard levels (not renamed: they are the mission's levels, not the rival's).
-  Should they take Frontier names too, or a fourth level with a Warlord rival?
+- Missions now use the same five levels (the owner's call, Nov 21 2026): old Easy, Normal and Hard are Settler,
+  Colonist and Commander, and their ticks moved there. Pioneer and Warlord values are worked out from the old three
+  (`mPick` in `js/missions.js`) and only Touchdown has been played through at Warlord: the tight clocks (Convoy's 13
+  minutes, with Warlord's bigger goals and a Normal rival) may need their own five-long values once played. The
+  future Main Campaign (CAMPAIGN.md) uses the same five.
 - Observer mode gives every colony one level; a level per colony (as diff5-aivai.js does) would make Warlord against
   Commander a thing to watch.
 

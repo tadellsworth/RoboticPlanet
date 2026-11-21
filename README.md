@@ -40,8 +40,14 @@ how goods move.
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
-  from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
-  ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
+  from the start. Missions have the rivals' five levels, Settler to Warlord (`MISSION_DIFFS` is `DIFF_ORDER`; a
+  mission's `diff` is its index, Colonist the default); values tuned on the old three levels stay written
+  `[Settler, Colonist, Commander]` and `mPick` reads them for five (Pioneer between the first two, Warlord half a step
+  past Commander, a rival level up; a five-long array sets each level), `mLimit` the clock (Pioneer has Settler's,
+  Warlord Commander's), and the Command Base starts with ×1.5, 1.25, 1, 0.75 or 0.6 of its goods. Finishing one ticks it
+  off at that level (saved by its `id`, so a reworked mission keeps its ticks; `loadCampaign` moves ticks from the old
+  Easy, Normal and Hard onto Settler, Colonist and Commander once, marking the save `lv: 5`, and a game saved in a
+  mission before then loads at the matching level, `lv5`), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
   level per difficulty, `style`, `rivalBonus`, `passive`), `limit` (minutes per difficulty), switches for what
   missions otherwise leave out (`war`, `lab`, `events`, `wildlife`, `nuke`), `pressOn` (the rival's trade convoys keep to
@@ -146,7 +152,7 @@ any other game.
 In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Settler, Pioneer, Colonist, Commander and Warlord
 apply to all computer colonies from that point in the match. In multiplayer only the host can send the
 `rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
-and production without changing stock already on the map. Missions keep their selected difficulty.
+and production without changing stock already on the map. Missions keep the level picked in the mission list.
 
 Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 Besides the autosave there are five named **save slots** (pause menu **Save → Slots**, main menu **Saved games**), and

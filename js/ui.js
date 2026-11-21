@@ -3760,16 +3760,25 @@ function openMissions() {
   renderMissions();
 }
 
-/** The planet and rules of a mission at difficulty diff, in a line: mode, map type, size, terrain, rival, extras, clock. */
+/** What each level does to a mission (the line under the mission picker's level buttons; DIFF_ORDER's order). */
+const MISSION_DIFF_INFO = [
+  'Settler: half as much again in the Command Base, the smallest goals, the mildest rival, no clock.',
+  'Pioneer: a little extra in the Command Base, goals between Settler and Colonist, no clock.',
+  'Colonist: the mission as designed. No clock.',
+  'Commander: less in the Command Base, bigger goals, a tougher rival and (on most) a clock.',
+  'Warlord: less again, the biggest goals, the rival a level above Commander, the same clock. For a strong player.',
+];
+
+/** The planet and rules of a mission at level diff, in a line: mode, map type, size, terrain, rival, extras, clock. */
 function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
-  const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
+  const lim = mLimit(def, diff), limit = lim ? ` · ${lim} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
   const extras = [def.victory && VICTORY[def.victory] && VICTORY[def.victory].name, def.mode === 'colony' && def.war && 'Warbots', (def.murmur || def.wildlife) && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.mega && 'Megastructures', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
-  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.style === 'random' ? ` (random doctrine${n > 1 ? 's' : ''})` : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
+  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[mPick(def.rival, diff)].label}${style} rival${n > 1 ? 's' : ''}${def.style === 'random' ? ` (random doctrine${n > 1 ? 's' : ''})` : ''}${def.passive && mPick(def.passive, diff) ? ' (passive)' : ''}`;
   return `Versus · ${shape} · ${size} · ${terr} · ${rival}${more}${limit}`;
 }
 
@@ -3781,7 +3790,7 @@ function renderMissions(msg) {
     // (The next to play: the first not yet finished at any difficulty. In order, they teach the whole game.)
     const next = MISSIONS.findIndex((m) => !(c.done[m.id] || []).some(Boolean));
     let chapter = '';
-    body.innerHTML = `<p class="desc">${MISSIONS.length} missions, each with its own goals and three difficulty levels. Play them in order to learn the game, or pick any.</p>
+    body.innerHTML = `<p class="desc">${MISSIONS.length} missions, each with its own goals and the five difficulty levels, Settler to Warlord. Play them in order to learn the game, or pick any.</p>
       <div class="ms-list">${MISSIONS.map((m, k) => {
         const done = c.done[m.id] || [];
         const marks = MISSION_DIFF_NAMES.map((n, d) => (done[d] ? `<span class="ms-done">${n} ✓</span>` : '')).filter(Boolean).join(' ');
@@ -3789,16 +3798,17 @@ function renderMissions(msg) {
         return `${head}<button class="ms-item${k === next ? ' next' : ''}" data-k="${k}"><span class="ms-num">${k + 1}</span>
           <span class="ms-name">${m.name}</span><span class="ms-meta">${marks || (k === next ? '<b class="ms-up">Next up</b> · ' : '') + (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
       }).join('')}</div>${msg ? `<p class="hint">${msg}</p>` : ''}`;
-    for (const el of body.querySelectorAll('.ms-item')) el.onclick = () => { sfx('click'); UI.msSel = +el.dataset.k; UI.msDiff = UI.msDiff ?? 1; renderMissions(); };
+    for (const el of body.querySelectorAll('.ms-item')) el.onclick = () => { sfx('click'); UI.msSel = +el.dataset.k; UI.msDiff = UI.msDiff ?? MISSION_DIFF_DEFAULT; renderMissions(); };
     return;
   }
-  const k = UI.msSel, def = MISSIONS[k], diff = UI.msDiff ?? 1;
+  const k = UI.msSel, def = MISSIONS[k], diff = UI.msDiff ?? MISSION_DIFF_DEFAULT;
   const done = c.done[def.id] || [];
   body.innerHTML = `<p class="hint" style="margin-top:6px">Mission ${k + 1} of ${MISSIONS.length}</p>
     <h3 style="margin:2px 0 6px;font-size:20px">${def.name}</h3>${def.chapter ? `<p class="hint" style="margin:0 0 4px">${def.chapter}</p>` : ''}
     <p class="desc">${def.brief}</p>
-    <div class="section-label" style="margin-top:12px">Difficulty</div>
-    <div class="seg" id="ms-diff">${MISSION_DIFF_NAMES.map((n, d) => `<button data-d="${d}" class="${d === diff ? 'on' : ''}">${n}${done[d] ? ' ✓' : ''}</button>`).join('')}</div>
+    <div class="section-label" style="margin-top:12px" id="ms-l-diff">Difficulty</div>
+    <div class="seg" id="ms-diff" role="radiogroup" aria-labelledby="ms-l-diff">${MISSION_DIFF_NAMES.map((n, d) => `<button type="button" role="radio" aria-checked="${d === diff}" data-d="${d}" data-v="${MISSION_DIFFS[d]}" class="${d === diff ? 'on' : ''}">${n}${done[d] ? ' ✓' : ''}</button>`).join('')}</div>
+    <p class="hint" id="ms-diff-info">${MISSION_DIFF_INFO[diff]}</p>
     <p class="hint">${missionMeta(def, diff)}</p>
     <div class="section-label" style="margin-top:12px">Goals</div>
     <ul class="ms-goals">${def.goals.map((g) => `<li>${goalText(g, diff)}</li>`).join('')}</ul>`;

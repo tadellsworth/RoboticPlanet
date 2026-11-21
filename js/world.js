@@ -5477,7 +5477,7 @@ function checkSave(o) {
   }
   if (o.mission) {
     const M = o.mission;
-    if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
+    if (!obj(M) || ![0, 1, 2, 3, 4].includes(M.diff) || (!M.lv5 && M.diff > 2)) bad();
     if (M.id === 'arterial' && (![M.arterialDepot, M.arterialRuns].every((n) => Number.isSafeInteger(n) && n >= 0) || M.arterialDepot === 0)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
@@ -5552,6 +5552,8 @@ function deserializeGame(json) {
   const o = JSON.parse(json);
   checkSave(o);
   o.difficulty = o.difficulty || 'normal';
+  // A mission saved when missions had three levels (Easy, Normal, Hard): now Settler, Colonist, Commander.
+  if (o.mission && !o.mission.lv5) { o.mission.diff = [0, 2, 3][o.mission.diff]; o.mission.lv5 = 1; }
   // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
   if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.

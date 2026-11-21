@@ -34,7 +34,7 @@ const { missions, buildings, harbourSteps, airliftSteps, arterialRun } = vm.runI
       }
     },
     arterialRun() {
-      newGame(missionOptions(MISSIONS.findIndex((m) => m.id === 'arterial'), 2));
+      newGame(missionOptions(MISSIONS.findIndex((m) => m.id === 'arterial'), 3));
       const { x, north, south } = arterialRoute(getE(S.players[0].lander));
       const id = S.mission.arterialDepot;
       const express = [];

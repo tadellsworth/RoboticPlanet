@@ -168,6 +168,7 @@ Decided by the owner, Nov 17 2026. Every game gets the living-world layer: Earth
 
 - [ ] Is the player's colony COBALT? Any callsign works; COBALT fits because it wrote the Accord's road standards.
 - [ ] Amounts, timers and difficulty are placeholders until playtesting.
+- [x] Difficulty: the campaign uses the same five levels as rivals and the tutorial Missions: Settler, Pioneer, Colonist, Commander, Warlord (`DIFFICULTY` in js/defs.js), Colonist by default.
 - [ ] The finale reuses Colony mode's final research line. Keep both, or give Colony mode its own ending?
 - [ ] If the Hollow isn't ready in time, merge missions 13 and 14 into one surface mission at the Bloom's largest mound.
 
