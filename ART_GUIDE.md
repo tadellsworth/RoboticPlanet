@@ -1880,4 +1880,8 @@ from `js/wildlife.js`. Blackwater alligators have low olive bodies, broad rounde
 raised scutes and muscular tails. Short legs and splayed feet carry each step. The Bloom’s fauna shares
 dark plum plates, warm amber eyes and soft rose highlights. Six-legged hinge-backs open overlapping
 plates along a warm seam. Switchtails balance on hooked feet with two flexing tails and raised sensory vanes.
-Sailwings bank on ribbed membranes around a narrow body. The hinge-back and sailwing also use this art in the Hollow.
+Sailwings bank on ribbed membranes around a narrow body. The hinge-back also uses this art in the Hollow.
+The Hollow’s sailwing has a pale body, a thin line of cartilage and translucent violet membranes with
+scalloped edges. Its blind crawler has overlapping bone-colored plates, hooked legs and long feelers.
+Shoals crabs have red shells, broad pincers and four pairs of walking legs. Their body faces across
+the direction of travel during a sidestep.

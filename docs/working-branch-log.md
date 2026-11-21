@@ -258,3 +258,9 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Gave Blackwater alligators a broad snout, raised scutes, articulated feet and a flexing tail.
 - Redrew the Bloom’s hinge-back, switchtail and sailwing around shared plum plates and amber eyes. Each has a distinct gait or flight silhouette.
 - Checked the new renderers in Blackwater, the Bloom and the Hollow in Chromium. Verified the sailwing’s shadow and compared the before and after art at game scale.
+
+### Shoals crabs and Hollow wildlife
+
+- Added red shore crabs with pincers and a sideways walk. Small groups stick to open ground along the Shoals’ beaches.
+- Redrew the Hollow’s blind crawler and gave its cave sailwing a dedicated model. The Hollow still uses the existing hinge-back.
+- Verified crabs spawning and moving along a generated Shoals beach in Chromium. Checked the Hollow sprites at game scale and the cave sailwing’s shadow.
