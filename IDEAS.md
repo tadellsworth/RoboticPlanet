@@ -22,6 +22,19 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Mass Driver sound:** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
+## Polish round 1 (built Nov 21 2026; open questions)
+
+Camera spots (Shift+F1–F4 / F1–F4, minimap pips), J stepping back through recent alerts, each good's net change a
+minute with the full-output and robot-limit warnings, and five named save slots with a Continue card are in the game
+(`js/qol.js`; see the README). Still open:
+- Ctrl+F1–F4 was the first thought for keeping a spot, but Ctrl+F4 closes the tab on Windows, so it's Shift. A key on
+  a Mac laptop needs fn too: is a different pair (say Shift+Z..V) worth it?
+- "Storage nearly full": warehouses hold without limit, so the warning reads the makers' output stores (haulers falling
+  behind). Should a Fuel Tank (it has a cap) warn too, or a Depot's supply orders?
+- Save slots live in localStorage beside the autosave and the restore points; a long game's save is ~300 KB, so a full
+  set can reach a few MB. If browsers start refusing, the slots could move to IndexedDB.
+- Tapping a whole message (not just its Go chip) to go there would stop taps reaching the map beneath it; kept to Go.
+
 ## Sunsets per biome (built Nov 20 2026; open questions)
 
 Each biome now has its own sunset and sunrise (`js/sunset.js`; see the README's Day and night and ART_GUIDE's

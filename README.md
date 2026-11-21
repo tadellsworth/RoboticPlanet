@@ -144,6 +144,8 @@ apply to all computer colonies from that point in the match. In multiplayer only
 and production without changing stock already on the map. Missions keep their selected difficulty.
 
 Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
+Besides the autosave there are five named **save slots** (pause menu **Save → Slots**, main menu **Saved games**), and
+the main menu's **Continue** card names what it will resume: the newest of them all.
 
 ## How to play
 
@@ -1367,6 +1369,28 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
   If the browser refuses the new resume save, the loaded game still plays and the warning points to **Save → File**.
+- **Save slots and the Continue card** (`js/qol.js`, `#screen-saves`): the autosave (`SAVE_KEY`, Continue's) plus `SLOTS`
+  = 5 manual slots, each a whole save under `terrafall.slot.<n>`, with one small index (`SAVE_META_KEY`,
+  `terrafall.saveMeta.v1`: per save its name, real date saved, map or mission, mode and game time) so the list never parses
+  a save. `saveGame` (js/world.js) calls `noteAutoSaved` after writing the autosave, to date its line; an autosave from an
+  earlier version with no line gets one the first time it's listed (dated "earlier"). **Saved games** (pause menu **Save →
+  Slots**, main menu **Saved games**) lists the Autosave and Slot 1–5: name a slot and **Save here** / **Save over**
+  (confirmed; not in multiplayer, Observer mode or a finished game), **Load** (through `loadSaveText`, so a loaded slot
+  becomes the autosave and the old autosave the backup; from a game it asks first) and **Delete**. The main menu's
+  **Continue** card (`syncContinue`) shows the newest save's line and resumes it (`continueNewest`). A slot that doesn't fit
+  in storage says so and nothing changes.
+- **Camera spots** (`js/qol.js`): **Shift+F1–F4** keeps the view (x, y and zoom) as spot 1–4, **F1–F4** goes back; under a
+  finger the 1–4 pips at the minimap's foot (tap an empty one to keep the view, a lit one to go there, hold to keep the
+  view there instead). Kept in `S.camSpots`, an interface-only field saved with the game like `S.checkpointRun` (no rule
+  reads it, `hashState` leaves it out; a save's values are checked before use); in multiplayer in `QOL.spots`, this tab only.
+- **Recent alerts** (`qolAlert`, `jumpAlert`): the last 8 warnings with a place; **J** goes to the newest, and again within
+  5 s to the one before, round the list, with a line in the middle of the screen (`qolFlash`) naming it.
+- **Goods a minute and warnings** (`qolHudTick`, with the HUD every quarter second): `playerGoods` sampled once a game
+  second over the last 60 s gives each good's net change a minute, shown after its count on a wide screen (hidden on a
+  phone, where a tap opens the Goods panel and its rates) and in the counter's tooltip. A good whose producers' output
+  stores (`def.out`, storage aside) hold 90% or more of what they can for 20 s gets an amber ring and a message with Go
+  (at most every 3 minutes a good; it clears below 75%). At 90% of the robot limit the robot counter turns amber with
+  the count against the limit, with a message at 90% and another at the limit.
 - **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
   and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
@@ -2612,7 +2636,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   R is Ore Mine on Gather and Refinery on Make; on All a card shows "2 C"; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
-  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
+  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
   recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
@@ -3024,6 +3048,7 @@ js/photo.js               photo mode: the interface hidden, a time-of-day slider
 js/watch.js               Observer mode: computer colonies play while you watch, with a scout report and a camera that follows the fighting
 js/scout.js               scout reports in your own games: what a computer rival starts doing, as a message with Go
 js/blueprint.js           blueprints: a block of buildings and its roads kept on the device, placed again through orders
+js/qol.js                 interface helpers: camera spots, recent alerts (J), goods a minute and warnings, save slots and Continue
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools

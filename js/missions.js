@@ -277,6 +277,8 @@ const MISSIONS = [
       'Up to 3 Workers lay a road at once, so the rest stay free to build: <b>Road crew</b>, in Paths, changes that.',
       'When the boulders run out, a Quarry cuts Stone from crags and cliffs or digs it: it never runs dry.',
       'The 1× chip at the top (or ]) speeds time up; [ slows it. The game saves itself: Continue picks up where you left off.',
+      'On a computer each good on the top bar shows its change a minute; an amber ring means its makers are full and waiting for Haulers.',
+      'To keep a game aside, pause → <b>Slots</b> saves it in one of five save slots (the main menu’s <b>Saved games</b> lists them).',
     ],
     mode: 'colony', seed: 1202, size: 0, rough: 0, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 10],
     layout(m, W) {
@@ -447,6 +449,7 @@ const MISSIONS = [
       'Deposits out past the border are richer. Tap one to see what it holds.',
       'A spent building says so on its panel. <b>Dismantle</b> gives back all its materials in crates.',
       'In Colony free play, claiming more of the land earns milestones. <b>M</b> shows or hides the minimap.',
+      'The 1–4 pips under the minimap keep <b>camera spots</b>: tap one to keep this view, tap it later to fly back (keys: <kbd>Shift</kbd>+<kbd>F1</kbd>–<kbd>F4</kbd>, then <kbd>F1</kbd>–<kbd>F4</kbd>).',
     ],
     mode: 'colony', seed: 7101, size: 0, rough: 1, rich: 3, biome: 'savanna', limit: [0, 0, 20],
     // The ore round the landing is gone (and the two last veins behind the base): only the richer veins out past the
@@ -1224,7 +1227,7 @@ const MISSIONS = [
       'They tunnel toward your power and come up through <b>tunnel exits</b>: collapse those with warbots.',
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
-      'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert.',
+      'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert (again: the one before).',
     ],
     // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them. The packs come only at
     // night, as in every game: the day is for a turret, warbots and the exit already open; the first night brings a
