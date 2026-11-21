@@ -19,6 +19,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Hollow seed 12 stalls again** (75 min, AI vs AI): the rule that fixed it (a rival's own dismantled crates not hauled
   first, `collectCrates` in js/sim.js) made a reloaded save play differently (murmur-forms-sim-test), so it was undone.
   The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
+- **Next after the current batch (the owner, Nov 21 2026):**
+  1. Design the new top-tier Murmur unit (the behemoth in the Murmur rework notes): a design sheet first.
+  2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
+     third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
+     unit late on).
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
