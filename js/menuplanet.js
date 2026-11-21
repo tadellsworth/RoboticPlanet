@@ -34,7 +34,7 @@ const MPLANET = {
 };
 
 const MPL = { c: null, g: null, raf: 0, last: 0, t: 0, open: 0, map: null, sky: null, sphere: null, geo: null, w: 0, h: 0, dpr: 1, on: false,
-  war: { fronts: [], fires: [], flashes: [], tracers: [], strikes: [], nextFront: 0, nextStrike: 40, nextTracer: 12, nuke: null, nextNuke: 0 },
+  war: { fronts: [], fires: [], flashes: [], tracers: [], strikes: [], nextFront: 0, nextStrike: 20, nextTracer: 6, nuke: null, nextNuke: 0 },
   falls: [], nextFall: 4, spr: {} };
 
 /** 3D value noise (0..1), for a seamless map on the sphere. */
@@ -253,11 +253,11 @@ function mplWarTick(dt, still, saver) {
   for (const f of W.fronts) f.left -= dt;
   for (const f of W.fronts) if (f.left <= 0) W.fires.push({ u: f.u, lat: f.lat, a: 1, life: 40 + 30 * Math.random() });
   W.fronts = W.fronts.filter((f) => f.left > 0);
-  if (W.fronts.length < 3 && T >= W.nextFront) { const p = mplLitSpot(); W.fronts.push({ ...p, left: 18 + 22 * Math.random(), spread: 0.025 + 0.03 * Math.random() }); W.nextFront = T + 6 + 8 * Math.random(); }
-  const rate = saver ? 1.2 : 3.2;
+  if (W.fronts.length < (saver ? 3 : 4) && T >= W.nextFront) { const p = mplLitSpot(); W.fronts.push({ ...p, left: 18 + 22 * Math.random(), spread: 0.025 + 0.03 * Math.random() }); W.nextFront = T + 4 + 6 * Math.random(); }
+  const rate = saver ? 1.8 : 5; // (busier since Nov 21 2026: the owner found it too calm)
   for (const f of W.fronts) {
     if (Math.random() < dt * rate) {
-      const big = Math.random() < 0.12;
+      const big = Math.random() < 0.18;
       W.flashes.push({ u: f.u + (Math.random() - 0.5) * f.spread, lat: f.lat + (Math.random() - 0.5) * f.spread * 0.7, a: 1, life: big ? 0.9 : 0.35, s: big ? 2.2 : 1 });
     }
     if (Math.random() < dt * 0.1 && W.fires.length < 24) W.fires.push({ u: f.u + (Math.random() - 0.5) * f.spread, lat: f.lat, a: 1, life: 30 + 30 * Math.random() });
@@ -268,12 +268,12 @@ function mplWarTick(dt, still, saver) {
   if (T >= W.nextTracer && W.fronts.length) {
     const to = W.fronts[Math.floor(Math.random() * W.fronts.length)], from = mplLitSpot();
     W.tracers.push({ a: from, b: to, p: 0, dur: 1.6 + Math.random() });
-    W.nextTracer = T + (saver ? 30 : 14) + 14 * Math.random();
+    W.nextTracer = T + (saver ? 20 : 8) + 10 * Math.random();
   }
   for (const r of W.tracers) r.p += dt / r.dur;
   W.tracers = W.tracers.filter((r) => r.p < 1.4);
   // a rare big strike (a Lance shot, a missile salvo): a brighter flash and a fading ring
-  if (T >= W.nextStrike) { const p = W.fronts[0] || mplLitSpot(); W.strikes.push({ u: p.u + 0.01, lat: p.lat, p: 0 }); W.nextStrike = T + 50 + 30 * Math.random(); }
+  if (T >= W.nextStrike) { const p = W.fronts[0] || mplLitSpot(); W.strikes.push({ u: p.u + 0.01, lat: p.lat, p: 0 }); W.nextStrike = T + 25 + 20 * Math.random(); }
   for (const s of W.strikes) s.p += dt / 6;
   W.strikes = W.strikes.filter((s) => s.p < 1);
   // the nuclear blast: only after the menu has been open a while, then once in a long while
