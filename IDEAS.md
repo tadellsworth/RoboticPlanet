@@ -21,6 +21,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
 - **Next after the current batch (the owner, Nov 21 2026):**
   1. Design the new top-tier Murmur unit (the behemoth in the Murmur rework notes): a design sheet first.
+     The owner (Nov 21): the biggest and scariest-looking Murmur form, and the most powerful thing on the map:
+     almost an endgame unit, which only a real army can bring down. When it appears is to be decided with the owner.
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).
