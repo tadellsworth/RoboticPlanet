@@ -577,6 +577,35 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **Balance audit.** The open-field Bulwark blob is still strong (+0.18). Levers to try: a slower Bulwark, the shield
     dropping while it moves, a shock when a shield breaks. Mixed-army cohesion too: a mix loses to massed warbots and to
     the blob.
+    **Done, Nov 21 2026** (the audit of November 2026, every change the owner approved; the Bulwark left alone: at equal
+    cost the blob only draws with warbots, and four units beat it):
+    - *Warden* (AI only): claims 3 Outposts before it walls in, walls the side facing its rival first and stops at 16
+      pieces (it had 26 to 39), each turret that falls due goes first (up to six), its first Keep waits for 3 turrets
+      and 3 Outposts, army growth 0.9 → 1.0. In a trace on Standard 11 it held 13 robots and 124 Alloy made at 18
+      minutes (6 and 90 before). Won **3 of 16** in the 40-game batch (1.5 before): up, but short of the hoped 30–40%.
+      Army 1.1 and an earlier missile start were tried on top and did worse (2.5 of 16, 3 games undecided), so not kept.
+    - *Skirmisher* health 10 → 9: average at 24 parts +.15 → +.02, against warbots +.19 → +.04 (even); still beats
+      Railgunners (+.51) and Arc Casters (+.45). Salvager 11 of 16 (12).
+    - *Pulse Turret* armor 12 → 20 and 5 a shot (was 4); *Bunker* armor 32 → 40. Two Turrets (stocked once) now kill
+      18.6 of 6 warbots (12.4), 18.6 of 6 Skirmishers (0) and hold against 3 Torches (fell). A Bunker with 2 warbots
+      holds against 3 Torches (1 of 3) and kills 18.6 of 6 Skirmishers (8.3), but still only 8.3 of 6 warbots.
+    - *Minigun Nest* 2 Cement 2 Alloy (was 1 Alloy): six now cost 32 value against the 37 they stop (19 before).
+    - *Disruptor Tower* without its 3 Crystal. *Railgunner* reach on buildings 4.5 → 5.5, past a Pulse Turret's 5: two
+      Railgunners now take 2 Turrets without a loss (they held before), which is the siege role it was meant to get.
+    - *Rivals against a blob*: up to 4 Mortar Pits (was 2).
+    - *Architect* (AI only): its missile programme starts with its army up to 4 behind its rival's (it waited for 2
+      ahead). Won 6 of 16 (4.5), but its Silos still came at 22.6 minutes on average (5 built in 40 games, 5 Missiles
+      fired): the factory's site waits for Alloy its Bot Foundry and Ammo Plant take. Letting the Foundry rest for it
+      put Silos at 18.5 minutes but cost it its army (3.5 of 16), so not kept. Still open.
+    - *Marching together* (a rule): robots sent together move at the slowest one's pace until they meet the enemy
+      (enemy land, 6 tiles from the target or flag, an armed foe that close, or a hit). Measured from 18 tiles apart, the
+      W+S+A+R mix went −.51 → −.42 and all six −.24 → −.28: about no change. The audit's same-speed lever (−.27 → −.02)
+      worked by changing speeds in the fight itself, not on the way, so this rule doesn't make mixed armies even. Open
+      for the owner: keep it (columns arrive as one), or try pacing through the fight too.
+    - *Megastructures*: build times to about two-thirds, Arrival City at 12 minutes (was 15), the rivals' Lance and
+      Lift from 15 (18; a Herald's Lift from 19, was 22) and Dome from 17 (20). In 40 games 17 Cities and 14 Lifts were
+      placed (7 and 3) and one City finished (none before); games ran a little longer (24.0 minutes to a win, was 20.4).
+    - 40-game batch: no game undecided (1 before). Wins of 16: Salvager 11, Herald 11, Steward 9, Architect 6, Warden 3.
   - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
     Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
     and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
