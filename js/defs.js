@@ -927,6 +927,18 @@ const NUKE_GOODS = ['uranium', 'fissile'];
 const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
+/*
+ * Radiation (the owner's design, Nov 2026). A nuclear blast's fallout (RAD.nuke, a tile past its blast) and a Nuclear
+ * Reactor destroyed by a foe (RAD.reactor; dismantled, moved or wrecked by its own side, it shuts down safely) leave a
+ * radiation zone: a circle `r` tiles round where it struck that shrinks steadily to nothing over `life` s (S.rads). In it:
+ * robots out in the open lose `hurt` of their full health a second at its middle, `edge` of that at its rim (indoors and
+ * in the air they're safe); every building there works `work` as fast (factories, gatherers, Bot Foundries, sites going
+ * up); robots that don't fight route round it (`path` more for every tile of it they'd cross) and take no work in it
+ * (gathering, paving) unless sent there; nothing new is built in it. A Shield Dome that stops a nuke stops its fallout
+ * with it; fallout already on the ground is not kept out by one. A breached Reactor is left a ruin (S.ruins) with a broken
+ * stack, smoking and, at night, glowing green and blue into the sky for `glow` s; then it is a cold wreck.
+ */
+const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.02, edge: 0.5, work: 0.5, path: 10, glow: 300, ruins: 12, max: 24 };
 
 /*
  * Megastructures (the Megastructures setting on game setup, on by default; missions keep their own: megaOn). Late-game,

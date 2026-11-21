@@ -1638,6 +1638,7 @@ const MISSIONS = [
       'A <b>Nuclear race</b>: an Ore Mine beside green Uranium digs it first.',
       'A <b>Nuclear Reactor</b> enriches 2 Uranium into 1; a Nuclear Silo needs 6 for a missile.',
       'A nuclear missile flattens everything round where it lands. A direct hit destroys a Command Base.',
+      'Its fallout lingers: a green ring of radiation for minutes, where robots sicken, work slows and nothing is built. A Reactor a rival destroys leaks too.',
       'If one ever comes for you, press <b>Evacuate</b> (<kbd>V</kbd>) on the warning card.',
       'This mission ends with your launch. In free play, Custom Game → Rules switches the race on or off.',
     ],

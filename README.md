@@ -2125,6 +2125,29 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
+  - **Radiation** (`RAD` in `js/defs.js`; the rules in `js/sim.js`, "radiation"; the looks and sound in `js/radfx.js`).
+    A nuke's fallout (`radAdd(..., 'nuke')` in `nukeImpact`, after `domeCatch`: a nuke a Shield Dome stops leaves none)
+    and a Nuclear Reactor destroyed by a foe (`reactorDown` from `destroyBuilding`: by force, and a foe hit its colony in
+    the last 2 s, `liftKiller`; dismantled, moved or wrecked by its own side it shuts down safely) leave a zone in
+    `S.rads` (`{ id, x, y, r, cr, t0, life, k, o }`): 7 tiles round a nuke for 330 s, 4 round a Reactor for 300 s, its
+    radius shrinking linearly to nothing (`cr`, set every half second by `updateRads`, so every reader sees the same
+    circle on every device and after a load). In a zone: robots out in the open (not indoors or in the air) lose
+    `RAD.hurt` (2%) of their full health a second at its middle, `RAD.edge` (half) of that at its rim (`radDose`): about
+    10% walking through a Reactor's, dead in a minute standing at a nuke's middle; buildings work at `RAD.work` (half:
+    `radWork` in `produce`, a gatherer's trip and a site going up; the panel says "slowed by radiation"); `findPath`
+    adds `RAD.path` a tile (`radMap`) for robots that don't fight (`avoidFor`) and for a rival's army on the march
+    (`routeOpts` `rad`), so they go round where it's short and still go in when their job is inside; gatherers, Pavers
+    and road crews take no node or tile in one (`radTile`); `canPlace` and `footPlace` refuse a building in one with how
+    long until that ground clears (`radWhy`, `radClearIn`); the rival's site search keeps 1.5 tiles clear of one, and
+    its nuke aim counts its own buildings in the fallout ring against a target. A breached Reactor leaves a ruin
+    (`S.ruins`, `{ id, x, y, t, o }`, up to `RAD.ruins`): drawn among the buildings as the Reactor's art greyed, its stack
+    broken and dome holed, smoking, and at night casting a green and blue light column for `RAD.glow` s before it goes
+    cold; it goes when something is built, laid or planned on its tile (`ruinTidy`). Zones and ruins are in `hashState`,
+    saves and `checkSave`; a save from before has none. On the ground (`drawRadGround`): the grass desaturated grey
+    (a plain wash on Saver), a green-yellow haze thickest at the rim with a slow flicker, a dashed ring at the edge and a
+    trefoil on its north side; motes drifting up (`RADFX.motes`, by Graphics step), robots in a zone glowing green, and
+    on the minimap a ringed disc (`drawRadMinimap`). With a robot selected in a zone, or the camera over one, a faint
+    Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
   `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3 or 3)

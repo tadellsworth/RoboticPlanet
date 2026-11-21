@@ -732,11 +732,19 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
   <p>With <b>Nuclear race</b> on (the new-game screen; on by default) a few deposits of glowing green <span class="g uranium"><i></i>Uranium</span> are scattered across the planet. There aren't many, so whoever holds them wins the race.</p>
   <ul class="tight">
     <li><b>Dig it:</b> an <b>Ore Mine</b> within 4 tiles of a deposit digs its Uranium before any ore.</li>
-    <li><b>Enrich it:</b> a <b>Nuclear Reactor</b> turns 2 Uranium into 1 <span class="g fissile"><i></i>Enriched Uranium</span>.</li>
+    <li><b>Enrich it:</b> a <b>Nuclear Reactor</b> turns 2 Uranium into 1 <span class="g fissile"><i></i>Enriched Uranium</span>. Guard it: destroyed by a rival, its core is breached (see Radiation below).</li>
     <li><b>Build the bomb:</b> a <b>Nuclear Silo</b> assembles one nuclear missile at a time from 6 Enriched Uranium, 4 Alloy and 2 Chips, a minute's work once the parts are in. That's 12 Uranium a bomb.</li>
   </ul>
   <figure><img src="%%shot_nuke%%" alt="Three moments of a nuclear strike: the red target ring with a countdown, the mushroom cloud, and the scorched crater left behind"><figcaption>Incoming (the countdown shows on the target), the blast, and the scorched crater it leaves.</figcaption></figure>
   <p>Tap the Silo and press <b>Aim nuclear missile</b>: its 40-tile range shows on the ground. Tap a spot to see the 6-tile blast, then <b>Launch</b>. The missile takes 30 seconds to land, and the target is warned the moment it launches, with the blast ring and a countdown on their map. A <b>Nuclear missile incoming</b> card appears with an <b>Evacuate</b> button: press it and every robot in the ring, garrisons and the workers inside buildings included, runs out to safe ground and waits; nothing is sent back in until the blast, then everyone goes back to work. The rival evacuates too. Everything inside the ring is wiped out: buildings, robots and roads, <b>yours included</b>. A Command Base caught in the blast survives with its garrison gone and almost no armor, ready for warbots to capture, but <b>a missile that lands on a Command Base destroys it</b>: that colony is out, and what's left of it is yours. The rival aims for your Command Base when it's in range, so keep your Silos' targets in mind and theirs out of reach. The ground stays scorched for 4 minutes, and nothing can be built or laid there until it cools. The rival races for the bomb too, and fires as soon as it has one.</p>
+  <h3>Radiation</h3>
+  <p>A nuke's fallout and a breached Reactor leave a <b>radiation zone</b>: a sickly green-yellow haze over dead grey grass, its edge marked by a dashed yellow ring (and on the minimap). It shrinks as it cools and is gone on its own: a nuke's starts 7 tiles round where it landed and lasts 5½ minutes; a Reactor's starts 4 tiles round it and lasts 5 minutes. A nuke a Shield Dome stops leaves none. A Reactor only breaches when a rival destroys it: dismantled or moved, it shuts down safely.</p>
+  <ul class="tight">
+    <li><b>Robots</b> out in a zone lose 2% of their health a second at its middle (half that at its edge): walking straight through costs a little, standing in it kills in about a minute. Inside buildings and in the air they're safe. They glow green while it hurts them, and a faint Geiger crackle plays when a selected robot (or the camera) is in one.</li>
+    <li><b>Buildings</b> in a zone work at half speed, and <b>nothing new can be built</b> in one (the placement message says how long until it clears).</li>
+    <li><b>Workers and Haulers</b> go round zones where they can and won't gather or pave in one; jobs you leave inside they still go to. The rival keeps its sites out too and marches round them.</li>
+    <li>A breached Reactor is a smoking ruin with a broken stack; at night it sends a green and blue column of light into the sky for about 5 minutes before it goes cold.</li>
+  </ul>
 </section>
 
 <section id="missions">

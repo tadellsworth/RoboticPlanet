@@ -1817,6 +1817,23 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
 
+### Radiation (drawn in code; one optional image)
+
+Fallout zones and breached Reactors (README, Nuclear race, "Radiation"; `js/radfx.js`). All drawn in code:
+
+| What | How it's drawn |
+|---|---|
+| A zone on the ground | The grass under it drained of colour and dulled (a plain grey wash on Saver), a sickly green-yellow haze (`#96be28` to `#cee448`) thickest towards the rim and soft past it, a dark-backed dashed ring of `#def85c` on the edge, creeping round, and a small yellow-and-black trefoil on its north side close up. At night the haze adds light. |
+| Motes | Small green-yellow and pale mint specks drifting up through the haze (more on High and Ultra, none on Saver). |
+| A robot in a zone | A green glow round it, flickering, and specks rising off it. |
+| The reactor ruin | The owner's Reactor art, greyed and darkened, its cooling stack cut off along a jagged line (a charred rim, bent rebar, a dark mouth), a hole torn in its dome, burns across the pad and pieces of the stack on it; a darker blue-grey copy fades in at night. While it's hot, the stack's mouth glows green and the dome's hole blue. |
+| The light column | At night, over a hot ruin: a beam of light straight up from the stack, pale green-white at the bottom through green to blue, fading into the sky about 12 tiles up, with a wider soft halo (not on Saver) and its light on the ground round the ruin. |
+| Minimap | A ringed green-yellow disc for each zone; a green dot for a hot ruin, grey for a cold one. |
+
+`reactor-ruin@0` / `reactor-ruin@1` (optional, 512 px like the Reactor, same anchor): a painted ruin would replace the
+code-made one by day; keep the broken stack's mouth near (160, 140) and the dome's hole near (302, 176) of the 512, where
+the glows and the light column are drawn (`RADFX.stack`, `RADFX.dome`).
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
