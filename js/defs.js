@@ -967,7 +967,8 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * fire through. It has `max` strength; each hit costs `cost` of it (a nuclear missile or a Lance shot all of it); left
  * unhit for `quiet` s it recharges `regen` a second; at 0 it drops for `down` s and comes back at `back`. While up it
  * burns a Crystal every `crystal` s (Haulers bring them, `cap` at most) and needs a Generator with Fuel within `reach`
- * tiles: without either it's down.
+ * tiles: without either it's down. Its owner can turn it off (setPaused; down, no Crystal burnt); turned back on it
+ * takes `warm` s to come up (b.dWarm), as long as a nuke's flight, so it can't be flicked on when a launch is seen.
  */
 /*
  * Arrival City (BDEFS.city): a 4 x 4 terraced arcology of homes, parks, a school and a station, built for colonists who
@@ -1037,7 +1038,7 @@ const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, rGens: 1, uEv
 /** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
 const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
 const LANCE = { charge: 90, reload: 240, reactorCharge: 45, reactorReload: 180, gens: 2, reach: 4, genFuel: 30, uranium: 2, slow: 1 / 3, width: 2, edge: 1, edgeDmg: 0.5, warn: 20, beam: 2.5, glow: 45, cutsMax: 24 };
-const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4,
+const DOME = { radius: 9, max: 100, quiet: 10, regen: 1, down: 60, back: 40, crystal: 20, cap: 6, reach: 4, warm: 30,
   cost: { missile: 25, nuke: 100, bomb: 10, napalm: 10, shell: 3, rocket: 3, canister: 3, meteor: 25, rock: 10, lance: 100 } };
 
 // You (blue, COBALT), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
@@ -1349,7 +1350,7 @@ const BDEFS = {
   },
   dome: {
     name: 'Shield Dome', short: 'Dome',
-    desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. One per colony.',
+    desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. Turn it off to save Crystal: turned back on, it takes 30 seconds to come up. One per colony.',
     cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 180, war: true,
   },
   city: {
