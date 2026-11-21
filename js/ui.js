@@ -358,10 +358,11 @@ function syncWakeLock() {
 
 /** What each rival difficulty plays like (the Match section's line). */
 const DIFF_INFO = {
-  easy: 'Easy: a slow, forgiving rival that builds up and attacks late.',
-  medium: 'Medium: between Easy and Normal. It attacks later, with smaller armies, and raids less.',
-  normal: 'Normal: a fair fight. The rival expands, raids your roads and attacks in force.',
-  hard: 'Hard: a fast rival that lands with extra goods and attacks early and often.',
+  easy: 'Settler: a slow, forgiving rival that builds up and attacks late.',
+  medium: 'Pioneer: between Settler and Colonist. It attacks later, with smaller armies, and raids less.',
+  normal: 'Colonist: a fair fight. The rival expands, raids your roads and attacks in force.',
+  hard: 'Commander: a fast rival that lands with extra goods and attacks early and often.',
+  warlord: 'Warlord: the hardest. Much faster, with twice the extra goods, it attacks within two minutes and never lets up. For a strong player.',
 };
 /** What each Graphics step does (the line under it in the pause menu, and the new-game Rules line). */
 const GFX_INFO = {

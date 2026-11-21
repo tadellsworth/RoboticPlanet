@@ -56,6 +56,19 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Mass Driver sound (BUILT, Nov 21 2026: a deep charging hum, a crack and thump, a falling rush of air):** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
+## Five rival levels (built Nov 21 2026; open questions)
+
+The rival levels are now Settler, Pioneer, Colonist, Commander and Warlord (the owner's set C, "Frontier"; keys
+easy/medium/normal/hard plus `warlord`). Warlord: mult 1.6, grace 100 s, threshold 3, four sites, thinks every second,
+12 more of every good, raids every 90 s. In AI against AI (Standard, Steward against Steward, both seats, seeds 1 to 8)
+a Warlord beat a Commander in 12 of 16, every game decided (8 to 20 minutes; one Warlord took a base at 3½ minutes).
+- Is Warlord winnable by a strong human? Nobody has played it yet; if its first attack (from about 1½ minutes) is too
+  much, raise grace before the economy numbers.
+- Missions keep their own Easy / Normal / Hard levels (not renamed: they are the mission's levels, not the rival's).
+  Should they take Frontier names too, or a fourth level with a Warlord rival?
+- Observer mode gives every colony one level; a level per colony (as diff5-aivai.js does) would make Warlord against
+  Commander a thing to watch.
+
 ## Polish round 1 (built Nov 21 2026; open questions)
 
 Camera spots (Shift+F1–F4 / F1–F4, minimap pips), J stepping back through recent alerts, each good's net change a

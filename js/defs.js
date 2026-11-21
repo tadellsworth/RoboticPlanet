@@ -1526,12 +1526,20 @@ const TURRET_TURN = 2.4;   // radians per second a turret's head turns (about 14
 const TURRET_SWEEP = 0.35; // radians per second it sweeps while watching for targets
 const SHOTS_PER_AMMO = 4;
 
+/*
+ * The rival's level, easiest first (players see `label`, the Frontier names). The keys stay the old words (easy,
+ * medium, normal, hard: saves, settings, missions and multiplayer setups use them); warlord, the fifth, is harder
+ * than Hard. diffAtLeast(k) asks whether this game's level is k or harder (Warlord counts as Hard everywhere).
+ */
 const DIFFICULTY = {
-  easy:   { label: 'Easy',   mult: 0.7,  grace: 330, threshold: 7, maxSites: 1, think: 3.0, bonus: 0 },
-  medium: { label: 'Medium', mult: 0.85, grace: 275, threshold: 6, maxSites: 2, think: 2.5, bonus: 0 },
-  normal: { label: 'Normal', mult: 1.0,  grace: 220, threshold: 5, maxSites: 2, think: 2.0, bonus: 0 },
-  hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
+  easy:    { label: 'Settler',   mult: 0.7,  grace: 330, threshold: 7, maxSites: 1, think: 3.0, bonus: 0 },
+  medium:  { label: 'Pioneer',   mult: 0.85, grace: 275, threshold: 6, maxSites: 2, think: 2.5, bonus: 0 },
+  normal:  { label: 'Colonist',  mult: 1.0,  grace: 220, threshold: 5, maxSites: 2, think: 2.0, bonus: 0 },
+  hard:    { label: 'Commander', mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
+  warlord: { label: 'Warlord',   mult: 1.6,  grace: 100, threshold: 3, maxSites: 4, think: 1.0, bonus: 12 },
 };
+const DIFF_ORDER = Object.keys(DIFFICULTY);
+function diffAtLeast(k, d = S.difficulty) { return DIFF_ORDER.indexOf(d) >= DIFF_ORDER.indexOf(k); }
 
 /*
  * Rival doctrines (the code calls them personalities: `style` on a player, `PERSONALITIES` here). Every rival
@@ -1557,7 +1565,7 @@ const PERSONALITIES = {
     name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
     tag: 'builds, defends and attacks in good measure',
     quote: 'This action has been logged for review by the Accord tribunal.',
-    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (on Normal). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
     weak: 'No great strength and no great weakness: a fair first opponent.',
     // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
     voice: {
@@ -1585,7 +1593,7 @@ const PERSONALITIES = {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
     tag: 'raids your roads, again and again',
     quote: 'Nothing\'s coming from home. Everything on the road is supply.',
-    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (at Colonist level) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home. Its army runs on fast Skirmishers.',
     weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags (massed warbots beat Skirmishers); while its bands are out, its base is open.',
     voice: {
       attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',

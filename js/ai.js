@@ -556,7 +556,7 @@ function aiThink(p) {
   // aiSearchSpot; its builder keeps out of their way), up to three, one at most every three minutes (P.parkAt: a raiding
   // besieger wrecked the sites as fast as they went up). Normal and Hard rivals, and a Warden (turtle) on any. (Nothing
   // answered a besieger parked just outside the guns.)
-  if ((S.difficulty === 'normal' || S.difficulty === 'hard' || st.walls) && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !few &&
+  if ((diffAtLeast('normal') || st.walls) && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !few &&
       !(P.defWant && S.time < P.defWant.until) && S.time - (P.defAt || -999) > 60 && S.time - (P.parkAt ?? -999) > 180 && (counts.mortar || 0) < 3) {
     let n = 0, sx = 0, sy = 0;
     for (const u of S.bots) {
@@ -1179,7 +1179,7 @@ function aiThink(p) {
     for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
     // An Architect on Normal or Hard rains them on what its rival lives on (aiMissileWorth), and under siege into the
     // army at its gates (aiMissileKnot).
-    const rain = !!st.missiles && (S.difficulty === 'normal' || S.difficulty === 'hard');
+    const rain = !!st.missiles && diffAtLeast('normal');
     if (rain && P.homeCall > S.time) for (const silo of me) {
       if (silo.type !== 'silo' || !siloReady(silo)) continue;
       const k = aiMissileKnot(p, lander, silo);
@@ -2789,7 +2789,7 @@ function aiSquad(sp, need, help) {
  * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
  * near it), and comes home: RAID_TIME after it gets there, or as soon as it is outnumbered.
  */
-const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120 };
+const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120, warlord: 90 };
 const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
 const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {

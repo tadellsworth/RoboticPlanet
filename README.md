@@ -8,7 +8,12 @@ how goods move.
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes), or pick a
   faster **Victory** on the new-game screen: **Domination** (hold most of the land for 3 minutes) or **Uplinks** (hold
   neutral relay towers for a total of 5 minutes). A rival that's clearly beaten surrenders.
-  The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **doctrine**
+  The rival is **Settler**, **Pioneer**, **Colonist**, **Commander** or **Warlord** (easiest to hardest; `DIFFICULTY` in
+  `js/defs.js`; the keys stay `easy`, `medium`, `normal`, `hard`, so old saves, settings and multiplayer setups keep
+  their level, and `warlord` is the fifth: mult 1.6, grace 100 s, threshold 3, 4 sites, thinks every 1 s, 12 more of
+  every good; `diffAtLeast(k)` counts it as Hard wherever the code asks for Hard or Normal and up, raids every 90 s
+  in `RAID_GAP`). Notes below that say Easy, Medium, Normal or Hard mean those keys: Settler, Pioneer, Colonist and
+  Commander. The rival has a **doctrine**
   (Rival doctrine: the Steward, balanced, by default, or Random, the Warden (turtle), Salvager (raider), Herald (rusher)
   or Architect (tycoon); with three or four players one for each rival if you like; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
@@ -138,7 +143,7 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Easy, Medium, Normal and Hard
+In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Settler, Pioneer, Colonist, Commander and Warlord
 apply to all computer colonies from that point in the match. In multiplayer only the host can send the
 `rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
 and production without changing stock already on the map. Missions keep their selected difficulty.

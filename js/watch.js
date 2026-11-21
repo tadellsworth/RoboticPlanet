@@ -51,10 +51,11 @@ function syncWatchMore() {
 const WATCH_MODS = MOD_ORDER.filter((k) => k !== 'noturret');
 /** The computer's level, for every colony (DIFFICULTY; Custom Game's DIFF_INFO speaks of one rival against you). */
 const WATCH_DIFF_INFO = {
-  easy: 'Easy: every colony plays slow and forgiving, building up and attacking late.',
-  medium: 'Medium: between Easy and Normal: later attacks, smaller armies, fewer raids.',
-  normal: 'Normal: every colony expands, raids the roads and attacks in force.',
-  hard: 'Hard: every colony lands with extra goods and attacks early and often.',
+  easy: 'Settler: every colony plays slow and forgiving, building up and attacking late.',
+  medium: 'Pioneer: between Settler and Colonist: later attacks, smaller armies, fewer raids.',
+  normal: 'Colonist: every colony expands, raids the roads and attacks in force.',
+  hard: 'Commander: every colony lands with extra goods and attacks early and often.',
+  warlord: 'Warlord: every colony works much faster, lands with twice the extra goods and attacks within two minutes.',
 };
 
 /**
