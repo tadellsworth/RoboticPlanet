@@ -2513,6 +2513,7 @@ function megaBlocked(owner, type) {
   if (BDEFS[type].atmos && !atmosOpen()) return `The Atmosphere Engine opens ${Math.round(ATMOS.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(ATMOS.at - S.time))}.`;
   if (BDEFS[type].deepcore && !deepOpen()) return `The Deep Core opens ${Math.round(DEEP.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(DEEP.at - S.time))}.`;
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
+  if (BDEFS[type].sunder && !sunderOpen()) return `The Sundering Ray opens ${Math.round(SUNDER.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(SUNDER.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
 }
@@ -5351,7 +5352,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash'];
+const SPARSE_LAYERS = ['crater', 'ash', 'crk']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -5413,6 +5414,7 @@ function checkSave(o) {
     if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
     if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();
     if (M.dark != null && !(Array.isArray(M.dark) && M.dark.length < 256 && M.dark.every((d) => nums(d, ['x', 'y', 'r', 'until'])))) bad();
+    if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
@@ -5457,6 +5459,11 @@ function checkSave(o) {
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
     for (const k of ['lOn', 'lCharge', 'lReload', 'lReactor', 'lShot', 'lTime', 'dStr', 'dHit', 'dDown', 'dCry', 'dUp']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // the Sundering Ray (see updateSunder): its aim and blow, wind-up, power and reload, the night it lured; a Quake's crack, a struck nest's quiet night
+    if (b.sAim != null && !(Array.isArray(b.sAim) && b.sAim.length === 2 && Number.isInteger(b.sAim[0]) && Number.isInteger(b.sAim[1]) && b.sAim[0] >= 0 && b.sAim[1] >= 0 && b.sAim[0] < o.W && b.sAim[1] < o.H)) bad();
+    if (b.sSrc != null && !['', 'gen', 'reactor'].includes(b.sSrc)) bad();
+    if (b.sMode != null && !['', 'deep', 'quake'].includes(b.sMode)) bad();
+    for (const k of ['sOn', 'sCharge', 'sReload', 'sReactor', 'sShot', 'sTime', 'sLure', 'sQuiet', 'crack']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     // the Orbital Lift (see updateLift): its fall line, the Carrier's reserve, the climber and the goods it sends up
     // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
     if (b.gSrc != null && !['', 'gen', 'reactor'].includes(b.gSrc)) bad();
@@ -5485,6 +5492,7 @@ function checkSave(o) {
   for (const u of o.bots) {
     if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
+    if (u.stunT != null && !Number.isFinite(u.stunT)) bad(); // (stunned by a Sundering Ray's Quake)
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
@@ -5534,6 +5542,10 @@ function checkSave(o) {
   // The Lance of Corvane's cuts across the map (S.cuts, see lanceFire): numbers on the map.
   if (o.cuts != null && !(Array.isArray(o.cuts) && o.cuts.length <= 4 * LANCE.cutsMax && o.cuts.every((c) => obj(c) && ['x0', 'y0', 'x1', 'y1', 't'].every((k) => Number.isFinite(c[k])) && owner(c.o) && (c.w == null || (Number.isFinite(c.w) && c.w > 0 && c.w <= 8)) &&
     [c.x0, c.x1].every((x) => x >= -1 && x <= o.W + 1) && [c.y0, c.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
+  // The Sundering Ray's ripples and their marks (S.sunders, see sunderFire): numbers on the map, a blow's kind, owners.
+  if (o.sunders != null && !(Array.isArray(o.sunders) && o.sunders.length <= 4 * SUNDER.keep && o.sunders.every((w) => obj(w) && ['id', 'x0', 'y0', 'x1', 'y1', 't', 'at', 'f', 'b'].every((k) => Number.isFinite(w[k])) &&
+    (w.m === 'deep' || w.m === 'quake') && owner(w.o) && (w.done === 0 || w.done === 1) && [w.x0, w.x1].every((x) => x >= -1 && x <= o.W + 1) && [w.y0, w.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
+  for (const k of ['crkN', 'sunderSeq']) if (o[k] != null && !(Number.isSafeInteger(o[k]) && o[k] >= 0)) bad();
   // Orbital Lift cables coming down (S.liftFalls, see liftFall): numbers, a direction, owners, the anchor on the map.
   if (o.liftFalls != null && !(Array.isArray(o.liftFalls) && o.liftFalls.length <= 64 && o.liftFalls.every((f) => obj(f) && ['id', 't', 'k', 'sp', 'n', 'ax', 'ay'].every((k) => Number.isFinite(f[k])) &&
     Number.isInteger(f.d) && f.d >= 0 && f.d < 8 && owner(f.o) && Number.isFinite(f.by) && f.ax >= 0 && f.ay >= 0 && f.ax < o.W && f.ay < o.H && f.n >= 0 && f.n <= o.W + o.H))) bad();
@@ -5660,6 +5672,7 @@ function deserializeGame(json) {
   o.cans = o.cans || []; // (saves from before the Mass Driver: no canisters in flight)
   o.cuts = o.cuts || []; // (saves from before the Lance of Corvane: no cuts; their settings have no Megastructures: off, see megaOn)
   o.liftFalls = o.liftFalls || []; // (saves from before the Orbital Lift: no cable coming down)
+  o.sunders = o.sunders || []; // (saves from before the Sundering Ray: no ripples)
   o.rads = o.rads || []; o.ruins = o.ruins || []; // (saves from before radiation: no zones, no ruins)
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();

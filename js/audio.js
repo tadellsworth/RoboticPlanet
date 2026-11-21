@@ -250,6 +250,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
+  sundercharge: 2, sunderthud: 0.12, sunderfire: 1, sunderquake: 0.8,
   deepstage: 3, atmosstage: 4,
 };
 
@@ -270,6 +271,7 @@ const BLAST_SIZE = {
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
   citychime: 1.6, cityclock: 0.5, // (Arrival City's tram-stop chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
+  sundercharge: 3, sunderthud: 2.6, sunderfire: 3, sunderquake: 2.4, // (the Sundering Ray's thudding is heard by everyone, as the Lance's charge; its blow landing far off)
   deepstage: 1.8, // (a Deep Core reaching a new depth: heard off screen, near by)
   atmosstage: 1.8, // (an Atmosphere Engine reaching a new stage: heard off screen, near by)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
@@ -896,6 +898,36 @@ function sfx(name, dest, y, dur) {
       blast(D, { size: 2.2, far: Math.min(far, 0.4), gain: 0.7, delay: 0.05, deep: true });
       duckMusic(0.3, 3);
       break;
+    // The Sundering Ray starts its wind-up: the hydraulic pumps kicking in, a hiss of pressure building in the lines.
+    case 'sundercharge':
+      _noise(0.14, 0.12, { type: 'lowpass', freq: 380, dest: D }); _tone(55, 0.5, 'square', 0.03, 38, 0, D);
+      _noise(1.8, 0.05, { type: 'bandpass', freq: 1800, to: 3400, q: 2, attack: 0.2, delay: 0.2, dest: D });
+      _tone(48, 2.2, 'sawtooth', 0.025, 70, 0.3, D);
+      break;
+    // One stroke of a great ram: a deep, heavy thud through the ground, a clank of steel on its seat, a short gasp of hydraulics.
+    case 'sunderthud':
+      _tone(52, 0.38, 'sine', 0.22, 30, 0, D); _tone(104, 0.12, 'triangle', 0.06, 50, 0, D);
+      _noise(0.16, 0.12, { type: 'lowpass', freq: 260, to: 90, attack: 0.003, dest: D });
+      _noise(0.06, 0.03, { type: 'bandpass', freq: 1600, q: 3, attack: 0.001, delay: 0.01, dest: D });
+      _noise(0.22, 0.025, { type: 'highpass', freq: 2600, attack: 0.02, delay: 0.12, dest: D });
+      break;
+    // The blow: the bore charge going off under the tower, the six plates slamming in a rolling ripple, a long low shudder.
+    case 'sunderfire':
+      _noise(0.1, 0.35, { type: 'lowpass', freq: 900, to: 200, attack: 0.002, dest: D });
+      _tone(38, 1.8, 'sine', 0.32, 22, 0, D);
+      for (let k = 0; k < 6; k++) { _tone(60 - k * 2, 0.22, 'sine', 0.16, 34, 0.1 + k * 0.07, D); _noise(0.08, 0.06, { type: 'lowpass', freq: 320, delay: 0.1 + k * 0.07, dest: D }); }
+      _noise(2.6, 0.14, { type: 'lowpass', freq: 160, to: 50, attack: 0.3, delay: 0.3, dest: D });
+      blast(D, { size: 1.8, far: Math.min(far, 0.5), gain: 0.55, delay: 0.02, deep: true });
+      duckMusic(0.4, 2.5);
+      break;
+    // The ripple lands: the quake's rumble rolling up out of the ground, stone cracking, rubble settling.
+    case 'sunderquake':
+      _noise(3.2, 0.3, { type: 'lowpass', freq: 140, to: 40, attack: 0.25, dest: D });
+      _tone(31, 2.8, 'sine', 0.28, 24, 0, D); _tone(46, 2.2, 'triangle', 0.08, 30, 0.1, D);
+      for (let k = 0; k < 7; k++) _noise(0.05, 0.06, { type: 'bandpass', freq: 900 + Math.random() * 1600, q: 2, attack: 0.001, delay: 0.15 + Math.random() * 1.6, dest: D });
+      _noise(1.4, 0.06, { type: 'bandpass', freq: 500, to: 220, q: 0.8, attack: 0.1, delay: 1.2, dest: D });
+      duckMusic(0.5, 2.5);
+      break;
     // Something strikes a Shield Dome: a low resonant thrum through the field, and a glassy shimmer on top.
     case 'domehit': {
       const ac = AUDIO.ctx, t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
@@ -1347,6 +1379,17 @@ function audioTick(dt) {
   // Paused: the music sounds far away.
   const muffle = !!(inGame && UI.paused);
   if (muffle !== WORLD.muffled) { WORLD.muffled = muffle; AUDIO.musicLP.frequency.setTargetAtTime(muffle ? 900 : 18000, ac.currentTime, 0.25); }
+  // A Sundering Ray winding up anywhere: a deep thud at every stroke of its rams, in time with them (sunderPhase).
+  if (inGame && !UI.paused && S.winner < 0) {
+    const was = WORLD.sray && WORLD.sray.of === S ? WORLD.sray : { of: S }, now = { of: S };
+    for (const b of S.buildings) {
+      if (b.dead || !b.sOn || !BDEFS[b.type].sunder) continue;
+      const k = Math.floor(sunderPhase(b) * 2);
+      if (was[b.id] !== undefined && k !== was[b.id]) { const c = bCentre(b); sfx('sunderthud', c.x, c.y); }
+      now[b.id] = k;
+    }
+    WORLD.sray = now;
+  }
   WORLD.bt = (WORLD.bt || 0) - dt;
   if (WORLD.bt <= 0) {
     const live = !!(inGame && !UI.paused && S.winner < 0);

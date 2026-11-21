@@ -2109,7 +2109,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans. The Atmosphere Engine: N, for eNgine; A pans)
+  mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
@@ -2145,6 +2145,9 @@ const SHEET_KEYS = {
   'sh-recall': ['c', 'Call back this squad'],
   'sh-unpost': ['c', 'Send back stationed warbots'],
   'sh-lstop': ['c', 'Stand down the Lance'],
+  'sh-sdeep': ['f', 'Sundering Ray: Strike the Deep'],
+  'sh-squake': ['q', 'Sundering Ray: Quake'],
+  'sh-sstop': ['c', 'Stand down the Sundering Ray'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],
   'sh-st-send': ['v', 'Station here'],
@@ -5219,13 +5222,20 @@ function confirmAirdrop() {
   });
 }
 
-function startAim(silo) {
+function startAim(silo, mode) {
   setMode('aim');
   UI.aimSilo = silo.id;
   R.selected = silo.id;
   // The Lance of Corvane: no ring (it reaches across the map); the view stays, and the line follows the pointer.
   if (BDEFS[silo.type].lance) { if (silo.lAim) R.aim = { i: silo.lAim[0], j: silo.lAim[1] }; showAimBanner(); return; }
-  const range = BDEFS[silo.type].nukeSilo ? NUKE.range : BDEFS.silo.missile.range;
+  // The Sundering Ray: Strike the Deep reaches anywhere (the view stays); a Quake shows its reach round the Ray.
+  const ray = !!BDEFS[silo.type].sunder;
+  if (ray) {
+    UI.aimMode = mode === 'deep' ? 'deep' : 'quake';
+    if (silo.sAim && silo.sMode === UI.aimMode) R.aim = { i: silo.sAim[0], j: silo.sAim[1] };
+    if (UI.aimMode === 'deep') { showAimBanner(); return; }
+  }
+  const range = ray ? SUNDER.range : BDEFS[silo.type].nukeSilo ? NUKE.range : BDEFS.silo.missile.range;
   showAimBanner();
   // Fit the whole range ring in the map area left between the top bar and the banner (or the tools, where they
   // lie across the bottom). Under a finger it never zooms out further than AIM_TILE px a tile: at the 9 px a
@@ -5235,7 +5245,8 @@ function startAim(silo) {
   const bottom = Math.min(bn.height && bn.top > R.h / 2 ? bn.top : R.h, bb.height && bb.width > R.w / 2 ? bb.top : R.h) - 8;
   const avail = Math.max(120, Math.min(R.w - 16, bottom - top));
   R.cam.z = clamp(avail / (2 * range + 2), Math.max(minZoom(), onTouch() ? AIM_TILE : 0), maxZoom());
-  centerOn(silo.x + 0.5, silo.y + 0.5 + (R.h / 2 - (top + bottom) / 2) / R.cam.z);
+  const sc = ray ? bCentre(silo) : { x: silo.x + 0.5, y: silo.y + 0.5 };
+  centerOn(sc.x, sc.y + (R.h / 2 - (top + bottom) / 2) / R.cam.z);
 }
 const AIM_TILE = 20;
 
@@ -5260,7 +5271,7 @@ function mapGrab(x, y) {
 }
 
 /** Why the weapon being aimed (a Silo, a Nuclear Silo, the Lance) can't strike tile (i, j) ('' if it can). */
-function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
+function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.sunder ? sunderAimBlocked(silo, i, j, UI.aimMode) : d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
 
 function showAimBanner(problem) {
   const silo = getE(UI.aimSilo), md = BDEFS.silo.missile;
@@ -5272,6 +5283,15 @@ function showAimBanner(problem) {
       ? `<b>${silo.lOn ? 'Turn the Lance onto this line?' : 'Charge the Lance along this line?'}</b> ${silo.lOn ? `It fires in ${fmtSecs(lanceTime(silo) - silo.lCharge)}.` : `It charges for ${lanceTime(silo)} s (your lights dim, your factories slow, and every rival hears it), then fires.`} Everything in the red core (2 tiles wide) is destroyed, yours too; the fainter edge either side is scorched to half armor.`
       : 'Tap a spot anywhere on the map: the beam runs from the gun through it, right across the map.';
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
+    return;
+  }
+  if (BDEFS[silo.type].sunder) {
+    const deep = UI.aimMode === 'deep', T = sunderTime(silo);
+    html += R.aim
+      ? (deep ? `<b>${silo.sOn ? 'Turn the Ray here?' : 'Strike the Deep here?'}</b> ${silo.sOn ? `It fires in ${fmtSecs(T - silo.sCharge)}.` : `It winds up for ${T} s (everyone hears it), then a ripple runs through the ground to the spot.`} In the ${SUNDER.deep}-tile circle every Murmur tunnel caves in, the exits are sealed for ${SUNDER.sealNights} nights and the nests are shaken. The Murmur will come for the Ray the next night.`
+        : `<b>${silo.sOn ? 'Turn the Quake here?' : 'Quake here?'}</b> ${silo.sOn ? `It fires in ${fmtSecs(T - silo.sCharge)}.` : `It winds up for ${T} s; a ring shows here for everyone ${SUNDER.warn} s before it lands.`} In the ${SUNDER.quake}-tile circle buildings lose ${Math.round(SUNDER.dmg * 100)}% of their armor (never below ${Math.round(SUNDER.floor * 100)}%, yours too) and crack, roads and track crack, robots are stunned. A Shield Dome doesn't stop it.`)
+      : deep ? `Tap a spot anywhere on the map: the ${SUNDER.deep}-tile circle where the Murmur's tunnels cave in.` : `Tap a spot inside the ring (${SUNDER.range} tiles from the Ray): the ${SUNDER.quake}-tile circle the Quake lands on.`;
+    showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.sOn ? 'Aim here' : deep ? 'Strike' : 'Quake') : null, 'Cancel');
     return;
   }
   if (BDEFS[silo.type].nukeSilo) {
@@ -5316,6 +5336,14 @@ function fireAimed() {
     const was = silo.lOn;
     act('lanceAim', [sid, i, j], (why) => {
       if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Lance turns onto the new line.' : `The Lance is charging: it fires in ${lanceTime(silo)} seconds.`, 'info'); return; }
+      sfx('error'); showAimBanner(why);
+    });
+    return;
+  }
+  if (BDEFS[silo.type].sunder) {
+    const was = silo.sOn, mode = UI.aimMode === 'deep' ? 'deep' : 'quake';
+    act('sunderAim', [sid, i, j, mode], (why) => {
+      if (!why) { setMode('normal'); sfx(was ? 'click' : 'alert'); toast(was ? 'The Sundering Ray turns to the new aim.' : `The Sundering Ray is winding up: it fires in ${sunderTime(silo)} seconds.`, 'info'); return; }
       sfx('error'); showAimBanner(why);
     });
     return;
@@ -7448,6 +7476,11 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-aim-hint"></p><button class="btn" id="sh-lstop" hidden>Stand down (the charge is lost)</button>
         <button class="btn" id="sh-luser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-luser-hint"></p>`;
     }
+    if (def.sunder && b.built && b.owner === ME) {
+      html += `<div class="actions"><button class="btn primary big danger-glow" id="sh-sdeep">Strike the Deep</button><button class="btn primary big danger-glow" id="sh-squake">Quake</button></div>
+        <p class="hint" id="sh-saim-hint"></p><button class="btn" id="sh-sstop" hidden>Stand down (the blow is lost)</button>
+        <button class="btn" id="sh-suser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-suser-hint"></p>`;
+    }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
         <p class="hint" id="sh-aim-hint">Shows the Silo's ${def.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.</p>`;
@@ -7511,6 +7544,10 @@ function openBuildingSheet(b) {
       sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); if (!b.dead) openBuildingSheet(b);
     });
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
+    if ($('sh-sdeep')) $('sh-sdeep').onclick = () => { sfx('click'); startAim(b, 'deep'); };
+    if ($('sh-squake')) $('sh-squake').onclick = () => { sfx('click'); startAim(b, 'quake'); };
+    if ($('sh-sstop')) $('sh-sstop').onclick = () => { sfx('click'); act('sunderStop', [b.id], () => { toast('The Sundering Ray stands down: the blow is lost.', 'info'); refreshSheet(); }); };
+    if ($('sh-suser')) $('sh-suser').onclick = () => { sfx('click'); const on = !b.sUseR; act('sunderReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Ray winds up on it (${SUNDER.reactorCharge} s, ${SUNDER.uranium} Uranium or an Enriched Uranium a blow).` : 'Use Reactor off: with Generators in reach the Ray winds up on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
     if ($('sh-lstop')) $('sh-lstop').onclick = () => { sfx('click'); act('lanceStop', [b.id], () => { toast('The Lance stands down: its charge is lost.', 'info'); refreshSheet(); }); };
     if ($('sh-luser')) $('sh-luser').onclick = () => { sfx('click'); const on = !b.lUseR; act('lanceReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Lance charges on it (${LANCE.reactorCharge} s, ${LANCE.uranium} Uranium or an Enriched Uranium a shot).` : 'Use Reactor off: with Generators in reach the Lance charges on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
     for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
@@ -7890,6 +7927,19 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Reload</span><span>${b.lReload > 0 ? fmtSecs(b.lReload) : 'Ready'}</span></div>`);
       }
     }
+    if (def.sunder) {
+      const pw = sunderPower(b), gens = megaGens(b, SUNDER.reach).length, rx = sunderReactor(b), T = sunderTime(b);
+      if (b.sOn) parts.push(`<div class="kv"><span>Winding up</span><span>${b.sMode === 'deep' ? 'Strike the Deep' : 'Quake'}: ${Math.floor((b.sCharge / T) * 100)}%, fires in ${fmtSecs(T - b.sCharge)}${sunderLocked(b) ? ' (the ring is showing: aim fixed)' : ''}</span></div><div class="bar"><div style="width:${Math.round((b.sCharge / T) * 100)}%;background:#ff9a3a"></div></div>`);
+      if (mine) {
+        const src = b.sOn ? b.sSrc : pw;
+        parts.push(`<div class="kv"><span>Power</span><span>${src === 'reactor' ? `Reactor, ${b.sOn ? 'its Uranium in' : `${SUNDER.uranium} Uranium a blow`}, ${SUNDER.reactorCharge} s wind-up, ${Math.round(SUNDER.reactorReload / 60)} min reload`
+          : src === 'gen' ? `${gens} Generator${gens === 1 ? '' : 's'}, extra Fuel while it winds up, ${SUNDER.charge} s wind-up, ${Math.round(SUNDER.reload / 60)} min reload`
+          : `<b>None</b>: ${gens} of ${SUNDER.gens} Generators with Fuel${rx ? '' : ', and no Reactor with Uranium in reach'}`}</span></div>`);
+        parts.push(`<div class="kv"><span>Reload</span><span>${b.sReload > 0 ? fmtSecs(b.sReload) : 'Ready'}</span></div>`);
+        parts.push(`<div class="kv"><span>Reach</span><span>Strike the Deep: anywhere, a ${SUNDER.deep}-tile circle · Quake: ${SUNDER.range} tiles, a ${SUNDER.quake}-tile circle</span></div>`);
+      }
+      if (b.sLure && wildOn() && b.sLure >= murmurNights(S.time)) parts.push(`<div class="kv"><span>The Murmur</span><span><b>They heard it</b>: ${murmurNight(S.time) && b.sLure === murmurNights(S.time) ? 'tonight' : 'the next night'} the nests within ${SUNDER.lure} tiles come for it first</span></div>`);
+    }
     if (def.dome) {
       const st = b.dDown ? `Down: back in ${fmtSecs(b.dDown - S.time)}` : b.dUp ? 'Up' : 'Down';
       parts.push(`<div class="kv"><span>Shield</span><span>${st}, ${Math.floor(b.dStr ?? DOME.max)} of ${DOME.max} strength</span></div><div class="bar"><div style="width:${Math.round(((b.dStr ?? DOME.max) / DOME.max) * 100)}%;background:#5ab8ff"></div></div>`);
@@ -7975,6 +8025,18 @@ function refreshBuildingSheet(b) {
     if ($('sh-luser')) {
       $('sh-luser').textContent = `Use Reactor: ${b.lUseR ? 'On' : 'Off'}`; $('sh-luser').setAttribute('aria-pressed', b.lUseR ? 'true' : 'false'); $('sh-luser').classList.toggle('on', !!b.lUseR);
       $('sh-luser-hint').textContent = `With Generators and a Reactor both in reach: On charges on the Reactor (${LANCE.reactorCharge} s, reload ${Math.round(LANCE.reactorReload / 60)} min, ${LANCE.uranium} Uranium or an Enriched Uranium a shot); Off uses the Generators (${LANCE.charge} s, reload ${Math.round(LANCE.reload / 60)} min) and saves the Uranium for a nuke. A Reactor alone is always used.`;
+    }
+  } else if (def.sunder && $('sh-sdeep')) {
+    const why = b.sOn ? (sunderLocked(b) ? 'The ring is showing: the aim is fixed now.' : '') : sunderBlocked(b), deepWhy = sunderDeepOn() ? '' : 'No Murmur in this game.';
+    $('sh-sdeep').disabled = !!why || !!deepWhy; $('sh-squake').disabled = !!why;
+    $('sh-sdeep').textContent = b.sOn && b.sMode === 'deep' ? 'Move the Strike' : 'Strike the Deep';
+    $('sh-squake').textContent = b.sOn && b.sMode === 'quake' ? 'Move the Quake' : 'Quake';
+    $('sh-saim-hint').textContent = why || (b.sOn ? 'Winding up: tap either to turn it onto another spot before it fires (a Quake\'s aim is fixed once its ring shows).'
+      : `${deepWhy ? deepWhy + ' ' : `Strike the Deep: anywhere, a ${SUNDER.deep}-tile circle where the Murmur's tunnels cave in. `}Quake: within ${SUNDER.range} tiles, a ${SUNDER.quake}-tile circle; buildings lose ${Math.round(SUNDER.dmg * 100)}% of their armor and crack. It winds up for ${sunderTime(b)} s.`);
+    if ($('sh-sstop')) $('sh-sstop').hidden = !b.sOn;
+    if ($('sh-suser')) {
+      $('sh-suser').textContent = `Use Reactor: ${b.sUseR ? 'On' : 'Off'}`; $('sh-suser').setAttribute('aria-pressed', b.sUseR ? 'true' : 'false'); $('sh-suser').classList.toggle('on', !!b.sUseR);
+      $('sh-suser-hint').textContent = `With Generators and a Reactor both in reach: On winds up on the Reactor (${SUNDER.reactorCharge} s, reload ${Math.round(SUNDER.reactorReload / 60)} min, ${SUNDER.uranium} Uranium a blow); Off uses the Generators (${SUNDER.charge} s, reload ${Math.round(SUNDER.reload / 60)} min). A Reactor alone is always used.`;
     }
   } else if ($('sh-aim') && def.nukeSilo) {
     $('sh-aim').disabled = !b.armed;

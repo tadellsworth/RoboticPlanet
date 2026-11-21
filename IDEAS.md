@@ -44,6 +44,22 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   robots staggering as it passes; it arrives a moment later (sound through rock), which gives the target its warning
   naturally. On arrival the ground heaves and cracks spread in a circle; Murmur tunnels cave in along the path and at
   the target. Keeps the approved Piston Battery look.
+  - **The Sundering Ray: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, Megastructures and The Murmur; the
+    First Contact mission *Something Keeps Time*). Short name **Ray**, key **Y** on the Mega tab (L is the Lance's; D pans
+    the map, S too; the Deep Core is free to take any of E, K or P). The Piston Battery as the plan above has it: three
+    hydraulic rams in a block round the bore tower over a shot hole, two stacks, six ram plates in a row before it
+    (`renderer/b/sunder.js`); the rams pump in turn and the plates drum, faster to the blow; at the blow the plates slam
+    in a timed ripple, the far side from the aim first; a bulge runs through the ground with dust and cracks behind it,
+    caving in tunnels a tile either side of its path; on landing the ground heaves in rings and cracks spread (fading
+    over 5 minutes). Every other answer the sheet's recommendation and its numbers. Decided here, for the owner to check:
+    the ripple runs 10 tiles a second (1.5 to 6 s on the way, so a Quake's target has the ring's 20 s and a moment more);
+    a Quake's aim is fixed once its ring shows (else the warning means nothing); a Quake cracks the colony's own
+    buildings too (as the Lance's line burns its own), but nothing on a Trade Post's ground; a Strike the Deep's seal
+    runs through the second night after the blow; cracked roads are mended by idle Workers by themselves, a 3 × 3 patch
+    in 4 s (no Cement), cracked foundations by the ordinary paid Repair; stunned robots neither move nor fire for 4 s;
+    the AI Warden picks it from 15 minutes in (when its pick is still open), as its one weapon, no Nuclear Silo then, and besides striking after a raid strikes the nest nearest home every other day while it is within 40 tiles (with no raid it would never fire: Wardens seldom march into Quake range).
+    Open: whether the Murmur should also go for it on the night of a blow struck after dark (now: only the next night),
+    and the balance audit's look at its numbers.
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
   - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright
@@ -67,7 +83,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     - "A crater for 5 minutes" is not a separate rule: the shaft (with the Murmur on) is the lasting mark; with them off
       the ground is free at once.
     - The Core's output is multiplied by the colony's difficulty `mult`, like every producer; Arrival City's boost
-      doesn't reach it. It can't be paused (turn its Generator off).
+      doesn't reach it. It can be turned off on its panel like the Shield Dome (owner, Nov 21): no Fuel burned, depth kept.
     - The Hollow's "each stage counts double" is read as every call twice as big (Brutes too).
     - The mission *Dry Ground* teaches the Murmur briefly before First Contact (Quiet, four warbots), as the sheet put it
       in Industry and Trade; its Crystal goal counts what the Core brings up (12, 20 or 30 by level).

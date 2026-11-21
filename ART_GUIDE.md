@@ -1783,6 +1783,28 @@ Transmitting on all channels. Listening on all channels."
 | (code) | No power | the glow down to a slow red blink, no beam |
 | (code) | Minimap | rings in its owner's colour pulsing out from it while it transmits, red while it stalls |
 
+### Batch 28: the Sundering Ray (installed)
+
+The owner's look **B** from the design sheet (Nov 21 2026), the "Piston Battery" (drawn on the sheet as the Seismic
+Lance; renamed the Sundering Ray), with the owner's plan for how it works (IDEAS.md): a phased array of hydraulic rams
+round a bore tower. Rendered with `renderer/b/sunder.js` at every time of day by `renderer/tools/render_sunder.sh`;
+`renderer/tools/install_sunder.py` writes the WebP files and prints its frame and marks (RENDERER.md, "The Sundering
+Ray"). Framed like the Lance (`SUNDER_FRAME`). The parts that move are each their own image on the same frame, so the
+game pumps them; the glow, smoke, dust, the ripple and the cracks are drawn in code.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `sunder@0`, `sunder@1` (+ morning, evening, night) | A 3 × 3 hazard-edged pad; a long dark-concrete block at the back, ribbed, a team stripe along its face and a hazard band at its foot, a steel tread deck with two empty ram bores (orange collars, bolt circles) and white accumulators; in the middle the bore tower over the shot hole: a steel casing in a four-legged lattice, braced, a crown deck with a team band, a yellow sheave and a red beacon; two stacks at the back corners (orange-lit mouths at night); an orange manifold with lines down to six steel-rimmed plate sockets in a row; the control cabin (lit window band, team stripe) and the pump house at the front; amber lamps, floodlights, a team light strip | the art |
+| `sunder-site1@T` | Going up: the block's formwork and rebar, the shot hole drilled with the rig over it, pallets and a heap of spoil | under 45% built; `drawSunderSite` |
+| `sunder-site2@T` | Going up: the block cast, the bores open, the tower's legs half up in scaffolding, a crawler crane leaning over | 45% to 85%; then the finished art rises over it |
+| `sunder-ram-w-0..2`, `sunder-ram-e-0..2` (+ times of day) | A great ram alone, west or east, its head down, half up or full up on its chrome rod: a dark steel cylinder with an orange band and a bolted crown. No team colour | `drawSunder` by `sunderAnim` |
+| `sunder-plate-K-0`, `sunder-plate-K-1` | Ram plate K alone, seated or raised on its two orange lift rams | the same |
+| (code) | The wind-up | the rams pump in turn and the plates drum down the row, faster as it nears the blow (`sunderPhase`); dust lifts off each plate as it comes down; the shot hole glows orange under the tower; the stacks breathe orange smoke, glowing at night |
+| (code) | The blow | a white-hot flash and a column of dust out of the shot hole; the rams slam down, the plates slam in a ripple, the far side from the aim first (`sunderOrder`) |
+| (code) | The ripple | `drawSunderGround`: a bulge running through the ground (a light crest, its shadow behind, a bright arc at its front: amber for a Quake, violet for Strike the Deep at night), a line of small cracks left along its path; `drawSunderAir`: dust kicked up along it |
+| (code) | The landing | rings of heaved ground out to the circle's edge; cracks spreading from the middle, branching, fading over 5 minutes; on Strike the Deep, the caved-in pits (violet-lit at night) |
+| (code) | The marks | cracked roads and track (dark zigzags, until mended), cracks up the walls of cracked buildings, sparks circling stunned robots, the Quake's red ring for its last 20 s (its own side sees the aim, dashed, all the way) |
+
 ### Batch 27: the Orbital Lift (installed)
 
 The owner's look **A** from the design sheet (Nov 20 2026), the "Beacon Cable". The anchor pad is rendered with

@@ -642,7 +642,7 @@ function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH,
  * unless you take the land back.
  */
 const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
-const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome']);
+const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome', 'sunder']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -1040,6 +1040,37 @@ const GUP = { at: 1500, hold: 480, gens: 3, reach: 4, genFuel: 30, rGens: 1, uEv
 /** What answers, on the end screen of a game won by contact (the owner's answer (c), Nov 2026: Earth's fate stays open). */
 const GUP_ANSWER = 'Signal acknowledged. Source unidentified. Further instructions to follow.';
 /*
+ * The Sundering Ray (BDEFS.sunder; the owner's look B, the Piston Battery, Nov 2026; drawn on the sheet as the "Seismic
+ * Lance", renamed so it doesn't share the Lance of Corvane's name): a phased array. Three great hydraulic rams in a long
+ * concrete block round its bore tower over a deep shot hole, and a row of ram plates set in the ground before it. It
+ * winds up for `charge` s (`reactorCharge` on a Reactor), the rams pumping one after another, then fires: the bore
+ * charge goes off and the plates slam in a timed ripple whose tiny delays steer the shock one way, a ray through the
+ * earth. The ripple runs through the ground at `speed` tiles a second (between `travelMin` and `travelMax` s on the
+ * way), caving in the Murmur's tunnels a tile either side of its path, and lands:
+ *   Strike the Deep (on the Murmur; aimed anywhere, only with the Murmur on): in a `deep`-tile circle every tunnel caves
+ *     in, every exit is collapsed and sealed (none opens there for `sealNights` nights: S.mur.seal), every nest loses
+ *     `nestHit` of its full armor (never below 1) and sends no raid the next night (b.sQuiet), and a Sapper underground
+ *     there dies. The nests live and the tunnels grow back as ever.
+ *   Quake (on a colony; aimed within `range` tiles of its square): a ring shows on the ground for the last `warn` s of
+ *     the wind-up, for everyone (the aim is fixed then). In a `quake`-tile circle buildings, whosever, lose `dmg` of
+ *     their full armor but never drop below `floor` of it (a Command Base or Keep takes `baseDmg` of it); their
+ *     foundations crack (b.crack): they work at `crackWork` speed until repaired to full. Roads and track crack (S.crk:
+ *     robots on them move at `crackSpeed`) until a Worker mends them (`mend` s a patch of 3 x 3 tiles), Walls and Gates
+ *     crack (they take `wallTakes` times the damage until repaired to full), robots there are stunned for `stun` s and
+ *     take no damage; aircraft aren't touched. Any tunnels and exits there cave in too.
+ * A Shield Dome doesn't stop it: it comes through the ground. Power, as the Lance of Corvane's: `gens` Generators with
+ * Fuel within `reach` tiles (a Fuel every `genFuel` s each while it winds up) or a Nuclear Reactor there with `uranium`
+ * Uranium (or an Enriched Uranium) a blow; lose the power and the blow is lost. `reload` s (`reactorReload`) after a
+ * blow it can wind up again. Winding up draws the Murmur like the Lance's charge, and they hear every blow: the next
+ * night every nest within `lure` tiles sends its packs at it first, `packMul` times bigger (Active; normal size on
+ * Quiet: b.sLure). In the Hollow every blow also brings `rocks` rocks down from the roof inside its circle. Opens `at`
+ * s into a free-play game (at once in a mission that teaches it). One per colony; everywhere, on Argos (no Murmur) a
+ * Quake weapon only. Its cracks on the ground show for `scar` s (S.sunders keeps the last `keep` blows).
+ */
+const SUNDER = { at: 1080, charge: 60, reactorCharge: 40, reload: 300, reactorReload: 240, gens: 2, reach: 4, genFuel: 30, uranium: 1,
+  deep: 16, quake: 5, range: 30, warn: 20, dmg: 0.4, floor: 0.1, baseDmg: 0.2, stun: 4, crackWork: 0.5, crackSpeed: 0.5, wallTakes: 2,
+  nestHit: 1 / 3, sealNights: 2, lure: 40, packMul: 1.5, speed: 10, travelMin: 1.5, travelMax: 6, mend: 4, rocks: 3, scar: 300, keep: 8, stroke: 0.55 };
+/*
  * The Deep Core (BDEFS.deepcore; the owner's look A, the Headframe, Nov 21 2026): a 3 x 3 winding tower over a shaft that
  * goes deeper by itself while it has power, bringing up Ore, then Crystal, then a little Uranium, and never running dry.
  * It opens `at` s into a free-play game (a mission that teaches it: at once). Power: a Generator with Fuel within `reach`
@@ -1402,6 +1433,11 @@ const BDEFS = {
     desc: 'A 2 by 2 emitter that raises a faint blue dome 9 tiles round it. It stops what falls on it from outside: Missiles, nuclear missiles (it takes one and drops), bombs and napalm, Ringfall, Howitzer and Mortar shells, rival Mass Driver canisters, falling rock in the Hollow and one Lance shot. Robots walk straight in, and guns fire through it. It has 100 strength: a Missile takes 25, a bomb 10, a shell 3, a nuke or a Lance shot all of it. Left unhit for 10 seconds it recharges 1 a second; at 0 it drops, and comes back after a minute. While up it burns a Crystal every 20 seconds (Haulers bring them) and needs a Generator with Fuel within 4 tiles. Turn it off to save Crystal: turned back on, it takes 30 seconds to come up. One per colony.',
     cost: { cement: 30, alloy: 24, chip: 12, crystal: 20 }, dome: true, mega: true, foot: 2, ammo: 'crystal', ammoCap: 6, armor: 50, buildTime: 120, war: true,
   },
+  sunder: {
+    name: 'Sundering Ray', short: 'Ray',
+    desc: 'A phased array: three great hydraulic rams in a concrete block round a bore tower, and a row of ram plates in the ground before it, 3 by 3 tiles. Its panel aims one of two blows. Strike the Deep (with the Murmur on): aim anywhere; in a 16-tile circle every Murmur tunnel caves in, every tunnel exit is sealed for 2 nights, every nest loses a third of its armor and sends no raid the next night, and a Sapper underground there dies. Quake: aim within 30 tiles of it; a ring shows on the ground for 20 seconds first, seen by everyone, then in a 5-tile circle buildings lose 40% of their full armor but never drop below 10% (a Command Base or Keep half that), their cracked foundations work at half speed until repaired to full, roads and track crack (half speed until a Worker mends them), Walls take double damage until repaired, and robots are stunned for 4 seconds. It winds up for 60 seconds, the rams pumping one after another (everyone hears it), then the ripple runs through the ground to the target. It needs 2 Generators with Fuel within 4 tiles (they burn Fuel fast while it winds up) or a Nuclear Reactor there with 1 Uranium a blow (40 s wind-up). 5 minutes to reload. A Shield Dome does not stop it. The Murmur hear every blow: the next night the nests within 40 tiles come for it first, in bigger packs. One per colony; opens 18 minutes into a game.',
+    cost: { cement: 50, alloy: 30, chip: 12, crystal: 8 }, sunder: true, mega: true, foot: 3, armor: 90, buildTime: 240, war: true,
+  },
   city: {
     name: 'Arrival City', short: 'City',
     desc: 'A 4 by 4 square built for the colonists: four concrete apartment blocks round a green, a tram waiting at the stop, all finished and all empty, with the Arrival clock on its stele in the middle and WELCOME HOME on the roof. Every factory, gatherer, Oil Pump and Bot Foundry of yours within 8 tiles of its middle works 20% faster, and Workers build 20% faster there. It holds 6 tiles of land round its middle like an Outpost, and in Domination that land counts twice. Its lights burn a Fuel a minute at night (Tankers bring it; it holds 6): out of Fuel it goes dark and its bonus halves. It can never be destroyed: fighting knocks it down to 0, its windows go dark and its bonus stops until Workers repair it. While it\'s down, armed warbots of another colony standing at its walls for 20 seconds, with none of yours there, take it, land, bonus and all. One per colony; it stores nothing. Opens 15 minutes into a game. Not on Argos.',
@@ -1458,7 +1494,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -1466,7 +1502,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'], late: true },
+  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'], late: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -2073,6 +2109,7 @@ const FLAVOR = {
   magterm: 'Phase 2 transit. Platforms to passenger standard. Departures on time; the seats stay folded.',
   mdriver: 'Survey kit to supply settlements before the roads. The settlements never came. It still fires.',
   lance: 'Orbital defence, from the archive’s last pages. Rebuilt here, aimed the other way.',
+  sunder: 'Piling rig for the arrival district’s foundations. Something under the district keeps time with it.',
   dome: 'Weather shield for the arrival district. Rated for storms. Used for everything else.',
   city: 'Homes for 12,000. Lights on at dusk, on a timer. Occupancy: pending.',
   lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',

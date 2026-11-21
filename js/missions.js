@@ -1690,6 +1690,49 @@ const MISSIONS = [
     ],
   },
 
+  // Something Keeps Time (the design sheet's mission for the Sundering Ray): the Murmur's tunnels already under the
+  // base, the Ray built, powered and fired over the nest that dug them, and the night it brings held.
+  {
+    id: 'keepstime', name: 'Something Keeps Time', chapter: 'First Contact',
+    brief: 'Tunnels are spreading under your base; the Bloom ridges already reach the Smelter. Build the Sundering Ray, strike the deep, and hold the night they answer.',
+    intro: [
+      'The <b>Sundering Ray</b> (Mega tab) is a phased array: rams in a row round a bore tower, steering a shock through the ground.',
+      'It needs <b>2 Generators</b> with Fuel within 4 tiles. It winds up for 60 seconds, and everyone hears it.',
+      '<b>Strike the Deep</b> caves in every tunnel in a 16-tile circle, seals the exits there for 2 nights and shakes the nests.',
+      'A <b>Quake</b> cracks a colony instead: buildings, roads and Walls in a 5-tile circle. A Shield Dome doesn\'t stop it.',
+      'The Murmur hear every blow. The next night the nests near it come for the Ray first, in bigger packs.',
+    ],
+    mode: 'colony', seed: 4417, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, mega: true, murmur: 'active', limit: [0, 0, 30],
+    setup(S) {
+      kit(S, [...KIT8, 'armory'], 5);
+      const P = S.players[0], L = getE(P.lander);
+      for (let k = 0; k < 6; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      P.stats.startBots = P.stats.bots;
+      L.stock.ammo = 40; L.stock.cement += 70; L.stock.alloy += 46; L.stock.chip += 18; L.stock.crystal += 14; L.stock.fuel += 24;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
+      // The nest nearest the colony has dug toward it for nights: its tunnels under the base, an exit open out there.
+      const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
+      if (near) { for (let k = 0; k < 3; k++) murmurPredig(near, 30, k === 2); S.mission.markNest = near.id; }
+    },
+    goals: [
+      { kind: 'built', type: 'sunder', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Mega</b> (<kbd>6</kbd>) → <b>Sundering Ray</b> (<kbd>Y</kbd>) near home. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='sunder'], #sh-layroad" },
+      { kind: 'rayPower', n: 1, text: 'Power the Ray with 2 Generators', at: 'sunder',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.built && b.owner === 0 && BDEFS[b.type].sunder && megaGens(b, SUNDER.reach).length >= SUNDER.gens).length,
+        hint: '<b>Make</b> (<kbd>B</kbd> <kbd>2</kbd>) → <b>Generator</b> (<kbd>G</kbd>), two within 4 tiles of the Ray. A Tanker brings Fuel.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      { kind: 'deepStruck', n: 1, text: 'Strike the Deep over the marked nest', at: 'sunder',
+        count: (P, S) => { const N = getE(S.mission && S.mission.markNest); return N && !N.dead && N.sQuiet ? 1 : N && N.dead ? 1 : 0; },
+        focus: (S) => getE(S.mission && S.mission.markNest) || null,
+        hint: 'Tap the Ray → <b>Strike the Deep</b> (<kbd>F</kbd>), tap the ringed nest, then <b>Strike</b>. Do it by day.',
+        ui: '#sh-sdeep' },
+      { kind: 'rayDawn', n: 1, text: 'Keep the Ray standing until dawn', at: 'sunder',
+        count: (P, S) => S.buildings.some((b) => !b.dead && b.built && b.owner === 0 && BDEFS[b.type].sunder && b.sLure && murmurNights(S.time) >= b.sLure && !murmurNight(S.time)) ? 1 : 0,
+        hint: 'They come for the Ray tonight: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it, and a <b>Pulse Turret</b>.',
+        ui: '#btn-attack, #ar-hold' },
+    ],
+  },
   // Chapter 7, War. Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.
   {
     id: 'supply', name: 'Supply Lines', chapter: 'War',
