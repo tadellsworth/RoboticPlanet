@@ -2806,7 +2806,7 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   its palette and touches (`DUSK_BIOMES`): glints on water, motes (dust, spores, embers, pollen, ice), light shafts (off for now: the owner, Nov 21 2026),
   plant silhouettes (a map of every plant at a few pixels a tile, made a few rows a frame and kept up with the ground:
   `duskSilTiles`), pink fog, heat haze easing off; the Bloom's glow and the Cinderlands' lava wake early (`duskWake`),
-  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead, and the
+  Steamwells' steam is lit gold (`duskSteamRgb`), the tops of the war's smoke columns catch the low sun (`duskSmokeRgb`, read by `wfxSmoke` in js/warfx.js), Argos has a hard terminator sweeping east to west instead (bowed, its middle leading, as on a round world: `D.lineAt`, `duskNightPath`), and the
   Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
   it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
   `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;

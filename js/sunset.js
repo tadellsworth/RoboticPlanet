@@ -415,23 +415,35 @@ function duskTerminator(ctx, ox, oy, z, D) {
   const sweep = D.dawn ? (((x - DUSK_TIMES.dawn[0] - 5) % DUSK_TIMES.len) + DUSK_TIMES.len) % DUSK_TIMES.len : x - DUSK_TIMES.dusk[0] - 55;
   const p = clamp(sweep / 60, 0, 1), line = ox + S.W * z * (1.12 - 1.24 * p), soft = Math.max(2, z * 0.35);
   const dark = duskRgb(D.pal.shade);
-  D.line = line; // (duskSky dims what stands on the night side too)
+  // The line is bowed, as a shadow's edge on a round world is (the owner, Nov 21 2026): its middle (the map's middle
+  // row) leads by `bend`, its ends trail, an arc across the map's height.
+  const bend = S.H * z * 0.09, cy = oy + S.H * z / 2, hh = Math.max(1, S.H * z / 2);
+  D.line = line; D.lineAt = (y) => { const t = Math.max(-1.4, Math.min(1.4, (y - cy) / hh)); return line - bend * (1 - t * t); };
   ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.82 * a;
   ctx.fillStyle = dark;
-  if (D.dawn) { if (line > 0) ctx.fillRect(0, 0, Math.min(R.w, line - soft), R.h); } // (dawn: the night still lies west of it)
-  else if (line < R.w) ctx.fillRect(Math.max(0, line + soft), 0, R.w, R.h); // (dusk: night has come east of it)
-  if (line + soft > 0 && line - soft < R.w) {
-    const g = ctx.createLinearGradient(line - soft, 0, line + soft, 0);
-    g.addColorStop(D.dawn ? 1 : 0, 'rgba(255,255,255,1)'); g.addColorStop(D.dawn ? 0 : 1, dark);
-    ctx.fillStyle = g;
-    ctx.fillRect(line - soft, 0, soft * 2, R.h);
-    // the last of the light along the line: a thin, cold rim
-    ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = 0.35 * a;
-    ctx.fillStyle = 'rgb(200,214,255)';
-    ctx.fillRect(D.dawn ? line + soft * 0.2 : line - soft * 0.6, 0, Math.max(1, soft * 0.4), R.h);
+  const steps = 6; // (the soft edge: the night laid down in thin bands across the line, fading in)
+  for (let i = 0; i < steps; i++) {
+    ctx.globalAlpha = (0.82 * a) / steps;
+    duskNightPath(ctx, D, -soft + (2 * soft * (i + 0.5)) / steps);
+    ctx.fill();
   }
+  // the last of the light along the line: a thin, cold rim
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.35 * a;
+  ctx.strokeStyle = 'rgb(200,214,255)'; ctx.lineWidth = Math.max(1, soft * 0.4);
+  ctx.beginPath();
+  for (let y = 0; y <= R.h + 8; y += 8) { const x = D.lineAt(y) + (D.dawn ? soft * 0.4 : -soft * 0.4); if (y === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  ctx.stroke();
+}
+
+/** The night side of Argos's bowed terminator (D.lineAt), shifted `off` px toward the night, as the current path. */
+function duskNightPath(ctx, D, off) {
+  const d = D.dawn ? -1 : 1, edge = D.dawn ? -10 : R.w + 10;
+  ctx.beginPath();
+  ctx.moveTo(edge, -10);
+  for (let y = -10; y <= R.h + 10; y += 8) ctx.lineTo(D.lineAt(y) + d * off, y);
+  ctx.lineTo(edge, R.h + 10);
+  ctx.closePath();
 }
 
 /**
@@ -453,7 +465,7 @@ function duskSky(ctx, ox, oy, z) {
     ctx.globalCompositeOperation = 'multiply';
     ctx.globalAlpha = 0.45 * D.env / (D.dawn ? 0.62 : 1);
     ctx.fillStyle = duskRgb(P.shade);
-    if (D.dawn) { if (D.line > 0) ctx.fillRect(0, 0, Math.min(R.w, D.line), R.h); } else if (D.line < R.w) ctx.fillRect(Math.max(0, D.line), 0, R.w, R.h);
+    if (D.lineAt) { duskNightPath(ctx, D, 0); ctx.fill(); }
   }
   if (D.saver || D.B.terminator) { ctx.restore(); return; }
   // The glare: the low sun just off the screen's edge.
