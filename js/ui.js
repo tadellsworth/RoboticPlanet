@@ -124,16 +124,22 @@ function initUI() {
       if (!ok) toast('The rival difficulty could not be changed.', 'warn');
     });
   };
-  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
+  $('btn-pause').onclick = () => { if (UI.menuSettings) closeMenuSettings(); UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); pauseView('main'); $('screen-pause').hidden = false; showCheckpoints(); syncSaved(); syncGfx(); sfx('click'); };
   $('p-keys').onclick = openKeys;
   $('keys-close').onclick = closeKeys;
   $('screen-keys').onclick = (e) => { if (e.target === $('screen-keys')) closeKeys(); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
-  $('p-back').onclick = () => { sfx('click'); pauseView('main', true); };
+  $('p-back').onclick = () => { sfx('click'); if (UI.menuSettings) closeMenuSettings(); else pauseView('main', true); };
+  // The same Settings from the main menu (its Settings pill): over the menu, Back or Esc returns to it.
+  $('m-settings').onclick = () => { sfx('click'); openMenuSettings(); };
+  // Menu background (js/menuplanet.js): Classic (the demo game) or Planet, at once.
+  UI.syncMenuBg = () => { for (const b of $('p-menubg').children) { const on = b.dataset.v === menuBg(); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } };
+  UI.syncMenuBg();
+  for (const b of $('p-menubg').children) b.onclick = () => { setMenuBg(b.dataset.v); UI.syncMenuBg(); sfx('click'); };
   // Its choices (Graphics, Time of day) are radio groups: ← → (↑ ↓) pick the next one, as anywhere else.
-  for (const id of ['p-gfx', 'p-daynight', 'p-scars']) {
+  for (const id of ['p-gfx', 'p-daynight', 'p-scars', 'p-menubg']) {
     $(id).addEventListener('keydown', (e) => {
       const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
       if (!d) return;
@@ -392,8 +398,28 @@ function pauseView(v, focus) {
   $('p-setview').hidden = !set;
   $('screen-pause').querySelector('.card').classList.toggle('p-set', set);
   $('screen-pause').scrollTop = 0;
-  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); if (UI.syncScars) UI.syncScars(); }
+  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); if (UI.syncScars) UI.syncScars(); if (UI.syncMenuBg) UI.syncMenuBg(); }
   if (focus) $(set ? 'p-back' : 'p-settings').focus({ preventScroll: true });
+}
+
+/**
+ * Settings from the main menu: the pause menu's Settings view, opened on its own over the menu (#screen-pause.from-menu,
+ * which also hides its first view). Everything there is a device setting, so all of it applies here too. Back or Esc
+ * closes it and the focus returns to the menu's Settings pill.
+ */
+function openMenuSettings() {
+  if (UI.inGame) return;
+  UI.menuSettings = true;
+  $('screen-pause').classList.add('from-menu');
+  pauseView('settings');
+  $('screen-pause').hidden = false; // (initDialogs moves the focus in, and back to the pill on the way out)
+}
+function closeMenuSettings() {
+  UI.menuSettings = false;
+  $('screen-pause').hidden = true;
+  $('screen-pause').classList.remove('from-menu');
+  pauseView('main');
+  if (!UI.inGame && !$('screen-menu').hidden) $('m-settings').focus({ preventScroll: true });
 }
 
 /*
@@ -746,6 +772,7 @@ function initMenu() {
   // Esc: close the picker, then go back from Customise to Home.
   window.addEventListener('keydown', (e) => {
     if (UI.inGame || e.key !== 'Escape' || $('screen-menu').hidden) return;
+    if (UI.menuSettings) { e.preventDefault(); closeMenuSettings(); return; }
     if (!$('screen-feedback').hidden) { e.preventDefault(); closeFeedback(); return; }
     if (!$('screen-lore').hidden) { e.preventDefault(); closeLore(); return; }
     if (UI.picker) { e.preventDefault(); closePicker(); return; }

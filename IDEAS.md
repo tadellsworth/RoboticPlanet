@@ -617,7 +617,9 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     - 40-game batch: no game undecided (1 before). Wins of 16: Salvager 11, Herald 11, Steward 9, Architect 6, Warden 3.
   - **The main menu as Corvane's system** (done, Nov 21 2026: `js/menuplanet.js`): Ithaca I on a slow orbit round
     Corvane with the Ring, Argos and its shadow, the Carriers, ringfall and the Wren; the war flickering on the night side
-    and, rarely, a nuclear blast. Still open: the other planets of the system (Ithaca I is the fourth; LORE.md names
+    and, rarely, a nuclear blast. Since Nov 21 2026 it's a choice, **Menu background** in Settings (now also on the
+    main menu), and **Classic** (the demo game) is the default for now, the owner's call. Still open: whether Planet
+    becomes the default later; the other planets of the system (Ithaca I is the fourth; LORE.md names
     none), and whether the Wren's waystation could show at the system's edge.
   - **Map edges, looks only** (done, Nov 20 2026: `natureOffMap` in `js/nature.js`): faded, unplayable terrain carries
     on past the map's edge (the map's own ground mirrored there) into a haze of the biome's colour that thickens outward,
