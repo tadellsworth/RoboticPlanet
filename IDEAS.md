@@ -34,7 +34,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   privacy note (only ID, name and scores until accounts), and Cloudflare's free tier covering it.
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
-  **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Groundbreaker** (not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
+  **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
   Atmosphere Engine A Rain Tower with the missions Rain, Seed Vault, Under the Bloom and Landing Zone; build order City
   look, Deep Core, Seismic Lance, Atmosphere Engine. Ask the owner before starting each.
   - **Arrival City's new look: DONE (Nov 21 2026).** Four Blocks round a Square replaced the Terraced Arcology outright
