@@ -2068,7 +2068,7 @@ function dispatch(p) {
   function collectCrates(priority, workersOnly = false) {
     for (const l of S.loot || []) {
       if (!idle.length) return;
-      if ((l.dismantled === p && !P.ai) !== priority) continue;
+      if ((l.dismantled === p) !== priority) continue; // (&& !P.ai, rivals' own crates not first, was reverted Nov 21 2026: a save then didn't play on the same, murmur-forms-sim-test)
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
