@@ -3112,9 +3112,14 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     // The Lance of Corvane: its gun on the turntable turns to its aim (lance-head-0…15), and its rings light as it charges.
     if (type === 'lance') {
-      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'lance');
+      const aim = b && b.aim !== undefined ? b.aim : -Math.PI / 4, head = turretHead(owner, aim, 'lance');
+      // The art comes in 16 ways; the gun is turned the rest of the way (up to 11°) about its turntable, so it points
+      // along the shot exactly and swings round smoothly (the owner, Nov 21 2026).
+      const tw = lanceTwist(b, aim, cx, cy, s);
+      if (tw) { ctx.save(); ctx.translate(tw.x, tw.y); ctx.rotate(tw.d); ctx.translate(-tw.x, -tw.y); }
       if (head) drawArt(ctx, head, cx, cy, s);
       if (b && b.id) drawLanceCharge(ctx, b, cx, cy, s);
+      if (tw) ctx.restore();
     }
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
@@ -10215,6 +10220,19 @@ const LANCE_ART = [
   { r: [[0.418, -0.722], [0.558, -0.86], [0.697, -0.997], [0.836, -1.134], [0.973, -1.27], [1.109, -1.405], [1.245, -1.539], [1.38, -1.672]], m: [1.656, -1.945], b: [-0.398, 0.085] },
   { r: [[0.551, -0.563], [0.737, -0.649], [0.922, -0.734], [1.108, -0.82], [1.293, -0.906], [1.478, -0.991], [1.662, -1.077], [1.847, -1.162]], m: [2.228, -1.338], b: [-0.517, -0.07] },
 ]; // (the dome's height drawn up the screen: DOME_K of its reach)
+
+/**
+ * How far Lance b's gun is turned past the nearest of its 16 drawn ways (radians, up to half a step), and the turntable
+ * it turns about (screen px): the point on the barrel's line behind its first ring, from lanceMarks. Null: no need.
+ */
+function lanceTwist(b, aim, cx, cy, s) {
+  if (!b) return null;
+  const step = (Math.PI * 2) / 16, d = aim - Math.round(aim / step) * step;
+  if (Math.abs(d) < 0.003) return null;
+  const M = lanceMarks(b), r0 = M.r[0], r7 = M.r[7], L = Math.hypot(r7[0] - r0[0], r7[1] - r0[1]) || 1;
+  const ux = (r7[0] - r0[0]) / L, uy = (r7[1] - r0[1]) / L;
+  return { d, x: cx + (r0[0] - ux * 0.6) * s, y: cy + (r0[1] - uy * 0.6) * s };
+}
 
 /** Where Lance b's head points (way k of 16) and its marks then (from LANCE_ART, or worked out if the art isn't in). */
 function lanceMarks(b) {

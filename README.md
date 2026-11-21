@@ -2192,6 +2192,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     water: `drawCuts`, `drawLanceBeams`) and on War scars burns the core's ground to ash with the animals there and
     scorches the edge lighter (`scarTrench`). The aim line (`drawLanceLine`) shows the core as a red band and the edge
     as a fainter orange one, buildings in the core ringed red (yours amber) and those only in the edge ringed dashed. Then `reload` (240) s. Not in the Hollow (`worldBan`).
+  - The Lance's gun turns toward its aim at 0.35 rad/s (`updateLance`, `b.aim`); its art has 16 ways, and the render
+    turns the nearest one the rest of the way about the turntable (`lanceTwist`), so it points exactly along the shot
+    and swings smoothly (Nov 21 2026).
   - **The Shield Dome** (`BDEFS.dome`, `DOME`; key H; 30 Cement, 24 Alloy, 12 Chips, 20 Crystal; 180 s). Up while it
     has power (a Generator with Fuel within `reach` 4) and Crystal (one every `crystal` 20 s, `cap` 6, hauled as its
     ammo): `updateDome`, `b.dUp`. `domeCatch(x, y, by, kind, sx, sy)` in each impact (`missileImpact`, `nukeImpact`,
