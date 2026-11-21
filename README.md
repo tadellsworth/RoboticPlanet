@@ -1414,6 +1414,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Rematch** (end screen): `UI.lastGame` holds the options `startNewGame` used (or the mission and difficulty) for the
     game being played; Rematch calls `startNewGame(opts)` again (no new random pick), or `startMission`. Hidden in
     multiplayer, Observer mode, after a loaded game and after a lost or final mission (Try again / Play it again).
+- **The Daily Planet** (`js/polish3.js`): the main menu's card (`m-daily`) starts the day's game: `dailySetup(date)`
+  turns the UTC date (`dailyDate`, YYYY-MM-DD) into ordinary `startNewGame` options by a hash of it (map type of the
+  ones taking two or three colonies, players, biome, ground, resources, three different doctrines, seed, planetary
+  events; Versus on Normal, no challenge modifiers), so the game itself stays a plain one. A win's time is kept per day
+  in `terrafall.daily` (`{ tries, wins, best }`, the last 60 days; not with Boosts) by `dailyOver` on the end screen,
+  which also says so; Rematch reuses the same options and counts too. No online leaderboard.
 - **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
   and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
@@ -3073,6 +3079,7 @@ js/scout.js               scout reports in your own games: what a computer rival
 js/blueprint.js           blueprints: a block of buildings and its roads kept on the device, placed again through orders
 js/qol.js                 interface helpers: camera spots, recent alerts (J), goods a minute and warnings, save slots and Continue
 js/polish.js              interface helpers: reach rings, health bars switch, +N popups, panel ?, Idle (,), Surrender, Rematch
+js/polish3.js             the Daily Planet, multiplayer chat, Ready and colours in the lobby, who's reconnecting
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
@@ -3114,7 +3121,26 @@ How it plays opens the whole of it) and taps
 
 - The menu button (top right) opens the menu without stopping the game; **Pause the game for everyone** pauses all
   of you (anyone can resume). The game runs at one speed for everyone.
+- **Your colour and Ready** (`js/polish3.js`, on a relay with the `prefs` cap): each player picks one of the four team
+  colours in the lobby (`mp-colors`; one taken by someone else is disabled) and taps **Ready** (`mp-ready`); both go to
+  the relay as `prefs {ready, color}` and come back in the lobby's seats. The host's **Start game** waits for everyone
+  here to be ready (`mpReadyGate`: a second tap within 5 s starts anyway). At the start the host turns the picks into
+  `settings.look` (`mpLook`: by colony, a pick where it's free in seat order, then the usual colours), and every device
+  applies it in `mpOnStart` before the game is made (`applyLook`: `PLAYER_COLORS`, `RIVAL_NAMES`, `CALLSIGNS` and
+  `TEAM_ART`, so `artFor` picks the team art `@<artTeam(owner)>`). The game itself never reads it (not in `hashState`);
+  any other game wears the usual look (`lookTick`).
+- **Chat** (`js/polish3.js`): in the lobby (`mp-chat`, relay `chat` cap) and in the game (**Enter**, or the round Chat
+  button `btn-chat` on touch; Enter sends, Esc closes, Tab or **All/Team** picks who reads it when you have a teammate
+  and a human rival). Lines are plain text (escaped, control characters dropped, 140 characters) sent as `chat
+  {text, id, team?, to?}`; the last 40 are kept, the last 6 fade over the map. **Mute** (`terrafall.chatMute`) hides
+  the others' lines and counts them on the button. Never an order, never in the game.
+- **Pings** (`js/coop.js`) are team-only: they go to the people running your colony and your allies' players
+  (`mpTeammates`), never to a rival, and a game with no teammate has none. **Alt+click** on the map or minimap, `.`
+  under the pointer, a long press (550 ms) on the minimap, or **Ping** on the bar; three per 5 s (`PING_RATE`).
 - If someone's connection drops, the others' games wait for it; after 12 seconds the computer runs that colony.
+  The relay's presence (its `lobby` message, in a game too) marks who is reconnecting: the waiting banner says
+  *Waiting for Sam (reconnecting)*, and *Sam reconnected.* when they're back (`mpPresence3`). The dropped device shows
+  **Reconnecting…** (with the try count) while `net.js` retries by itself, then catches up from the relay's log.
   When the device comes back it catches up and the colony is handed back. A page that reloads (or a phone app that
   was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others. Rejoining a
   paused match keeps it paused. **Cancel** keeps the seat available for another attempt.
@@ -3186,6 +3212,16 @@ the upload (Cloudflare not yet seeing a Worker it has just been sent: "This Work
 
 The relay runs locally too: `cd relay && npx wrangler dev`, then open the game with `?relay=ws://127.0.0.1:8787`.
 
+**Relay update for polish round 3 (redeploy needed).** The relay now says what it can do in `hello` (`caps:
+['chat', 'prefs']`), keeps each seat's `ready` and `color` (the lobby message `prefs`; both are in the lobby's seats),
+passes lobby `chat` lines to the others, and in a game passes `chat`, `mark` and `cur` unnumbered and unlogged, to the
+players in `to` when given (a team's chat and pings never reach a rival's device); chat is cleaned and limited to 6
+lines in 5 s a seat. Run **Deploy multiplayer relay** (or push a change to `relay/`) to put it live. Until then the game
+works as before on the old relay: with no `caps` it hides Ready, the colour picker and lobby chat (the host starts as
+before, everyone in their usual colours), and in-game chat goes as an ordinary numbered message (the old relay passes
+anything in a game on), filtered for the team on each device. Old copies of the game on the new relay ignore the new
+fields and messages. Tests: `node relay/test/room.test.mjs`.
+
 **Player feedback.** The relay also takes the game's **Send feedback** form (`js/feedback.js`; see Send feedback above):
 `POST /feedback` (`relay/src/feedback.js`, whose header has the exact contract) with JSON `{ type, text, contact?, meta?,
 save?, shot?, website? }` answers 200 `{ ok: true, n }`, and each report becomes issue #n in a private GitHub repository,
@@ -3255,11 +3291,12 @@ node tools/smoke-test.js http://localhost:8000/ .
 
 ```bash
 node relay/test/saves.test.mjs
+node relay/test/room.test.mjs
 ```
 
 The first two play complete AI-vs-AI games (or an AI colony) in a few seconds and print the economy
-each minute. The smoke test needs Playwright and a running local server. The last tests the relay's cloud saves (see
-Multiplayer, Cloud saves).
+each minute. The smoke test needs Playwright and a running local server. The last two test the relay's cloud saves and its rooms'
+chat, Ready and colours (see Multiplayer, Cloud saves).
 
 ## Ideas for next steps
 

@@ -38,6 +38,21 @@ minute with the full-output and robot-limit warnings, and five named save slots 
   set can reach a few MB. If browsers start refusing, the slots could move to IndexedDB.
 - Tapping a whole message (not just its Go chip) to go there would stop taps reaching the map beneath it; kept to Go.
 
+## Polish round 3 (built Nov 21 2026; open questions)
+
+The Daily Planet, multiplayer chat, team pings (Alt+click, a long press on the minimap), Ready and colour picks in the
+lobby, and "X reconnecting" are in the game (`js/polish3.js`; see the README). The relay needs a redeploy for Ready,
+colours and lobby chat (the old one still plays, without them). Still open:
+- **Daily Planet leaderboard**: the best time is only kept on the device. A shared board would need the relay to keep
+  scores (and some check against made-up times); worth it?
+- **Pings in a free-for-all** go nowhere (team-only, by choice). Should a 1 vs 1 or FFA allow pinging for yourself, as
+  a marker?
+- **Colours beyond the four teams**: the art is recoloured only to cyan, red, green and purple, so the lobby offers
+  those four. More would need more recolours (`recolorArt`).
+- **Chat filter**: there is none beyond plain text and a rate limit (6 lines in 5 s). Mute is all-or-nothing; muting
+  one player could come later.
+- The Daily Planet is always Normal and Versus. A weekly harder one (Hard, a challenge modifier) could sit beside it.
+
 ## Polish round 2 (built Nov 21 2026; open questions)
 
 Reach rings, health bars (with a Settings switch), +N goods popups, a ? on panels, the Idle button (,), Surrender and
