@@ -2109,7 +2109,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', gup: 'u' },
+  mega: { lance: 'l', dome: 'h', city: 'c', lift: 'o', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans)
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
 /**
@@ -7300,6 +7300,7 @@ function ownedText(type) {
   if (BDEFS[type].city && worldBan(type)) return 'Not on the moon';
   if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
   if (BDEFS[type].lift && worldBan(type)) return 'No sky down here';
+  if (BDEFS[type].deepcore && !deepOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(DEEP.at / 60)}:00`;
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -7900,6 +7901,19 @@ function refreshBuildingSheet(b) {
       const c = b.lfMove === 1 ? 'coming down' : b.lfMove === 2 ? 'going up' : 'at the anchor';
       parts.push(`<div class="kv"><span>Fall line</span><span>${liftLen()} tiles ${LIFT_DIR_NAMES[b.lfDir || 0]} (drawn on the map): if an enemy destroys it, the cable comes down there${b.armor < def.armor * LIFT.weak ? ': <b class="err">cable unstable</b>' : ''}</span></div>`);
       if (b.owner !== ME) parts.push(`<div class="kv"><span>Climber</span><span>${c}${b.lfMove === 1 && b.lfPaid ? `: lands in ${fmtSecs(Math.max(0, LIFT.climb - (b.lfT || 0)))}` : ''}</span></div>`);
+    }
+    if (def.deepcore && b.built) {
+      // Its depth gauge: three lamps (the stages), and how far down the shaft is toward the next.
+      const st = b.dcStage || 1, T = b.dcT || 0, lamps = [1, 2, 3].map((k) => `<span class="dc-lamp${k <= st ? ' on' : ''}" title="Stage ${k}: ${DEEP_STAGE_NAMES[k - 1]}"></span>`).join('');
+      const nx = st < 3 ? DEEP.stages[st] : 0, f = st < 3 ? (T - DEEP.stages[st - 1]) / (nx - DEEP.stages[st - 1]) : 1;
+      parts.push(`<div class="kv"><span>Depth</span><span>${lamps} Stage ${st}, ${DEEP_STAGE_NAMES[st - 1]}${st < 3 ? `: stage ${st + 1} after ${fmtSecs(nx - T)} more of power` : ': at its deepest'}</span></div><div class="bar"><div style="width:${Math.round(Math.max(0, Math.min(1, f)) * 100)}%;background:#a77cff"></div></div>`);
+      const R = deepRates(b), out = Object.keys(R).map((g) => g === 'uranium' ? `a Uranium every ${Math.round(1 / R[g])} min` : `${R[g]} ${GOOD[g].name} a minute`).join(', ');
+      parts.push(`<div class="kv"><span>Brings up</span><span>${out}${b.armor < def.armor * DEEP.weak ? ' (<b class="err">half</b>: it is damaged, and goes no deeper)' : ''}</span></div>`);
+      if (mine) {
+        parts.push(`<div class="kv"><span>Hoppers</span><span>${['ore', 'crystal', 'uranium'].map((g) => goodTag(g, `${Math.floor(b.stock[g] || 0)}/${DEEP.cap}`, (b.stock[g] || 0) >= DEEP.cap)).join(' ')} (Haulers carry them off)</span></div>`);
+        parts.push(`<div class="kv"><span>Power</span><span>${b.dcSrc === 'reactor' ? 'A Nuclear Reactor in reach (no Uranium used)' : b.dcSrc === 'gen' ? `A Generator in reach: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute` : `<b>None</b>: a Generator with Fuel within ${DEEP.reach} tiles, or a Nuclear Reactor`}</span></div>`);
+      }
+      if (b.dcCall && murmurCfg()) parts.push(`<div class="kv"><span>Heard below</span><span><b class="err">${b.dcCall >= 3 ? 'The next night the Deep answers: Brutes, and a new tunnel exit by it' : 'The next night a bigger raid comes for it'}</b></span></div>`);
     }
     if (def.city && b.built) {
       const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;

@@ -100,7 +100,7 @@ Bloom and Argos, the moon; scenery only, with plants that roads and buildings cl
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
 and switches for the **Nuclear race** (on by default), **Megastructures** (on by default: the Lance of Corvane, the Shield
-Dome, Arrival City, the Orbital Lift and the Great Uplink; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), the **Great Uplink win** (beside Victory, off by default, Versus only: a second way to win alongside any Victory, teams too; greyed out without Megastructures or on the Hollow; `UI.menu.upwin`, `S.settings.upWin`, `gupWinOn`; carried in the lobby's and lockstep's settings and in Observer mode; a mission's `upWin`; a save from before it loads with it off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
+Dome, Arrival City, the Orbital Lift, the Deep Core and the Great Uplink; `S.settings.mega`, `megaOn`; missions keep their own, `mega` in a mission; a save from before it loads with them off), the **Great Uplink win** (beside Victory, off by default, Versus only: a second way to win alongside any Victory, teams too; greyed out without Megastructures or on the Hollow; `UI.menu.upwin`, `S.settings.upWin`, `gupWinOn`; carried in the lobby's and lockstep's settings and in Observer mode; a mission's `upWin`; a save from before it loads with it off), **Planetary events** (off by default), **The Murmur** (Off, Quiet or
 Active, Active by default, for Versus and Colony; shown Off and greyed on Lunar; a map type's `murmur` sets it when picked),
 **Day and night** (Always day isn't offered while the Murmur are on) and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -216,6 +216,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles; can be turned off (30 s to come back up) |
 | Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
 | Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
+| Deep Core | 60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 3 × 3 tiles, armor 100, one per colony (Megastructures), from 20 minutes in: a winding tower over a shaft that goes deeper while it has power (a Generator within 4 tiles, a Fuel a minute, or a Reactor, no Uranium): 6 Ore a minute; after 6 minutes 8 Ore and 3 Crystal; 10 minutes later 10 Ore, 4 Crystal and a Uranium every 4 minutes; never runs dry; 30 of each in its hoppers for Haulers; the Murmur raid it the night after each stage, and its open shaft is their exit once it's destroyed (see Megastructures below) |
 | Orbital Lift | 60 Cement, 44 Alloy, 26 Chips, 20 Crystal, 3 × 3 tiles, one per colony (Megastructures), not in the Hollow: calls a climber down from the Carrier (6 Warbots and 2 Bulwarks, 6 Workers and 2 Freight Trucks, 30 Alloy or 18 Chips; 45 s; then 6 minutes), 6 drops in the Carrier's reserve; 30 goods sent up put a drop back and make the next drop half again bigger (up to double); 2 Fuel a climb from a Generator within 4 tiles; destroyed by an enemy, its cable falls along the fall line set with R when placing (see Megastructures below) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
@@ -2242,7 +2243,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
-  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3 or 3)
+  `late`: drawn after All, key **6**; L the Lance, H the Dome, C Arrival City, O the Orbital Lift, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 2, 4, 3, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -2353,6 +2354,43 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (`drawCableWreck`), sparking for `sparks` (60) s. Sound (`js/audio.js`): `liftHum` (the cable's held note, a whine
     while a climber moves), `liftclimb`, `liftland`, `liftgroan`, `liftsnap`, `liftimpact`. Its panel: `renderLiftSection`
     (the six lamps, Call down on Z X C V, Restock the Carrier).
+  - **The Deep Core** (`BDEFS.deepcore`, `DEEP`; key E (D pans); 60 Cement, 40 Alloy, 20 Chips, 10 Crystal; 300 s; 3 × 3;
+    armor 100; the owner's look A, the Headframe, and the sheet's numbers, Nov 21 2026). Opens `DEEP.at` (20 min) into a
+    free-play game (`deepOpen`; at once in a mission). `updateDeep`: power from a Nuclear Reactor within `reach` (4) tiles
+    (`deepReactor`; no Uranium used) or a Generator there with Fuel (`deepGen`): it takes a Fuel from it every `genFuel`
+    (60) s itself (`b.dcFuel`, `b.dcGen`; the Core isn't in the Generator's own reach list, and a Generator feeding one
+    runs for it: `deepFeeds` in `updateGenerator`); `b.dcSrc` says which. Without power (or cut by the Murmur) nothing
+    happens and `b.dcT` (seconds of depth) is kept. Powered it is `working`; above `weak` (half) of its armor `b.dcT`
+    grows; `deepStageAt` gives the stage from `stages` [0, 360, 960] (`b.dcStage`; `deepDeeper` on reaching one: told,
+    `logEvent` `deep`, `P.stats.deepStage`). It brings up `out[stage - 1]` a minute (6 Ore; 8 Ore, 3 Crystal; 10 Ore, 4
+    Crystal, 0.25 Uranium) times the colony's `mult`, half below `weak` (`deepRates`; no Crystal on Argos), into its own
+    stock (`b.dcAcc` the fractions; `def.out` 30 of each, Haulers take it as from any producer; full, that good waits),
+    counted in `P.stats.deepOre`, `deepCrystal`, `deepUranium`. The Murmur: at work it is `chargeWorth` 3 and adds to
+    `murmurPower` like a Generator. A stage reached with the Murmur on and a nest standing sets `b.dcCall` (the stage)
+    for night `b.dcCallN` (the next one): `deepWarn` tells its owner at dusk, and `deepCalls` (from `murmurTick`, 50 s into
+    that night) sends a pack for it (`raid` with `focus` the Core) of `call` (1.5) times the night's (`MURMUR` `pack`),
+    `hollow` (2) times that in the Hollow, from the exit nearest it; at stage 3 first `deepExit` opens a new exit within
+    `exitR` (8) tiles of it (open, reachable, `exitRoom`; for good, until collapsed) and `breakers` (2) Brutes more come
+    (`logEvent` `deepCall`); at dawn, still standing, `deepHeld` counts `P.stats.deepHeld`. Destroyed by force
+    (`destroyBuilding`), its stock is lost (no crates) and so is its depth; with the Murmur on, `deepShaft` puts a tunnel
+    exit (`burrow`, `e.shaft` its colony, the nearest nest's) on its middle tile, and that colony's Workers cap it by
+    themselves (the worker pass, `deepShaftsFor`, `assignCap`, task `capshaft`, `doCap`: `capCement` (4) Cement taken from
+    storage once, `e.capPaid`; `capT` (20) s of work, `e.capT`; `P.stats.shaftsCapped`), or warbots collapse it as any
+    exit. Saved with the building (`dcT`, `dcStage`, `dcAcc`, `dcSrc`, `dcFuel`, `dcGen`, `dcGenT`, `dcCall`, `dcCallN`,
+    `dcWarn`, `dcHeldN`; on a shaft `shaft`, `capper`, `capT`, `capPaid`); `hashState` covers them. Its panel (the dynamic
+    part of the building sheet): the gauge's three lamps and a bar to the next stage, what it brings up, its hoppers, its
+    power and the coming call. Art: `renderer/b/deepcore.js` (`tools/render_deepcore.sh`, `tools/install_deepcore.py`):
+    `deepcore@T` (the tower without its wheels) at every time of day, framed as the Lift (`DEEP_FRAME`), and the wheels
+    alone, `deepcore-work-0`…`7` (through 60 degrees, one set for every team), drawn over it by `drawDeep`: turning at 8
+    frames a second while it works, standing where they stopped when not (`DEEP_WHEEL`, looks only). In code
+    (`deepLights`, from `DEEP_MARKS`): the violet glow rising out of the shaft from stage 2, brighter and pulsing at stage
+    3, faint by day (`deepGlow`), the gauge's lamps (the next one blinking while it works toward it), the floodlit wheels at
+    night, and its light pools. Sound (`js/audio.js`): `deepHum` (its winding engine and drill on screen, sinking with each
+    stage; the wheels' clank) and `deepstage` (a stage reached). Rivals: `aiDeep` (outside `AI_MEGA_KIND`, so never under
+    the cap): any rival, from `DEEP.aiAt` (30 min), once it has dug Ore and none of its Ore Mines has any left in reach,
+    half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
+    a Generator then going up beside it; `aiMegaSpot`), the goods of both first; `aiDeepGuard` rallies up to 8 warbots by it before dusk on a call
+    night (`P.deepRally`, called back at dawn). The Salvager marches on a foe's stage-3 Core (`aiMarch`).
   - **The Great Uplink** (`BDEFS.gup`, `GUP`; key U; 50 Cement, 40 Alloy, 30 Chips, 24 Crystal; 200 s; 3 × 3; armor 120;
     the owner's look A, the Dish Array, Nov 2026). Only in a game with the **Great Uplink win** on (`gupWinOn`:
     `S.settings.upWin`, Megastructures on, Versus, not the Hollow; `megaBlocked` and `worldBan` say why, and the Build menu
@@ -2386,7 +2424,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     the music falls silent, then one answering tone (`gupanswer`).
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance or the nukes: the `megaPick` choice counts as the one) and two megastructures in all; a
-    Shield Dome (`shield`) never counts. Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
+    Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect
     and Steward; the Orbital Lift for the Warden, and the Herald from `AI_MEGA.heraldLift`, 19 min; none for the
     Salvager; Arrival City for all in Domination: `aiMegaMain`). `aiLift` places the Lift from `AI_MEGA.liftAt` (15 min)
     once it has a Bot Foundry and half its Cement and Crystal (`aiLiftFunds`), with its line over the fewest of its own

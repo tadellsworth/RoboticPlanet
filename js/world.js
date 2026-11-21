@@ -2501,7 +2501,7 @@ function mapDims(st) {
 }
 
 /**
- * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City, the Orbital Lift)? The Megastructures setting (on unless the
+ * Are the megastructures in this game (the Lance of Corvane, the Shield Dome, Arrival City, the Orbital Lift, the Deep Core)? The Megastructures setting (on unless the
  * game setup turned it off; a save from before it: off), and in a mission only one that teaches them (S.mission.mega).
  */
 function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission || !!S.mission.mega); }
@@ -2510,6 +2510,7 @@ function megaOn() { return !!(S && S.settings && S.settings.mega) && (!S.mission
 function megaBlocked(owner, type) {
   if (!megaOn()) return S && S.mission ? 'No megastructures in this mission.' : 'Megastructures are off in this game (game setup).';
   if (BDEFS[type].gup && !gupWinOn()) return S && S.mission ? 'No Great Uplink in this mission.' : S && S.settings && S.settings.upWin ? 'No Great Uplink here: no sky to transmit to.' : 'The Great Uplink win is off in this game (game setup, beside Victory).';
+  if (BDEFS[type].deepcore && !deepOpen()) return `The Deep Core opens ${Math.round(DEEP.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(DEEP.at - S.time))}.`;
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
@@ -2520,6 +2521,9 @@ function megaBlocked(owner, type) {
  * off), with Megastructures on, in a Versus game (never Colony), and never in the Hollow, which has no sky.
  */
 function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow; }
+
+/** Can the Deep Core be built yet (DEEP.at s into a free-play game; at once in a mission that teaches it)? */
+function deepOpen() { return !!S && (!!S.mission || S.time >= DEEP.at); }
 
 /** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
 function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
@@ -5109,6 +5113,8 @@ function destroyBuilding(b, burn, quiet) {
   if (BDEFS[b.type].city && b.built && !b.gone && typeof cityDown === 'function') { b.armor = 0; cityDown(b, -1); return; }
   // An Orbital Lift destroyed by force: a foe's doing, its cable falls along its line (liftDown); a climber on it is lost.
   if (BDEFS[b.type].lift && b.built && typeof liftDown === 'function') liftDown(b, !!burn);
+  // A Deep Core destroyed by force: its depth and stock are lost, and its open shaft can become a Murmur exit (deepShaft, below).
+  const shaft = !!(BDEFS[b.type].deepcore && b.built && burn && !b.gone && typeof deepShaft === 'function');
   // A Nuclear Reactor destroyed by a foe: its core is breached, a ruin and a radiation zone (reactorDown, RAD).
   if (b.type === 'reactor' && b.built && burn && typeof reactorDown === 'function') reactorDown(b);
   // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
@@ -5118,7 +5124,7 @@ function destroyBuilding(b, burn, quiet) {
   const boom = burn && b.built && BDEFS[b.type].explodes && typeof burnLiquids === 'function' ? burnLiquids(b) : -1;
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect. A construction
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
-  if (typeof dropLoot === 'function' && (b.built || !burn)) dropLoot(b);
+  if (typeof dropLoot === 'function' && (b.built || !burn) && !shaft) dropLoot(b); // (a Deep Core's stock is lost with it)
   if (BDEFS[b.type].magterm) magTermDown(b);
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
@@ -5161,6 +5167,7 @@ function destroyBuilding(b, burn, quiet) {
   if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
   if (burn && b.built && !quiet && typeof scarBuildingDown === 'function') scarBuildingDown(b); // (its rubble stays: War scars)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
+  if (shaft) deepShaft(b);
 }
 
 /* ------------------------------------------------------------------ messages & effects */
@@ -5444,6 +5451,12 @@ function checkSave(o) {
     // the Great Uplink (see updateGup): transmitting, its clock, who began it, jammed by whom, the last alert, power
     if (b.gSrc != null && !['', 'gen', 'reactor'].includes(b.gSrc)) bad();
     for (const k of ['gOn', 'gT', 'gBy', 'gJam', 'gWarn', 'gPow', 'gBest', 'gU']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // (the Deep Core: its depth, stage, fractions, power and calls; a fallen one's shaft: its colony and its capping)
+    for (const k of ['dcT', 'dcStage', 'dcFuel', 'dcGen', 'dcGenT', 'dcCall', 'dcCallN', 'dcWarn', 'dcHeldN', 'capper', 'capT', 'capPaid']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    if (b.dcStage != null && ![0, 1, 2, 3].includes(b.dcStage)) bad();
+    if (b.dcSrc != null && !['', 'gen', 'reactor'].includes(b.dcSrc)) bad();
+    if (b.dcAcc != null && !(obj(b.dcAcc) && Object.keys(b.dcAcc).every((g) => ['ore', 'crystal', 'uranium'].includes(g) && Number.isFinite(b.dcAcc[g])))) bad();
+    if (b.shaft != null && !owner(b.shaft)) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
     if (b.lfLoad != null && b.lfLoad !== '' && !ownKey(LIFT.drops, b.lfLoad)) bad();

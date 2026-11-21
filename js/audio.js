@@ -250,6 +250,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   lancecharge: 2, lancefire: 1, domehit: 0.12, domefall: 1, citychime: 2.5, cityclock: 3,
   liftclimb: 1.5, liftland: 1, liftgroan: 2, liftsnap: 2, liftimpact: 0.35,
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
+  deepstage: 3,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -269,6 +270,7 @@ const BLAST_SIZE = {
   lancecharge: 3, lancefire: 3.2, domehit: 0.95, domefall: 1.4, // (the Lance of Corvane is heard by everyone, wherever it is; a Shield Dome near by)
   citychime: 1.6, cityclock: 0.5, // (Arrival City's tram-stop chime, taken or repaired, heard off screen; its clock's chime only on it)
   liftclimb: 0.8, liftland: 1.1, liftgroan: 2.2, liftsnap: 3, liftimpact: 1.6, // (an Orbital Lift's climber near by; its cable groaning and falling heard far off)
+  deepstage: 1.8, // (a Deep Core reaching a new depth: heard off screen, near by)
   gupbegin: 3, guppulse: 0.6, gupecho: 0.6, // (a Great Uplink beginning to transmit heard by everyone; its pulse, and the Murmur's answer, only with it on screen)
 };
 
@@ -915,6 +917,14 @@ function sfx(name, dest, y, dur) {
     case 'citychime':
       for (const [f, dl] of [[523.3, 0], [659.3, 0.42], [784, 0.84], [1046.5, 1.26]]) { _tone(f, 1.4, 'sine', 0.05, null, dl, D); _tone(f * 2.01, 0.7, 'sine', 0.012, null, dl, D); _tone(f * 3.02, 0.3, 'sine', 0.005, null, dl, D); }
       break;
+    // A Deep Core reaching a new depth: the drill breaking through, a deep thud and a long falling rumble, and under it a
+    // low note from further down that holds a moment longer than it should.
+    case 'deepstage':
+      _tone(55, 0.7, 'sine', 0.16, 34, 0, D);
+      _noise(1.6, 0.09, { type: 'lowpass', freq: 260, delay: 0.05, dest: D });
+      _tone(41.2, 3.2, 'triangle', 0.035, 38, 0.6, D);
+      _tone(82.4 * 1.004, 2.6, 'sine', 0.012, 79, 0.9, D);
+      break;
     // An Orbital Lift's climber setting off: a rising electric whine, and the clack of its clamps passing the first joints.
     case 'liftclimb':
       _tone(180, 2.2, 'sawtooth', 0.018, 900, 0, D);
@@ -1082,6 +1092,40 @@ function liftHum(k, w) {
   LIFTHUM.o.g.gain.setTargetAtTime(0.03 * k, t, 0.8);
   LIFTHUM.o.gw.gain.setTargetAtTime(0.05 * (w || 0), t, 0.4);
   LIFTHUM.o.c.frequency.setTargetAtTime(380 + 420 * (w || 0), t, 1.2);
+}
+
+/*
+ * A Deep Core at work on screen: its winding engine and the drill far down the shaft. A low drone that sinks with each
+ * stage (the shaft deeper), a grinding band of noise, and the winding wheels' slow clank (a pulse on the noise) as the
+ * ropes run (k 0..1 by how near the middle of the screen it is; 0 stops it). On the ambience volume, like the Lift's.
+ */
+const DEEPHUM = { o: null };
+function deepHum(k, stage) {
+  const ac = AUDIO.ctx;
+  if (!ac || !natureReady()) k = 0;
+  if (!k) {
+    if (DEEPHUM.o) { const t = ac.currentTime, h = DEEPHUM.o; DEEPHUM.o = null; h.g.gain.setTargetAtTime(0.0001, t, 0.6); setTimeout(() => { try { h.a.stop(); h.n.stop(); h.l.stop(); } catch (e) { /* gone */ } }, 3000); }
+    return;
+  }
+  if (!DEEPHUM.o) {
+    const a = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter(), bp = ac.createBiquadFilter(), gn = ac.createGain(), ga = ac.createGain();
+    const n = ac.createBufferSource(), len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; n.loop = true;
+    a.type = 'sawtooth'; a.frequency.value = 49; lp.type = 'lowpass'; lp.frequency.value = 260;
+    bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = 2.2;
+    // the wheels' clank: a slow square pulse swinging the grinding band's level
+    const l = ac.createOscillator(), lg = ac.createGain(); l.type = 'square'; l.frequency.value = 1.4; lg.gain.value = 0.35; gn.gain.value = 0.45;
+    l.connect(lg).connect(gn.gain);
+    ga.gain.value = 0.5;
+    a.connect(ga).connect(lp); n.connect(bp).connect(gn).connect(lp); lp.connect(g).connect(AUDIO.natureBus);
+    g.gain.value = 0.0001;
+    a.start(); n.start(); l.start();
+    DEEPHUM.o = { a, n, l, g };
+  }
+  const t = ac.currentTime;
+  DEEPHUM.o.g.gain.setTargetAtTime(0.045 * k, t, 0.8);
+  DEEPHUM.o.a.frequency.setTargetAtTime([49, 43.6, 36.7][Math.max(0, Math.min(2, (stage || 1) - 1))], t, 2);
 }
 
 /*
@@ -1294,6 +1338,16 @@ function audioTick(dt) {
       if (k > lk) { lk = k; lw = b.lfMove && b.lfPaid ? 1 : 0; }
     }
     liftHum(lk, lw);
+    // A Deep Core at work on screen: its winding engine and drill, deeper with each stage.
+    let dk = 0, ds = 1;
+    if (live) for (const b of S.buildings) {
+      if (b.dead || !b.built || !b.working || !BDEFS[b.type].deepcore) continue;
+      const m = bCentre(b), p = worldToScreen(m.x, m.y);
+      if (p.x < -80 || p.y < -120 || p.x > R.w + 80 || p.y > R.h + 80) continue;
+      const k = 1 - Math.min(1, Math.hypot(p.x - R.w / 2, p.y - R.h / 2) / Math.max(R.w, R.h));
+      if (k > dk) { dk = k; ds = b.dcStage || 1; }
+    }
+    deepHum(dk, ds);
     // Burning oil on screen (js/warfx.js): its roar, from the loudest well, a little more with more of them.
     let ok = 0, op = 0, on = 0;
     if (live && typeof R !== 'undefined' && R.wfx && R.wfx.of === S && R.wfx.oil && R.wfx.oil.length) for (const e of R.wfx.oil) {

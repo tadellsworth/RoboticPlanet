@@ -659,3 +659,22 @@ python3 tools/install_gup.py      # writes the WebP files into ../art, prints GU
 
 The Uplink composes like a building (`compose.py`). The game draws it by `GUP_FRAME` (art-manifest.js) over the middle
 of its square, and its signal from `GUP_MARKS` (`gupAt` in `js/render.js`).
+## The Deep Core
+
+The owner's look A, the Headframe (Nov 21 2026; IDEAS.md, "Megastructures"). `b/deepcore.js` is the 3 x 3 winding tower
+on its own 30 x 30 pad, framed like the Lift and the Uplink (`longPad(30, 30)`, `frameCompoundOpts({ half: 15.12,
+width: 0.62, cy: 0.6 })`): the shaft collar, the red lattice tower and its sheave deck, the winding house, the conveyor,
+three labelled hoppers, the depth gauge and the spoil heap. The plain render has no wheels; `part=work&f=k` is the two
+wheels alone (`worklib.js`'s `workLayer`), turned k/8 of 60 degrees (six spokes, so 8 frames loop), drawn over it by the
+game. Marks `shaft` (where the game's violet glow rises), `wheelL`, `wheelR`, `g1`, `g2`, `g3` (the gauge's lamps) and
+`beacon`. Run from this folder:
+
+```
+bash tools/render_deepcore.sh [out]    # the tower for both teams at every time of day, and the 8 wheel frames (~8 min)
+python3 tools/install_deepcore.py      # writes the WebP files into ../art, prints DEEP_FRAME and DEEP_MARKS
+```
+
+The Core composes like a building (`compose.py`). The game draws it by `DEEP_FRAME` (art-manifest.js) over the middle of
+its square, the wheels on top, and its glow, gauge and floodlights from `DEEP_MARKS` (`drawDeep`, `deepLights` in
+`js/render.js`).
+

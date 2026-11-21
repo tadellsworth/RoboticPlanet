@@ -50,6 +50,27 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     (art: `renderer/b/city.js`), the LED strips lit in the owner colony's colour (`city-led`, tinted in code), WELCOME
     HOME on the roof, WEL OME HOME flickering on the wreck (`city-lit-down`). No rules changed. Open: whether the side
     blocks should show their courtyard faces (the camera sees only their roofs and south gables), and a lit mosaic.
+  - **The Deep Core: BUILT (Nov 21 2026)** (README, "Megastructures"; How to play, Megastructures; the new Industry and
+    Trade mission *Dry Ground*, after Trade Winds). Look A, the Headframe (`renderer/b/deepcore.js`: the wheels turn while
+    it works; the violet glow out of the shaft from stage 2, brighter at stage 3; the gauge's lamps), the name kept, and
+    the sheet's numbers (60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 300 s, armor 100, from 20 minutes, one per colony;
+    6 Ore; 8 Ore and 3 Crystal after 6 minutes of power; 10 Ore, 4 Crystal and a Uranium every 4 minutes 10 minutes
+    later; 30 of each in its hoppers; a Generator within 4 tiles burning a Fuel a minute, or a Reactor, no Uranium). The
+    Murmur: a raid half again a night's pack the night after stage 2; the night after stage 3 two more Brutes and a new
+    exit within 8 tiles; twice as big in the Hollow; nothing with them off. Destroyed: depth and stock lost, the shaft
+    their exit until a Worker caps it (20 s, 4 Cement). Rivals: never under the cap; any rival from 30 minutes once its
+    last Ore Mine is dry, guarding it on a call night; the Salvager marches on stage-3 Cores. Read into the sheet, for
+    the owner to confirm:
+    - "Breakers" in the sheet are the Brutes (LORE.md: the art brief's Breakers describe the Brute's size).
+    - A Worker caps the shaft by itself (no button), paying the 4 Cement from storage as it sets out; warbots can also
+      cave it in like any exit. Dismantled (not destroyed), a Core leaves no shaft.
+    - "A crater for 5 minutes" is not a separate rule: the shaft (with the Murmur on) is the lasting mark; with them off
+      the ground is free at once.
+    - The Core's output is multiplied by the colony's difficulty `mult`, like every producer; Arrival City's boost
+      doesn't reach it. It can't be paused (turn its Generator off).
+    - The Hollow's "each stage counts double" is read as every call twice as big (Brutes too).
+    - The mission *Dry Ground* teaches the Murmur briefly before First Contact (Quiet, four warbots), as the sheet put it
+      in Industry and Trade; its Crystal goal counts what the Core brings up (12, 20 or 30 by level).
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).

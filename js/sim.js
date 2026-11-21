@@ -2163,6 +2163,13 @@ function dispatch(p) {
       if (u) assignFix(u, b);
     }
   }
+  // 1c) A Worker to cap each open shaft of a fallen Deep Core of ours (the Murmur's way up: deepShaft), with the Cement for it.
+  for (const e of deepShaftsFor(p)) {
+    if (!idle.length) return;
+    if ((!e.capPaid && playerGoods(p).cement < DEEP.capCement) || (P.danger && dangerAt(p, e.x, e.y))) continue;
+    const u = take(e.x, e.y, 'build');
+    if (u) assignCap(u, e);
+  }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
   const staffQueue = blds.filter((b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
@@ -3365,6 +3372,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
   else if (t.type === 'magfix') doMagFix(u, t, dt);
+  else if (t.type === 'capshaft') doCap(u, t, dt);
   else if (t.type === 'repair') {
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner) { u.task = null; u.path = null; }
@@ -4165,6 +4173,7 @@ function updateBuilding(b, dt) {
   else if (def.dome) updateDome(b, dt);
   else if (def.city) updateCity(b, dt);
   else if (def.lift) updateLift(b, dt);
+  else if (def.deepcore) updateDeep(b, dt);
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -4257,11 +4266,13 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
   }
+  const core = deepFeeds(b); // (a Deep Core takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel)
+  if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding the Deep Core: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
   if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
   if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
   if (!((b.energy || 0) > 0)) {
@@ -11523,6 +11534,7 @@ function murmurTick() {
   // second well into the night.
   const into = x - NIGHT_FROM;
   while ((M.wave || 0) < C.waves && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; if (smart) murmurCraftWave(n, C, M.wave); else murmurWave(n, C); }
+  deepCalls(n, C); // (a Deep Core that went deeper: the night's raid that comes for it)
   if (smart) murmurPlansTick();
 }
 
@@ -11623,6 +11635,7 @@ function murmurPower(e) {
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
     else if (BDEFS[b.type].lift && b.working) charge += 2;
+    else if (BDEFS[b.type].deepcore) charge += 2; // (a Deep Core at work: like a Generator's)
     else if (BDEFS[b.type].gup && b.working) charge += 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber: charge running up the cable)
     else if (b.type === 'refinery' || BDEFS[b.type].magterm || BDEFS[b.type].charger) charge++;
     if (charge >= 7) return 2;
@@ -11637,6 +11650,7 @@ function chargeWorth(e) {
   if (def.lance && e.lOn) return 6; // (a Lance charging: the most charge on the planet, and they know it)
   if (def.city && e.working) return 3; // (Arrival City's lights at night, like a Generator's)
   if (def.lift && e.working) return 3;
+  if (def.deepcore && e.working) return 3; // (a Deep Core at work draws them like a Generator)
   if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
   if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
@@ -17504,6 +17518,8 @@ function hashState() {
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); num(b.dWarm || 0); }
     if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
+    if (BDEFS[b.type].deepcore) { int(b.id); num(b.dcT || 0); int(b.dcStage || 0); obj(b.dcAcc); str(b.dcSrc); num(b.dcFuel || 0); int(b.dcGen || 0); num(b.dcGenT || 0); int(b.dcCall || 0); int(b.dcCallN || 0); int(b.dcWarn || 0); int(b.dcHeldN || 0); }
+    if (b.shaft !== undefined) { int(b.id); int(b.shaft); int(b.capper || 0); num(b.capT || 0); int(b.capPaid || 0); } // (a fallen Deep Core's open shaft)
     if (BDEFS[b.type].lift) { int(b.id); int(b.lfDir || 0); num(b.lfRes ?? -1); num(b.lfBoost || 0); num(b.lfCd || 0); int(b.lfMove || 0); num(b.lfT || 0); int(b.lfPaid || 0); str(b.lfLoad); num(b.lfMul || 0); obj(b.lfSend); obj(b.loot); num(b.lfFeed || 0); int(b.lfWarn || 0); }
   }
   // The Orbital Lift's falling cables, and its wreckage (counted with the scrap when War scars are on).
@@ -19175,3 +19191,254 @@ function gupLive() { return S.buildings.filter((b) => !b.dead && b.built && b.gO
 
 /** The furthest-along Great Uplink transmitting that belongs to a foe of p's, or null. */
 function gupFoeLive(p) { return gupLive().find((b) => b.owner >= 0 && foes(b.owner, p) && !isWild(b.owner)) || null; }
+
+/* ------------------------------------------------------------------ the Deep Core */
+
+/*
+ * The Deep Core (DEEP; BDEFS.deepcore). b.dcT: s of depth (powered work while above DEEP.weak of its armor); b.dcStage:
+ * its stage (1..3, from dcT: deepStageAt); b.dcAcc: what it has brought up toward the next whole good of each; b.dcSrc:
+ * its power now ('gen', 'reactor' or ''); b.dcFuel: s left of the Fuel it last took from a Generator, b.dcGen that
+ * Generator (b.dcGenT: until when it counts as feeding it). The Murmur: b.dcCall the stage that calls them (2 or 3), on
+ * night b.dcCallN; b.dcWarn: its owner was told at dusk; b.dcHeldN: the night a call came up (at dawn, if it stands, it
+ * held). A fallen Core's open shaft is a Murmur exit (a burrow) with e.shaft its colony's id; e.capper the Worker capping
+ * it, e.capT s of that work, e.capPaid its Cement taken.
+ */
+const DEEP_STAGE_NAMES = ['bedrock', 'the buried ringfall', 'the deep seam'];
+
+/** The stage a Deep Core with `t` s of depth is at (1, 2 or 3). */
+function deepStageAt(t) { return t >= DEEP.stages[2] ? 3 : t >= DEEP.stages[1] ? 2 : 1; }
+
+/** What Deep Core b brings up a minute at its stage (no Crystal on Argos), before damage. */
+function deepRates(b) {
+  const out = Object.assign({}, DEEP.out[(b.dcStage || 1) - 1]);
+  if (biome() === 'lunar') delete out.crystal;
+  return out;
+}
+
+/** A Nuclear Reactor of b's owner within DEEP.reach of its square (built, on, not cut), or null. */
+function deepReactor(b) {
+  for (const r of S.buildings) {
+    if (r.dead || r.owner !== b.owner || !r.built || r.type !== 'reactor' || r.paused || murmurCutOn(r)) continue;
+    if (footDist(b, r.x + 0.5, r.y + 0.5) <= DEEP.reach + 0.5) return r;
+  }
+  return null;
+}
+
+/** A Generator of b's owner within DEEP.reach of its square with Fuel in stock to give it, or null. */
+function deepGen(b) { return megaGens(b, DEEP.reach).find((g) => (g.stock.fuel || 0) >= 1) || null; }
+
+/** What powers Deep Core b now: 'reactor' (one in reach: it uses no Uranium), 'gen' (Fuel it has, or a Generator's), or ''. */
+function deepPower(b) {
+  if (murmurCutOn(b)) return '';
+  if (deepReactor(b)) return 'reactor';
+  const g = b.dcGen && getE(b.dcGen);
+  if ((b.dcFuel || 0) > 0 && g && !g.dead && g.built && !g.paused && !murmurCutOn(g) && footDist(b, g.x + 0.5, g.y + 0.5) <= DEEP.reach + 0.5) return 'gen';
+  return deepGen(b) ? 'gen' : '';
+}
+
+/** Is Generator g feeding a Deep Core its Fuel now (it runs for it: see updateGenerator)? */
+function deepFeeds(g) {
+  for (const c of S.buildings) if (!c.dead && c.built && c.owner === g.owner && BDEFS[c.type].deepcore && c.dcGen === g.id && (c.dcGenT || 0) > S.time) return true;
+  return false;
+}
+
+/** The Deep Core, each tick: its power, its depth and stage, what it brings up, and the Murmur it calls. */
+function updateDeep(b, dt) {
+  const def = BDEFS[b.type], P = S.players[b.owner];
+  if (!b.dcStage) b.dcStage = deepStageAt(b.dcT || 0);
+  b.dcAcc = b.dcAcc || {};
+  deepHeld(b);
+  deepWarn(b);
+  const src = deepPower(b);
+  b.dcSrc = src;
+  b.working = false;
+  if (!src) {
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn, its depth kept.'
+      : `Stopped, its depth kept: no power (a Generator with Fuel within ${DEEP.reach} tiles, or a Nuclear Reactor)`;
+    return;
+  }
+  // On a Generator: a Fuel every DEEP.genFuel s, taken from it (it runs while it feeds the Core: see updateGenerator).
+  if (src === 'gen') {
+    if ((b.dcFuel || 0) <= 0) {
+      const g = deepGen(b);
+      if (!g) { b.status = 'Stopped, its depth kept: its Generator is out of Fuel (a Tanker brings it)'; return; }
+      bump(g.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
+      b.dcFuel = (b.dcFuel || 0) + DEEP.genFuel; b.dcGen = g.id;
+    }
+    b.dcFuel -= dt;
+    b.dcGenT = S.time + 1.2;
+  }
+  b.working = true;
+  const weak = b.armor < def.armor * DEEP.weak, k = (weak ? 0.5 : 1) * (P ? P.mult : 1);
+  if (!weak) b.dcT = (b.dcT || 0) + dt;
+  const st = deepStageAt(b.dcT || 0);
+  if (st > b.dcStage) deepDeeper(b, st);
+  const rates = deepRates(b), full = [];
+  for (const g in rates) {
+    b.dcAcc[g] = (b.dcAcc[g] || 0) + (rates[g] / 60) * dt * k;
+    while (b.dcAcc[g] >= 1) {
+      if ((b.stock[g] || 0) >= DEEP.cap) { b.dcAcc[g] = 1; full.push(GOOD[g].name); break; }
+      b.dcAcc[g] -= 1;
+      bump(b.stock, g, 1); madeGood(b.owner, g, 1);
+      if (P) { const key = 'deep' + g[0].toUpperCase() + g.slice(1); P.stats[key] = (P.stats[key] || 0) + 1; }
+    }
+  }
+  const per = Object.keys(rates).filter((g) => g !== 'uranium').map((g) => `${+(rates[g] * (weak ? 0.5 : 1)).toFixed(1)} ${GOOD[g].name}`).join(' and ');
+  const what = `${per} a minute` + (rates.uranium ? `, and a Uranium every ${Math.round(1 / (rates.uranium * (weak ? 0.5 : 1)))} minutes` : '');
+  const next = b.dcStage < 3 ? DEEP.stages[b.dcStage] - (b.dcT || 0) : 0;
+  b.status = (weak ? `Damaged: no deeper, and half the output (repair it above ${Math.round(DEEP.weak * 100)}%). ` : '') +
+    `Stage ${b.dcStage}, ${DEEP_STAGE_NAMES[b.dcStage - 1]}: ${what}` + (src === 'reactor' ? ' on Reactor power' : '') +
+    (b.dcStage < 3 ? (weak ? '' : `; stage ${b.dcStage + 1} in ${fmtSecs(next)}`) : '; at its deepest') + (full.length ? `. Full of ${full.join(' and ')}: Haulers take it` : '');
+}
+
+/** Deep Core b reaches stage `st`: its owner is told, and with the Murmur on, they will come for it the next night. */
+function deepDeeper(b, st) {
+  b.dcStage = st;
+  const P = S.players[b.owner], c = bCentre(b);
+  if (P) P.stats.deepStage = Math.max(P.stats.deepStage || 0, st);
+  logEvent({ t: S.time, k: 'deep', p: b.owner, g: st });
+  addFx('ring', c.x, c.y, { color: '#b07cff', r: 2.4 });
+  sfx('deepstage', c.x, c.y);
+  const heard = !!murmurCfg() && (S.mur && (S.mur.nests || []).some((id) => { const n = getE(id); return n && !n.dead; }));
+  if (heard) { b.dcCall = st; b.dcCallN = murmurNights(S.time) + 1; b.dcWarn = 0; }
+  const lunar = biome() === 'lunar';
+  postMsg(b.owner, st === 2
+    ? `Your Deep Core reached the buried ringfall (stage 2): ${lunar ? 'more Ore' : 'Crystal comes up with the Ore'} now.${heard ? ' Something below heard it: the next night a bigger raid comes for it.' : ''}`
+    : `Your Deep Core struck the deep seam (stage 3): a Uranium every 4 minutes now.${heard ? ' The next night, the Deep answers: Brutes, and a new tunnel exit near it.' : ''}`, c.x, c.y, heard ? 'warn' : 'good');
+}
+
+/** At dusk before Deep Core b's call: its owner is told that tonight they come for it. */
+function deepWarn(b) {
+  if (!b.dcCall || b.dcWarn || !murmurCfg() || murmurNight(S.time)) return;
+  if (murmurNights(S.time) + 1 < (b.dcCallN || 0) || dayClock(S.time) < NIGHT_FROM - MURMUR.warn) return;
+  b.dcWarn = 1;
+  postMsg(b.owner, b.dcCall >= 3 ? 'Tonight the Deep answers your Deep Core. Guard it: Brutes are coming, and a new exit will open near it.' : 'Tonight the Murmur come for your Deep Core, more of them than a night\'s pack. Guard it.', b.x + 1, b.y + 1, 'warn');
+}
+
+/** Dawn after the night a call came up for Deep Core b: still standing, it held (a mission counts it). */
+function deepHeld(b) {
+  if (!b.dcHeldN || murmurNight(S.time)) return;
+  b.dcHeldN = 0;
+  const P = S.players[b.owner];
+  if (P) P.stats.deepHeld = (P.stats.deepHeld || 0) + 1;
+  postMsg(b.owner, 'Dawn: your Deep Core stood through the night.', b.x + 1, b.y + 1, 'good');
+}
+
+/**
+ * The calls of every Deep Core, each tick of a night (from murmurTick): a minute into the night it was called for (b.dcCallN),
+ * a pack comes up for it, DEEP.call times a night's (in the Hollow DEEP.hollow times that again), from the exit nearest it;
+ * at stage 3 a new exit opens within DEEP.exitR tiles of it first, and DEEP.breakers Brutes more come with the pack.
+ */
+function deepCalls(n, C) {
+  const M = S.mur;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.dcCall || !BDEFS[b.type].deepcore || n < (b.dcCallN || 0) || S.time < (M.at || 0) + 50) continue;
+    const st = b.dcCall;
+    b.dcCall = 0; b.dcWarn = 0;
+    const c = bCentre(b);
+    let nest = null, bd = Infinity;
+    for (const id of M.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+    if (!nest) continue;
+    let ex = st >= 3 ? deepExit(b, nest, n) : null;
+    if (!ex) ex = murmurNearExit(c.x, c.y, 60);
+    const from = ex || nest, home = ex ? getE(ex.nest) || nest : nest;
+    const k = S.hollow ? DEEP.hollow : 1, size = Math.max(2, Math.round(murmurBy(C.pack, n) * DEEP.call * k));
+    const brutes = (n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0) + (st >= 3 ? DEEP.breakers * k : 0);
+    const task = { type: 'raid', focus: b.id, x: b.x, y: b.y, until: S.time + 600, night: 1 };
+    for (let q = 0; q < size + (st >= 3 ? DEEP.breakers * k : 0); q++) {
+      const u = spawnCritter(from, q < brutes ? 'brute' : 'scuttler', { ...task });
+      u.nest = home.id; if (ex) u.exit = ex.id;
+    }
+    addFx('dust', from.x + 0.5, from.y + 0.5, { r: 0.9 });
+    b.dcHeldN = n;
+    logEvent({ t: S.time, k: 'deepCall', p: b.owner, g: st });
+    postMsg(b.owner, `The Murmur are up for your Deep Core: ${size + (st >= 3 ? DEEP.breakers * k : 0)} of them${brutes ? ', Brutes among them' : ''}!`, from.x, from.y, 'bad');
+    if (isMe(b.owner)) sfx('alert');
+  }
+}
+
+/**
+ * A new tunnel exit for nest `nest` within DEEP.exitR tiles of Deep Core b (the Deep answering it, stage 3): on open level
+ * ground a colony's robots can walk to, not a road, building, resource or ramp, clear of other exits; about five tiles from
+ * its square. Returns it, or null where there's nowhere.
+ */
+function deepExit(b, nest, n) {
+  const c = bCentre(b), R = DEEP.exitR, reach = murmurReach(), exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow');
+  let best = -1, bs = -Infinity;
+  for (let j = Math.floor(c.y - R); j <= Math.ceil(c.y + R); j++) for (let i = Math.floor(c.x - R); i <= Math.ceil(c.x + R); i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = footDist(b, i + 0.5, j + 0.5);
+    if (d < 2 || dist(i + 0.5, j + 0.5, c.x, c.y) > R) continue;
+    if (S.terrain[t] !== T_GROUND || S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || S.plan[t] || (S.rail && S.rail[t]) || (S.pipe && S.pipe[t]) || !reach[t] || !exitRoom(t) || calmAt(i + 0.5, j + 0.5)) continue;
+    if (exits.some((e) => dist2(e.x, e.y, i, j) < 16)) continue;
+    const s = -Math.abs(d - 5) + hash2(t, b.id, n) * 1.5;
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (best < 0) return null;
+  const e = addBuilding(wildOwner(), 'burrow', best % S.W, (best / S.W) | 0, true);
+  e.nest = nest.id; e.armor = MURMUR.exitArmor;
+  addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1 });
+  postMsg(b.owner, 'Something below answered your Deep Core: a new tunnel exit opened beside it. Send warbots to collapse it.', e.x, e.y, 'warn');
+  return e;
+}
+
+/**
+ * Deep Core b was destroyed by force (destroyBuilding): its depth and stock are gone, and with the Murmur on its open
+ * shaft becomes their exit (a burrow at its middle tile, e.shaft its colony) until a Worker caps it (deepCapStep).
+ */
+function deepShaft(b) {
+  const P = S.players[b.owner], c = bCentre(b), i = Math.floor(c.x), j = Math.floor(c.y);
+  let nest = null, bd = Infinity;
+  if (murmurCfg() && S.mur) for (const id of S.mur.nests || []) { const e = getE(id); if (e && !e.dead) { const d = dist2(e.x, e.y, c.x, c.y); if (d < bd) { bd = d; nest = e; } } }
+  logEvent({ t: S.time, k: 'deepLost', p: b.owner, g: b.dcStage || 1 });
+  if (!nest || !inMap(i, j) || S.bAt[tIdx(i, j)] || S.terrain[tIdx(i, j)] !== T_GROUND) {
+    if (P) postMsg(b.owner, 'Your Deep Core is gone, and its depth with it: a new one starts at bedrock.', i, j, 'lost');
+    return;
+  }
+  const e = addBuilding(wildOwner(), 'burrow', i, j, true);
+  e.nest = nest.id; e.armor = MURMUR.exitArmor; e.shaft = b.owner;
+  addFx('dust', i + 0.5, j + 0.5, { r: 1.4 });
+  if (P) postMsg(b.owner, `Your Deep Core is gone, its depth with it, and its open shaft is a way up for the Murmur. A Worker caps it (${DEEP.capCement} Cement), or warbots cave it in.`, i, j, 'lost');
+}
+
+/** The open shafts of fallen Deep Cores that colony p's Workers cap: theirs, not yet being capped by someone alive. */
+function deepShaftsFor(p) {
+  const out = [];
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || e.shaft !== p) continue;
+    const u = e.capper && getE(e.capper);
+    if (u && !u.dead && u.task && u.task.type === 'capshaft' && u.task.bld === e.id) continue;
+    out.push(e);
+  }
+  return out;
+}
+
+/** Worker u goes to cap shaft e (its Cement is taken from storage now, once). */
+function assignCap(u, e) {
+  cancelTask(u);
+  if (!e.capPaid) { takeGood(u.owner, 'cement', DEEP.capCement); e.capPaid = 1; }
+  u.task = { type: 'capshaft', bld: e.id, phase: 'go' };
+  e.capper = u.id;
+  if (!goTo(u, e.x, e.y)) { cancelTask(u); u.task = null; e.capper = 0; }
+}
+
+/** A Worker capping a fallen Deep Core's shaft: walk over, then DEEP.capT s of work, and the shaft is sealed. */
+function doCap(u, t, dt) {
+  const e = getE(t.bld);
+  if (!e || e.dead || e.capper !== u.id) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') {
+    if (moveAlong(u, dt) || dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) < 2.3) { t.phase = 'work'; u.path = null; }
+    return;
+  }
+  if (mustRecharge(u)) { e.capper = 0; u.task = null; return; }
+  u.busy = 1;
+  e.capT = (e.capT || 0) + dt * S.players[u.owner].mult * batFactor(u);
+  if (e.capT < DEEP.capT) return;
+  const p = e.shaft, P = S.players[p];
+  if (P) P.stats.shaftsCapped = (P.stats.shaftsCapped || 0) + 1;
+  destroyBuilding(e, false, true);
+  addFx('ring', e.x + 0.5, e.y + 0.5, { color: '#7ee08a' });
+  addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
+  postMsg(p, 'The Deep Core\'s old shaft is capped: the Murmur can\'t come up through it any more.', e.x, e.y, 'good');
+  u.task = null; u.idleT = 0;
+}

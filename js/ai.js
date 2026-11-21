@@ -2339,6 +2339,7 @@ function aiMega(p, me, lander, canBuild) {
   aiLift(p, me, lander, canBuild);
   aiLiftAmbush(p);
   aiGup(p, me, lander, canBuild);
+  aiDeep(p, me, lander, canBuild);
   const lance = me.find((b) => b.type === 'lance');
   // Its Lance: within reach of a Reactor of its own; with no room by one, on open ground near its Command Base, and a
   // Reactor goes up beside it once it stands (a search every AI_MEGA.look s while it finds none).
@@ -2376,6 +2377,55 @@ function aiMega(p, me, lander, canBuild) {
     const spot = threat && aiMegaSpot(p, 'dome', gens, DOME.reach, lander);
     if (spot) placeSite(p, 'dome', spot[0], spot[1]);
   }
+}
+
+/*
+ * The Deep Core (DEEP), for any rival: it never counts against its two megastructures (it has no AI_MEGA_KIND). Once a
+ * game is DEEP.aiAt s in and its last Ore Mine has run dry (it has dug Ore, and none of its Mines has any left in reach),
+ * with half its Cement and Crystal in hand it puts one up by a Generator (or Reactor) near its Command Base, or near
+ * the Base with a Generator going up beside it, the goods of both first. Built, before dusk on a night the Core has called the Murmur for (b.dcCall), its spare warbots rally to
+ * it (P.deepRally), called back at dawn. (The Salvager goes for foes' stage-3 Cores: see the marches.)
+ */
+function aiDeep(p, me, lander, canBuild) {
+  const P = S.players[p], core = me.find((b) => BDEFS[b.type].deepcore);
+  if (core) {
+    if (!core.built && !core.prio) { core.prio = 'high'; core.sitePrio = 1; }
+    // (no power in reach of it: a Generator goes up beside it, its goods first)
+    if (!deepReactor(core) && !me.some((g) => g.type === 'generator' && footDist(core, g.x + 0.5, g.y + 0.5) <= DEEP.reach + 0.5) && aiAffordable(p, 'generator') && S.time - (P.deepLook ?? -999) >= AI_MEGA.look / 4) {
+      P.deepLook = S.time;
+      const g = aiMegaSpot(p, 'generator', [core], DEEP.reach, lander, 0), r = g && placeSite(p, 'generator', g[0], g[1]);
+      if (r && r.ok) { r.building.prio = 'high'; r.building.sitePrio = 1; }
+    }
+    if (core.built) aiDeepGuard(p, core);
+    return;
+  }
+  if (P.deepRally) { recallRally(P.deepRally); P.deepRally = 0; }
+  if (!canBuild || !lander || S.time < DEEP.aiAt || worldBan('deepcore') || megaBlocked(p, 'deepcore')) return;
+  if (!((P.made && P.made.ore) > 0) || me.some((b) => b.type === 'mine' && b.built && !b.depleted)) return; // (its last Ore Mine has run dry)
+  // (half its Cement and Crystal in hand: its Alloy and Chips never pile up, going into warbots as made, so the site
+  // waits for those and gets them first, as Arrival City's does)
+  const have = playerGoods(p), c = BDEFS.deepcore.cost;
+  if (have.cement < c.cement / 2 || have.crystal < c.crystal / 2 || S.time - (P.deepLook ?? -999) < AI_MEGA.look) return;
+  P.deepLook = S.time;
+  const pow = me.filter((b) => b.built && (b.type === 'generator' || b.type === 'reactor') && dist2(b.x, b.y, lander.x, lander.y) <= 14 * 14);
+  // (clear of the map's edge, with open ground at its door, the corner its Workers and Haulers come to)
+  const ok = (i, j) => i >= 2 && j >= 2 && i + 4 < S.W && j + 4 < S.H && [[i - 1, j], [i, j - 1], [i - 1, j - 1]].some(([a, b]) => { const t = tIdx(a, b); return walkable(t) && !S.bAt[t]; });
+  const spot = (pow.length && aiMegaSpot(p, 'deepcore', pow, DEEP.reach, lander, -1, ok)) || aiMegaSpot(p, 'deepcore', [lander], 10, lander, -1, ok);
+  const r = spot && placeSite(p, 'deepcore', spot[0], spot[1]);
+  if (r && r.ok) { P.deepAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
+}
+/** Rival p's warbots stand by its Deep Core through a night it has called the Murmur for, and go home at dawn. */
+function aiDeepGuard(p, core) {
+  const P = S.players[p], night = murmurNight(S.time);
+  if (core.dcCall && !night && murmurNights(S.time) + 1 >= (core.dcCallN || 0) && dayClock(S.time) >= NIGHT_FROM - MURMUR.warn - 30) {
+    if (P.deepRally || P.deepGuardN === core.dcCallN) return;
+    P.deepGuardN = core.dcCallN;
+    const c = bCentre(core), i = Math.floor(c.x), j = Math.floor(c.y) + 3;
+    const r = sendToRally(p, inMap(i, j) ? i : Math.floor(c.x), inMap(i, j) ? j : Math.floor(c.y), 8, false, true);
+    if (r && r.sent && r.rally) P.deepRally = r.rally.id;
+    return;
+  }
+  if (P.deepRally && !night && !core.dcCall && !core.dcHeldN) { recallRally(P.deepRally); P.deepRally = 0; }
 }
 
 /**
@@ -2549,9 +2599,9 @@ function aiHalfway(p, type, share = 0.5) {
 /**
  * A spot for megastructure `type` of p's within `reach` of one of `near` (its power), as close to its Command Base as can
  * be. `front` 1: rather on the enemy's side of what it's near (a Lance in front of its Reactor, so its own buildings
- * aren't on its lines of fire); -1: rather behind it (a Reactor behind its Lance).
+ * aren't on its lines of fire); -1: rather behind it (a Reactor behind its Lance). `ok(i, j)`, if given, must pass too.
  */
-function aiMegaSpot(p, type, near, reach, lander, front) {
+function aiMegaSpot(p, type, near, reach, lander, front, ok) {
   const F = BDEFS[type].foot || 1, E = front ? getE(S.players[rivalOf(p)] && S.players[rivalOf(p)].lander) : null;
   const eu = E ? (() => { const dx = E.x - lander.x, dy = E.y - lander.y, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; })() : null;
   let best = null, bs = Infinity;
@@ -2561,7 +2611,7 @@ function aiMegaSpot(p, type, near, reach, lander, front) {
       if (BDEFS[n.type].foot ? footDist(n, i + F / 2, j + F / 2) - F / 2 > reach : footDist({ type, x: i, y: j }, n.x + 0.5, n.y + 0.5) > reach) continue;
       let s = dist(i + F / 2, j + F / 2, lander.x + 0.5, lander.y + 0.5);
       if (eu) { const nc = BDEFS[n.type].foot ? bCentre(n) : { x: n.x + 0.5, y: n.y + 0.5 }, vx = i + F / 2 - nc.x, vy = j + F / 2 - nc.y, l = Math.hypot(vx, vy) || 1; s -= front * 8 * (vx * eu[0] + vy * eu[1]) / l; }
-      if (s >= bs || !canPlace(p, type, i, j).ok) continue;
+      if (s >= bs || (ok && !ok(i, j)) || !canPlace(p, type, i, j).ok) continue;
       bs = s; best = [i, j];
     }
   }
@@ -3285,13 +3335,13 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
   if (!storm || tgt) P.stormT = 0;
   if (!storm) for (const b of S.buildings) {
     // (Its forts, and the enemy's Arrival City: knocked down and held, it's theirs, land, bonus and all: see cityCapture.)
-    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth)) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
+    if (b.dead || b.owner !== enemy || !b.built || !(BDEFS[b.type].mil || BDEFS[b.type].city || (BDEFS[b.type].gup && b.gOn) || (BDEFS[b.type].lift && aiLiftWorth(p, b) >= AI_MEGA.liftWorth) || (BDEFS[b.type].deepcore && (b.dcStage || 1) >= 3 && P.style === 'raider')) || BDEFS[b.type].bunker) continue; // (a Lift: when its fall would crush enough of theirs)
     const at = !aiBeaten(P, b, 22) && spotBy(b);
     if (!at) continue;
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0) - (BDEFS[b.type].deepcore ? 3 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -3303,7 +3353,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
-      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup || BDEFS[tgt.type].deepcore ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
