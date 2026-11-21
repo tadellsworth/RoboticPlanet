@@ -16,6 +16,9 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 - **Lance of Corvane cooling down:** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
   normal look as the reload runs out (drawn from its reload clock; red at its hottest just after the shot).
+- **Hollow seed 12 stalls again** (75 min, AI vs AI): the rule that fixed it (a rival's own dismantled crates not hauled
+  first, `collectCrates` in js/sim.js) made a reloaded save play differently (murmur-forms-sim-test), so it was undone.
+  The likely cause is cached road-network state the crate path reads; find it, then bring the rule back.
 - **Polish round 2:** skip the What's new popup and the credits for now.
 - **Tip jar (for when the game goes public):** it's free, so a small, optional way to donate (a link on the main menu
   or in the pause menu; nothing pushy, nothing in a game).
