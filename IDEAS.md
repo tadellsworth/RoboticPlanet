@@ -371,8 +371,9 @@ each is a call waiting for the owner's yes or no:
 17. **Played battles (the bridge):** a battle against the Murmur alone is a Colony-mode match held for 12 minutes (a
     surge, "until dawn", 10); the Hollow assault is won by destroying the Deep's mound; at the cap the land held
     decides, and the defender wins within 10% of the leader. The kit: +2.5× the starting stock × (stars − 1) / 4 and
-    +30 Ore at 5 stars; +15 of each resource type held. Fortification level 2's walls and level 3's Shield Dome site
-    aren't put down yet (a Keep, and Mortar Pits, are). The Harrow comes six minutes in. Played wins give a star;
+    +30 Ore at 5 stars; +15 of each resource type held. Level 2's walls are a line of 7 Wall pieces 7 tiles out toward
+    the nearest foe (as Siege Breakers' outer works), with a gap where a road goes through; level 3's Shield Dome is a
+    site, joined by road, that the defender still has to supply. The Harrow comes six minutes in. Played wins give a star;
     survivors are recorded but don't add rank beyond it.
 18. **Cards in battle (stage 4):** Orbital Drop lands 6 warbots; Called Ringfall is five strikes round the spot (they
     dent, as Ringfall does, and crater roads); Corvane Flare drains every rival robot to 20% battery. They aim at the

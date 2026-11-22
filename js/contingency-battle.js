@@ -55,12 +55,35 @@ function contKit(S, p, X, B) {
   if (X.refits.includes('foundry')) put('foundry');
   if (X.defender) {
     if (B.fort >= 1) { put('turret', { crystal: 20 }); put('turret', { crystal: 20 }); }
-    if (B.fort >= 2) put('keep');
-    if (B.fort >= 3) { put('mortar', { ammo: 12 }); put('mortar', { ammo: 12 }); }
+    if (B.fort >= 2) { put('keep'); contWalls(S, p); }
+    if (B.fort >= 3) {
+      put('mortar', { ammo: 12 }); put('mortar', { ammo: 12 });
+      // a Shield Dome site, laid out and waiting for its materials
+      const s = aiFindSpot(p, 'dome', L);
+      if (s) { const r = placeSite(p, 'dome', s.x, s.y); if (r && r.ok) { const route = roadRouteTo(p, r.building) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, p); } }
+    }
     if (B.mega && CONT_MEGA_TYPE[B.mega]) put(CONT_MEGA_TYPE[B.mega]);
   }
   computeTerritory();
   P.stats.startBots = P.stats.bots;
+}
+
+/**
+ * Fortification level 2's walls: a line of Wall 7 pieces long, 7 tiles out from seat p's Command Base across the way in
+ * from its nearest foe (as Siege Breakers' outer works), with a gap where a road goes through.
+ */
+function contWalls(S, p) {
+  const R = getE(S.players[p].lander), foes = S.players.filter((Q) => Q.id !== p && !Q.absent).map((Q) => getE(Q.lander)).filter(Boolean);
+  if (!R || !foes.length) return;
+  const L = foes.reduce((a, x) => (dist2(x.x, x.y, R.x, R.y) < dist2(a.x, a.y, R.x, R.y) ? x : a));
+  const dx = L.x - R.x, dy = L.y - R.y, d = Math.sqrt(dx * dx + dy * dy) || 1, fx = dx / d, fy = dy / d, px = -fy, py = fx;
+  const cx = R.x + fx * 7, cy = R.y + fy * 7;
+  for (let k = -3; k <= 3; k++) {
+    const i = Math.round(cx + px * k), j = Math.round(cy + py * k);
+    if (!inMap(i, j)) continue;
+    if (S.road[tIdx(i, j)]) continue; // (a gap where a road goes through)
+    if (canPlace(p, 'wall', i, j).ok) addBuilding(p, 'wall', i, j, true);
+  }
 }
 
 /** Play battle b as a match (the battle card's Play). */

@@ -108,7 +108,7 @@ how goods move.
   surge, when the Murmur are the only enemy; the Hollow on its own map, won by its mound), the seats (you first) with
   their warbots, rank, refits and supply lines. `contPlayBattle` starts it with newGame (`contBattleOptions`: `setup`
   lands each kit with `contKit`, builds the defender's turrets, Keep, Mortar Pits and megastructure with `preBuild` at
-  `aiFindSpot`, and sets `S.contingency`: the run and battle, the seats' sides, the cap, the hold, the defender's seat,
+  `aiFindSpot`, its line of Wall (`contWalls`) and its Shield Dome site (`placeSite`), and sets `S.contingency`: the run and battle, the seats' sides, the cap, the hold, the defender's seat,
   and `look`, each seat in its callsign's colour, which `lookTick` applies); `contBattleCheck` runs from `simStep` every
   30 ticks (the cap scored on land held, a close count going to the defender; the hold; the Hollow's mound; the Harrow
   six minutes in where the Murmur are at full strength late in a run). `showGameOver` hands a Contingency battle to
