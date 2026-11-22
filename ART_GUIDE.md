@@ -1594,24 +1594,29 @@ evening and night sets: `LANDMARK_TOD_KEYS` in `art/tod/tod-keys.js`). About 670
 The owner chose direction A of the behemoth sheet (design/behemoth/BEHEMOTH-SHEET.md): **the Harrow**, the walking siege
 mound, with two borrowings (Scuttlers riding in its spine crack, a cave-in crater where it comes up). Rendered with
 `renderer/b/murmur_behemoth.js` (`c=harrow&game=1`: every pose centred on the body like the walk, the ground effects
-left to the game) at 1280 and composed to 640 by `renderer/tools/render_harrow.sh`, hungry (`charge=0.3`), at every
+left to the game) at 1024 and composed to 512 by `renderer/tools/render_harrow.sh`, hungry (`charge=0.3`), at every
 time of day; `renderer/tools/install_harrow.py` writes the WebP files and the glow images. In the Murmur's lazy bundle
-with the rest of them (`MURMUR_ART`, `MURMUR_TOD_KEYS`, `dist/murmur.js`).
+with the rest of them (`MURMUR_ART`, `MURMUR_TOD_KEYS`, `dist/murmur.js`). Made a fifth smaller on the map (Nov 22
+2026: 6 tiles to 4.8), its frames went from 640 to 512 (the same pixels a tile), which paid for the new ones: 20 keys
+instead of 13 for about the same bytes.
 
 | Keys | What | How it's drawn |
 |---|---|---|
-| `harrow-f0…3` | Walking: a badger-mole the size of a hill, its back a mantle of banded geode plate split down the spine where a ridge of crystal spires stands, the core lit through seams in the plate, plated neck and flanks, hands the size of a Hauler, the jaws open on a lit throat. 640×640, straight down, facing right, the frame 18 world units | `MURMUR_LOOK.harrow`: 6 tiles across (its body about 4.5 by 3), turned to face, a shadow 4.2 by 2.5 tiles under it, 3 walking frames a second |
-| `harrow-slam-f0`, `-f1` | Rearing (the front of it up, hands raised and spread, the star flared) and the slam (hands flat on the ground ahead) | `HARROW_POSES.slam`: `HARROW.rear` s, then 0.6 s; its glow flaring |
+| `harrow-f0…7` | Walking, half a step a frame (`f=0, 0.5 … 3.5`), its body dipping as each pair of feet comes down and its shoulders rolling with the leading hand: a badger-mole the size of a hill, its back a mantle of banded geode plate split down the spine where a ridge of crystal spires stands, the core lit through seams in the plate, plated neck and flanks, hands the size of a Hauler, the jaws open on a lit throat. 512×512, straight down, facing right, the frame 18 world units | `MURMUR_LOOK.harrow`: 4.8 tiles across (its body about 3.6 by 2.4), turned to face (swinging round at 1.8 radians a second), a shadow 3.4 by 2 tiles under it, 6 walking frames a second; standing, f0 breathing (a slow swell, its glow with it: `harrowMotion`, `harrowBreath`) |
+| `harrow-slam-f0`, `-f1` | Rearing (the front of it up, hands raised and spread, the star flared) and the slam (hands flat on the ground ahead) | `HARROW_POSES.slam`: `HARROW.rear` s, then 0.6 s; its glow flaring. In code: a crouch first (drawn a little smaller and back), rising toward you as it rears, trembling at the top, then squashed into the ground as it lands; the screen shakes |
+| `harrow-bite-f0` | The bite: lunging, head low and forward, jaws thrown wide on the lit throat, one hand swiping ahead | Half a second after each blow (at a robot or a building: `u.cd`), lunging forward 0.2 of a tile and back; its throat's glow flaring |
 | `harrow-hurt-f0` | Flinching: head down, rolled away, the star clenched, the jaws wide | `hurt`, after a blow of 6 or more; its glow stuttering |
-| `harrow-fall-f0` | Dying: rolled onto its side, limbs limp, the light gone, spires broken off beside it | Its body where it fell (`S.mur.husks`), fading out over its last 10 s |
+| `harrow-die-f0` | Dying, staggering: reeled back and rolled, head down, jaws wide, cracks of light racing across every plate (the seams and eight more, blazing) | `HARROW_DEATH` (`drawHarrowDying`): the first 0.9 s, swaying, its glow stuttering and racing out from the core (the glow clipped to a growing disc) |
+| `harrow-die-f1` | Toppling onto its side, half its spires snapped off, the light in its seams going | 0.9 to 1.9 s, rolling a quarter tile to its side; the snapped spires are code: 28 shards flung out, tumbling, landing and fading (`drawHarrowDeathFx`) |
+| `harrow-fall-f0` | Dead: rolled onto its side, limbs limp, the light gone, spires broken off beside it | Its body where it fell (`S.mur.husks`) from 1.9 s (the thud: a ring of dust in code, the screen shaking), its core gathering light, bursting at 2.8 s (a violet flash and shockwave in code) and going dark; fading out over its last 10 s |
 | `harrow-up-f0…2` | Coming up out of the ground: the ground bursting with only its spires and hands through, head and shoulders out, climbing out; a crater of broken earth, torn slabs and lit cracks round it | `up`, `HARROW.up` s, once |
-| `harrow-crater` | The cave-in crater it leaves: a dark throat, a heaped rim, torn slabs, cracks lit faintly | On the ground where it came up (`S.mur.craters`), 6 tiles, fading over its last minute (`HARROW.crater` s); its light at dusk and night. It stays open as a tunnel exit, so the exit's own art stands in its middle until warbots collapse it |
-| `harrow-cracks` | The slam's broken ground: a disc of split earth, the cracks lit violet, slabs heaved up | Where it slammed (`S.mur.cracks`), 6 tiles, fading in 20 s, its light strongest at first |
+| `harrow-crater` | The cave-in crater it leaves: a dark throat, a heaped rim, torn slabs, cracks lit faintly | On the ground where it came up (`S.mur.craters`), 4.8 tiles, fading over its last minute (`HARROW.crater` s); its light at dusk and night. It stays open as a tunnel exit, so the exit's own art stands in its middle until warbots collapse it |
+| `harrow-cracks` | The slam's broken ground: a disc of split earth, the cracks lit violet, slabs heaved up | Where it slammed (`S.mur.cracks`), 6 tiles (`HARROW_CRACKS`: the slam's reach, which didn't shrink with it), fading in 20 s, its light strongest at first |
 | `<every key above>-glow` | The crystal's light alone: the night glow pass, bloomed, one gain for every frame | Added over it as bright as it's charged, by day faint and full at night |
 
-Drawn in code: its light pool at dusk and night (9 tiles across, `L.light`), the Scuttlers riding on its back
-(`drawHarrowRiders`: the Scuttler's own art, half size, curled along its spine, one fewer each time two jump off), its hp
-bar (2.4 tiles wide) and its ring on the minimap. The slam's dust, ring and flash are the game's own effects.
+Drawn in code: its light pool at dusk and night (7.5 tiles across, `L.light`), the Scuttlers riding on its back
+(`drawHarrowRiders`: the Scuttler's own art, 0.45 of a tile, curled along its spine, one fewer each time two jump off), its hp
+bar (2 tiles wide) and its ring on the minimap. The slam's dust, ring and flash are the game's own effects.
 
 ### Batch 18: the Airship and the Mooring Mast (installed)
 

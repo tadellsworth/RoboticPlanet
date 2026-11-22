@@ -515,12 +515,14 @@ node preview/shoot.js out/sheet out/sheet/overview.html out/sheet/harrow.html ou
 ## The Harrow (installed)
 
 The game's Harrow (ART_GUIDE.md, Batch 31) is the sheet's direction A rendered with `c=harrow&game=1` (every pose
-centred on the body like the walk, the slam's broken ground left to its own frame) and `px=1280`, hungry
-(`charge=0.3`). New for it: `pose=hurt`, `pose=emerge&f=0..2` (coming up), `pose=crater` (the crater alone) and
-`pose=cracks` (the slam's broken ground alone). From this folder:
+centred on the body like the walk, the slam's broken ground left to its own frame) and `px=1024` (composed to 512: it
+is drawn 4.8 tiles across), hungry (`charge=0.3`). New for it: `pose=hurt`, `pose=bite`, `pose=die&f=0|1` (staggering,
+toppling), `pose=emerge&f=0..2` (coming up), `pose=crater` (the crater alone) and `pose=cracks` (the slam's broken
+ground alone); the walk takes half steps (`f=0, 0.5 … 3.5`: eight frames), its body dipping and rolling with them.
+From this folder:
 
 ```
-tools/render_harrow.sh out/harrow                 # every frame at every time of day, composed (--b1 8 --b2 25 --glow 1.4)
+tools/render_harrow.sh out/harrow                 # every frame at every time of day, composed (--b1 6.4 --b2 20 --glow 1.4)
 python3 tools/install_harrow.py out/harrow ../art # the WebP sprites and their glow images
 ```
 

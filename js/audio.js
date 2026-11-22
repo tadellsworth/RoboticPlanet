@@ -252,7 +252,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   gupbegin: 2, guppulse: 1.2, gupecho: 1.2, gupanswer: 5,
   sundercharge: 2, sunderthud: 0.12, sunderfire: 1, sunderquake: 0.8,
   deepstage: 3, atmosstage: 4, stormbolt: 1,
-  harrow: 4, harrowslam: 1.5, harrowdown: 3,
+  harrow: 4, harrowslam: 1.5, harrowdown: 4,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -694,12 +694,32 @@ function sfx(name, dest, y, dur) {
       rubble(D, far);
       duckMusic(0.5, 1.2);
       break;
-    case 'harrowdown':
-      _tone(58, 3.2, 'sine', 0.2, 26, 0, D);
-      _noise(3, 0.16, { freq: 260, to: 60, attack: 0.1, dest: D });
-      rubble(D, far);
-      duckMusic(0.45, 2.5);
+    case 'harrowdown': { // (timed with its death on screen, HARROW_DEATH in js/render.js, at the game's speed)
+      const T = typeof HARROW_DEATH !== 'undefined' ? HARROW_DEATH : { shatter: 0.9, thud: 1.9, burst: 2.8 }, k = 1 / (spd || 1);
+      // staggering: a long falling groan, its core crackling as the light stutters
+      _tone(58, T.thud * k + 0.6, 'sine', 0.2, 30, 0, D);
+      _tone(116, T.shatter * k + 0.5, 'sawtooth', 0.025, 70, 0, D);
+      const crk = [];
+      for (let i = 0; i < 26; i++) crk.push({ at: Math.random() * T.shatter * k, len: 0.01 + Math.random() * 0.03, amp: 0.03 + Math.random() * 0.04, f: 1800 + Math.random() * 3500 });
+      grains(D, crk, 'bandpass', 4);
+      // the spires shattering: a glassy crack and a shower of ringing shards
+      _noise(0.25, 0.2, { type: 'highpass', freq: 2500, attack: 0.002, delay: T.shatter * k, dest: D });
+      for (let i = 0; i < 5; i++) _tone(1900 + Math.random() * 2600, 0.5 + Math.random() * 0.5, 'triangle', 0.018, 0, T.shatter * k + Math.random() * 0.15, D);
+      const sh = [];
+      for (let i = 0; i < 22; i++) sh.push({ at: T.shatter * k + 0.05 + Math.pow(Math.random(), 1.3) * 1.2, len: 0.02 + Math.random() * 0.05, amp: 0.025 + Math.random() * 0.035, f: 2500 + Math.random() * 4500 });
+      grains(D, sh, 'bandpass', 6);
+      // the thud as it comes down: the ground jumping, rubble
+      _tone(46, 1.4, 'sine', 0.32, 22, T.thud * k, D);
+      _noise(0.12, 0.3, { freq: 700, attack: 0.002, delay: T.thud * k, dest: D });
+      _noise(1.8, 0.16, { freq: 300, to: 60, attack: 0.05, delay: T.thud * k + 0.03, dest: D });
+      // the core bursting: a rising suck of breath, a deep boom and a bright violet ring going out
+      _noise(0.5, 0.08, { type: 'bandpass', freq: 300, to: 1600, q: 1.5, attack: 0.4, delay: T.burst * k - 0.45, dest: D });
+      _tone(38, 1.8, 'sine', 0.3, 20, T.burst * k, D);
+      _noise(1.2, 0.18, { type: 'bandpass', freq: 1400, to: 200, q: 0.8, attack: 0.005, delay: T.burst * k, dest: D });
+      _tone(660, 1.4, 'sine', 0.03, 220, T.burst * k, D);
+      duckMusic(0.4, T.burst * k + 1.5);
       break;
+    }
     case 'beacon': if (typeof ambHum === 'function') ambHum(D); break; // (a Command Base's beacon coming on at dusk: js/ambient.js)
     // Coming down on you: a bomb's whistle as it falls, a missile's roar as it dives in (each ending as it hits).
     case 'bombfall': incoming(D, 'bomb', BOMBER.fall / spd); break;

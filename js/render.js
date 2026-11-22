@@ -4836,24 +4836,188 @@ function drawTunnels(ctx, ox, oy, z) {
 
 /**
  * The Harrow's marks on the ground (S.mur.craters, cracks, husks: see harrowState): the cave-in crater where it came up
- * (fading over its last minute), the slam's broken ground (its cracks lit, fading in 20 s), and where one fell, its
- * body lying dark (the dying art), sinking in its last 10 s. The crater and cracks' light is added at dusk and night.
+ * (fading over its last minute), the slam's broken ground (its cracks lit, fading in 20 s; drawn `HARROW_CRACKS` tiles
+ * across whatever the Harrow's size, as the slam's reach is), and where one fell, its body lying on its side (the dead
+ * art) once it has come down (HARROW_DEATH.thud: before that drawHarrowDying draws it standing among the bots), its core
+ * charging and bursting (HARROW_DEATH.burst), then dark, sinking in its last 10 s. The crater and cracks' light is
+ * added at dusk and night.
  */
+const HARROW_CRACKS = 6;
 function drawHarrowMarks(ctx, ox, oy, z) {
   const M = S.mur;
   if (!M || !M.hw) return;
   const W = z * MURMUR_LOOK.harrow.size, n = fxNight(), ga = ctx.globalAlpha;
-  const mark = (key, x, y, a, rot, glow) => {
+  const mark = (key, x, y, a, rot, glow, size, day) => {
     const art = ART[key];
     if (!art || a <= 0) return;
-    ctx.globalAlpha = ga * a; drawArt(ctx, art, ox + x * z, oy + y * z, W, rot);
+    ctx.globalAlpha = ga * a; drawArt(ctx, art, ox + x * z, oy + y * z, size || W, rot);
     const g = ART[key + '-glow'];
-    if (g && glow > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga * a * glow * (0.25 + 0.75 * n); drawArtRaw(ctx, g, ox + x * z, oy + y * z, W, rot); ctx.restore(); }
+    if (g && glow > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, ga * a * glow * ((day || 0.25) + (1 - (day || 0.25)) * n)); drawArtRaw(ctx, g, ox + x * z, oy + y * z, size || W, rot); ctx.restore(); }
     ctx.globalAlpha = ga;
   };
   for (const c of M.craters || []) { const age = S.time - c.t; mark('harrow-crater', c.x + 0.5, c.y + 0.5, clamp((HARROW.crater - age) / 60, 0, 1) * clamp(age / 1.5, 0, 1), hash2(c.x, c.y, 5) * 6.28, clamp(1 - age / 240, 0.2, 1)); }
-  for (const c of M.cracks || []) { const age = S.time - c.t; mark('harrow-cracks', c.x, c.y, clamp((20 - age) / 6, 0, 1), hash2(Math.round(c.x * 7), Math.round(c.y * 7), 3) * 6.28, clamp(1 - age / 12, 0, 1) * 1.4); }
-  for (const c of M.husks || []) { const age = S.time - c.t; mark('harrow-fall-f0', c.x, c.y, clamp((HARROW.husk - age) / 10, 0, 1), c.a || 0, clamp(1 - age / 8, 0, 1) * 0.6); }
+  for (const c of M.cracks || []) { const age = S.time - c.t; mark('harrow-cracks', c.x, c.y, clamp((20 - age) / 6, 0, 1), hash2(Math.round(c.x * 7), Math.round(c.y * 7), 3) * 6.28, clamp(1 - age / 12, 0, 1) * 1.4, z * HARROW_CRACKS); }
+  for (const c of M.husks || []) {
+    const age = S.time - c.t, D = HARROW_DEATH;
+    if (age < D.thud) continue;
+    const p = harrowHuskAt(c, age), glow = harrowCoreGlow(c, age);
+    mark('harrow-fall-f0', p.x, p.y, clamp((HARROW.husk - age) / 10, 0, 1) * clamp((age - D.thud) / 0.12, 0, 1), p.rot, glow, 0, 0.6);
+  }
+}
+
+/*
+ * The Harrow's death, all looks (the game keeps only where and when it fell, S.mur.husks: { x, y, a, t }), timed from
+ * that moment: it staggers, its core light stuttering, cracks of light racing out across its plates (die-f0); its
+ * spires shatter, shards of crystal flung out all round (`shatter`); it topples onto its side (die-f1) and comes down
+ * with a thud that shakes the ground and throws up a ring of dust (`thud`: the dead art from here, on the ground); the
+ * light gathers in its core, which bursts in a violet flash and a shockwave (`burst`) and goes dark (`dark`). The
+ * husk lies HARROW.husk s, as before. Its sound (sfx 'harrowdown', js/audio.js) is timed the same.
+ */
+const HARROW_DEATH = { shatter: 0.9, thud: 1.9, burst: 2.8, dark: 3.4, roll: 0.28 };
+/** Where its body is at that age: rolling a little to its side as it topples (tiles across from where it fell), turned a little. */
+function harrowHuskAt(c, age) {
+  const D = HARROW_DEATH, a = c.a || 0, t = clamp((age - D.shatter) / (D.thud - D.shatter), 0, 1), e = t * t, side = hash2(Math.round(c.x * 10), Math.round(c.y * 10), 17) < 0.5 ? -1 : 1;
+  return { x: c.x - Math.sin(a) * side * D.roll * e, y: c.y + Math.cos(a) * side * D.roll * e, rot: a + side * 0.1 * e, side };
+}
+/** How bright its core shows through the dead art (as mark's glow): gathering after it lands, flaring as it bursts, then dark. */
+function harrowCoreGlow(c, age) {
+  const D = HARROW_DEATH;
+  if (age < D.burst) { const g = clamp((age - D.thud) / (D.burst - D.thud), 0, 1); return 0.5 + 1.6 * g * g + 0.3 * Math.sin(age * 30) * g; }
+  return age < D.dark ? 2.6 * (1 - (age - D.burst) / (D.dark - D.burst)) ** 2 : 0;
+}
+
+/** The dying Harrows standing (before they come down), for the frame's list of what's drawn among the bots. */
+function harrowDyingItems(items, inView) {
+  const M = S.mur;
+  if (!M || !M.husks) return;
+  for (const c of M.husks) { const age = S.time - c.t; if (age >= 0 && age < HARROW_DEATH.thud + 0.12 && inView(c.x, c.y, 4)) items.push({ ent: 'harrowdie', x: c.x, y: c.y, h: c }); }
+}
+
+/** One of them, staggering and toppling (see HARROW_DEATH): its shadow, its frame, and its light stuttering and racing out over its plates. */
+function drawHarrowDying(ctx, c, ox, oy, z) {
+  const D = HARROW_DEATH, age = S.time - c.t, L = MURMUR_LOOK.harrow, W = z * L.size, seed = Math.round(c.x * 13) + Math.round(c.y * 7) * 131;
+  const p = harrowHuskAt(c, age), ga = ctx.globalAlpha, out = clamp((D.thud + 0.12 - age) / 0.12, 0, 1);
+  // staggering: reeling, swaying side to side, slowing as it goes
+  const st = clamp(1 - age / D.thud, 0, 1), sway = Math.sin(age * 8.5) * 0.06 * st, back = Math.sin(clamp(age / D.shatter, 0, 1) * Math.PI) * 0.14;
+  const rot = p.rot + sway, x = ox + (p.x - Math.cos(c.a || 0) * back) * z, y = oy + (p.y - Math.sin(c.a || 0) * back) * z;
+  const k = 1 - 0.04 * clamp((age - D.shatter) / (D.thud - D.shatter), 0, 1);
+  ctx.save(); // (its shadow, as it stands; going as it comes down)
+  ctx.translate(x + z * 0.03, y + z * 0.08); ctx.rotate(rot);
+  ctx.fillStyle = `rgba(20,8,20,${0.3 * out})`; ctx.beginPath(); ctx.ellipse(0, 0, z * L.sh[0], z * L.sh[1], 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // the frames: staggering, then (crossfading over a fifth of a second) toppling
+  const f = clamp((age - D.shatter + 0.08) / 0.2, 0, 1), A = ART['harrow-die-f0'] || ART['harrow-hurt-f0'], B = ART['harrow-die-f1'] || ART['harrow-fall-f0'];
+  ctx.globalAlpha = ga * out;
+  if (f < 1 && A) drawArt(ctx, A, x, y, W * k, rot);
+  if (f > 0 && B) { ctx.globalAlpha = ga * out * f; drawArt(ctx, B, x, y, W * k, rot); }
+  // its light: stuttering (a hash of the moment, so it's the same each time it's drawn), cracks of light racing out from
+  // the core over the plates as it staggers (the glow drawn clipped to a growing disc), dimming as it topples
+  const ga2 = ART['harrow-die-f0-glow'], gb = ART['harrow-die-f1-glow'], n = fxNight();
+  const stut = hash2(Math.floor(age * 24), seed, 5) > 0.4 ? 1 : 0.2, lit = (0.55 + 0.45 * n) * out;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  if (ga2 && f < 1) {
+    ctx.globalAlpha = Math.min(1, ga * lit * (1 - f) * stut * 0.7); drawArtRaw(ctx, ga2, x, y, W * k, rot);
+    const race = clamp((age - 0.12) / 0.6, 0, 1);
+    if (race > 0) {
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y, W * 0.55 * race, 0, Math.PI * 2); ctx.clip();
+      ctx.globalAlpha = Math.min(1, ga * lit * (1 - f) * (1.2 - 0.4 * race) * (0.6 + 0.4 * stut)); drawArtRaw(ctx, ga2, x, y, W * k, rot);
+      ctx.restore();
+    }
+  }
+  if (gb && f > 0) { ctx.globalAlpha = Math.min(1, ga * lit * f * stut * clamp(1.1 - (age - D.shatter) / (D.thud - D.shatter), 0.35, 1)); drawArtRaw(ctx, gb, x, y, W * k, rot); }
+  ctx.restore();
+  ctx.globalAlpha = ga;
+}
+
+/**
+ * Over everything: its death's effects (HARROW_DEATH). The spires' shards flung out, tumbling, falling and lying a
+ * moment where they land; a flash where they broke; the ring of dust as it comes down; the core's violet flash and
+ * its shockwave. All from the clock and a hash of where it fell: nothing kept.
+ */
+function drawHarrowDeathFx(ctx, ox, oy, z) {
+  const M = S.mur;
+  if (!M || !M.husks || !M.husks.length) return;
+  const D = HARROW_DEATH, n = fxNight();
+  for (const c of M.husks) {
+    const age = S.time - c.t;
+    if (age < D.shatter - 0.05 || age > 5) continue;
+    const seed = Math.round(c.x * 13) + Math.round(c.y * 7) * 131, a0 = c.a || 0, ca = Math.cos(a0), sa = Math.sin(a0);
+    const at = (lx, ly) => [ox + (c.x + lx * ca - ly * sa) * z, oy + (c.y + lx * sa + ly * ca) * z];
+    ctx.save();
+    // the shards: out from along its spine, up and out, tumbling; down, a moment on the ground, gone
+    const ts = age - D.shatter;
+    if (ts > 0 && ts < 3.2) {
+      for (let i = 0, N = fxCount(28); i < N; i++) {
+        const h = (q) => hash2(seed, i, q), lx = -1.2 + 1.9 * h(1), ly = (h(2) - 0.5) * 0.35, t = ts - h(3) * 0.12;
+        if (t <= 0) continue;
+        const dir = Math.atan2(ly + (h(4) - 0.5) * 0.9 * (h(5) < 0.5 ? -1 : 1), (h(6) - 0.5) * 0.7) + a0, sp = 1.6 + 3.2 * h(7), vz = 2.5 + 4 * h(8), g = 13;
+        const tl = (2 * vz) / g, tf = Math.min(t, tl), d = sp * tf * (1 - 0.15 * tf), hgt = Math.max(0, vz * tf - 0.5 * g * tf * tf);
+        const [bx, by] = at(lx, ly), x = bx + Math.cos(dir) * d * z, y = by + Math.sin(dir) * d * z - hgt * z * 0.45;
+        const fade = t < tl ? 1 : clamp(1 - (t - tl) / 1.4, 0, 1);
+        if (fade <= 0) continue;
+        const len = z * (0.12 + 0.22 * h(9)), spin = t < tl ? h(10) * 6.28 + t * (6 + 10 * h(11)) : h(10) * 6.28 + tl * (6 + 10 * h(11));
+        ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
+        if (t >= tl) { ctx.fillStyle = `rgba(20,8,20,${0.25 * fade})`; ctx.beginPath(); ctx.ellipse(len * 0.1, len * 0.12, len * 0.5, len * 0.16, 0, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = fxDim(h(12) < 0.5 ? '#c9b4f2' : '#a98ae0'); ctx.strokeStyle = 'rgba(60,30,90,0.6)'; ctx.lineWidth = Math.max(0.6, z * 0.012);
+        ctx.beginPath(); ctx.moveTo(-len * 0.5, 0); ctx.lineTo(-len * 0.1, -len * 0.14); ctx.lineTo(len * 0.5, 0); ctx.lineTo(-len * 0.05, len * 0.13); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(245,235,255,0.75)'; ctx.beginPath(); ctx.moveTo(-len * 0.3, -len * 0.02); ctx.lineTo(len * 0.35, 0); ctx.lineTo(-len * 0.1, -len * 0.09); ctx.closePath(); ctx.fill();
+        // (their light, in flight: a spark of the core's violet, at night the more)
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade * (t < tl ? 0.55 : 0.2 * (1 - (t - tl) / 1.4)) * (0.5 + 0.5 * n);
+        const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, len * 0.9); gr.addColorStop(0, 'rgba(210,170,255,0.9)'); gr.addColorStop(1, 'rgba(150,80,255,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, len * 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      // where they broke: a flash along the spine
+      if (ts < 0.35) {
+        ctx.globalCompositeOperation = 'lighter';
+        for (const lx of [-1.0, -0.4, 0.2]) {
+          const [x, y] = at(lx, 0), r = z * (0.6 + 1.4 * ts), al = (1 - ts / 0.35) * 0.8;
+          const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(240,225,255,${al})`); gr.addColorStop(0.4, `rgba(180,120,255,${al * 0.6})`); gr.addColorStop(1, 'rgba(150,80,255,0)');
+          ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    // the thud: a ring of dust rolling out from under it, and a darker ring of the ground jumping
+    const td = age - D.thud, p = harrowHuskAt(c, Math.max(age, D.thud));
+    if (td > 0 && td < 1.8) {
+      const e = 1 - (1 - td / 1.8) ** 3, R0 = z * (1.3 + 2.6 * e), cx = ox + p.x * z, cy = oy + p.y * z;
+      if (td < 0.5) { ctx.strokeStyle = `rgba(60,40,28,${0.35 * (1 - td / 0.5)})`; ctx.lineWidth = z * 0.12 * (1 - td / 0.5) + 1; ctx.beginPath(); ctx.ellipse(cx, cy, z * (1.2 + 3.2 * td / 0.5), z * (0.9 + 2.8 * td / 0.5), p.rot, 0, Math.PI * 2); ctx.stroke(); }
+      for (let i = 0, N = fxCount(22); i < N; i++) {
+        const h = (q) => hash2(seed, i, 40 + q), ang = (i / N) * Math.PI * 2 + h(1) * 0.3, r = R0 * (0.85 + 0.3 * h(2)) * (Math.abs(Math.cos(ang - p.rot)) * 0.25 + 0.85);
+        const px = cx + Math.cos(ang) * r, py = cy + Math.sin(ang) * r * 0.9 - td * z * 0.25 * h(3), pr = z * (0.35 + 0.5 * h(4)) * (0.6 + 0.8 * e);
+        const al = 0.6 * (1 - td / 1.8) * (td < 0.08 ? td / 0.08 : 1);
+        const gr = ctx.createRadialGradient(px, py, 0, px, py, pr);
+        gr.addColorStop(0, fxMix('#9c8466', '#0d1018', n * 0.72, al)); gr.addColorStop(1, fxMix('#9c8466', '#0d1018', n * 0.72, 0));
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // the core bursting: a violet flash, a shockwave racing out
+    const tb = age - D.burst;
+    if (tb > -0.4 && tb < 1.1) {
+      const cx = ox + p.x * z, cy = oy + p.y * z;
+      ctx.globalCompositeOperation = 'lighter';
+      const fl = tb < 0 ? 0.25 * (1 + tb / 0.4) : tb < 0.08 ? 1 : Math.max(0, 1 - (tb - 0.08) / 0.55), r = z * (tb < 0 ? 1.2 : 1.6 + 2.4 * Math.min(1, tb / 0.3));
+      if (fl > 0) {
+        const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); gr.addColorStop(0, `rgba(255,248,255,${fl})`); gr.addColorStop(0.25, `rgba(200,140,255,${0.8 * fl})`); gr.addColorStop(1, 'rgba(120,50,255,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      if (tb > 0) {
+        const q = Math.min(1, tb / 0.75), rr = z * (0.8 + 5.4 * (1 - (1 - q) ** 2)), al = (1 - q) ** 1.5;
+        ctx.strokeStyle = `rgba(199,125,255,${0.85 * al})`; ctx.lineWidth = Math.max(1.5, z * 0.28 * (1 - q)); ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(245,235,255,${0.9 * al})`; ctx.lineWidth = Math.max(1, z * 0.07 * (1 - q)); ctx.beginPath(); ctx.arc(cx, cy, rr * 0.97, 0, Math.PI * 2); ctx.stroke();
+        // (motes of its light, rising off it and going out)
+        for (let i = 0, N = fxCount(16); i < N; i++) {
+          const h = (q2) => hash2(seed, i, 70 + q2), t = tb - h(1) * 0.2;
+          if (t <= 0 || t > 1.1) continue;
+          const ang = h(2) * 6.28, d = z * (0.3 + 2.2 * h(3)) * Math.min(1, t * 2), mx = cx + Math.cos(ang) * d, my = cy + Math.sin(ang) * d * 0.8 - t * z * (0.8 + h(4));
+          ctx.fillStyle = `rgba(215,180,255,${0.8 * (1 - t / 1.1)})`; ctx.beginPath(); ctx.arc(mx, my, Math.max(1, z * 0.05), 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
 }
 
 /** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
@@ -5064,11 +5228,16 @@ const MURMUR_LOOK = {
   leech: { size: 0.81, sh: [0.24, 0.16], walk: 6 },
   sapper: { size: 0.9, sh: [0.3, 0.12], walk: 7 },
   brute: { size: 0.82, sh: [0.29, 0.17], walk: 6 },
-  // The Harrow (renderer/b/murmur_behemoth.js, frame 18 world units): drawn 6 tiles across, its body about 4.5 by 3; its
-  // light pool `light` tiles across (not size x 2.4: it would cover a base), its hp bar `bar` tiles wide.
-  harrow: { size: 6, sh: [2.1, 1.25], walk: 3, light: 9, bar: 2.4 },
+  // The Harrow (renderer/b/murmur_behemoth.js, frame 18 world units): drawn 4.8 tiles across, its body about 3.6 by 2.4;
+  // eight walking frames (`frames`, half a step each); its light pool `light` tiles across (not size x 2.4: it would
+  // cover a base), its hp bar `bar` tiles wide; it turns `turn` radians a second (the rest snap round at 11).
+  harrow: { size: 4.8, sh: [1.68, 1.0], walk: 6, frames: 8, light: 7.5, bar: 2, turn: 1.8 },
 };
-/** The Harrow's own takes on the actions (its frames: harrow-<key>-f<n>): rearing then slamming, flinching, coming up out of its crater. */
+/**
+ * The Harrow's own takes on the actions (its frames: harrow-<key>-f<n>): rearing then slamming, flinching, coming up out
+ * of its crater. (Its bite, its breathing and the slam's crouch and blow are timed in drawHarrowBody; its death in
+ * drawHarrowDying.)
+ */
 const HARROW_POSES = {
   slam: { key: 'slam', n: 2, times: [HARROW.rear, 0.6] },
   hurt: { key: 'hurt', n: 1, dt: 1 },
@@ -5102,7 +5271,7 @@ function murmurFrame(u) {
     if (ART[key]) return { key, k, pose: P };
   }
   const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, moving = (u.moved || u.fought) && !P;
-  const k = moving ? Math.floor(R.time * L.walk + (u.id || 0)) % 4 : 0;
+  const k = moving ? Math.floor(R.time * L.walk + (u.id || 0)) % (L.frames || 4) : 0;
   return { key: `${u.type}-f${k}`, k, pose: null };
 }
 
@@ -5123,6 +5292,8 @@ function murmurGlow(ctx, u, fr, x, y, w, face) {
   else if (u.pose === 'spit' && fr.pose) pulse = [1.25, 1.35, 0.55, 0.8][fr.k] || 1;
   else if (u.type === 'harrow' && u.pose === 'slam' && fr.pose) pulse = fr.k ? 1.5 : 1.15; // (the Harrow slamming: its core flares)
   else if (u.type === 'harrow' && u.pose === 'hurt') pulse = 0.5 + 0.5 * Math.abs(Math.sin(R.time * 18)); // (flinching: its light stutters)
+  else if (u.type === 'harrow' && fr.bite) pulse = 1.1 + 0.4 * fr.bite; // (biting: the throat flares)
+  else if (u.type === 'harrow') pulse = 0.72 + 0.4 * harrowBreath(id); // (the core's slow heartbeat, through the seams)
   else if (u.pose === 'under') pulse = 0.45 + 0.75 * Math.pow(Math.max(0, Math.sin(R.time * 2.7 + id * 2.3)), 8) + 0.2 * Math.max(0, Math.sin(R.time * 4.1 + id));
   const a = (0.22 + 0.78 * fxNight()) * (0.12 + 0.88 * Math.pow(ch, 0.9)) * pulse;
   if (a < 0.02) return;
@@ -5163,16 +5334,45 @@ function murmurInSight(u) {
   return v;
 }
 
-/** Where a creature faces: as it goes, or while it spits, at what it's spitting at (u.fx: { x, y } or [x, y]). */
+/** Where a creature faces: as it goes, or while it spits, at what it's spitting at (u.fx: { x, y } or [x, y]); the Harrow swinging round slowly (rface). */
 function murmurFace(u) {
   const t = u.pose === 'spit' && u.fx, tx = t && (Array.isArray(t) ? t[0] : t.x), ty = t && (Array.isArray(t) ? t[1] : t.y);
+  if (u.type === 'harrow' && typeof u.rface === 'number') return u.rface;
   return t && tx === +tx && ty === +ty && (tx !== u.x || ty !== u.y) ? Math.atan2(ty - u.y, tx - u.x) : u.face || 0;
+}
+
+/** The Harrow's breath (0..1): a slow heave, the core's light swelling with it. */
+function harrowBreath(id) { const p = (R.time * 0.55 + (id || 0) * 0.31) % 1; return Math.pow(Math.sin(p * Math.PI), 2); }
+
+/**
+ * How the Harrow's body moves on its frame (all looks: the game only keeps its pose and its clock): { k (scale), dx, dy
+ * (tiles, along and across it), rot }. Standing, it breathes; walking, its weight dips with each footfall; biting (just
+ * after a blow: u.cd, set to HARROW.every by one), it lunges and draws back; the slam crouches before it rears, rises
+ * toward you as it rears, and squashes into the ground as it lands.
+ */
+function harrowMotion(u, fr) {
+  const o = { k: 1, dx: 0, dy: 0, rot: 0 }, id = u.id || 0;
+  if (u.pose === 'slam') {
+    const t = u.poseT || 0, H = HARROW;
+    if (t < 0.28) { const c = Math.sin((t / 0.28) * Math.PI); o.k = 1 - 0.035 * c; o.dx = -0.12 * c; } // (the crouch: gathering itself)
+    else if (t < H.rear) { const r = (t - 0.28) / (H.rear - 0.28), e = 1 - (1 - r) * (1 - r); o.k = 1 + 0.07 * e; o.dx = -0.06 * e; o.rot = Math.sin(t * 11) * 0.012 * e; } // (up, toward you, trembling at the top)
+    else { const r = Math.min(1, (t - H.rear) / 0.18); o.k = 1.07 - 0.1 * r + 0.03 * Math.min(1, (t - H.rear) / 0.5); o.dx = 0.1 * r; } // (down: the weight of it into the ground)
+    return o;
+  }
+  if (fr.bite) { const b = fr.bite; o.dx = 0.22 * Math.sin(b * Math.PI); o.k = 1 + 0.015 * Math.sin(b * Math.PI); return o; }
+  if (fr.pose) return o;
+  if (u.moved || u.fought) { const ph = (R.time * MURMUR_LOOK.harrow.walk + id) * Math.PI / 2 + Math.PI / 2; o.k = 1 - 0.008 * (0.5 + 0.5 * Math.cos(ph)); o.dy = 0.025 * Math.sin(ph / 2); return o; } // (in step with its frames: murmurFrame)
+  o.k = 1 + 0.012 * harrowBreath(id); // (standing: breathing)
+  return o;
 }
 
 function drawCritter(ctx, u, x, y, s) {
   const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, face = murmurFace(u), under = u.pose === 'under';
   if (under && !murmurInSight(u)) return; // (a Sapper under the ground shows only where the colony can see)
-  const fr = murmurFrame(u), art = ART[fr.key], w = s * L.size;
+  const fr = murmurFrame(u);
+  if (u.type === 'harrow' && !fr.pose && !u.moved && u.cd > HARROW.every - 0.5 && u.cd <= HARROW.every && ART['harrow-bite-f0']) { fr.bite = (HARROW.every - u.cd) / 0.5; fr.key = 'harrow-bite-f0'; } // (just struck: the bite)
+  const art = ART[fr.key], HM = u.type === 'harrow' ? harrowMotion(u, fr) : null, w = s * L.size * (HM ? HM.k : 1);
+  if (HM) { const c = Math.cos(face), sn = Math.sin(face); x += (HM.dx * c - HM.dy * sn) * s; y += (HM.dx * sn + HM.dy * c) * s; }
   // Dragging one of its dead (Active): the body behind it, and a scuff in the dirt where it's been dragged.
   if (u.drag && BOTS[u.drag]) {
     const k = L.sh[0] / 0.17, bx = x - Math.cos(face) * s * 0.3 * k, by = y - Math.sin(face) * s * 0.3 * k;
@@ -5188,9 +5388,9 @@ function drawCritter(ctx, u, x, y, s) {
     ctx.restore();
   }
   if (art) {
-    drawArt(ctx, art, x, y, w, face);
-    murmurGlow(ctx, u, fr, x, y, w, face);
-    if (u.riders > 0 && u.pose !== 'up') drawHarrowRiders(ctx, u, x, y, s, face);
+    drawArt(ctx, art, x, y, w, face + (HM ? HM.rot : 0));
+    murmurGlow(ctx, u, fr, x, y, w, face + (HM ? HM.rot : 0));
+    if (u.riders > 0 && u.pose !== 'up') drawHarrowRiders(ctx, u, x, y, s * (HM ? HM.k : 1), face);
   } else if (under) {
     // (no art yet: a mound of heaved earth)
     ctx.save(); ctx.translate(x, y); ctx.rotate(face);
@@ -5225,17 +5425,17 @@ function drawCritter(ctx, u, x, y, s) {
     ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
-  { const bw = L.bar ? s * L.bar : s * 0.34 * L.sh[0] / 0.17; hpBar(ctx, u.id, u.hp / u.maxHp, x - bw / 2, y - s * (L.bar ? 1.9 : Math.max(0.24, L.sh[0] * 1.3)), bw, Math.max(2, s * (L.bar ? 0.08 : 0.05))); }
+  { const bw = L.bar ? s * L.bar : s * 0.34 * L.sh[0] / 0.17; hpBar(ctx, u.id, u.hp / u.maxHp, x - bw / 2, y - s * (L.bar ? L.size * 0.32 : Math.max(0.24, L.sh[0] * 1.3)), bw, Math.max(2, s * (L.bar ? 0.08 : 0.05))); }
 }
 
 /** The Scuttlers riding in the Harrow's spine crack (u.riders), curled among the crystal, a twitch now and then. */
 function drawHarrowRiders(ctx, u, x, y, s, face) {
   const art = ART['scuttler-f0'];
   if (!art) return;
-  const spots = [[-0.2, 0.18], [0.35, -0.14], [-0.75, -0.12], [0.85, 0.12], [-1.2, 0.15], [1.25, -0.1]];
+  const spots = [[-0.16, 0.14], [0.28, -0.11], [-0.6, -0.1], [0.68, 0.1], [-0.96, 0.12], [1.0, -0.08]]; // (along its spine: 4.8 tiles across)
   for (let k = 0; k < Math.min(u.riders, spots.length); k++) {
     const [a, b] = spots[k], c = Math.cos(face), sn = Math.sin(face), tw = Math.sin(R.time * 3 + k * 1.9 + u.id) > 0.92 ? 0.25 : 0;
-    drawArt(ctx, art, x + (a * c - b * sn) * s, y + (a * sn + b * c) * s, s * 0.5, face + (k % 2 ? 0.6 : -0.6) + tw);
+    drawArt(ctx, art, x + (a * c - b * sn) * s, y + (a * sn + b * c) * s, s * 0.45, face + (k % 2 ? 0.6 : -0.6) + tw);
   }
 }
 
@@ -6719,6 +6919,7 @@ function render(dtReal) {
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
   if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
   if (S.landmarks && S.landmarks.length && typeof lmItems === 'function') lmItems(items, inView); // (a Contingency battle's landmark: js/landmarks.js)
+  if (S.mur && S.mur.husks) harrowDyingItems(items, inView); // (a Harrow dying, still on its feet: drawHarrowDying)
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
   let under = null;
@@ -6745,6 +6946,7 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
+      if (e.ent === 'harrowdie') { const g0 = ctx.globalAlpha, age = S.time - e.h.t; ctx.globalAlpha = g0 * (hash2(Math.floor(age * 24), Math.round(e.x * 13), 5) > 0.4 ? 0.9 : 0.25) * clamp(1.2 - age / HARROW_DEATH.thud, 0.3, 1); pool(ox + e.x * z, oy + e.y * z, z * MURMUR_LOOK.harrow.light, '#a46cff'); ctx.globalAlpha = g0; continue; } // (its light stuttering as it dies)
       if (e.ent === 'gantry') {
         for (const lane of [0, 1]) {
           const on = gantryLamp(e, lane);
@@ -6781,6 +6983,7 @@ function render(dtReal) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'pillar') { drawPillar(ctx, ox + (e.x + 0.5) * z, oy + e.y * z, z, e.x, e.y); continue; }
+    if (e.ent === 'harrowdie') { drawHarrowDying(ctx, e.h, ox, oy, z); continue; }
     if (e.ent === 'lm') { lmDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'ruin') { drawRadRuin(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
@@ -6811,7 +7014,7 @@ function render(dtReal) {
       }
     } else {
       // Bots swing round to a new heading instead of snapping to it (long trucks turn slower).
-      const turn = (BOTS[e.type].sea ? 2.5 : BOTS[e.type].air ? 3 : BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
+      const turn = (BOTS[e.type].sea ? 2.5 : BOTS[e.type].air ? 3 : BOTS[e.type].truck ? 5 : BOTS[e.type].behemoth ? MURMUR_LOOK.harrow.turn : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
       const want = e.face || 0;
       e.rface = e.rface === undefined ? want : e.rface + clamp(wrapAngle(want - e.rface), -turn, turn);
       // Off-road bots spread out a little; on roads they drive in lanes (keep right on two-way roads).
@@ -6949,6 +7152,7 @@ function render(dtReal) {
   if (R.workerView) drawWorkerView(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
+  if (S.mur && S.mur.husks) drawHarrowDeathFx(ctx, ox, oy, z); // (a Harrow's death: its shards, the dust of its fall, its core bursting)
   if (typeof drawGoodsPops === 'function' && !R.clean) drawGoodsPops(ctx, ox, oy, z); // (+N where goods are made or stored: js/polish.js)
   if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
   if (typeof drawRadAir === 'function') drawRadAir(ctx, ox, oy, z, v0, v1); // (radiation: motes, robots sickening, a hot ruin's smoke and light column, the Geiger crackle: js/radfx.js)
@@ -9120,8 +9324,8 @@ function renderMinimap() {
   for (const u of S.bots) {
     if (u.dead || u.type !== 'harrow') continue;
     const x = u.x * sx, y = u.y * sy, f = (R.time * 1.4) % 1;
-    ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(x, y, Math.max(3.2, sx * 1.8), 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 2; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, Math.max(4, sx * 2) + f * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(x, y, Math.max(3.2, sx * 1.45), 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 2; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, Math.max(4, sx * 1.6) + f * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
   // The Hollow's breaches: soft pools of pale gold, the only daylight down there.
   if (S.hollow) for (const b of S.hollow.breaches) {

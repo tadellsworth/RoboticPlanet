@@ -1980,7 +1980,7 @@ const MURMUR = {
  */
 /**
  * The Harrow, the behemoth (BOTS.harrow; harrowTick and the rest in js/sim.js, after the Murmur's forms). Its body is
- * about 4.5 by 3 tiles: shots reach it `r` tiles further than its middle. Small arms (warbots, Bulwarks, Skirmishers,
+ * about 3.6 by 2.4 tiles: shots reach it `r` tiles further than its middle. Small arms (warbots, Bulwarks, Skirmishers,
  * turrets, Minigun Nests, Bunkers, a train's guns) do `small` of their damage; everything heavier does it all, and a
  * Missile does `missile`. It walks at its colony's Command Base and what holds the most charge (`charge` per point of
  * chargeWorth against `far` a tile of the way), battering what's in its way: `smash` armor a blow every `every` s
@@ -1996,7 +1996,7 @@ const MURMUR = {
  * `nights`; the campaigns call spawnHarrow. The rival gathers `aiNeed` armed robots ahead of it before it fights.
  */
 const HARROW = {
-  r: 1.5, small: 0.25, missile: 60, charge: 3, far: 0.25, smash: 10, every: 2.5, bite: 10, reach: 2.4,
+  r: 1.2, small: 0.25, missile: 60, charge: 3, far: 0.25, smash: 10, every: 2.5, bite: 10, reach: 1.9,
   slamEvery: 9, slamMin: 3, slamR: 3, rear: 1.2, slamBot: 6, stun: 3, slamBld: 25, riders: 6, drop: 2,
   escort: { scuttler: 6, brute: 2 }, floor: 0.5, feed: 30, up: 2.7, crater: 900, stay: 900, husk: 60, loot: 40, repath: 12,
   mound: 0.25, rollNight: 6, chance: 0.5, nights: [6, 8], aiNeed: 12, aiReach: 30,

@@ -2198,9 +2198,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `tunnel-exit-collapsed`).
   - **How they're drawn** (`drawCritter`; art from `renderer/b/murmur_moles.js`). Each form true to the others' size,
     but the Brute shrunk to fit the map (`MURMUR_LOOK`, the sprite's width in tiles): Scuttler 0.62, Spitter 0.73,
-    Leech 0.81, Brute 0.82, Sapper 0.9, the Harrow 6 (its own takes on the poses, `HARROW_POSES`: rearing and the
-    slam, flinching, coming up; the Scuttlers on its back drawn over it, `drawHarrowRiders`; its crater, the slam's
-    broken ground and its dead on the ground, `drawHarrowMarks`; its light pool 9 tiles, `L.light`; a pulsing violet ring
+    Leech 0.81, Brute 0.82, Sapper 0.9, the Harrow 4.8 (eight walking frames, `L.frames`, and its own takes on the
+    poses, `HARROW_POSES`: rearing and the slam, flinching, coming up; its body's motion on the frame, `harrowMotion`:
+    breathing as it stands, its weight dipping as it walks, the bite's lunge (the `harrow-bite-f0` frame for half a second
+    after a blow, read from `u.cd`), the slam's crouch, rise and impact; it swings round slowly, `L.turn`, through the
+    frame's `rface`; the Scuttlers on its back drawn over it, `drawHarrowRiders`; its crater, the slam's broken ground
+    (6 tiles, `HARROW_CRACKS`, the slam's reach) and its dead on the ground, `drawHarrowMarks`; its death,
+    `HARROW_DEATH`, `drawHarrowDying` and `drawHarrowDeathFx`; its light pool 7.5 tiles, `L.light`; a pulsing violet ring
     on the minimap), with a shadow turned with it. Four walking frames each, and the forms' actions
     as loops timed by `u.poseT` (`MURMUR_POSES`, `murmurFrame`): the Leech feeding (`u.pose` `feed`: the star pulsing,
     the sac swelling), the Spitter spitting (`spit`: wind-up, the spit, recoil, recovering), the Sapper digging in
@@ -2343,8 +2347,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **The Harrow, the behemoth (rare and late).** `harrow` in `BOTS` (wild, `behemoth`), its numbers in `HARROW` in
     `js/defs.js`, the section after the Sapper's in `js/sim.js` (`spawnHarrow`, `harrowTick`, `harrowSlam`,
     `harrowFurrow`, `harrowBatter`, `harrowPath`, `harrowTarget`, `harrowDied`, `harrowDown`, `harrowMound`,
-    `harrowRoll`, `harrowNight`, `harrowMarks`), `aiHarrow` in `js/ai.js`. The biggest of the Murmur, drawn 6 tiles
-    across (its body about 4.5 by 3). **When it comes:** (1) the Hollow: the Deep's mound under `mound` (a quarter) of its
+    `harrowRoll`, `harrowNight`, `harrowMarks`), `aiHarrow` in `js/ai.js`. The biggest of the Murmur, drawn 4.8 tiles
+    across (its body about 3.6 by 2.4). **When it comes:** (1) the Hollow: the Deep's mound under `mound` (a quarter) of its
     armor (`updateNest` → `harrowMound`): two burst out of it, 4 tiles out toward each colony's Command Base, one for
     each colony, once a game (`S.mur.hw.mound`); (2) a long game on Active (not the Hollow, not a mission unless it sets
     `harrowRoll`): at the dusk warning of night `rollNight` (6, about 70 minutes in: confirmed by the owner, Nov 21
@@ -2365,7 +2369,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     a tile; re-picked every `repath` s; another colony's when its own has none); what stands on its route it batters
     (`harrowBatter`: `smash` armor every `every` s, a Wall or Gate twice that; it feeds, `feed` health back, on a
     building of charge 3 it wrecks); a Command Base, Keep, megastructure or Arrival City only down to `floor` (half)
-    of its armor (`harrowSpares`, `harrowFloor`), then on to the next. A robot within `reach` takes `bite` (10) every
+    of its armor (`harrowSpares`, `harrowFloor`), then on to the next. A robot within `reach` (1.9) takes `bite` (10) every
     `every` s. **The furrow** (`harrowFurrow`, each tile it enters): its tile and the 8 round it lose their road (not a
     bridge or tunnel), track, pipe and plans, and become its nest's tunnel (`S.tun`). **The slam** (`harrowSlam`,
     `ph` 'slam', pose `slam`: rearing `rear` s, then the blow): every `slamEvery` s with `slamMin` of a colony's robots
@@ -2374,10 +2378,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     pipes are torn up, `drop` (2) of its `riders` (6) jump off as Scuttlers raiding its target, and the broken ground
     is drawn 20 s (`S.mur.cracks`). **Its hide** (`damageBot`'s `small`): small arms do `small` (a quarter): warbots,
     Bulwarks, a Railgunner's sidearm, Skirmishers, Pulse Turrets, Bunkers, Minigun Nests, a train's guns; the rest in
-    full; a Missile `missile` (60). Shots reach its body's edge (`r`, 1.5: `nearestEnemyBot`, `armyInRange`), and
+    full; a Missile `missile` (60). Shots reach its body's edge (`r`, 1.2: `nearestEnemyBot`, `armyInRange`), and
     Howitzers take it on by themselves (`rocketTargetNear`, `rocketTarget` with a bot; a shell within `r` of it does
     `ROCKET.damage × fortMul`). A heavy blow (6 or more) makes it flinch (pose `hurt`). **Dead** (`killBot` →
-    `harrowDied`): no body to drag; it lies `husk` s (`S.mur.husks`, the dying art), its riders scatter home, a Crystal
+    `harrowDied`): no body to drag; it dies on screen over about 3.4 s, looks only, timed from the husk's `t`
+    (`HARROW_DEATH` in `js/render.js`: staggering, its light stuttering and cracks of light racing over its plates; at
+    0.9 s its spires shatter, shards flung out; it topples and at 1.9 s comes down with a thud, a ring of dust and the
+    screen shaking, `fxShake`; at 2.8 s its core bursts in a violet flash and shockwave and goes dark; the sound,
+    `sfx('harrowdown')`, timed with it), then lies `husk` s (`S.mur.husks`, the dead art), its riders scatter home, a Crystal
     hoard of `loot` (40) spills (`addLoot`), the colony whose army stood nearest is credited (`stats.harrows`), and
     `S.mur.slain.harrow` counts. After `stay` (15 min) up it goes back down (`harrowDown`, a crater). **The rival**
     (`aiHarrow`, at the top of `aiMurmur`): with one going for it or within `aiReach` (30) tiles, one rally flag

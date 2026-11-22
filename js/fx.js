@@ -288,6 +288,14 @@ function fxShake(ox, oy, z) {
     const sx = ox + f.x * z, sy = oy + f.y * z, d = Math.hypot(sx - R.w / 2, sy - R.h / 2) / Math.max(R.w, R.h);
     a = Math.max(a, s * clamp(1.2 - d * 1.6, 0, 1));
   }
+  // The Harrow: its slam landing (S.mur.cracks), and its death (S.mur.husks): the thud as it comes down, its core bursting.
+  const M = S.mur, near = (x, y, s) => { const d = Math.hypot(ox + x * z - R.w / 2, oy + y * z - R.h / 2) / Math.max(R.w, R.h); a = Math.max(a, s * clamp(1.2 - d * 1.6, 0, 1)); };
+  if (M && M.cracks) for (const c of M.cracks) { const t = S.time - c.t; if (t >= 0 && t < 0.45) near(c.x, c.y, 6 * (1 - t / 0.45)); }
+  if (M && M.husks && typeof HARROW_DEATH !== 'undefined') for (const c of M.husks) {
+    const t = S.time - c.t, D = HARROW_DEATH;
+    if (t >= D.thud && t < D.thud + 0.6) near(c.x, c.y, 8 * (1 - (t - D.thud) / 0.6));
+    else if (t >= D.burst && t < D.burst + 0.4) near(c.x, c.y, 4 * (1 - (t - D.burst) / 0.4));
+  }
   return a;
 }
 
