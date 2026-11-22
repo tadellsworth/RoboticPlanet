@@ -276,7 +276,9 @@ a Warlord beat a Commander in 12 of 16, every game decided (8 to 20 minutes; one
 - Missions now use the same five levels (the owner's call, Nov 21 2026): old Easy, Normal and Hard are Settler,
   Colonist and Commander, and their ticks moved there. Pioneer and Warlord values are worked out from the old three
   (`mPick` in `js/missions.js`) and only Touchdown has been played through at Warlord: the tight clocks (Convoy's 13
-  minutes, with Warlord's bigger goals and a Normal rival) may need their own five-long values once played. The
+  minutes, with Warlord's bigger goals and a Normal rival) may need their own five-long values once played. (Convoy has
+  them since Nov 22 2026: a Medium rival and 16 minutes on Warlord. Border Dispute on Warlord is lost by the script too: see
+  the balance audit of Nov 22 2026.) The
   future Main Campaign (CAMPAIGN.md) uses the same five.
 - Observer mode gives every colony one level; a level per colony (as diff5-aivai.js does) would make Warlord against
   Commander a thing to watch.
@@ -1600,6 +1602,65 @@ its buildings called for, and some 25 warbots, Alloy piling up for want of room,
 warbots: those games end at 44 and 37 minutes, won by the same side. The other long ones, seeds 8, 11 and 13 at an hour or more, are close wars, not full
 colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands a well dug-in rival can
 still hold out to the clock against a leader landing band after band (see Island maps, above).
+
+## Balance audit, Nov 22 2026 (after the megastructures, the Harrow and the bolder Murmur)
+
+Measured headless (the full report: the audit folder's REPORT.md): 40-game doctrine batches (all 10 pairs × Standard
+11 and 23 with seats swapped, Chokepoint 5, Standard Large 31) with the Murmur Off, Quiet and Active, megastructures
+on and off, plus 40 games over 12 map types, sizes and biomes, 16 Colony games, 12 two-hour Colony games for the
+Harrow, the arena and defence trials, and every mission at all five levels.
+
+**Fixed:**
+- *Active games that never ended* (8 of 40, 6 on Standard Large 31): both rivals' only roads to their Crystal ran
+  past a nest, and their Haulers turned back there for good. The ground kept clear of a nest's guards in Versus was a
+  circle round each guard (5 to 6 tiles from the nest), where they never bite. Now it's the circle they bite in
+  (`GUARD_VERSUS` + 1 round the nest), and a rival's roads go round it where they can (`roadNestAvoid`). Active:
+  undecided 8 → 3 of 40 (two of those end at 49 and 56 minutes, one is a long war); Quiet 0 → 0; Off unchanged.
+- *Convoy on Warlord* (none of 3 scripted runs won): a Medium rival and 16 minutes (five-long values); 4 of 5 won.
+
+**Wins of 16** (Salvager, Herald, Steward, Architect, Warden):
+- Off: 10, 8, **11**, 6, **5**.
+- Off without megastructures: 11, 9, 11, 3, 6.
+- Quiet: 12, 11, 9, 3, 5 (after the fix 13, 10, 7, 3, 7).
+- Active: 11.5, 7, 8, 8, 5.5 (after the fix 15, 8, 8, 6, 3).
+- Minutes to a win: 19.6 Off, 22.1 Quiet, 25.3 Active.
+
+**For the owner (not changed):**
+- **The Steward on The Rust (the default biome) and Cinderlands is 11 of 16, and the Warden 5.** The Nov 21 retune's
+  7 and 7 were measured before the Atmosphere Engine merged. On a barren home the Engine (from 21 minutes) replaces
+  Arrival City (from 12) as the Steward's main project, and a City it rarely finishes was costing it games. With the
+  Engine off for rivals the batch gives back the approved numbers exactly (10, 8, 7, 8, 7). Choose: the Engine only
+  with Planetary events (back to the approved balance), or keep it.
+- **Megastructures never decide a game between rivals.** In 160 games, 49% are over by 20 minutes and 82% by 30.
+  - Arrival City: placed 25 times, finished 2.
+  - Orbital Lift: placed 41, finished 0.
+  - Lance: chosen 28 times, never built.
+  - Sundering Ray: chosen 19 times, never placed, not even in peace.
+  - Deep Core: placed 13 at about 36 minutes, never finished.
+  - Atmosphere Engine: placed 11, finished 0.
+
+  A weapon pick that never gets built also costs the rival its Nuclear Silo. Proposed: choose the Lance or Ray only
+  with half its cost in hand; the Deep Core for rivals from 20 minutes (30 now, and only once its last Ore Mine is
+  dry). Pacing (build times or costs to two thirds) is the owner's call.
+- **The Harrow and a colony with no army:** it came in 5 of 12 two-hour Colony games on Active (night 6 or 7). The
+  computer-run colony had no armed robot each time; the Harrow was barely scratched (235 of 240), left after 15
+  minutes, and 13 to 55 buildings went; colonies ended with 1 to 16 buildings (33 to 77 without it). Proposed: the
+  Observer/autoplay colony raises 12 armed robots once the roll hits, and the dusk warning names it; strength as set.
+- **The Salvager leads with the Murmur on** (12 to 15 of 16).
+- **The Architect is weakest** on Quiet and without megastructures (3 of 16); its Silos are still late (3 in 16
+  games, at 14, 17 and 29 minutes).
+- **The rivals built 2 bombers in 160 games:** the Flak Gun has nothing to shoot in a game against them.
+- **Missions on Warlord:** Border Dispute is lost at all three scripted work speeds (the Command Base falls at 3½ to
+  13 minutes) with mPick's rival a level up; with Commander's rival on Warlord all three win (7 to 13 minutes). Hold
+  the Line's script plans its Walls on a Trade Post's ground now (the post has moved), so it can't be judged. Live
+  Fire on Warlord: the script's army runs out of Ammo by the rival base at 1 armor. Harbour: the script ships nothing
+  (on Nov 21 code too).
+
+**Unchanged and fine:**
+- Combat and defences: no number changed. Every robot and defence has its job (the brawl tables match Nov 21).
+- Colony on Active and Quiet: the same as when the bolder Murmur were built.
+- The known Hollow stalls end (Hollow 12 at 42.6, Hollow Large 11 at 28.1 and 21 at 33.3).
+- Sky islands and Islands still have their known long wars (4 of 40 in the map batch).
 
 ## Balance decisions
 
