@@ -45,6 +45,42 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   2. A smarter Murmur AI, and the Murmur about twice as hard overall: on **Quiet** a nuisance; on **Active** a real
      third opponent, slow at the start and growing powerful by the late game (more and bigger raids, planning, the new
      unit late on).
+     **BUILT (Nov 22 2026): the Murmur grow bolder on Active** (README, "Bolder as the game goes on"; How to play, The
+     Murmur, "Armed robots" and "As the game goes on"; the guide; *What Comes Up* teaches the hunt with a goal to
+     collapse an exit near the colony; `lh/murmur-smart-test.js`; measuring: `lh/murmur-smart-measure.js`,
+     `murmur-smart-batch.sh`, `murmur-smart-sum.js`). `MURMUR.bold`: (1) **threats**: an armed robot within 5 tiles (or
+     whatever just hit one) is never walked past: a pack half again as strong turns on it, a weaker one falls back and
+     comes on again (twice, then carries on), and shot at after that it fights; the Leech, Spitter and Sapper turn only
+     on what shoots them. (2) **Pressure** from the 3rd night: 1.25, 1.5 ... at most 2.2 by the 7th, times the colony's
+     power (buildings and twice its armed robots over 40, 0.6 to 1.6), never under 1: bigger packs, more up at once, an
+     extra exit a nest from the 4th night (two from the 6th), a third wave from the 4th; a strike done with its target
+     goes on through the colony. (3) **The hunt** from the 4th night: every 40 s teams come up at the colony's unguarded
+     weak points (power cut first, sites, lone buildings, the robots there), only through exits within 40 tiles of it.
+     (4) **The horde** from the 5th night: a strike under way is fed fresh packs every 35 s up the exit nearest it.
+     Quiet is untouched (the same game, hash for hash); missions only where one asks (`bold`). The rival also turns a
+     squad out at a Murmur exit into its Harrow flag. Fixed on the way: a game loaded part way through the danger maps'
+     15 ticks rebuilt them from where things stood after loading, so a save could play on differently (`S.dng`,
+     `S.mgn`). Measured (60-minute computer-run Colony games, seeds 7 and 8, Standard Small and Huge, the Hollow Small
+     and Huge, before → after): **Active**, robots lost to the Murmur in all eight **22 → 77**, by night 1-2 15 → 15,
+     3rd 3 → 14, 4th 2 → 23, 5th 2 → 25; the most up at once on the 5th night 15 to 18 → 23 to 45 (the first two nights
+     the same); buildings at 15 minutes 218 → 218, at 30 291 → 291, at 45 341 → 334, at 60 360 → 349; blows on buildings
+     in all eight 2,309 → 8,716, roads torn up 119 → 215, sites wrecked 12 → 11, the power cut 13 to 17 times a game →
+     11 to 18. **Quiet**: unchanged (150 robots lost, 237, 308, 365, 395 buildings, before and after). Versus (Medium,
+     shapes 0, 2 and 4, seeds 21 to 23, and the Hollow Small 21 and Medium 11, 75 minutes at most): Active, 11 of 11
+     decided before and after (none undecided), a win in 27.6 → 21.4 minutes on average, 5.4 → 2.3 robots a colony lost
+     to the Murmur (most games end by the 2nd or 3rd night, before the pressure starts, and packs now fall back from
+     squads they can't beat; three winners changed); the Hollow won both times (Small 21 at 18.3 → 11.7, Medium 11 at
+     28.0 → 20.7); Quiet, four games, unchanged. An earlier cut without the power floor and with packs turning on
+     anything they merely outweighed ran one Versus game to the cap (both armies bled out at the exits), hence those two
+     rules. Missions: *What Comes Up* won at all five levels (now 13 to 20 minutes of its 25 with the new goal; was 9 to
+     11), *Something Keeps Time* and *The Harrow* played through and won; *Under the Bloom* has no play-through in the
+     kit (the computer player never builds its Engine), and on it only the threat rule applies.
+     Decided here, for the owner to check: the first two nights stay as they were (the pressure starts on the 3rd); a
+     beaten or small colony draws them less (so a computer rival with no army isn't hunted into a stalemate: one Versus
+     game ran to the cap with no such floor); finished buildings still can't be wrecked (but a Wall or Gate); the hunt
+     and the horde come only through exits near the colony, so collapsing them is the answer.
+     Open: whether the late horde should grow past the 7th night; whether the Harrow should lead a horde; the hunt in
+     missions other than *What Comes Up*.
 - **Global leaderboards (the owner, Nov 21 2026: for later, for when the game goes public).** Built on the relay's
   Cloudflare Worker (a small table of scores + a page to read them). Scores are proved, not trusted: the game is
   deterministic, so a submission carries the day's setup and the player's orders, and the server (or a nightly job)
@@ -447,11 +483,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 **Murmur: a bigger rework (after the megastructures and the audit, before the campaign)**
 - **Smarter Murmur:** they sometimes walk straight past robots that then shoot them; fix their threat and target choice
-  (avoid or engage, don't ignore armed robots in reach).
-- **Late game: an almost unending horde,** growing with the colonies' power (the theme below).
+  (avoid or engage, don't ignore armed robots in reach). **BUILT (Nov 22 2026)**, with the next two: see the owner's notes, Nov 21, item 2.
+- **Late game: an almost unending horde,** growing with the colonies' power (the theme below). **BUILT (Nov 22 2026)** (the pressure, the horde).
 - **A massive endgame unit, a behemoth,** the biggest Murmur form (its own art and abilities).
 - **Much smarter, more aggressive planning:** by late game, if you haven't knocked out their tunnels they hunt you and
-  sabotage every weak point in your base (the Phase 1+2 "crafty" Murmur is the base to build on).
+  sabotage every weak point in your base (the Phase 1+2 "crafty" Murmur is the base to build on). **BUILT (Nov 22 2026)** (the hunt).
 
 **Game setup and structure**
 - **Megastructures are an enable-able checkbox on game setup,** like Nuclear race (BUILT, Nov 20 2026, with the Lance of

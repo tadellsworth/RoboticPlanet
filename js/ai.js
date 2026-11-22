@@ -1511,8 +1511,8 @@ function aiMurmur(p, lvl, lander, smart) {
 /**
  * A Harrow coming for colony p (going for it, or within HARROW.aiReach tiles of its buildings): its army gathers on one
  * rally flag in its way, every warbot it can spare (the rear garrisons too), a few tiles ahead of it on the way to what
- * it's after (or by that, if it's already close), the flag moved as it comes; it masses more (P.massFor) and sends no
- * small squads at exits or nests meanwhile. Its Howitzers take it on by themselves (rocketTargetNear). The flag comes
+ * it's after (or by that, if it's already close), the flag moved as it comes; it masses more (P.massFor), calls home
+ * the squads out at exits or nests and sends no more meanwhile. Its Howitzers take it on by themselves (rocketTargetNear). The flag comes
  * down when the Harrow is gone. True while one is coming.
  */
 function aiHarrow(p) {
@@ -1541,7 +1541,12 @@ function aiHarrow(p) {
     spot = [i, j];
   }
   if (!spot) return true;
-  const old = P.hwRally && rallyById(P.hwRally.id);
+  let old = P.hwRally && rallyById(P.hwRally.id);
+  // (A squad out at a Murmur exit or nest comes to it: its flag becomes the Harrow's, the rest are called home. With
+  // the Murmur bolder, a night can find much of the army out there.)
+  const wildFlag = (r) => { const tg = r.owner === p && r.target ? getE(r.target) : null; return !!tg && !tg.dead && isWild(tg.owner); };
+  if (!old) { const r = S.rallies.find(wildFlag); if (r) { r.target = 0; r.first = 0; r.x = spot[0] + 0.5; r.y = spot[1] + 0.5; old = r; P.hwRally = { id: r.id, t: S.time }; } }
+  for (const r of S.rallies.filter(wildFlag)) recallRally(r.id);
   // (the flag moves with it, its army with the flag, until the fight is on there)
   if (old && dist(old.x, old.y, h.x, h.y) > 6) { old.x = spot[0] + 0.5; old.y = spot[1] + 0.5; }
   const res = sendToRally(p, old ? Math.floor(old.x) : spot[0], old ? Math.floor(old.y) : spot[1], 99, true, true);

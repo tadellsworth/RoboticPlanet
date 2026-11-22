@@ -1942,6 +1942,30 @@ const MURMUR = {
     spitter: { from: 2, range: 4.5, every: 3, cost: 0.25, regen: 0.05, damage: 2, short: 4 },
     sapper: { from: 3, dig: 2.5, speed: 0.9, up: 1.5 },
   },
+  // Bolder as the game goes on, on Active only (Quiet as before; missions only where one asks: S.mission.bold). See
+  // murmurThreat, murmurPressure, murmurHunt and murmurHorde in js/sim.js. Threats: an armed robot within `threatR`
+  // tiles of one of them at night (or one that hit it in the last `hitFor` s) is never ignored: with `engage` times its
+  // strength round it (its own within `packR` tiles, by `w`; a robot's its health / `robotW`, and each gun covering it
+  // `gunW`) it fights it, else it falls back `avoidFor` s and comes on again; fallen back `avoidMost` times it carries
+  // on, and shot at after that (hit in the last `hitFor` s) it turns and fights. Pressure: from night `nightFrom`,
+  // `perNight` more a night (at most `nightMost`), times the colony's power (its finished buildings and twice its armed
+  // robots) over `powerRef` (from `powerMin` to `powerMost`), never under 1 (a small colony fewer hunting teams too); it
+  // scales the packs and how many may be up at once; from `exitNight` a nest may hold one more exit (two from
+  // `exitNight2`), and from `waveNight` a third wave comes. The hunt: from night `huntFrom` (a mission's S.mur.huntFrom,
+  // sooner), every `huntEvery` s of the night, teams of `teamN` (times the pressure; a Brute with them from night
+  // `teamBrute`) come up at the colony's weak points (no gun covering them, no armed robot near: power first, then sites
+  // and lone buildings), `teams` a colony at most (base, per night, most), only through exits within `huntR` tiles of
+  // its buildings: collapse those and the hunt dies. The horde: from night `hordeFrom`, a strike under way gets `hordeN`
+  // more (times the pressure) every `hordeEvery` s from the exit nearest its target. From `nightFrom`, one done at its
+  // strike's objective (nothing left to catch there for `idle` s, or battered down) goes on through the colony, a
+  // Scuttler after the nearest unarmed robot within `quarryR` tiles that no gun covers.
+  bold: {
+    threatR: 5, hitFor: 2, packR: 4, engage: 1.5, robotW: 4, gunW: 3, avoidFor: 3, avoidMost: 2,
+    w: { scuttler: 1, brute: 4, leech: 0.5, spitter: 1.5, sapper: 3, harrow: 30 },
+    nightFrom: 3, perNight: 0.25, nightMost: 2.2, powerRef: 40, powerMin: 0.6, powerMost: 1.6, exitNight: 4, exitNight2: 6, waveNight: 4,
+    huntFrom: 4, huntEvery: 40, teamN: 2, teamBrute: 5, teams: [1, 0.5, 4], huntR: 40,
+    hordeFrom: 5, hordeEvery: 35, hordeN: 2, idle: 8, quarryR: 6,
+  },
   craft: {
     watch: 12, rally: 9, wait: 14, waitMax: 50, join: 46, cutR: 10, cutTime: 3, cutWait: 30, dark: 5, lampDark: 2, leadGap: 3,
     joinMost: 3, spread: 1.6, half: 0.5, again: 45, againLeft: 70, scatter: 4.5, scatterN: 2, scatterFor: 4, scatterCd: 12, dragR: 8,

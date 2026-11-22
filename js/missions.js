@@ -1478,8 +1478,9 @@ const MISSIONS = [
       'A <b>Spitter</b> shorts out your guns from a few tiles off. A <b>Sapper</b> digs under and comes up inside.',
       'Nothing reaches a Sapper underground: catch it as it heaves up. And they take their dead with them.',
       'Your warbots wait in the Command Base: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) sends them.',
+      'They don\'t walk past armed robots: a big pack turns on them, a small one falls back. And from the second night small teams <b>hunt</b> whatever you leave unguarded, coming up through the <b>tunnel exits near you</b>.',
     ],
-    mode: 'colony', seed: 7, size: 0, rough: 1, rich: 3, biome: 'desert', war: true, murmur: 'active', limit: [0, 0, 25],
+    mode: 'colony', seed: 7, size: 0, rough: 1, rich: 3, biome: 'desert', war: true, murmur: 'active', limit: [0, 0, 25], bold: true,
     setup(S) {
       kit(S, KIT8, 4);
       const P = S.players[0], L = getE(P.lander);
@@ -1491,6 +1492,7 @@ const MISSIONS = [
       const fs = preBuild(0, 'charger', L.x + 6, L.y + 4, { road: true, reach: 6, stock: { fuel: 4 } });
       if (fs) murmurCut({ id: 0, p: 0, cut: [], cutMsg: 1 }, [1, fs.id, fs.x, fs.y]);
       S.mur.formsFrom = 1; S.mur.formsAll = 1;
+      S.mur.huntFrom = 2; // (the hunt at the weak points from the second night, as on a long game's fourth: murmurHunt)
     },
     goals: [
       { kind: 'powerback', n: 1, text: 'Get the power back', count: (P) => P.stats.powerBack || 0, at: 'charger',
@@ -1506,6 +1508,10 @@ const MISSIONS = [
       { kind: 'forms', n: 3, text: 'Kill a Leech, a Spitter and a Sapper', count: (P, S) => ['leech', 'spitter', 'sapper'].filter((k) => S.mur && S.mur.slain && S.mur.slain[k]).length,
         hint: 'Turrets and warbots kill them: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) where a Sapper heaves up.',
         ui: '#btn-attack, #ar-hold' },
+      // The hunt (MURMUR.bold): its teams come up only through the exits near the colony, so shutting them shuts it out.
+      { kind: 'exits', n: [1, 1, 2], text: ['Collapse a tunnel exit near your land', 'Collapse {n} tunnel exits near your land'], count: (P) => P.stats.collapsed || 0,
+        hint: 'Hunting teams come up through exits near you: <b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b>, then tap one (a violet ring).',
+        ui: '#btn-attack, #ar-attack' },
     ],
   },
   // The Atmosphere Engine's campaign sketches (the megastructure sheet, Nov 2026), built as missions. Seed Vault: a desert
@@ -2364,7 +2370,7 @@ function missionOptions(k, diff) {
         for (const g in R2.stock) R2.stock[g] += mPick(def.rivalBonus, diff);
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, lv5: 1, limit: mLimit(def, diff) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn };
+      S.mission = { k, id: def.id, diff, lv5: 1, limit: mLimit(def, diff) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, drizzle: !!def.drizzle, mega: !!def.mega, pressOn: !!def.pressOn, bold: !!def.bold };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
