@@ -305,7 +305,14 @@ const ORDERS = {
    */
   command(p, ids, spec) {
     ids = ownIds(p, ids);
-    const s = spec || {}, out = { kind: '', n: 0, nr: 0 };
+    let s = spec || {};
+    const out = { kind: '', n: 0, nr: 0 };
+    // (Passenger Town: a building tapped, they go and stand beside it: at its sentry, they shoot it down)
+    const ruin = !s.b && !s.foe && !s.ferry && S.town && inMap(s.i, s.j) ? townRuinAt(tIdx(s.i, s.j)) : null;
+    if (ruin) {
+      const u0 = getE(ids[0]), st = townStands(ruin);
+      if (u0 && st.length) { const t = st.reduce((a, c) => (dist2((c % S.W) + 0.5, ((c / S.W) | 0) + 0.5, u0.x, u0.y) < dist2((a % S.W) + 0.5, ((a / S.W) | 0) + 0.5, u0.x, u0.y) ? c : a)); s = { ...s, i: t % S.W, j: (t / S.W) | 0 }; }
+    }
     if (s.ferry) {
       const f = ownU(p, s.ferry, 'ferry'); if (!f) return { why: 'That Ferry is gone.' };
       const r = orderBoardFerry(p, ids, f);
@@ -484,6 +491,8 @@ const ORDERS = {
    * more than SITE_UNDO s ago and not finished yet. Everything paid or delivered for it comes back (see undoSite):
    * { back: {good: n}, type } (or { why }).
    */
+  /** Passenger Town: order building `id` stripped for salvage (on), or call it off. '' or why not. */
+  townStrip(p, id, on) { return S.town && !isWild(p) ? townStrip(p, id | 0, !!on) : 'No town here.'; },
   undoSite(p, id) {
     const b = ownB(p, id);
     if (!b) return { why: 'That site is gone.' };

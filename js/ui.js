@@ -1575,6 +1575,16 @@ function drawShapeThumb(cv, P) {
     ctx.shadowBlur = 0;
     crags = 0;
   }
+  if (P.city) {
+    // Passenger Town: a band of blocks across the middle, a street grid through it.
+    const nx = 6, ny = 4, v0 = 0.3, v1 = 0.7;
+    for (let a = 0; a < nx; a++) for (let b = 0; b < ny; b++) {
+      const u = 0.02 + (a / nx) * 0.96, v = v0 + (b / ny) * (v1 - v0), bw = 0.96 / nx * 0.72, bh = (v1 - v0) / ny * 0.7;
+      ctx.fillStyle = (a * 7 + b * 3) % 5 === 0 ? '#9aa3a8' : '#6c7378'; ctx.fillRect(X(u), Y(v), bw * mw, bh * mh);
+      if ((a + b) % 3 === 0) { ctx.fillStyle = '#ffcf7a'; ctx.fillRect(X(u + bw * 0.3), Y(v + bh * 0.3), Math.max(1, bw * mw * 0.15), Math.max(1, bh * mh * 0.15)); }
+    }
+    crags = 0;
+  }
   if (P.maze) {
     // A labyrinth carved from a grid (the same every time for this map type).
     const cw = 5, ch = Math.max(5, Math.round(cw / a)), seen = new Uint8Array(cw * ch), walls = [];
@@ -2325,6 +2335,8 @@ const SHEET_KEYS = {
   'sh-lf-chips': ['v', 'Call down Chips'],
   'sh-gup-begin': ['t', 'Begin Uplink transmission'],
   'sh-gup-stop': ['c', 'Stand down the Uplink'],
+  'sh-strip': ['s', 'Passenger Town: Strip for salvage'],
+  'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
 };
 const ARMY_SIZE_KEYS = Object.fromEntries(Object.entries(SHEET_KEYS)
   .filter(([id]) => id.startsWith('ar-n')).map(([id, [key]]) => [key, id]));
@@ -6167,6 +6179,7 @@ function onMapTap(i, j, wx, wy) {
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
+  if (inMap(i, j) && S.town && typeof townSheet === 'function' && townRuinAt(tIdx(i, j))) { sfx('click'); townSheet(townRuinAt(tIdx(i, j))); return; } // (a building of Passenger Town: js/city.js)
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && burntSoil(tIdx(i, j)) && S.terrain[tIdx(i, j)] === T_GROUND && !S.road[tIdx(i, j)]) { sfx('click'); openBurntSheet(tIdx(i, j)); return; }
@@ -8507,6 +8520,7 @@ function botActivity(u) {
   if (t.type === 'dock') return 'Trade convoy: waiting at the Trade Post for the ledger to take its run';
   if (t.type === 'haul' && u.trade) return t.dst === u.trade ? (t.phase === 'toSrc' ? `Trade convoy: loading ${GOOD[t.good].name} at the ${nm(t.src)}` : `Trade convoy: taking ${GOOD[t.good].name} out to the Trade Terminal`) : t.phase === 'toSrc' ? `Trade convoy: going to the Trade Post for its ${GOOD[t.good].name}` : `Trade convoy: bringing ${GOOD[t.good].name} home from the Trade Post`;
   if (t.type === 'salvage') return t.phase === 'cut' ? 'Salvaging scrap: cutting it up for Alloy' : 'Driving out to salvage scrap';
+  if (t.type === 'strip') { const r = townById(t.r), nm = r ? TOWN_KINDS[r.k].name.replace(/^The /, 'the ').toLowerCase() : 'a building'; return t.phase === 'go' ? `Walking to strip ${/^the /.test(nm) ? nm : aOrAn(nm)}` : `Stripping ${/^the /.test(nm) ? nm : aOrAn(nm)} for salvage`; }
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
   if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : `Constructing ${a}`; }
   if (t.type === 'staff') {
@@ -9821,6 +9835,7 @@ function uiTick(dt) {
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
   if (typeof contBarTick === 'function') contBarTick();
+  if (typeof townUiTick === 'function') townUiTick(); // (a Passenger Town building's panel: js/city.js)
   if (typeof lmUiTick === 'function') lmUiTick(); // (a wreck's log recovered: js/landmarks.js) // (a Contingency battle's clock and cards: js/contingency-battle.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;

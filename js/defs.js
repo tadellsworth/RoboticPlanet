@@ -740,7 +740,47 @@ const SHAPE_PRESETS = [
     tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
   { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook rocky shelves, green river basins and Ore and Crystal. The river splits around islands between its narrows.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true, river: true, // (river: ships sail its river, but it's a heights map, not a naval one: no Naval badge, no Shoals biome)
     tip: 'Grand Canyon: your colony starts on a high rim. Two single-lane descents lead down from each rim, a switchback and a side-canyon trail. Ships can sail around the midstream islands, robots can wade at the fords, and a Viaduct can cross at the narrows.' },
+  // Passenger Town (LORE.md: the empty town, in Greenreach): the Pathfinder's town fills the middle (townSetup in world.js).
+  { name: 'Passenger Town', group: 'divided', blurb: 'The empty Accord town between the bases: its streets are a maze, its buildings block the way. Strip a building for Cement, Alloy and Chips, and its lot opens a new way through.', w: 1, h: 1.1, city: true, flat: true,
+    tip: 'Passenger Town: the empty town between the bases. Its buildings block the way and its streets are a maze. Tap a building and Strip for salvage (S): your Workers take it apart for Cement, Alloy and Chips, carried home as crates, and its lot opens a new street. Robots beside a building are in cover. Some still have an old Accord sentry on duty: clear it with warbots first.' },
 ];
+/**
+ * Passenger Town (SHAPE_PRESETS city: townSetup in world.js, the rules in sim.js, the look in js/city.js).
+ *   band, clear   half the town's height (share of the map's), and the rows kept clear in front of each base
+ *   blockX, blockY  a block's width and height (tiles); streets are 2 wide
+ *   lots, plaza   the share of blocks left as parking lots (with car hulks) and plazas
+ *   close         the share of street segments closed by an arcade built over them (while every street stays reachable)
+ *   perTile       salvage in a building, per tile of it, times its kind's `mult` (TOWN_KINDS)
+ *   unit          a Worker's seconds to strip one unit of salvage; crew: Workers of one colony on one building, at most
+ *   pile          units a Worker strips before it sets them down as a pile of crates (beside the building)
+ *   cover         damage a robot beside a standing building takes (as the Stone Forest's)
+ *   cacheShare, caches  the share of buildings with a cache inside, and what one holds (found when it's stripped)
+ *   sentry        old Accord sentries on duty: `per` buildings on each side (the civic hall's among them), its armour,
+ *                 its reach from the building's edge, its shot's damage every `every` s, and the damage each armed
+ *                 robot of yours within `back` tiles of it does back a second
+ *   ai            a rival's strip orders: one every `every` s, at most `max` buildings at once, within `reach` of its land
+ */
+const TOWN = {
+  band: 0.2, clear: 6, blockX: [4, 6], blockY: [3, 5], lots: 0.1, plaza: 0.05, close: 0.4,
+  perTile: { cement: 0.6, alloy: 0.25, chip: 0.06 }, unit: 4, crew: 3, pile: 4, cover: 0.75,
+  cacheShare: 0.15, caches: [{ chip: 5 }, { crystal: 6, chip: 2 }, { alloy: 8 }],
+  sentry: { per: 2, hp: 40, range: 3.2, dmg: 2.5, every: 1, back: 3.4, hit: 1.2 },
+  ai: { every: 20, max: 2, reach: 6 },
+};
+/** The kinds of building in Passenger Town: name, line (flavour), height range (tiles, as drawn), salvage multiplier. */
+const TOWN_KINDS = {
+  house: { name: 'Walk-up flats', h: [0.8, 1.15], mult: 0.9, cache: true, line: 'Three floors, six flats, keys in every door. The welcome packs are still on the kitchen tables.' },
+  shop: { name: 'Shopfront', h: [0.55, 0.8], mult: 0.8, cache: true, line: 'The shutters are up and the shelves are stocked to the Accord list. Opening day: Arrival.' },
+  flats: { name: 'Apartment block', h: [1.3, 1.9], mult: 1.2, cache: true, line: 'Two hundred homes, allocated by lottery. The lottery was to be drawn on board.' },
+  tower: { name: 'Residential tower', h: [2.3, 3.4], mult: 1.5, cache: true, line: 'Its lifts run a test cycle every morning at six. Nobody has ever rung for one.' },
+  school: { name: 'The school', h: [0.9, 1.05], mult: 1.1, chips: 2, cache: true, line: 'Desks set out for the first term: names on the coat pegs, blank.' },
+  hall: { name: 'The civic hall', h: [1.5, 1.7], mult: 1.4, chips: 3, cache: true, line: 'The town council\'s chamber. The chairs are numbered; the first meeting is still on the noticeboard.' },
+  spire: { name: 'The civic tower', h: [4.2, 4.6], mult: 1.8, chips: 2, line: 'The tallest thing the Pathfinder built. Its beacon has burned every night for sixty years, for the arks to steer by.' },
+  arcade: { name: 'Covered arcade', h: [0.8, 1.0], mult: 0.7, line: 'A glass roof over the street, so the colonists could shop in the rain. It rains here more than they were told.' },
+  car: { name: 'Parked car', h: [0.22, 0.28], mult: 1, fixed: { cement: 0, alloy: 2, chip: 0 }, line: 'A town runabout from the Pathfinder\'s hold, parked where it was charged. Mileage: zero.' },
+};
+/** The sentry's voice: its log line, with {day} the days on duty (LORE.md: the Warden's register). */
+const TOWN_SENTRY_LINE = 'Accord Civil Security. Position held. Day {day}.';
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
 // `closing`: bots keep off the flats this long before they flood.

@@ -1631,6 +1631,38 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-nall, #ar-attack' },
     ],
   },
+  // Passenger Town (the city map, SHAPE_PRESETS city): stripping its buildings for salvage, the ways that opens,
+  // cover beside them, and an old Accord sentry cleared with warbots.
+  {
+    id: 'ruins', name: 'Passenger Town', chapter: 'First Contact',
+    brief: 'The Pathfinder\'s town for the first colonists stands empty between you and a rival. Strip it for salvage, and open a way through.',
+    intro: [
+      'The town was built for colonists who never came. Its buildings block the way: the streets are a maze.',
+      'Tap a building → <b>Strip for salvage</b> (<kbd>S</kbd>). Your free Workers take it apart for Cement, Alloy and Chips.',
+      'They set the salvage down beside it in crates: Haulers with a road to them, or idle Workers, carry them home.',
+      'A stripped lot is open ground: a new street, for you and the rival alike. Robots beside a building are in cover.',
+      'Some buildings still have an old Accord sentry on duty. It shoots anything that comes near: clear it with warbots.',
+    ],
+    mode: 'versus', seed: 7310, size: 0, rough: 1, rich: 3, biome: 'jungle', players: 2, style: 'balanced', shape: SHAPE_PRESETS.findIndex((p) => p.city),
+    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 25],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with an Ammo Plant)
+      const L = getE(S.players[0].lander);
+      for (let k = 0; k < mPick([4, 3, 2], diff); k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      S.players[0].stats.startBots = S.players[0].stats.bots;
+    },
+    goals: [
+      { kind: 'ruins', n: [2, 3, 4], text: ['Strip a building of the town', 'Strip {n} buildings of the town'], count: (P) => P.stats.ruins || 0,
+        hint: 'Tap a building in the town → <b>Strip for salvage</b> (<kbd>S</kbd>). Your free Workers go and take it apart.',
+        ui: '#sh-strip' },
+      { kind: 'salvage', n: [20, 30, 45], text: 'Strip {n} units of salvage', count: (P) => P.stats.stripped || 0,
+        hint: 'Order more buildings stripped (<kbd>S</kbd> on a building\'s panel). Bigger ones take longer and give more.',
+        ui: '#sh-strip' },
+      { kind: 'sentry', n: 1, text: 'Clear an old Accord sentry', count: (P) => P.stats.sentries || 0,
+        hint: 'Drag a box round warbots (or <b>Army</b> → <b>Select all</b>), then tap the guarded building.',
+        ui: '#btn-attack, #ar-select' },
+    ],
+  },
   {
     id: 'border', name: 'Border Dispute', chapter: 'First Contact',
     brief: 'A rival shares this plateau, and the rich fields lie between you. Take their Outposts, carry off loot and hold the land.',

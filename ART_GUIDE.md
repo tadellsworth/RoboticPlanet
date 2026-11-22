@@ -1937,6 +1937,31 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
 
+### Passenger Town, the city map (drawn in code; no images)
+
+The owner's art direction (Nov 22 2026): the mood of the dense sci-fi cities of *Industries of Titan*, not their
+content: our own buildings, in our camera view. A dense grid of blocks packed with mid-rise and taller buildings of
+varied heights and footprints (not a sparse suburb); chunky blocky forms with rooftop clutter (vents, tanks, fans,
+landing pads, antennas); many small warm-lit windows (amber, cream) and cool accents (cyan strips, glyph signs, a few red
+panel signs); a few landmark towers and a big civic block; wide streets with dashed lanes, kerbs and street lamps, a
+plaza or two; low haze over it, thickest at dusk and night, deeper toward the map's edges; empty and abandoned, its
+lights still running on automatic (LORE: empty, waiting). By day the same forms in muted greys, browns and teal panels,
+lights off. A stripped building leaves a cleared lot: a foundation slab, rubble and rebar.
+
+All of it is drawn in code (`js/city.js`), so there's nothing to bundle:
+
+| What | How it's drawn |
+|---|---|
+| Streets and lots (`townGroundCanvas`) | One picture of the whole town at 16 px a tile, made again only when a building comes down, drawn with the ground (graded with it at dusk and night): asphalt with grit, concrete block slabs with a pale kerb and its shadow, dashed lane lines down every street, worn zebra crossings, parking bays, plazas (paving grid, planters, a dry fountain), stripped lots. |
+| Buildings (`townPaint`) | Boxes in the game's projection (the front face standing up toward the camera, the roof a footprint lifted by the height), one to four tiers stepping back, a shadow cast east. Fronts: floors of windows, floor bands, balconies, shopfronts with awnings, the hall's columns and steps, the school's yellow band and clock, a cyan strip up an edge, a red or glyph sign. Roofs (seven greys, browns and teals): vents, tanks, fans, rows of units, antennas with red tips, a tower's landing pad. Being stripped: lower as it goes, scaffold over the front, girders where the roof was. Each building is cached as two pictures at the nearest of a few zoom steps (its body, coloured for the time of day with `todColor`; its lit windows and signs, added on at night, some buildings' lights faltering now and then). |
+| Kinds (`TOWN_LOOK`) | Walk-up flats (warm brick and cream), shopfronts, apartment blocks (greys and teal panels), residential towers (dark, two or three tiers, red light blinking), the school, the civic hall (pale stone, a copper-green upper block, a bare flagpole), the civic tower (slim, four tiers, a beacon that pulses from dusk to dawn), covered arcades over the streets (a glass roof on ribs, arches underneath) and parked cars. |
+| Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on the roof; its armour bar once hit. |
+| The rest | Street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
+
+A sprite set from the renderer could replace the buildings later (`renderer/b/landmark.js` has Passenger Town's
+house and sign): the kinds and their footprints are in `TOWN_KINDS` (js/defs.js); keep a body and a lights picture
+for each, and a stripped-down look.
+
 ### Wind, water, sky and the planet view (drawn in code; no images)
 
 The owner's theme for these: the immense beauty of the planet, being torn apart by war. All of it is drawn in code

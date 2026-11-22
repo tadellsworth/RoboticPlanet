@@ -2676,6 +2676,7 @@ function newGame(opts) {
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
+  if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
@@ -2744,6 +2745,7 @@ function newGame(opts) {
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
+  if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = 0; i < S.W; i++) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
@@ -3677,6 +3679,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
+  if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
@@ -4006,6 +4009,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
+  if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -4976,6 +4980,7 @@ function cancelTask(bot, keepLoad = false) {
       if (!keepLoad) dropCarried(bot);
       break;
     }
+    case 'strip': townDropLoad(bot, t); break; // (Passenger Town: what it stripped, set down as crates)
     case 'build': {
       const s = getE(t.site);
       if (s && s.builder === bot.id) s.builder = 0;
@@ -5454,6 +5459,19 @@ function checkSave(o) {
   }
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.
   if (o.landmarks != null) { if (typeof lmCheckSave === 'function') lmCheckSave(o, bad); else bad(); }
+  // Passenger Town (townSetup): its rectangle, its blocks' spans, signs and plazas, and its buildings.
+  if (o.town != null) {
+    const T = o.town, int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi, span = (a, n) => Array.isArray(a) && a.length <= 64 && a.every((q) => Array.isArray(q) && q.length === 2 && int(q[0], 0, n) && int(q[1], 0, n));
+    if (!obj(T) || T.v !== 1 || !int(T.x0, 0, o.W - 1) || !int(T.x1, 0, o.W - 1) || !int(T.y0, 0, o.H - 1) || !int(T.y1, 0, o.H - 1) || (T.ver != null && !int(T.ver, 0, 1e6))) bad();
+    if (!span(T.xs, o.W) || !span(T.ys, o.H) || !Array.isArray(T.signs) || T.signs.length > 8 || !T.signs.every((q) => Array.isArray(q) && q.length === 2 && int(q[0], 0, o.W - 1) && int(q[1], 0, o.H - 1))) bad();
+    if (!Array.isArray(T.plazas) || T.plazas.length > 512 || !T.plazas.every((q) => Array.isArray(q) && q.length === 5 && q.every((v) => int(v, 0, Math.max(o.W, o.H))))) bad();
+    if (!Array.isArray(T.r) || T.r.length > 8192) bad();
+    for (const r of T.r) {
+      if (!obj(r) || !ownKey(TOWN_KINDS, r.k) || !Number.isSafeInteger(r.id) || !int(r.x, 0, o.W - 1) || !int(r.y, 0, o.H - 1) || !int(r.w, 1, 16) || !int(r.h, 1, 16) || r.x + r.w > o.W || r.y + r.h > o.H) bad();
+      if (!int(r.v, 0, 1e6) || !int(r.hgt, 0, 100) || !obj(r.g) || !['cement', 'alloy', 'chip'].every((g) => int(r.g[g] || 0, 0, 9999)) || Object.keys(r.g).some((g) => !['cement', 'alloy', 'chip'].includes(g))) bad();
+      if (!int(r.n0, 0, 99999) || !int(r.cache, 0, TOWN.caches.length) || !(Number.isFinite(r.sen) && r.sen >= 0) || !(Number.isFinite(r.scd || 0) && (r.scd || 0) >= 0) || !int(r.by, 0, 255) || ![0, 1].includes(r.gone)) bad();
+    }
+  }
   // A Contingency battle (js/contingency-battle.js): the run and battle, the seats' sides, the clock, the colours, and
   // each seat's cards for the battle (CONT_CARDS keys that act in battle) with the ones already played.
   if (o.contingency != null) {
@@ -5572,6 +5590,8 @@ function checkSave(o) {
       if (t.path != null && !(Array.isArray(t.path) && t.path.length <= o.W * o.H && t.path.every((q) => Number.isInteger(q) && q >= 0 && q < o.W * o.H))) bad();
     } else if (u.type === 'harrow' && u.task != null) bad();
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
+    if (u.task?.type === 'strip' && (!Number.isSafeInteger(u.task.r) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !Number.isFinite(u.task.w) || !Number.isInteger(u.task.n) ||
+      !obj(u.task.load) || Object.keys(u.task.load).some((g) => !['cement', 'alloy', 'chip'].includes(g) || !Number.isInteger(u.task.load[g])))) bad(); // (Passenger Town: stripping a building)
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
   }
@@ -6015,4 +6035,171 @@ function railRoute(u, x, y, arrivalComps) {
   // A train inside a station starts by rolling onto its platform; one already on the track skips its own tile.
   if (!u.inside && path[0] === tIdx(Math.floor(u.x), Math.floor(u.y))) path.shift();
   return path;
+}
+
+/* ------------------------------------------------------------------ Passenger Town (the city map) */
+
+/*
+ * Passenger Town (SHAPE_PRESETS city; LORE.md: the empty town, in Greenreach): the Pathfinder's town for the first
+ * colonists, built and never lived in, fills the middle of the map between the two bases. A grid of streets runs
+ * between blocks of empty buildings (S.town.r, the ruins: rock under their art, so they block the way and nothing is
+ * built on them); some street segments are closed by an arcade built over them, so the streets are a maze. Laid by
+ * townSetup on the canonical half and turned 180° onto the other, tile for tile, so both colonies get the same town.
+ *
+ * S.town: { v: 1, x0, y0, x1, y1 (its rectangle, inclusive), xs, ys (the blocks' spans along each axis, [a, b)),
+ * signs: [[x, y]] (the WELCOME TO ITHACA signs: scenery), plazas: [[x, y, w, h]], r: [ruin] } with a ruin
+ * { id, x, y, w, h, k (TOWN_KINDS key), v (its look's seed), hgt (tenths of a tile, as drawn), g: { cement, alloy, chip }
+ * (salvage left), n0 (salvage it began with), cache (0, or 1 to 3: TOWN.caches), sen (its sentry's armour, 0: none),
+ * scd (the sentry's next shot), by (bit p set: colony p has ordered it stripped), gone (1: stripped, its lot open) }.
+ * The rules are in sim.js (townTick, townRun, townDoStrip); the look in js/city.js.
+ */
+
+/** Sizes of blocks lo..hi tiles, with 2-tile streets between, filling T tiles exactly (or as near under it as fits). */
+function townPart(T, lo, hi, rng) {
+  for (let t = T; t >= lo; t--) {
+    let nb = 1;
+    while (nb * hi + 2 * (nb - 1) < t) nb++;
+    while ((nb + 1) * lo + 2 * nb <= t && (t - 2 * (nb - 1)) / nb > (lo + hi) / 2 + 0.5) nb++;
+    if (nb * lo + 2 * (nb - 1) > t) continue;
+    const s = new Array(nb).fill(lo);
+    let left = t - 2 * (nb - 1) - nb * lo;
+    while (left > 0) { const k = Math.floor(rng() * nb); if (s[k] < hi) { s[k]++; left--; } }
+    return s;
+  }
+  return [lo];
+}
+
+/**
+ * Lay Passenger Town on a new game's map (newGame, before the Command Bases land): `bases` the landing spots. Clears
+ * the town's ground (no water, crags or deposits), lays the blocks and their ruins, closes street segments with
+ * arcades while every street stays reachable and the bases stay joined, and turns it all onto the other half.
+ */
+function townSetup(seed, bases) {
+  const W = S.W, H = S.H, N = W * H, rng = makeRng((seed ^ 0x7a0c17) >>> 0);
+  const mir = (t) => N - 1 - t;
+  // Along x: blocks from the west edge to a street down the middle (2 wide, or 3 on an odd width), mirrored east.
+  const cwx = W % 2 ? 3 : 2, Tx = (W - cwx) / 2;
+  const sx = townPart(Tx, TOWN.blockX[0], TOWN.blockX[1], rng), xs = [];
+  let p = Tx - sx.reduce((a, b) => a + b, 0) - 2 * (sx.length - 1); // (any slack: on the west edge)
+  for (const s of sx) { xs.push([p, p + s]); p += s + 2; }
+  for (let k = xs.length - 1; k >= 0; k--) xs.push([W - xs[k][1], W - xs[k][0]]);
+  // Along y: a street across the middle, then blocks out toward each base, kept TOWN.clear tiles short of it.
+  const mid = H / 2, by = Math.max(...bases.map((b) => b.y));
+  const Ty = Math.max(TOWN.blockY[0], Math.min(Math.round(H * TOWN.band), by - TOWN.clear - (mid + 1) + 1));
+  const sy = townPart(Ty, TOWN.blockY[0], TOWN.blockY[1], rng), ysB = [];
+  p = mid + 1;
+  for (const s of sy) { ysB.push([p, p + s]); p += s + 2; }
+  const y1 = ysB[ysB.length - 1][1] - 1, y0 = H - 1 - y1;
+  const ys = [...ysB.slice().reverse().map(([a, b]) => [H - b, H - a]), ...ysB];
+  const T = (S.town = { v: 1, x0: 0, y0, x1: W - 1, y1, xs, ys, signs: [], plazas: [], r: [] });
+  // The town's ground (and a row round it): open, level, bare.
+  for (let j = Math.max(0, y0 - 1); j <= Math.min(H - 1, y1 + 1); j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i;
+    S.terrain[t] = T_GROUND; S.res[t] = 0; S.amt[t] = 0; if (S.fert) S.fert[t] = 0; if (S.grow) S.grow[t] = 0; if (S.ramp) S.ramp[t] = 0;
+    if (S.elev) S.elev[t] = S.elev[mir(t)] = Math.min(S.elev[t], S.elev[mir(t)]);
+  }
+  if (S.elev) { const e0 = S.elev[tIdx(W >> 1, mid)]; for (let j = y0; j <= y1; j++) for (let i = 0; i < W; i++) S.elev[j * W + i] = e0; }
+  const add = (x, y, w, h, k, extra) => {
+    const D = TOWN_KINDS[k], hgt = Math.round((D.h[0] + rng() * (D.h[1] - D.h[0])) * 10), area = w * h;
+    const g = D.fixed ? { ...D.fixed } : { cement: Math.max(1, Math.round(area * TOWN.perTile.cement * D.mult)), alloy: Math.round(area * TOWN.perTile.alloy * D.mult), chip: Math.round(area * TOWN.perTile.chip * D.mult) + (D.chips || 0) };
+    const r = { id: 0, x, y, w, h, k, v: Math.floor(rng() * 1e6), hgt, g, n0: 0, cache: 0, sen: 0, scd: 0, by: 0, gone: 0, ...extra };
+    r.n0 = r.g.cement + r.g.alloy + r.g.chip;
+    T.r.push(r);
+    return r;
+  };
+  // The blocks in the south (canonical) half, nearest the middle first: the civic hall, the civic tower, a school;
+  // then parking lots, a plaza, and the rest split into buildings.
+  const blocks = [];
+  for (const [ya, yb] of ysB) for (const [xa, xb] of xs) blocks.push({ x: xa, y: ya, w: xb - xa, h: yb - ya });
+  const cx = (W - 1) / 2, cy = (H - 1) / 2;
+  blocks.sort((a, b) => dist2(a.x + a.w / 2, a.y + a.h / 2, cx, cy) - dist2(b.x + b.w / 2, b.y + b.h / 2, cx, cy) || a.x - b.x);
+  const split = (x, y, w, h, depth) => {
+    const area = w * h;
+    if (depth > 0 && (area <= 6 || (area <= 15 && rng() < 0.35))) {
+      const k = area <= 4 ? 'house' : area <= 8 ? (rng() < 0.5 ? 'house' : 'shop') : rng() < 0.45 ? 'tower' : 'flats';
+      add(x, y, w, h, k);
+      return;
+    }
+    const vert = w > h || (w === h && rng() < 0.5);
+    const L = vert ? w : h;
+    if (L < 4) { add(x, y, w, h, area <= 4 ? 'house' : 'flats'); return; }
+    const c = 2 + Math.floor(rng() * (L - 3));
+    if (vert) { split(x, y, c, h, depth + 1); split(x + c, y, w - c, h, depth + 1); } else { split(x, y, w, c, depth + 1); split(x, y + c, w, h - c, depth + 1); }
+  };
+  let school = false;
+  blocks.forEach((b, n) => {
+    if (n === 0) { add(b.x, b.y, b.w, b.h, 'hall', { sen: TOWN.sentry.hp }); return; }
+    if (n === 1) { // the civic tower on the block's corner nearest the middle, shops round it
+      const tx = b.x + b.w / 2 < cx ? b.x + b.w - 2 : b.x, ty = b.y;
+      add(tx, ty, 2, 2, 'spire');
+      if (b.h > 2) split(b.x, b.y + 2, b.w, b.h - 2, 1);
+      if (b.w > 2) split(tx === b.x ? b.x + 2 : b.x, b.y, b.w - 2, 2, 1);
+      return;
+    }
+    const roll = rng();
+    if (!school && n >= 3 && b.w * b.h >= 12) { school = true; add(b.x, b.y, b.w, b.h, 'school'); return; }
+    if (roll < TOWN.lots) { // a parking lot: open asphalt with a few car hulks
+      T.plazas.push([b.x, b.y, b.w, b.h, 1]);
+      const n = 2 + Math.floor(rng() * 2);
+      for (let k = 0; k < n; k++) {
+        const x = b.x + 1 + Math.floor(rng() * Math.max(1, b.w - 2)), y = b.y + Math.floor(rng() * b.h);
+        if (!T.r.some((r) => r.x === x && r.y === y)) add(x, y, 1, 1, 'car');
+      }
+      return;
+    }
+    if (roll < TOWN.lots + TOWN.plaza) { T.plazas.push([b.x, b.y, b.w, b.h, 0]); return; }
+    split(b.x, b.y, b.w, b.h, 0);
+  });
+  // A few caches, and old Accord sentries still at their posts (the civic hall's, and TOWN.sentry.per - 1 more).
+  const big = T.r.filter((r) => r.k === 'tower' || r.k === 'flats');
+  for (let k = 1; k < TOWN.sentry.per && big.length; k++) big.splice(Math.floor(rng() * big.length), 1)[0].sen = TOWN.sentry.hp;
+  for (const r of T.r) if (TOWN_KINDS[r.k].cache && rng() < TOWN.cacheShare) r.cache = 1 + Math.floor(rng() * TOWN.caches.length);
+  // The street segments: a column street beside a block row, or a row street under a block column. Each with its
+  // twin; arcades close some, while every street tile stays reachable and the bases joined.
+  const segs = [];
+  const colStreets = [];
+  for (let k = 0; k + 1 < xs.length; k++) colStreets.push([xs[k][1], xs[k + 1][0]]);
+  const rowStreets = [[mid - 1, mid + 1]];
+  for (let k = 0; k + 1 < ysB.length; k++) rowStreets.push([ysB[k][1], ysB[k + 1][0]]);
+  for (const [a, b] of colStreets) for (const [ya, yb] of ysB) segs.push([a, ya, b - a, yb - ya]);
+  for (const [a, b] of rowStreets) for (const [xa, xb] of xs) if (a >= mid - 1 && (a > mid - 1 || xa + xb <= W)) segs.push([xa, a, xb - xa, b - a]); // (the middle row's: the west half's, its twins east)
+  for (let k = segs.length - 1; k > 0; k--) { const m = Math.floor(rng() * (k + 1)); [segs[k], segs[m]] = [segs[m], segs[k]]; }
+  // the town's ruins in the terrain, mirrored
+  const twin = (r) => ({ ...r, x: W - r.x - r.w, y: H - r.y - r.h, g: { ...r.g } });
+  const south = T.r.slice();
+  for (const r of south) T.r.push(twin(r));
+  const solid = (r, v) => { for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) { S.terrain[j * W + i] = v; S.terrain[mir(j * W + i)] = v; } };
+  for (const r of south) solid(r, T_ROCK);
+  const streets = [];
+  for (let j = y0; j <= y1; j++) for (let i = 0; i < W; i++) if (S.terrain[j * W + i] === T_GROUND) streets.push(j * W + i);
+  const seen = new Uint8Array(N);
+  const joined = () => {
+    seen.fill(0);
+    const s0 = tIdx(bases[0].x, bases[0].y), q = [s0];
+    seen[s0] = 1;
+    for (let h = 0; h < q.length; h++) {
+      const a = q[h], i = a % W;
+      for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) if (b >= 0 && b < N && !seen[b] && S.terrain[b] === T_GROUND) { seen[b] = 1; q.push(b); }
+    }
+    return bases.every((b) => seen[tIdx(b.x, b.y)]) && streets.every((t) => seen[t] || S.terrain[t] !== T_GROUND);
+  };
+  if (!joined()) { // (the map round the town cut a base off: no arcades, and a lane opened from each base to the town)
+    for (const b of bases) for (let j = Math.min(b.y, y1); j <= Math.max(b.y, y0); j++) if (j < y0 || j > y1) { const t = tIdx(b.x, j); if (S.terrain[t] !== T_GROUND) { S.terrain[t] = T_GROUND; S.res[t] = 0; } }
+  }
+  const closed = [];
+  for (const sg of segs) {
+    if (rng() >= TOWN.close) continue;
+    const r = { x: sg[0], y: sg[1], w: sg[2], h: sg[3] };
+    solid(r, T_ROCK);
+    if (joined()) closed.push(r); else solid(r, T_GROUND);
+  }
+  for (const r of closed) { const a = add(r.x, r.y, r.w, r.h, 'arcade'); T.r.push(twin(a)); }
+  // The rest of the street tiles are bare old paving; ids for every ruin, the twins after their own.
+  T.r.sort((a, b) => (a.y * W + a.x) - (b.y * W + b.x));
+  for (const r of T.r) r.id = S.nextId++;
+  for (const [x, y, w, h, lot] of T.plazas.slice()) T.plazas.push([W - x - w, H - y - h, w, h, lot]);
+  // WELCOME TO ITHACA, at the mouth of the middle street, facing each base.
+  const sx0 = (W >> 1) + (cwx === 3 ? 2 : 1);
+  T.signs.push([sx0, Math.min(H - 1, y1 + 1)], [W - 1 - sx0, Math.max(0, y0 - 1)]);
+  return T;
 }

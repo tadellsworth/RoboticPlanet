@@ -12,6 +12,26 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## Passenger Town, the city map (built Nov 22 2026; open questions for the owner)
+
+The owner's design (approved): the empty Accord town between the bases, its streets a maze, its buildings stripped
+for salvage to open new ways through, cover beside them, caches, old sentries, rivals that strip near their routes.
+Built as `SHAPE_PRESETS` `city` (README, Passenger Town); the mission *Passenger Town* (First Contact) teaches it.
+Calls made that the owner may want changed:
+
+- **Workers aren't selected and sent.** Workers in Terrafall are never selected, so the order is on the building's
+  panel (Strip for salvage, S) and the colony's free Workers go, up to 3 a building, like Call a worker.
+- **Sentries are part of their building**, not robots: a sentry on the roof shoots any robot within 3.2 tiles and
+  armed robots beside it shoot back; warbots are sent by selecting them and tapping the building. There is no neutral
+  robot side in the game to put them on. They fire at everyone, the Murmur's creatures aside.
+- **Numbers:** a unit of salvage every 4 s a Worker; about 240 Cement, 105 Alloy and 25 Chips a side on Medium (a
+  Smelter makes 12 Alloy a minute); a cache in one building in seven; sentry armour 40, 2.5 damage a second.
+- **The streets are old paving, not roads**: Haulers still need roads laid on them. Pre-laid neutral roads would
+  have needed an owner for them.
+- **For two players only** so far; three or four would need a layout turned three or four ways.
+- **Trade Posts** can land in the town's streets or plazas (the posts go where open ground is); left as it is.
+- **The look** is drawn in code (ART_GUIDE.md, Passenger Town); a renderer sprite set could replace it.
+
 ## The owner's notes, Nov 21 2026 (for later)
 
 - **Lance of Corvane cooling down (BUILT, Nov 21 2026):** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its

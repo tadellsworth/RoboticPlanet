@@ -387,6 +387,7 @@ function aiThink(p) {
   if (!lander || lander.owner !== p) return;
   aiAllyCmds(p); // (a teammate's commands: see allyCommand)
   aiArmorTrains(p);
+  if (S.town) aiTown(p, lander); // (Passenger Town: buildings to strip)
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
   // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
@@ -4900,4 +4901,43 @@ function aiSunder(p, me, lander, canBuild) {
     const q = aiQuakeSpot(p, ray);
     if (q && q.s >= AI_SUNDER.worth && !setSunderAim(ray, q.i, q.j, 'quake')) P.sunderQuakes = (P.sunderQuakes || 0) + 1;
   }
+}
+
+/* ------------------------------------------------------------------ Passenger Town */
+
+/**
+ * A rival on Passenger Town (S.town) orders buildings stripped (townStrip) near the way to its enemy: once every
+ * TOWN.ai.every seconds, while fewer than TOWN.ai.max of its orders stand, the unguarded building its Workers can reach
+ * that lies nearest the line from its Command Base to the nearest enemy's, within TOWN.ai.reach tiles of its land (or 20
+ * of its base), the richer the better. Stripped, its lot opens a way through for its army. Sentries it leaves be: its
+ * warbots shoot one down when they pass it.
+ */
+function aiTown(p, lander) {
+  const P = S.players[p];
+  if (S.time < (P.townT || 0)) return;
+  P.townT = S.time + TOWN.ai.every;
+  const mine = S.town.r.filter((r) => !r.gone && (r.by >> p) & 1).length;
+  if (mine >= TOWN.ai.max) return;
+  let foe = null, fd = Infinity;
+  for (const Q of S.players) { const L = !Q.out && !Q.absent && foes(p, Q.id) && !isWild(Q.id) ? getE(Q.lander) : null; if (L && dist2(L.x, L.y, lander.x, lander.y) < fd) { fd = dist2(L.x, L.y, lander.x, lander.y); foe = L; } }
+  const z = S.zone[tIdx(lander.x, lander.y)], R = TOWN.ai.reach;
+  const near = (r) => {
+    if (dist2(r.x + r.w / 2, r.y + r.h / 2, lander.x, lander.y) <= 400) return true;
+    for (let j = r.y - R; j < r.y + r.h + R; j += 2) for (let i = r.x - R; i < r.x + r.w + R; i += 2) if (inMap(i, j) && S.owner[tIdx(i, j)] === p) return true;
+    return false;
+  };
+  let best = null, bs = Infinity;
+  for (const r of S.town.r) {
+    if (r.gone || r.sen > 0 || (r.by >> p) & 1 || !townStands(r).some((t) => S.zone[t] === z && !hotFor(p, t)) || !near(r)) continue;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    let off = 0;
+    if (foe) { // (how far off the straight line between the bases)
+      const ax = lander.x + 0.5, ay = lander.y + 0.5, bx = foe.x + 0.5 - ax, by = foe.y + 0.5 - ay, L2 = bx * bx + by * by || 1;
+      const k = clamp(((cx - ax) * bx + (cy - ay) * by) / L2, 0, 1);
+      off = Math.sqrt(dist2(cx, cy, ax + k * bx, ay + k * by));
+    }
+    const sc = off * 2 + Math.sqrt(dist2(cx, cy, lander.x, lander.y)) * 0.5 - r.n0 * 0.1 + (r.k === 'car' ? 6 : 0);
+    if (sc < bs || (sc === bs && r.id < best.id)) { bs = sc; best = r; }
+  }
+  if (best) townStrip(p, best.id, true);
 }

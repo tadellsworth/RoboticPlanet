@@ -93,6 +93,7 @@ function simStep(dt) {
   if (S.mission && S.tick % 30 === 0 && typeof checkMission === 'function') checkMission();
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)
   if (S.landmarks && S.landmarks.length && S.tick % 10 === 7 && typeof lmTick === 'function') lmTick(10 * dt); // (a landmark's clock or wreck: js/landmarks.js)
+  if (S.town && S.tick % 3 === 1) townTick(3 * dt); // (Passenger Town's sentries)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -2517,6 +2518,8 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g), g));
     }
   }
+  // 5b) Passenger Town: Workers to the buildings the colony ordered stripped (townRun).
+  if (S.town) townRun(p, idle);
   // 6) Free workers pave planned roads (see nextPaveTile). The tile one picks goes to the free worker on its ground
   //    nearest to it: the one at home takes the tile at the home end, not one standing out at the far end.
   //    No more than the colony's road crew limit of them at once (roadCrew): a Roadworks' Pavers lay road too, and
@@ -3382,6 +3385,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'board') doBoard(u, t, dt);
   else if (t.type === 'crate') doCrate(u, t, dt);
   else if (t.type === 'salvage') doSalvage(u, t, dt);
+  else if (t.type === 'strip') townDoStrip(u, t, dt); // (Passenger Town: stripping a building)
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
@@ -5798,6 +5802,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
   if (S.landmarks && typeof lmCover === 'function') dmg *= lmCover(u); // (cover among the Stone Forest's pillars: js/landmarks.js)
+  if (S.town) dmg *= townCover(u); // (cover beside Passenger Town's buildings)
   u.hp -= dmg;
   u.hurtT = S.time;
   if (sx !== undefined && BOTS[u.type].wild) { u.hitX = sx; u.hitY = sy; u.hitT = S.time; } // (the Murmur remember what killed them: murmurBody)
@@ -6139,6 +6144,8 @@ function updateDanger(again) {
     const spots = dist2(lx, ly, v.x, v.y) > 0.25 ? [[v.x, v.y], [lx, ly]] : [[v.x, v.y]];
     for (const [cx, cy] of spots) { const f = [v.owner, cx, cy, R]; D.f.push(f); spot(f); }
   }
+  // Passenger Town's sentries on duty: everyone's robots that don't fight keep out of their reach.
+  if (S.town) for (const r of S.town.r) if (!r.gone && r.sen > 0) { const a = townSentryAt(r), f = [-1, a.x, a.y, TOWN.sentry.range + Math.hypot(r.w, r.h) / 2 + 0.5]; D.f.push(f); spot(f); }
   D.n = DANGER.foes;
 }
 
@@ -18299,6 +18306,7 @@ function hashState() {
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
+  if (S.town) for (const r of S.town.r) { int(r.id); int(r.gone); int(r.by); int(r.cache); num(r.sen); num(r.scd || 0); int(r.g.cement || 0); int(r.g.alloy || 0); int(r.g.chip || 0); } // (Passenger Town's buildings)
   for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
   if (S.crater) { int(S.scarN || 0); for (const s of S.scrap) { int(s.id); num(s.x); num(s.y); num(s.n); int(s.k); } int(S.bones.length); }
@@ -21119,4 +21127,200 @@ function stormBrokenFor(p) {
   if (!S.buildings.some((e) => !e.dead && BDEFS[e.type].atmos && e.owner >= 0 && foes(e.owner, p))) return true;
   const c = bCentre(L);
   return S.buildings.some((e) => !e.dead && e.built && BDEFS[e.type].atmos && !foes(e.owner, p)) && atmosOwnAt(c.x, c.y, p);
+}
+
+/* ------------------------------------------------------------------ Passenger Town: stripping, sentries, cover */
+
+/*
+ * Passenger Town's buildings (S.town.r: laid by townSetup in world.js). A colony orders one stripped from its panel
+ * (the townStrip order: bit p of r.by); its idle Workers go (townRun, from dispatch: up to townCrew of them), stand
+ * beside it and take it apart a unit of salvage every TOWN.unit seconds (townDoStrip), setting each TOWN.pile units
+ * down beside it as crates (which never rot: Haulers with a road to them, idle Workers or warbots carry them home,
+ * anyone's). Stripped bare it comes down (townFall): its ground is open, a new way through the town, and a cache
+ * inside spills out. A building with an old Accord sentry on duty (r.sen) can't be stripped till it's down: the
+ * sentry shoots any robot that comes within reach, and armed robots within TOWN.sentry.back shoot back (townTick).
+ * Robots beside a standing building are in cover (townCover). All deterministic, from the simulation's own clock.
+ */
+const _town = { of: null, ver: -1, n: 0, at: null, near: null };
+/** The town's tiles, indexed: at[t] = the standing building's index + 1 (0: none); near[t] = 1 beside one. */
+function townIndex() {
+  const T = S.town, N = S.W * S.H;
+  if (_town.of === T && _town.ver === (T.ver || 0) && _town.n === N) return _town;
+  const at = new Int32Array(N), near = new Uint8Array(N);
+  T.r.forEach((r, k) => {
+    if (r.gone) return;
+    for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) at[j * S.W + i] = k + 1;
+  });
+  for (let t = 0; t < N; t++) {
+    if (!at[t]) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) if (inMap(i + a, j + b) && !at[t + b * S.W + a]) near[t + b * S.W + a] = 1;
+  }
+  Object.assign(_town, { of: T, ver: T.ver || 0, n: N, at, near });
+  return _town;
+}
+/** The standing building of Passenger Town on tile t, or null. */
+function townRuinAt(t) { if (!S || !S.town) return null; const k = townIndex().at[t]; return k ? S.town.r[k - 1] : null; }
+/** A building of the town by id (standing or not), or null. */
+function townById(id) { if (!S || !S.town) return null; for (const r of S.town.r) if (r.id === id) return r; return null; }
+/** Cover: a robot on the street right beside a standing building takes TOWN.cover of the damage. */
+function townCover(u) {
+  if (!S.town) return 1;
+  const i = Math.floor(u.x), j = Math.floor(u.y);
+  return inMap(i, j) && townIndex().near[j * S.W + i] ? TOWN.cover : 1;
+}
+/** How far (x, y) is from building r's edge (0 inside it). */
+function townDist(r, x, y) { const dx = Math.max(r.x - x, 0, x - (r.x + r.w)), dy = Math.max(r.y - y, 0, y - (r.y + r.h)); return Math.sqrt(dx * dx + dy * dy); }
+/** Where building r's sentry is, for the rules: its post on the roof, over the middle of the building. */
+function townSentryAt(r) { return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+/** Workers of one colony on building r at most. */
+function townCrew(r) { return Math.min(TOWN.crew, 1 + Math.floor((r.w * r.h) / 4)); }
+/** Salvage left in building r. */
+function townLeft(r) { return (r.g.cement || 0) + (r.g.alloy || 0) + (r.g.chip || 0); }
+/** Can colony p strip building r ('' yes, else why not)? */
+function townWhyNot(p, r) {
+  if (!r || r.gone) return 'That building is gone: its lot is open ground.';
+  if (r.sen > 0) return 'An old Accord sentry is still on duty here. Clear it with warbots first.';
+  return '';
+}
+/** Colony p orders building `id` stripped (on) or called off. Returns '' or why not. */
+function townStrip(p, id, on) {
+  const r = townById(id);
+  if (on) { const why = townWhyNot(p, r); if (why) return why; r.by |= 1 << p; return ''; }
+  if (r) r.by &= ~(1 << p);
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'strip' && u.task.r === id) cancelTask(u);
+  return '';
+}
+/** The open tiles beside building r a robot can stand on to work it (4-way neighbours). */
+function townStands(r) {
+  const out = [];
+  const add = (i, j) => { if (!inMap(i, j)) return; const t = tIdx(i, j); if (walkable(t) && !S.bAt[t] && !townRuinAt(t)) out.push(t); };
+  for (let i = r.x; i < r.x + r.w; i++) { add(i, r.y - 1); add(i, r.y + r.h); }
+  for (let j = r.y; j < r.y + r.h; j++) { add(r.x - 1, j); add(r.x + r.w, j); }
+  return out;
+}
+/**
+ * Dispatch (step 6, before the paving): player p's idle Workers go to the buildings it ordered stripped, up to
+ * townCrew on each, the nearest first, none where enemies are about. One Worker is kept back while crates of its
+ * salvage lie waiting and no Hauler has a road to them, so the crates get carried.
+ */
+function townRun(p, idle) {
+  if (!S.town || !idle.length) return;
+  const T = S.town, want = T.r.filter((r) => !r.gone && (r.by >> p) & 1);
+  if (!want.length) return;
+  const on = new Map(), at = new Map();
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'strip') { on.set(u.task.r, (on.get(u.task.r) || 0) + 1); at.set(u.task.tile, 1); }
+  const piles = (S.loot || []).some((l) => l.dismantled === p && l.town && lootLeft(l) > (l.claimed || 0));
+  let spare = idle.filter((u) => u.type === 'worker' && !(u.failUntil > S.time)).length;
+  for (const r of want) {
+    if (r.sen > 0) { r.by &= ~(1 << p); continue; }
+    if (foesNear(p, r.x + r.w / 2, r.y + r.h / 2, CRATE_SAFE)) continue;
+    const stands = townStands(r).filter((t) => !hotFor(p, t)); // (none in a sentry's reach, nor where enemy guns or warbots are)
+    if (!stands.length) continue;
+    while ((on.get(r.id) || 0) < townCrew(r) && spare > (piles ? 1 : 0)) {
+      let best = -1, bt = -1, bd = Infinity;
+      for (let k = 0; k < idle.length; k++) {
+        const u = idle[k];
+        if (u.type !== 'worker' || u.failUntil > S.time) continue;
+        const z = botZone(u);
+        for (const t of stands) {
+          if (S.zone[t] !== z) continue;
+          const d = dist2(u.x, u.y, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5) + (at.has(t) ? 40 : 0);
+          if (d < bd) { bd = d; best = k; bt = t; }
+        }
+      }
+      if (best < 0) break;
+      const u = idle.splice(best, 1)[0];
+      spare--;
+      cancelTask(u);
+      u.task = { type: 'strip', r: r.id, tile: bt, phase: 'go', w: 0, n: 0, load: {} };
+      if (!goTo(u, bt % S.W, (bt / S.W) | 0)) { u.task = null; u.failGoal = bt; u.failUntil = S.time + 20; continue; }
+      on.set(r.id, (on.get(r.id) || 0) + 1); at.set(bt, 1);
+    }
+  }
+}
+/** A stripping Worker's load put down beside it as crates (its own colony's salvage: they never rot). */
+function townDropLoad(u, t) {
+  if (!t || !t.n) return;
+  const x = t.tile % S.W, y = (t.tile / S.W) | 0;
+  addLoot(x, y, t.load, true, u.owner);
+  const l = S.loot.find((q) => q.x === x && q.y === y);
+  if (l) l.town = 1;
+  t.load = {}; t.n = 0;
+}
+/** A Worker stripping building t.r: to its spot beside it, then a unit of salvage every TOWN.unit seconds. */
+function townDoStrip(u, t, dt) {
+  const r = townById(t.r);
+  if (!r || r.gone || !((r.by >> u.owner) & 1) || r.sen > 0) { townDropLoad(u, t); u.task = null; u.path = null; return; }
+  if (t.phase === 'go') {
+    const a = travel(u, t.tile % S.W, (t.tile / S.W) | 0, dt);
+    if (a === null) { u.task = null; u.failGoal = t.tile; u.failUntil = S.time + 20; return; }
+    if (a) { t.phase = 'cut'; u.vel = 0; }
+    return;
+  }
+  if (S.tick % 15 === u.id % 15 && (foesNear(u.owner, u.x, u.y, CRATE_SAFE) || hotFor(u.owner, t.tile))) { cancelTask(u); u.task = null; return; }
+  u.busy = 1;
+  u.face = datan2(r.y + r.h / 2 - u.y, r.x + r.w / 2 - u.x);
+  if (hash2(u.id, S.tick, 61) < 0.05) addFx('spark', clamp(u.x, r.x, r.x + r.w), clamp(u.y, r.y, r.y + r.h) - 0.2, { color: '#ffd27a', life: 0.35, hit: true });
+  t.w += dt * (S.players[u.owner].ai ? S.players[u.owner].mult || 1 : 1);
+  if (t.w < TOWN.unit) return;
+  t.w -= TOWN.unit;
+  let g = null;
+  for (const k of ['cement', 'alloy', 'chip']) if ((r.g[k] || 0) > 0 && (!g || r.g[k] > r.g[g])) g = k;
+  if (g) {
+    r.g[g]--; t.load[g] = (t.load[g] || 0) + 1; t.n++;
+    const P = S.players[u.owner];
+    P.stats.stripped = (P.stats.stripped || 0) + 1;
+  }
+  if (t.n >= TOWN.pile || !townLeft(r)) townDropLoad(u, t);
+  if (!townLeft(r)) { townFall(r, u.owner); u.task = null; }
+}
+/** Building r stripped bare by colony p: it comes down, its lot open ground; a cache inside spills out. */
+function townFall(r, p) {
+  r.gone = 1; r.by = 0; r.sen = 0;
+  const P = S.players[p]; if (P) P.stats.ruins = (P.stats.ruins || 0) + 1;
+  for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) S.terrain[j * S.W + i] = T_GROUND;
+  S.town.ver = (S.town.ver || 0) + 1;
+  terrainChanged();
+  const cx = r.x + Math.floor(r.w / 2), cy = r.y + Math.floor(r.h / 2), D = TOWN_KINDS[r.k];
+  addFx('ring', cx + 0.5, cy + 0.5, { color: '#d8cfbf', r: Math.max(r.w, r.h) * 0.7 });
+  if (r.cache) {
+    const goods = { ...TOWN.caches[r.cache - 1] };
+    addLoot(cx, cy, goods, true, p);
+    const l = S.loot.find((q) => q.x === cx && q.y === cy); if (l) l.town = 1;
+    postMsg(p, `A cache in the ${D.name.replace(/^The /, '').toLowerCase()}: ${Object.keys(goods).map((g) => goods[g] + ' ' + GOOD[g].name + (g === 'chip' && goods[g] !== 1 ? 's' : '')).join(', ')}, left in the cupboards for the colonists.`, cx, cy, 'good');
+  }
+  if (r.k !== 'car') postMsg(p, `${D.name.replace(/^the /i, 'The ')} stripped: its lot is open ground, a new way through the town.`, cx, cy, 'info');
+}
+/** Three times a second: the sentries on duty shoot, and armed robots beside them shoot back. */
+function townTick(dt) {
+  for (const r of S.town.r) {
+    if (r.gone || !(r.sen > 0)) continue;
+    const at = townSentryAt(r), R = TOWN.sentry.range;
+    let tgt = null, td = Infinity, back = 0;
+    const hitters = new Set();
+    for (const u of S.bots) {
+      if (u.dead || u.inside || u.owner < 0 || BOTS[u.type].wild || BOTS[u.type].air || BOTS[u.type].sea || aloft(u)) continue;
+      const d = townDist(r, u.x, u.y);
+      if (d > TOWN.sentry.back + 1) continue;
+      if (d <= R && (d < td || (d === td && u.id < tgt.id)) && !calmAt(u.x, u.y)) { td = d; tgt = u; } // (nothing shoots on a Trade Post's ground)
+      if (isArmy(u) && botArmed(u) && d <= TOWN.sentry.back) { back += TOWN.sentry.hit * dt; hitters.add(u.owner); if (hash2(u.id, S.tick, 62) < 0.3) addFx('tracer', u.x, u.y - 0.2, { x2: at.x, y2: at.y - r.hgt / 10 + 0.1, life: 0.08, color: PLAYER_COLORS[u.owner] }); }
+    }
+    r.scd = Math.max(0, (r.scd || 0) - dt);
+    if (tgt && r.scd <= 0) {
+      r.scd = TOWN.sentry.every;
+      addFx('tracer', at.x, at.y - r.hgt / 10 + 0.1, { x2: tgt.x, y2: tgt.y - 0.2, life: 0.1, color: '#9fe8ff' });
+      if (isMe(tgt.owner)) sfx('hit', tgt.x, tgt.y);
+      damageBot(tgt, TOWN.sentry.dmg, at.x, at.y);
+    }
+    if (back > 0) {
+      r.sen = Math.max(0, r.sen - back);
+      if (!r.sen) {
+        addFx('boom', at.x, at.y - r.hgt / 10 + 0.1, { r: 0.6 });
+        if ([...hitters].some(isMe)) sfx('boom', at.x, at.y);
+        for (const p of hitters) S.players[p].stats.sentries = (S.players[p].stats.sentries || 0) + 1;
+        for (const p of hitters) postMsg(p, `Sentry down at the ${TOWN_KINDS[r.k].name.replace(/^The /, '').toLowerCase()}. Its last log: "Position held." It can be stripped now.`, Math.floor(at.x), Math.floor(at.y), 'good');
+      }
+    }
+  }
 }

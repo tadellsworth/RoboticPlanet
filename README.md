@@ -35,7 +35,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, stripping Passenger Town for salvage past its old sentries (*Passenger Town*), a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -205,7 +205,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two players; `townSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -237,6 +237,36 @@ The river splits around two low islands and rejoins at the ends. Each rim has tw
 a switchback and a side-canyon trail. Fords link the banks on foot, and Ports can use the continuous channel
 (ships sail the river, but it is a heights map, not a naval one: `river`, so no Naval badge and no Shoals biome).
 Players can cut additional ramps or build crossings through Paths.
+
+**Passenger Town** (`SHAPE_PRESETS` `city`, under Divided, two players; LORE.md's empty town in Greenreach) is a flat map
+with the Pathfinder's town filling the middle. `townSetup` (js/world.js) lays it on the south half and turns it half
+round onto the north, tile for tile: a grid of blocks (`TOWN.blockX` 4 to 6 tiles wide, `blockY` 3 to 5 deep) with
+2-tile streets between and a street down and across the middle, kept `TOWN.clear` rows short of each base. Each block is
+the civic hall (nearest the middle, with a sentry), the civic tower (the next), the school, a parking lot with car
+hulks (`TOWN.lots`, 10%), a plaza (5%) or split into walk-up flats, shopfronts, apartment blocks and towers
+(`TOWN_KINDS`). The buildings are rock under their art (they block robots, roads, tunnels and building: `townRuinAt`
+in canPlace and canRoad; drawn as street by `pillarAt`). Street segments are then closed by covered arcades
+(`TOWN.close`, 40% of them tried) as long as every street tile stays reachable and the bases joined, so the streets are a
+maze. `S.town` holds it all (saved, checked by checkSave, hashed): the rectangle, the blocks' spans, signs, plazas and
+the buildings `{ id, x, y, w, h, k, v, hgt, g (salvage left), n0, cache, sen, scd, by, gone }`.
+**Strip for salvage** (a building's panel, key S; the `townStrip` order sets bit p of `r.by`): dispatch's step 5b
+(`townRun`) sends the colony's idle Workers, up to `townCrew` (1 to `TOWN.crew` 3 by size), to open tiles beside it
+that no danger covers (`hotFor`); each strips a unit every `TOWN.unit` (4) s (`townDoStrip`: Cement, then Alloy, then
+Chips, the most left first) and sets every `TOWN.pile` (4) down beside it as crates that never rot (`addLoot`, keep,
+`dismantled` = the colony: its Haulers get first call; idle Workers carry them too; `townRun` keeps one Worker back
+while its crates wait). Salvage is `TOWN.perTile` (0.6 Cement, 0.25 Alloy, 0.06 Chips) a tile times the kind's `mult`
+(0.8 shops to 1.8 the civic tower) plus a few Chips in the school, hall and tower; a car is 2 Alloy. A Medium town holds
+about 240 Cement, 105 Alloy and 25 Chips a side. Stripped bare (`townFall`) a building's tiles turn to open ground
+(`terrainChanged`), a cache (`TOWN.cacheShare` 15%) spills out, and its lot is drawn cleared. Robots beside a standing
+building take `TOWN.cover` (0.75) of the damage (`townCover`, in damageBot). **Sentries** (`TOWN.sentry`: the civic
+hall's and one more each side) stand on the roof and shoot the nearest robot of any colony within `range` (3.2) of the
+building every second for `dmg` (2.5), not on a Trade Post's ground; every armed army robot within `back` (3.4) shoots
+back, `hit` (1.2) a second off its `hp` (40) (`townTick`, three times a second). Its reach is in everyone's danger map
+(bit 2), so robots that don't fight keep out of it; a guarded building can't be ordered stripped. A rival (`aiTown` in
+js/ai.js) orders one building at a time stripped, up to `TOWN.ai.max` (2), every `TOWN.ai.every` (20) s: the unguarded
+one nearest the line from its base to its enemy's within `TOWN.ai.reach` of its land, the richer the better.
+The look is drawn in code (js/city.js; ART_GUIDE.md, Passenger Town). The mission **Passenger Town** (First Contact)
+teaches it. `node tools/city-test.js [--games n minutes]` checks the layout, stripping, sentries, the save and AI games.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
