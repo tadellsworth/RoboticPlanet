@@ -624,22 +624,109 @@ function menuSummary() {
   return { main: main.join(' · '), extra: extra.join(' · ') };
 }
 
-/** Home or Customise. */
+/**
+ * The main menu's four views, in the one card: 'home' (what shows on load), 'setup' (Custom Game), 'camps' (Campaigns:
+ * a card per campaign) and 'extra' (More: Observer, Records, the two ways to load a game). Back or Esc returns Home,
+ * the focus going back to the button that opened the view.
+ */
+const MENU_VIEW_OPENER = { setup: 'm-customise', camps: 'm-campaigns', extra: 'm-extras' };
 function showMenuView(v, focus) {
-  const setup = v === 'setup';
-  if ((UI.menuView === 'setup') === setup && UI.menuView) return;
-  UI.menuView = setup ? 'setup' : 'home';
+  if (!['home', 'setup', 'camps', 'extra'].includes(v)) v = 'home';
+  if (UI.menuView === v) return;
+  const from = UI.menuView, setup = v === 'setup', home = v === 'home';
+  UI.menuView = v;
   $('m-more').hidden = !setup;
-  $('m-home').hidden = setup;
-  $('m-home-foot').hidden = setup;
+  $('m-camps').hidden = v !== 'camps';
+  $('m-extra').hidden = v !== 'extra';
+  $('m-home').hidden = !home;
+  $('m-home-foot').hidden = !home;
+  $('m-go').hidden = !home && !setup;
   $('menu-card').classList.toggle('is-setup', setup);
   $('screen-menu').classList.toggle('is-setup', setup);
+  $('menu-card').dataset.view = v;
   $('m-new-label').textContent = UI.mpSetup ? 'Done' : setup ? 'Start' : 'Play';
   $('m-setup-title').textContent = UI.mpSetup ? 'Multiplayer game' : 'Custom Game';
   if (!setup) closePicker(false);
-  else { $('m-body').scrollTop = 0; $('screen-menu').scrollTop = 0; }
+  else { $('m-body').scrollTop = 0; }
+  $('screen-menu').scrollTop = 0;
+  if (v === 'camps') renderCampaignHub();
+  if (home) syncCampaignTile();
   syncMenu();
-  if (focus) (setup ? $('m-back') : $('m-customise')).focus();
+  if (!focus) return;
+  if (setup) $('m-back').focus();
+  else if (v === 'camps') $('m-missions').focus();
+  else if (v === 'extra') ([...document.querySelectorAll('#m-extra .mx-row')].find((b) => !b.hidden) || $('m-extra-back')).focus();
+  else $(MENU_VIEW_OPENER[from] || 'm-new').focus();
+}
+
+/** The Missions' progress: how many are finished (at any level) and the next to play. */
+function missionsProgress() {
+  const c = typeof loadCampaign === 'function' ? loadCampaign() : { done: {} };
+  const fin = (m) => (c.done[m.id] || []).some(Boolean);
+  const done = MISSIONS.filter(fin).length, next = MISSIONS.find((m) => !fin(m));
+  return { done, n: MISSIONS.length, next: next ? next.name : null };
+}
+
+/** Home's Campaigns tile: a line of where you are. */
+function syncCampaignTile() {
+  const el = $('m-campaigns-sub');
+  if (!el) return;
+  const p = missionsProgress();
+  el.textContent = p.done ? `Missions: ${p.done} of ${p.n} done` : 'Start with the Missions';
+}
+
+/**
+ * The Campaigns view: the Missions (the tutorial) with their progress; the Main Campaign, in preparation; Contingency,
+ * which opens with openContingency() once that is built (and says it's coming until then; its status line may come from
+ * contingencyMenuLine() when that exists); and room for co-op scenarios later.
+ */
+function renderCampaignHub() {
+  const p = missionsProgress();
+  $('m-missions-prog').innerHTML = `<span class="mh-bar" aria-hidden="true"><i style="width:${Math.round((100 * p.done) / Math.max(1, p.n))}%"></i></span>`
+    + `${p.done} of ${p.n} done${p.next ? ` · Next up: <b>${p.next}</b>` : ' · All finished'}`;
+  const ready = typeof openContingency === 'function';
+  $('m-contingency').classList.toggle('is-soon', !ready);
+  $('m-contingency').setAttribute('aria-disabled', ready ? 'false' : 'true');
+  $('m-contingency-tag').hidden = ready;
+  let line = null;
+  try { line = ready && typeof contingencyMenuLine === 'function' ? contingencyMenuLine() : null; } catch (e) { line = null; }
+  $('m-contingency-prog').textContent = line || 'Territory by territory, a year a turn. Every run a different war.';
+}
+
+/** Contingency's card: open it, or say it's coming. */
+function menuOpenContingency() {
+  if (typeof openContingency === 'function') { sfx('click'); audioUnlock(); openContingency(); return; }
+  const tag = $('m-contingency-tag');
+  tag.classList.remove('nudge'); void tag.offsetWidth; tag.classList.add('nudge');
+}
+
+/**
+ * Arrow keys on the main menu's Home, Campaigns and More (a keyboard or a controller's d-pad mapped to them): the focus
+ * moves to the nearest button that way. (Custom Game keeps its arrows: they pick within its choices.)
+ */
+function menuArrowKey(e) {
+  const dirs = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }, d = dirs[e.key];
+  if (!d || UI.inGame || $('screen-menu').hidden || UI.menuView === 'setup' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  if (topScreen() !== $('screen-menu') || UI.picker) return;
+  const a = document.activeElement, card = $('menu-card');
+  if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
+  const all = [...card.querySelectorAll('button')].filter((b) => !b.disabled && b.offsetParent && b.getClientRects().length);
+  if (!all.length) return;
+  e.preventDefault();
+  if (!a || !card.contains(a) || !all.includes(a)) { all[0].focus(); return; }
+  const r = a.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let best = null, bs = Infinity;
+  for (const b of all) {
+    if (b === a) continue;
+    const q = b.getBoundingClientRect(), bx = q.left + q.width / 2, by = q.top + q.height / 2;
+    const along = (bx - cx) * d[0] + (by - cy) * d[1], across = Math.abs((bx - cx) * d[1] + (by - cy) * d[0]);
+    // (that way at all: past the edge it leaves from, so a button beside it doesn't count as below it)
+    const out = d[0] ? (d[0] > 0 ? q.left >= r.right - 2 : q.right <= r.left + 2) : (d[1] > 0 ? q.top >= r.bottom - 2 : q.bottom <= r.top + 2);
+    if (along <= 0 || !out) continue;
+    const score = along + across * 2;
+    if (score < bs) { bs = score; best = b; }
+  }
+  if (best) best.focus();
 }
 
 /**
@@ -757,8 +844,14 @@ function initMenu() {
     // (Toasts belong to the game screen: say it on the button too.)
     const b = $('m-saveplanet'); b.textContent = 'Saved ✓'; clearTimeout(UI.savedFlash); UI.savedFlash = setTimeout(() => { b.textContent = 'Save'; }, 1600);
   };
-  // The two views. Tests and older code open Customise with $('m-more').open = true (it was a <details>).
+  // The views. Tests and older code open Customise with $('m-more').open = true (it was a <details>).
   $('m-customise').onclick = () => { sfx('click'); showMenuView('setup', true); };
+  $('m-campaigns').onclick = () => { sfx('click'); showMenuView('camps', true); };
+  $('m-extras').onclick = () => { sfx('click'); showMenuView('extra', true); };
+  $('m-camps-back').onclick = () => { sfx('click'); showMenuView('home', true); };
+  $('m-extra-back').onclick = () => { sfx('click'); showMenuView('home', true); };
+  $('m-contingency').onclick = menuOpenContingency;
+  window.addEventListener('keydown', menuArrowKey);
   $('m-back').onclick = () => { sfx('click'); if (UI.mpSetup) mpSetupDone(); else showMenuView('home', true); };
   Object.defineProperty($('m-more'), 'open', { configurable: true, get: () => UI.menuView === 'setup', set: (v) => showMenuView(v ? 'setup' : 'home') });
   $('m-new').onclick = () => { audioUnlock(); if (UI.mpSetup) mpSetupDone(); else startNewGame(); };
@@ -777,8 +870,13 @@ function initMenu() {
     if (!$('screen-feedback').hidden) { e.preventDefault(); closeFeedback(); return; }
     if (!$('screen-lore').hidden) { e.preventDefault(); closeLore(); return; }
     if (UI.picker) { e.preventDefault(); closePicker(); return; }
+    if (!$('screen-help').hidden) { e.preventDefault(); $('h-close').click(); return; }
+    // (Multiplayer's first screen: Esc is its Back; in a lobby it's left alone, as Back there leaves the lobby)
+    if (!$('screen-mp').hidden) { if (NET.state !== 'lobby' && !$('mp-back').hidden) { e.preventDefault(); $('mp-back').click(); } return; }
+    // (the Missions over the menu: Esc steps back as their Back does, from a mission to the list, then to the menu)
+    if (!$('screen-missions').hidden && $('screen-help').hidden && $('screen-stats').hidden) { e.preventDefault(); $('ms-close').click(); return; }
     const over = !$('screen-help').hidden || !$('screen-missions').hidden || !$('screen-stats').hidden;
-    if (!over && UI.menuView === 'setup') { e.preventDefault(); showMenuView('home', true); }
+    if (!over && topScreen() === $('screen-menu') && UI.menuView !== 'home') { e.preventDefault(); if (UI.menuView === 'setup') $('m-back').click(); else showMenuView('home', true); }
   });
   // One line per section about the option under the mouse, or focused, or else what's chosen.
   for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules', 'm-sec-challenge']) hoverInfo($(sec), (k) => { UI.menuHover[sec] = k; syncInfo(); });
@@ -3543,6 +3641,7 @@ function toMenu() {
   placeMinimap();
   $('screen-menu').hidden = false;
   showMenuView('home');
+  syncCampaignTile(); // (a mission may have been finished)
   syncMenu();
   syncRejoin();
   startDemo();

@@ -1383,7 +1383,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
-  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
+  what), and **Load a save file** (main menu, More, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
   (`checkSave` in `js/world.js`: unknown building, robot, good, biome, map type, mission or event, map layers of the wrong
   size, owners or places off the map, or a name holding `<`, `>` or `"`; in text those three are swapped for look-alikes
   that can't make markup, so nothing in a save can run script in the panels; a multiplayer catch-up is checked the same
@@ -1436,7 +1436,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Rematch** (end screen): `UI.lastGame` holds the options `startNewGame` used (or the mission and difficulty) for the
     game being played; Rematch calls `startNewGame(opts)` again (no new random pick), or `startMission`. Hidden in
     multiplayer, Observer mode, after a loaded game and after a lost or final mission (Try again / Play it again).
-- **The Daily Planet** (`js/polish3.js`): the main menu's card (`m-daily`) starts the day's game: `dailySetup(date)`
+- **The Daily Planet** (`js/polish3.js`): the main menu's gold tile (`m-daily`, its date short by `dailyShort`) starts the day's game: `dailySetup(date)`
   turns the UTC date (`dailyDate`, YYYY-MM-DD) into ordinary `startNewGame` options by a hash of it (map type of the
   ones taking two or three colonies, players, biome, ground, resources, three different doctrines, seed, planetary
   events; Versus on Normal, no challenge modifiers), so the game itself stays a plain one. A win's time is kept per day
@@ -1447,7 +1447,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
   localStorage: `{ code, key, at, game }`; **New code** posts a fresh one and deletes the old). The dialog shows the code
   (`XXXXX-XXXXX`), the link `https://terrafall.app/#save=<code>` (`cloudLink`) with a QR code of it made offline by
-  `qrSvg` (`js/qr.js`), Copy link, Share and the expiry. **Load from a code** (main menu, `cloudLoad`) and opening a
+  `qrSvg` (`js/qr.js`), Copy link, Share and the expiry. **Load from a code** (main menu, More, `cloudLoad`) and opening a
   `#save=` link (`cloudFromLink`: at start, on `hashchange` and from `launchQueue`, so an open installed app takes it
   too; it asks first, then clears the address) fetch `GET /save/<code>` and load it as Load a save file does
   (`loadSaveText`, shared with `importSaveFile`).
@@ -1488,7 +1488,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Download save file does: the artifact `downloads` capability in claude.ai, else an `<a download>` link
   (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
   to the pause menu if it was opened from there; everything set aside comes back as it was.
-- **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Observer** pill on the main menu opens a setup card
+- **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): **Observer** (`#m-watch`, in the main menu's **More**) opens a setup card
   (`openWatch`, built once by `buildWatch`, kept up to date by `syncWatch`), laid out like Custom Game's (sections **Match**,
   **Planet**, **Rules**, **Challenge**, `.m-sec`, with the summary and Start observing in a bar that stays in view) and
   built from its parts: `segChoice`/`markSeg` (the choice rows), `hoverInfo` (each section's line), `shapePickRow`/
@@ -1970,8 +1970,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
-  **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
+  **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** button in the
+  main menu's bottom row (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
   Ithaca I, The atlas, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
@@ -2775,8 +2775,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   taken with `STORM_MIN` (20) of your armed robots within `STORM_R` of it, counted each second before it fell,
   `metaStormTick`), deeds from any game played without help, multiplayer and missions too (`metaDeeds`: the first
   Ropeway and Freight Train, a nest cleared, every upgrade, the last Colony milestone, every Colony goal), and the
-  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** on the main
-  menu (`#screen-records`, `openRecords`, a pill beside Lore and Feedback) shows them all; an earned achievement with
+  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** in the main
+  menu's **More** (`#m-records` opens `#screen-records`, `openRecords`) shows them all; an earned achievement with
   `lore` has a button that opens the Lore guide on that page (`openLore(id)`). **Forget records and achievements**
   (two taps) clears both. Challenge modifiers don't stop a game counting: records keep the ones on (`mods`, `metaMods`)
   and achievements too (`_mods` in `terrafall.achievements`), both marked ◆ on the Records screen; a win with some on
@@ -2817,9 +2817,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
   without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer. Settings
   also has **Menu background** (Classic / Planet: see The main menu under Looks). **From the main menu**: the
-  **Settings** pill (`#m-settings`, a gear, among Records, Observer, Lore and Feedback) opens the same view on its own
+  **Settings** button (`#m-settings`, a gear, in the bottom row with How to play, Lore, Feedback and More) opens the same view on its own
   over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
-  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the pill.
+  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the button.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -3178,6 +3178,28 @@ clouds' drift (`natureCloudTime`).
   straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
   `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
   minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
+- **The main menu's layout** (`#screen-menu` in index.html; `showMenuView`, `renderCampaignHub`, `menuArrowKey` in
+  js/ui.js). One card (404 px wide at most, so the menu planet beside it stays clear) with four views. **Home**: the
+  title, **Continue** / **Saved games** / restore points / **Rejoin** when they apply, **Play** (`#m-new`, the last
+  settings at once) with its summary, then four tiles two by two (`.m-tiles`: **Campaigns** `#m-campaigns`, **Custom
+  Game** `#m-customise`, **Multiplayer** `#m-multi`, the **Daily Planet** `#m-daily`) and a bottom row of five small
+  buttons (`.m-pills`: **How to play** `#m-help`, **Lore** `#m-lore`, **Settings** `#m-settings`, **Feedback**
+  `#m-feedback`, **More** `#m-extras`). **Custom Game** (`#m-more`, `'setup'`) is as below. **Campaigns** (`#m-camps`,
+  `'camps'`): a card a campaign, a picture from `art/menu/` beside a line in the setting's voice: the **Missions**
+  (`#m-missions`, opens `#screen-missions`; `missionsProgress` gives finished / total and Next up, also the Campaigns
+  tile's line, `syncCampaignTile`), the **Main Campaign** (`#m-campaign`, CAMPAIGN.md, *In preparation*: not a button,
+  its three acts as a teaser), **Contingency** (`#m-contingency`: calls `openContingency()` once that exists, its status
+  line from `contingencyMenuLine()` if that exists too; until then *Coming soon*, which a tap nudges) and a dashed
+  **Co-op scenarios** card (*Later*). **More** (`#m-extra`, `'extra'`): **Observer** `#m-watch`, **Records**
+  `#m-records`, **Load a save file** `#m-import`, **Load from a code** `#m-cloud` (shown where it works). Every
+  destination is two taps from Home at most. Back (`#m-camps-back`, `#m-extra-back`, `#m-back`) or Esc returns Home
+  with the focus on the tile or button that opened the view; Esc also closes How to play and the Missions (a mission's
+  brief, then the list) over the menu, and Multiplayer's first screen. The arrow keys move the focus between the
+  buttons of Home, Campaigns and More by where they sit (`menuArrowKey`; Custom Game keeps its arrows for its choices),
+  and Tab goes through them in reading order. Load messages (`menuMsg`, `#m-import-msg`) show under Home or More. On an
+  upright screen with the Planet background the card starts below the planet's orbit and the app icon is left out
+  (CSS, `max-aspect-ratio: 23/20`, as `mplLayout`), so the planet is never covered. `tools/menu-test.js` checks that every destination opens and Esc / Back
+  return, on a computer and a phone.
 - **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
   beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
   `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
@@ -3372,9 +3394,11 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
                           face (ithaca-map.webp, the atlas made small)
+art/menu/                 the Campaigns cards' pictures: 160 px crops of art/lore/ (inline in the one-file build)
 tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
+tools/menu-test.js        the main menu: every destination opens (two taps at most) and Esc / Back return (Playwright)
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when

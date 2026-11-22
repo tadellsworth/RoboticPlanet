@@ -2,7 +2,7 @@
 /*
  * Terrafall — Observer mode: computer colonies play a game out while you watch.
  *
- * Main menu, Observer: a setup card laid out like Custom Game's (Match, Planet, Rules, Challenge), with its controls and
+ * Main menu, More, Observer: a setup card laid out like Custom Game's (Match, Planet, Rules, Challenge), with its controls and
  * texts (segChoice, the map type and biome pickers, MURMUR_INFO, VICTORY, MODS): how many colonies (two, or three or
  * four where the map type has room; Teams, 2 vs 2, with four), the Victory, the computer's level (DIFFICULTY, the same
  * for every colony), each one's doctrine (or Random: one no other colony has), map type and biome (or Random), size,

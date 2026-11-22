@@ -1174,13 +1174,65 @@ canvas.chart.small { height: 110px; }
 .m-sum .sum-extra { display: block; font-size: 12px; margin-top: 1px; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .m-home-foot { display: flex; flex-direction: column; }
-.m-cust { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; }
-.m-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; margin-top: 12px; }
-.m-links button { position: relative; border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 13.5px; padding: 6px 6px; border-radius: 8px; }
-.m-links button + button:not(.m-pill)::before { content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 3px; margin-top: -1.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
-.m-links button:hover { color: var(--text); }
-.m-links .m-loads { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; }
-@media (pointer: coarse) { .m-links .m-loads button { min-height: 44px; } }
+/* Home's four big choices, two by two: Campaigns, Custom Game, Multiplayer, the Daily Planet. */
+.m-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.m-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; min-height: 84px; padding: 11px 12px 10px;
+  border-radius: 14px; border: 1px solid rgba(241, 228, 211, 0.16); background: rgba(20, 33, 61, 0.72); color: var(--text);
+  font: inherit; text-align: left; line-height: 1.25; cursor: pointer; transition: border-color 0.15s, background-color 0.15s, transform 0.15s; }
+.m-tile svg { flex: none; color: #ff8a66; margin-bottom: 5px; }
+.m-tile .mt-name { font-weight: 800; font-size: 15px; letter-spacing: 0.01em; }
+.m-tile .mt-sub { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.m-tile:hover, .m-tile:focus-visible { border-color: rgba(255, 107, 74, 0.55); background: rgba(30, 44, 78, 0.85); transform: translateY(-1px); }
+.m-tile:active { transform: none; }
+/* The small buttons under the tiles: an icon over a word each, in a row. */
+.m-links { display: flex; justify-content: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.m-links .m-pills { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; width: 100%; }
+.m-links .m-pill { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: 52px; padding: 6px 2px;
+  border: 0; border-radius: 10px; background: none; color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 650; letter-spacing: 0; line-height: 1.15; text-align: center; cursor: pointer; }
+.m-links .m-pill span { overflow-wrap: normal; }
+.m-links .m-pill svg { color: #ff8a66; }
+.m-links .m-pill:hover, .m-links .m-pill:focus-visible { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+/* Campaigns and More: a header like Custom Game's, then a list. */
+.m-view { display: flex; flex-direction: column; margin: -26px -22px -18px; min-width: 0; }
+.m-view[hidden] { display: none; }
+.m-view .m-head { border-radius: inherit; }
+.mh-list, .mx-list { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.mh-card { display: flex; align-items: stretch; gap: 12px; width: 100%; min-width: 0; padding: 10px; border-radius: 14px; text-align: left; font: inherit; color: var(--text);
+  border: 1px solid rgba(241, 228, 211, 0.16); background: rgba(20, 33, 61, 0.72); line-height: 1.3; transition: border-color 0.15s, background-color 0.15s; }
+button.mh-card { cursor: pointer; }
+button.mh-card:not(.is-soon):hover, button.mh-card:focus-visible { border-color: rgba(255, 107, 74, 0.55); background: rgba(30, 44, 78, 0.85); }
+.mh-pic { flex: none; width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: #0b1226; box-shadow: 0 0 0 1px rgba(241, 228, 211, 0.12); }
+.mh-pic-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); background: none; box-shadow: none; border: 1px dashed rgba(241, 228, 211, 0.22); }
+.mh-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; justify-content: center; }
+.mh-name { font-weight: 800; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.mh-name small { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.mh-name .mh-tag { color: #ffd98a; }
+.mh-name .mh-tag[hidden] { display: none; }
+.mh-line { font-size: 13px; color: #d9c9b6; font-style: italic; text-wrap: pretty; }
+.mh-acts span { white-space: nowrap; }
+.mh-prog, .mh-acts { font-size: 12px; color: var(--muted); }
+.mh-prog b { color: var(--text); font-weight: 700; }
+.mh-bar { display: block; height: 4px; margin: 3px 0 5px; border-radius: 2px; background: rgba(241, 228, 211, 0.12); overflow: hidden; }
+.mh-bar i { display: block; height: 100%; min-width: 2px; background: linear-gradient(90deg, #ff6b4a, #ffb08f); }
+.mh-card.is-soon .mh-pic { filter: grayscale(0.55) brightness(0.8); }
+.mh-card.is-soon, .mh-card.is-later { background: rgba(20, 33, 61, 0.45); }
+div.mh-card.is-soon, .mh-card.is-later { cursor: default; }
+.mh-card.is-later { border-style: dashed; }
+.mh-tag.nudge { animation: mhNudge 0.5s ease; }
+@keyframes mhNudge { 30% { color: #fff; transform: translateX(2px); } 60% { transform: translateX(-2px); } }
+.mh-name .mh-tag { display: inline-block; }
+.mx-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border-radius: 12px; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  border: 1px solid rgba(241, 228, 211, 0.14); background: rgba(20, 33, 61, 0.6); line-height: 1.25; }
+.mx-row[hidden] { display: none; }
+.mx-row svg { flex: none; color: #ff8a66; }
+.mx-row span { display: flex; flex-direction: column; min-width: 0; }
+.mx-row b { font-size: 15px; }
+.mx-row small { font-size: 12px; color: var(--muted); }
+.mx-row:hover, .mx-row:focus-visible { border-color: rgba(255, 107, 74, 0.55); background: rgba(30, 44, 78, 0.85); }
+.m-msg { margin: 10px 0 0; text-align: center; }
+.menu-card.is-setup .m-msg { display: none; }
+@media (pointer: coarse) { .mx-row, .mh-card { min-height: 56px; } }
+@media (prefers-reduced-motion: reduce) { .m-tile, .mh-card { transition: none; } .m-tile:hover, .m-tile:focus-visible { transform: none; } .mh-tag.nudge { animation: none; } }
 #m-import-msg { text-align: center; }
 
 /* Customise: a header, the scrolling settings, and Start in a bar that stays in view. */
@@ -1333,8 +1385,9 @@ canvas.chart.small { height: 110px; }
   #screen-menu .m-icon { width: 64px; height: 64px; margin: -4px auto 6px; border-radius: 16px; }
   #screen-menu .logo { font-size: clamp(30px, 9.6vw, 40px); }
   .menu-card .tagline { margin: 0 0 14px; }
-  .m-cust { margin-top: 10px; }
-  .m-links { margin-top: 8px; }
+  .m-tiles { margin-top: 10px; gap: 8px; }
+  .m-links { margin-top: 8px; padding-top: 6px; }
+  .m-view { margin: -18px -20px -14px; }
   /* With Continue (or Rejoin) showing, the title alone heads the card: the icon makes room for it. */
   #screen-menu .m-home:has(> .m-cont:not([hidden])) .m-icon { display: none; }
 }
@@ -1348,8 +1401,10 @@ canvas.chart.small { height: 110px; }
   .menu-card.is-setup #m-new { padding: 10px 18px; }
   .menu-card:not(.is-setup) { padding: 14px 20px 12px; }
   .menu-card .tagline { margin-bottom: 10px; }
-  .m-cust { margin-top: 10px; }
-  .m-links { margin-top: 6px; }
+  .m-tiles { margin-top: 10px; gap: 8px; }
+  .m-tile { min-height: 0; }
+  .m-links { margin-top: 6px; padding-top: 4px; }
+  .m-view { margin: -14px -20px -12px; }
 }
 @media (max-height: 500px) and (min-width: 700px) {
   .menu-card.is-setup { width: min(100%, 1000px); }
@@ -1538,27 +1593,24 @@ canvas.chart.small { height: 110px; }
 #menu-planet { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; display: block; }
 #menu-planet[hidden] { display: none; }
 #screen-menu > .menu-card { position: relative; z-index: 1; }
+/* An upright screen with the Planet background: Ithaca I and its Ring orbit across the top (mplLayout), so Home, Campaigns and
+   More start below them (the planet stands in for the app icon there), and the card never sits over the planet. */
+@media (max-aspect-ratio: 23/20) {
+  #screen-menu:has(> #menu-planet:not([hidden])):not(.is-setup) { padding-top: calc(var(--safe-t) + max(16.8vw, 7vh) + 12vw + 14px); place-items: start center; }
+  #screen-menu:has(> #menu-planet:not([hidden])) .m-icon { display: none; }
+}
 .menu-card, #screen-missions .card, #screen-help .card, #screen-lore .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
 .m-icon { display: block; width: 84px; height: 84px; margin: -4px auto 10px; border-radius: 20px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(241, 228, 211, 0.12); }
 #screen-menu .logo, .menu-card .m-head-logo { background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent; }
 #screen-menu .tagline { color: #d9c9b6; letter-spacing: 0.04em; }
 #m-new { box-shadow: 0 8px 26px rgba(255, 107, 74, 0.28); }
 #screen-menu .btn.primary:hover { filter: brightness(1.06); }
-#screen-menu .m-cust { background: rgba(20, 33, 61, 0.72); border-color: rgba(241, 228, 211, 0.16); color: var(--text); }
-#screen-menu .m-cust:hover { border-color: rgba(255, 107, 74, 0.55); }
 #screen-menu .m-cont { background: rgba(255, 107, 74, 0.1); border-color: rgba(255, 107, 74, 0.5); color: #ffd9cc; }
 #screen-menu .m-sum .sum-main { color: #e6d9c8; }
-#screen-menu .m-links button:hover { color: #ffb08f; }
-/* The Lore guide's and Send feedback's buttons: small pills at the end of the links, kept together (they take a line of
-   their own when the links fill theirs). */
-.m-links .m-pills { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 8px; margin-left: 4px; }
-.m-links .m-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 9px; border-radius: 999px;
-  border: 1px solid rgba(241, 228, 211, 0.14); background: rgba(20, 33, 61, 0.5); font-size: 13px; letter-spacing: 0.02em; }
-.m-links .m-pill svg { color: #ff8a66; }
+#screen-menu .m-links .m-pill:hover { color: #ffb08f; }
 /* Settings from the main menu (openMenuSettings): the pause menu's Settings view over the menu, in the menu's colours. */
 #screen-pause.from-menu { background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.6), rgba(8, 12, 24, 0.92)); }
 #screen-pause.from-menu .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
-#screen-menu .m-links .m-pill:hover { color: #ffb08f; border-color: rgba(255, 107, 74, 0.45); }
 #screen-missions .help-body h3, #screen-help .help-body h3, #screen-lore .help-body h3 { color: #ff8a66; }
 
 /* ---- The app icon, animated (tools/icon-animated.py): the planet turns, the stars twinkle ---- */
@@ -1914,7 +1966,7 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .rc-lore { float: right; margin-top: -4px; }
 .rc-foot { display: flex; justify-content: center; margin: 14px 0 4px; }
 #rc-forget.arm { color: #ff9aa8; border-color: rgba(255, 90, 110, 0.6); }
-@media (pointer: coarse) { #screen-records .btn, .m-links .m-pill { min-height: 44px; } }
+@media (pointer: coarse) { #screen-records .btn { min-height: 44px; } }
 /* ---------- insight: why a factory is idle, the colony's shortage, the end-of-game report (js/insight.js) ---------- */
 .why-box {
   margin: 8px 0 4px; padding: 9px 11px; border-radius: 12px; font-size: 14px; line-height: 1.4; color: #ffe1a6;
@@ -2137,12 +2189,14 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 @media (pointer: coarse) { .sv-acts .btn { min-height: 40px; } }
 /* ---------- Polish round 3 (js/polish3.js) ---------- */
 /* The Daily Planet card on the main menu. */
-.m-daily { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; max-width: 420px; margin: 0 auto 10px; padding: 9px 14px;
-  border-radius: 12px; border: 1px solid rgba(255, 196, 87, 0.45); background: rgba(255, 196, 87, 0.08); color: var(--text); font: inherit; cursor: pointer; line-height: 1.25; }
-.m-daily:hover, .m-daily:focus-visible { background: rgba(255, 196, 87, 0.15); }
-.m-daily .md-k { font-weight: 800; font-size: 14.5px; color: #ffd98a; letter-spacing: 0.01em; }
-.m-daily .md-line { font-size: 12.5px; color: var(--text); opacity: 0.9; text-wrap: balance; }
-.m-daily .md-best { font-size: 12px; color: var(--muted); }
+.m-tile.m-daily { border-color: rgba(255, 196, 87, 0.45); background: rgba(255, 196, 87, 0.08); }
+.m-tile.m-daily:hover, .m-tile.m-daily:focus-visible { background: rgba(255, 196, 87, 0.15); border-color: rgba(255, 196, 87, 0.7); }
+.m-daily svg { color: #ffd98a; }
+.m-daily .md-k { color: #ffd98a; }
+.m-daily .md-dash { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* (read out, not shown: the date sits under the name) */
+.m-daily .md-line { font-size: 11.5px; color: var(--text); opacity: 0.85; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-daily .md-best { font-size: 11.5px; color: var(--muted); }
+.m-daily .md-best:empty { display: none; }
 /* In-game chat: the last lines over the map's lower left, the line to type in when open; the button that opens it. */
 .chat { position: fixed; z-index: 29; left: calc(var(--safe-l) + 10px); bottom: calc(var(--safe-b) + 150px); width: min(380px, calc(100% - 20px));
   display: flex; flex-direction: column; gap: 6px; pointer-events: none; }

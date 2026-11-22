@@ -186,6 +186,49 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Mass Driver sound (BUILT, Nov 21 2026: a deep charging hum, a crack and thump, a falling rush of air):** the launch sounds like a funny whistle. Give it something cooler: a deep capacitor whine
   building up, a hard electromagnetic crack or thump as it fires, and a fading rush as the canister leaves.
 
+## The main menu with room for campaigns (built Nov 22 2026; for the owner's approval)
+
+The owner (Nov 22): "We will need a good way to organize the main menu without being too cluttered once we add these
+extra campaigns." Built while the owner slept, so every call below waits for a yes or a change.
+
+**Structure.** Home has a few big choices and a quiet row; everything else is one tap further, never more than two.
+- **Home:** the title, **Continue** (when there's a save; Saved games and Rejoin as before), **Play** (the last settings,
+  at once), then four tiles two by two: **Campaigns**, **Custom Game**, **Multiplayer**, **Daily Planet**. Along the
+  foot, five small icon buttons: **How to play**, **Lore**, **Settings**, **Feedback**, **More**.
+- **Campaigns** (a view in the same card, like Custom Game): a card each, picture, a line in the setting's voice and
+  progress: **Missions** ("Command, newly woken. Learn the planet one order at a time.", finished / total, Next up, a
+  bar), **Main Campaign** ("The last reserve Command Base. Fifteen missions, three acts.", *In preparation*, its acts
+  as a teaser), **Contingency** ("The sealed orders, opened. Secure Ithaca I.": calls `openContingency()` once that
+  exists, *Coming soon* until then), and a dashed **Co-op scenarios** card ("Two Commands, one landing.", *Later*).
+- **More:** Observer, Records, Load a save file, Load from a code (and a leaderboard later, if one comes).
+
+**Why.** The old Home had thirteen things of about equal weight (Daily card, Play, two big buttons, four text links,
+five pills); three more campaigns would have made it a list. Grouping by what a player came to do (play now, play a
+campaign, set one up, play with friends, today's planet) keeps Home to five big targets however many campaigns come:
+new ones become cards in the hub, not buttons on Home. The hub is a view inside the menu card, not a full screen, so
+the card stays the same width (the menu planet sits beside it) and Back / Esc behave as Custom Game's always did.
+Observer, Records and the two loaders are used rarely and only by people who know they want them, so they went to
+More; the help, story and settings stay on Home because a new player looks for them.
+
+**Calls made (please approve or change):**
+- Missions left Home for Campaigns (one tap more for the tutorial). The Campaigns tile reads "Start with the Missions"
+  until one is finished, then "Missions: n of N done", so a new player is still pointed at them.
+- The Daily Planet became a tile (gold, short date, the planet in a line, the best time once there is one); its
+  "The same planet for everyone today" line moved to the tooltip and How to play.
+- Observer, Records, Load a save file and Load from a code moved to **More**. Records could come back to Home (a
+  sixth small button) or go into Campaigns if it grows into per-campaign records or leaderboards.
+- The card pictures are 160 px crops of the Lore guide's art (`art/menu/`): the Rust's ground for the Missions,
+  Ithaca I from orbit for the Main Campaign, the atlas globe for Contingency. Real art (a mission briefing frame, a
+  sealed-orders envelope) would be better later.
+- On an upright phone with the Planet background, the card now starts below the planet's orbit and the app icon is
+  left out (the planet stands in for it), so the planet is never covered; on Classic nothing changed there.
+- The Main Campaign card names the acts, including Act III's "The Silence" (a word from the lore's core vocabulary,
+  not a statement of Earth's fate). Say if the act names should stay hidden until the campaign ships.
+- Contingency's card can show a status line from the Contingency code (`contingencyMenuLine()`, e.g. "Year T+7 ·
+  11 of 28 territories") once that worktree adds it.
+- Arrow keys move the focus between the menu's buttons by where they sit, for keyboards and controllers that send
+  arrows; there's no Gamepad API support anywhere in the game yet (a separate idea).
+
 ## Five rival levels (built Nov 21 2026; open questions)
 
 The rival levels are now Settler, Pioneer, Colonist, Commander and Warlord (the owner's set C, "Frontier"; keys
