@@ -635,7 +635,7 @@ function cgBattle() {
   const hand = run.sides[0].cards.filter((k) => CONT_CARDS[k].battle);
   if (hand.length && !b.cards[0]) h += `<div class="cg-buyrow"><select id="cg-bcard" aria-label="A card for this battle">${hand.map((k) => `<option value="${k}">${CONT_CARDS[k].name}</option>`).join('')}</select><button type="button" class="btn small" data-x="bcard">Play this card</button></div>`;
   const live = typeof contPlayBattle === 'function', resume = live && run.playing === b.id && contSavedBattle();
-  h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button><button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button></div>`;
+  h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button>${resume && run.opts.ironman ? '' : `<button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button>`}</div>${resume && run.opts.ironman ? '<p class="hint">Ironman: this battle has begun, so it is played to its end (or withdrawn from).</p>' : ''}`;
   if (CG.lastBattle) h += `<p class="cg-note" role="status">${esc(CG.lastBattle)}</p>`;
   return h;
 }

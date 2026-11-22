@@ -664,7 +664,8 @@ function contBattleCard(run, b, s, k) {
 /* ------------------------------------------------------------------ battles: results */
 
 /** Auto-resolve battle b (a seeded roll on its odds). */
-function contAutoResolve(run, b) { if (!b || b.result) return false; contResolve(run, b, null); contAdvance(run); return true; }
+function contAutoResolve(run, b) { if (!b || b.result || (run.opts.ironman && run.playing === b.id)) return false; // (Ironman: a battle begun is played out)
+  contResolve(run, b, null); contAdvance(run); return true; }
 /**
  * A played battle's outcome: { winner: a side (or CONT_MURMUR), survivors: { side: warbots left }, mega: a CONT_MEGA key
  * finished by the winner, forts: fortification level standing, withdrew: true when you withdrew }.

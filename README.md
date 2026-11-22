@@ -124,6 +124,11 @@ how goods move.
   work for 5 minutes (`contWork`, in `produce`); a flare year starts everyone's batteries at 40. The bar (`#cg-bar`,
   `contBarTick` from `uiTick`) shows the clock and the cards; Drop and Ringfall aim at the view's middle (`#cg-aim`).
   On the battle's end the cards played leave the run's hand, and a battle-card one unplayed goes back.
+  **Ironman** (`run.opts.ironman`, carried into the match as `S.contingency.ironman`; `contIronman`, `contIronmanSave`):
+  the battle keeps only the autosave for Continue: `checkpointTick` writes no restore points, `showCheckpoints` offers
+  none and `restoreCheckpoint` refuses one, `canSaveSlot` and `cloudCanSave` say no, File and Slots are hidden in the
+  pause menu (which says why: `CONT_IRONMAN_NO`), `loadSlot` and `loadSaveText` refuse an Ironman battle's save, and a
+  battle begun can't be auto-resolved instead (`contAutoResolve`).
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

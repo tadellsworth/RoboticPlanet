@@ -380,8 +380,11 @@ each is a call waiting for the owner's yes or no:
     middle of the view rather than a tapped tile. The computer plays its cards at set times (the Flare at 4 minutes, the
     Drop at 5, the Ringfall on your base at 7). Road Standard and Foundry Surge are played on the battle card, as they act
     at the start; a flare year starts every battery at 40%.
-19. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-20. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+19. **Ironman:** a battle keeps one save, for Continue and its battle card; restore points, slots, files and codes are
+    refused, with a line saying so, and once a battle has begun it can't be auto-resolved instead. Withdraw still
+    works. (Closing the tab loses at most the last in-game minute, as for any autosave.)
+20. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+21. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)

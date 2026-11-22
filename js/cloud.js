@@ -78,7 +78,7 @@ function cloudGameId() {
 
 /** Can this game go to the cloud? (A game of one's own: not multiplayer, not Observer mode; and a relay to send it to.) */
 function cloudCanSave() {
-  return !!(S && UI.inGame && !UI.watch && !(typeof MP !== 'undefined' && MP.on) && cloudBase());
+  return !!(S && UI.inGame && !UI.watch && !(typeof MP !== 'undefined' && MP.on) && cloudBase() && !(typeof contIronman === 'function' && contIronman()));
 }
 
 /** The pause menu's Save to the cloud, and the main menu's Load from a code: shown where they can work. */

@@ -1879,6 +1879,7 @@ function checkpointTick() {
   const time = S.time, run = S.checkpointRun;
   UI.nextCheckpoint = (Math.floor((time + 1e-6) / AUTOSAVE_EVERY) + 1) * AUTOSAVE_EVERY;
   const json = serializeGame(), prior = readCheckpoints();
+  if (typeof contIronman === 'function' && contIronman()) { autoSave(json); return; } // (Ironman: the autosave alone)
   const earlier = prior?.run === run ? prior.entries.filter((e) => e.time < time) : [];
   const entries = [{ time, json }, ...earlier].slice(0, CHECKPOINT_LIMIT);
   autoSave(json, prior ? removeCheckpointBook : undefined);
@@ -1902,6 +1903,7 @@ async function showCheckpoints(prefix = 'p') {
   const run = fromMenu ? null : game?.checkpointRun;
   row.hidden = true;
   if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
+  if (!fromMenu && typeof contIronman === 'function' && contIronman(game)) return; // (Ironman: none to choose)
   try {
     const book = readCheckpoints();
     const stored = book && (fromMenu || book.run === run) ? book.entries : await legacyCheckpoints(run);
@@ -1925,6 +1927,7 @@ async function showCheckpoints(prefix = 'p') {
 }
 
 function restoreCheckpoint(entry, prefix) {
+  if (entry && typeof contIronmanSave === 'function' && (contIronmanSave(entry.json) || (prefix !== 'm' && contIronman()))) { if (prefix === 'm') menuMsg(CONT_IRONMAN_NO); else toast(CONT_IRONMAN_NO, 'warn'); return; }
   if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the point from ${fmtClock(entry.time)} game time?`)) return;
   if (prefix === 'm') audioUnlock();
   if (loadSaveText(entry.json, 'Restore point loaded.')) {
@@ -2006,6 +2009,9 @@ function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
   if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
+  const iron = typeof contIronman === 'function' && contIronman();
+  $('p-export').hidden = $('p-slots').hidden = iron;
+  if (iron) { el.textContent = CONT_IRONMAN_NO; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
     : UI.saveFailed ? 'Saving isn’t working in this browser right now. Keep this tab open or choose Save → File to keep a copy.'
@@ -3485,6 +3491,7 @@ function saveFileText() {
  */
 async function downloadSave() {
   if (!S) return;
+  if (typeof contIronman === 'function' && contIronman()) { $('p-saved').textContent = CONT_IRONMAN_NO; return; }
   const d = new Date(), pad = (n) => String(n).padStart(2, '0');
   const name = `terrafall-${S.mission ? 'mission' : S.mode}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const text = saveFileText();
@@ -3561,6 +3568,7 @@ function loadSaveText(text, welcome) {
   try {
     const o = JSON.parse(json);
     if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
+    if (typeof contIronmanSave === 'function' && contIronmanSave(json)) { toast(CONT_IRONMAN_NO, 'warn'); return false; } // (Ironman: never reloaded)
     deserializeGame(json);
   } catch (e) { S = prev; return false; }
   if (!enterLoaded(prev)) return false;

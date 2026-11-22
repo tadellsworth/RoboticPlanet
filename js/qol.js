@@ -245,7 +245,7 @@ function noteAutoSaved() {
   writeSaveMeta(m);
 }
 
-function canSaveSlot() { return UI.inGame && S && !UI.watch && !(typeof MP !== 'undefined' && MP.on) && !S.players[0].ai && S.winner < 0 && !UI.saveHold; }
+function canSaveSlot() { return UI.inGame && S && !UI.watch && !(typeof MP !== 'undefined' && MP.on) && !S.players[0].ai && S.winner < 0 && !UI.saveHold && !(typeof contIronman === 'function' && contIronman()); }
 
 function fmtSavedAt(at) {
   if (!at) return 'earlier';
@@ -302,6 +302,7 @@ function loadSlot(n, fromContinue) {
   let json = null;
   try { json = localStorage.getItem(SLOT_PREFIX + n); } catch (e) { json = null; }
   if (!json || !meta) { savesSay('That slot is empty.'); return; }
+  if (typeof contIronmanSave === 'function' && contIronmanSave(json)) { savesSay(CONT_IRONMAN_NO); return; } // (none is saved there now; an older one, refused)
   if (UI.inGame && !window.confirm(`Load “${meta.name}”? The game you’re playing closes (keep it in a slot first if you want it).`)) return;
   if (!UI.inGame) audioUnlock();
   if (loadSaveText(json, fromContinue ? 'Welcome back.' : `Loaded “${meta.name}”.`)) {

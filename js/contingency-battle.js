@@ -29,7 +29,7 @@ function contBattleOptions(run, b) {
     setup(S) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
         cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
-        hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
+        ironman: !!run.opts.ironman, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
       B.seat.forEach((X, p) => contKit(S, p, X, B));
       // the cards that act as the battle starts: Road Standard, Foundry Surge, and a Corvane Flare year
       B.seat.forEach((X, p) => { if (X.card === 'road') contRoadStandard(p); if (X.card === 'surge') S.contingency.surge = p; });
@@ -308,3 +308,11 @@ function contCardTap(i) {
   $('cg-aim-go').onclick = () => { act('contCard', [CGB.aim, Math.floor(R.cam.x), Math.floor(R.cam.y)], (r) => { if (!r) toast('It can\'t land there: aim at open ground.', 'warn'); }); CGB.aim = -1; CGB.key = ''; $('cg-aim').hidden = true; };
   $('cg-aim-no').onclick = () => { CGB.aim = -1; $('cg-aim').hidden = true; };
 }
+
+/* ------------------------------------------------------------------ Ironman: no reloading a battle */
+
+/** Is the game in S an Ironman run's battle? Then it keeps one save, for Continue: no restore points, slots, files or codes. */
+function contIronman(G = typeof S !== 'undefined' ? S : null) { return !!(G && G.contingency && G.contingency.ironman); }
+/** Is this save text an Ironman run's battle (a restore point, a slot, a file)? */
+function contIronmanSave(text) { return /"contingency":\{[^{}]*"ironman":true/.test(String(text || '')); }
+const CONT_IRONMAN_NO = 'Ironman: this Contingency battle keeps one save, to carry on from (Continue, or its battle card). No restore points, slots, files or codes.';
