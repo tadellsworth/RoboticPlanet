@@ -35,7 +35,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -1130,6 +1130,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
   (A rival's warbots keep the older rules: badly hurt, they pull out for repairs even mid-fight, and on the way to
   resupply they fight what they meet. Its army lives on being mended.)
+  The danger maps (`DANGER`, `updateDanger`: worked out every 15 ticks and once a second) keep what they were worked
+  out from in the game (`S.dng`: each gun's disc as `[id, owner, type, x, y, R]` and each foe's spots as `[owner, x,
+  y, R]`; the Murmur's gun cover likewise, `S.mgn`, for `murmurGunMap`): a game loaded part way through those 15
+  ticks rebuilds the same maps from them (`dangerMap` → `updateDanger(true)`) instead of from where things stand after
+  loading, so a save plays on exactly as the game would have (it could part ways before). Saved; `checkSave` checks
+  them; not in `hashState`.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
   not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own
@@ -2163,6 +2169,42 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     each kind are counted (`S.mur.slain`). The rival: warbots to a rally flag where an underground Sapper will come up
     (`aiMurmur`, one at a time, called home after 40 s: `P.sapRally`); a shorted gun counts as a place to cover
     (`P.murCut` → `aiMurCut`, another Pulse Turret there). Missions: *What Comes Up* (First Contact).
+  - **Bolder as the game goes on (Active only; Quiet is as it was).** `MURMUR.bold` in `js/defs.js`, the section after
+    `murmurDeliver` in `js/sim.js`. **Threats** (every game on Active, missions too): an armed robot (`isArmy`, `botArmed`,
+    out in the open) within `threatR` (5) tiles of a night creature, or a robot that hit it in the last `hitFor` s, is
+    never walked past (`murmurThreat`, from `updateCritter` before anything else of a raid or rally): it weighs its pack
+    within `packR` tiles (`w`: a Scuttler 1, a Brute 4, a Leech 0.5, a Spitter 1.5, a Sapper 3) against the armed robots
+    within 4 tiles of the robot (health / `robotW`, 4: a warbot 3) and the guns covering it (`gunW` each); with `engage` (1.5) times as much
+    it fights it (`task.thr`, until `thrT` or it's dead, inside or out of reach), else it falls back 5 tiles for
+    `avoidFor` s (`task.scat`, as the craft's scatter; `task.av` counts it) and comes on again; fallen back `avoidMost`
+    times it carries on past it, and hit after that (in the last `hitFor` s) it fights. The Leech, Spitter and Sapper keep to their parts: they turn only
+    on a robot that just hit them, and never fall back. Not the watcher, a feeding Leech, a Sapper digging in or under, or one going home. **Pressure**
+    (`murmurBold`: Active, and not in a mission unless it sets `bold`): `murmurPressure(p, n)` is 1 for the first nights,
+    then from `nightFrom` (3) 1 and `perNight` (0.25) for that night and each after (1.25 on the 3rd, at most `nightMost`, 2.2) times colony p's power
+    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick) over `powerRef` (40), clamped
+    to `powerMin` (0.6) to `powerMost` (1.6) (`murmurPowerMul`), and never under 1: a small or beaten colony draws them
+    less, and gets fewer hunting teams. It scales a craft wave's packs (`murmurPack`, Brutes a quarter), how many may be up at
+    once (`murmurRoom`: `room` × the mean pressure on the colonies still in), a nest's open exits (`murmurMaxExits`: one
+    more from `exitNight` 4, two from `exitNight2` 6; the Hollow's Colony cap follows it) and the waves
+    (`murmurWaves`: a third from `waveNight` 4, at 175 s into the night). A creature done at its strike's objective (a
+    Brute that battered it to 1, a Scuttler with nothing to catch there for `idle` s) goes on through the colony
+    (`murmurLoose`, role `loose`: a Scuttler after the nearest unarmed robot out of the guns' reach within `quarryR` (6) tiles,
+    `murmurQuarry`, else `murmurPrey`; `murmurOnward` likewise every 8 s). **The hunt** (`murmurHunt`, from `huntFrom` 4;
+    a mission can bring it sooner with `S.mur.huntFrom`): every `huntEvery` (40) s of the night, from 70 s in to 40 s
+    before dawn (`S.mur.huntAt`, `huntSeq`), each colony gets `teams` (base 1, half a team a night, at most 4) teams of
+    `teamN` × the pressure (a Brute leading from `teamBrute` 5) at its weak points (`murmurWeak`: no gun within reach with
+    a tile to spare, no armed robot within 6 tiles, not a Command Base, Wall, Gate or Viaduct nor anything a plan or team
+    is after; scored on power they can cut, charge, sites, being alone, the `fed` and `kill` memories), each from a
+    different exit within `huntR` (40) tiles of the colony's buildings with a route there (none near, no hunt: the
+    counter). A team member (role `hunt`, `murmurHuntStep`): a Scuttler cuts the power there (`murmurCut`), any of them
+    bites a site; then it fights as a strike's main pack does. The colony is told once a night (`P.murHunt`). **The
+    horde** (`murmurHorde`, from `hordeFrom` 5): a plan in its strike (phase 2) gets `hordeN` × the pressure more
+    (every third a Brute) every `hordeEvery` (35) s (`pl.hordeAt`, added to `pl.n0`) up the exit nearest its target with
+    a route, until 30 s before dawn; its colony is told once (`pl.hordeMsg`). New state is saved, in `hashState` (only
+    when set, so a game on Quiet hashes as before) and checked by `checkSave`. The rival copes as it did: it collapses the
+    exits near its land (`aiMurmur`), which is what starves the hunt and the horde. Taught in *What Comes Up* (First
+    Contact: `bold`, the hunt from the second night, and a goal to collapse an exit near the colony). Test:
+    `lh/murmur-smart-test.js`; measuring: `lh/murmur-smart-measure.js`, `murmur-smart-batch.sh`, `murmur-smart-sum.js`.
   - **The Harrow, the behemoth (rare and late).** `harrow` in `BOTS` (wild, `behemoth`), its numbers in `HARROW` in
     `js/defs.js`, the section after the Sapper's in `js/sim.js` (`spawnHarrow`, `harrowTick`, `harrowSlam`,
     `harrowFurrow`, `harrowBatter`, `harrowPath`, `harrowTarget`, `harrowDied`, `harrowDown`, `harrowMound`,
