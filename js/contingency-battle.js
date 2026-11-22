@@ -130,6 +130,7 @@ function contBattleCheck() {
   }
   if (C.kind === 'hollow' && S.time > 30 && !S.buildings.some((x) => !x.dead && x.type === 'mound')) { S.winner = 0; S.endHow = 'capture'; return; }
   if (C.hold && S.time >= C.hold) { S.winner = 0; S.endHow = 'hold'; return; }
+  if (C.kind === 'murmur' && S.time > 60 && !S.buildings.some((x) => !x.dead && x.type === 'nest')) { S.winner = 0; S.endHow = 'capture'; return; } // (the nests cleared)
   if (S.mode === 'colony' && S.players[0].out) { S.winner = 1; S.endHow = 'capture'; return; }
   if (S.time < C.cap) return;
   // the cap: scored on land held (the Domination count); a close count goes to the defender
@@ -316,3 +317,12 @@ function contIronman(G = typeof S !== 'undefined' ? S : null) { return !!(G && G
 /** Is this save text an Ironman run's battle (a restore point, a slot, a file)? */
 function contIronmanSave(text) { return /"contingency":\{[^{}]*"ironman":true/.test(String(text || '')); }
 const CONT_IRONMAN_NO = 'Ironman: this Contingency battle keeps one save, to carry on from (Continue, or its battle card). No restore points, slots, files or codes.';
+
+/** The goal card in a Contingency battle (objectiveText): what wins it, in place of the Colony steps and milestones. */
+function contObjective() {
+  const C = S.contingency, where = `<b>Battle for ${esc(contName(C.at))}</b>`;
+  if (C.kind === 'hollow') return `${where}: destroy the Deep's mound.`;
+  if (C.hold) return `${where}: hold against the Murmur until the clock runs out${C.kind === 'surge' ? ' (until dawn)' : ', or clear the nests'}.`;
+  const up = S.victory === 'uplinks';
+  return `${where}: ${up ? 'hold the most Uplinks' : 'capture the rival Command Base'}. At the cap the land held decides it${C.def >= 0 ? `, and a close count goes to ${C.def === ME ? 'you, defending' : 'the defender'}` : ''}.`;
+}

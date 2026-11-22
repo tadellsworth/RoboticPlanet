@@ -88,7 +88,7 @@ function simStep(dt) {
     S.buildings = S.buildings.filter((b) => !b.dead);
     S.bots = S.bots.filter((u) => !u.dead);
   }
-  if (S.mode === 'colony' && !S.mission && S.tick % 90 === 0) checkMilestones();
+  if (S.mode === 'colony' && !S.mission && !S.contingency && S.tick % 90 === 0) checkMilestones(); // (not in a Contingency battle against the Murmur)
   if (S.tick % Math.round(HIST_STEP / SIM_STEP) === 0) recordHistory();
   if (S.mission && S.tick % 30 === 0 && typeof checkMission === 'function') checkMission();
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)

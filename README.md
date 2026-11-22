@@ -129,6 +129,9 @@ how goods move.
   none and `restoreCheckpoint` refuses one, `canSaveSlot` and `cloudCanSave` say no, File and Slots are hidden in the
   pause menu (which says why: `CONT_IRONMAN_NO`), `loadSlot` and `loadSaveText` refuse an Ironman battle's save, and a
   battle begun can't be auto-resolved instead (`contAutoResolve`).
+  In a battle the goal card says what wins it (`contObjective`, from `objectiveText`; `objectiveStep` gives no Colony
+  steps) and a battle against the Murmur shows no Colony milestones (`checkMilestones` is skipped); clearing every
+  nest wins one, as does the hold.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

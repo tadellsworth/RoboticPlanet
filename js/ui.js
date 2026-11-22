@@ -9379,7 +9379,7 @@ function hasBuilt(type) {
 
 /** The step the goal card is on (the first not done), or null: in a mission, or with every step done. */
 function objectiveStep() {
-  if (S.mission) return null;
+  if (S.mission || S.contingency) return null; // (a Contingency battle has its own goal: contObjective)
   for (const o of OBJECTIVES) if (!o.done()) return o;
   return null;
 }
@@ -9411,6 +9411,7 @@ function objectiveText() {
   const warn = cut.length && !(cut.length === 1 && cut[0].type === 'harvester' && !hasBuilt('harvester'))
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
+  if (S.contingency && typeof contObjective === 'function') return warn + contObjective(); // (js/contingency-battle.js)
   for (const o of OBJECTIVES) if (!o.done()) return warn + o.text;
   if (warn) return warn;
   if (S.mode === 'colony') {
