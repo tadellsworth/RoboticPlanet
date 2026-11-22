@@ -393,8 +393,11 @@ each is a call waiting for the owner's yes or no:
     few minutes either way. Still open for the
     owner: a grace before a Command Base can be captured, or Medium-only maps for three sides; a person defends
     better than the computer, so played battles likely run longer than these.
-21. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-22. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+21. **Megastructure targets are chosen for you:** the Lance strikes the most fortified enemy territory two borders away,
+    the Ray quakes the first infested neighbour (else an enemy's fortification). Letting the player pick the target is
+    left for later.
+22. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+23. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)

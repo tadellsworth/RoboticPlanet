@@ -930,10 +930,10 @@ function contYearEnd(run) {
 /** The win checks: the Uplinks held three years running, conquest of every home, the last one standing, the window. */
 function contCheckWin(run) {
   const alive = [0, 1, 2, 3].filter((s) => run.sides[s].alive);
-  const homes = [0, 1, 2, 3].map((s) => run.sides[s].home);
+  const homes = [0, 1, 2, 3].map((s) => run.sides[s].home).filter((h) => h >= 0);
   const up = alive.filter((s) => run.sides[s].streak >= CONT.uplinkYears).sort((a, b) => contUplinks(run, b) - contUplinks(run, a) || contHeld(run, b).length - contHeld(run, a).length || a - b);
   if (up.length) return contWin(run, up[0], 'uplinks');
-  const conq = alive.find((s) => homes.every((h) => run.t[h].owner === s));
+  const conq = homes.length ? alive.find((s) => homes.every((h) => run.t[h].owner === s)) : undefined;
   if (conq !== undefined) return contWin(run, conq, 'conquest');
   if (!run.sides[0].alive && !run.opts.watch) return contWin(run, -1, 'lost');
   if (alive.length === 1) return contWin(run, alive[0], 'conquest');

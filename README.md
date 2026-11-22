@@ -147,6 +147,15 @@ how goods move.
   `contBattleCheck` sends its twin the other way (`S.contingency.twin`); the Harrow comes up six minutes into a
   full-strength battle late in a run or with the meter at 60+ (`spawnHarrow` at the nest nearest your landing).
   Headless test: `lh/contingency-murmur-test.js`.
+  **Megastructures on the globe** (stage 6, `contYearEnd`, `contIncomeOf`, `contFortOf`, `contPower`, `contUseCard`,
+  `contMovesFrom`, `contCardCost`, `contMurmurSpread`, `contUplinks`): the Lance strikes the most fortified enemy
+  territory two borders away every 3 years (−1 fortification, its groups −1 star); the Sundering Ray quakes a
+  neighbour every 2 (−1 Murmur first, else −1 enemy fortification); the Shield Dome turns enemy cards and both
+  weapons away and adds a star's warbots to its defender; Arrival City +3 Reserve and fortification 3; the Orbital
+  Lift launches to Argos and back and halves Orbital Drops; the Atmosphere Engine +1 here and in your neighbours,
+  −1 in a rival's, and stops the Murmur spreading in; the Deep Core +3, and +1 Murmur next door each year; the Great
+  Uplink counts twice. One finished in a played battle is kept (`contBattleOver` → `contSetMega`) and built at the start
+  of the next battle there; taking the territory wrecks it. Headless test: `lh/contingency-mega-test.js`.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,
