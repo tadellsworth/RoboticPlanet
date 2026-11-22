@@ -395,9 +395,11 @@ each is a call waiting for the owner's yes or no:
     few minutes either way. Still open for the
     owner: a grace before a Command Base can be captured, or Medium-only maps for three sides; a person defends
     better than the computer, so played battles likely run longer than these.
-21. **Megastructure targets are chosen for you:** the Lance strikes the most fortified enemy territory two borders away,
-    the Ray quakes the first infested neighbour (else an enemy's fortification). Letting the player pick the target is
-    left for later.
+21. **Megastructure targets (the owner approved picking them, Nov 22):** your Lance and Ray are aimed in the Spend phase
+    when they're charged (a tap on a lit territory; the Ray asks Murmur or walls where it could do either), or Skip.
+    Rivals' weapons, Skip and a target no longer in range use the automatic choice: the Lance the most fortified enemy
+    territory two borders away, the Ray the first infested neighbour, else an enemy's fortification. The Lance's star
+    loss spares a friend's groups.
 22. **The win screen's year:** it reads the year the run was won and that year's odds of contact ("Arrival clock:
     T+19. Probability of contact: 0.9%"); at T+31 it is the plan's line exactly (0.2%). A rival's win reads "...
     speaks for Ithaca I ... Command authority transferred. Hold position."; the Steward's and others' on-defeat lines

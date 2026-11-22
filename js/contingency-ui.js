@@ -15,7 +15,7 @@
  */
 
 const CGV = { maxRes: 560, turnKey: 0.18, tilt: 1.25, tint: 0.42, minR: 120 };
-const CG = { coach: -1, run: null, on: false, yaw: 0, pitch: 0.3, sel: -1, group: 0, sheet: null, dirty: true, raf: 0, map: null, cells: null,
+const CG = { pick: -1, pickTo: -1, coach: -1, run: null, on: false, yaw: 0, pitch: 0.3, sel: -1, group: 0, sheet: null, dirty: true, raf: 0, map: null, cells: null,
   geo: null, img: null, off: null, drag: null, v: { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, r: 100, moon: null }, note: '', battleAt: 0, marks: [] };
 const CG_RES_ICON = { ore: 'Ore', fiber: 'Fiber', stone: 'Stone', crude: 'Crude', fuel: 'Fuel', crystal: 'Crystal' };
 const CG_REGION_SHAPES_NOTE = 'Each battle is a Terrafall match on the territory\'s ground.';
@@ -144,7 +144,9 @@ function cgRgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 
 
 /** The move targets of the selected group (each territory index it may be ordered to). */
 function cgTargets() {
-  const run = CG.run, g = run && CG.group ? contGroup(run, CG.group) : null;
+  const run = CG.run;
+  if (run && CG.pick >= 0 && run.phase === 'plan') return new Set(contWeaponTargets(run, CG.pick).map((x) => x.to)); // (a weapon's range)
+  const g = run && CG.group ? contGroup(run, CG.group) : null;
   if (!g || g.side !== 0 || run.phase !== 'plan') return new Set();
   const out = new Set(contMovesFrom(run, 0, g.at).filter((m) => contMayEnter(run, 0, m.to)).map((m) => m.to));
   const path = run.orders[g.id];
@@ -246,6 +248,9 @@ function cgOverlay(g) {
     let a = gr.at;
     for (const b of path) { cgArc(g, a, b, '#ffdc78'); a = b; }
   }
+  // your weapons' aims this year: a red line from the weapon to its target
+  for (const [w, a] of Object.entries(run.aims || {})) if (a && !a.skip && run.t[+w].owner === 0) cgArc(g, +w, a.to, '#ff6a5a');
+  if (CG.pick >= 0) { const p = cgSpot(CG.pick); if (p) { g.strokeStyle = '#ff6a5a'; g.lineWidth = 3; g.setLineDash([5, 4]); g.beginPath(); g.arc(p.x, p.y, 20, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); } }
   // the battles waiting
   for (const b of run.battles) if (!b.result) {
     const p = cgSpot(b.at);
@@ -384,6 +389,7 @@ function cgKey(e) {
   if (!CG.on || e.defaultPrevented || $('screen-contingency').hidden || !$('screen-help').hidden) return;
   if (e.key === 'Escape') {
     e.preventDefault();
+    if (CG.pick >= 0) { CG.pick = -1; CG.pickTo = -1; cgSync(); return; } // (aiming a weapon: put it down)
     if (CG.sheet && CG.sheet !== 'new' && CG.sheet !== 'battle') cgSheet(null);
     else if (CG.sheet === 'new' && CG.run) cgSheet(null);
     else if (CG.group) { CG.group = 0; cgSync(); }
@@ -400,6 +406,7 @@ function cgKey(e) {
 /** A tap on territory t (or on nothing: -1): with a group picked, a move order there; else the territory's card. */
 function cgTap(t) {
   const run = CG.run;
+  if (CG.pick >= 0 && run.phase === 'plan') { cgPickTarget(t); return; }
   if (CG.group && t >= 0 && run.phase === 'plan') {
     const gr = contGroup(run, CG.group), targets = cgTargets();
     if (gr && targets.has(t)) {
@@ -454,6 +461,7 @@ function cgSync() {
   const n = Object.keys(run.orders).length;
   $('cg-orders').textContent = n ? `${n} order${n > 1 ? 's' : ''}` : contGroups(run, 0).length ? 'No orders yet' : '';
   cgCard();
+  cgWeapons();
   cgResize();
 }
 
@@ -804,4 +812,44 @@ function contingencyMenuLine() {
   if (!run || run.phase === 'over') return null;
   const held = contHeld(run, 0).length, up = contUplinksToward(run, 0);
   return `Year T+${run.turn} · ${CONT_CS_NAMES[run.sides[0].cs]} · ${held} of ${CONT_MAP.n} territories${up ? ` · ${up} Uplink${up > 1 ? 's' : ''}` : ''}${run.playing ? ' · a battle under way' : ''}`;
+}
+
+/* ------------------------------------------------------------------ your weapons: aiming the Lance and the Ray */
+
+/**
+ * Your Lance of Corvane and Sundering Ray, when one fires at this year's end: a line each in #cg-weapons with Pick a
+ * target (its range lights up on the globe: tap a territory in it) and Skip (it chooses, as a rival's does).
+ */
+function cgWeapons() {
+  const run = CG.run, el = $('cg-weapons');
+  const ready = run && run.phase === 'plan' && !CG.sheet ? run.t.map((T, t) => t).filter((t) => run.t[t].owner === 0 && contWeaponReady(run, t)) : [];
+  el.hidden = !ready.length;
+  if (!ready.length) { if (CG.pick >= 0) { CG.pick = -1; CG.pickTo = -1; } return; }
+  el.innerHTML = ready.map((t) => {
+    const T = run.t[t], name = CONT_MEGA[T.mega].name, a = run.aims && run.aims[t], picking = CG.pick === t;
+    const what = a && !a.skip ? `Target: <b>${esc(contName(a.to))}</b>${T.mega === 'ray' ? (a.mode === 'murmur' ? ' (the Murmur)' : ' (their walls)') : ''}.` : a && a.skip ? 'It will choose for itself.' : 'No target yet: it will choose for itself.';
+    let btns = `<button type="button" class="btn small ${picking ? 'primary' : ''}" data-w="${t}" data-wa="pick">${picking ? 'Tap a territory in range' : a && !a.skip ? 'Change' : 'Pick a target'}</button><button type="button" class="btn small ghost" data-w="${t}" data-wa="skip">Skip</button>`;
+    if (picking && CG.pickTo >= 0) btns = `<button type="button" class="btn small primary" data-w="${t}" data-wa="murmur">Quake the Murmur (−1)</button><button type="button" class="btn small" data-w="${t}" data-wa="fort">Crack their walls (−1)</button><button type="button" class="btn small ghost" data-w="${t}" data-wa="cancel">Cancel</button>`;
+    const range = T.mega === 'lance' ? 'strikes a territory two borders away: −1 fortification, its groups −1 star' : 'quakes a neighbour: −1 Murmur, or −1 enemy fortification';
+    return `<div class="cg-weapon"><p><b>${name}</b> at ${esc(contName(t))} is charged and fires at the year's end: it ${range}. ${what}</p><div class="cg-weapon-btns">${btns}</div></div>`;
+  }).join('');
+  el.querySelectorAll('[data-wa]').forEach((b) => { b.onclick = () => cgWeaponAct(+b.dataset.w, b.dataset.wa); });
+}
+function cgWeaponAct(t, act) {
+  const run = CG.run;
+  sfx('click');
+  if (act === 'pick') { CG.pick = CG.pick === t ? -1 : t; CG.pickTo = -1; CG.group = 0; if (CG.pick >= 0) { CG.sel = t; CG.note = `${CONT_MEGA[run.t[t].mega].name}: the territories in range are lit. Tap one to aim at it.`; } }
+  if (act === 'skip') { contAim(run, 0, t, null); CG.pick = -1; CG.pickTo = -1; CG.note = `${CONT_MEGA[run.t[t].mega].name} will choose its own target.`; }
+  if (act === 'murmur' || act === 'fort') { if (contAim(run, 0, t, CG.pickTo, act)) CG.note = `${CONT_MEGA[run.t[t].mega].name} aimed at ${contName(CG.pickTo)}.`; CG.pick = -1; CG.pickTo = -1; }
+  if (act === 'cancel') { CG.pickTo = -1; }
+  cgSave(); cgSync();
+}
+/** A tap while aiming: a territory in range takes the aim (the Ray, where it could do either, asks which). */
+function cgPickTarget(t) {
+  const run = CG.run, w = CG.pick, opts = contWeaponTargets(run, w).filter((x) => x.to === t);
+  if (!opts.length) { CG.note = t === w ? 'Tap a lit territory in range, or Skip.' : `${t >= 0 ? contName(t) : 'That'} is out of range.`; cgSync(); return; }
+  if (opts.length > 1) { CG.pickTo = t; CG.sel = t; cgSync(); return; }
+  if (contAim(run, 0, w, t, opts[0].mode)) { sfx('click'); CG.note = `${CONT_MEGA[run.t[w].mega].name} aimed at ${contName(t)}.`; }
+  CG.pick = -1; CG.pickTo = -1; CG.sel = t;
+  cgSave(); cgSync();
 }

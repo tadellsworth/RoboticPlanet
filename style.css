@@ -2385,3 +2385,9 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .cg-log h4:first-of-type { margin-top: 8px; }
 .cg-log .cg-voice { color: #ffd9cc; padding-left: 10px; border-left: 2px solid rgba(255, 107, 74, 0.55); }
 .cg-aim-pad { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; }
+/* Contingency: your Lance and Ray, charged this year (#cg-weapons, cgWeapons): a card under the top bar on the left. */
+.cg-weapons { position: absolute; z-index: 3; left: calc(var(--safe-l) + 10px); top: calc(var(--safe-t) + 104px); width: min(380px, calc(100% - 20px - var(--safe-l) - var(--safe-r))); display: flex; flex-direction: column; gap: 6px; }
+.cg-weapon { padding: 9px 11px; border-radius: 12px; background: rgba(40, 16, 14, 0.92); border: 1px solid rgba(255, 106, 90, 0.55); font-size: 13px; line-height: 1.4; }
+.cg-weapon p { margin: 0 0 6px; }
+.cg-weapon-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (min-width: 760px) { .cg-weapons { top: calc(var(--safe-t) + 60px); } }

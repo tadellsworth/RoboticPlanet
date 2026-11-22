@@ -158,9 +158,12 @@ how goods move.
   "Reserve exhausted. Carrier dark.", or the rival that speaks for Ithaca I; each beaten rival's on-defeat line (its
   doctrine's `voice.surrender`); the run's numbers. Nothing names Earth's fate (`lh/contingency-test.js` checks).
   **Megastructures on the globe** (stage 6, `contYearEnd`, `contIncomeOf`, `contFortOf`, `contPower`, `contUseCard`,
-  `contMovesFrom`, `contCardCost`, `contMurmurSpread`, `contUplinks`): the Lance strikes the most fortified enemy
-  territory two borders away every 3 years (−1 fortification, its groups −1 star); the Sundering Ray quakes a
-  neighbour every 2 (−1 Murmur first, else −1 enemy fortification); the Shield Dome turns enemy cards and both
+  `contMovesFrom`, `contCardCost`, `contMurmurSpread`, `contUplinks`): the Lance strikes an enemy territory two
+  borders away every 3 years (−1 fortification, its groups −1 star); the Sundering Ray quakes a neighbour every 2
+  (−1 Murmur, or −1 enemy fortification). Yours are aimed in the Spend phase (`contWeaponReady`, `contWeaponTargets`,
+  `contAim` into `run.aims`, checked by `contValid`; `cgWeapons` and `cgPickTarget` on the globe, the range lit by
+  `cgTargets`, the aim a red arc); Skip, a pick no longer in range, or a rival's weapon uses `contWeaponAuto` (the
+  most fortified target; the Ray the Murmur first); the report logs the shot (", as ordered"); the Shield Dome turns enemy cards and both
   weapons away and adds a star's warbots to its defender; Arrival City +3 Reserve and fortification 3; the Orbital
   Lift launches to Argos and back and halves Orbital Drops; the Atmosphere Engine +1 here and in your neighbours,
   −1 in a rival's, and stops the Murmur spreading in; the Deep Core +3, and +1 Murmur next door each year; the Great

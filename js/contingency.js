@@ -74,8 +74,8 @@ const CONT_CARDS = {
   credit:   { name: 'Ledger Credit', cost: 4, globe: 'credit', own: 3, desc: 'buy any card at half price this turn' },
 };
 const CONT_MEGA = {
-  lance:    { name: 'Lance of Corvane', desc: 'every 3 turns, strikes a territory 2 borders away: −1 fortification, and its Command Group loses a star' },
-  ray:      { name: 'Sundering Ray', desc: 'every 2 turns, quakes a neighbour: −1 Murmur, or −1 enemy fortification' },
+  lance:    { name: 'Lance of Corvane', desc: 'every 3 turns, strikes a territory 2 borders away: −1 fortification, and its Command Groups lose a star (yours: you pick the target)' },
+  ray:      { name: 'Sundering Ray', desc: 'every 2 turns, quakes a neighbour: −1 Murmur, or −1 enemy fortification (yours: you pick which)' },
   dome:     { name: 'Shield Dome', desc: 'enemy cards can\'t touch this territory; defending here, auto-resolve counts as +1 star' },
   city:     { name: 'Arrival City', desc: '+3 Reserve a turn; counts as fortification level 3' },
   lift:     { name: 'Orbital Lift', desc: 'orbital launch from here (reach Argos), and Orbital Drops cost half' },
@@ -360,7 +360,7 @@ function contBreakTruce(run, s, rival) {
 
 /** Income, truce offers: the start of a year (phase plan). */
 function contBeginTurn(run) {
-  run.phase = 'plan'; run.orders = {}; run.battles = []; run.offers = []; run.year = [];
+  run.phase = 'plan'; run.orders = {}; run.battles = []; run.offers = []; run.year = []; run.aims = {};
   if (run.carryOffer) { run.offers.push(run.carryOffer); run.carryOffer = null; }
   run.event = run.nextEvent; run.nextEvent = null;
   for (let s = 0; s < 4; s++) {
@@ -868,22 +868,24 @@ function contYearEnd(run) {
   // megastructures act on the globe
   run.t.forEach((T, t) => {
     if (!T.mega || T.owner < 0) return;
-    const s = T.owner, age = run.turn - T.megaAt;
-    if (T.mega === 'lance' && age > 0 && age % 3 === 0) {
-      const d = contDistances([t]);
-      const targets = run.t.map((X, i) => i).filter((i) => d[i] === 2 && run.t[i].owner >= 0 && !contFriends(run, s, run.t[i].owner) && run.t[i].mega !== 'dome');
-      if (targets.length) {
-        const i = targets.sort((a, b) => run.t[b].fort - run.t[a].fort || a - b)[0];
-        if (run.t[i].fort > 0) run.t[i].fort--;
-        for (const g of contGroupAt(run, i)) g.stars = Math.max(1, g.stars - 1);
-        contLog(run, `Lance of Corvane fired on ${contName(i)}.`, s, true, [run.t[i].owner]);
-      }
-    }
-    if (T.mega === 'ray' && age > 0 && age % 2 === 0) {
-      const n = M.links[t].map((L) => L.to).filter((i) => !contIsArgos(i) && i !== M.hollow);
-      const bug = n.find((i) => run.t[i].murmur > 0), foe = n.find((i) => run.t[i].owner >= 0 && !contFriends(run, s, run.t[i].owner) && run.t[i].fort > 0 && run.t[i].mega !== 'dome');
-      if (bug !== undefined) { run.t[bug].murmur--; contLog(run, `Sundering Ray quake under ${contName(bug)}. Murmur activity down.`, s); }
-      else if (foe !== undefined) { run.t[foe].fort--; contLog(run, `Sundering Ray quake under ${contName(foe)}. Their walls cracked.`, s, true, [run.t[foe].owner]); }
+    const s = T.owner;
+    if (!contWeaponReady(run, t)) return;
+    // the shot: the target you picked (if it still stands in range), else the weapon's own choice
+    const aim = s === 0 && run.sides[0].human && run.aims && run.aims[t];
+    const picked = aim && !aim.skip && contWeaponTargets(run, t).find((x) => x.to === aim.to && x.mode === aim.mode);
+    const shot = picked || contWeaponAuto(run, t);
+    if (!shot) return;
+    const i = shot.to, how = picked ? ', as ordered' : '';
+    if (shot.mode === 'strike') {
+      if (run.t[i].fort > 0) run.t[i].fort--;
+      for (const g of contGroupAt(run, i)) if (!contFriends(run, s, g.side)) g.stars = Math.max(1, g.stars - 1);
+      contLog(run, `Lance of Corvane fired on ${contName(i)}${how}. Fortification and rank reduced.`, s, true, [run.t[i].owner]);
+    } else if (shot.mode === 'murmur') {
+      run.t[i].murmur--;
+      contLog(run, `Sundering Ray quake under ${contName(i)}${how}. Murmur activity down.`, s);
+    } else {
+      run.t[i].fort--;
+      contLog(run, `Sundering Ray quake under ${contName(i)}${how}. Their walls cracked.`, s, true, [run.t[i].owner]);
     }
   });
   for (const T of run.t) if (T.reseed > 0) T.reseed--;
@@ -929,6 +931,53 @@ function contYearEnd(run) {
   if (!run.over && run.pendingAlliance) { run.carryOffer = run.pendingAlliance; }
   run.pendingAlliance = null;
   contReport(run);
+}
+
+/* ------------------------------------------------------------------ the globe's weapons: the Lance and the Sundering Ray */
+
+/** Will the weapon at territory t fire at this year's end (the Lance every 3 years, the Ray every 2, from when it was finished)? */
+function contWeaponReady(run, t) {
+  const T = run.t[t], age = run.turn - T.megaAt, every = { lance: 3, ray: 2 }[T.mega];
+  return !!every && T.owner >= 0 && age > 0 && age % every === 0;
+}
+/**
+ * What the weapon at t can hit now, each { to, mode }: the Lance any enemy territory two borders away ('strike': −1
+ * fortification, its groups −1 star); the Ray a neighbour with Murmur under it ('murmur': −1) or an enemy's with
+ * fortifications ('fort': −1). Never a Shield Dome's territory, Argos from the Ray, or the Hollow.
+ */
+function contWeaponTargets(run, t) {
+  const T = run.t[t], s = T.owner, out = [], foe = (i) => run.t[i].owner >= 0 && !contFriends(run, s, run.t[i].owner) && run.t[i].mega !== 'dome';
+  if (s < 0) return out;
+  if (T.mega === 'lance') {
+    const d = contDistances([t]);
+    for (let i = 0; i < CONT_MAP.n; i++) if (d[i] === 2 && i !== CONT_MAP.hollow && foe(i)) out.push({ to: i, mode: 'strike' });
+  } else if (T.mega === 'ray') {
+    for (const L of CONT_MAP.links[t]) {
+      const i = L.to;
+      if (L.kind === 'orbit' || contIsArgos(i) || i === CONT_MAP.hollow || out.some((x) => x.to === i && x.mode)) continue;
+      if (run.t[i].murmur > 0) out.push({ to: i, mode: 'murmur' });
+      if (foe(i) && run.t[i].fort > 0) out.push({ to: i, mode: 'fort' });
+    }
+  }
+  return out;
+}
+/** The weapon's own choice (a rival's, or yours on Skip): the Lance the most fortified target, the Ray the Murmur first. */
+function contWeaponAuto(run, t) {
+  const all = contWeaponTargets(run, t);
+  if (run.t[t].mega === 'lance') return all.sort((a, b) => run.t[b.to].fort - run.t[a.to].fort || a.to - b.to)[0] || null;
+  return all.find((x) => x.mode === 'murmur') || all.find((x) => x.mode === 'fort') || null;
+}
+/**
+ * Side s aims its weapon at t for this year's shot (the Spend phase): `to` and `mode` one of contWeaponTargets, or
+ * `to` null to Skip (the weapon chooses). Kept in run.aims until the year's end. Returns true if the aim stands.
+ */
+function contAim(run, s, t, to, mode) {
+  if (run.phase !== 'plan' || !run.t[t] || run.t[t].owner !== s || !contWeaponReady(run, t)) return false;
+  run.aims = run.aims || {};
+  if (to === null || to === undefined) { run.aims[t] = { skip: true }; return true; }
+  if (!contWeaponTargets(run, t).some((x) => x.to === to && x.mode === mode)) return false;
+  run.aims[t] = { to, mode };
+  return true;
 }
 
 /** The win checks: the Uplinks held three years running, conquest of every home, the last one standing, the window. */
@@ -1239,6 +1288,10 @@ function contValid(run) {
   for (const S of run.sides) if (!S || !int(S.cs, 0, 3) || !Number.isFinite(S.reserve) || S.reserve < 0 || !Array.isArray(S.cards) || !Array.isArray(S.refits)) return false;
   for (const T of run.t) if (!T || !int(T.owner, -1, 3) || !int(T.fort, 0, 3) || !int(T.murmur, 0, 3) || (T.mega !== null && !CONT_MEGA[T.mega])) return false;
   for (const g of run.groups) if (!g || !int(g.side, 0, 3) || !int(g.at, 0, CONT_MAP.n - 1) || !int(g.stars, 1, 5)) return false;
+  if (run.aims != null) {
+    if (typeof run.aims !== 'object' || Array.isArray(run.aims)) return false;
+    for (const [k, a] of Object.entries(run.aims)) if (!/^\d+$/.test(k) || +k >= CONT_MAP.n || !a || typeof a !== 'object' || !(a.skip === true || (int(a.to, 0, CONT_MAP.n - 1) && ['strike', 'murmur', 'fort'].includes(a.mode)))) return false;
+  }
   return Array.isArray(run.battles) && run.opts && typeof run.opts === 'object';
 }
 /** The Contingency slot in this device's storage (apart from the normal save slots). */
