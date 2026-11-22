@@ -247,6 +247,7 @@ function initUI() {
   $('o-keep').onclick = () => { sfx('click'); keepPlaying(); };
   $('o-menu').onclick = () => { $('screen-over').hidden = true; if (MP.on) mpQuit(); toMenu(); if (UI.overMenu) UI.overMenu(); };
   $('m-missions').onclick = () => { sfx('click'); openMissions(); };
+  $('m-contingency').onclick = () => { sfx('click'); openContingency(); }; // (js/contingency-ui.js)
   $('ms-close').onclick = () => { sfx('click'); if (UI.msSel != null) { UI.msSel = null; renderMissions(); } else $('screen-missions').hidden = true; };
   $('o-statsbtn').onclick = () => { sfx('click'); openStats(); };
   $('p-stats').onclick = () => { sfx('click'); openStats(); };

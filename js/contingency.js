@@ -737,11 +737,11 @@ function contRetreat(run, b, g) {
   if (to < 0) for (const L of CONT_MAP.links[t]) if (L.kind !== 'orbit' && L.kind !== 'below' && run.t[L.to].owner === s && L.to !== t) { to = L.to; break; }
   if (to < 0 || g.stars <= 1) {
     run.groups.splice(run.groups.indexOf(g), 1);
-    contLog(run, `Command Group ${g.id} lost at ${contName(t)}${to < 0 ? '. No line of retreat' : ''}.`, s, true);
+    contLog(run, `Command Group ${g.id} lost at ${contName(t)}${to < 0 ? '. No line of retreat' : ''}.`, s, true, b.sides);
     return;
   }
   g.stars--; g.xp = 0; g.at = to;
-  contLog(run, `${contNameCap(t)}: Command Group ${g.id} withdrew to ${contName(to)}. Rank reduced.`, s, true);
+  contLog(run, `${contNameCap(t)}: Command Group ${g.id} withdrew to ${contName(to)}. Rank reduced.`, s, true, b.sides);
 }
 
 /** Side s takes territory t (by a battle won, or walking in). */
@@ -972,8 +972,9 @@ function contReport(run) {
   const ours = run.log.filter((L) => L.s === me || L.also.includes(me) || L.s === CONT_MURMUR);
   const heard = run.log.filter((L) => !ours.includes(L) && L.big);
   lines.push(`Arrival clock: T+${run.turn}. Year report.`);
-  for (const L of ours) lines.push(L.line);
-  for (const L of heard) lines.push('Long-range listening: ' + L.line);
+  const who = (L) => (L.s !== me && L.s >= 0 && L.s < 4 ? contSideName(run, L.s) + ': ' : '');
+  for (const L of ours) lines.push(who(L) + L.line);
+  for (const L of heard) lines.push('Long-range listening. ' + who(L) + L.line);
   // the rivals' lines: who attacked us this year speaks
   const said = new Set();
   for (const b of run.year || []) if (b.sides.includes(me)) for (const s of b.sides) if (s !== me && s !== CONT_MURMUR && !said.has(s) && run.sides[s].doctrine) {

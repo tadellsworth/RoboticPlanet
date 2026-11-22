@@ -2422,8 +2422,8 @@ function musicLore(open) {
 }
 /** The story's level the Lore guide plays the campaign theme at: the first murmur, quiet enough to read by. */
 const LORE_STORY = 0.33;
-/** The level the campaign theme plays at now. */
-function storyLevel() { return MUSIC.lore && !(typeof UI !== 'undefined' && UI.inGame) ? LORE_STORY : MUSIC.story == null ? 0 : MUSIC.story; }
+/** The level the campaign theme plays at now (MUSIC.loreLevel: Contingency's globe sets its own, js/contingency-ui.js). */
+function storyLevel() { return MUSIC.lore && !(typeof UI !== 'undefined' && UI.inGame) ? (MUSIC.loreLevel != null ? MUSIC.loreLevel : LORE_STORY) : MUSIC.story == null ? 0 : MUSIC.story; }
 
 const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10], DORIAN = [0, 2, 3, 5, 7, 9, 10];
 const LYDIAN = [0, 2, 4, 6, 7, 9, 11], MIXOLYDIAN = [0, 2, 4, 5, 7, 9, 10], HARMONIC = [0, 2, 3, 5, 7, 8, 11];

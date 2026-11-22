@@ -70,6 +70,39 @@ how goods move.
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
+- **Contingency** (`js/contingency.js`, the engine; `js/contingency-ui.js`, the screens; CONTINGENCY.md, the plan): a
+  replayable campaign on the globe of Ithaca I, opened by the main menu's **Contingency** button (`openContingency`, the
+  one way in, for the menu's Campaigns area to take over). One turn is one year on the Arrival clock, T+1 to T+31. The
+  atlas is `js/contingency-atlas.js`, written by `tools/atlas/contingency_table.py` from what `tools/atlas/atlas.py`
+  leaves in `tools/atlas/out/` (run atlas.py first): 28 territories (`CONT_TERR`: id, name, region, lon, lat), the land
+  borders where atlas cells touch (`CONT_LAND`), the sea crossings (`CONT_SEA`, CONTINGENCY.md's table, plus the Shoals'
+  own channel), the way down to the Hollow from Violet Reach (`CONT_BELOW`), orbit from Pathfinder's Landing to Argos
+  (`CONT_ORBIT`; an Orbital Lift adds its own) and a 256 × 128 territory map of the globe (`CONT_CELLS`, run-length
+  rows). **The engine** keeps the whole run in one plain object (it is the save) and rolls only from its own seeded
+  generator (`contRand`: mulberry32, its state `run.rng` in the run; lint treats it as a simulation file), so the same
+  seed and choices replay exactly. `contNewRun(opts)` deals it: your callsign (side 0) and the other three with doctrines
+  (random and different, or set), resources per region (`CONT_REGION_RES`), the fifth Uplink (four are fixed: Northcap,
+  Stillwater, Lantern Reef, the Lunar Relay), four homes at least three borders apart (fortified to 2), two 1-star
+  Command Groups each, the Murmur at 2 in the Bloom, 3 in the Hollow and 1 under every surface Uplink. A turn's phases
+  (`run.phase`): `plan` (income in, `contBuyGroup`, `contFortify`, `contBuyRefit`, `contBuyCard`, `contUseCard`,
+  `contOrder`, truce offers `contOfferTruce` / `contAnswer` / `contBreakTruce`), then `contEndTurn` (the rivals spend
+  and order, `contAiPlan` by doctrine in `CONT_AI`; all moves at once, `contMoves`; a battle for every contested
+  territory), `battles` (yours wait for `contAutoResolve` or `contBattleResult`), `murmur` (`contMurmurSpread`:
+  spread into unguarded neighbours at `CONT.spread` × the meter, growth on unheld ground, surges from level 3 and at a
+  transmitting side's Uplinks), `surges`, and `report` (`contYearEnd`: megastructures act, truces run down, the next
+  year's event, the win checks `contCheckWin`, the report in the log voice `contReport`); `contAdvance` moves on until
+  the person has something to do. Auto-resolve (`contOdds`) weighs each side's strength (`contPower`: kit warbots by
+  rank, Heavier Kit, fortification ×(1 + 0.15 a level), home, cold or island or lunar ground, an ally next door,
+  refits, supply lines, a battle card, the difficulty for rivals and `CONT.playedEdge` 0.92 for yours) to the power
+  2.2. Saving: `contSave` / `contLoad` (JSON with an FNV checksum and a shape check: a corrupt save is refused), one
+  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw the
+  menu planet's face (`mplMakeMap`) on a sphere shaded per pixel only when something changes (turned by drag, swipe,
+  wheel or the arrow keys), tinted by owner with the atlas's borders, markers for Uplinks, homes, groups, forts and the
+  Murmur, Argos as a disc beside it, and the orders as arcs; a territory card (`cgCard`), the Spend panel, the battle
+  card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
+  screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
+  at Contingency's place in the story (`MUSIC.loreLevel`). Headless test: `lh/contingency-test.js` in the test kit (50
+  whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,
   victory, level, rules and challenge options) while you
   look on at up to 8×, with a scout report on what each is doing and a camera that follows the fighting; nothing is
@@ -3343,6 +3376,7 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
+js/contingency*.js        Contingency: the atlas table, the campaign's engine and its globe screens
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/orders.js              every player action as an order: a name and plain arguments, checked against the player
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)

@@ -244,6 +244,55 @@ The design so far:
   (a ringfall season, a flare year), and difficulty runs from Settler to Warlord. A run is about 3 to 6 hours, saved
   between battles. Later: 2 to 4 players on the same planet map, as allies or against each other.
 
+### Contingency: built so far, and calls made for the owner's approval (Nov 22 2026)
+
+Built: the engine (`js/contingency.js`, stage 1, tested headless over 50 to 200 whole runs) and the globe screens
+(`js/contingency-ui.js`, stage 2), reached from the main menu's **Contingency** button. The plan was silent on these;
+each is a call waiting for the owner's yes or no:
+
+1. **Fixed places stay fixed.** The atlas's named places don't move: the Pathfinder's site at Pathfinder's Landing,
+   Passenger Town, the Trade Posts at Ledger Post and Geyser Field (Spring Market), and four Uplinks at Northcap,
+   Stillwater, Lantern Reef and the Lunar Relay. Each run deals the resources within each region, the fifth Uplink
+   (in Emberwood, the Long Grass, Blackwater, Cinderlands, Steamwells or Southcap, never on a home) and the homes.
+2. **Trade Post territories can be held.** The Post itself stays neutral (in a battle it's a neutral Trade Post on the
+   map). Holding one pays 3 Reserve (4 for TYRIAN) and is what the Accord Ledger Deal card needs (+10 Reserve on the
+   globe; half price in a Wren year).
+3. **Palm Keys and Lantern Reef** are joined by a sea crossing of their own ("the Shoals' channel"); the atlas gave
+   them no border.
+4. **The Murmur start under every surface Uplink (level 1), and a side transmitting on 3 Uplinks draws surges at them**
+   (20% an Uplink a year): "the ground answers the signal" (LORE.md: they repeat the Uplink's rhythm back). Without it a
+   quarter of the computer-only runs were won on the Uplinks by T+9, before anyone could answer.
+5. **A 1-star Command Group that loses a battle is lost** (it has no rank left to give up), as is one with nowhere to
+   retreat. Without it groups almost never died and Reserve piled up.
+6. **Several Command Groups may share a territory** and fight together in its battle.
+7. **Taking a territory wrecks its megastructure** ("as long as you hold it"). An auto-resolved win has a small chance
+   (6%; the Architect's 22%) of finishing one, so the globe's megastructures show up in auto-resolved runs too.
+8. **Unguarded ground:** an enemy territory with no Command Group and no fortification is taken by walking in; one
+   fortified but empty is a battle against its garrison.
+9. **Orbit costs Reserve:** 3 a move to or from Argos, 1 with the Orbital Lift Charter (the refit's "cheaper moves").
+10. **The Murmur meter:** +2 for every battle between vanguards, +1 for one against the Murmur, −1 a year, at most 100.
+    Spread chance a year: (10% + 0.5% a point of meter) × the infested territory's level ÷ 2 (×1.7 Rampant, ×0.5 after
+    the Hollow falls). After the Deep's mound falls the Hollow fills again slowly (they never go away for good); the
+    assault can be made once a run.
+11. **Truces are only ever with you** (rivals don't make them with each other yet). The Steward offers one when you're
+    1.4× its strength or the meter is 60+; the computer answers in its doctrine's voice. An alliance offer comes when a
+    truce has been kept 5 years (never from the Salvager).
+12. **Rivals without their home can't buy Command Groups; you can** (the plan says so of rivals only). You lose when you
+    have no group and under 14 Reserve, or no territory at all.
+13. **Events:** each of the four comes 10% of years (60% none), announced in the report the year before.
+14. **Probability of contact:** 0.2% × 2^((31 − T) / 6): 6.4% at T+1, never shown as zero, 0.2% at T+31.
+15. **The window (T+31):** the rivals double the value of Uplinks that year; the most Uplinks wins, then the most
+    territory, then the most stars.
+16. **Auto-resolve numbers:** a group's kit is 4 warbots at 1 star to 14 at 5 (+2 Heavier Kit); defenders ×(1 + 0.15 a
+    fortification level), ×1.1 at home, ×1.08 on the Polar Caps, the Shoals and Argos; an empty fortified territory
+    fights with 1.5 + 2.5 a level; refits ×1.04 to ×1.07, Torch Doctrine ×1.25 against the Murmur, +2% a supply line,
+    battle cards ×1.06 to ×1.15; rivals by difficulty ×0.9 to ×1.12; yours ×0.92 (a little below playing it); odds by
+    strength to the power 2.2. A star a played win, half a star an auto-resolved one; a winner at under 45% may lose
+    a star.
+17. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+18. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+    T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
+
 ## Polish round 1 (built Nov 21 2026; open questions)
 
 Camera spots (Shift+F1–F4 / F1–F4, minimap pips), J stepping back through recent alerts, each good's net change a
