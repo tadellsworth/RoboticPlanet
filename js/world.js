@@ -4705,8 +4705,30 @@ function roadWeight(t) {
   return c ? c.weight * bridgeMul(t) : S.res[t] ? ROAD_AVOID : 1;
 }
 
+/**
+ * A rival's roads keep out of the circle a Murmur nest's guards bite in (Versus: GUARD_VERSUS tiles round the nest, and
+ * a tile more) where there's a way round: each tile there costs ROAD_NEST_AVOID tiles more (null: no such tiles). Its
+ * Haulers and Workers keep off that circle, so a road through it was never paved, or was driven by no one: on Standard
+ * Large seed 31 on Active the roads to both rivals' Crystal ran past nests and neither colony grew after minute 9 (the
+ * balance audit of Nov 22 2026).
+ */
+const ROAD_NEST_AVOID = 30;
+function roadNestAvoid(owner) {
+  if (!S.wildlife || S.mode === 'colony' || !S.players[owner] || !S.players[owner].ai) return null;
+  let m = null;
+  const R = GUARD_VERSUS + 1, W = S.W;
+  for (const b of S.buildings) {
+    if (b.dead || !isNestB(b)) continue;
+    const cx = b.x + 0.5, cy = b.y + 0.5;
+    for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(S.H - 1, Math.floor(cy + R)); j++)
+      for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
+        if (dist2(i + 0.5, j + 0.5, cx, cy) <= R * R) (m || (m = new Uint8Array(W * S.H)))[j * W + i] = 1;
+  }
+  return m;
+}
 function roadSearch(owner, seeds, done) {
   const W = S.W, N = S.W * S.H;
+  const nestAv = roadNestAvoid(owner);
   const cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2); // (doubles, like the heap's keys: see the stale test below)
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
@@ -4729,7 +4751,7 @@ function roadSearch(owner, seeds, done) {
     const i = t % W;
     for (const n of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (n < 0 || n >= N || !open(n) || !step(t, n)) continue;
-      let u = n, nc0 = c + roadWeight(n);
+      let u = n, nc0 = c + roadWeight(n) + (nestAv && nestAv[n] ? ROAD_NEST_AVOID : 0);
       if (ov && S.over[n]) {
         // An overpass: the road runs straight on over (or under) it, never round the corner there.
         u = overHop(t, n);

@@ -2121,9 +2121,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     ("strike sites"); crowded out, a little closer, but only to have one set. Each keeps
     `guards + level` Scuttlers on guard (they go for what comes within 7 tiles of the nest in Colony, within `GUARD_VERSUS`
     (3) in Versus, and robots keep that far clear of them: `foeReach`; a nest beside a colony's way to its fields stopped
-    a rival's economy dead) and grows a level every `WILD.grow` s (to 3). The rival builds no nearer a nest than
+    a rival's economy dead; in Versus the ground kept clear is that circle round the nest and a tile more, drawn once for
+    all its guards in `updateDanger`, not a circle round each guard, which reached 5 to 6 tiles out over roads they
+    never bite on, so Haulers on them turned back for good: the balance audit of Nov 22 2026) and grows a level every
+    `WILD.grow` s (to 3). The rival builds no nearer a nest than
     `aiNestClear()` tiles (`aiSearchSpot`): `AI_NEST_CLEAR` (8) in Colony, `AI_NEST_CLEAR_VS` (6) in Versus, where the
-    guards only reach 3 (on the Hollow the Ore off a colony's home ground can all lie that near nests). Nests send
+    guards only reach 3 (on the Hollow the Ore off a colony's home ground can all lie that near nests), and in Versus its
+    roads keep out of that guarded circle where there's a way round (`roadNestAvoid`: `ROAD_NEST_AVOID`, 30 tiles' cost
+    a tile; on Standard Large seed 31 on Active both rivals' only roads to their Crystal ran past nests, were never
+    driven, and 6 of 8 games there ran to the cap). Nests send
     nothing by day (`updateNest` keeps the guards up and grows the nest), **in Colony as in Versus** (the owner's call,
     Nov 2026: Colony's daytime raids are gone; packs come only at night, through the exits).
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,

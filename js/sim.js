@@ -6114,10 +6114,22 @@ function updateDanger(again) {
   const spot = (f) => { for (let p = 0; p < n; p++) if (foes(p, f[0]) && !isWild(p)) disc(DANGER.maps[p], f[1], f[2], f[3], 2); };
   DANGER.foes = 0;
   if (again) { DANGER.foes = D.n || 0; for (const f of D.f) spot(f); return; }
+  // (A nest's guards in Versus bite only what comes within GUARD_VERSUS tiles of the nest: the ground to keep off is
+  // that circle round the nest (and a tile more), once for all its guards, not a circle round each guard. Round each
+  // one, it reached 5 to 6 tiles from the nest, over roads they never bite on: a rival's only road to its Crystal ran
+  // there, its Haulers turned back at it for good, and its colony stopped growing (Standard Large seed 31 on Active,
+  // the balance audit of Nov 22 2026).)
+  const guarded = new Set();
   for (const v of S.bots) {
     const R = foeReach(v);
     if (!R) { v.dgT = undefined; continue; }
     DANGER.foes++;
+    const gn = S.mode !== 'colony' && BOTS[v.type].wild && v.task && v.task.type === 'guard' ? getE(v.nest) : null;
+    if (gn && !gn.dead) {
+      v.dgT = undefined;
+      if (!guarded.has(gn.id)) { guarded.add(gn.id); const f = [v.owner, gn.x + 0.5, gn.y + 0.5, GUARD_VERSUS + 1]; D.f.push(f); spot(f); }
+      continue;
+    }
     const dtv = v.dgT === undefined ? 0 : S.time - v.dgT;
     if (dtv >= 0.25) { v.dgVx = (v.x - v.dgX) / dtv; v.dgVy = (v.y - v.dgY) / dtv; }
     if (dtv >= 0.25 || v.dgT === undefined) { v.dgX = v.x; v.dgY = v.y; v.dgT = S.time; }
