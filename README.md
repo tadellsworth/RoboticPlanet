@@ -105,8 +105,8 @@ how goods move.
   at Contingency's place in the story (`MUSIC.loreLevel`). **The bridge to battles** (`js/contingency-battle.js`):
   `contBattleSetup` (engine) turns a battle into a setup: the region's biome and a map type from `CONT_REGION_SHAPES`
   (a free-for-all one for three sides), Small or Medium (Large at a home), a 25-minute cap (35 at a home), Uplinks
-  victory on an Uplink territory, the Murmur at the territory's level (Colony mode, with a 12-minute hold, 10 for a
-  surge, when the Murmur are the only enemy; the Hollow on its own map, won by its mound), the seats (you first) with
+  victory on an Uplink territory, the Murmur at the territory's level (Colony mode, held until dawn, `TOD_LEN`: 12 minutes,
+  when the Murmur are the only enemy, a surge too; the Hollow on its own map, won by its mound), the seats (you first) with
   their warbots, rank, refits and supply lines. `contPlayBattle` starts it with newGame (`contBattleOptions`: `setup`
   lands each kit with `contKit`, builds the defender's turrets, Keep, Mortar Pits and megastructure with `preBuild` at
   `aiFindSpot`, its line of Wall (`contWalls`) and its Shield Dome site (`placeSite`), and sets `S.contingency`: the run and battle, the seats' sides, the cap, the hold, the defender's seat,
@@ -141,6 +141,12 @@ how goods move.
   half at 6 (`S.contingency.waves`, `waveN`, checked by `checkSave`), so a high rank doesn't flatten a landing in the
   first minutes. Battle length: `lh/contingency-length-test.js` plays battles through the bridge with the computer on
   every side (autoplay) and reports how long each lasts.
+  **The Murmur in play** (stage 5): a surge is a Colony-mode battle with the Murmur at least Active, held until dawn
+  (one turn of the day, `TOD_LEN`, the night last); the Hollow assault is played on the Hollow map, won when the
+  Deep's mound falls, and when the mound's own Harrow bursts out (`harrowMound`, under `HARROW.mound` of its armor)
+  `contBattleCheck` sends its twin the other way (`S.contingency.twin`); the Harrow comes up six minutes into a
+  full-strength battle late in a run or with the meter at 60+ (`spawnHarrow` at the nest nearest your landing).
+  Headless test: `lh/contingency-murmur-test.js`.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

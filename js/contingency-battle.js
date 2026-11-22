@@ -145,6 +145,12 @@ function contBattleCheck() {
     const L = getE(S.players[0].lander), nests = S.buildings.filter((x) => !x.dead && (x.type === 'nest' || x.type === 'mound'));
     if (L && nests.length) { const n = nests.reduce((a, x) => (dist2(x.x, x.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? x : a)); spawnHarrow(n.x, n.y, 0); }
   }
+  // the Hollow: the mound's Harrows, two of them, one each way (with one colony, harrowMound sends only one)
+  if (C.kind === 'hollow' && !C.twin && S.mur && S.mur.hw && S.mur.hw.mound) {
+    C.twin = 1;
+    const m = S.buildings.find((x) => !x.dead && x.type === 'mound'), L = getE(S.players[0].lander);
+    if (m && L) { const cs = bCentre(m), a = datan2(L.y + 0.5 - cs.y, L.x + 0.5 - cs.x) + Math.PI; spawnHarrow(cs.x + dcos(a) * 4, cs.y + dsin(a) * 4, 0, { nest: m.id }); }
+  }
   if (C.kind === 'hollow' && S.time > 30 && !S.buildings.some((x) => !x.dead && x.type === 'mound')) { S.winner = 0; S.endHow = 'capture'; return; }
   if (C.hold && S.time >= C.hold) { S.winner = 0; S.endHow = 'hold'; return; }
   if (C.kind === 'murmur' && S.time > 60 && !S.buildings.some((x) => !x.dead && x.type === 'nest')) { S.winner = 0; S.endHow = 'capture'; return; } // (the nests cleared)
@@ -308,7 +314,7 @@ function contBarTick() {
   if (!C || S.winner >= 0) { if (!bar.hidden) { bar.hidden = true; $('cg-aim').hidden = true; CGB.aim = -1; } return; }
   bar.hidden = false;
   const left = C.hold ? C.hold - S.time : C.cap - S.time, m = Math.max(0, Math.floor(left / 60)), s = Math.max(0, Math.floor(left % 60));
-  $('cg-bar-time').textContent = `${C.hold ? 'Hold' : 'Cap'} ${m}:${String(s).padStart(2, '0')}`;
+  $('cg-bar-time').textContent = `${C.hold ? 'Dawn in' : 'Cap'} ${m}:${String(s).padStart(2, '0')}`;
   const hand = (C.hands && C.hands[ME]) || [], key = hand.map((k, i) => (C.used[ME].includes(i) ? '-' : k)).join(',');
   if (key === CGB.key) return;
   CGB.key = key;

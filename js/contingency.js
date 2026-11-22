@@ -1236,7 +1236,7 @@ function contBattleSetup(run, b) {
   const shape = b.kind === 'hollow' ? 23 : pick(shapes, 1);
   const size = home ? 2 : three ? 1 : pick([0, 1], 2);
   const minutes = home ? 35 : 25;
-  const level = contIsArgos(t) || run.opts.murmur === 'off' ? 0 : b.kind === 'hollow' ? 3 : T.murmur;
+  const level = contIsArgos(t) || run.opts.murmur === 'off' ? 0 : b.kind === 'hollow' ? 3 : b.kind === 'surge' ? Math.max(2, T.murmur) : T.murmur; // (a surge is the Murmur at full cry)
   // you first, then the others in the battle's order: each with its groups' warbots, rank and refits
   const order = seats.includes(0) ? [0, ...seats.filter((s) => s !== 0)] : seats;
   const seat = order.map((s) => {
@@ -1249,7 +1249,7 @@ function contBattleSetup(run, b) {
     biome: CONT_REGIONS[region][1], shape, shapeName: SHAPE_PRESETS[shape].name, size, sizeName: SIZE_PRESETS[size].name, minutes,
     mode: murmurOnly ? 'colony' : 'versus', victory: !murmurOnly && T.uplink && b.kind !== 'hollow' ? 'uplinks' : 'capture',
     murmur: level >= 2 ? 'active' : level === 1 ? 'quiet' : 'off', level, harrow: level >= 3 && (run.meter >= 60 || run.turn >= 20),
-    hold: b.kind === 'surge' ? 10 : murmurOnly && b.kind !== 'hollow' ? 12 : 0, kind: b.kind,
+    hold: murmurOnly && b.kind !== 'hollow' ? TOD_LEN / 60 : 0, kind: b.kind, // (until dawn: one turn of the day, the night last)
     fort: b.defender >= 0 && b.defender !== CONT_MURMUR ? contFortOf(run, t) : 0, mega: T.mega, seat, difficulty: run.opts.difficulty,
     seed: b.seed, flare: run.event === 'flare',
   };

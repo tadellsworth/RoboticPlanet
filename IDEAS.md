@@ -369,7 +369,8 @@ each is a call waiting for the owner's yes or no:
     strength to the power 2.2. A star a played win, half a star an auto-resolved one; a winner at under 45% may lose
     a star.
 17. **Played battles (the bridge):** a battle against the Murmur alone is a Colony-mode match held for 12 minutes, or
-    won by clearing every nest on the map (a surge, "until dawn": held 10); the Hollow assault is won by destroying the Deep's mound; at the cap the land held
+    won by clearing every nest on the map; a surge, "until dawn", the same with the Murmur at least Active; when the
+    Deep's mound sends out its Harrow (one per colony), Contingency sends a second the other way, so two come; the Hollow assault is won by destroying the Deep's mound; at the cap the land held
     decides, and the defender wins within 10% of the leader. The kit: +2.5× the starting stock × (stars − 1) / 4 and
     +30 Ore at 5 stars; +15 of each resource type held. Level 2's walls are a line of 7 Wall pieces 7 tiles out toward
     the nearest foe (as Siege Breakers' outer works), with a gap where a road goes through; level 3's Shield Dome is a
