@@ -385,18 +385,30 @@ function duskGlitter(ctx, ox, oy, z, v0, v1, D, a) {
   }
 }
 
-/** The heat haze over the sand easing off as the sun goes down: the ground drawn so far nudged in fine wavering bands. */
+/**
+ * The heat haze over the sand easing off as the sun goes down: the ground drawn so far nudged in fine wavering bands.
+ * The frame is copied once into a spare canvas and the bands are drawn back from that copy: drawing the canvas onto
+ * itself, band by band (a hundred or more a frame), made the browser copy the whole frame for every band, and the game
+ * crawled at dusk on desert maps (the owner's game, Nov 22 2026). Bands of 10 px, and none where the nudge is tiny.
+ */
+let duskHazeCv = null;
 function duskShimmer(ctx, D) {
   const k = D.B.shimmer * D.mute * duskSmooth(0, 0.08, D.h) * (1 - duskSmooth(0.12, 0.4, D.h));
   if (k < 0.05) return;
-  const c = ctx.canvas, dpr = R.dpr, band = 6, t = R.time;
+  const c = ctx.canvas, dpr = R.dpr, band = 10 * dpr, t = R.time;
+  if (!duskHazeCv) duskHazeCv = document.createElement('canvas');
+  const h = duskHazeCv;
+  if (h.width !== c.width || h.height !== c.height) { h.width = c.width; h.height = c.height; }
+  const hg = h.getContext('2d');
+  hg.globalCompositeOperation = 'copy';
+  hg.drawImage(c, 0, 0);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 0.6;
-  for (let y = 0; y < c.height; y += band * dpr) {
+  for (let y = 0; y < c.height; y += band) {
     const dx = Math.sin(y * 0.045 / dpr + t * 2.3) * 0.9 * k * dpr;
-    if (Math.abs(dx) < 0.15) continue;
-    ctx.drawImage(c, 0, y, c.width, band * dpr, dx, y, c.width, band * dpr);
+    if (Math.abs(dx) < 0.25) continue;
+    ctx.drawImage(h, 0, y, c.width, band, dx, y, c.width, band);
   }
   ctx.restore();
 }
