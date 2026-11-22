@@ -56,6 +56,8 @@ const ORDERS = {
    * Surrender (the pause menu, confirmed first): player p gives up to the rival beating it (surrenderTo), which takes
    * everything it had, as when a Command Base falls. Versus games only (not Colony, a mission or a watched game).
    */
+  /** Contingency: play card i of p's hand in this battle (at tile x, y for those aimed): js/contingency-battle.js. */
+  contCard(p, i, x, y) { return typeof contPlayCard === 'function' && !!S.contingency && contPlayCard(p, i, x, y); },
   surrender(p) {
     if (S.mission || S.watch || S.mode === 'colony' || S.winner >= 0 || !human(p) || S.players[p].out) return false;
     const by = surrenderTo(p);

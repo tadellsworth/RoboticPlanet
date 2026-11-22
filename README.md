@@ -115,6 +115,15 @@ how goods move.
   `contBattleOver`, which sends the winner, its warbots left, a megastructure it finished and the fortifications
   standing to `contBattleResult` and returns to the globe; **Withdraw** (`#p-withdraw`, `contWithdraw`) is a loss with a
   retreat. The battle saves as any game does; its battle card's Play (or Continue) resumes it (`contSavedBattle`).
+  **Cards in a battle** (plan stage 4): `S.contingency.hands` (each seat's in-battle cards, `CONT_IN_BATTLE`: Orbital
+  Drop, Called Ringfall, Corvane Flare, the one played on the battle card first), `used` and `pre`, validated by
+  `checkSave`; played through the order `contCard` (js/orders.js → `contPlayCard`: 6 warbots on open ground round the
+  spot, five `meteorImpact`s round it, or every rival robot's battery down to 20), the computer's from `contAiCards`
+  (the Flare at 4 minutes, the Drop by its base at 5, the Ringfall on its foe's at 7). Road Standard lays road from the
+  base toward its nearest Stone and Ore at the start (`contRoadStandard`); Foundry Surge doubles the seat's Foundries'
+  work for 5 minutes (`contWork`, in `produce`); a flare year starts everyone's batteries at 40. The bar (`#cg-bar`,
+  `contBarTick` from `uiTick`) shows the clock and the cards; Drop and Ringfall aim at the view's middle (`#cg-aim`).
+  On the battle's end the cards played leave the run's hand, and a battle-card one unplayed goes back.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

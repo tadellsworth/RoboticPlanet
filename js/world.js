@@ -5427,6 +5427,18 @@ function checkSave(o) {
     if (M.huntFrom != null && !(Number.isInteger(M.huntFrom) && M.huntFrom >= 0)) bad(); // (a mission's: the hunt sooner)
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
+  // A Contingency battle (js/contingency-battle.js): the run and battle, the seats' sides, the clock, the colours, and
+  // each seat's cards for the battle (CONT_CARDS keys that act in battle) with the ones already played.
+  if (o.contingency != null) {
+    const C = o.contingency, n = o.players.length, ints = (a, lo, hi, max = n) => Array.isArray(a) && a.length <= max && a.every((v) => Number.isInteger(v) && v >= lo && v <= hi);
+    if (!obj(C) || !Number.isSafeInteger(C.run) || !Number.isSafeInteger(C.battle) || !ints(C.sides, 0, 3) || !Number.isFinite(C.cap) || !Number.isFinite(C.hold) || !/^[0-3]{4}$/.test(String(C.look))) bad();
+    if (!Number.isInteger(C.def) || C.def < -1 || C.def >= n || !Number.isInteger(C.at) || !['assault', 'claim', 'murmur', 'surge', 'hollow'].includes(C.kind)) bad();
+    if (C.mega0 != null && !ownKey(BDEFS, C.mega0)) bad();
+    if (C.surge != null && !(Number.isInteger(C.surge) && C.surge >= -1 && C.surge < n)) bad();
+    if (C.hands != null && !(Array.isArray(C.hands) && C.hands.length <= n && C.hands.every((h) => Array.isArray(h) && h.length <= 6 && h.every((k) => ['drop', 'ringfall', 'flare'].includes(k))))) bad();
+    if (C.used != null && !(Array.isArray(C.used) && C.used.length <= n && C.used.every((u, p) => ints(u, 0, 5, 6) && C.hands && C.hands[p] && u.every((i) => i < C.hands[p].length)))) bad();
+    if (C.pre != null && !ints(C.pre, -1, 5)) bad();
+  }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   // What the danger maps and the Murmur's gun cover were last worked out from (updateDanger, murmurGunMap): numbers.
   if (o.dng != null && !(obj(o.dng) && Number.isInteger(o.dng.ep) && (o.dng.n == null || Number.isInteger(o.dng.n)) &&

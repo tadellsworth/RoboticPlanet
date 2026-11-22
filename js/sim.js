@@ -4351,7 +4351,7 @@ function produce(b, def, dt) {
   const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
   b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '') + (b.crack ? ', at half speed: its foundations are cracked (repair it to full)' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b) * (b.crack ? SUNDER.crackWork : 1); // (half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1) * (lanceDim(b.owner) ? 1 - LANCE.slow : 1) * city * radWork(b) * (b.crack ? SUNDER.crackWork : 1) * (S.contingency && typeof contWork === 'function' ? contWork(b) : 1); // (Foundry Surge, in Contingency: twice as fast; half as fast in a radiation zone; a third slower while its Lance charges; faster by Arrival City)
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) {

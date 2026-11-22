@@ -2361,3 +2361,16 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
   .cg-orders { display: none; }
   .cg-foot .btn { padding: 10px 12px; }
 }
+/* A Contingency battle's corner (js/contingency-battle.js): the clock and the cards, above the bottom bar on the left; aiming a card at the middle of the view. */
+.cg-bar { position: fixed; z-index: 6; left: calc(var(--safe-l) + 8px); bottom: calc(var(--safe-b) + 76px); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); pointer-events: none; }
+.cg-bar > * { pointer-events: auto; }
+.cg-bar-time { padding: 5px 10px; border-radius: 10px; background: rgba(16, 19, 28, 0.86); border: 1px solid rgba(255, 196, 87, 0.5); color: #ffd9a8; font-weight: 800; font-variant-numeric: tabular-nums; }
+#cg-bar-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.cg-card-b { background: rgba(40, 30, 60, 0.92); border-color: rgba(200, 160, 255, 0.55); }
+.cg-aim { position: fixed; inset: 0; z-index: 7; pointer-events: none; }
+.cg-aim-x { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border: 2px dashed #ffdc78; border-radius: 50%; box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.08); }
+.cg-aim-x::before, .cg-aim-x::after { content: ''; position: absolute; background: #ffdc78; left: 50%; top: 50%; }
+.cg-aim-x::before { width: 2px; height: 70px; margin: -35px 0 0 -1px; }
+.cg-aim-x::after { height: 2px; width: 70px; margin: -1px 0 0 -35px; }
+.cg-aim-btns { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); display: flex; gap: 6px; align-items: center; pointer-events: auto; padding: 6px 8px; border-radius: 12px; background: rgba(16, 19, 28, 0.9); white-space: nowrap; font-size: 13px; }
+@media (min-width: 1000px) { .cg-bar { bottom: calc(var(--safe-b) + 80px); } }

@@ -14,6 +14,9 @@
  */
 
 const CONT_MEGA_TYPE = { lance: 'lance', ray: 'sunder', dome: 'dome', city: 'city', lift: 'lift', atmos: 'atmos', deepcore: 'deepcore', uplink: 'gup' };
+/** The cards played inside a battle (CONT_CARDS: Orbital Drop, Called Ringfall, Corvane Flare), as orders (contCard). */
+const CONT_IN_BATTLE = ['drop', 'ringfall', 'flare'];
+const CONT_DROP = { warbots: 6, reach: 4 }, CONT_RINGFALL = { hits: 5, spread: 2 }, CONT_FLARE = { bat: 20 };
 const CONT_GOODS = { ore: 'ore', fiber: 'fiber', stone: 'stone', crude: 'crude', fuel: 'fuel', crystal: 'crystal' };
 
 /** The new-game options for battle b of the run (its setup builds the kits). */
@@ -25,8 +28,12 @@ function contBattleOptions(run, b) {
     difficulty: B.difficulty, styles: B.seat.slice(1).map((x) => x.doctrine), murmur: B.murmur, victory: B.victory, events: false, mega: true,
     setup(S) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
-        cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null };
+        cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
+        hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
       B.seat.forEach((X, p) => contKit(S, p, X, B));
+      // the cards that act as the battle starts: Road Standard, Foundry Surge, and a Corvane Flare year
+      B.seat.forEach((X, p) => { if (X.card === 'road') contRoadStandard(p); if (X.card === 'surge') S.contingency.surge = p; });
+      if (B.flare) for (const u of S.bots) if (!u.dead) u.bat = Math.min(u.bat ?? 100, 40);
     },
   };
 }
@@ -91,6 +98,7 @@ function contSavedBattle() {
 function contBattleCheck() {
   const C = S.contingency;
   if (!C || S.winner >= 0) return;
+  if (C.hands) contAiCards();
   // the Harrow comes up six minutes in, at the nest nearest your landing, where the Murmur are at full strength
   if (C.harrow === 0 && S.time >= 360 && typeof spawnHarrow === 'function') {
     C.harrow = 1;
@@ -136,6 +144,14 @@ function contBattleOver(withdrew) {
     if (forts && n('keep')) forts = 2;
     if (forts === 2 && (n('mortar') || n('dome'))) forts = 3;
   }
+  // the cards: those played are spent from the run's hand; one played on the battle card and not used goes back to it
+  if (C.hands) C.sides.forEach((s, p) => {
+    const hand = C.hands[p] || [], used = C.used[p] || [], S0 = run.sides[s];
+    hand.forEach((k, i) => {
+      if (i === 0 && C.pre[p] === 0) { if (!used.includes(0)) S0.cards.push(k); return; }
+      if (used.includes(i)) { const j = S0.cards.indexOf(k); if (j >= 0) S0.cards.splice(j, 1); }
+    });
+  });
   contBattleResult(run, b, { winner, survivors: { [winner]: survivors }, mega, forts, withdrew: !!withdrew });
   run.playing = 0;
   contStore(run);
@@ -151,4 +167,121 @@ function contWithdraw() {
   $('screen-pause').hidden = true;
   UI.paused = false;
   contBattleOver(true);
+}
+
+/* ------------------------------------------------------------------ cards in battle (stage 4): lockstep orders */
+
+/**
+ * Seat X's cards for the battle: the one played on the battle card first (if it acts in battle), then the in-battle
+ * cards in its side's hand (Orbital Drop, Called Ringfall, Corvane Flare). Using one in the match spends it from the run.
+ */
+function contBattleHand(run, X) {
+  const hand = X.card && CONT_IN_BATTLE.includes(X.card) ? [X.card] : [];
+  for (const k of run.sides[X.side].cards) if (CONT_IN_BATTLE.includes(k) && hand.length < 6) hand.push(k);
+  return hand;
+}
+/** Is card i of seat p's hand there to play (and its spot, for those aimed, on the map)? */
+function contCardOk(p, i, x, y) {
+  const C = S.contingency;
+  if (!C || S.winner >= 0 || !Array.isArray(C.hands) || !C.hands[p] || !Number.isInteger(i) || i < 0 || i >= C.hands[p].length || C.used[p].includes(i)) return false;
+  const k = C.hands[p][i];
+  if (k === 'flare') return true;
+  return Number.isInteger(x) && Number.isInteger(y) && inMap(x, y);
+}
+/**
+ * Seat p plays card i of its hand (an order: contCard in js/orders.js, the same tick on every device; the computer's
+ * from contBattleCheck). Orbital Drop: warbots land at (x, y), on open ground near it. Called Ringfall: pieces of the
+ * Ring strike round (x, y). Corvane Flare: every rival colony's robots' batteries drain.
+ */
+function contPlayCard(p, i, x, y) {
+  if (!contCardOk(p, i, x, y)) return false;
+  const C = S.contingency, k = C.hands[p][i];
+  if (k === 'drop') {
+    let n = 0;
+    for (let r = 0; r <= CONT_DROP.reach && n < CONT_DROP.warbots; r++) for (let j = y - r; j <= y + r && n < CONT_DROP.warbots; j++) for (let q = x - r; q <= x + r && n < CONT_DROP.warbots; q++) {
+      if (Math.max(Math.abs(q - x), Math.abs(j - y)) !== r || !inMap(q, j)) continue;
+      const t = tIdx(q, j);
+      if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t)) continue;
+      addBot(p, 'warbot', q + 0.5, j + 0.5); n++;
+    }
+    if (!n) return false;
+    addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[p], r: 3 });
+    postMsg(p, `Orbital Drop: ${n} warbots down from the Carrier.`, x, y, 'good');
+    for (const P of S.players) if (P.id !== p && !P.absent) postMsg(P.id, `${playerName(p)} dropped reinforcements from orbit!`, x, y, 'bad');
+  } else if (k === 'ringfall') {
+    const E = { cratered: {}, relaid: {}, msgT: -99 };
+    for (let h = 0; h < CONT_RINGFALL.hits; h++) {
+      const a = (h / CONT_RINGFALL.hits) * Math.PI * 2, d = h ? CONT_RINGFALL.spread : 0;
+      const i2 = clamp(Math.round(x + dcos(a) * d), 0, S.W - 1), j2 = clamp(Math.round(y + dsin(a) * d), 0, S.H - 1);
+      meteorImpact(E, { x: i2, y: j2 });
+    }
+    postMsg(p, 'Called Ringfall: the Ring answered.', x, y, 'good');
+  } else if (k === 'flare') {
+    for (const u of S.bots) if (!u.dead && u.owner !== p && S.players[u.owner] && !isWild(u.owner)) u.bat = Math.min(u.bat ?? 100, CONT_FLARE.bat);
+    for (const P of S.players) if (!P.absent) postMsg(P.id, P.id === p ? 'Corvane Flare called: the rivals\' batteries are draining.' : 'Corvane flare! Battery reserves draining.', undefined, undefined, P.id === p ? 'good' : 'bad');
+  } else return false;
+  C.used[p].push(i);
+  return true;
+}
+/** The computer's cards in a battle: the Flare at 4 minutes, the Drop beside its base at 5, the Ringfall on its foe's at 7. */
+function contAiCards() {
+  const C = S.contingency;
+  for (let p = 1; p < C.hands.length; p++) {
+    const P = S.players[p];
+    if (!P || P.absent || P.out || !P.ai) continue;
+    C.hands[p].forEach((k, i) => {
+      if (C.used[p].includes(i)) return;
+      const L = getE(P.lander), foe = getE(S.players[0].lander);
+      if (k === 'flare' && S.time >= 240) contPlayCard(p, i);
+      else if (k === 'drop' && S.time >= 300 && L) contPlayCard(p, i, L.x, L.y + 3);
+      else if (k === 'ringfall' && S.time >= 420 && foe) contPlayCard(p, i, foe.x, foe.y);
+    });
+  }
+}
+/** Foundry Surge: seat C.surge's Bot Foundries work at double speed for the first 5 minutes (produce, in js/sim.js). */
+function contWork(b) { const C = S.contingency; return C && C.surge === b.owner && b.type === 'foundry' && S.time < 300 ? 2 : 1; }
+/** Road Standard: seat p's base starts linked by road to its nearest Stone and Ore (as far as open ground allows). */
+function contRoadStandard(p) {
+  const L = getE(S.players[p].lander);
+  if (!L) return;
+  for (const want of [R_BOULDER, R_ORE]) {
+    let best = -1, bd = 30 * 30;
+    for (let t = 0; t < S.W * S.H; t++) { if (S.res[t] !== want) continue; const d = dist2(t % S.W, (t / S.W) | 0, L.x, L.y); if (d < bd) { bd = d; best = t; } }
+    if (best < 0) continue;
+    const tx = best % S.W, ty = (best / S.W) | 0, n = Math.ceil(Math.sqrt(bd));
+    for (let s = 2; s < n; s++) {
+      const i = Math.round(L.x + ((tx - L.x) * s) / n), j = Math.round(L.y + ((ty - L.y) * s) / n), t = tIdx(i, j);
+      if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) break;
+      if (S.bAt[t] || S.road[t]) continue;
+      setRoad(i, j, true, p);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ the battle's corner: its clock and the card bar */
+
+const CGB = { aim: -1, key: '' };
+/** A few times a second (uiTick): the clock, and the cards still to play. */
+function contBarTick() {
+  const C = UI.inGame && S && S.contingency, bar = $('cg-bar');
+  if (!C || S.winner >= 0) { if (!bar.hidden) { bar.hidden = true; $('cg-aim').hidden = true; CGB.aim = -1; } return; }
+  bar.hidden = false;
+  const left = C.hold ? C.hold - S.time : C.cap - S.time, m = Math.max(0, Math.floor(left / 60)), s = Math.max(0, Math.floor(left % 60));
+  $('cg-bar-time').textContent = `${C.hold ? 'Hold' : 'Cap'} ${m}:${String(s).padStart(2, '0')}`;
+  const hand = (C.hands && C.hands[ME]) || [], key = hand.map((k, i) => (C.used[ME].includes(i) ? '-' : k)).join(',');
+  if (key === CGB.key) return;
+  CGB.key = key;
+  $('cg-bar-cards').innerHTML = hand.map((k, i) => C.used[ME].includes(i) ? '' : `<button type="button" class="btn small cg-card-b" data-i="${i}" title="${esc(CONT_CARDS[k].name + ': ' + CONT_CARDS[k].desc)}">${esc(CONT_CARDS[k].name)}</button>`).join('');
+  $('cg-bar-cards').querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => contCardTap(+b.dataset.i); });
+}
+/** A card tapped: the Flare goes at once; a Drop or a Ringfall aims at the middle of the view first (pan to aim). */
+function contCardTap(i) {
+  const C = S.contingency, k = C.hands[ME][i];
+  sfx('click');
+  if (k === 'flare') { act('contCard', [i]); CGB.key = ''; return; }
+  CGB.aim = i;
+  $('cg-aim').hidden = false;
+  $('cg-aim-what').textContent = `${CONT_CARDS[k].name}: move the map to aim`;
+  $('cg-aim-go').onclick = () => { act('contCard', [CGB.aim, Math.floor(R.cam.x), Math.floor(R.cam.y)], (r) => { if (!r) toast('It can\'t land there: aim at open ground.', 'warn'); }); CGB.aim = -1; CGB.key = ''; $('cg-aim').hidden = true; };
+  $('cg-aim-no').onclick = () => { CGB.aim = -1; $('cg-aim').hidden = true; };
 }

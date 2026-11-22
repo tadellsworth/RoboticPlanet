@@ -374,8 +374,13 @@ each is a call waiting for the owner's yes or no:
     +30 Ore at 5 stars; +15 of each resource type held. Fortification level 2's walls and level 3's Shield Dome site
     aren't put down yet (a Keep, and Mortar Pits, are). The Harrow comes six minutes in. Played wins give a star;
     survivors are recorded but don't add rank beyond it.
-18. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-19. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+18. **Cards in battle (stage 4):** Orbital Drop lands 6 warbots; Called Ringfall is five strikes round the spot (they
+    dent, as Ringfall does, and crater roads); Corvane Flare drains every rival robot to 20% battery. They aim at the
+    middle of the view rather than a tapped tile. The computer plays its cards at set times (the Flare at 4 minutes, the
+    Drop at 5, the Ringfall on your base at 7). Road Standard and Foundry Surge are played on the battle card, as they act
+    at the start; a flare year starts every battery at 40%.
+19. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+20. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)

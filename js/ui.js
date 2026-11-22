@@ -9783,6 +9783,7 @@ function uiTick(dt) {
   mpBannerTick();
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
+  if (typeof contBarTick === 'function') contBarTick(); // (a Contingency battle's clock and cards: js/contingency-battle.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
