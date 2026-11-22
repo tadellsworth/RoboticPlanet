@@ -1236,6 +1236,11 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     like roads); C's flyover as a later piece over a second lane; the sign gantries (built Nov 19 2026, drawn in code, blank boards); nicer one-way
     arrows (below) so a lane's arrow fits its markings. **Tutorial done:** Arterial follows Blacktop in Roads and Traffic. It has a stocked
     Roadworks, a 16-tile Express pair, two side ramps, and Freight Truck deliveries to a survey Depot.
+    **Reviewed Nov 22 2026** (determinism, pathing, saves, art, docs: sound). Fixed: a lane dragged across a lane still
+    only planned took the crossing tile over (the lanes would have crossed once built); now refused there, as across a
+    built one. A lane can now be dragged under a Maglev pylon, as a road can (`tools/transit-test.js`). *Open:* a Hauler
+    or light bot off the road may step across a lane at any tile, not only at an overpass (pathing allows any crossing
+    step across the lane's way); should open ground beside a lane be fenced, as the barrier art suggests?
   - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
     shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in

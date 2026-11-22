@@ -498,7 +498,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`sideLane` in `js/world.js`, Nov 21 2026: before, every tile of a two-way lane slowed traffic as a junction). An
   ordinary road touching a lane's side is a ramp (a junction: give way); where a
   road crosses a lane (four roads on a lane tile) an overpass is planned for its owner (`expressJoins`, from `layRoad`
-  and the paths order; the sketches count them, `draftOverpasses`); lanes never cross each other. The art is drawn in
+  and the paths order; the sketches count them, `draftOverpasses`); lanes never cross each other, nor a lane only planned (`S.xdir`: the paths order and
+  `expressDrag` refuse the crossing tile). A lane runs under a Maglev pylon as a road does. The art is drawn in
   code (`drawExpress` in `js/render.js`: median, barrier, amber and white lines, cat's-eyes, hazard aprons at ramps,
   ends narrowing onto a road; `laneMate` finds the partner lane); at night `drawRoadGlow` lights the cat's-eyes and a
   strip in the owner's colour along the median, and `streetLamps` puts the asphalt lamps on the median. Sign gantries (render-only, `expressGantries`/`drawGantry` in

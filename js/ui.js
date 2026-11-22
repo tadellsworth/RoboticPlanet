@@ -6425,12 +6425,13 @@ function expressDrag(i, j, first) {
   paintFlagsReset(); UI.paintLanes = 0; UI.paintCrossLane = false;
   for (const [t, v] of expressLanes(path, UI.xSingleDrag)) {
     const x = t % S.W, y = (t / S.W) | 0;
-    if (UI.draft.express.has(t) || UI.draft.ramps.has(t) || S.bAt[t]) continue;
+    if (UI.draft.express.has(t) || UI.draft.ramps.has(t) || (S.bAt[t] && !pylonAt(t))) continue; // (a lane runs under a Maglev pylon, as a road does)
     if (S.road[t]) {
       if (!roadOwnedBy(ME, t)) { UI.paintSkipped = true; continue; }
       if (S.paveMark[t] === 2 && S.road[t] >= 2 && S.road[t] % 2 !== v % 2) { UI.paintCrossLane = true; continue; } // lanes never cross each other
     } else if (S.plan[t]) {
       if (S.plan[t] !== ME + 1) { UI.paintSkipped = true; continue; }
+      if (S.xdir[t] && S.xdir[t] % 2 !== v % 2) { UI.paintCrossLane = true; continue; } // (nor across a lane only planned)
     } else if (S.res[t]) { UI.paintSkipped = true; continue; }
     else if (canRoad(ME, x, y) || draftBridge(t)) { draftOp(UI.stroke, t, 'add'); if (crossTile(t)) { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; } }
     else { if (crossTile(t)) UI.paintCross = true; else UI.paintSkipped = true; continue; }

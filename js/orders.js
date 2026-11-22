@@ -258,7 +258,7 @@ const ORDERS = {
         setPaveMark(p, i, j, true, 3);
         expressJoins(t);
         out.lanes++;
-      } else if (S.plan[t] === p + 1) { S.xdir[t] = v | 0; out.lanes++; }
+      } else if (S.plan[t] === p + 1 && !(S.xdir[t] && (S.xdir[t] % 2) !== (v % 2))) { S.xdir[t] = v | 0; out.lanes++; } // (nor across a lane only planned)
     }
     for (const t of L(d.rail)) { const w = queueRail(p, t); if (w) { out.railWhy = out.railWhy || w; } else out.rails++; }
     for (const t of L(d.pipeDel)) if (S.pipe[t] === p + 1 || S.pipePlan[t] === p + 1) { takeUpPipe(p, t); out.pipesUp++; }
