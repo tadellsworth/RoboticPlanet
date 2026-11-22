@@ -396,8 +396,12 @@ each is a call waiting for the owner's yes or no:
 21. **Megastructure targets are chosen for you:** the Lance strikes the most fortified enemy territory two borders away,
     the Ray quakes the first infested neighbour (else an enemy's fortification). Letting the player pick the target is
     left for later.
-22. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-23. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+22. **The win screen's year:** it reads the year the run was won and that year's odds of contact ("Arrival clock:
+    T+19. Probability of contact: 0.9%"); at T+31 it is the plan's line exactly (0.2%). A rival's win reads "...
+    speaks for Ithaca I ... Command authority transferred. Hold position."; the Steward's and others' on-defeat lines
+    are their doctrine's surrender lines.
+23. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+24. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)

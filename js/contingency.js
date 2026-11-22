@@ -84,10 +84,14 @@ const CONT_MEGA = {
   uplink:   { name: 'Great Uplink', desc: 'counts as two Uplinks toward victory' },
 };
 const CONT_EVENTS = {
-  ringfall: { name: 'Ringfall season', line: 'Forecast: ringfall season. Fresh Crystal in the strike zones; strike sites pay double.' },
-  flare:    { name: 'Flare year', line: 'Corvane flare cycle. Battery reserves draining. Every battle starts drained.' },
-  wren:     { name: 'A Wren year', line: 'The Wren is on approach. On schedule, as always. Trade Post deals at half price.' },
-  dust:     { name: 'Dust year', line: 'Rust front inbound. Visibility zero across the Rust. Attacks there falter.' },
+  ringfall: { name: 'Ringfall season', line: 'Forecast: a ringfall season. Fresh Ore and Crystal expected in the strike zones; strike sites will pay double. Listen for the Murmur.',
+    now: 'Ringfall season. Fresh Crystal in the strike zones: strike sites pay double this year.' },
+  flare:    { name: 'Flare year', line: 'Forecast: a Corvane flare year. Battery reserves will drain; every battle will start low. Nothing to do but wait.',
+    now: 'Corvane flare year. Battery reserves draining. Every landing starts low.' },
+  wren:     { name: 'A Wren year', line: 'Forecast: the Wren is on approach. On schedule, as always. Trade Post deals at half price.',
+    now: 'The Wren in orbit, on schedule, as always. Its cargo list: seed stock, school tablets, 4,000 pairs of children\'s shoes. Trade Post deals at half price.' },
+  dust:     { name: 'Dust year', line: 'Forecast: Rust front inbound. Visibility zero across the Rust; attacks there will falter. Haulers, hold position.',
+    now: 'Dust year. Visibility zero across the Rust. Haulers, hold position.' },
 };
 /** Each region's resources, dealt to its territories (one each) from the run's seed, and its battle map shapes. */
 const CONT_REGION_RES = {
@@ -761,7 +765,7 @@ function contTake(run, t, s, how) {
 function contHomeLost(run, s) {
   const S = run.sides[s], lose = Math.floor(S.reserve * CONT.homeLoss);
   S.reserve -= lose;
-  contLog(run, s === 0 ? `Home territory lost. Reserve stock abandoned: ${lose}.` : `${contSideName(run, s)} lost its home territory.`, s, true);
+  contLog(run, s === 0 ? `Home territory lost. Command core transferred to the Carrier. Reserve stock abandoned: ${lose}.` : `${contSideName(run, s)} lost its home territory.`, s, true);
 }
 function contHollowFalls(run, s) {
   run.hollowDone = run.turn;
@@ -833,8 +837,6 @@ function contMurmurSpread(run) {
   }
   // they never go away for good: after the Deep's mound falls, the Hollow fills again, slowly
   if (run.hollowDone && run.t[M.hollow].murmur < 3 && contRand(run) < 0.25) run.t[M.hollow].murmur++;
-  const quiet = run.t.filter((T) => T.murmur > 0).length;
-  if (quiet) contLog(run, `Acoustic anomaly logged under ${quiet} territor${quiet === 1 ? 'y' : 'ies'}.`, 0);
   // a side transmitting on its Uplinks draws them: the ground answers the signal, and may surge under an Uplink
   for (let t = 0; t < M.n; t++) {
     const T = run.t[t];
@@ -970,30 +972,41 @@ function contContact(turn) { return Math.max(0.1, 0.2 * Math.pow(2, (CONT.lastTu
 function contLog(run, line, s, big, also) {
   run.log.push({ line, s: s === undefined ? 0 : s, big: !!big, also: also || [] });
 }
-/** The year's report, from the year's log: ours first, then what long-range listening heard, then the rivals' lines. */
+/**
+ * The year's report, from the year's log, in the colony's log voice (LORE.md, Your colony's voice): the year's event,
+ * our own lines, then what long-range listening heard, the rivals who spoke to us, our standing, the Murmur, and the
+ * contact line (or the ending). Lines starting with '§' are the report's headings (the screen shows them as such).
+ */
 function contReport(run) {
   const me = 0, S = run.sides[me], lines = [];
   const ours = run.log.filter((L) => L.s === me || L.also.includes(me) || L.s === CONT_MURMUR);
   const heard = run.log.filter((L) => !ours.includes(L) && L.big);
+  const forecast = ours.filter((L) => /^Forecast:/.test(L.line));
   lines.push(`Arrival clock: T+${run.turn}. Year report.`);
+  if (run.event) lines.push(CONT_EVENTS[run.event].now);
   const who = (L) => (L.s !== me && L.s >= 0 && L.s < 4 ? contSideName(run, L.s) + ': ' : '');
-  for (const L of ours) lines.push(who(L) + L.line);
-  for (const L of heard) lines.push('Long-range listening. ' + who(L) + L.line);
-  // the rivals' lines: who attacked us this year speaks
-  const said = new Set();
+  const own = ours.filter((L) => !forecast.includes(L));
+  if (own.length) { lines.push('§ Our lines'); for (const L of own) lines.push(who(L) + L.line); }
+  if (heard.length) { lines.push('§ Long-range listening'); for (const L of heard) lines.push(who(L) + L.line); }
+  // the rivals' lines: who fought us this year speaks
+  const said = new Set(), voices = [];
   for (const b of run.year || []) if (b.sides.includes(me)) for (const s of b.sides) if (s !== me && s !== CONT_MURMUR && !said.has(s) && run.sides[s].doctrine) {
     said.add(s);
-    lines.push(`${contSideName(run, s)}: “${contVoice(run, s)}”`);
+    voices.push(`${contSideName(run, s)}: “${contVoice(run, s, b.winner === s ? 'attack' : b.winner === me ? 'surrender' : 'attack')}”`);
   }
+  if (voices.length) { lines.push('§ On open channels'); lines.push(...voices); }
+  lines.push('§ Standing');
   if (S.alive) {
-    lines.push(`Reserve: ${S.reserve}. Territories held: ${contHeld(run, me).length}. Command Groups: ${contGroups(run, me).length}.`);
+    lines.push(`Reserve: ${S.reserve}. Territories held: ${contHeld(run, me).length} of ${CONT_MAP.n}. Command Groups: ${contGroups(run, me).length}.`);
     const u = contUplinksToward(run, me);
-    lines.push(`Uplinks held: ${u} of 5.${S.streak ? ` Transmission year ${S.streak} of ${CONT.uplinkYears}.` : ''}`);
+    lines.push(u ? `Uplinks held: ${u} of 5.${S.streak ? ` Transmitting: year ${S.streak} of ${CONT.uplinkYears}.` : ''} Listening on all channels. No response.` : 'Uplinks held: none. Nothing to listen with.');
   }
   const lead = [1, 2, 3].filter((s) => run.sides[s].alive && run.sides[s].streak > 0 && contAlly(run, 0) !== s);
   for (const s of lead) lines.push(`Warning: ${contSideName(run, s)} transmitting on ${contUplinksToward(run, s)} Uplinks. Year ${run.sides[s].streak} of ${CONT.uplinkYears}.`);
-  lines.push(`Murmur meter: ${Math.round(run.meter)}.`);
-  if (run.over) lines.push(...contEnding(run));
+  const infested = run.t.filter((T, i) => T.murmur > 0 && i !== CONT_MAP.hollow).length;
+  lines.push(`Murmur meter: ${Math.round(run.meter)}. ${infested ? `Ground sensors register them under ${infested} territor${infested === 1 ? 'y' : 'ies'}.` : 'The ground is quiet.'}`);
+  if (!run.over) for (const L of forecast) lines.push(L.line);
+  if (run.over) { lines.push('§ The end of the run'); lines.push(...contEnding(run)); }
   else lines.push(`Probability of contact: ${contContact(run.turn).toFixed(1)}%. Still counting.`);
   run.reports.push({ turn: run.turn, lines });
   if (run.reports.length > CONT.lastTurn + 2) run.reports.shift();
@@ -1005,20 +1018,32 @@ function contVoice(run, s, kind = 'attack') {
   const V = PERSONALITIES[run.sides[s].doctrine || 'balanced'].voice;
   return contPick(run, V[kind] || V.attack).replace('{day}', contWardenDay(run));
 }
-/** The ending's lines (the win screen). */
+/**
+ * The ending's lines (the win screen, CONTINGENCY.md: Winning and losing): Ithaca I secured, with the year it was and
+ * that year's odds of contact (at T+31, every match's own line); or "Reserve exhausted. Carrier dark."; or the rival
+ * that now speaks for the planet. Then each beaten rival's on-defeat line, and the run's numbers.
+ */
 function contEnding(run) {
   const O = run.over, out = [];
   if (!O) return out;
+  const year = run.turn, odds = contContact(year).toFixed(1);
   if (O.winner === 0) {
-    out.push(`Ithaca I secured for the Sponsor. Awaiting colonists. Arrival clock: T+${run.opts.turnCap ? CONT.lastTurn : run.turn}. Probability of contact: 0.2%. Still counting.`);
-    for (let s = 1; s < 4; s++) out.push(`${contSideName(run, s)}: “${contVoice(run, s, 'surrender')}”`);
+    out.push(`Ithaca I secured for the Sponsor. Awaiting colonists. Arrival clock: T+${year}. Probability of contact: ${odds}%. Still counting.`);
   } else if (O.winner < 0 || !run.sides[0].alive) {
     out.push('Reserve exhausted. Carrier dark.');
   } else {
     const how = { uplinks: `transmitting on ${contUplinks(run, O.winner)} Uplinks for ${CONT.uplinkYears} years`, conquest: 'holding every landing', window: 'holding the most Uplinks when the window closed' }[O.how];
     out.push(`${contSideName(run, O.winner)} speaks for Ithaca I, ${how}. Command authority transferred. Hold position.`);
   }
-  out.push(`Battles: ${run.stats.battles}. Years: ${run.turn}. Territories at most: ${run.stats.peak[0]}. Murmur meter at its highest: ${Math.round(run.meterMax)}.`);
+  // each beaten rival's on-defeat line (beaten: every rival when we win; else those whose carriers went dark)
+  for (let s = 1; s < 4; s++) {
+    const R = run.sides[s];
+    if (s === O.winner || !(O.winner === 0 || !R.alive)) continue;
+    out.push(`${contSideName(run, s)}${R.alive ? '' : `, carrier dark at T+${R.out}`}: “${contVoice(run, s, 'surrender')}”`);
+  }
+  const st = run.stats, auto = st.battles - st.played;
+  out.push(`Years: ${year}. Battles: ${st.battles} (${st.played} played, ${auto} auto-resolved). Territories held at most: ${st.peak[0]} of ${CONT_MAP.n}. Uplinks at the end: ${contUplinks(run, 0)} of 5. Murmur meter at its highest: ${Math.round(run.meterMax)}.`);
+  if (run.hollowDone) out.push(`The Deep's mound fell at T+${run.hollowDone}. The murmur stopped. They never go away for good.`);
   return out;
 }
 

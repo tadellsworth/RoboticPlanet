@@ -147,6 +147,12 @@ how goods move.
   `contBattleCheck` sends its twin the other way (`S.contingency.twin`); the Harrow comes up six minutes into a
   full-strength battle late in a run or with the meter at 60+ (`spawnHarrow` at the nest nearest your landing).
   Headless test: `lh/contingency-murmur-test.js`.
+  **The writing** (stage 7, LORE.md's log voice; `contReport`, `contEnding`, `CONT_EVENTS[k].line` the forecast and
+  `.now` the year itself): a report runs the year's event, then headed parts ('§' lines: our lines, long-range
+  listening, open channels, standing), next year's forecast and the odds of contact. The ending: "Ithaca I secured for
+  the Sponsor. Awaiting colonists. Arrival clock: T+n. Probability of contact: x%. Still counting." (0.2% at T+31),
+  "Reserve exhausted. Carrier dark.", or the rival that speaks for Ithaca I; each beaten rival's on-defeat line (its
+  doctrine's `voice.surrender`); the run's numbers. Nothing names Earth's fate (`lh/contingency-test.js` checks).
   **Megastructures on the globe** (stage 6, `contYearEnd`, `contIncomeOf`, `contFortOf`, `contPower`, `contUseCard`,
   `contMovesFrom`, `contCardCost`, `contMurmurSpread`, `contUplinks`): the Lance strikes the most fortified enemy
   territory two borders away every 3 years (−1 fortification, its groups −1 star); the Sundering Ray quakes a

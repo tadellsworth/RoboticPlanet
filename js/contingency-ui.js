@@ -681,9 +681,13 @@ function cgReport() {
   const run = CG.run, R = run.reports[run.reports.length - 1];
   let h = `<header class="cg-sh-head"><h2>Year report${R ? ` <small>T+${R.turn}</small>` : ''}</h2><button type="button" class="btn small cg-focus" data-x="close">Continue</button></header>`;
   if (!R) return h + '<p class="cg-log">Arrival clock: T+1. No reports yet.</p>';
-  h += '<div class="cg-log">' + R.lines.map((l) => `<p>${esc(l)}</p>`).join('') + '</div>';
-  if (run.reports.length > 1) h += `<details class="cg-adv"><summary>Earlier years</summary>${run.reports.slice(0, -1).reverse().map((r) => `<div class="cg-log">${r.lines.map((l) => `<p>${esc(l)}</p>`).join('')}</div>`).join('<hr>')}</details>`;
+  h += cgLog(R.lines);
+  if (run.reports.length > 1) h += `<details class="cg-adv"><summary>Earlier years</summary>${run.reports.slice(0, -1).reverse().map((r) => cgLog(r.lines)).join('<hr>')}</details>`;
   return h;
+}
+/** A report's lines as the log: its '§' lines as headings, a rival's quoted line set apart. */
+function cgLog(lines) {
+  return '<div class="cg-log">' + lines.map((l) => l.startsWith('§ ') ? `<h4>${esc(l.slice(2))}</h4>` : `<p${/: “/.test(l) ? ' class="cg-voice"' : ''}>${esc(l)}</p>`).join('') + '</div>';
 }
 function cgOffer() {
   const run = CG.run, O = run.offers[0];
@@ -696,7 +700,7 @@ function cgOffer() {
 function cgOver() {
   const run = CG.run, R = run.reports[run.reports.length - 1], won = run.over.winner === 0;
   return `<header class="cg-sh-head"><h2>${won ? 'Ithaca I secured' : run.over.winner < 0 ? 'Carrier dark' : 'The run is over'}</h2></header>
-    <div class="cg-log">${(R ? R.lines : contEnding(run)).map((l) => `<p>${esc(l)}</p>`).join('')}</div>
+    ${cgLog(R ? R.lines.slice(Math.max(0, R.lines.indexOf('§ The end of the run'))) : contEnding(run))}
     <div class="cg-btns"><button type="button" class="btn big primary cg-focus" data-x="again">New run</button><button type="button" class="btn big" data-x="back">Main menu</button></div>`;
 }
 
