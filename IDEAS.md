@@ -376,9 +376,11 @@ each is a call waiting for the owner's yes or no:
     the nearest foe (as Siege Breakers' outer works), with a gap where a road goes through; level 3's Shield Dome is a
     site, joined by road, that the defender still has to supply. The Harrow comes six minutes in. Played wins give a star;
     survivors are recorded but don't add rank beyond it.
-18. **Cards in battle (stage 4):** Orbital Drop lands 6 warbots; Called Ringfall is five strikes round the spot (they
+18. **Refits in battle:** Sealed Research seals one Research Lab upgrade, chosen when it's fitted (Power Tools by
+    default, and the computer's pick); Torch Doctrine is ×1.5 to the Murmur from that side's Torches.
+    **Cards in battle (stage 4):** Orbital Drop lands 6 warbots; Called Ringfall is five strikes round the spot (they
     dent, as Ringfall does, and crater roads); Corvane Flare drains every rival robot to 20% battery. They aim at the
-    middle of the view rather than a tapped tile. The computer plays its cards at set times (the Flare at 4 minutes, the
+    tapped tile (or the crosshair's middle of the view). The computer plays its cards at set times (the Flare at 4 minutes, the
     Drop at 5, the Ringfall on your base at 7). Road Standard and Foundry Surge are played on the battle card, as they act
     at the start; a flare year starts every battery at 40%.
 19. **Ironman:** a battle keeps one save, for Continue and its battle card; restore points, slots, files and codes are

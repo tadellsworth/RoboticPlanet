@@ -611,7 +611,8 @@ function cgSpend() {
   h += '<section><h3>Refits <small>for the whole run</small></h3><ul class="cg-list">';
   for (const [k, R] of Object.entries(CONT_REFITS)) {
     const own = S.refits.includes(k);
-    h += `<li><span><b>${R.name}</b>: ${R.desc}.</span>${own ? '<small class="cg-own">Fitted</small>' : `<button type="button" class="btn small" data-x="refit" data-k="${k}" ${S.reserve < R.cost ? 'disabled' : ''}>${R.cost}</button>`}</li>`;
+    const pick = k === 'research' ? (own ? ` <small>(${TECHS[S.sealed || 'tools'].name})</small>` : `<select id="cg-sealed" aria-label="The Research Lab upgrade to seal">${TECH_ORDER.map((t) => `<option value="${t}"${t === 'tools' ? ' selected' : ''}>${TECHS[t].name}</option>`).join('')}</select>`) : '';
+    h += `<li><span><b>${R.name}</b>: ${R.desc}.${own ? pick : ''}</span>${own ? '<small class="cg-own">Fitted</small>' : `${pick}<button type="button" class="btn small" data-x="refit" data-k="${k}" ${S.reserve < R.cost ? 'disabled' : ''}>${R.cost}</button>`}</li>`;
   }
   h += '</ul></section>';
   // Cards
@@ -733,7 +734,7 @@ function cgSheetAct(x, d) {
   }
   if (x === 'group') { if (!contBuyGroup(run, 0, +$('cg-buy-at').value)) CG.note = 'No room for another Command Group, or not enough Reserve.'; }
   if (x === 'fort') contFortify(run, 0, +d.t);
-  if (x === 'refit') contBuyRefit(run, 0, d.k);
+  if (x === 'refit') contBuyRefit(run, 0, d.k, $('cg-sealed') ? $('cg-sealed').value : undefined);
   if (x === 'card') contBuyCard(run, 0, d.k);
   if (x === 'use') {
     const k = run.sides[0].cards[+d.i], sel = $('cg-use-' + d.i);

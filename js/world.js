@@ -5438,6 +5438,7 @@ function checkSave(o) {
     if (C.hands != null && !(Array.isArray(C.hands) && C.hands.length <= n && C.hands.every((h) => Array.isArray(h) && h.length <= 6 && h.every((k) => ['drop', 'ringfall', 'flare'].includes(k))))) bad();
     if (C.used != null && !(Array.isArray(C.used) && C.used.length <= n && C.used.every((u, p) => ints(u, 0, 5, 6) && C.hands && C.hands[p] && u.every((i) => i < C.hands[p].length)))) bad();
     if (C.pre != null && !ints(C.pre, -1, 5)) bad();
+    if (C.torch != null && !ints(C.torch, 0, 7)) bad();
     if (C.twin != null && ![0, 1].includes(C.twin)) bad();
     if (C.waves != null && !(ints(C.waves, 0, 64) && Number.isInteger(C.waveN) && C.waveN >= 0 && C.waveN <= 4)) bad();
   }

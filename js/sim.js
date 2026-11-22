@@ -5250,11 +5250,11 @@ function torchFire(u, tx, ty, power, bld) {
       shieldTake(w, v, u.x, u.y, took, want);
       dmg = dmg * TORCH.shieldPass + blocked * (1 - took / want);
     }
-    damageBot(v, dmg);
+    damageBot(v, dmg * (S.contingency && isWild(v.owner) && typeof contTorch === 'function' ? contTorch(u.owner) : 1)); // (Torch Doctrine, in Contingency)
   }
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
-    hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1), u.owner);
+    hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1) * (S.contingency && isWild(bld.owner) && typeof contTorch === 'function' ? contTorch(u.owner) : 1), u.owner);
     if (hash2(u.id, S.tick, 11) < 0.12 && !atmosRainAt(bld.x + 0.5, bld.y + 0.5, u.owner)) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });

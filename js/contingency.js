@@ -56,7 +56,7 @@ const CONT_CALLSIGNS = [
 const CONT_REFITS = {
   heavy:    { name: 'Heavier Kit', cost: 16, desc: '+2 warbots in every battle' },
   outpost:  { name: 'Forward Outpost', cost: 12, desc: 'battles start with an Outpost built' },
-  research: { name: 'Sealed Research', cost: 14, desc: 'one Research Lab upgrade, done in every battle' },
+  research: { name: 'Sealed Research', cost: 14, desc: 'one Research Lab upgrade, done in every battle (picked as you fit it)' },
   foundry:  { name: 'Foundry Pattern', cost: 18, desc: 'start every battle with a Bot Foundry' },
   torch:    { name: 'Torch Doctrine', cost: 10, desc: 'Torches do more to the Murmur' },
   lift:     { name: 'Orbital Lift Charter', cost: 12, desc: 'moves to Argos cost 1 Reserve instead of 3' },
@@ -433,10 +433,12 @@ function contFortify(run, s, t) {
   T.fort++;
   return true;
 }
-function contBuyRefit(run, s, k) {
+/** Buy refit k for side s (Sealed Research: `pick`, the Research Lab upgrade it seals, a TECHS key; Power Tools unpicked). */
+function contBuyRefit(run, s, k, pick) {
   const S = run.sides[s], R = CONT_REFITS[k];
   if (run.phase !== 'plan' || !R || S.refits.includes(k) || !contSpend(run, s, R.cost)) return false;
   S.refits.push(k); S.refits.sort();
+  if (k === 'research') S.sealed = TECH_ORDER.includes(pick) ? pick : 'tools';
   return true;
 }
 /** What a card costs side s now (Ledger Credit: half; a Wren year: the Ledger Deal at half; an Orbital Lift: Drops at half). */
@@ -1268,7 +1270,7 @@ function contBattleSetup(run, b) {
     const gs = (b.groups[s] || []).map((id) => contGroup(run, id)).filter(Boolean);
     const stars = gs.length ? Math.max(...gs.map((g) => g.stars)) : 1;
     return { side: s, cs: run.sides[s].cs, doctrine: run.sides[s].doctrine || 'balanced', warbots: gs.reduce((a, g) => a + contWarbots(run, g), 0) || (b.defender === s ? 2 : 4),
-      stars, refits: run.sides[s].refits.slice(), supply: contSupply(run, s), card: b.cards[s] || null, defender: b.defender === s };
+      stars, refits: run.sides[s].refits.slice(), sealed: run.sides[s].refits.includes('research') ? run.sides[s].sealed || 'tools' : null, supply: contSupply(run, s), card: b.cards[s] || null, defender: b.defender === s };
   });
   return {
     biome: CONT_REGIONS[region][1], shape, shapeName: SHAPE_PRESETS[shape].name, size, sizeName: SIZE_PRESETS[size].name, minutes,

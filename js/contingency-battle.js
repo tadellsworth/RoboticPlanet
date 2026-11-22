@@ -31,7 +31,7 @@ function contBattleOptions(run, b) {
     setup(S) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
         cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
-        ironman: !!run.opts.ironman, waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
+        ironman: !!run.opts.ironman, torch: [], waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
       B.seat.forEach((X, p) => contKit(S, p, X, B));
       // the cards that act as the battle starts: Road Standard, Foundry Surge, and a Corvane Flare year
       B.seat.forEach((X, p) => { if (X.card === 'road') contRoadStandard(p); if (X.card === 'surge') S.contingency.surge = p; });
@@ -57,6 +57,9 @@ function contKit(S, p, X, B) {
   if (S.contingency) S.contingency.waves[p] = Math.max(0, X.warbots - Math.max(now, have));
   const put = (type, stock) => { const s = aiFindSpot(p, type, L); return s ? preBuild(p, type, s.x, s.y, { road: true, reach: 4, stock }) : null; };
   if (X.refits.includes('outpost')) put('outpost');
+  // Sealed Research: its Research Lab upgrade, done; Torch Doctrine: its Torches burn the Murmur harder (contTorch)
+  if (X.sealed && TECHS[X.sealed]) { P.tech = P.tech || {}; P.tech[X.sealed] = true; }
+  if (X.refits.includes('torch') && S.contingency && !S.contingency.torch.includes(p)) S.contingency.torch.push(p);
   if (X.refits.includes('foundry')) put('foundry');
   if (X.defender) {
     if (B.fort >= 1) { put('turret', { crystal: 20 }); put('turret', { crystal: 20 }); }
@@ -328,8 +331,20 @@ function contCardTap(i) {
   if (k === 'flare') { act('contCard', [i]); CGB.key = ''; return; }
   CGB.aim = i;
   $('cg-aim').hidden = false;
-  $('cg-aim-what').textContent = `${CONT_CARDS[k].name}: move the map to aim`;
-  $('cg-aim-go').onclick = () => { act('contCard', [CGB.aim, Math.floor(R.cam.x), Math.floor(R.cam.y)], (r) => { if (!r) toast('It can\'t land there: aim at open ground.', 'warn'); }); CGB.aim = -1; CGB.key = ''; $('cg-aim').hidden = true; };
+  $('cg-aim-what').textContent = `${CONT_CARDS[k].name}: tap the spot (or move the map and tap Here)`;
+  const fire = (x, y) => { act('contCard', [CGB.aim, Math.floor(x), Math.floor(y)], (r) => { if (!r) toast('It can\'t land there: aim at open ground.', 'warn'); }); CGB.aim = -1; CGB.key = ''; $('cg-aim').hidden = true; };
+  $('cg-aim-go').onclick = () => fire(R.cam.x, R.cam.y);
+  // the pad over the map: a tap aims there; a drag still moves the map
+  const pad = $('cg-aim-pad');
+  let down = null;
+  pad.onpointerdown = (e) => { down = { x: e.clientX, y: e.clientY, moved: false }; pad.setPointerCapture(e.pointerId); };
+  pad.onpointermove = (e) => {
+    if (!down) return;
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8) return;
+    const a = screenToWorld(down.x, down.y), b = screenToWorld(e.clientX, e.clientY);
+    R.cam.x += a.x - b.x; R.cam.y += a.y - b.y; down = { x: e.clientX, y: e.clientY, moved: true };
+  };
+  pad.onpointerup = (e) => { const d = down; down = null; if (d && !d.moved) { const w = screenToWorld(e.clientX, e.clientY); fire(w.x, w.y); } };
   $('cg-aim-no').onclick = () => { CGB.aim = -1; $('cg-aim').hidden = true; };
 }
 
@@ -348,4 +363,15 @@ function contObjective() {
   if (C.hold) return `${where}: hold against the Murmur until the clock runs out${C.kind === 'surge' ? ' (until dawn)' : ', or clear the nests'}.`;
   const up = S.victory === 'uplinks';
   return `${where}: ${up ? 'hold the most Uplinks' : 'capture the rival Command Base'}. At the cap the land held decides it${C.def >= 0 ? `, and a close count goes to ${C.def === ME ? 'you, defending' : 'the defender'}` : ''}.`;
+}
+
+/** Torch Doctrine: seat p's Torches do half as much again to the Murmur (torchFire, in js/sim.js). */
+function contTorch(p) { const C = S.contingency; return C && C.torch && C.torch.includes(p) ? CONT_TORCH : 1; }
+const CONT_TORCH = 1.5;
+/** The top bar's clock in a battle against the Murmur alone: the time to dawn, or the Deep's mound standing. */
+function contTopLine() {
+  const C = S.contingency;
+  if (C.kind === 'hollow') { const m = S.buildings.find((x) => !x.dead && x.type === 'mound'); return m ? `The Deep ${Math.ceil((100 * m.armor) / BDEFS.mound.armor)}%` : 'The Deep: down'; }
+  const left = Math.max(0, C.hold - S.time), nests = S.buildings.filter((x) => !x.dead && x.type === 'nest').length;
+  return `Dawn ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')} · ${nests} nest${nests === 1 ? '' : 's'}`;
 }

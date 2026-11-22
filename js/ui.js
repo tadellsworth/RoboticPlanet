@@ -9455,7 +9455,7 @@ function updateHUD() {
     (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = tod + (S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time));
+  const ct = tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)); // (a Contingency battle against the Murmur: dawn and the nests)
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)

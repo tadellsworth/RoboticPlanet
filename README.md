@@ -123,7 +123,11 @@ how goods move.
   (the Flare at 4 minutes, the Drop by its base at 5, the Ringfall on its foe's at 7). Road Standard lays road from the
   base toward its nearest Stone and Ore at the start (`contRoadStandard`); Foundry Surge doubles the seat's Foundries'
   work for 5 minutes (`contWork`, in `produce`); a flare year starts everyone's batteries at 40. The bar (`#cg-bar`,
-  `contBarTick` from `uiTick`) shows the clock and the cards; Drop and Ringfall aim at the view's middle (`#cg-aim`).
+  `contBarTick` from `uiTick`) shows the clock and the cards; Drop and Ringfall aim at a tapped tile (`#cg-aim-pad` over the map: a drag still pans) or at the
+  crosshair in the view's middle (Here, `#cg-aim`). Sealed Research seals one Research Lab upgrade, picked when it's
+  fitted (`side.sealed`, set done on the seat's player in `contKit`); Torch Doctrine makes that seat's Torches do ×1.5
+  to the Murmur (`contTorch` in `torchFire`). In a battle against the Murmur alone the top bar's clock reads the time to
+  dawn and the nests left, or the Deep's mound (`contTopLine`).
   On the battle's end the cards played leave the run's hand, and a battle-card one unplayed goes back.
   **Ironman** (`run.opts.ironman`, carried into the match as `S.contingency.ironman`; `contIronman`, `contIronmanSave`):
   the battle keeps only the autosave for Continue: `checkpointTick` writes no restore points, `showCheckpoints` offers
