@@ -74,7 +74,7 @@ function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
 const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'springs', 'tropical'];
 function biomeAllowed(key, shape) {
-  return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval));
+  return Object.prototype.hasOwnProperty.call(BIOMES, key) && (!BIOMES[key].navalOnly || !!(NAVAL_ON && SHAPE_PRESETS[shape]?.naval && !SHAPE_PRESETS[shape].river));
 }
 /** Mixed scenery belongs on the largest surface maps on Ithaca I. Argos is a separate world. */
 function secondBiomeAllowed(key, primary, size, shape) {
@@ -738,7 +738,7 @@ const SHAPE_PRESETS = [
   // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
   { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
     tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
-  { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook rocky shelves, green river basins and Ore and Crystal. The river splits around islands between its narrows.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true,
+  { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook rocky shelves, green river basins and Ore and Crystal. The river splits around islands between its narrows.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true, river: true, // (river: ships sail its river, but it's a heights map, not a naval one: no Naval badge, no Shoals biome)
     tip: 'Grand Canyon: your colony starts on a high rim. Two single-lane descents lead down from each rim, a switchback and a side-canyon trail. Ships can sail around the midstream islands, robots can wade at the fords, and a Viaduct can cross at the narrows.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
@@ -1996,7 +1996,7 @@ const MURMUR = {
  * `nights`; the campaigns call spawnHarrow. The rival gathers `aiNeed` armed robots ahead of it before it fights.
  */
 const HARROW = {
-  r: 1.2, small: 0.25, missile: 60, charge: 3, far: 0.25, smash: 10, every: 2.5, bite: 10, reach: 1.9,
+  r: 1.2, small: 0.25, missile: 60, charge: 3, far: 0.25, smash: 10, every: 2.5, bite: 10, reach: 2.1,
   slamEvery: 9, slamMin: 3, slamR: 3, rear: 1.2, slamBot: 6, stun: 3, slamBld: 25, riders: 6, drop: 2,
   escort: { scuttler: 6, brute: 2 }, floor: 0.5, feed: 30, up: 2.7, crater: 900, stay: 900, husk: 60, loot: 40, repath: 12,
   mound: 0.25, rollNight: 6, chance: 0.5, nights: [6, 8], aiNeed: 12, aiReach: 30,

@@ -36,7 +36,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
      (Nov 21): night 6 **confirmed**; **keep the slam and its strength as they are** (the owner will test it and wants it
      tough); **its crater stays open as a tunnel exit** of its nest (BUILT). Open: whether a second roll comes much later;
      whether Arc Casters should heal it (the sheet's Bearer idea, not used).
-     **Refined (the owner, Nov 22 2026; BUILT):** a fifth smaller (drawn 4.8 tiles, its body `r` 1.2 and bite `reach` 1.9;
+     **Refined (the owner, Nov 22 2026; BUILT):** a fifth smaller (drawn 4.8 tiles, its body `r` 1.2 and bite `reach` 2.1, so it still bites 0.9 tiles past its body as before;
      health, damage and the slam's 3 tiles unchanged), eight walking frames with its weight in them, breathing as it
      stands, a bite, swinging round slowly, the slam's crouch and impact (the screen shakes), and a death of its own
      (staggering, spires shattering, a thud, the core bursting: ART_GUIDE Batch 31, README). Open: whether its death

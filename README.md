@@ -234,7 +234,8 @@ moved just off it, the same kind and amount (`clearCalmGround`; see the Trade Te
 
 **Grand Canyon** has rocky shelves below the rims, then a canyon floor that opens into broad, fertile bends.
 The river splits around two low islands and rejoins at the ends. Each rim has two single-lane natural descents,
-a switchback and a side-canyon trail. Fords link the banks on foot, and Ports can use the continuous channel.
+a switchback and a side-canyon trail. Fords link the banks on foot, and Ports can use the continuous channel
+(ships sail the river, but it is a heights map, not a naval one: `river`, so no Naval badge and no Shoals biome).
 Players can cut additional ramps or build crossings through Paths.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
@@ -2369,7 +2370,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     a tile; re-picked every `repath` s; another colony's when its own has none); what stands on its route it batters
     (`harrowBatter`: `smash` armor every `every` s, a Wall or Gate twice that; it feeds, `feed` health back, on a
     building of charge 3 it wrecks); a Command Base, Keep, megastructure or Arrival City only down to `floor` (half)
-    of its armor (`harrowSpares`, `harrowFloor`), then on to the next. A robot within `reach` (1.9) takes `bite` (10) every
+    of its armor (`harrowSpares`, `harrowFloor`), then on to the next. A robot within `reach` (2.1) takes `bite` (10) every
     `every` s. **The furrow** (`harrowFurrow`, each tile it enters): its tile and the 8 round it lose their road (not a
     bridge or tunnel), track, pipe and plans, and become its nest's tunnel (`S.tun`). **The slam** (`harrowSlam`,
     `ph` 'slam', pose `slam`: rearing `rear` s, then the blow): every `slamEvery` s with `slamMin` of a colony's robots
