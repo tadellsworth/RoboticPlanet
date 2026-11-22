@@ -2380,3 +2380,4 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .cg-coach-btns { display: flex; gap: 6px; align-items: center; }
 .cg-coach-btns span { margin-right: auto; color: var(--muted); font-size: 12px; }
 @media (min-width: 760px) { .cg-coach { top: calc(var(--safe-t) + 60px); } }
+@media (max-width: 560px) { .cg-coach { top: calc(var(--safe-t) + 92px); padding: 9px 11px; font-size: 13px; line-height: 1.35; } .cg-coach p { margin-bottom: 6px; } }
