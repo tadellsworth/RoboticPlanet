@@ -139,7 +139,7 @@ function cgCellAt(lon, lat) {
   const W = CONT_CELLS.w, H = CONT_CELLS.h, i = Math.min(W - 1, Math.floor((lon + 180) / 360 * W)), j = Math.min(H - 1, Math.max(0, Math.floor((90 - lat) / 180 * H)));
   return CG.cells[j * W + i];
 }
-function cgColor(s) { return s >= 0 && CG.run ? PLAYER_COLORS[CG.run.sides[s].cs] : '#8a8f99'; }
+function cgColor(s) { return s >= 0 && CG.run ? CONT_CS_COLORS[CG.run.sides[s].cs] : '#8a8f99'; }
 function cgRgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
 /** The move targets of the selected group (each territory index it may be ordered to). */
@@ -530,11 +530,11 @@ function cgNewRun() {
   const saved = contRestore(), cont = saved && saved.phase !== 'over' ? saved : null;
   let h = '<header class="cg-sh-head"><h2>Contingency</h2><button type="button" class="btn small ghost" data-x="back">Back</button></header>';
   h += '<p class="cg-lede">Arrival clock: T+1. The Accord has been ruled void, and every vanguard\'s sealed orders open: <i>secure Ithaca I for us.</i> Take the planet territory by territory, one year a turn, until T+31.</p>';
-  if (cont) h += `<button type="button" class="btn primary big cg-focus" data-x="continue">Continue: T+${cont.turn} · ${CALLSIGNS[cont.sides[0].cs]} · ${contHeld(cont, 0).length} territories</button>`;
+  if (cont) h += `<button type="button" class="btn primary big cg-focus" data-x="continue">Continue: T+${cont.turn} · ${CONT_CS_NAMES[cont.sides[0].cs]} · ${contHeld(cont, 0).length} territories</button>`;
   h += '<h3>Your callsign</h3><div class="cg-cs" role="radiogroup" aria-label="Your callsign">';
-  CALLSIGNS.forEach((c, k) => {
+  CONT_CS_NAMES.forEach((c, k) => {
     const C = CONT_CALLSIGNS[k], card = CONT_CARDS[C.card];
-    h += `<button type="button" role="radio" aria-checked="${CGN.cs === k}" class="cg-cs-b ${CGN.cs === k ? 'on' : ''}" data-x="cs" data-k="${k}" style="--c:${PLAYER_COLORS[k]}"><b>${c}</b><span>${C.perk}.</span><span><i>${card.name}:</i> ${card.desc}.</span></button>`;
+    h += `<button type="button" role="radio" aria-checked="${CGN.cs === k}" class="cg-cs-b ${CGN.cs === k ? 'on' : ''}" data-x="cs" data-k="${k}" style="--c:${CONT_CS_COLORS[k]}"><b>${c}</b><span>${C.perk}.</span><span><i>${card.name}:</i> ${card.desc}.</span></button>`;
   });
   h += '</div><h3>Difficulty</h3><div class="seg" role="radiogroup" aria-label="Difficulty">';
   for (const d of DIFF_ORDER) h += `<button type="button" role="radio" aria-checked="${CGN.diff === d}" class="${CGN.diff === d ? 'on' : ''}" data-x="diff" data-k="${d}">${DIFFICULTY[d].label}</button>`;
@@ -542,7 +542,7 @@ function cgNewRun() {
   h += '<details class="cg-adv"><summary>Advanced</summary>';
   const others = [0, 1, 2, 3].filter((c) => c !== CGN.cs);
   others.forEach((c, k) => {
-    h += `<label class="cg-row"><span>${CALLSIGNS[c]}'s doctrine</span><select data-doc="${k}"><option value="random">Random</option>${CONT_DOCTRINES.map((d) => `<option value="${d}" ${CGN.docs[k] === d ? 'selected' : ''}>${docLabel(d)}</option>`).join('')}</select></label>`;
+    h += `<label class="cg-row"><span>${CONT_CS_NAMES[c]}'s doctrine</span><select data-doc="${k}"><option value="random">Random</option>${CONT_DOCTRINES.map((d) => `<option value="${d}" ${CGN.docs[k] === d ? 'selected' : ''}>${docLabel(d)}</option>`).join('')}</select></label>`;
   });
   h += `<div class="cg-row"><span>The Murmur</span><div class="seg">${['off', 'normal', 'rampant'].map((m) => `<button type="button" class="${CGN.murmur === m ? 'on' : ''}" data-x="murmur" data-k="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div></div>`;
   h += `<label class="cg-row"><span>Events</span><input type="checkbox" id="cg-o-events" ${CGN.events ? 'checked' : ''}></label>`;
@@ -634,8 +634,8 @@ function cgBattle() {
   h += '</ul><p class="hint">The odds are auto-resolve\'s: a seeded roll on them, set a little below what playing it well gets you.</p>';
   const hand = run.sides[0].cards.filter((k) => CONT_CARDS[k].battle);
   if (hand.length && !b.cards[0]) h += `<div class="cg-buyrow"><select id="cg-bcard" aria-label="A card for this battle">${hand.map((k) => `<option value="${k}">${CONT_CARDS[k].name}</option>`).join('')}</select><button type="button" class="btn small" data-x="bcard">Play this card</button></div>`;
-  const live = typeof contPlayBattle === 'function';
-  h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button><button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button></div>`;
+  const live = typeof contPlayBattle === 'function', resume = live && run.playing === b.id && contSavedBattle();
+  h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button><button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button></div>`;
   if (CG.lastBattle) h += `<p class="cg-note" role="status">${esc(CG.lastBattle)}</p>`;
   return h;
 }

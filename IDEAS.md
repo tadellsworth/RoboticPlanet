@@ -289,8 +289,14 @@ each is a call waiting for the owner's yes or no:
     battle cards ×1.06 to ×1.15; rivals by difficulty ×0.9 to ×1.12; yours ×0.92 (a little below playing it); odds by
     strength to the power 2.2. A star a played win, half a star an auto-resolved one; a winner at under 45% may lose
     a star.
-17. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-18. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+17. **Played battles (the bridge):** a battle against the Murmur alone is a Colony-mode match held for 12 minutes (a
+    surge, "until dawn", 10); the Hollow assault is won by destroying the Deep's mound; at the cap the land held
+    decides, and the defender wins within 10% of the leader. The kit: +2.5× the starting stock × (stars − 1) / 4 and
+    +30 Ore at 5 stars; +15 of each resource type held. Fortification level 2's walls and level 3's Shield Dome site
+    aren't put down yet (a Keep, and Mortar Pits, are). The Harrow comes six minutes in. Played wins give a star;
+    survivors are recorded but don't add rank beyond it.
+18. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+19. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)

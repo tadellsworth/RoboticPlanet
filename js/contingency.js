@@ -42,6 +42,9 @@ const CONT = {
   megaChance: 0.06, megaChanceArchitect: 0.22,
 };
 const CONT_MURMUR = 4; // (a battle's side for the Murmur)
+/** The four callsigns and their colours, as LORE.md has them (fixed here: a battle recolours the game's own while it runs). */
+const CONT_CS_NAMES = ['COBALT', 'VERMILION', 'VIRIDIAN', 'TYRIAN'];
+const CONT_CS_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
 const CONT_DOCTRINES = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
 /** Each callsign's perk (every battle) and its own card (CONTINGENCY.md, Factions). */
 const CONT_CALLSIGNS = [
@@ -955,7 +958,7 @@ function contWin(run, s, how) {
 
 /* ------------------------------------------------------------------ the year report (the colony's log voice) */
 
-function contSideName(run, s) { return s === CONT_MURMUR ? 'the Murmur' : CALLSIGNS[run.sides[s].cs]; }
+function contSideName(run, s) { return s === CONT_MURMUR ? 'the Murmur' : CONT_CS_NAMES[run.sides[s].cs]; }
 function contSideLabel(run, s) { return s === 0 && run.sides[0].human ? 'Our' : contSideName(run, s) + '\'s'; }
 /** Probability of contact: a little lower each year, never shown as zero (0.2% at T+31, as every match says). */
 function contContact(turn) { return Math.max(0.1, 0.2 * Math.pow(2, (CONT.lastTurn - turn) / 6)); }
@@ -1214,3 +1217,39 @@ function contValid(run) {
 function contStore(run) { try { localStorage.setItem(CONT.saveKey, contSave(run)); return true; } catch (e) { return false; } }
 function contRestore() { try { const s = localStorage.getItem(CONT.saveKey); return s ? contLoad(s) : null; } catch (e) { return null; } }
 function contForget() { try { localStorage.removeItem(CONT.saveKey); } catch (e) { /* storage unavailable */ } }
+
+/* ------------------------------------------------------------------ a battle as a match (the bridge: js/contingency-battle.js plays it) */
+
+/** Each region's map types for its battles (SHAPE_PRESETS indices): CONTINGENCY.md, Battles. */
+const CONT_REGION_SHAPES = {
+  rust: [0, 4, 16], green: [0, 11, 2], ember: [0, 5, 7], grass: [0, 1, 10], black: [13, 11], polar: [0, 8, 2],
+  cinder: [14, 15], steam: [9, 5], shoals: [3], bloom: [0, 6, 7], hollow: [23], argos: [4, 0],
+};
+/** Battle b as a new game's setup: the ground, the size, the cap, the victory, who sits where and with what. */
+function contBattleSetup(run, b) {
+  const t = b.at, T = run.t[t], region = CONT_MAP.T[t].region, seats = b.sides.filter((s) => s !== CONT_MURMUR);
+  const murmurOnly = seats.length === 1, three = seats.length > 2, home = T.home >= 0;
+  const pick = (arr, k) => arr[contHash(b.seed, k) % arr.length];
+  let shapes = CONT_REGION_SHAPES[region] || [0];
+  if (three) shapes = shapes.filter((k) => SHAPE_PRESETS[k].ffa).concat(shapes.some((k) => SHAPE_PRESETS[k].ffa) ? [] : [0]);
+  const shape = b.kind === 'hollow' ? 23 : pick(shapes, 1);
+  const size = home ? 2 : three ? 1 : pick([0, 1], 2);
+  const minutes = home ? 35 : 25;
+  const level = contIsArgos(t) || run.opts.murmur === 'off' ? 0 : b.kind === 'hollow' ? 3 : T.murmur;
+  // you first, then the others in the battle's order: each with its groups' warbots, rank and refits
+  const order = seats.includes(0) ? [0, ...seats.filter((s) => s !== 0)] : seats;
+  const seat = order.map((s) => {
+    const gs = (b.groups[s] || []).map((id) => contGroup(run, id)).filter(Boolean);
+    const stars = gs.length ? Math.max(...gs.map((g) => g.stars)) : 1;
+    return { side: s, cs: run.sides[s].cs, doctrine: run.sides[s].doctrine || 'balanced', warbots: gs.reduce((a, g) => a + contWarbots(run, g), 0) || (b.defender === s ? 2 : 4),
+      stars, refits: run.sides[s].refits.slice(), supply: contSupply(run, s), card: b.cards[s] || null, defender: b.defender === s };
+  });
+  return {
+    biome: CONT_REGIONS[region][1], shape, shapeName: SHAPE_PRESETS[shape].name, size, sizeName: SIZE_PRESETS[size].name, minutes,
+    mode: murmurOnly ? 'colony' : 'versus', victory: !murmurOnly && T.uplink && b.kind !== 'hollow' ? 'uplinks' : 'capture',
+    murmur: level >= 2 ? 'active' : level === 1 ? 'quiet' : 'off', level, harrow: level >= 3 && (run.meter >= 60 || run.turn >= 20),
+    hold: b.kind === 'surge' ? 10 : murmurOnly && b.kind !== 'hollow' ? 12 : 0, kind: b.kind,
+    fort: b.defender >= 0 && b.defender !== CONT_MURMUR ? contFortOf(run, t) : 0, mega: T.mega, seat, difficulty: run.opts.difficulty,
+    seed: b.seed, flare: run.event === 'flare',
+  };
+}

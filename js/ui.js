@@ -129,6 +129,7 @@ function initUI() {
   $('keys-close').onclick = closeKeys;
   $('screen-keys').onclick = (e) => { if (e.target === $('screen-keys')) closeKeys(); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
+  $('p-withdraw').onclick = () => { sfx('click'); contWithdraw(); }; // (js/contingency-battle.js)
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
   $('p-back').onclick = () => { sfx('click'); if (UI.menuSettings) closeMenuSettings(); else pauseView('main', true); };
@@ -1901,6 +1902,7 @@ function syncRivalDifficulty() {
 
 function syncSaved() {
   syncRivalDifficulty();
+  $('p-withdraw').hidden = !(S && S.contingency && S.winner < 0); // (a Contingency battle: js/contingency-battle.js)
   syncPauseMods();
   if (UI.syncTod) UI.syncTod();
   syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
@@ -3699,6 +3701,7 @@ function showGameOver() {
   showCheckpoints('o');
   $('o-rematch').hidden = true;
   if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
+  if (S.contingency && typeof contBattleOver === 'function') { contBattleOver(false); return; } // (a Contingency battle: its result goes back to the globe)
   clearSave();
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';

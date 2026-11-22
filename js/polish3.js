@@ -139,7 +139,7 @@ function applyLook(look) {
 /** Every frame: a multiplayer game wears its start's look; anything else the usual one. */
 function lookTick() {
   const st = NET.startMsg && NET.startMsg.settings;
-  applyLook((MP.on || MPJ.on) && st && st.look ? st.look : '0123');
+  applyLook((MP.on || MPJ.on) && st && st.look ? st.look : typeof S !== 'undefined' && S && S.contingency && /^[0-3]{4}$/.test(S.contingency.look) ? S.contingency.look : '0123'); // (a Contingency battle: each colony in its callsign's colour)
 }
 
 /**

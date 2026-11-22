@@ -101,7 +101,21 @@ how goods move.
   Murmur, Argos as a disc beside it, and the orders as arcs; a territory card (`cgCard`), the Spend panel, the battle
   card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
   screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
-  at Contingency's place in the story (`MUSIC.loreLevel`). Headless test: `lh/contingency-test.js` in the test kit (50
+  at Contingency's place in the story (`MUSIC.loreLevel`). **The bridge to battles** (`js/contingency-battle.js`):
+  `contBattleSetup` (engine) turns a battle into a setup: the region's biome and a map type from `CONT_REGION_SHAPES`
+  (a free-for-all one for three sides), Small or Medium (Large at a home), a 25-minute cap (35 at a home), Uplinks
+  victory on an Uplink territory, the Murmur at the territory's level (Colony mode, with a 12-minute hold, 10 for a
+  surge, when the Murmur are the only enemy; the Hollow on its own map, won by its mound), the seats (you first) with
+  their warbots, rank, refits and supply lines. `contPlayBattle` starts it with newGame (`contBattleOptions`: `setup`
+  lands each kit with `contKit`, builds the defender's turrets, Keep, Mortar Pits and megastructure with `preBuild` at
+  `aiFindSpot`, and sets `S.contingency`: the run and battle, the seats' sides, the cap, the hold, the defender's seat,
+  and `look`, each seat in its callsign's colour, which `lookTick` applies); `contBattleCheck` runs from `simStep` every
+  30 ticks (the cap scored on land held, a close count going to the defender; the hold; the Hollow's mound; the Harrow
+  six minutes in where the Murmur are at full strength late in a run). `showGameOver` hands a Contingency battle to
+  `contBattleOver`, which sends the winner, its warbots left, a megastructure it finished and the fortifications
+  standing to `contBattleResult` and returns to the globe; **Withdraw** (`#p-withdraw`, `contWithdraw`) is a loss with a
+  retreat. The battle saves as any game does; its battle card's Play (or Continue) resumes it (`contSavedBattle`).
+  Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,
   victory, level, rules and challenge options) while you
@@ -3376,7 +3390,7 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
-js/contingency*.js        Contingency: the atlas table, the campaign's engine and its globe screens
+js/contingency*.js        Contingency: the atlas table, the campaign's engine, its globe screens and the bridge to battles
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/orders.js              every player action as an order: a name and plain arguments, checked against the player
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
