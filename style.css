@@ -582,7 +582,10 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .p-head .p-mods { flex-basis: 100%; margin: 0; }
 .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .p-row { display: flex; gap: 8px; }
-#p-checkpoint-row, #o-checkpoint-row { margin-top: 8px; }
+#o-checkpoint-row { margin-top: 8px; }
+#p-checkpoint { flex: 2.3 1 0; font-size: 14px; }
+#p-checkpoint-hint { margin: 6px 2px 0; font-size: 12px; line-height: 1.35; }
+#p-checkpoint-hint:empty { display: none; }
 #m-checkpoint-row { margin-bottom: 10px; }
 #m-checkpoint-game { margin: 0 0 4px; }
 #m-checkpoint, #p-checkpoint, #o-checkpoint, #p-difficulty { min-width: 0; padding: 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
@@ -626,6 +629,8 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
   .p-save { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
   .p-save .p-label { margin: 0; }
   .p-save .p-row { flex: 1; }
+  .p-save.p-restore { flex-wrap: wrap; }
+  .p-save.p-restore #p-checkpoint-hint { flex-basis: 100%; margin-top: 0; }
   #p-saved { margin-top: 6px; }
   .p-foot { margin-top: 8px; }
   #p-setview:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 0 12px; }

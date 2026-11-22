@@ -1881,7 +1881,7 @@ function checkpointTick() {
   const json = serializeGame(), prior = readCheckpoints();
   if (typeof contIronman === 'function' && contIronman()) { autoSave(json); return; } // (Ironman: the autosave alone)
   const earlier = prior?.run === run ? prior.entries.filter((e) => e.time < time) : [];
-  const entries = [{ time, json }, ...earlier].slice(0, CHECKPOINT_LIMIT);
+  const entries = [{ time, json, at: Date.now() }, ...earlier].slice(0, CHECKPOINT_LIMIT);
   autoSave(json, prior ? removeCheckpointBook : undefined);
   // Keep the newest snapshots first. A failed setItem leaves the previous book intact.
   while (entries.length) {
@@ -1897,13 +1897,39 @@ function checkpointTick() {
   }
 }
 
+/** How long ago a restore point was kept, in real time ("just now", "3 min ago", "2 h ago", "yesterday"). */
+function checkpointAgo(ms) {
+  const min = Math.floor(Math.max(0, ms) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
+}
+
+/** A restore point's line in the list: its game time, and how long ago it was kept (game minutes, for one kept before `at`). */
+function checkpointLabel(e, now) {
+  const ago = Number.isFinite(e.at) ? checkpointAgo(Date.now() - e.at)
+    : ((m) => (m > 0 ? `${m} game min ago` : 'just now'))(Math.floor((now - e.time + 1e-6) / AUTOSAVE_EVERY));
+  return `${fmtClock(e.time)} in game · ${ago}`;
+}
+
 async function showCheckpoints(prefix = 'p') {
   const game = S, row = $(prefix + '-checkpoint-row'), select = $(prefix + '-checkpoint');
   const fromMenu = prefix === 'm';
   const run = fromMenu ? null : game?.checkpointRun;
+  // The pause menu's Restore points item: shown in a solo game (none in multiplayer, watching or Ironman), with a line
+  // saying when the first comes while there's none yet.
+  const group = prefix === 'p' ? $('p-checkpoint-group') : null, hint = group && $('p-checkpoint-hint');
   row.hidden = true;
+  if (group) group.hidden = true;
   if (!canChooseCheckpoint(prefix) || (!fromMenu && !run)) return;
   if (!fromMenu && typeof contIronman === 'function' && contIronman(game)) return; // (Ironman: none to choose)
+  if (group) {
+    group.hidden = false;
+    hint.textContent = `None yet: one is kept every game minute (the first at ${fmtClock(UI.nextCheckpoint || AUTOSAVE_EVERY)}), the last ${CHECKPOINT_LIMIT} on this device.`;
+  }
   try {
     const book = readCheckpoints();
     const stored = book && (fromMenu || book.run === run) ? book.entries : await legacyCheckpoints(run);
@@ -1917,10 +1943,8 @@ async function showCheckpoints(prefix = 'p') {
       $('m-checkpoint-game').textContent = Number.isInteger(seed) ? `Recent restore points for Planet #${seed}` : 'Recent solo restore points';
     }
     const now = fromMenu ? entries[0].time : game.time;
-    select.replaceChildren(...entries.map((e, i) => {
-      const minutes = Math.floor((now - e.time + 1e-6) / AUTOSAVE_EVERY);
-      return new Option(`Restore point: ${minutes > 0 ? minutes + ' min ago' : 'just now'}`, i);
-    }));
+    select.replaceChildren(...entries.map((e, i) => new Option(fromMenu || prefix === 'p' ? checkpointLabel(e, now) : `Restore point: ${checkpointLabel(e, now)}`, i)));
+    if (hint) hint.textContent = `The last ${entries.length === 1 ? 'one' : entries.length}, a game minute apart: pick one and Restore to go back to it.`;
     $(prefix + '-checkpoint-restore').onclick = () => restoreCheckpoint(entries[+select.value], prefix);
     row.hidden = false;
   } catch (e) { /* history is unavailable; Continue remains independent */ }
@@ -1928,7 +1952,7 @@ async function showCheckpoints(prefix = 'p') {
 
 function restoreCheckpoint(entry, prefix) {
   if (entry && typeof contIronmanSave === 'function' && (contIronmanSave(entry.json) || (prefix !== 'm' && contIronman()))) { if (prefix === 'm') menuMsg(CONT_IRONMAN_NO); else toast(CONT_IRONMAN_NO, 'warn'); return; }
-  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Restore the point from ${fmtClock(entry.time)} game time?`)) return;
+  if (!entry || !canChooseCheckpoint(prefix) || !window.confirm(`Go back to the restore point at ${fmtClock(entry.time)} in game? What happened since then is lost.`)) return;
   if (prefix === 'm') audioUnlock();
   if (loadSaveText(entry.json, 'Restore point loaded.')) {
     $('screen-pause').hidden = true;
