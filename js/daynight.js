@@ -126,7 +126,7 @@ function todSrc(name, key) {
 }
 
 function todKeySet() {
-  if (!TOD.keys) TOD.keys = new Set([...(typeof TOD_KEYS !== 'undefined' ? TOD_KEYS : []), ...(typeof MURMUR_TOD_KEYS !== 'undefined' ? MURMUR_TOD_KEYS : [])]);
+  if (!TOD.keys) TOD.keys = new Set([...(typeof TOD_KEYS !== 'undefined' ? TOD_KEYS : []), ...(typeof MURMUR_TOD_KEYS !== 'undefined' ? MURMUR_TOD_KEYS : []), ...(typeof LANDMARK_TOD_KEYS !== 'undefined' ? LANDMARK_TOD_KEYS : [])]);
   return TOD.keys;
 }
 
@@ -138,6 +138,7 @@ function todLoadSet(name) {
   if (TOD.sets[name]) return;
   const set = TOD.sets[name] = { imgs: {}, n: 0 };
   todMurmurAdd(name, set); // (the Murmur's, in a game with them: from their own bundle)
+  todLandmarkAdd(name, set); // (a Contingency battle's landmark's, likewise: js/landmarks.js)
   if (typeof window !== 'undefined' && window.TOD_BUNDLE) {
     const go = () => { const d = window.TOD_DATA && window.TOD_DATA[name]; if (d) for (const key in d) todAdd(name, set, key, d[key]); };
     if (window.TOD_DATA && window.TOD_DATA[name]) { go(); return; }
@@ -172,6 +173,14 @@ function todMurmurAdd(name, set) {
   const d = typeof window !== 'undefined' && window.MURMUR_BUNDLE ? window.MURMUR_DATA && window.MURMUR_DATA[name] : null;
   for (const key of MURMUR_TOD_KEYS) { const src = d ? d[key] : todSrc(name, key); if (src) todAdd(name, set, key, src); }
 }
+/** The landmarks' re-lit sprites (LANDMARK_TOD_KEYS), likewise once their art is wanted (ensureLandmarkArt). */
+function todLandmarkAdd(name, set) {
+  if (typeof _lmArt === 'undefined' || _lmArt.state !== 'in' || set.landmark || typeof LANDMARK_TOD_KEYS === 'undefined') return;
+  set.landmark = true;
+  const d = typeof window !== 'undefined' && window.LANDMARK_BUNDLE ? window.LANDMARK_DATA && window.LANDMARK_DATA[name] : null;
+  for (const key of LANDMARK_TOD_KEYS) { const src = d ? d[key] : todSrc(name, key); if (src) todAdd(name, set, key, src); }
+}
+function todLandmarkIn() { for (const name in TOD.sets) todLandmarkAdd(name, TOD.sets[name]); }
 /** The Murmur's art has come in: the sets already loaded take their re-lit sprites too. */
 function todMurmurIn() { for (const name in TOD.sets) todMurmurAdd(name, TOD.sets[name]); }
 

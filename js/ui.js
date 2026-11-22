@@ -3741,6 +3741,7 @@ function openLore(at) {
     s.onload = s.onerror = show;
     document.head.appendChild(s);
   } else show();
+  if (typeof lmLoreLogs === 'function') lmLoreLogs(); // (the wrecks' logs found on this device: js/landmarks.js)
   scr.hidden = false;
   pagerShow(LORE_PAGER, at && $(at) ? at : pagerSections(LORE_PAGER)[0].id); // (`at`: a page to open on, from the Records screen)
   musicLore(true); // (the campaign theme while it's open: musicLore in audio.js)
@@ -6141,6 +6142,7 @@ function onMapTap(i, j, wx, wy) {
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
+  if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && burntSoil(tIdx(i, j)) && S.terrain[tIdx(i, j)] === T_GROUND && !S.road[tIdx(i, j)]) { sfx('click'); openBurntSheet(tIdx(i, j)); return; }
@@ -8755,7 +8757,8 @@ function refreshRoadSheet(t) {
 function openPostSheet(post) {
   const t = tIdx(post.x, post.y);
   R.selected = 0; R.selTile = t; UI.selBot = 0;
-  const html = `<div class="sheet-title"><div><h3>Trade Post</h3><div class="sub">Neutral: nobody owns it</div></div></div>
+  const named = S.landmarks && typeof lmPostName === 'function' ? lmPostName(post) : null; // (one the atlas names: Ledger Post, Spring Market)
+  const html = `<div class="sheet-title"><div><h3>${named ? esc(named.name) : 'Trade Post'}</h3><div class="sub">${named ? 'A neutral Trade Post: nobody owns it' : 'Neutral: nobody owns it'}</div></div></div>${named ? `<p class="flavor">${esc(named.line)}</p>` : ''}
     <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. A small neutral AI keeps the Accord's ledger here: your Terminal runs one standing trade route, a Road Train or Freight Train convoy every 2 minutes. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more. <b>Nothing shoots on its ground</b> (the gold dashed square): convoys are hit out on the road.</p>
     <div id="sh-dyn"></div>
     <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>${flavorLine('post')}`;
@@ -9792,7 +9795,8 @@ function uiTick(dt) {
   mpBannerTick();
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
-  if (typeof contBarTick === 'function') contBarTick(); // (a Contingency battle's clock and cards: js/contingency-battle.js)
+  if (typeof contBarTick === 'function') contBarTick();
+  if (typeof lmUiTick === 'function') lmUiTick(); // (a wreck's log recovered: js/landmarks.js) // (a Contingency battle's clock and cards: js/contingency-battle.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();

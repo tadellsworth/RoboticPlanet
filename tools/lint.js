@@ -13,7 +13,7 @@
 const fs = require('fs'), path = require('path');
 const dir = path.join(__dirname, '..', 'js');
 const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort();
-const SIM = new Set(['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js', 'missions.js', 'orders.js', 'contingency-atlas.js', 'contingency.js']);
+const SIM = new Set(['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js', 'missions.js', 'orders.js', 'contingency-atlas.js', 'contingency.js', 'landmarks.js']);
 const BANNED = [[/\bMath\.random\s*\(/, 'Math.random'], [/\bDate\.now\s*\(/, 'Date.now'], [/\bperformance\.now\s*\(/, 'performance.now'], [/\bnew Date\s*\(/, 'new Date']];
 const KNOWN_DUPLICATES = new Set(['roundRect']); // (two harmless copies, one per canvas helper)
 const problems = [];

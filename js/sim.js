@@ -92,6 +92,7 @@ function simStep(dt) {
   if (S.tick % Math.round(HIST_STEP / SIM_STEP) === 0) recordHistory();
   if (S.mission && S.tick % 30 === 0 && typeof checkMission === 'function') checkMission();
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)
+  if (S.landmarks && S.landmarks.length && S.tick % 10 === 7 && typeof lmTick === 'function') lmTick(10 * dt); // (a landmark's clock or wreck: js/landmarks.js)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -5796,6 +5797,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
   if (sx !== undefined && SHIELDS.length) { dmg = shieldBlock(u, sx, sy, dmg); if (dmg <= 0) return; }
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
+  if (S.landmarks && typeof lmCover === 'function') dmg *= lmCover(u); // (cover among the Stone Forest's pillars: js/landmarks.js)
   u.hp -= dmg;
   u.hurtT = S.time;
   if (sx !== undefined && BOTS[u.type].wild) { u.hitX = sx; u.hitY = sy; u.hitT = S.time; } // (the Murmur remember what killed them: murmurBody)
@@ -9992,7 +9994,7 @@ function rockfall(r) {
   if (hit.has(ME) || S.owner[tIdx(r.x, r.y)] === ME) sfx('boom', cx, cy);
   // What came down lies there: a boulder (Stone for a Quarry), where the ground is clear.
   const t = tIdx(r.x, r.y);
-  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !calmAt(r.x + 0.5, r.y + 0.5) && !uplinkAt(t)) {
+  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !calmAt(r.x + 0.5, r.y + 0.5) && !uplinkAt(t) && !(S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t))) {
     const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
     S.res[t] = R_BOULDER; S.amt[t] = clamp(Math.round(RES[R_BOULDER].amount * pr.amount), 1, 255); S.grow[t] = 1;
     clearDecor(t);
@@ -18297,6 +18299,7 @@ function hashState() {
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
+  for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
   if (S.crater) { int(S.scarN || 0); for (const s of S.scrap) { int(s.id); num(s.x); num(s.y); num(s.n); int(s.k); } int(S.bones.length); }
   // The Murmur's tunnels, their nests' branches and the exits shut for now (see murmurTick).

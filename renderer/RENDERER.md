@@ -38,6 +38,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
 | Resources (Reedcane and the survey stake installed) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
 | Airship and Mooring Mast (`v=c` installed) | airship (`v=a\|b\|c`: three directions, top-down like the Cargo Plane; `c`, the armoured blimp, is the game's), mast (`v=a\|b\|c`; `c`, the armoured pylon, is the game's; `dock=1` the moored presentation view). See [The Airship and the Mooring Mast](#the-airship-and-the-mooring-mast). |
+| The atlas's landmarks (installed) | landmark: a Contingency battle's set pieces (`c=hull\|spire\|pillar\|falls\|geyser\|house\|sign\|town\|lake\|crater\|shaft\|wreck`, `v=`, `w=kestrel\|survey\|halvard`; the town's ground, Glass Lake and Silent Crater straight down). `tools/render_landmarks.sh`, then `tools/install_landmarks.py` (ART_GUIDE Batch 32). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 

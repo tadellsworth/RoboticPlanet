@@ -32,6 +32,9 @@ function contBattleOptions(run, b) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
         cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
         ironman: !!run.opts.ironman, torch: [], waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
+      // the territory's landmark (js/landmarks.js), before the kits land: a wreck whose log this run has already has none to give
+      const lm = contLandmark(b.at);
+      if (lm && b.kind !== 'hollow') lmSetup(lm, B.seed, !!LANDMARKS[lm].wreck && (run.logs || []).includes(LANDMARKS[lm].wreck));
       B.seat.forEach((X, p) => contKit(S, p, X, B));
       // the cards that act as the battle starts: Road Standard, Foundry Surge, and a Corvane Flare year
       B.seat.forEach((X, p) => { if (X.card === 'road') contRoadStandard(p); if (X.card === 'surge') S.contingency.surge = p; });
@@ -39,6 +42,9 @@ function contBattleOptions(run, b) {
     },
   };
 }
+
+/** Territory t's landmark (LM_AT in js/landmarks.js), or null. */
+function contLandmark(t) { return typeof LM_AT === 'object' && typeof lmSetup === 'function' ? LM_AT[CONT_MAP.T[t].id] || null : null; }
 
 /** Seat p's landing kit: goods by rank and supply lines, warbots by rank, refits; a defender's works. */
 function contKit(S, p, X, B) {
@@ -173,8 +179,10 @@ function contBattleCheck() {
 function contBattleOver(withdrew) {
   const C = S.contingency, run = contRestore();
   const b = run && run.battles.find((x) => x.id === C.battle && !x.result);
+  const logs = (S.landmarks || []).filter((L) => L.got === 1 && LANDMARKS[L.id].wreck).map((L) => LANDMARKS[L.id].wreck); // (a wreck's log recovered: kept in the run, won or lost)
   clearSave();
   if (!b) { toMenu(); openContingency(); return; }
+  for (const k of logs) if (!(run.logs || (run.logs = [])).includes(k)) { run.logs.push(k); contLog(run, LM_LOGS[k], 0); }
   const side = (p) => (p >= 0 && p < C.sides.length ? C.sides[p] : CONT_MURMUR);
   let winner;
   if (withdrew) winner = b.sides.find((s) => s !== 0) ?? CONT_MURMUR;

@@ -423,6 +423,29 @@ const ART_MANIFEST = {
   'wreck-bomber': { src: 'bots/wreck-bomber.webp', scale: 1.38 },
   'wreck-airship': { src: 'bots/wreck-airship.webp', scale: 3.4 },
 
+  // The atlas landmarks in a Contingency battle (renderer/b/landmark.js, renderer/tools/install_landmarks.py; ART_GUIDE
+  // Batch 32): loaded only in a battle with one (ensureLandmarkArt in js/landmarks.js). Scale and anchor from the renders.
+  'lm-hull': { src: 'landmarks/lm-hull.webp', scale: 7.9618, anchor: [0.5, 0.6] },
+  'lm-spire': { src: 'landmarks/lm-spire.webp', scale: 5.5432, anchor: [0.5, 0.8] },
+  'lm-pillar-1': { src: 'landmarks/lm-pillar-1.webp', scale: 2.381, anchor: [0.5, 0.8] },
+  'lm-pillar-2': { src: 'landmarks/lm-pillar-2.webp', scale: 2.381, anchor: [0.5, 0.8] },
+  'lm-pillar-3': { src: 'landmarks/lm-pillar-3.webp', scale: 2.381, anchor: [0.5, 0.8] },
+  'lm-falls': { src: 'landmarks/lm-falls.webp', scale: 4.3141, anchor: [0.5, 0.62] },
+  'lm-geyser': { src: 'landmarks/lm-geyser.webp', scale: 4.0193, anchor: [0.5, 0.58] },
+  'lm-house-1': { src: 'landmarks/lm-house-1.webp', scale: 1.7241, anchor: [0.5, 0.68] },
+  'lm-house-2': { src: 'landmarks/lm-house-2.webp', scale: 1.7241, anchor: [0.5, 0.68] },
+  'lm-house-3': { src: 'landmarks/lm-house-3.webp', scale: 1.7241, anchor: [0.5, 0.68] },
+  'lm-sign': { src: 'landmarks/lm-sign.webp', scale: 1.8182, anchor: [0.5, 0.68] },
+  'lm-shaft': { src: 'landmarks/lm-shaft.webp', scale: 1.6129, anchor: [0.5, 0.55] },
+  'lm-wreck-kestrel': { src: 'landmarks/lm-wreck-kestrel.webp', scale: 4.9407, anchor: [0.5, 0.58] },
+  'lm-wreck-survey': { src: 'landmarks/lm-wreck-survey.webp', scale: 4.9407, anchor: [0.5, 0.58] },
+  'lm-wreck-halvard': { src: 'landmarks/lm-wreck-halvard.webp', scale: 4.9407, anchor: [0.5, 0.58] },
+  'lm-town': { src: 'landmarks/lm-town.webp', scale: 9, anchor: [0.5, 0.5] },
+  'lm-town-s': { src: 'landmarks/lm-town-s.webp', scale: 9, anchor: [0.5, 0.5] },
+  'lm-lake': { src: 'landmarks/lm-lake.webp', scale: 12, anchor: [0.5, 0.5] },
+  'lm-crater': { src: 'landmarks/lm-crater.webp', scale: 8.0, anchor: [0.5, 0.5] },
+  'lm-spire-glow': { src: 'landmarks/lm-spire-glow.webp', scale: 5.5432, anchor: [0.5, 0.8] },
+  'lm-sign-glow': { src: 'landmarks/lm-sign-glow.webp', scale: 1.8182, anchor: [0.5, 0.68] },
   // Still to make (placeholders are drawn until these exist):
   //   resources: crop, uranium          ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)

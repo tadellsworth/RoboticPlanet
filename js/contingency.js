@@ -1292,6 +1292,7 @@ function contValid(run) {
     if (typeof run.aims !== 'object' || Array.isArray(run.aims)) return false;
     for (const [k, a] of Object.entries(run.aims)) if (!/^\d+$/.test(k) || +k >= CONT_MAP.n || !a || typeof a !== 'object' || !(a.skip === true || (int(a.to, 0, CONT_MAP.n - 1) && ['strike', 'murmur', 'fort'].includes(a.mode)))) return false;
   }
+  if (run.logs != null && !(Array.isArray(run.logs) && run.logs.length <= 3 && run.logs.every((k) => ['kestrel', 'survey', 'halvard'].includes(k)))) return false; // (the wrecks' logs recovered: js/landmarks.js)
   return Array.isArray(run.battles) && run.opts && typeof run.opts === 'object';
 }
 /** The Contingency slot in this device's storage (apart from the normal save slots). */

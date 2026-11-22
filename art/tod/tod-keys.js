@@ -29,3 +29,4 @@ for (const t of [0, 1]) TOD_KEYS.push(`deepcore@${t}`);
 for (const t of [0, 1]) TOD_KEYS.push(`atmos@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);
+const LANDMARK_TOD_KEYS = ["lm-hull", "lm-spire", "lm-pillar-1", "lm-pillar-2", "lm-pillar-3", "lm-falls", "lm-geyser", "lm-house-1", "lm-house-2", "lm-house-3", "lm-sign", "lm-shaft", "lm-wreck-kestrel", "lm-wreck-survey", "lm-wreck-halvard"]; // (the atlas landmarks: js/landmarks.js, loaded with them: ensureLandmarkArt)
