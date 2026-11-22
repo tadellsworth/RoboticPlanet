@@ -16,6 +16,8 @@
 const CONT_MEGA_TYPE = { lance: 'lance', ray: 'sunder', dome: 'dome', city: 'city', lift: 'lift', atmos: 'atmos', deepcore: 'deepcore', uplink: 'gup' };
 /** The cards played inside a battle (CONT_CARDS: Orbital Drop, Called Ringfall, Corvane Flare), as orders (contCard). */
 const CONT_IN_BATTLE = ['drop', 'ringfall', 'flare'];
+/** The kit's warbots: how many land with the base (and how many more for the defender), and when the rest come (s). */
+const CONT_WAVES = { first: 4, defender: 2, at: [180, 360] };
 const CONT_DROP = { warbots: 6, reach: 4 }, CONT_RINGFALL = { hits: 5, spread: 2 }, CONT_FLARE = { bat: 20 };
 const CONT_GOODS = { ore: 'ore', fiber: 'fiber', stone: 'stone', crude: 'crude', fuel: 'fuel', crystal: 'crystal' };
 
@@ -29,7 +31,7 @@ function contBattleOptions(run, b) {
     setup(S) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
         cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
-        ironman: !!run.opts.ironman, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
+        ironman: !!run.opts.ironman, waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
       B.seat.forEach((X, p) => contKit(S, p, X, B));
       // the cards that act as the battle starts: Road Standard, Foundry Surge, and a Corvane Flare year
       B.seat.forEach((X, p) => { if (X.card === 'road') contRoadStandard(p); if (X.card === 'surge') S.contingency.surge = p; });
@@ -49,7 +51,10 @@ function contKit(S, p, X, B) {
   L.stock.ore = (L.stock.ore || 0) + Math.round(30 * k);
   for (const r of X.supply) if (CONT_GOODS[r]) L.stock[CONT_GOODS[r]] = (L.stock[CONT_GOODS[r]] || 0) + 15;
   const have = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot').length;
-  for (let n = have; n < X.warbots; n++) enterBuilding(addBot(p, 'warbot', L.x, L.y), L);
+  // the kit's warbots: CONT_WAVES.first land with the base (more for a defender), the rest in waves from the Carrier
+  const now = Math.min(X.warbots, CONT_WAVES.first + (X.defender ? CONT_WAVES.defender : 0));
+  for (let n = have; n < now; n++) enterBuilding(addBot(p, 'warbot', L.x, L.y), L);
+  if (S.contingency) S.contingency.waves[p] = Math.max(0, X.warbots - Math.max(now, have));
   const put = (type, stock) => { const s = aiFindSpot(p, type, L); return s ? preBuild(p, type, s.x, s.y, { road: true, reach: 4, stock }) : null; };
   if (X.refits.includes('outpost')) put('outpost');
   if (X.refits.includes('foundry')) put('foundry');
@@ -122,6 +127,18 @@ function contBattleCheck() {
   const C = S.contingency;
   if (!C || S.winner >= 0) return;
   if (C.hands) contAiCards();
+  // the rest of each kit, in waves at its Command Base
+  if (C.waves && C.waveN < CONT_WAVES.at.length && S.time >= CONT_WAVES.at[C.waveN]) {
+    const last = C.waveN === CONT_WAVES.at.length - 1;
+    C.waves.forEach((n, p) => {
+      const P = S.players[p], L = P && !P.out && getE(P.lander), k = last ? n : Math.ceil(n / 2);
+      if (!L || !k) return;
+      for (let q = 0; q < k; q++) enterBuilding(addBot(p, 'warbot', L.x, L.y), L);
+      C.waves[p] = n - k;
+      postMsg(p, `${k} more warbots down from the Carrier.`, L.x, L.y, 'good');
+    });
+    C.waveN++;
+  }
   // the Harrow comes up six minutes in, at the nest nearest your landing, where the Murmur are at full strength
   if (C.harrow === 0 && S.time >= 360 && typeof spawnHarrow === 'function') {
     C.harrow = 1;

@@ -137,6 +137,10 @@ how goods move.
   Spend and the Uplinks, End turn and the battles), moved on by Next or by the first order, ended by Skip or End turn
   and remembered on the device (`terrafall.contingency.coach`). The main menu's Campaigns card reads the run's line
   from `contingencyMenuLine()` ("Year T+7 · COBALT · 11 of 28 territories · 2 Uplinks").
+  A kit's warbots come in waves (`CONT_WAVES`): 4 with the base (6 for the defender), the rest half at 3 minutes and
+  half at 6 (`S.contingency.waves`, `waveN`, checked by `checkSave`), so a high rank doesn't flatten a landing in the
+  first minutes. Battle length: `lh/contingency-length-test.js` plays battles through the bridge with the computer on
+  every side (autoplay) and reports how long each lasts.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

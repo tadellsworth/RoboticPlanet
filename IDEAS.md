@@ -383,8 +383,17 @@ each is a call waiting for the owner's yes or no:
 19. **Ironman:** a battle keeps one save, for Continue and its battle card; restore points, slots, files and codes are
     refused, with a line saying so, and once a battle has begun it can't be auto-resolved instead. Withdraw still
     works. (Closing the tab loses at most the last in-game minute, as for any autosave.)
-20. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
-21. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
+20. **Battle length (play-tested, computer on every side, 12 battles through the bridge):** home assaults on Large ran
+    19 to 35 minutes (two to the 35-minute cap); assaults on other ground 7 to 19; Uplink battles 8 and 23; contested
+    landings 9 and 11; three-sided battles 6 and 7. Median about 13 minutes, below the plan's 15 to 25. What ends them
+    early is a capture by a side with a much higher rank (1 star against 3 or 4) or a Herald's rush; between equal
+    ranks they mostly run 15 to 25. Tuned: the kit's warbots now come in waves (4 with the base, 6 for a defender, the
+    rest at 3 and 6 minutes), which took a 1-star-against-3 home assault from 6 minutes to the cap; the others moved by a
+    few minutes either way. Still open for the
+    owner: a grace before a Command Base can be captured, or Medium-only maps for three sides; a person defends
+    better than the computer, so played battles likely run longer than these.
+21. **Home territories pay 2** like plain ground (the plan gives them no income of their own).
+22. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
 ## Polish round 1 (built Nov 21 2026; open questions)
