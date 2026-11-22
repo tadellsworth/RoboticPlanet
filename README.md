@@ -2048,7 +2048,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   minutes on Normal); Hold the Line's Herald hits a colony that only follows the hints a minute or two sooner on Easy
   and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, played the same way, was won on Hard at
   about 9 to 12 minutes, so its Hard clock went from 40 minutes to 13; with the Grove Planter in its kit since, Hard was
-  won in only 2 of 7 such runs, so its Hard rival is Medium, as on Normal: 4 of 4 won, at 9 to 11 minutes (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
+  won in only 2 of 7 such runs, so its Hard rival is Medium, as on Normal: 4 of 4 won, at 9 to 11 minutes (see IDEAS). On Warlord it keeps that Medium rival with 16 minutes on the clock (its own five-long values, the balance audit of Nov 22 2026: with a Normal rival and 13 minutes none of three runs was won; now 4 of 5, at 11 to 13½ minutes). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
   Harbour's briefing tells of them.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
