@@ -408,11 +408,12 @@ each is a call waiting for the owner's yes or no:
 24. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
-### Contingency's landmarks: calls for the owner's approval (Nov 22 2026)
+### Contingency's landmarks (Nov 22 2026; approved by the owner as shipped)
 
 The atlas's named places (LORE.md, The atlas) are now set pieces in a Contingency battle fought in their territory
 (`js/landmarks.js`; README, Contingency). Each is scenery with its name (hovered or tapped; in faded atlas lettering
-zoomed out) and, where it fit, a light touch. Every one of these is a call for the owner:
+zoomed out) and, where it fit, a light touch. The owner approved all of it as built (placement, wreck territories,
+the numbers, the three logs, the flavour lines); the "Open" notes and item 7 stay open for later:
 
 1. **Where they go.** Near the middle of the line between the sides, outward from it to the first spot where it fits:
    open ground, nothing already there, at least 7 tiles from a base (5 if there's no room), and every tile either base
