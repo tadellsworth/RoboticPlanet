@@ -6073,30 +6073,47 @@ function gunReach(b) {
   return r;
 }
 
-/** Work out, for every player, the ground its rivals' guns cover. */
-function updateDanger() {
+/**
+ * Work out, for every player, the ground its rivals' guns cover. What it was worked out from (the guns' discs and the
+ * spots of the robots and creatures out in the open) is kept in the game (S.dng, saved): a game loaded part way through
+ * the 15 ticks one lasts rebuilds the same maps from it (`again`, see dangerMap) instead of from where things stand
+ * now, so a saved game plays on exactly as it would have.
+ */
+function updateDanger(again) {
   const W = S.W, H = S.H, N = W * H, n = S.players.length;
   if (DANGER.s !== S || DANGER.maps.length !== n || !DANGER.maps[0] || DANGER.maps[0].length !== N) DANGER.maps = S.players.map(() => new Uint8Array(N));
   DANGER.s = S; DANGER.t = S.time; DANGER.epoch = Math.floor(S.tick / 15);
   for (const m of DANGER.maps) m.fill(0);
   DANGER.guns = S.players.map(() => []);
-  for (const b of S.buildings) {
+  const D = again ? S.dng : (S.dng = { ep: DANGER.epoch, g: [], f: [] });
+  const disc = (m, cx, cy, R, bit) => {
+    const R2 = R * R;
+    for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
+      for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
+        if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= bit;
+  };
+  // (a gun: [id, owner, type, x, y, R])
+  const gun = (g) => {
+    const b = getE(g[0]) || { id: g[0], ent: 'b', owner: g[1], type: g[2], x: g[3], y: g[4], dead: true, stock: {} }; // (one lost since: as it stood then)
+    for (let p = 0; p < n; p++) {
+      if (!foes(p, g[1]) || isWild(p)) continue;
+      DANGER.guns[p].push({ b, r: g[5] });
+      disc(DANGER.maps[p], g[3] + 0.5, g[4] + 0.5, g[5], 1);
+    }
+  };
+  if (again) for (const g of D.g) gun(g);
+  else for (const b of S.buildings) {
     const r = gunReach(b);
     if (!r) continue;
-    const R = r + DANGER_PAD, R2 = R * R, cx = b.x + 0.5, cy = b.y + 0.5;
-    for (let p = 0; p < n; p++) {
-      if (!foes(p, b.owner) || isWild(p)) continue;
-      DANGER.guns[p].push({ b, r: R });
-      const m = DANGER.maps[p];
-      for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
-        for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
-          if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= 1;
-    }
+    const g = [b.id, b.owner, b.type, b.x, b.y, r + DANGER_PAD];
+    D.g.push(g); gun(g);
   }
   // Enemy robots out in the open that would shoot (armed warbots) or bite (creatures): bit 2.
   // One on the move counts where it's heading too (FOE_LEAD seconds on, at the pace it's going): a warbot on a road
-  // outpaces a worker on foot, so robots have to give way before it's on them.
+  // outpaces a worker on foot, so robots have to give way before it's on them. (A spot: [owner, x, y, R].)
+  const spot = (f) => { for (let p = 0; p < n; p++) if (foes(p, f[0]) && !isWild(p)) disc(DANGER.maps[p], f[1], f[2], f[3], 2); };
   DANGER.foes = 0;
+  if (again) { DANGER.foes = D.n || 0; for (const f of D.f) spot(f); return; }
   for (const v of S.bots) {
     const R = foeReach(v);
     if (!R) { v.dgT = undefined; continue; }
@@ -6106,16 +6123,9 @@ function updateDanger() {
     if (dtv >= 0.25 || v.dgT === undefined) { v.dgX = v.x; v.dgY = v.y; v.dgT = S.time; }
     const lx = v.x + (v.dgVx || 0) * FOE_LEAD, ly = v.y + (v.dgVy || 0) * FOE_LEAD;
     const spots = dist2(lx, ly, v.x, v.y) > 0.25 ? [[v.x, v.y], [lx, ly]] : [[v.x, v.y]];
-    const R2 = R * R;
-    for (let p = 0; p < n; p++) {
-      if (!foes(p, v.owner) || isWild(p)) continue;
-      const m = DANGER.maps[p];
-      for (const [cx, cy] of spots)
-        for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
-          for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
-            if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= 2;
-    }
+    for (const [cx, cy] of spots) { const f = [v.owner, cx, cy, R]; D.f.push(f); spot(f); }
   }
+  D.n = DANGER.foes;
 }
 
 /**
@@ -6166,7 +6176,11 @@ function foeReach(v) {
 /** The ground player p's robots should keep off (1 = an enemy gun reaches it). */
 function dangerMap(p) {
   // (worked out afresh every 15 ticks, at the same ticks on every device and after a game is loaded: see hashState)
-  if (DANGER.s !== S || DANGER.epoch !== Math.floor(S.tick / 15) || !DANGER.maps[p]) updateDanger();
+  if (DANGER.s !== S || DANGER.epoch !== Math.floor(S.tick / 15) || !DANGER.maps[p]) {
+    // (a game loaded part way through: the maps as they were worked out, from what S.dng kept)
+    const ep = Math.floor(S.tick / 15), D = S.dng;
+    updateDanger(DANGER.s !== S && D && D.ep === ep && Array.isArray(D.g) && Array.isArray(D.f));
+  }
   return DANGER.maps[p] || DANGER.maps[0];
 }
 /** Does an enemy gun reach tile t, for player p's robots? */
@@ -11341,6 +11355,8 @@ function updateCritter(u, dt) {
   const t = u.task || (u.task = { type: 'guard' });
   // The other forms' pose (for the drawing): 'walk' but where their own step says otherwise (see murmurPose).
   if (u.pose !== undefined) { u.poseT = (u.poseT || 0) + dt; if (!u.under && !(t.type === 'raid' && (t.role === 'spit' || t.role === 'sap' || (t.role === 'cut' && t.feeding)))) murmurPose(u, 'walk'); }
+  // Active: an armed robot in reach is never walked past: they fight it or fall back from it (murmurThreat).
+  if (t.night && murmurSmart() && murmurThreat(u, t, dt)) return;
   if (t.type === 'raid' && t.wait > S.time) {
     u.path = null; u.fight = 0;
     u.face = datan2(t.y + 0.5 - u.y, t.x + 0.5 - u.x);
@@ -11370,6 +11386,7 @@ function updateCritter(u, dt) {
     return;
   }
   if (t.type === 'raid' && t.role === 'cut') { murmurCutStep(u, t, dt); return; }
+  if (t.type === 'raid' && t.role === 'hunt') { murmurHuntStep(u, t, dt); return; } // (a hunting team at a weak point: murmurHunt)
   // The other forms (Active): a Spitter at the guns, a Sapper under them, a full Leech going home.
   if (t.type === 'raid' && t.role === 'sap') { murmurSapStep(u, t, dt); return; }
   if (t.type === 'raid' && t.role === 'spit') { murmurSpitStep(u, t, dt); return; }
@@ -11387,7 +11404,7 @@ function updateCritter(u, dt) {
     const b = getE(t.focus);
     if (!b || b.dead || !foes(u.owner, b.owner) || calmB(b) || S.time > t.until) { murmurBack(u); return; }
     if (bt.smash) {
-      if (b.armor <= 1 && b.built) { murmurBack(u); return; }
+      if (b.armor <= 1 && b.built) { if (!murmurLoose(u, t)) murmurBack(u); return; } // (later on: on through the colony)
       if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 1.7) {
         u.path = null;
         if (u.cd <= 0) critterBite(u, b);
@@ -11465,6 +11482,9 @@ function updateCritter(u, dt) {
     const prey = wildPrey(u.x, u.y, WILD.hunt, S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], atObjective);
     if (prey && travel(u, Math.floor(prey.x), Math.floor(prey.y), dt) !== null) return;
     if (atObjective) {
+      // (later on, with nothing left to catch there a while, on through the colony: murmurLoose)
+      t.idle = (t.idle || 0) + dt;
+      if (t.idle >= MURMUR.bold.idle && murmurLoose(u, t)) return;
       if (dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) >= 2.2) travel(u, t.x, t.y, dt);
       return;
     }
@@ -11504,7 +11524,7 @@ function updateCritter(u, dt) {
 function murmurOnward(u, t) {
   if (S.time < (t.re || 0)) return;
   t.re = S.time + 8;
-  const g = murmurPrey(u.x, u.y, 16);
+  const g = (t.role === 'loose' && !BOTS[u.type].smash && murmurQuarry(u, MURMUR.bold.quarryR)) || murmurPrey(u.x, u.y, 16); // (loose, later on: robots first)
   if (g && dist2(g.x + 0.5, g.y + 0.5, u.x, u.y) > 4) { t.x = g.x; t.y = g.y; t.arrived = false; t.smash = null; u.path = null; }
 }
 
@@ -11577,10 +11597,11 @@ function murmurTick() {
   // The packs: `waves` a night, the first a minute after nightfall (the night's first exits are open by then), the
   // second well into the night.
   const into = x - NIGHT_FROM;
-  while ((M.wave || 0) < C.waves && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; if (smart) murmurCraftWave(n, C, M.wave); else murmurWave(n, C); }
+  while ((M.wave || 0) < murmurWaves(n, C) && into >= [55, 135, 175][M.wave || 0]) { M.wave = (M.wave || 0) + 1; if (smart) murmurCraftWave(n, C, M.wave); else murmurWave(n, C); }
   deepCalls(n, C); // (a Deep Core that went deeper: the night's raid that comes for it)
   atmosCalls(n); // (an Atmosphere Engine that reached a new stage: the Sappers that dig in under it)
   if (smart) murmurPlansTick();
+  if (murmurBold()) { murmurHunt(n); murmurHorde(n); } // (Active, later in the game: the hunt at the weak points, the horde)
 }
 
 /** Nightfall (night n): each live nest's tunnels set out toward power (murmurGrow), and new exits are due. */
@@ -11613,7 +11634,7 @@ function murmurNightfall(n) {
     }
     b.tunAcc = 0; b.tunRate = budget / 120; // (dug in the first two minutes of the night)
     const open = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id).length;
-    b.exitsDue = Math.max(0, Math.min(murmurBy(C.exits, n), C.maxExits - open));
+    b.exitsDue = Math.max(0, Math.min(murmurBy(C.exits, n), murmurMaxExits(n, C) - open));
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
@@ -11633,7 +11654,7 @@ function murmurExitCap() {
   if (S.mode !== 'colony' || !S.hollow) return Infinity;
   const C = murmurCfg(), n = Math.max(1, murmurNights(S.time)), sz = SIZE_PRESETS[S.settings.size] || { w: S.W, h: S.H };
   let each = 0;
-  for (let k = 1; k <= n && each < C.maxExits; k++) each = Math.min(C.maxExits, each + murmurBy(C.exits, k));
+  for (let k = 1; k <= n && each < murmurMaxExits(k, C); k++) each = Math.min(murmurMaxExits(k, C), each + murmurBy(C.exits, k));
   return colonyNests(sz.w, sz.h) * each;
 }
 
@@ -11850,7 +11871,7 @@ function murmurReach() {
 
 /** A night's wave: a pack comes up through every open exit with something of a colony's within reach of it (murmurPrey). */
 function murmurWave(n, C) {
-  const up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length, room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  const up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length, room = murmurRoom();
   const size = murmurBy(C.pack, n), brutes = n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0, until = S.time + 600;
   const told = {};
   let made = 0;
@@ -11907,7 +11928,11 @@ function murmurGunMap() {
   const ep = Math.floor(S.tick / 15);
   if (MUR_GUNS.ms === S && MUR_GUNS.ep === ep && MUR_GUNS.map) return MUR_GUNS.map;
   const W = S.W, H = S.H, m = MUR_GUNS.map && MUR_GUNS.map.length === W * H ? MUR_GUNS.map.fill(0) : new Uint8Array(W * H);
-  for (const g of murmurGuns()) {
+  // (kept in the game, S.mgn, saved: a game loaded part way through the 15 ticks rebuilds the same ground from it)
+  const kept = MUR_GUNS.ms !== S && S.mgn && S.mgn.ep === ep && Array.isArray(S.mgn.l) ? S.mgn.l : null;
+  const list = kept ? kept.map((g) => ({ x: g[0], y: g[1], r: g[2] })) : murmurGuns();
+  if (!kept) S.mgn = { ep, l: list.map((g) => [g.x, g.y, g.r]) };
+  for (const g of list) {
     const R = g.r + 1, R2 = R * R;
     for (let j = Math.max(0, Math.floor(g.y - R)); j <= Math.min(H - 1, Math.floor(g.y + R)); j++)
       for (let i = Math.max(0, Math.floor(g.x - R)); i <= Math.min(W - 1, Math.floor(g.x + R)); i++) if (dist2(i + 0.5, j + 0.5, g.x, g.y) <= R2) m[j * W + i] = 1;
@@ -12207,7 +12232,7 @@ function murmurCraftWave(n, C, wave) {
   }
   const plans = M.plans.filter((pl) => pl.n === n && pl.round === wave && pl.phase === 0);
   let up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length;
-  const room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  const room = murmurRoom();
   const size = murmurBy(C.pack, n), brutes = n >= C.brutes ? Math.max(1, Math.floor(size / 4)) : 0, until = S.time + 600;
   const told = {}, packs = [], openedByPlan = new Map();
   // Only exits with a usable approach can supply a plan. If two plans can use one, the nearer one gets it.
@@ -12239,15 +12264,17 @@ function murmurCraftWave(n, C, wave) {
     const g = pl ? null : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey);
     if (!pl && (!g || dr?.pl.p === g.owner || !murmurRoute(e, g.x, g.y))) continue;
     const task = pl ? { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 } : { type: 'raid', x: g.x, y: g.y, until, night: 1 };
-    for (let k = 0; k < size; k++) {
-      const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
+    // (later in the game, bigger packs for a bigger colony: murmurPressure; as before on the first nights)
+    const sz = Math.max(1, Math.min(murmurPack(size, pl ? pl.p : g.owner), room - up)), br = n >= C.brutes ? Math.max(brutes, Math.floor(sz / 4)) : 0;
+    for (let k = 0; k < sz; k++) {
+      const u = spawnCritter(e, k < br ? 'brute' : 'scuttler', { ...task });
       u.nest = nest.id; u.exit = e.id;
       if (pl) u.plan = pl.id;
       up++;
     }
     addFx('dust', e.x + 0.5, e.y + 0.5, { r: 0.8 });
     const owner = pl ? pl.p : g.owner;
-    if (owner >= 0) { const T = told[owner] || (told[owner] = { n: 0, x: e.x, y: e.y }); T.n += size; }
+    if (owner >= 0) { const T = told[owner] || (told[owner] = { n: 0, x: e.x, y: e.y }); T.n += sz; }
     packs.push({ e, nest, pl, task, owner });
     if (pl && !pl.phase) { pl.phase = 1; pl.at = S.time; openedByPlan.set(pl.id, e); }
   }
@@ -12452,7 +12479,7 @@ function murmurPullBack(pl, fighters) {
 /** Those that went back come up again: at the exit nearest the rally point, gathering at a new one. */
 function murmurAgain(pl) {
   pl.again = 0;
-  const room = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  const room = murmurRoom();
   const up = S.bots.filter((u) => !u.dead && u.task?.night).length;
   const n = Math.min(pl.home || 0, room - up);
   if (n <= 0) { pl.phase = 4; return; }
@@ -12717,6 +12744,303 @@ function murmurDeliver(u) {
   nest.born -= MURMUR.forms.leech.grow * u.charge;
   u.charge = 0;
   addFx('ring', nest.x + 0.5, nest.y + 0.5, { color: WILD_COLOR, r: 1.2 });
+}
+
+/* ------------------------------------------------------------------ the Murmur grow bolder (Active only) */
+
+/*
+ * MURMUR.bold. Three things, on Active only (Quiet is as it was):
+ * - Threats (every game on Active, missions too): an armed robot in reach is never walked past. Each of them at night
+ *   weighs it against its own pack round it (murmurThreat): strong enough, they turn on it; too weak, they fall back
+ *   from it a moment and come on again (twice; then they carry on), and cornered (shot at after that) they fight.
+ * - Pressure (not in missions, unless one asks: S.mission.bold): the first two nights as before; from the third
+ *   bigger packs, more of them up at once, more exits and a third wave, growing night by night and with the colony's
+ *   power (murmurPressure).
+ * - The hunt and the horde (the same): later on, teams come up at every weak point a colony leaves unguarded through
+ *   the exits near it (murmurHunt: collapse them and it dies), and a strike under way is fed fresh packs (murmurHorde).
+ * New state: S.mur.huntAt, a plan's hordeAt and hordeMsg, a creature's task.thr, thrT, av (and the scat it shares with
+ * the craft's scatter).
+ */
+function murmurBold() { return murmurSmart() && (!S.mission || !!S.mission.bold); }
+
+/** Colony p's power as the Murmur feel it: its finished buildings and twice its armed robots (made once a tick). */
+const MUR_POWER = { s: null, tick: -1, by: {} };
+function murmurColonyPower(p) {
+  if (MUR_POWER.s !== S || MUR_POWER.tick !== S.tick) { MUR_POWER.s = S; MUR_POWER.tick = S.tick; MUR_POWER.by = {}; }
+  if (MUR_POWER.by[p] !== undefined) return MUR_POWER.by[p];
+  let n = 0;
+  for (const b of S.buildings) if (!b.dead && b.built && b.owner === p && !BDEFS[b.type].wild) n++;
+  for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u)) n += 2;
+  return (MUR_POWER.by[p] = n);
+}
+
+/** Colony p's power as a share of MURMUR.bold.powerRef, from powerMin to powerMost: a small or beaten colony draws them less. */
+function murmurPowerMul(p) {
+  const B = MURMUR.bold, P = p >= 0 ? S.players[p] : null;
+  return P && !isWild(p) ? clamp(murmurColonyPower(p) / B.powerRef, B.powerMin, B.powerMost) : 1;
+}
+
+/**
+ * How hard they press colony p on night n: 1 on the first nights; from nightFrom more each night, times its power
+ * (murmurPowerMul), never under 1 (MURMUR.bold).
+ */
+function murmurPressure(p, n = murmurNights(S.time)) {
+  const B = MURMUR.bold;
+  if (!murmurBold() || n < B.nightFrom) return 1;
+  const night = Math.min(B.nightMost, 1 + (n - B.nightFrom + 1) * B.perNight);
+  return Math.max(1, Math.round(night * murmurPowerMul(p) * 100) / 100);
+}
+
+/** A pack of `size` (the night's) for colony p, scaled by the pressure on it. */
+function murmurPack(size, p) { return p >= 0 ? Math.round(size * murmurPressure(p)) : size; }
+
+/** At most how many of them are up at once: MURMUR.room, times the mean pressure on the colonies still in (Active, later on). */
+function murmurRoom() {
+  const base = MURMUR.room[0] + MURMUR.room[1] * nColoniesIn();
+  if (!murmurBold()) return base;
+  let s = 0, k = 0;
+  for (const P of S.players) if (!P.absent && !P.out && !isWild(P.id)) { s += murmurPressure(P.id); k++; }
+  return Math.round(base * (k ? s / k : 1));
+}
+
+/** How many exits a nest may hold open at once on night n (one more from MURMUR.bold.exitNight, two from exitNight2). */
+function murmurMaxExits(n, C) {
+  const B = MURMUR.bold;
+  return C.maxExits + (murmurBold() ? (n >= B.exitNight ? 1 : 0) + (n >= B.exitNight2 ? 1 : 0) : 0);
+}
+
+/** How many waves come up on night n (a third from MURMUR.bold.waveNight). */
+function murmurWaves(n, C) { return C.waves + (murmurBold() && n >= MURMUR.bold.waveNight ? 1 : 0); }
+
+/** An armed robot of a colony, out where one of them can get at it. */
+function murmurArmedFoe(v, u) {
+  return !v.dead && !v.inside && !isWildBot(v) && v.owner >= 0 && foes(v.owner, u.owner) && !aloft(v) && isArmy(v) && botArmed(v) && !calmAt(v.x, v.y);
+}
+
+/**
+ * Creature u (a night task on Active) and the armed robots round it: an armed robot within MURMUR.bold.threatR tiles,
+ * or whatever robot just hit it, is never ignored. Against its own pack round it (packR) it is weighed (w, robotW, and
+ * the guns covering it, gunW): strong enough, they fight it (task.thr) until it's dead or gone; too weak, they fall
+ * back from it (task.scat) and come on again; fallen back avoidMost times, they carry on, and cornered (shot at
+ * after that) they fight. The Leech, Spitter and Sapper turn only on what just hit them, and never fall back. True if that was u's
+ * turn. Not for the watcher, a Leech feeding, a Sapper digging in or under, or one going home.
+ */
+function murmurThreat(u, t, dt) {
+  const B = MURMUR.bold;
+  if (u.under || (t.type !== 'raid' && t.type !== 'rally') || t.role === 'sap' || (t.role === 'cut' && t.feeding) || BOTS[u.type].behemoth) return false;
+  // Falling back: away until the time is up, then on with what it was doing.
+  if (t.scat) {
+    if (t.scat > S.time) { murmurFlee(u, t, dt); return true; }
+    t.scat = 0; t.arrived = false; u.path = null;
+  }
+  // Fighting one: on at it while it's alive, out in the open and in reach.
+  if (t.thr) {
+    const v = getE(t.thr);
+    if (v && v.ent === 'u' && !v.dead && !v.inside && !aloft(v) && !calmAt(v.x, v.y) && S.time < t.thrT && dist2(u.x, u.y, v.x, v.y) <= sq(B.threatR + 2)) {
+      if (dist(u.x, u.y, v.x, v.y) > 0.75) {
+        if (!moveDirect(u, v.x, v.y, dt) && travel(u, Math.floor(v.x), Math.floor(v.y), dt) === null) { t.thr = 0; u.fight = 0; u.ignoreFoe = v.id; u.ignoreUntil = S.time + 5; u.path = null; }
+      } else { u.path = null; if (u.cd <= 0) critterBite(u, v); }
+      return true;
+    }
+    t.thr = 0; u.fight = 0; u.path = null; t.arrived = false;
+  }
+  u.thrScan = (u.thrScan || 0) - dt;
+  if (u.thrScan > 0) return false;
+  u.thrScan = 0.4;
+  // The nearest armed robot in reach, or the robot that just hit it.
+  // (The other forms keep to their part in the strike: they turn only on what shoots them, and never fall back.)
+  const form = murmurForm(u);
+  let v = null, bd = B.threatR * B.threatR;
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  if (!form) for (const w of S.bots) {
+    if (!murmurArmedFoe(w, u) || (w.id === u.ignoreFoe && S.time < u.ignoreUntil)) continue;
+    const d = dist2(w.x, w.y, u.x, u.y);
+    if (d < bd && S.zone[tIdx(Math.floor(w.x), Math.floor(w.y))] === zone) { bd = d; v = w; }
+  }
+  if (!v && u.hitT !== undefined && S.time - u.hitT < B.hitFor && Number.isFinite(u.hitX)) {
+    let hd = 1.5 * 1.5;
+    for (const w of S.bots) {
+      if (w.dead || w.inside || isWildBot(w) || w.owner < 0 || !foes(w.owner, u.owner) || aloft(w) || calmAt(w.x, w.y)) continue;
+      const d = dist2(w.x, w.y, u.hitX, u.hitY);
+      if (d < hd && dist2(w.x, w.y, u.x, u.y) <= sq(B.threatR + 3) && S.zone[tIdx(Math.floor(w.x), Math.floor(w.y))] === zone) { hd = d; v = w; }
+    }
+  }
+  if (!v) return false;
+  // Weigh it: their pack round u against the armed robots round it and the guns that cover it.
+  let mine = 0, theirs = murmurGunAt(v.x, v.y) * B.gunW;
+  for (const w of S.bots) {
+    if (w.dead || w.under) continue;
+    if (isWildBot(w)) { if (w.task && w.task.night && dist2(w.x, w.y, u.x, u.y) <= B.packR * B.packR) mine += B.w[w.type] || 1; }
+    else if (murmurArmedFoe(w, u) && dist2(w.x, w.y, v.x, v.y) <= 16) theirs += BOTS[w.type].hp / B.robotW;
+  }
+  if (!theirs) theirs = BOTS[v.type].hp / B.robotW; // (an unarmed robot that hit it: a train's gun, a Howitzer)
+  // (Cornered: fallen back avoidMost times and still being shot, it turns and fights.)
+  const cornered = (t.av || 0) >= B.avoidMost && u.hitT !== undefined && S.time - u.hitT < B.hitFor;
+  // (Fallen back as often as it will and not shot at: on its way, past it; the moment it's shot, cornered.)
+  if (mine < theirs * B.engage && !cornered && !form && (t.av || 0) >= B.avoidMost) return false;
+  if (mine < theirs * B.engage && !cornered && !form) {
+    const dx = u.x - v.x, dy = u.y - v.y, d = Math.max(0.1, Math.sqrt(dx * dx + dy * dy));
+    const s = murmurStand(clamp(u.x + (dx / d) * 5, 0, S.W - 1), clamp(u.y + (dy / d) * 5, 0, S.H - 1));
+    if (s) {
+      t.av = (t.av || 0) + 1; t.scat = S.time + B.avoidFor; t.scatCd = S.time + MURMUR.craft.scatterCd; t.sx = s.x; t.sy = s.y;
+      u.fight = 0; u.path = null;
+      murmurFlee(u, t, dt);
+      return true;
+    }
+  }
+  t.thr = v.id; t.thrT = S.time + 10; u.fight = v.id; u.path = null;
+  return true;
+}
+
+/**
+ * Colony p's weak points tonight (night n), up to `want`, a few tiles apart: what no gun covers and no armed robot
+ * stands by, power they can cut first, then sites and lone buildings, where they fed and not where they were killed.
+ * Not a Command Base, Wall, Gate or Viaduct, nor what a strike or another team is already after. [{ b, x, y }].
+ */
+function murmurWeak(p, n, want) {
+  const M = S.mur, taken = new Set();
+  for (const pl of M.plans || []) if (pl.p === p && pl.phase < 4) taken.add(pl.tb);
+  for (const u of S.bots) if (!u.dead && isWildBot(u) && u.task && u.task.focus) taken.add(u.task.focus);
+  const armed = S.bots.filter((u) => !u.dead && !u.inside && u.owner === p && isArmy(u) && botArmed(u));
+  const mine = S.buildings.filter((b) => !b.dead && b.owner === p), list = [];
+  for (const e of mine) {
+    const def = BDEFS[e.type];
+    if (def.barrier || def.viaduct || def.wild || e.type === 'lander' || calmB(e) || taken.has(e.id) || murmurGunAt(e.x + 0.5, e.y + 0.5, 1)) continue;
+    if (armed.some((u) => dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) < 36)) continue;
+    let crowd = 0;
+    for (const o of mine) if (o !== e && dist2(o.x, o.y, e.x, e.y) < 36) crowd++;
+    const s = (murmurCutPower(e) ? 6 : 0) + chargeWorth(e) * 1.5 + (e.built ? 0 : 3) + Math.max(0, 3 - crowd * 0.5)
+      - murmurMem('kill', e.x, e.y) * 2 + murmurMem('fed', e.x, e.y) + hash2(e.id, n * 7 + (M.huntSeq || 0), 83) * 1.5;
+    list.push({ b: e, x: e.x, y: e.y, s });
+  }
+  list.sort((a, c) => c.s - a.s || a.b.id - c.b.id);
+  const out = [];
+  for (const w of list) {
+    if (out.length >= want) break;
+    if (out.some((o) => dist2(o.x, o.y, w.x, w.y) < 36)) continue;
+    out.push(w);
+  }
+  return out;
+}
+
+/**
+ * The hunt (MURMUR.bold, from night huntFrom): every huntEvery seconds of the night (after the first wave, not in its
+ * last 40 seconds), teams come up at each colony's weak points (murmurWeak), each through a different exit within huntR
+ * tiles of the colony that has a way there: no exit near, no hunt.
+ */
+function murmurHunt(n) {
+  const B = MURMUR.bold, M = S.mur, x = dayClock(S.time);
+  const from = M.huntFrom || B.huntFrom; // (a mission can bring it sooner: S.mur.huntFrom)
+  if (n < from || x - NIGHT_FROM < 70 || NIGHT_TO - x < 40 || S.time < (M.huntAt || 0)) return;
+  M.huntAt = S.time + B.huntEvery; M.huntSeq = (M.huntSeq || 0) + 1;
+  const room = murmurRoom(), until = S.time + 300;
+  let up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length;
+  for (const P of S.players) {
+    if (P.absent || P.out || isWild(P.id) || up >= room) continue;
+    const mine = S.buildings.filter((b) => !b.dead && b.owner === P.id);
+    const exits = murmurExits(0, 0, Math.hypot(S.W, S.H)).filter((e) => getE(e.nest).sQuiet !== n && mine.some((b) => dist2(b.x, b.y, e.x, e.y) <= B.huntR * B.huntR));
+    if (!exits.length) continue;
+    const want = Math.min(exits.length, Math.max(1, Math.round(murmurBy(B.teams, n - from + 1) * Math.min(1, murmurPowerMul(P.id))))); // (fewer at a small colony)
+    const size = Math.max(B.teamN, Math.round(B.teamN * murmurPressure(P.id, n))), used = new Set();
+    let teams = 0;
+    for (const w of murmurWeak(P.id, n, want)) {
+      if (up + size > room) break;
+      const ex = exits.filter((e) => !used.has(e.id)).sort((a, c) => dist2(a.x, a.y, w.x, w.y) - dist2(c.x, c.y, w.x, w.y) || a.id - c.id).slice(0, 3)
+        .find((e) => murmurRoute(e, w.x, w.y, 80));
+      if (!ex) continue;
+      used.add(ex.id);
+      const st = murmurStand(w.x + 0.5, w.y + 0.5) || { x: w.x, y: w.y };
+      for (let k = 0; k < size; k++) {
+        const u = spawnCritter(ex, k === 0 && n >= B.teamBrute ? 'brute' : 'scuttler', { type: 'raid', role: 'hunt', focus: w.b.id, x: st.x, y: st.y, until, night: 1 });
+        u.nest = ex.nest; u.exit = ex.id;
+      }
+      addFx('dust', ex.x + 0.5, ex.y + 0.5, { r: 0.8 });
+      up += size; teams++;
+    }
+    if (teams && P.murHunt !== n) {
+      P.murHunt = n;
+      postMsg(P.id, `Contacts at ${teams > 1 ? `${teams} points` : 'a point'} round the colony at once, each at something unguarded. The tunnel exits near the colony are their way in.`, undefined, undefined, 'bad');
+      if (isMe(P.id)) sfx('alert');
+    }
+  }
+}
+
+/**
+ * A hunting team's member (raid task with role 'hunt', its focus a weak point): a Scuttler cuts the power there if it
+ * can (as a strike's cutters do), any of them goes at a site; then it fights as a strike's do (the Brute batters it,
+ * the Scuttlers hunt the robots round it).
+ */
+function murmurHuntStep(u, t, dt) {
+  const b = getE(t.focus);
+  if (!b || b.dead || !foes(u.owner, b.owner) || calmB(b) || S.time > t.until) { murmurBack(u); return; }
+  const cut = !BOTS[u.type].smash && murmurCutPower(b), site = !b.built;
+  const onward = () => { t.role = 'main'; t.arrived = false; t.work = 0; u.path = null; };
+  if (!cut && !site) { onward(); return; }
+  const gx = b.x + 0.5, gy = b.y + 0.5;
+  if (dist2(u.x, u.y, gx, gy) > 1.7) { if (!murmurStep(u, gx, gy, dt)) onward(); return; }
+  u.path = null; u.face = datan2(gy - u.y, gx - u.x); u.fought = 1;
+  if (site) { if (u.cd <= 0) critterBite(u, b); return; }
+  t.work = (t.work || 0) + dt;
+  if (t.work >= MURMUR.craft.cutTime) { murmurCut({ id: 0, p: b.owner, cut: [], cutMsg: 0 }, [1, b.id, b.x, b.y]); onward(); }
+}
+
+/**
+ * The horde (MURMUR.bold, from night hordeFrom): a strike under way (phase 2) is fed hordeN more (times the pressure)
+ * every hordeEvery seconds, up the exit nearest its target that has a way there, straight at it, until dawn is near.
+ */
+function murmurHorde(n) {
+  const B = MURMUR.bold, K = MURMUR.craft, M = S.mur;
+  if (n < B.hordeFrom || !M.plans) return;
+  const room = murmurRoom();
+  let up = -1;
+  for (const pl of M.plans) {
+    if (pl.phase !== 2 || pl.n !== n) continue;
+    if (!pl.hordeAt) { pl.hordeAt = S.time + B.hordeEvery; continue; }
+    if (S.time < pl.hordeAt) continue;
+    pl.hordeAt = S.time + B.hordeEvery;
+    const tb = getE(pl.tb);
+    if (NIGHT_TO - dayClock(S.time) < 30 || !tb || tb.dead || tb.owner !== pl.p || calmB(tb)) continue;
+    if (up < 0) up = S.bots.filter((u) => !u.dead && u.task && u.task.night).length;
+    const k = Math.min(Math.round(B.hordeN * murmurPressure(pl.p, n)), room - up);
+    if (k <= 0) continue;
+    const ex = murmurExits(pl.tx, pl.ty, K.join).slice(0, 4).find((e) => getE(e.nest).sQuiet !== n && murmurRoute(e, pl.tx, pl.ty, 80));
+    if (!ex) continue;
+    const st = murmurStand(pl.tx + 0.5, pl.ty + 0.5) || { x: pl.tx, y: pl.ty };
+    for (let j = 0; j < k; j++) {
+      const u = spawnCritter(ex, j % 3 === 2 ? 'brute' : 'scuttler', { type: 'raid', role: 'main', focus: tb.id, x: st.x, y: st.y, until: S.time + 300, night: 1 });
+      u.nest = ex.nest; u.exit = ex.id; u.plan = pl.id;
+    }
+    pl.n0 = (pl.n0 || 0) + k; up += k;
+    addFx('dust', ex.x + 0.5, ex.y + 0.5, { r: 0.8 });
+    if (!pl.hordeMsg) { pl.hordeMsg = 1; postMsg(pl.p, `Contacts still surfacing at your ${BDEFS[tb.type].name}, more every half minute. The exit near it is feeding them.`, ex.x, ex.y, 'bad'); if (isMe(pl.p)) sfx('alert'); }
+  }
+}
+
+/** The robot a loose Scuttler hunts: the nearest of a colony's out in the open within r tiles, unarmed and out of the guns' reach, that it can walk to. { x, y, owner } or null. */
+function murmurQuarry(u, r) {
+  let best = null, bd = r * r;
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  for (const v of S.bots) {
+    if (v.dead || v.inside || isWildBot(v) || v.owner < 0 || !foes(v.owner, u.owner) || aloft(v) || BOTS[v.type].air || BOTS[v.type].sea || (isArmy(v) && botArmed(v))) continue;
+    const d = dist2(v.x, v.y, u.x, u.y);
+    if (d >= bd || calmAt(v.x, v.y) || S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== zone || murmurGunAt(v.x, v.y, 1)) continue;
+    bd = d; best = { x: Math.floor(v.x), y: Math.floor(v.y), owner: v.owner };
+  }
+  return best;
+}
+
+/**
+ * A creature done at its strike's objective (a Brute that has battered it down, a Scuttler with nothing left to catch
+ * there for MURMUR.bold.idle s), from night nightFrom where they grow bolder: it doesn't go back down or wait there, it
+ * goes on through the colony after the next thing it can get at (a free raid: murmurOnward). True if it went.
+ */
+function murmurLoose(u, t) {
+  if (!murmurBold() || murmurNights(S.time) < MURMUR.bold.nightFrom) return false;
+  const g = (!BOTS[u.type].smash && murmurQuarry(u, MURMUR.bold.quarryR)) || murmurPrey(u.x, u.y, 16);
+  if (!g) return false;
+  t.focus = 0; t.role = 'loose'; t.x = g.x; t.y = g.y; t.arrived = false; t.smash = null; t.idle = 0; t.re = S.time + 8;
+  u.fight = 0; u.path = null;
+  return true;
 }
 
 /** A Spitter's strike (role 'spit'): to a few tiles off the nearest gun or Wall round the target, then a volley every few seconds. */
@@ -17973,11 +18297,15 @@ function hashState() {
       int(pl.redirected || 0); int(pl.feintCover || 0); num(pl.feintAt);
       int(pl.feintGuard?.length || 0);
       for (const id of pl.feintGuard || []) int(id);
+      if (pl.hordeAt) { num(pl.hordeAt); int(pl.n0 || 0); } // (the horde feeding a strike: murmurHorde)
     }
+    if (S.mur.huntAt) { num(S.mur.huntAt); int(S.mur.huntSeq || 0); } // (the hunt at the weak points: murmurHunt)
     for (const k of ['kill', 'fed']) for (const e of (S.mur.mem && S.mur.mem[k]) || []) { num(e[0]); num(e[1]); num(e[2]); }
     for (const d of S.mur.dead || []) { int(d.id); num(d.x); num(d.y); int(d.by); }
     for (const d of S.mur.dark || []) { int(d.x); int(d.y); num(d.until); }
   }
+  // (Active: a creature fighting an armed robot, or falling back from one: murmurThreat)
+  for (const u of S.bots) if (u.task && (u.task.thr || u.task.av || u.task.scat)) { int(u.id); int(u.task.thr || 0); num(u.task.thrT || 0); int(u.task.av || 0); num(u.task.scat || 0); }
   for (const u of S.bots) if (u.pose !== undefined) { int(u.id); str(u.pose); num(u.charge || 0); int(u.under || 0); } // (the Murmur's other forms)
   // The Harrow: its task, its riders, when it comes and the marks it leaves.
   for (const u of S.bots) if (u.task && u.task.type === 'harrow') { const t = u.task; int(u.id); int(t.p); int(t.tb || 0); str(t.ph); num(t.slamAt); num(t.born); num(t.re || 0); int(t.pi || 0); int(t.path ? t.path.length : -1); int(t.hit || 0); int(t.miss || 0); int(u.riders || 0); }

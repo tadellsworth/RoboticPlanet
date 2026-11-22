@@ -5422,9 +5422,17 @@ function checkSave(o) {
     // and the marks it leaves (its craters, the slams' broken ground, its dead): numbers on the map.
     if (M.hw != null && !(obj(M.hw) && [0, 1, 2].includes(M.hw.roll) && Number.isInteger(M.hw.night) && M.hw.night >= 0 && [0, 1].includes(M.hw.done) && [0, 1].includes(M.hw.mound))) bad();
     for (const k of ['craters', 'cracks', 'husks']) if (M[k] != null && !(Array.isArray(M[k]) && M[k].length <= 16 && M[k].every((c) => obj(c) && ['x', 'y', 't'].every((q) => Number.isFinite(c[q])) && c.x >= -1 && c.y >= -1 && c.x <= o.W && c.y <= o.H && (c.a == null || Number.isFinite(c.a))))) bad();
+    if (M.huntAt != null && !Number.isFinite(M.huntAt)) bad(); // (the hunt: murmurHunt)
+    if (M.huntSeq != null && !(Number.isInteger(M.huntSeq) && M.huntSeq >= 0)) bad();
+    if (M.huntFrom != null && !(Number.isInteger(M.huntFrom) && M.huntFrom >= 0)) bad(); // (a mission's: the hunt sooner)
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
+  // What the danger maps and the Murmur's gun cover were last worked out from (updateDanger, murmurGunMap): numbers.
+  if (o.dng != null && !(obj(o.dng) && Number.isInteger(o.dng.ep) && (o.dng.n == null || Number.isInteger(o.dng.n)) &&
+    Array.isArray(o.dng.g) && o.dng.g.length <= 1e5 && o.dng.g.every((g) => Array.isArray(g) && g.length === 6 && Number.isSafeInteger(g[0]) && owner(g[1]) && ownKey(BDEFS, g[2]) && [3, 4, 5].every((k) => Number.isFinite(g[k]))) &&
+    Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && f.length === 4 && owner(f[0]) && [1, 2, 3].every((k) => Number.isFinite(f[k]))))) bad();
+  if (o.mgn != null && !(obj(o.mgn) && Number.isInteger(o.mgn.ep) && Array.isArray(o.mgn.l) && o.mgn.l.length <= 1e5 && o.mgn.l.every((g) => Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)))) bad();
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
   const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
   for (const P of o.players) if (P.trade != null) {
@@ -5508,7 +5516,11 @@ function checkSave(o) {
   for (const u of o.bots) {
     if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
-    if (u.stunT != null && !Number.isFinite(u.stunT)) bad(); // (stunned by a Sundering Ray's Quake)
+    if (u.stunT != null && !Number.isFinite(u.stunT)) bad();
+    // A creature fighting an armed robot (its id, until when) or falling back from one (how often tonight): murmurThreat.
+    if (u.task?.thr != null && !(Number.isSafeInteger(u.task.thr) && u.task.thr >= 0)) bad();
+    if (u.task?.av != null && !(Number.isInteger(u.task.av) && u.task.av >= 0 && u.task.av <= 99)) bad();
+    for (const k of ['thrT', 'scat', 'sx', 'sy']) if (u.task?.[k] != null && !Number.isFinite(u.task[k])) bad(); // (stunned by a Sundering Ray's Quake)
     // The Harrow: its task (its colony, what it's after, its phase, its route as tiles) and the Scuttlers on its back.
     if (u.riders != null && !(Number.isInteger(u.riders) && u.riders >= 0 && u.riders <= HARROW.riders)) bad();
     if (u.task?.type === 'harrow') {

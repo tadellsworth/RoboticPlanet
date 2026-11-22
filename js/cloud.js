@@ -290,7 +290,7 @@ function cloudSaved(rec, expires) {
   CLOUD.done = { code: rec.code, expires: +expires || Date.now() + CLOUD_DAYS * 86400e3, kept };
   if ($('screen-cloud').hidden || CLOUD.view !== 'save') {
     // (closed before the answer came: in a game, a message says so instead)
-    if (UI.inGame) toast(`Saved to the cloud: code ${cloudShow(rec.code)} (main menu, Load from a code, on another device).`, 'good');
+    if (UI.inGame) toast(`Saved to the cloud: code ${cloudShow(rec.code)} (main menu, More, Load from a code, on another device).`, 'good');
     return;
   }
   cloudSay('');

@@ -35,7 +35,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft and other forms on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -1177,6 +1177,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   waits for an opening and starts only once a route exists. Manual marches and resupply trips keep their orders.
   (A rival's warbots keep the older rules: badly hurt, they pull out for repairs even mid-fight, and on the way to
   resupply they fight what they meet. Its army lives on being mended.)
+  The danger maps (`DANGER`, `updateDanger`: worked out every 15 ticks and once a second) keep what they were worked
+  out from in the game (`S.dng`: each gun's disc as `[id, owner, type, x, y, R]` and each foe's spots as `[owner, x,
+  y, R]`; the Murmur's gun cover likewise, `S.mgn`, for `murmurGunMap`): a game loaded part way through those 15
+  ticks rebuilds the same maps from them (`dangerMap` → `updateDanger(true)`) instead of from where things stand after
+  loading, so a save plays on exactly as the game would have (it could part ways before). Saved; `checkSave` checks
+  them; not in `hashState`.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
   not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own
@@ -1430,7 +1436,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
-  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
+  what), and **Load a save file** (main menu, More, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
   (`checkSave` in `js/world.js`: unknown building, robot, good, biome, map type, mission or event, map layers of the wrong
   size, owners or places off the map, or a name holding `<`, `>` or `"`; in text those three are swapped for look-alikes
   that can't make markup, so nothing in a save can run script in the panels; a multiplayer catch-up is checked the same
@@ -1483,7 +1489,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Rematch** (end screen): `UI.lastGame` holds the options `startNewGame` used (or the mission and difficulty) for the
     game being played; Rematch calls `startNewGame(opts)` again (no new random pick), or `startMission`. Hidden in
     multiplayer, Observer mode, after a loaded game and after a lost or final mission (Try again / Play it again).
-- **The Daily Planet** (`js/polish3.js`): the main menu's card (`m-daily`) starts the day's game: `dailySetup(date)`
+- **The Daily Planet** (`js/polish3.js`): the main menu's gold tile (`m-daily`, its date short by `dailyShort`) starts the day's game: `dailySetup(date)`
   turns the UTC date (`dailyDate`, YYYY-MM-DD) into ordinary `startNewGame` options by a hash of it (map type of the
   ones taking two or three colonies, players, biome, ground, resources, three different doctrines, seed, planetary
   events; Versus on Normal, no challenge modifiers), so the game itself stays a plain one. A win's time is kept per day
@@ -1494,7 +1500,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
   localStorage: `{ code, key, at, game }`; **New code** posts a fresh one and deletes the old). The dialog shows the code
   (`XXXXX-XXXXX`), the link `https://terrafall.app/#save=<code>` (`cloudLink`) with a QR code of it made offline by
-  `qrSvg` (`js/qr.js`), Copy link, Share and the expiry. **Load from a code** (main menu, `cloudLoad`) and opening a
+  `qrSvg` (`js/qr.js`), Copy link, Share and the expiry. **Load from a code** (main menu, More, `cloudLoad`) and opening a
   `#save=` link (`cloudFromLink`: at start, on `hashchange` and from `launchQueue`, so an open installed app takes it
   too; it asks first, then clears the address) fetch `GET /save/<code>` and load it as Load a save file does
   (`loadSaveText`, shared with `importSaveFile`).
@@ -1535,7 +1541,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Download save file does: the artifact `downloads` capability in claude.ai, else an `<a download>` link
   (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
   to the pause menu if it was opened from there; everything set aside comes back as it was.
-- **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Observer** pill on the main menu opens a setup card
+- **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): **Observer** (`#m-watch`, in the main menu's **More**) opens a setup card
   (`openWatch`, built once by `buildWatch`, kept up to date by `syncWatch`), laid out like Custom Game's (sections **Match**,
   **Planet**, **Rules**, **Challenge**, `.m-sec`, with the summary and Start observing in a bar that stays in view) and
   built from its parts: `segChoice`/`markSeg` (the choice rows), `hoverInfo` (each section's line), `shapePickRow`/
@@ -2017,8 +2023,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
-  **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
+  **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** button in the
+  main menu's bottom row (beside **Feedback**) opens the colony's archive, LORE.md told in eleven pages (Terrafall, The Arrival clock,
   Ithaca I, The atlas, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
@@ -2210,6 +2216,42 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     each kind are counted (`S.mur.slain`). The rival: warbots to a rally flag where an underground Sapper will come up
     (`aiMurmur`, one at a time, called home after 40 s: `P.sapRally`); a shorted gun counts as a place to cover
     (`P.murCut` → `aiMurCut`, another Pulse Turret there). Missions: *What Comes Up* (First Contact).
+  - **Bolder as the game goes on (Active only; Quiet is as it was).** `MURMUR.bold` in `js/defs.js`, the section after
+    `murmurDeliver` in `js/sim.js`. **Threats** (every game on Active, missions too): an armed robot (`isArmy`, `botArmed`,
+    out in the open) within `threatR` (5) tiles of a night creature, or a robot that hit it in the last `hitFor` s, is
+    never walked past (`murmurThreat`, from `updateCritter` before anything else of a raid or rally): it weighs its pack
+    within `packR` tiles (`w`: a Scuttler 1, a Brute 4, a Leech 0.5, a Spitter 1.5, a Sapper 3) against the armed robots
+    within 4 tiles of the robot (health / `robotW`, 4: a warbot 3) and the guns covering it (`gunW` each); with `engage` (1.5) times as much
+    it fights it (`task.thr`, until `thrT` or it's dead, inside or out of reach), else it falls back 5 tiles for
+    `avoidFor` s (`task.scat`, as the craft's scatter; `task.av` counts it) and comes on again; fallen back `avoidMost`
+    times it carries on past it, and hit after that (in the last `hitFor` s) it fights. The Leech, Spitter and Sapper keep to their parts: they turn only
+    on a robot that just hit them, and never fall back. Not the watcher, a feeding Leech, a Sapper digging in or under, or one going home. **Pressure**
+    (`murmurBold`: Active, and not in a mission unless it sets `bold`): `murmurPressure(p, n)` is 1 for the first nights,
+    then from `nightFrom` (3) 1 and `perNight` (0.25) for that night and each after (1.25 on the 3rd, at most `nightMost`, 2.2) times colony p's power
+    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick) over `powerRef` (40), clamped
+    to `powerMin` (0.6) to `powerMost` (1.6) (`murmurPowerMul`), and never under 1: a small or beaten colony draws them
+    less, and gets fewer hunting teams. It scales a craft wave's packs (`murmurPack`, Brutes a quarter), how many may be up at
+    once (`murmurRoom`: `room` × the mean pressure on the colonies still in), a nest's open exits (`murmurMaxExits`: one
+    more from `exitNight` 4, two from `exitNight2` 6; the Hollow's Colony cap follows it) and the waves
+    (`murmurWaves`: a third from `waveNight` 4, at 175 s into the night). A creature done at its strike's objective (a
+    Brute that battered it to 1, a Scuttler with nothing to catch there for `idle` s) goes on through the colony
+    (`murmurLoose`, role `loose`: a Scuttler after the nearest unarmed robot out of the guns' reach within `quarryR` (6) tiles,
+    `murmurQuarry`, else `murmurPrey`; `murmurOnward` likewise every 8 s). **The hunt** (`murmurHunt`, from `huntFrom` 4;
+    a mission can bring it sooner with `S.mur.huntFrom`): every `huntEvery` (40) s of the night, from 70 s in to 40 s
+    before dawn (`S.mur.huntAt`, `huntSeq`), each colony gets `teams` (base 1, half a team a night, at most 4) teams of
+    `teamN` × the pressure (a Brute leading from `teamBrute` 5) at its weak points (`murmurWeak`: no gun within reach with
+    a tile to spare, no armed robot within 6 tiles, not a Command Base, Wall, Gate or Viaduct nor anything a plan or team
+    is after; scored on power they can cut, charge, sites, being alone, the `fed` and `kill` memories), each from a
+    different exit within `huntR` (40) tiles of the colony's buildings with a route there (none near, no hunt: the
+    counter). A team member (role `hunt`, `murmurHuntStep`): a Scuttler cuts the power there (`murmurCut`), any of them
+    bites a site; then it fights as a strike's main pack does. The colony is told once a night (`P.murHunt`). **The
+    horde** (`murmurHorde`, from `hordeFrom` 5): a plan in its strike (phase 2) gets `hordeN` × the pressure more
+    (every third a Brute) every `hordeEvery` (35) s (`pl.hordeAt`, added to `pl.n0`) up the exit nearest its target with
+    a route, until 30 s before dawn; its colony is told once (`pl.hordeMsg`). New state is saved, in `hashState` (only
+    when set, so a game on Quiet hashes as before) and checked by `checkSave`. The rival copes as it did: it collapses the
+    exits near its land (`aiMurmur`), which is what starves the hunt and the horde. Taught in *What Comes Up* (First
+    Contact: `bold`, the hunt from the second night, and a goal to collapse an exit near the colony). Test:
+    `lh/murmur-smart-test.js`; measuring: `lh/murmur-smart-measure.js`, `murmur-smart-batch.sh`, `murmur-smart-sum.js`.
   - **The Harrow, the behemoth (rare and late).** `harrow` in `BOTS` (wild, `behemoth`), its numbers in `HARROW` in
     `js/defs.js`, the section after the Sapper's in `js/sim.js` (`spawnHarrow`, `harrowTick`, `harrowSlam`,
     `harrowFurrow`, `harrowBatter`, `harrowPath`, `harrowTarget`, `harrowDied`, `harrowDown`, `harrowMound`,
@@ -2822,8 +2864,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   taken with `STORM_MIN` (20) of your armed robots within `STORM_R` of it, counted each second before it fell,
   `metaStormTick`), deeds from any game played without help, multiplayer and missions too (`metaDeeds`: the first
   Ropeway and Freight Train, a nest cleared, every upgrade, the last Colony milestone, every Colony goal), and the
-  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** on the main
-  menu (`#screen-records`, `openRecords`, a pill beside Lore and Feedback) shows them all; an earned achievement with
+  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** in the main
+  menu's **More** (`#m-records` opens `#screen-records`, `openRecords`) shows them all; an earned achievement with
   `lore` has a button that opens the Lore guide on that page (`openLore(id)`). **Forget records and achievements**
   (two taps) clears both. Challenge modifiers don't stop a game counting: records keep the ones on (`mods`, `metaMods`)
   and achievements too (`_mods` in `terrafall.achievements`), both marked ◆ on the Records screen; a win with some on
@@ -2864,9 +2906,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
   without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer. Settings
   also has **Menu background** (Classic / Planet: see The main menu under Looks). **From the main menu**: the
-  **Settings** pill (`#m-settings`, a gear, among Records, Observer, Lore and Feedback) opens the same view on its own
+  **Settings** button (`#m-settings`, a gear, in the bottom row with How to play, Lore, Feedback and More) opens the same view on its own
   over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
-  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the pill.
+  setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the button.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -3225,6 +3267,28 @@ clouds' drift (`natureCloudTime`).
   straight), under a depth haze thicker toward the far side, with a few stars through it at night. `screenToWorld` and
   `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
   minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
+- **The main menu's layout** (`#screen-menu` in index.html; `showMenuView`, `renderCampaignHub`, `menuArrowKey` in
+  js/ui.js). One card (404 px wide at most, so the menu planet beside it stays clear) with four views. **Home**: the
+  title, **Continue** / **Saved games** / restore points / **Rejoin** when they apply, **Play** (`#m-new`, the last
+  settings at once) with its summary, then four tiles two by two (`.m-tiles`: **Campaigns** `#m-campaigns`, **Custom
+  Game** `#m-customise`, **Multiplayer** `#m-multi`, the **Daily Planet** `#m-daily`) and a bottom row of five small
+  buttons (`.m-pills`: **How to play** `#m-help`, **Lore** `#m-lore`, **Settings** `#m-settings`, **Feedback**
+  `#m-feedback`, **More** `#m-extras`). **Custom Game** (`#m-more`, `'setup'`) is as below. **Campaigns** (`#m-camps`,
+  `'camps'`): a card a campaign, a picture from `art/menu/` beside a line in the setting's voice: the **Missions**
+  (`#m-missions`, opens `#screen-missions`; `missionsProgress` gives finished / total and Next up, also the Campaigns
+  tile's line, `syncCampaignTile`), the **Main Campaign** (`#m-campaign`, CAMPAIGN.md, *In preparation*: not a button,
+  its three acts as a teaser), **Contingency** (`#m-contingency`: calls `openContingency()` once that exists, its status
+  line from `contingencyMenuLine()` if that exists too; until then *Coming soon*, which a tap nudges) and a dashed
+  **Co-op scenarios** card (*Later*). **More** (`#m-extra`, `'extra'`): **Observer** `#m-watch`, **Records**
+  `#m-records`, **Load a save file** `#m-import`, **Load from a code** `#m-cloud` (shown where it works). Every
+  destination is two taps from Home at most. Back (`#m-camps-back`, `#m-extra-back`, `#m-back`) or Esc returns Home
+  with the focus on the tile or button that opened the view; Esc also closes How to play and the Missions (a mission's
+  brief, then the list) over the menu, and Multiplayer's first screen. The arrow keys move the focus between the
+  buttons of Home, Campaigns and More by where they sit (`menuArrowKey`; Custom Game keeps its arrows for its choices),
+  and Tab goes through them in reading order. Load messages (`menuMsg`, `#m-import-msg`) show under Home or More. On an
+  upright screen with the Planet background the card starts below the planet's orbit and the app icon is left out
+  (CSS, `max-aspect-ratio: 23/20`, as `mplLayout`), so the planet is never covered. `tools/menu-test.js` checks that every destination opens and Esc / Back
+  return, on a computer and a phone.
 - **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
   beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
   `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
@@ -3420,9 +3484,11 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
                           face (ithaca-map.webp, the atlas made small)
+art/menu/                 the Campaigns cards' pictures: 160 px crops of art/lore/ (inline in the one-file build)
 tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
+tools/menu-test.js        the main menu: every destination opens (two taps at most) and Esc / Back return (Playwright)
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when

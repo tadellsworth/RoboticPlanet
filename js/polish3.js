@@ -68,16 +68,21 @@ function dailyNice(date) {
   try { return new Date(date + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); } catch (e) { return date; }
 }
 
-/** The main menu's Daily Planet card: today's date, the planet in a line, and the best time on it so far. */
+/** ...and short, for the main menu's tile: "Sun 22 Nov". */
+function dailyShort(date) {
+  try { return new Date(date + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); } catch (e) { return date; }
+}
+
+/** The main menu's Daily Planet tile: today's date, the planet in a line, and the best time on it so far (once played). */
 function syncDaily() {
   const card = $('m-daily');
   if (!card) return;
   const d = dailyDate(), o = dailySetup(d), rec = dailyRecords()[d];
   card.dataset.date = d;
-  $('m-daily-date').textContent = dailyNice(d);
+  $('m-daily-date').textContent = dailyShort(d);
   $('m-daily-line').textContent = dailyLine(o);
   $('m-daily-best').textContent = rec && rec.best != null ? `Your best: won in ${fmtTime(rec.best)}${rec.tries > 1 ? ` · ${rec.tries} tries` : ''}`
-    : rec && rec.tries ? `Not won yet · ${rec.tries} ${rec.tries > 1 ? 'tries' : 'try'}` : 'The same planet for everyone today: win it as fast as you can';
+    : rec && rec.tries ? `Not won yet · ${rec.tries} ${rec.tries > 1 ? 'tries' : 'try'}` : ''; // (nothing yet: the card's title says what it is)
 }
 
 function startDaily() {

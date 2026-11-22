@@ -107,6 +107,9 @@ html = html.replace('<meta name="terrafall-build" content="dev">', `<meta name="
 // The menu planet's face (art/lore/ithaca-map.webp, the atlas made small: js/menuplanet.js) is small enough to go inline.
 const ithacaMap = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/lore/ithaca-map.webp')).toString('base64')}`;
 
+// The main menu's Campaigns pictures (art/menu/: small crops of the Lore guide's art) are small enough to go inline too.
+html = html.replace(/src="(art\/menu\/[a-z0-9-]+\.webp)"/g, (m, src) => `src="data:image/webp;base64,${fs.readFileSync(path.join(root, src)).toString('base64')}"`);
+
 const icon = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons/favicon-32.png')).toString('base64')}`;
 html = html
   .replace(/<link rel="manifest"[^>]*>\n/, '')

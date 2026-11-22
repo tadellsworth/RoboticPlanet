@@ -10,7 +10,7 @@
  *   the Goal card (#btn-goals) opens the list (sheet kind 'goals'); finishing one says so in a message.
  * - Records (RECORDS_KEY): fastest win for each map type and rival level, the biggest colony (robots, buildings), the
  *   longest game and the most land held. Single-player free games only (no missions, no multiplayer, nothing with
- *   Boosts, rival bans or Unlimited resources). The Records screen (main menu) shows them; the end screen says when one
+ *   Boosts, rival bans or Unlimited resources). The Records screen (main menu, More) shows them; the end screen says when one
  *   falls.
  * - Achievements (ACHIEVEMENTS, ACHIEVE_KEY): earned from a game's result and stats (metaGameOver) or from what you do
  *   during one (metaDeeds); a few open a page of the Lore guide from the Records screen.
