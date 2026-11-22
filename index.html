@@ -648,6 +648,8 @@
     <span class="cg-orders" id="cg-orders" aria-live="polite"></span>
     <button type="button" class="btn primary" id="cg-end">End turn</button>
   </footer>
+  <!-- The first-turn walkthrough (cgCoach): a few steps over the globe, dismissable, remembered on this device. -->
+  <div class="cg-coach" id="cg-coach" role="status" aria-live="polite" hidden><p id="cg-coach-text"></p><div class="cg-coach-btns"><span id="cg-coach-n"></span><button type="button" class="btn small ghost" id="cg-coach-skip">Skip</button><button type="button" class="btn small primary" id="cg-coach-next">Next</button></div></div>
   <div class="cg-sheet" id="cg-sheet" hidden><div class="cg-sheet-box card" id="cg-sheet-box" role="document"></div></div>
 </div>
 
@@ -1571,7 +1573,7 @@
 
       <section id="hs-contingency">
         <h3>Contingency: the globe campaign</h3>
-        <p><b>Contingency</b> (on the main menu) is a replayable campaign apart from the Missions: you conquer Ithaca I territory by territory on a turning globe. It starts at T+1, when the Accord is ruled void and every vanguard's sealed orders open: <i>secure Ithaca I for us.</i> One turn is one year on the Arrival clock, and a run lasts until T+31. The run saves itself after every step, in a Contingency slot of its own; <b>Continue</b> picks it up.</p>
+        <p><b>Contingency</b> (on the main menu) is a replayable campaign apart from the Missions: you conquer Ithaca I territory by territory on a turning globe. It starts at T+1, when the Accord is ruled void and every vanguard's sealed orders open: <i>secure Ithaca I for us.</i> One turn is one year on the Arrival clock, and a run lasts until T+31. The run saves itself after every step, in a Contingency slot of its own; <b>Continue</b> picks it up, and the Contingency card in <b>Campaigns</b> shows how the run stands (its year, your territories and Uplinks). The first turn of your first run has a short walkthrough over the globe (<b>Next</b>, or <b>Skip</b>); it isn't shown again on this device.</p>
         <ul class="chain">
           <li><b>A new run:</b> pick your callsign. Each has a perk in every battle and a card only it has: <b>COBALT</b> (cheaper, faster roads; <i>Road Standard</i>), <b>VERMILION</b> (faster Ore Mines and Smelters; <i>Foundry Surge</i>), <b>VIRIDIAN</b> (faster Bio Farms and Agribots; <i>Reseed</i>) or <b>TYRIAN</b> (better Trade Post rates; <i>Ledger Credit</i>). The other three callsigns are your rivals, each with a doctrine (random, or set in <b>Advanced</b>). The difficulty, Settler to Warlord, sets the rivals in battle and their income on the globe. Advanced also has the Murmur (Off, Normal, Rampant), events, the turn cap, <b>Ironman</b> and a fixed run seed.</li>
           <li><b>The globe:</b> drag or swipe to turn it (or the arrow keys). Its 28 territories are the atlas's (see the Lore guide), each tinted by its owner. Markers show an Uplink (a diamond), a home (a ring), Command Groups (a pill with their stars), fortification (white squares) and the Murmur (violet dots). Argos, the moon, sits beside the planet: only the Pathfinder's landing site, or an Orbital Lift, launches there (3 Reserve a move, 1 with the Orbital Lift Charter). The Hollow lies under Violet Reach.</li>

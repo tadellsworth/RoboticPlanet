@@ -2374,3 +2374,9 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .cg-aim-x::after { height: 2px; width: 70px; margin: -1px 0 0 -35px; }
 .cg-aim-btns { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); display: flex; gap: 6px; align-items: center; pointer-events: auto; padding: 6px 8px; border-radius: 12px; background: rgba(16, 19, 28, 0.9); white-space: nowrap; font-size: 13px; }
 @media (min-width: 1000px) { .cg-bar { bottom: calc(var(--safe-b) + 80px); } }
+/* Contingency's first-turn walkthrough (#cg-coach): a card under the top bar, over the globe. */
+.cg-coach { position: absolute; z-index: 4; left: calc(var(--safe-l) + 10px); top: calc(var(--safe-t) + 104px); width: min(360px, calc(100% - 20px - var(--safe-l) - var(--safe-r))); padding: 12px 14px; border-radius: 14px; background: rgba(14, 32, 44, 0.94); border: 1px solid rgba(56, 212, 255, 0.5); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); font-size: 14px; line-height: 1.45; }
+.cg-coach p { margin: 0 0 10px; }
+.cg-coach-btns { display: flex; gap: 6px; align-items: center; }
+.cg-coach-btns span { margin-right: auto; color: var(--muted); font-size: 12px; }
+@media (min-width: 760px) { .cg-coach { top: calc(var(--safe-t) + 60px); } }

@@ -15,7 +15,7 @@
  */
 
 const CGV = { maxRes: 560, turnKey: 0.18, tilt: 1.25, tint: 0.42, minR: 120 };
-const CG = { run: null, on: false, yaw: 0, pitch: 0.3, sel: -1, group: 0, sheet: null, dirty: true, raf: 0, map: null, cells: null,
+const CG = { coach: -1, run: null, on: false, yaw: 0, pitch: 0.3, sel: -1, group: 0, sheet: null, dirty: true, raf: 0, map: null, cells: null,
   geo: null, img: null, off: null, drag: null, v: { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, r: 100, moon: null }, note: '', battleAt: 0, marks: [] };
 const CG_RES_ICON = { ore: 'Ore', fiber: 'Fiber', stone: 'Stone', crude: 'Crude', fuel: 'Fuel', crystal: 'Crystal' };
 const CG_REGION_SHAPES_NOTE = 'Each battle is a Terrafall match on the territory\'s ground.';
@@ -405,7 +405,7 @@ function cgTap(t) {
     if (gr && targets.has(t)) {
       const path = run.orders[gr.id];
       const two = run.sides[0].silent === gr.id && path && path.length === 1 && !contMovesFrom(run, 0, gr.at).some((m) => m.to === t);
-      if (contOrder(run, gr.id, two ? [path[0], t] : [t])) { sfx('click'); CG.note = `Command Group ${gr.id} ordered to ${contName(t)}.`; CG.group = 0; cgSave(); cgSync(); return; }
+      if (contOrder(run, gr.id, two ? [path[0], t] : [t])) { sfx('click'); if (CG.coach === 1) cgCoach(2); CG.note = `Command Group ${gr.id} ordered to ${contName(t)}.`; CG.group = 0; cgSave(); cgSync(); return; }
       CG.note = 'That order can\'t be given (not enough Reserve for the launch?).';
     } else if (gr && t === gr.at) { contOrder(run, gr.id, []); CG.note = `Command Group ${gr.id} holds position.`; CG.group = 0; cgSave(); cgSync(); return; }
   }
@@ -722,7 +722,9 @@ function cgSheetAct(x, d) {
     CG.sel = CG.run.sides[0].home; CG.group = 0;
     cgFace(CG.sel);
     CG.note = 'Your home territory. Pick a Command Group (Move), then tap a highlighted territory to send it. End turn when your orders are in.';
+    if (!cgCoachSeen()) CG.note = ''; // (the walkthrough says it)
     cgSheet(null); cgAfter();
+    cgCoach(0);
     return;
   }
   if (x === 'group') { if (!contBuyGroup(run, 0, +$('cg-buy-at').value)) CG.note = 'No room for another Command Group, or not enough Reserve.'; }
@@ -760,7 +762,41 @@ function cgEndTurn() {
   if (!run || run.phase !== 'plan') return;
   sfx('click');
   CG.group = 0; CG.note = '';
+  if (CG.coach >= 0 && !$('cg-coach').hidden) cgCoachDone(); // (the walkthrough ends with the first turn)
   contEndTurn(run);
   CG.showReport = run.phase === 'plan';
   cgAfter();
+}
+
+/* ------------------------------------------------------------------ the first-turn walkthrough (plan stage 8) */
+
+const CG_COACH_KEY = 'terrafall.contingency.coach';
+const CG_COACH = [
+  'Year one: T+1. This is Ithaca I. Drag or swipe to turn it (or the arrow keys). Your territories wear your callsign\'s colour, and your home has a ring round it.',
+  'Your home\'s card is open. Tap <b>Move</b> on a Command Group, then a highlighted territory next to it. Or drag the group\'s pill on the globe onto a neighbour.',
+  '<b>Spend</b> buys Command Groups, fortifications, refits and cards with your Reserve. The diamonds are the Uplinks: hold 3 of the 5 for 3 years and the run is yours.',
+  'When your orders are in, tap <b>End turn</b>. Everyone moves at once, then come the battles: <b>Play</b> one as a match, or <b>Auto-resolve</b> it on the odds shown.',
+];
+/** Has the walkthrough been seen (or skipped) on this device? */
+function cgCoachSeen() { try { return localStorage.getItem(CG_COACH_KEY) === '1'; } catch (e) { return true; } }
+/** Show step k of the walkthrough, on the first turn of a run, unless it has been seen. */
+function cgCoach(k) {
+  const el = $('cg-coach'), run = CG.run;
+  if (!run || run.turn !== 1 || run.phase !== 'plan' || cgCoachSeen() || k >= CG_COACH.length) { el.hidden = true; if (k >= CG_COACH.length) cgCoachDone(); return; }
+  CG.coach = k;
+  el.hidden = false;
+  $('cg-coach-text').innerHTML = CG_COACH[k];
+  $('cg-coach-n').textContent = `${k + 1} of ${CG_COACH.length}`;
+  $('cg-coach-next').textContent = k === CG_COACH.length - 1 ? 'Got it' : 'Next';
+  $('cg-coach-next').onclick = () => { sfx('click'); cgCoach(k + 1); };
+  $('cg-coach-skip').onclick = () => { sfx('click'); cgCoachDone(); };
+}
+function cgCoachDone() { try { localStorage.setItem(CG_COACH_KEY, '1'); } catch (e) { /* storage unavailable */ } $('cg-coach').hidden = true; CG.coach = -1; }
+
+/** The main menu's Campaigns card line for Contingency: the run in progress, if there is one. */
+function contingencyMenuLine() {
+  const run = contRestore();
+  if (!run || run.phase === 'over') return null;
+  const held = contHeld(run, 0).length, up = contUplinksToward(run, 0);
+  return `Year T+${run.turn} · ${CONT_CS_NAMES[run.sides[0].cs]} · ${held} of ${CONT_MAP.n} territories${up ? ` · ${up} Uplink${up > 1 ? 's' : ''}` : ''}${run.playing ? ' · a battle under way' : ''}`;
 }

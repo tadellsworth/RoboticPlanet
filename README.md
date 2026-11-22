@@ -133,6 +133,10 @@ how goods move.
   In a battle the goal card says what wins it (`contObjective`, from `objectiveText`; `objectiveStep` gives no Colony
   steps) and a battle against the Murmur shows no Colony milestones (`checkMilestones` is skipped); clearing every
   nest wins one, as does the hold.
+  The first turn of a run shows a four-step walkthrough (`cgCoach`, `#cg-coach`: turning the globe, moving a group,
+  Spend and the Uplinks, End turn and the battles), moved on by Next or by the first order, ended by Skip or End turn
+  and remembered on the device (`terrafall.contingency.coach`). The main menu's Campaigns card reads the run's line
+  from `contingencyMenuLine()` ("Year T+7 · COBALT · 11 of 28 territories · 2 Uplinks").
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,
