@@ -26,7 +26,7 @@ const check = (n, ok, x) => { console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '
     await click('#m-campaigns');
     check(tag + ': Campaigns opens its view, the focus on Missions', (await view()) === 'camps' && (await focus()) === 'm-missions');
     const hub = await p.evaluate(() => ({ prog: $('m-missions-prog').textContent, main: $('m-campaign').getAttribute('aria-disabled'), cont: $('m-contingency').classList.contains('is-soon'), tag: !$('m-contingency-tag').hidden }));
-    check(tag + ': the hub: Missions progress, the Main Campaign in preparation, Contingency coming soon', /0 of \d+ done · Next up/.test(hub.prog) && hub.main === 'true' && hub.cont && hub.tag, hub);
+    check(tag + ': the hub: Missions progress, the Main Campaign in preparation, Contingency live', /0 of \d+ done · Next up/.test(hub.prog) && hub.main === 'true' && !hub.cont && !hub.tag, hub);
     await click('#m-missions');
     check(tag + ': Missions opens from the hub', await shown('screen-missions'));
     await p.click('#ms-body .ms-item'); await p.waitForTimeout(200);
@@ -34,8 +34,12 @@ const check = (n, ok, x) => { console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '
     check(tag + ': Esc from a mission brief goes back to the list', await shown('screen-missions') && await p.evaluate(() => UI.msSel == null));
     await esc();
     check(tag + ': Esc again closes the Missions, back to the hub', !(await shown('screen-missions')) && (await view()) === 'camps');
-    await p.click('#m-contingency', { force: true }); await p.waitForTimeout(300); // (aria-disabled: coming soon)
-    check(tag + ': Contingency, not built yet, stays put (coming soon)', (await view()) === 'camps' && await shown('screen-menu'));
+    await p.click('#m-contingency'); await p.waitForTimeout(400);
+    check(tag + ': Contingency opens its screen from the hub', await shown('screen-contingency'));
+    await esc(); await p.waitForTimeout(300);
+    if (await shown('screen-contingency')) await p.evaluate(() => { const b = document.querySelector('#screen-contingency [data-back], #screen-contingency .cg-back, #cg-back'); if (b) b.click(); });
+    if (!(await shown('screen-menu'))) await p.evaluate(() => { if (typeof closeContingency === 'function') closeContingency(); });
+    if ((await view()) !== 'camps') await click('#m-campaigns');
     await esc();
     check(tag + ': Esc from Campaigns returns Home, the focus on its tile', await onHome() && (await focus()) === 'm-campaigns');
     await click('#m-campaigns'); await click('#m-camps-back');
