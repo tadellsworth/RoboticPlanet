@@ -278,7 +278,7 @@ apply to all computer colonies from that point in the match. In multiplayer only
 `rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
 and production without changing stock already on the map. Missions keep the level picked in the mission list.
 
-Solo games keep up to five minute-by-minute restore points on this device. Pick a point in the pause menu and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
+Solo games keep up to five minute-by-minute restore points on this device. Pick a point under **Restore points** in the pause menu (each listed by its game time and how long ago it was kept) and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 Besides the autosave there are five named **save slots** (pause menu **Save → Slots**, main menu **Saved games**), and
 the main menu's **Continue** card names what it will resume: the newest of them all.
 
@@ -1506,8 +1506,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
-- **Saving:** solo games keep up to five restore points about a game minute apart in localStorage. Pick one by
-  its age and choose **Restore** in the pause menu or on the game-over screen, then confirm. The main menu opens the
+- **Saving:** solo games keep up to five restore points about a game minute apart in localStorage
+  (`terrafall.restorePoints.v1`: the newest first, each `{ time, json, at }`, `at` the real time it was kept; a full
+  storage drops the oldest until the rest fit). The pause menu's **Restore points** item (`#p-checkpoint-group`,
+  `showCheckpoints`) lists them as "14:00 in game · 3 min ago" (`checkpointLabel`; game minutes for a point kept before
+  `at`), says when the first comes while there is none, and is hidden in multiplayer, watching and Ironman. Pick one
+  and choose **Restore** in the pause menu or on the game-over screen, then confirm. The main menu opens the
   latest solo history after a reload, and **Continue** still opens older single autosaves. If storage is tight, the
   game keeps fewer points. Multiplayer hides restore points. Switching away or closing the tab also
   updates the save used by **Continue**. The pause menu says when it last saved, and a failed

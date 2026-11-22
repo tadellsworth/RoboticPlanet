@@ -562,31 +562,32 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   roads fell behind and Hollow games stalled; see README)?
 
 **Quick fixes (small, cheap; do these first when usage is short)**
-- **Maglev pods are made only at a Maglev Terminal,** not in the Bot Foundry or any other yard (check the Foundry's order list
-  and the Air/Army menus: `BOTS.magpod` must not appear there).
-- **No "Pipe to Terminal" button on an Oil Pump with a Refinery right beside it:** the conveyor join to adjacent
-  production buildings already feeds it (the button is noise). Show it only when no Refinery or Fuel Tank touches the pump.
+- **Maglev pods are made only at a Maglev Terminal** (BUILT Nov 18 2026, checked Nov 22): the Foundry's list is
+  `FOUNDRY_ORDER` (no `magpod`), its `foundryOrder` order refuses one, and only the Terminal's `yard` lists them.
+- **No pipe button on an Oil Pump with a Refinery right beside it** (BUILT Nov 20 2026, checked Nov 22):
+  `pumpFeedsNextDoor` in `pipeToRefinery` hides "Pipe it in" (and Paths → Pipe all pumps skips it) when a Refinery or
+  Fuel Tank touches the pump.
 - **Night sounds in the wilds (built Nov 20; open questions).** A cricket chorus that rises at dusk, a tree cricket's
   trill, katydids and the savanna's cicada, owls, night birds and leaves in the forests, peepers, frogs and splashes in
   Blackwater, insects and a dry wind on the Long Grass and in the Rust (`nightSounds` in `js/audio.js`; README, Sound).
   Open: the owner to listen and set the level (the crickets' peak is `0.016` in `nightSchedule`, the calls' rates in
   `NIGHT_SET`); whether the Shoals and Steamwells want more than their few crickets; whether the Bloom gets a night
   chorus of its own (stranger, not insects); whether a Murmur night should thin the insects out near their tunnels.
-- **Tone down the road trucks' smoke and brake noise** (the exhaust puffs on Freight Trucks and Road Trains, and the
-  brake squeal in `js/audio.js`): a little quieter and less constant.
-- **Dropped goods from a dismantled building go first to Haulers:** crates left by Dismantle are picked up before other
-  loose goods (priority in the Hauler's pickup choice, `doLoot`/`lootNear` and the Hauler job order).
-- **The main base beacon doesn't go so far up the screen at night:** shorter, dimmer beam (the Command Base's beam in
-  `js/daynight.js`/`js/render.js`); it fills too much of the view.
-- **Night lights: fewer bugs and less clutter** (the moths, fireflies and lamp insects round lights at night; see
-  `js/wildlife.js` `light:` kinds): fewer, smaller, and none on phone/Saver.
+- **Tone down the road trucks' smoke and brake noise** (BUILT Nov 20 2026: softer, capped exhaust puffs and air brakes).
+- **Dropped goods from a dismantled building go first to Haulers** (BUILT Nov 20 2026: `collectCrates(true)` in
+  `dispatch`; Workers help with the rest after their own work). The rivals' exception is open: see Hollow seed 12 above.
+- **The main base beacon doesn't go so far up the screen at night** (BUILT Nov 20 2026: shorter, dimmer beams).
+- **Night lights: fewer bugs and less clutter** (BUILT Nov 18 2026: under half the moths round each light, smaller,
+  none on a phone or on Saver; Nov 20, the lamps themselves fitted to their buildings and none on dead or dark ones).
 - **Change the AI's difficulty mid-game** (a setting on the pause menu; rivals' difficulty is read from `P.diff`;
   lockstep: it must be an order so every device agrees, and a note in a multiplayer game).
 - **The Deep spouts more Murmur the nearer it is to death** (the Hollow's mound: raise its exit/pack rate and size as its
   armor falls; `aiMurmur`/the nest code in js/sim.js; a last-stand surge).
-- **A rolling autosave to go back to:** the game autosaves every minute after 5 (task #114), but the owner wants a list
-  of recent restore points (say the last 5, one a minute) on the pause menu to undo a mistake and try again. Check
-  what exists first (`autosave` in js/main.js or js/ui.js) and extend it to keep several slots.
+- **A rolling autosave to go back to** (BUILT Nov 18–22 2026): the last 5 restore points, a game minute apart, kept in
+  localStorage (the oldest dropped when storage is full); the pause menu's **Restore points** item lists each by game
+  time and how long ago ("14:00 in game · 3 min ago") and loads one after a confirm; also on the game-over screen and
+  the main menu after a reload. Hidden in multiplayer and Ironman. *Open:* let a multiplayer host offer them (a reload
+  every player would have to take: today none).
 
 **Maglev follow-ups (medium)** (BUILT, Nov 20 2026, in two rounds; README "Maglev lines" has the detail)
 - **Losing a Terminal doesn't lose the whole line** (built): its lines stand broken (guideway and pylons kept, drawn
