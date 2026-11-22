@@ -98,7 +98,8 @@ how goods move.
   slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw the
   menu planet's face (`mplMakeMap`) on a sphere shaded per pixel only when something changes (turned by drag, swipe,
   wheel or the arrow keys), tinted by owner with the atlas's borders, markers for Uplinks, homes, groups, forts and the
-  Murmur, Argos as a disc beside it, and the orders as arcs; a territory card (`cgCard`), the Spend panel, the battle
+  Murmur, Argos as a disc beside it, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
+  pill (or its territory's marker) onto a neighbour (`cgDown` picks it up, `cgUp` gives the order); a territory card (`cgCard`), the Spend panel, the battle
   card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
   screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
   at Contingency's place in the story (`MUSIC.loreLevel`). **The bridge to battles** (`js/contingency-battle.js`):

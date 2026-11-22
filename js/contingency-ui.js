@@ -260,6 +260,14 @@ function cgOverlay(g) {
     if (!p) continue;
     cgMarker(g, t, p, small, marks, false);
   }
+  // a group being dragged: a line from where it stands to the pointer
+  const dg = CG.dragAt && CG.group ? contGroup(run, CG.group) : null, from = dg && cgSpot(dg.at);
+  if (from) {
+    const to = cgPick(CG.dragAt.x, CG.dragAt.y), ok = to >= 0 && cgTargets().has(to);
+    g.strokeStyle = ok ? '#ffdc78' : 'rgba(255,255,255,0.6)'; g.lineWidth = 3; g.setLineDash(ok ? [] : [6, 5]);
+    g.beginPath(); g.moveTo(from.x, from.y); g.lineTo(CG.dragAt.x, CG.dragAt.y); g.stroke(); g.setLineDash([]);
+    g.fillStyle = cgColor(0); g.beginPath(); g.arc(CG.dragAt.x, CG.dragAt.y, 7, 0, Math.PI * 2); g.fill();
+  }
   CG.marks = marks;
 }
 function PI_2() { return Math.PI / 2; }
@@ -308,6 +316,7 @@ function cgMarker(g, t, p, small, marks, moon) {
     g.fillStyle = cgColor(s); g.globalAlpha = 0.95;
     g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, 13, 6); else g.rect(x, y, w, 13); g.fill(); g.globalAlpha = 1;
     if (s === 0 && gs.some((x) => x.id === CG.group)) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); }
+    if (s === 0) marks.push({ t, x: x + w / 2, y: y + 6.5, r: 14, pill: true });
     g.fillStyle = '#071018'; g.font = '700 10px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(label, x + w / 2, y + 10);
   });
   // the name: all of them on a big globe, the picked one and the move targets on a small one
@@ -321,10 +330,30 @@ function cgMarker(g, t, p, small, marks, moon) {
 
 /* ------------------------------------------------------------------ turning and tapping */
 
+/** Where a pointer event is on the globe's canvas (css px). */
+function cgAt(e) { const r = $('cg-globe').getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+/** The territory under (x, y): a marker first, then the globe's own cells. */
+function cgPick(x, y) {
+  let t = -1, best = 1e9;
+  for (const m of CG.marks) { const d = Math.hypot(m.x - x, m.y - y); if (d < m.r && d < best) { best = d; t = m.t; } }
+  if (t < 0) { const q = cgUnproject(x, y); if (q) t = cgCellAt(q.lon, q.lat); }
+  return t;
+}
+/**
+ * A press on the globe: on one of your groups' pills (or the marker of a territory where you have one), it picks the
+ * group up, to drag onto a neighbour; anywhere else it turns the globe.
+ */
 function cgDown(e) {
   if (!CG.run) return;
   $('cg-globe').setPointerCapture(e.pointerId);
-  CG.drag = { x: e.clientX, y: e.clientY, yaw: CG.yaw, pitch: CG.pitch, moved: false };
+  const p = cgAt(e);
+  let grab = null;
+  if (CG.run.phase === 'plan') {
+    const hit = CG.marks.filter((m) => Math.hypot(m.x - p.x, m.y - p.y) < m.r).sort((a, b) => (b.pill ? 1 : 0) - (a.pill ? 1 : 0))[0];
+    const gs = hit ? contGroupAt(CG.run, hit.t, 0) : [];
+    if (gs.length) grab = (gs.find((g) => g.id === CG.group) || gs.find((g) => !CG.run.orders[g.id]) || gs[0]).id;
+  }
+  CG.drag = { x: e.clientX, y: e.clientY, yaw: CG.yaw, pitch: CG.pitch, moved: false, grab };
 }
 function cgMove(e) {
   const D = CG.drag;
@@ -332,16 +361,24 @@ function cgMove(e) {
   const dx = e.clientX - D.x, dy = e.clientY - D.y;
   if (!D.moved && Math.hypot(dx, dy) < 7) return;
   D.moved = true;
+  if (D.grab) { CG.group = D.grab; CG.dragAt = cgAt(e); CG.dirty = true; return; }
   CG.yaw = D.yaw - dx / CG.v.r; CG.pitch = clamp(D.pitch + dy / CG.v.r, -CGV.tilt, CGV.tilt); CG.dirty = true;
 }
 function cgUp(e) {
   const D = CG.drag; CG.drag = null;
-  if (!D || D.moved) return;
-  const rect = $('cg-globe').getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
-  let t = -1, best = 1e9;
-  for (const m of CG.marks) { const d = Math.hypot(m.x - x, m.y - y); if (d < m.r && d < best) { best = d; t = m.t; } }
-  if (t < 0) { const q = cgUnproject(x, y); if (q) t = cgCellAt(q.lon, q.lat); }
-  cgTap(t);
+  if (!D) return;
+  const p = cgAt(e);
+  if (D.grab && D.moved) {
+    // a group dropped: on a territory it may move to, the order; anywhere else, nothing
+    CG.dragAt = null; CG.dirty = true;
+    const t = cgPick(p.x, p.y), gr = contGroup(CG.run, D.grab);
+    if (gr && t >= 0 && cgTargets().has(t)) { CG.sel = gr.at; cgTap(t); return; }
+    if (gr && t === gr.at) { cgTap(t); return; }
+    CG.note = 'Drop a Command Group on a highlighted territory to move it there.'; CG.sel = gr ? gr.at : CG.sel; cgSync();
+    return;
+  }
+  if (D.moved) return;
+  cgTap(cgPick(p.x, p.y));
 }
 function cgKey(e) {
   if (!CG.on || e.defaultPrevented || $('screen-contingency').hidden || !$('screen-help').hidden) return;
