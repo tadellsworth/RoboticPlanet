@@ -230,7 +230,7 @@ function faunaHab(ci, cj) {
       if (k && Lf.dead && Lf.dead.includes(k)) H.dead.push(t);
       if (k && Lf.trees && Lf.trees.includes(k)) { H.tree.push(t); continue; }
       H.open.push(t);
-      if (S.green && S.green[t] >= 4) H.garden.push(t); // (an Atmosphere Engine's Garden: the Pathfinder's deer and birds come back to it)
+      if ((S.green && S.green[t] >= 4) || (typeof lmGarden === 'function' && lmGarden(t))) H.garden.push(t); // (an Atmosphere Engine's Garden, or Passenger Town's lawns: the Pathfinder's deer and birds come back to it)
       if (faunaNext(i, j, T_WATER)) H.shore.push(t);
       // (deer away from water: open ground by the trees)
       else if (Lf.trees && Lf.trees.length && faunaNearTree(i, j, Lf.trees)) H.edge.push(t);

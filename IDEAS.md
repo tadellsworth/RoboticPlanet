@@ -408,6 +408,56 @@ each is a call waiting for the owner's yes or no:
 24. **Balance (200 computer-only runs):** about 44% won on the Uplinks, 38% in the window, 18% by conquest; median run
     T+27; every callsign and doctrine wins (the Salvager least, about 19% of its runs against 25 to 32% for the rest).
 
+### Contingency's landmarks: calls for the owner's approval (Nov 22 2026)
+
+The atlas's named places (LORE.md, The atlas) are now set pieces in a Contingency battle fought in their territory
+(`js/landmarks.js`; README, Contingency). Each is scenery with its name (hovered or tapped; in faded atlas lettering
+zoomed out) and, where it fit, a light touch. Every one of these is a call for the owner:
+
+1. **Where they go.** Near the middle of the line between the sides, outward from it to the first spot where it fits:
+   open ground, nothing already there, at least 7 tiles from a base (5 if there's no room), and every tile either base
+   could reach before still reachable (so never the only pass). On a cramped map Passenger Town drops to one street of
+   4 houses, the Stone Forest to a small stand and the Long Falls to a shorter cliff, or none for its stream. Headless:
+   all 14 placed on every seed tried.
+2. **Which territory has which wreck** (the atlas names only the region): the *Kestrel* at Heron Reach (Blackwater), the
+   *Ninth Survey* at Ashfield (Cinderlands), the *Halvard* at Foxford (Emberwood).
+3. **The gameplay touches** (modest; every number is open):
+   - the Pathfinder's hull (5 × 2), the Ring Shard Spire (3 × 3), Passenger Town's houses, the Stone Forest's pillars,
+     the Breach Fields' shafts and Silent Crater's central peak block the way; nothing is built on any landmark's
+     ground (and no road tunnels through one);
+   - the Spire stands among Crystal clusters half as rich again as the map's own;
+   - the Stone Forest: robots standing among its pillars take a quarter less damage (cover);
+   - the Long Falls: a cliff (the map's own rock), its plunge pool and a short stream, which can be bridged;
+   - Glass Lake: ice robots cross, never built on;
+   - the Clock Geyser: from 45 seconds in, every 90 seconds for 8, its vent becomes impassable and robots within a tile
+     and a half are scalded (4 damage a second) and pushed off the vent; its panel shows the time to the next;
+   - Passenger Town: its lawns count as the Pathfinder's garden, so its deer and songbirds come to graze, and its welcome
+     sign ("WELCOME TO ITHACA") lights up at dusk and flickers now and then;
+   - Ledger Post and Spring Market: the battle's Trade Post nearest the middle carries the name; no rule changes;
+   - the Breach Fields and Silent Crater: scenery only (the shafts breathe violet at night).
+4. **The wrecks' logs.** Hold any robot of yours within a tile of a wreck's hatch for 20 seconds (Army, Hold ground)
+   and its log is recovered: a line in the battle's messages, the wreck's panel opens on it, it is kept in the run
+   (`run.logs`, won or lost, even on Withdraw) and in that year's report, and a later battle there has nothing more to
+   give. Rivals' robots recover nothing. The three logs, in the colony's voice (Earth's fate never stated):
+   - *Kestrel:* "Log recovered: the Kestrel, cargo lander, down in Blackwater at T−19. Final entries: "Ark construction
+     update received: hull sections 112 to 118 complete." "Ark construction update received: no change." "Awaiting ark
+     construction update." The last line repeats once a day for 1,106 days, then the batteries."
+   - *Ninth Survey:* "Log recovered: the Ninth Survey, Accord survey craft, down in the Cinderlands at T−8. It went on
+     listening after the crash. Its last 4,000 entries are the same: "Home channel open. Carrier steady. No content."
+     The carrier is still logged steady on the final entry."
+   - *Halvard:* "Log recovered: the Halvard, relay tender, down in Emberwood at T+3. Its receiver kept the deep-space
+     bands until its power failed: "Machine handshakes, Catalog worlds 2, 5 and 7. Accord protocols. Routine." Every
+     period closes with the same note: "No voice traffic this period.""
+   Open: whether these dates and craft fit the canon (LORE.md has no wreck histories yet), and who sent each.
+5. **The Lore guide.** Its atlas page lists the wrecks "each with a log to recover", so the logs found on this device
+   show there under it ("Recovered logs", from `terrafall.logs` in the device's storage). Open: whether the Archive
+   pages planned above should take them over, and whether a log should also count across devices (cloud saves).
+6. **Flavour lines** for each landmark (its panel) are new text in LORE's tone: the owner may want to rewrite them.
+7. **Not done:** no landmark marks on the minimap; Missions are untouched (Contingency isn't taught there); LORE.md's
+   open question on the Pathfinder wreck as a landmark is left to the owner (Contingency now shows it at Pathfinder's
+   Landing; Seed Vault keeps its own hull, drawn in code). The art (ART_GUIDE Batch 32) is new renders, not the Seed
+   Vault drawing.
+
 ## Polish round 1 (built Nov 21 2026; open questions)
 
 Camera spots (Shift+F1–F4 / F1–F4, minimap pips), J stepping back through recent alerts, each good's net change a
@@ -1672,7 +1722,8 @@ These wait for a later expansion:
   Pathfinder's arrival camps (empty shelters, a lit "Welcome to Ithaca" sign, a landing field whose lights still blink
   at night) and the half-buried wrecks of earlier landings that failed, each with a log for the Archives. A
   once-a-game moment for each biome: a herd crossing the Long Grass, geese over Emberwood, a lava flow in the
-  Cinderlands. Needs new art. The campaign's set pieces are listed in CAMPAIGN.md.
+  Cinderlands. Needs new art. The campaign's set pieces are listed in CAMPAIGN.md. (Contingency's battles have the
+  atlas's own landmarks and wrecks now: see Contingency's landmarks above.)
 - **The Hollow (decided by the owner, Nov 17; built Nov 2026).** The Murmur's cavern lair under the Bloom (LORE.md, The
   Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
   black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first

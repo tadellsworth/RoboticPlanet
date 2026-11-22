@@ -169,6 +169,29 @@ how goods move.
   −1 in a rival's, and stops the Murmur spreading in; the Deep Core +3, and +1 Murmur next door each year; the Great
   Uplink counts twice. One finished in a played battle is kept (`contBattleOver` → `contSetMega`) and built at the start
   of the next battle there; taking the territory wrecks it. Headless test: `lh/contingency-mega-test.js`.
+  **The atlas's landmarks** (`js/landmarks.js`; LORE.md, The atlas): a battle in a territory with one (`LM_AT`,
+  `contLandmark`) gets it from its setup, before the kits land (`lmSetup`): outward from the middle of the line between
+  the sides (`lmMiddle`) to the first spot where its tiles are open ground clear of everything (posts, Uplinks, nests,
+  roads, tides, lava, tunnels), what blocks the way on level ground with a ring of open ground round it, 7 tiles from
+  every base (then 5, then a compact shape: `lmShape`'s `small`), and every tile either base reached before is still
+  reachable (`lmReach`); deterministic from the map and the battle's seed. `S.landmarks` (`id`, `x`, `y`, `v`, `solid`
+  rock under its art, `area` nothing built: `lmNoBuild` in `canPlace` and `canRoad`, `water`, `rock`, and a geyser's `on`,
+  a wreck's `hatch`, `hold`, `got`) is saved, checked (`lmCheckSave`) and hashed. Solid tiles are drawn as the ground
+  under the art (`pillarAt`). The pieces: the Pathfinder's hull (5 × 2, blocks), Passenger Town (8 houses on a street,
+  or 4 in the compact one; its lawns the garden's deer graze: `lmGarden`; the welcome sign lit at night), the Ring
+  Shard Spire (3 × 3, blocks; Crystal round its foot at `LM_CRYSTAL` 1.5×), the Long Falls (a 5 × 2 cliff of rock, its
+  pool and stream, which can be bridged), the Stone Forest (pillars never side by side; robots among them take
+  `LM_COVER` 0.75 of the damage: `lmCover` in `damageBot`), Glass Lake (ice: crossed, not built on), the Clock Geyser
+  (`LM_GEYSER`: from 45 s, every 90 s for 8 its vent turns to rock, `terrainChanged`, and robots within a tile and a
+  half are scalded 4 a second and pushed off the vent: `lmTick`), the Breach Fields (shafts, blocking), Silent Crater
+  (Argos: a floor not built on, its peak blocks), Ledger Post and Spring Market (the Trade Post nearest the middle,
+  named: `lmPostName`), and three wrecks (3 × 2, the hatch below): one of your robots within a tile of the hatch for
+  `LM_WRECK_HOLD` (20) s recovers its log (`got` 1; `lmUiTick` opens it, `lmKeepLog` keeps it for the Lore guide's
+  atlas page, `#lore-logs`); `contBattleOver` puts it in `run.logs` (checked by `contValid`) and the year's report,
+  won or lost, and a later battle there has `got` 2. Hover or tap: `lmSheet`; the names in faded atlas lettering zoomed
+  out and over the one hovered (`lmLabels`). Art: `lm-*` keys, loaded only in a battle with a landmark
+  (`ensureLandmarkArt`; one-file: `dist/landmarks.js`), ART_GUIDE Batch 32. Headless test:
+  `lh/contingency-landmark-test.js`.
   Browser test: `lh/contingency-bridge-test.js`. Headless test: `lh/contingency-test.js` in the test kit (50
   whole runs auto-resolved, determinism, saves).
 - **Observer mode:** the computer plays every colony (two to four, each with the doctrine you pick, with Custom Game's map,

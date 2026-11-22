@@ -1564,6 +1564,31 @@ one burns. Everything else is drawn in code: the violet light on the ground roun
 shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
 (`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
 
+### Batch 32: the atlas's landmarks (installed)
+
+Rendered with `renderer/b/landmark.js` (`renderer/tools/render_landmarks.sh`, then `renderer/tools/install_landmarks.py`
+writes the WebP files and prints each frame's scale and anchor; `--sheet` makes a review sheet). The set pieces of a
+Contingency battle (`js/landmarks.js`, README, Contingency), at true scale (10 world units a tile) in the buildings'
+57-degree view; the town's ground, Glass Lake and Silent Crater straight down. No ground is drawn: an invisible floor
+hides what's buried, soft stains blend each foot into the map. Every key starts `lm-`, so it all loads only in a battle
+with a landmark (`ensureLandmarkArt`; in the single file, `dist/landmarks.js` beside the page, with its morning,
+evening and night sets: `LANDMARK_TOD_KEYS` in `art/tod/tod-keys.js`). About 670 KB in all.
+
+| Key | What | How it's drawn |
+| --- | --- | --- |
+| `lm-hull` | The Pathfinder's hull: the long white joint lander lying half-buried, its Accord stripe faded, the seed vault's hatch open, drift sand banked along it | 7.96 tiles, its middle on the line between the two rows of its 5 × 2 tiles |
+| `lm-spire` (+ `lm-spire-glow`) | The Ring Shard Spire: a curved slab of the Ring driven in, a tall lilac crystal spire out of it, crystals and rubble round its foot | 5.54 tiles, anchor [0.5, 0.8]; its glow added, breathing, faint by day and full at night |
+| `lm-pillar-1…3` | The Stone Forest: banded red sandstone columns, worn and faceted; 3 a hoodoo with its cap | 2.38 tiles, one on each pillar tile |
+| `lm-falls` | The Long Falls: the lip of the cliff, the water going over it and the foam in the pool | 4.31 tiles at the cliff's foot (the cliff is the map's rock, the pool and stream its water); streaks and spray animated in code |
+| `lm-geyser` | The Clock Geyser: the sinter cone and its terraces, cream to rust, warm pools stepping down, the dark vent | 4.02 tiles; the eruption (a column of steam, the seething before it) drawn in code from the simulation's clock |
+| `lm-house-1…3` | Passenger Town's houses: small bungalows, gable roofs (red, slate, green), porch, door, hedge, mailbox; the windows lit at night | 1.72 tiles, on each house tile |
+| `lm-sign` (+ `lm-sign-glow`) | The welcome sign: WELCOME TO ITHACA, PASSENGER TOWN, a flower bed; lit at night | 1.82 tiles; its lettering's glow added after dark, flickering now and then |
+| `lm-town`, `lm-town-s` | The town's ground: mown lawns, the street with its faded centre line and grass in the cracks, sidewalks, walks | 9 tiles square, straight down, with the ground (the compact town: one row of houses) |
+| `lm-lake` | Glass Lake: clear ice, dark over the deep, bubbles, cracks, snow drifted at its rim | 12 tiles square, straight down, with the ground |
+| `lm-crater` | Silent Crater: the bowl, its rim and central peak, scattered rocks, fading into the ground | 8 tiles square, straight down, with the ground |
+| `lm-shaft` | A shaft of the Breach Fields: a hole down into the Hollow, its lip of heaved earth crusted with violet crystal, root-veins running over the edge | 1.61 tiles; a violet breath of light over it in code |
+| `lm-wreck-kestrel`, `-survey`, `-halvard` | The failed landings, half-buried, the hatch toward you: the *Kestrel* (a boxy cargo lander broken in two, in the reeds), the *Ninth Survey* (a slim craft, its antenna mast and dish, under ash), the *Halvard* (a relay tender nose-down, red-gold leaves in its open bay) | 4.94 tiles over its 3 × 2 tiles; a ring fills at the hatch while it's held |
+
 ### Batch 31: the Harrow, the behemoth (installed)
 
 The owner chose direction A of the behemoth sheet (design/behemoth/BEHEMOTH-SHEET.md): **the Harrow**, the walking siege
