@@ -7523,6 +7523,7 @@ function render(dtReal) {
   if (S.town && typeof townHaze === 'function') { townHaze(ctx, ox, oy, z); townLabel(ctx, ox, oy, z); } // (the city map's haze and name: js/city.js)
   if (S.walker && typeof walkerMarks === 'function') walkerMarks(ctx, ox, oy, z); // (the Walking Factory's ring, claim and name: js/walker.js)
   if (S.landmarks && S.landmarks.length && typeof lmLabels === 'function') lmLabels(ctx, ox, oy, z, inView); // (the landmarks' names: js/landmarks.js)
+  drawCommandView(ctx, ox, oy, z); // (Army Groups' banners, zoomed far out or with Tab)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -8999,6 +9000,7 @@ function drawAgPlans(ctx, ox, oy, z) {
   if (UI.sheetKind === 'agroup') show.set(UI.sheetFor, null);
   if (UI.agPick && UI.agPick.k !== 'home') show.set(UI.agPick.g, UI.agPick);
   if (UI.sel && UI.sel.length) for (const g of agList(ME)) { const ids = agMembers(g).map((u) => u.id); if (ids.length && ids.every((id) => UI.selSet && UI.selSet.has(id))) show.set(g.id, show.get(g.id) || null); }
+  if (cmdViewOn()) for (const g of agList(ME)) if (!show.has(g.id)) show.set(g.id, null); // (the command view: every group's)
   for (const [id, pick] of show) {
     const g = agById(id); if (!g || g.owner !== ME) continue;
     const r = rallyById(g.flag), c = AGROUP.colors[g.n - 1];
@@ -9007,10 +9009,18 @@ function drawAgPlans(ctx, ox, oy, z) {
     ctx.save();
     ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.strokeStyle = c; ctx.fillStyle = c;
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 3;
-    if (k === 'defend') {
+    if (k === 'defend' || k === 'raid') {
       const at = pick ? null : g.ord.pts.length ? P(g.ord.pts[0]) : r ? [ox + r.x * z, oy + r.y * z] : null;
       const rad = pick ? pick.r : g.ord.r || AGROUP.rad;
       if (at) { ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(at[0], at[1], rad * z, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(at[0], at[1], rad * z, 0, Math.PI * 2); ctx.stroke(); }
+      // (a Raid: crosshairs on its target, while it's going for one)
+      if (at && k === 'raid' && !pick && r && (g.ord.at | 0) === 0 && g.ord.tk) {
+        const tx = ox + r.x * z, ty = oy + r.y * z, q = Math.max(8, z * 0.45);
+        ctx.setLineDash([]); ctx.lineWidth = Math.max(2, z * 0.06);
+        ctx.beginPath(); ctx.arc(tx, ty, q, 0, Math.PI * 2);
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(tx + a * q * 0.5, ty + b * q * 0.5); ctx.lineTo(tx + a * q * 1.5, ty + b * q * 1.5); }
+        ctx.stroke();
+      }
     } else if (k === 'patrol' || k === 'attack') {
       const ps = pts.map(P);
       const from = !pick && k === 'attack' && r ? (g.ord.done ? [] : [[ox + r.x * z, oy + r.y * z]]) : [];
@@ -9036,6 +9046,90 @@ function drawAgPlans(ctx, ox, oy, z) {
     }
     ctx.restore();
   }
+}
+
+/*
+ * The command view (Army Groups, stage 2): zoomed out to CMDV.z or less, or switched on (Tab, or the minimap's Command
+ * button: UI.cmdView), each of your groups shows as a banner over its units (or its flag, with none out): badge,
+ * count, a health bar and its order in a word, with a line to its flag when that's away from them, and every group's
+ * order drawn (drawAgPlans). Drawn on the map's canvas each frame from one pass over the robots; where each banner went
+ * is kept (UI.cmdIcons) for the pointer: tap one for its panel, drag it onto the map for an Attack there (cmdGrab).
+ */
+const CMDV = { z: 13, w: 104, h: 46, pad: 6 };
+const CMDV_WORD = { hold: 'Hold', defend: 'Defend', patrol: 'Patrol', attack: 'Attack', follow: 'Follow', raid: 'Raid' };
+function cmdViewOn() {
+  return typeof UI !== 'undefined' && !!UI.inGame && !R.clean && !UI.watch && !!S && !!S.agroups && S.agroups.length > 0 && (!!UI.cmdView || R.cam.z <= CMDV.z) && agList(ME).length > 0;
+}
+function drawCommandView(ctx, ox, oy, z) {
+  if (typeof UI === 'undefined') return;
+  UI.cmdIcons = [];
+  if (!cmdViewOn()) return;
+  const gs = agList(ME), at = new Map();
+  for (const g of gs) at.set(g.id, { x: 0, y: 0, k: 0, n: 0, hp: 0, max: 0 });
+  for (const u of S.bots) {
+    if (u.dead || !u.grp || u.owner !== ME) continue;
+    const a = at.get(u.grp); if (!a) continue;
+    a.n++; a.hp += u.hp; a.max += u.maxHp;
+    if (!u.inside) { a.x += u.x; a.y += u.y; a.k++; }
+  }
+  const W = CMDV.w, H = CMDV.h, placed = [];
+  ctx.save();
+  for (const g of gs) {
+    const a = at.get(g.id), r = rallyById(g.flag), c = AGROUP.colors[(g.n - 1) % AGROUP.colors.length];
+    const wx = a.k ? a.x / a.k : r ? r.x : 0, wy = a.k ? a.y / a.k : r ? r.y : 0;
+    const px = ox + wx * z, py = oy + wy * z;
+    // (its flag away from its units: a line there, an arrowhead at the end)
+    if (r && a.k && dist2(wx, wy, r.x, r.y) > 2.25) {
+      const fx = ox + r.x * z, fy = oy + r.y * z, an = Math.atan2(fy - py, fx - px), q = 9;
+      ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(fx - Math.cos(an) * q * 0.6, fy - Math.sin(an) * q * 0.6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx - Math.cos(an - 0.45) * q, fy - Math.sin(an - 0.45) * q); ctx.lineTo(fx - Math.cos(an + 0.45) * q, fy - Math.sin(an + 0.45) * q); ctx.closePath(); ctx.fill();
+    }
+    // The banner: over the spot, nudged clear of the ones already placed.
+    let x = Math.round(clamp(px - W / 2, 4, R.w - W - 4)), y = Math.round(clamp(py - H - 12, 4, R.h - H - 4));
+    for (let k = 0; k < 8 && placed.some((p) => x < p.x + W + 4 && x + W + 4 > p.x && y < p.y + H + 4 && y + H + 4 > p.y); k++) y = Math.min(R.h - H - 4, y + H + 6);
+    placed.push({ x, y });
+    const drag = UI.cmdDrag && UI.cmdDrag.n === g.n;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x + 2, y + 3, W, H);
+    ctx.fillStyle = drag ? 'rgba(10,28,40,0.97)' : 'rgba(6,12,19,0.92)'; ctx.fillRect(x, y, W, H);
+    ctx.strokeStyle = drag ? c : 'rgba(56,212,255,0.32)'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, W - 1, H - 1);
+    ctx.fillStyle = c; ctx.fillRect(x, y, 3, H);
+    // (a stalk down to the units)
+    ctx.strokeStyle = 'rgba(56,212,255,0.5)'; ctx.beginPath(); ctx.moveTo(clamp(px, x + 8, x + W - 8), y + H); ctx.lineTo(px, py); ctx.stroke();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+    // Badge: a diamond in the group's colour with its number.
+    const bx = x + 20, by = y + 17;
+    ctx.beginPath(); ctx.moveTo(bx, by - 11); ctx.lineTo(bx + 11, by); ctx.lineTo(bx, by + 11); ctx.lineTo(bx - 11, by); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#0a0f15'; ctx.font = "700 13px 'Chakra Petch', system-ui, sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(g.n), bx, by + 0.5);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e6f5fb'; ctx.font = "700 13px ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
+    ctx.fillText(`${a.n}/${g.size}`, x + 37, y + 11);
+    ctx.fillStyle = g.paused ? '#ffcf4a' : '#9dbccb'; ctx.font = "600 11px 'Chakra Petch', system-ui, sans-serif";
+    const word = g.paused ? 'Paused' : g.ord.k === 'raid' && (g.ord.at | 0) === 1 ? 'Pull out' : CMDV_WORD[g.ord.k] || '';
+    ctx.fillText(word.toUpperCase(), x + 37, y + 26);
+    // Health: a segmented bar.
+    const hp = a.max ? a.hp / a.max : 0, seg = 8, sw = (W - 14) / seg;
+    for (let k = 0; k < seg; k++) {
+      ctx.fillStyle = (k + 0.5) / seg <= hp ? (hp >= 0.66 ? '#7dffa0' : hp >= 0.33 ? '#ffcf4a' : '#ff6b6b') : 'rgba(157,188,203,0.18)';
+      ctx.fillRect(x + 7 + k * sw, y + H - 8, sw - 2, 4);
+    }
+    UI.cmdIcons.push({ n: g.n, x, y, w: W, h: H });
+  }
+  // Dragging a banner: a line to where it would attack.
+  const d = UI.cmdDrag;
+  if (d && d.moved) {
+    const g = agByN(d.n), ic = UI.cmdIcons.find((q) => q.n === d.n);
+    if (g && ic) {
+      const c = AGROUP.colors[(g.n - 1) % AGROUP.colors.length];
+      ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.setLineDash([10, 6]);
+      ctx.beginPath(); ctx.moveTo(ic.x + ic.w / 2, ic.y + ic.h / 2); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(d.x, d.y, 14, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = "700 12px 'Chakra Petch', system-ui, sans-serif"; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = '#fff';
+      ctx.strokeText('ATTACK HERE', d.x, d.y - 22); ctx.fillText('ATTACK HERE', d.x, d.y - 22);
+    }
+  }
+  ctx.restore();
 }
 
 /** Missiles fly in an arc: a shadow on the ground and the missile above it. */

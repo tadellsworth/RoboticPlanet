@@ -94,8 +94,24 @@ const controls = [
   ['siege', 5, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],
   ['hill', 3, ['Army (Q)', 'Hold ground (G)'], ['#btn-attack', '#ar-hold', '#win-card']],
+  ['standing', 3, ['Raid (R)'], []],
+  ['standing', 4, ['Retreat when weak', '50%', 'Stance', 'Aggressive', 'Hold fire'], []],
 ];
 const uiSource = read('js/ui.js') + read('index.html');
+// (Standing Orders' Raid and behaviour goals: the panel makes those buttons from lists, so their ids are checked here.)
+for (const id of ['ag-order-raid', 'ag-ret-50', 'ag-st-agg', 'ag-st-hold']) assert.ok(/ag-order-\$\{k\}|ag-ret-\$\{v\}|ag-st-\$\{v\}/.test(uiSource), `the group panel makes ${id}`);
+{
+  const goals = byId.get('standing').goals, raid = goals.find((g) => g.kind === 'agraid'), beh = goals.find((g) => g.kind === 'agbeh');
+  assert.equal(goals.indexOf(raid), 2); assert.equal(goals.indexOf(beh), 3);
+  assert.deepEqual(raid.ui.split(',').map((q) => q.trim()), ['#agcards .agcard', '#ag-order-raid'], 'the Raid goal lights the card and the Raid button');
+  assert.deepEqual(beh.ui.split(',').map((q) => q.trim()), ['#ag-ret-50', '#ag-st-agg', '#ag-st-hold'], 'the behaviour goal lights its buttons');
+  const G = (k, b) => ({ agroups: [{ owner: 0, ord: { k }, beh: b }, { owner: 1, ord: { k: 'raid' }, beh: { ret: 50, rel: 1, st: 'agg' } }] });
+  assert.equal(raid.count({}, G('hold')), 0, 'a rival\'s raid is not yours');
+  assert.equal(raid.count({}, G('raid')), 1, 'a group of yours on Raid counts');
+  assert.equal(beh.count({}, G('hold', { ret: 25, rel: 1, st: 'def' })), 0, 'the default behaviours do not count');
+  assert.equal(beh.count({}, G('hold', { ret: 50, rel: 1, st: 'def' })), 1, 'Retreat at 50% counts');
+  assert.equal(beh.count({}, G('hold', { ret: 25, rel: 1, st: 'hold' })), 1, 'Hold fire counts');
+}
 for (const [id, number, labels, selectors] of controls) {
   const goal = byId.get(id).goals[number - 1];
   const hint = plain(goal.hint);

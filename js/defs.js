@@ -945,7 +945,17 @@ const HUNT_CHAIN = 7; // (tiles round a hunted robot's death in which a person's
  * A group's target size runs 1 to `maxSize`; Patrol takes 2 to 3 points, Attack 1 to 5 waypoints.
  */
 const AGROUP = { max: 6, batch: 3, batchWait: 30, dwell: 3, radii: [4, 6, 8, 10], rad: 6, maxSize: 40, nameMax: 16,
-  colors: ['#ffcf4a', '#4ad6ff', '#ff7ad9', '#9dff6a', '#ff9a4a', '#c8a8ff'] };
+  colors: ['#ffcf4a', '#4ad6ff', '#ff7ad9', '#9dff6a', '#ff9a4a', '#c8a8ff'],
+  // Stage 2. Raid (agRaid): the area's circle at first `raid.rad` tiles; at a target the group stays `strike` s at most
+  // (a road: `road` s, `lane` s on a trade lane), and pulls out once it has lost `loss` of those it set off with, its
+  // health is down to `hp` on average, half of it is out of Ammo, or the armed enemy robots within `foeNear` tiles of
+  // the target outnumber its own. Home again it rests till its health is `rest` on average (`restMin` s at least,
+  // `restMax` at most), then raids again (Repeat) or holds (Once). Targets are looked for every `look` s while none.
+  raid: { rad: 8, strike: 120, road: 20, lane: 60, loss: 0.4, hp: 0.35, foeNear: 7, rest: 0.7, restMin: 10, restMax: 60, look: 10, outMax: 90 },
+  // Behaviours (agBeh): Retreat when weak at one of `rets` (% health; 0 off), Reload rotation (at most a third away at
+  // once), Stance (`stances`): Aggressive chases `aggLeash` tiles past the order's area; Hold fire shoots back only for
+  // `hitHold` s after one of the group is hit. New groups start on `beh`.
+  rets: [0, 25, 50], stances: ['agg', 'def', 'hold'], aggLeash: 7, hitHold: 5, beh: { ret: 25, rel: 1, st: 'def' } };
 const RECALL_NO_LOOT = 60; // a warbot called home (Recall all, or its rally flag taken down) leaves crates be this long (see lootNear)
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass

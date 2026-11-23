@@ -339,6 +339,7 @@ function initUI() {
   initSelBar();
   initSheetGrab();
   $('mm-hide').onclick = () => { setMinimap(false); sfx('click'); };
+  $('mm-cmd').onclick = () => toggleCmdView(); // (Army Groups' command view)
   $('mm-show').onclick = () => { setMinimap(true); sfx('click'); };
   try { MM.on = localStorage.getItem('botfall.minimap') !== '0'; } catch (e) { MM.on = true; }
   window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); if (UI.sheetKind) sheetMoved(); } });
@@ -2351,6 +2352,7 @@ const SHEET_KEYS = {
   'ag-order-patrol': ['p', 'Patrol (Army Group)'],
   'ag-order-attack': ['q', 'Attack (Army Group)'],
   'ag-order-follow': ['f', 'Follow (Army Group)'],
+  'ag-order-raid': ['r', 'Raid (Army Group)'],
   'ag-select': ['v', 'Select the group'],
   'ag-goto': ['c', 'Go to the group'],
   'sh-layroad': ['r', 'Lay road'],
@@ -2527,6 +2529,7 @@ const MAP_KEYS = [
   { keys: ['-', '_'], group: 'camera', label: 'Zoom out', run: () => zoomBy(0.8) },
   { keys: ['?'], group: 'panels', label: 'How to play', run: showHelp },
   { keys: [','], group: 'army', label: 'Pick idle warbots (again: the next group)', run: () => nextIdleArmy() },
+  { keys: ['tab'], group: 'army', label: 'Command view: your Army Groups from above (drag one to send it, tap it for its panel)', run: () => toggleCmdView() },
   { keys: ['.'], group: 'army', label: 'Ping under the pointer for your team (multiplayer; Alt+click too)', run: () => typeof coopPingHere === 'function' && !!coopPingHere(true) },
 ];
 const SHIFT_KEYS = {
@@ -2567,7 +2570,7 @@ function closeKeys() {
 
 /** Show context-specific bindings alongside the ones used on the map. */
 function renderKeys() {
-  const names = { home: 'Home', arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓' };
+  const names = { home: 'Home', tab: 'Tab', arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓' };
   const caps = (keys) => keys.map((key) => `<kbd>${names[key] || (key.length === 1 ? key.toUpperCase() : key)}</kbd>`).join(' ');
   const row = ([keys, label]) => `<div class="ks-row"><dt>${caps(keys)}</dt><dd>${label}</dd></div>`;
   const section = (title, rows, intro = '') => `<section class="ks-group"><h3>${title}</h3>${intro}<dl>${rows.map(row).join('')}</dl></section>`;
@@ -3388,6 +3391,7 @@ function escapeKey() {
   if (!$('screen-pause').hidden) { if (UI.pauseView === 'settings') pauseView('main', true); else $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
+  if (UI.cmdView) { toggleCmdView(false); return; }
   if (UI.toolPick && !$('banner').hidden) { toolPicker(false); return; } // (the Paths tools picker of an upright phone)
   // In Paths with a plan sketched, Esc takes back the last stroke (again for the one before); with none left it leaves Paths.
   if (R.mode === 'road' && !draftEmpty()) { draftUndo(); showRoadBanner(draftEmpty() ? 'Plan cleared.' : 'Last stroke taken back (Esc again for the one before; Clear drops the whole plan).', true); return; }
@@ -5584,8 +5588,10 @@ const AIM_TILE = 20;
  * always. Returns what to do with the finger's moves, or null when there is nothing to take hold of there.
  */
 const AIM_GRAB = 56; // px round the crosshair that take hold of it
-function mapGrab(x, y) {
-  if (R.mode !== 'aim' || !R.aim) return null;
+function mapGrab(x, y, mouse) {
+  const cmd = cmdGrab(x, y);
+  if (cmd) return cmd;
+  if (mouse || R.mode !== 'aim' || !R.aim) return null;
   const p = worldToScreen(R.aim.i + 0.5, R.aim.j + 0.5), dx = p.x - x, dy = p.y - y;
   if (Math.hypot(dx, dy) > AIM_GRAB) return null;
   return (mx, my) => {
@@ -10148,6 +10154,9 @@ function refreshAgCards() {
   }
   const gs = UI.inGame && S && warOn() && !UI.watch ? agMine() : [];
   el.hidden = !gs.length;
+  const mc = $('mm-cmd');
+  if (mc) { mc.hidden = !gs.length; mc.classList.toggle('on', !!UI.cmdView); mc.setAttribute('aria-pressed', UI.cmdView ? 'true' : 'false'); }
+  if (!gs.length && UI.cmdView) UI.cmdView = false;
   if (!gs.length) { el.dataset.html = ''; return; }
   const selAll = (ids) => ids.length && UI.selSet && ids.every((id) => UI.selSet.has(id));
   let h = '';
@@ -10235,6 +10244,50 @@ function initAgCards(el) {
   el.addEventListener('pointercancel', end);
 }
 
+/**
+ * The command view (Tab, or the minimap's Command button): the camera pulls out to the whole map and each group shows as
+ * a banner (drawCommandView); again (or Esc) and the camera goes back. Zoomed far out the banners show anyway.
+ */
+function toggleCmdView(on) {
+  const want = on === undefined ? !UI.cmdView : !!on;
+  if (want === !!UI.cmdView) return;
+  if (want && !agMine().length) { sfx('error'); toast('No Army Groups yet: select warbots, then Army group on the selection bar (or New group in the Army panel).', 'info'); return; }
+  sfx('click');
+  UI.cmdView = want;
+  if (want) {
+    UI.cmdPrev = { x: R.cam.x, y: R.cam.y, z: R.cam.z };
+    R.cam.z = minZoom();
+    centerOn(S.W / 2, S.H / 2);
+    toast(onTouch() ? 'Command view: drag a group\'s banner onto the map to send it there, tap it for its panel.' : 'Command view: drag a group\'s banner onto the map to send it there, click it for its panel. Tab or Esc to go back.', 'info');
+  } else if (UI.cmdPrev) {
+    R.cam.z = clamp(UI.cmdPrev.z, minZoom(), maxZoom());
+    centerOn(UI.cmdPrev.x, UI.cmdPrev.y);
+    UI.cmdPrev = null;
+  }
+  UI.cmdDrag = null;
+  refreshAgCards();
+}
+
+/** A pointer down on the map at (x, y): on a command-view banner, what its drag and tap do (input.js onGrab), else null. */
+function cmdGrab(x, y) {
+  if (typeof cmdViewOn !== 'function' || !cmdViewOn() || R.mode !== 'normal' || !UI.cmdIcons) return null;
+  const slack = onTouch() ? 8 : 2;
+  let hit = null;
+  for (const ic of UI.cmdIcons) if (x >= ic.x - slack && x <= ic.x + ic.w + slack && y >= ic.y - slack && y <= ic.y + ic.h + slack) hit = ic;
+  if (!hit) return null;
+  const n = hit.n;
+  UI.cmdDrag = { n, x, y, moved: false };
+  const f = (mx, my) => { UI.cmdDrag = { n, x: mx, y: my, moved: true }; };
+  f.tap = () => { UI.cmdDrag = null; const g = agByN(n); if (g) { sfx('click'); openAgSheet(g); } };
+  f.end = (mx, my) => {
+    UI.cmdDrag = null;
+    const g = agByN(n), w = screenToWorld(mx, my);
+    if (g && inMap(Math.floor(w.x), Math.floor(w.y))) agSendTo(g, Math.floor(w.x), Math.floor(w.y));
+  };
+  f.cancel = () => { UI.cmdDrag = null; };
+  return f;
+}
+
 /** A card tapped: its group selected, or (already selected, or a quick second tap) the camera to it. 0: the Reserve. */
 function agCardTap(n) {
   const g = n ? agByN(n) : null;
@@ -10316,6 +10369,13 @@ function openAgSelSheet() {
   if ($('ag-leave')) $('ag-leave').onclick = () => act('agLeave', [ids], (n) => { sfx('click'); toast(`${n} back in the Reserve.`, 'info'); closeSheet(); refreshAgCards(); });
 }
 
+const AG_STANCE_NAMES = { agg: 'Aggressive', def: 'Defensive', hold: 'Hold fire' };
+const AG_STANCE_HOW = {
+  agg: 'Aggressive: they chase what they see well past the order\'s area, and hit buildings further off.',
+  def: 'Defensive: they take on what comes within reach of the order\'s area, then come back to it.',
+  hold: 'Hold fire: they move and stand without shooting, until one of them is shot at; then the whole group fires back for a few seconds. (On a Raid they still hit its targets.)',
+};
+
 /** Group g's panel: rename, target size, priority, its order (with the map picks), home, select, go to, disband. */
 function openAgSheet(g) {
   if (!g) return;
@@ -10332,9 +10392,15 @@ function openAgSheet(g) {
     <div class="ag-row"><span id="ag-prio" class="ag-prio"></span><span class="ag-sep"></span><button class="btn" id="ag-up" aria-label="Higher priority">▲ Up</button><button class="btn" id="ag-down" aria-label="Lower priority">▼ Down</button></div>
     <div class="section-label">Standing order</div>
     <div class="ag-orders" id="ag-orders">${orders}</div>
-    <div class="ag-row" id="ag-rads"><span class="label-note">Defend area:</span>${AGROUP.radii.map((r) => `<button class="btn small" id="ag-rad-${r}" data-r="${r}">${r} tiles</button>`).join('')}</div>
+    <div class="ag-row" id="ag-rads"><span class="label-note">Area (Defend area, Raid):</span>${AGROUP.radii.map((r) => `<button class="btn small" id="ag-rad-${r}" data-r="${r}">${r} tiles</button>`).join('')}</div>
+    <div class="ag-row" id="ag-reps"><span class="label-note">After a raid:</span><button class="btn small" id="ag-rep-1" data-v="1">Repeat</button><button class="btn small" id="ag-rep-0" data-v="0">Once, then hold</button></div>
     <div id="ag-opt"></div>
     <p class="hint" id="ag-how"></p>
+    <div class="section-label">Behaviours <span class="label-note">how its units fight, whatever the order</span></div>
+    <div class="ag-row ag-beh" id="ag-rets"><span class="label-note">Retreat when weak:</span>${AGROUP.rets.map((v) => `<button class="btn small" id="ag-ret-${v}" data-v="${v}">${v ? v + '%' : 'Off'}</button>`).join('')}</div>
+    <div class="ag-row ag-beh" id="ag-rels"><span class="label-note">Reload rotation:</span><button class="btn small" id="ag-rel-1" data-v="1">On</button><button class="btn small" id="ag-rel-0" data-v="0">Off</button></div>
+    <div class="ag-row ag-beh" id="ag-sts"><span class="label-note">Stance:</span>${AGROUP.stances.map((v) => `<button class="btn small" id="ag-st-${v}" data-v="${v}">${AG_STANCE_NAMES[v]}</button>`).join('')}</div>
+    <p class="hint" id="ag-beh-how"></p>
     <div class="army-cmds"><button class="btn primary" id="ag-resume">Back to order</button><button class="btn" id="ag-select">Select</button><button class="btn" id="ag-goto">Go to</button><button class="btn" id="ag-home">Set home</button><button class="btn danger" id="ag-disband">Disband</button></div>`);
   $('ag-name-in').value = g.name;
   $('ag-name-in').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); $('ag-name').click(); } if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); } };
@@ -10349,8 +10415,19 @@ function openAgSheet(g) {
     const q = G(); if (!q) return;
     sfx('click'); UI.agRad = +b.dataset.r;
     if (q.ord.k === 'defend') act('agOrder', [q.id, 'defend', q.ord.pts, UI.agRad], () => refreshAgSheet());
+    if (q.ord.k === 'raid') act('agOrder', [q.id, 'raid', q.ord.pts, UI.agRad, 0, q.ord.rep ?? 1], () => refreshAgSheet());
     refreshAgSheet();
   };
+  for (const b of $('ag-reps').querySelectorAll('[data-v]')) b.onclick = () => {
+    const q = G(); if (!q) return;
+    sfx('click'); UI.agRep = +b.dataset.v;
+    if (q.ord.k === 'raid') act('agRaidRep', [q.id, UI.agRep], () => refreshAgSheet());
+    refreshAgSheet();
+  };
+  const beh = (args, say) => { const q = G(); if (!q) return; sfx('click'); act('agBeh', [q.id, ...args], (b) => { if (b && say) toast(say(q, b), 'info'); refreshAgSheet(); refreshAgCards(); }); };
+  for (const b of $('ag-rets').querySelectorAll('[data-v]')) b.onclick = () => beh([+b.dataset.v, null, null], (q, B) => (B.ret ? `The ${q.name}'s units pull out for repairs below ${B.ret}% health.` : `The ${q.name}'s units fight on, however damaged.`));
+  for (const b of $('ag-rels').querySelectorAll('[data-v]')) b.onclick = () => beh([null, +b.dataset.v, null], (q, B) => (B.rel ? `The ${q.name} restocks Ammo a few at a time.` : `The ${q.name}'s units each go for Ammo when they run out.`));
+  for (const b of $('ag-sts').querySelectorAll('[data-v]')) b.onclick = () => beh([null, null, b.dataset.v], (q, B) => `The ${q.name}: ${AG_STANCE_NAMES[B.st]}.`);
   $('ag-resume').onclick = () => { const q = G(); if (q) { sfx('order'); act('agResume', [q.id], () => { toast(`The ${q.name} is back on its order.`, 'info'); refreshAgSheet(); }); } };
   $('ag-select').onclick = () => { const q = G(); if (q) { closeSheet(); AGK.tapN = 0; agCardTap(q.n); } };
   $('ag-goto').onclick = () => { const q = G(); if (q) { sfx('click'); agCenter(q); } };
@@ -10385,7 +10462,16 @@ function refreshAgSheet() {
     `<div class="kv"><span>Home</span><span>${home}</span></div>`;
   const d = $('ag-dyn'); if (d.dataset.html !== dyn) { d.dataset.html = dyn; d.innerHTML = dyn; }
   for (const b of $('ag-orders').children) b.classList.toggle('on', b.dataset.k === g.ord.k);
-  for (const b of $('ag-rads').querySelectorAll('[data-r]')) b.classList.toggle('on', +b.dataset.r === (g.ord.k === 'defend' ? g.ord.r : UI.agRad));
+  for (const b of $('ag-rads').querySelectorAll('[data-r]')) b.classList.toggle('on', +b.dataset.r === (g.ord.k === 'defend' || g.ord.k === 'raid' ? g.ord.r : UI.agRad));
+  const rep = g.ord.k === 'raid' ? g.ord.rep ?? 1 : UI.agRep ?? 1, B = agBeh(g);
+  for (const b of $('ag-reps').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === rep);
+  $('ag-reps').hidden = g.ord.k !== 'raid';
+  for (const b of $('ag-rets').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === B.ret);
+  for (const b of $('ag-rels').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === B.rel);
+  for (const b of $('ag-sts').querySelectorAll('[data-v]')) b.classList.toggle('on', b.dataset.v === B.st);
+  const noRep = !S.buildings.some((b) => !b.dead && b.owner === ME && b.built && BDEFS[b.type].repair);
+  set('ag-beh-how', (B.ret ? `Below ${B.ret}% health a unit goes to a Repair Station and comes back mended${noRep ? ' (you have none yet: build one, or they fight on)' : ''}. ` : 'Retreat off: they fight on, however damaged. ') +
+    (B.rel ? 'Reload rotation: low on Ammo, they restock a few at a time, never more than a third at once. ' : 'Reload rotation off: each goes for Ammo when it runs out. ') + AG_STANCE_HOW[B.st]);
   $('ag-resume').hidden = !g.paused;
   const arm = UI.agDisbandArm && performance.now() - UI.agDisbandArm < 3000;
   set('ag-disband', arm ? 'Tap again to disband' : 'Disband');
@@ -10406,6 +10492,7 @@ function refreshAgSheet() {
     patrol: 'Patrol: they walk a loop of 2 or 3 points you tap, fighting what they meet, pausing a few seconds at each.',
     attack: 'Attack: they fight their way along up to 5 waypoints you tap, clearing each before the next, and hold the last.',
     follow: 'Follow: they shadow another of your groups, a couple of tiles behind it.',
+    raid: `Raid: they go for the enemy's economy in a ${g.ord.r || UI.agRad}-tile circle you tap (Haulers, trucks, mines, factories, Depots, roads; never defences), round the guns both ways, and pull out when it turns costly. ${(g.ord.rep ?? 1) ? 'Then they mend and go again.' : 'Then they hold at home.'}`,
   }[g.ord.k] || '';
   set('ag-how', how + (g.paused ? ' Paused: some were given orders of yours. Back to order puts them all back on it.' : '') + (r && !s.n ? ' No units yet: new ones from the Bot Foundry fill it.' : ''));
   markSheetKeys();
@@ -10417,6 +10504,7 @@ function agOrderButton(g, k) {
   sfx('click');
   if (k === 'hold') { act('agOrder', [g.id, 'hold', []], () => { toast(`The ${g.name} holds at home.`, 'info'); refreshAgSheet(); }); return; }
   if (k === 'follow') { UI.agOpt = UI.agOpt === 'follow' ? '' : 'follow'; refreshAgSheet(); return; }
+  if (k === 'raid' && !AGROUP.radii.includes(UI.agRad)) UI.agRad = AGROUP.raid.rad;
   agStartPick(g, k);
 }
 
@@ -10435,10 +10523,11 @@ function agPickBanner(note) {
   const O = AG_ORDERS[P.k], n = P.pts.length;
   const text = P.k === 'home' ? `Tap the <b>${g.name}</b>'s new home: one of your Outposts or Keeps, your Command Base, or open ground.`
     : P.k === 'defend' ? `Tap the middle of the area the <b>${g.name}</b> defends (a ${P.r}-tile circle), or <b>Around home</b>.`
+    : P.k === 'raid' ? `Tap the middle of the enemy ground the <b>${g.name}</b> raids (a ${P.r}-tile circle): it hits their economy there, keeping out of their guns.`
     : P.k === 'patrol' ? `Tap ${n ? 'the next point' : '2 or 3 points'} of the <b>${g.name}</b>'s patrol loop (${n} of 3).${n >= 2 ? ' <b>Done</b> to start.' : ''}`
     : `Tap the <b>${g.name}</b>'s waypoints, up to 5: it holds at the last (${n} of 5).${n ? ' <b>Done</b> to send it.' : ''}`;
-  showBanner((note ? note + ' ' : '') + text, P.k === 'defend' ? 'Around home' : P.k === 'home' ? null : 'Done', 'Cancel');
-  if (P.k !== 'defend' && P.k !== 'home') $('banner-ok').disabled = n < (O ? O.pts[0] : 1);
+  showBanner((note ? note + ' ' : '') + text, P.k === 'defend' ? 'Around home' : P.k === 'home' || P.k === 'raid' ? null : 'Done', 'Cancel');
+  if (P.k !== 'defend' && P.k !== 'home' && P.k !== 'raid') $('banner-ok').disabled = n < (O ? O.pts[0] : 1);
 }
 
 /** A tap on the map while picking for a group. */
@@ -10458,6 +10547,7 @@ function agPickTap(i, j, wx, wy) {
   let t = [i, j];
   if (b || !inMap(i, j) || !walkable(tIdx(i, j))) { const s = agSpot(b ? b.x : i, b ? b.y : j, b ? 1 : 0); if (!s) return fail('Tap ground your units can walk to.'); t = s; }
   if (P.k === 'defend') { act('agOrder', [g.id, 'defend', [t], P.r], (why) => (why ? fail(why) : agPickEnd(`The ${g.name} defends the area there.`))); return; }
+  if (P.k === 'raid') { act('agOrder', [g.id, 'raid', [t], P.r, 0, UI.agRep ?? 1], (why) => (why ? fail(why) : agPickEnd(`The ${g.name} raids there${(UI.agRep ?? 1) ? ', again and again' : ', once'}.`))); return; }
   P.pts.push(t);
   sfx('click');
   const max = AG_ORDERS[P.k].pts[1];

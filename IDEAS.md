@@ -120,7 +120,7 @@ calls made in building it, each a default for the owner to keep or change:
   robots among its legs still count. Open: B's lit deck ring and knee lights carried over for more of a "still running"
   feel at night; a Warbot seen rolling down the chute as one is built.
 
-## Army Groups (brainstormed with the owner Nov 23 2026; stage 1 built Nov 23 2026)
+## Army Groups (brainstormed with the owner Nov 23 2026; stages 1 and 2 built Nov 23 2026)
 
 The army ends up as one blob that splits itself between Outposts; on big maps the owner wants several armies, each
 with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selections.
@@ -135,7 +135,7 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
 - **The rally point sits alongside** groups (the owner's pick): it is the Reserve's home.
 - **Group cards** on screen: badge, count, health, Ammo, order. Tap selects, twice jumps; drag onto the map or
   minimap to send it.
-- **Later:** per-group behaviours (retreat below a health level, reload a few at a time, aggressive/defensive/hold
+- **Later (stage 2, built below):** per-group behaviours (retreat below a health level, reload a few at a time, aggressive/defensive/hold
   fire); a zoomed-out command view of group icons and order arrows; group banners and minimap marks; rivals using
   groups (defence, raid, main army).
 - **Order of work:** groups, reinforcement routing and group cards first; a Claude Design canvas for the group cards
@@ -160,6 +160,27 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   - **Dragging a card** onto the map or minimap gives an Attack order to that tile (it holds there after).
   - **The Reserve card** sits at the end of the strip: army units in no group (posted garrisons not counted).
   - **Defend area** sizes: 4, 6, 8 or 10 tiles, picked in the panel before tapping the middle (or Around home).
+- **Stage 2 BUILT (Nov 23 2026): Raid, behaviours, the command view, rivals' groups** (README, Army Groups stage 2;
+  How to play, Army Groups; *Standing Orders* has Raid and behaviour goals). Escort left out (not approved). Calls:
+  - **Raid targets** score by value (factories 7, Depots 6, mines 5, Haulers and trucks 5, Workers 3, roads 2,
+    junctions 3), less for armor, distance and armed foes near; never defences or anything a gun covers, nor where
+    armed foes outnumber the group. Its area is a circle (4-10 tiles, 8 to start), like Defend area's.
+  - **Pull-out:** 40% lost, armed foes near the target outnumbering it, health under 35% on average, half out of
+    Ammo, 2 minutes at the targets, or nothing safe left. It marches home without stopping to fight.
+  - **Then:** Repeat (to start; out again once at 70% health, 10-60 s) or Once, then hold: the player picks.
+  - **Retreat when weak is per unit**, not the whole group: a unit below the level goes to a Repair Station (even
+    mid-fight: you chose it) and rejoins mended; the group fights on. With no Repair Station they fight on. Off:
+    nobody pulls out. 25% to start (groups no longer use the general 35% rule).
+  - **Reload rotation** on to start; a third (at least one) away at most; each fills up while there.
+  - **Hold fire = shoot back once shot at:** when any unit of the group is hit, the whole group may fire for 5 s.
+    A Raid ignores Hold fire at its targets. Aggressive adds 7 tiles of chase.
+  - **Command view:** Tab (free on the map; the build menu keeps it for its tabs) or the minimap's Command button,
+    and on its own at zoom 13 px a tile or less. Dragging a banner gives Attack, as dragging a card does.
+  - **Rivals:** raids as a Raiders group (Once), and a Home Guard group under siege (not the Salvager). The main army
+    stays on the march logic. AI-vs-AI (10 games, 3 maps, all five doctrines): every game still ends, mean length
+    18.4 → 18.3 min, wins Herald 4, Salvager 5 → 4, Steward 1, Warden 0 → 1.
+- **Open after stage 2:** Escort; a target mix; should the main army march as a group; Retreat for the whole group as
+  an option; a waypoint route for Raid's way in.
 - **Open after stage 1:** should a group's units garrison inside an Outpost home on Hold (they stand beside it now)?
   Should the Army panel's Attack/Hold be able to draw on groups? A target *mix* (12 warbots, 2 Bulwarks) isn't built:
   groups take any army unit.

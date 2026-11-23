@@ -1203,6 +1203,7 @@ function routeOpts(u) {
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
   if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
+  if (isArmy(u) && !u.fight && u.task && u.task.type === 'hold') { const r = rallyById(u.task.rally); if (r && r.safe) o.safe = dangerMap(u.owner); } // (an Army Group's raid: round them, both ways, see agRaid)
   if (isArmy(u) && !u.fight && S.players[u.owner] && S.players[u.owner].ai && S.rads && S.rads.length) o.rad = true; // (a rival's army marches round radiation where it can)
   if (bt.wild && u.task && u.task.night && !u.fight && murmurSmart()) o.coverMap = murmurGunMap(); // (Active: the Murmur keep out of the colonies' guns where they can)
   return o;
@@ -1244,9 +1245,10 @@ let ROUTES = { s: null, tick: -1, list: [] };
  */
 function squadRoute(u, st, x, y) {
   if (ROUTES.s !== S || ROUTES.tick !== S.tick) ROUTES = { s: S, tick: S.tick, list: [] };
-  const goal = y * S.W + x, o = routeOpts(u), key = u.owner + ':' + u.type + ':' + (o.breach ? 1 : 0) + (u.fight ? 1 : 0);
+  const goal = y * S.W + x, o = routeOpts(u), key = u.owner + ':' + u.type + ':' + (o.breach ? 1 : 0) + (u.fight ? 1 : 0) + (o.safe ? 's' : '');
   for (const e of ROUTES.list) if (e.st === st && e.goal === goal && e.key === key) return e.p && e.p.slice();
-  const p = findPath(st % S.W, (st / S.W) | 0, x, y, undefined, o);
+  let p = findPath(st % S.W, (st / S.W) | 0, x, y, undefined, o);
+  if (!p && o.safe) { delete o.safe; p = findPath(st % S.W, (st / S.W) | 0, x, y, undefined, o); } // (no way round: the dear way through, as any march)
   ROUTES.list.push({ st, goal, key, p });
   return p && p.slice();
 }
@@ -7276,6 +7278,9 @@ function warbotAct(u, dt) {
   if (t && t.type === 'recycle') { u.fight = 0; doRecycle(u, t, dt); return; }
   const defending = t && t.type === 'defend';
   const rally = t && t.type === 'hold' ? rallyById(t.rally) : null;
+  // (On an Army Group's flag: the group's behaviours, see agBeh. Retreat when weak, Stance, Hold fire.)
+  const ag = rally && rally.grp && u.grp === rally.grp ? agById(rally.grp) : null, agB = ag ? agBeh(ag) : null;
+  const holdFire = !!ag && agHoldFire(ag, u), agg = !!agB && agB.st === 'agg';
   // Ordered somewhere (move, station, call back): it marches there without stopping to fight, until it
   // arrives (or MARCH_MAX runs out).
   if (u.march && (!t || S.time > u.march || (rally && dist2(u.x, u.y, rally.x, rally.y) <= 6.25) || t.type === 'attack')) u.march = 0;
@@ -7308,9 +7313,11 @@ function warbotAct(u, dt) {
   // than turn its back. A rival's pulls out all the same: its army lives on being mended, and fighting on to the end,
   // its hurt warbots died at the front and the Murmur's raiders bit them down at home, so on the Hollow both armies
   // stayed at two or three for twenty minutes and the game never ended.
-  if (!calm && t && !t.reload && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT &&
-      S.tick % 10 === u.id % 10 && !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y))) &&
-      (!armed || S.players[u.owner]?.ai || (S.time - (u.hurtT ?? -99) >= 1.5 && !nearestEnemyBot(u.owner, u.x, u.y, 2.8, true, false, true, armedThreat)))) {
+  // An Army Group's unit goes at the level its group's Retreat when weak sets (off: never), close fight or not: you
+  // chose it (agBeh).
+  if (!calm && t && !t.reload && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && (agB ? agB.ret > 0 && u.hp < u.maxHp * agB.ret / 100 : u.hp < u.maxHp * REPAIR_RETREAT) &&
+      S.tick % 10 === u.id % 10 && (agB || !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y)))) &&
+      (agB || !armed || S.players[u.owner]?.ai || (S.time - (u.hurtT ?? -99) >= 1.5 && !nearestEnemyBot(u.owner, u.x, u.y, 2.8, true, false, true, armedThreat)))) {
     const station = findRepair(u);
     const fight = u.fight;
     u.fight = 0; // Plan the withdrawal with the danger avoidance used by a march.
@@ -7327,19 +7334,21 @@ function warbotAct(u, dt) {
     }
     u.fight = fight;
   }
-  let foe = armed && u.fight && !calm ? getE(u.fight) : null;
+  let foe = armed && u.fight && !calm && !holdFire ? getE(u.fight) : null;
+  if (holdFire) u.fight = 0;
   // Hunting a robot (a flag that follows it): that's the one to shoot, once it's close enough.
-  if (armed && !calm && rally && rally.follow) {
+  if (armed && !calm && !holdFire && rally && rally.follow) {
     const tg = getE(rally.follow);
     if (tg && !tg.dead && !tg.inside && !tg.under && dist2(tg.x, tg.y, u.x, u.y) <= 30) { foe = tg; u.fight = tg.id; }
   }
   // A squad on a flag that isn't in a rival's land guards the ground round it, as a garrison does round its fort.
   const flagO = rally ? S.owner[tIdx(Math.floor(rally.x), Math.floor(rally.y))] : -1;
   const guardFlag = !!rally && !(flagO >= 0 && flagO !== u.owner);
-  const leash = defending || guardFlag ? Math.max(9, rally?.rad ? rally.rad + 2 : 0) : rally || escort ? 6 : 4;
+  // (Aggressive: AGROUP.aggLeash tiles further, from the unit and from the flag.)
+  const leash = (defending || guardFlag ? Math.max(9, rally?.rad ? rally.rad + 2 : 0) : rally || escort ? 6 : 4) + (agg ? AGROUP.aggLeash : 0);
   if (foe && (foe.dead || !foes(foe.owner, u.owner) || foe.inside || foe.dropping || foe.under || BOTS[foe.type].air || BOTS[foe.type].sea ||
       dist2(foe.x, foe.y, u.x, u.y) > leash * leash || calmAt(foe.x, foe.y) ||
-      (rally && dist2(foe.x, foe.y, rally.x, rally.y) > (rally.rad ? sq(rally.rad + 2) : 49)))) foe = null;
+      (rally && dist2(foe.x, foe.y, rally.x, rally.y) > sq((rally.rad ? rally.rad + 2 : 7) + (agg ? AGROUP.aggLeash : 0))))) foe = null;
   // A guard's leash is measured from its fort as well: a foe that walks away is let go (and left alone a while)
   // once it's SORTIE_LEASH from there, unless it's still close enough to shoot. It used to lead the guards off for good.
   // (Sent out to a building under attack, t.ax: from there instead, and that spot moves with the raid.)
@@ -7351,7 +7360,7 @@ function warbotAct(u, dt) {
     }
   }
   if (!foe) u.fight = 0;
-  if (armed && !calm && (!foe || !armyInRange(u, foe) || (rally?.follow !== foe.id && !armedThreat(foe)))) {
+  if (armed && !calm && !holdFire && (!foe || !armyInRange(u, foe) || (rally?.follow !== foe.id && !armedThreat(foe)))) {
     u.scanT -= dt;
     if (u.scanT <= 0) {
       u.scanT = 0.3;
@@ -7369,6 +7378,7 @@ function warbotAct(u, dt) {
         if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true, accepts);
       }
       if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, rally.rad || SORTIE_REACH, true, true, true, accepts); // (an Army Group's Defend area: its circle)
+      if (!foe && agg && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, (rally.rad || SORTIE_REACH) + AGROUP.aggLeash, true, false, true, accepts); // (Aggressive: further, anywhere)
       // (On a flag: an enemy trade convoy passing within TERMINAL.hunt tiles of it, wherever it is: what raids are for.)
       if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
@@ -8242,9 +8252,11 @@ const RALLY_SPOTS = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], 
  */
 function holdRally(u, t, r, dt, power) {
   if (!r) { u.task = null; return; }
+  // (An Army Group's: Reload rotation sends no more than a third to restock at once, see agRotate; Hold fire.)
+  const ag = r.grp && u.grp === r.grp ? agById(r.grp) : null;
   if (t.phase !== 'recharge') {
     const flat = (u.bat ?? 100) < BATTERY.critical;
-    if (flat || (u.ammo === 0 && S.tick % 15 === u.id % 15 && ammoNear(u))) { t.phase = 'recharge'; t.forAmmo = !flat; u.path = null; }
+    if (flat || (u.ammo === 0 && S.tick % 15 === u.id % 15 && ammoNear(u) && agReloadOk(ag))) { t.phase = 'recharge'; t.forAmmo = !flat; u.path = null; }
     if (u.ammo === 0 && t.phase !== 'recharge') t.target = 0; // no Ammo: it can only stand by the flag
   }
   if (t.phase === 'recharge') {
@@ -8261,26 +8273,28 @@ function holdRally(u, t, r, dt, power) {
       const charges = home.type !== 'lander'; // the Command Base only reloads Ammo
       if (charges) u.bat = Math.min(100, (u.bat ?? 0) + 8 * dt);
       reloadArmy(u, home);
+      if (ag && agBeh(ag).rel) while (reloadArmy(u, home)) { /* (Reload rotation: they go a few at a time, so each fills up) */ }
       if ((u.bat >= 95 || !charges) && (u.ammo > 0 || !reloadAmmo(u, home))) { t.phase = null; t.forAmmo = false; }
     } else if (travel(u, home.x, home.y, dt) === null) t.phase = null;
     return;
   }
   // A Torch on a flag with an empty tank: off to fill it, then back to the flag. (An Arc Caster out of bolts too.)
-  if (botTank(u.type) && !botArmed(u) && S.tick % 30 === u.id % 30) {
+  if (botTank(u.type) && !botArmed(u) && S.tick % 30 === u.id % 30 && agReloadOk(ag)) {
     const f = fuelPoint(u);
     if (f) { u.resume = { type: 'hold', rally: t.rally, slot: t.slot }; u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
   }
   // In formation: behind the group's Bulwark until it gets to the flag.
   if (dist2(u.x, u.y, r.x, r.y) > 9 && escortMove(u, r.x, r.y, { rally: r.id }, dt)) return;
   let tgt = t.target ? getE(t.target) : null;
-  if (!botArmed(u) || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
-  else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > RALLY_REACH2 && tgt.id !== r.first)) {
+  const hold = !!ag && agHoldFire(ag, u), reach2 = ag && agBeh(ag).st === 'agg' ? sq(Math.sqrt(RALLY_REACH2) + 3) : RALLY_REACH2; // (Aggressive: buildings further off too)
+  if (!botArmed(u) || hold || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
+  else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > reach2 && tgt.id !== r.first && tgt.id !== r.target)) {
     tgt = null;
     t.target = 0;
     u.scanT2 = (u.scanT2 || 0) - dt;
     if (u.scanT2 <= 0) {
       u.scanT2 = 0.5;
-      let bd = RALLY_REACH2;
+      let bd = reach2;
       // (A flag planted for an Attack goes for that building first; the rival AI's marches for the gun that covers
       // the flag, r.first, then on as usual: warbots only shoot back at robots, so the gun has to be their target.)
       const own = r.target ? getE(r.target) : r.first ? getE(r.first) : null;
@@ -8298,7 +8312,7 @@ function holdRally(u, t, r, dt, power) {
     return;
   }
   // Nothing to fight: crates near the flag go home, a crate at a time (flagLoot).
-  if (botArmed(u) && !u.fight && S.tick % 30 === u.id % 30 && flagLoot(u, r)) return;
+  if (botArmed(u) && !hold && !u.fight && S.tick % 30 === u.id % 30 && flagLoot(u, r)) return;
   // Stand guard on a spot around the flag.
   const spot = RALLY_SPOTS[t.slot % RALLY_SPOTS.length];
   let gx = Math.floor(r.x) + spot[0], gy = Math.floor(r.y) + spot[1];
@@ -8307,7 +8321,7 @@ function holdRally(u, t, r, dt, power) {
   }
   if (Math.floor(u.x) === gx && Math.floor(u.y) === gy && !u.path) {
     spreadOut(u, dt);
-    if (botArmed(u) && !u.fight) sabotageRoads(u, r, dt);
+    if (botArmed(u) && !hold && !u.fight) sabotageRoads(u, r, dt);
     return;
   }
   // On the march it makes for the flag itself (one route for the whole squad: squadRoute), and for its own spot
@@ -8614,6 +8628,7 @@ function huntNext(r) {
 /** Flags that follow an enemy robot: each moves with its quarry; when it's gone, a person's hunters take the next one near (huntNext) or hold there, a rival's come back. */
 function followRallies() {
   for (const r of S.rallies.slice()) {
+    if (r.grp) continue; // (an Army Group's raid moves its own flag: agRaid)
     // A flag planted beside a building attacked from too far for a garrison (the assault order): once it's down or
     // taken, its warbots finish as an attack does (crates within reach, then home), instead of holding the flag.
     if (r.target) { const b = getE(r.target); if (!b || b.dead || !foes(b.owner, r.owner)) recallRally(r.id); continue; }
@@ -8935,6 +8950,7 @@ const AG_ORDERS = {
   patrol: { name: 'Patrol', doing: 'Patrolling', pts: [2, 3], loop: true, aim: (g, r, us) => agRoute(g, r, us, false) },
   attack: { name: 'Attack', doing: 'Attacking', pts: [1, 5], aim: (g, r, us) => agRoute(g, r, us, true) },
   follow: { name: 'Follow', doing: 'Following', pts: [0, 0], group: true, aim: (g, r) => agFollowXY(g, r) },
+  raid: { name: 'Raid', doing: 'Raiding', pts: [1, 1], area: true, raid: true, aim: (g, r, us) => agRaid(g, r, us) },
 };
 
 function agList(owner) { return (S.agroups || []).filter((g) => g.owner === owner); }
@@ -9098,7 +9114,8 @@ function agTick() {
       const O = AG_ORDERS[g.ord.k] || AG_ORDERS.hold;
       const at = O.aim(g, r, us);
       if (at && (Math.abs(r.x - at[0]) > 0.01 || Math.abs(r.y - at[1]) > 0.01)) { r.x = at[0]; r.y = at[1]; }
-      if (O.area) r.rad = g.ord.r || AGROUP.rad; else delete r.rad;
+      if (O.area && !O.raid) r.rad = g.ord.r || AGROUP.rad; else delete r.rad;
+      if (!O.raid) { delete r.safe; delete r.target; delete r.follow; delete r.raid; }
       const join = [];
       for (const u of us) {
         if (u.grpNew) continue;
@@ -9108,7 +9125,10 @@ function agTick() {
       }
       agJoin(g, r, join);
       agBatch(g, r, us);
+      agRotate(g, r, us);
     }
+    // (Hold fire: when one of the group was last hit, so all of it may shoot back.)
+    for (const u of us) if (u.hurtT !== undefined && u.hurtT > (g.hitT ?? -99)) g.hitT = u.hurtT;
     // Reinforcements arriving.
     for (const u of us) if (u.grpGo && (!u.task || u.task.rally !== r.id || dist2(u.x, u.y, r.x, r.y) <= 16)) {
       delete u.grpGo;
@@ -9163,7 +9183,7 @@ function agNew(owner, ids) {
   let n = 1;
   while (mine.some((g) => g.n === n)) n++;
   const us = orderable(owner, ids || []);
-  const g = { id: S.nextId++, owner, n, name: agOrdinal(n), home: null, size: Math.max(1, Math.min(AGROUP.maxSize, us.length || 6)), ord: { k: 'hold', pts: [], at: 0 }, paused: 0, flag: 0 };
+  const g = { id: S.nextId++, owner, n, name: agOrdinal(n), home: null, size: Math.max(1, Math.min(AGROUP.maxSize, us.length || 6)), ord: { k: 'hold', pts: [], at: 0 }, paused: 0, flag: 0, beh: Object.assign({}, AGROUP.beh) };
   // Home: the Outpost or Keep (or Command Base) they're in or beside, else where they stand, else the Command Base.
   let home = null;
   if (us.length) {
@@ -9232,7 +9252,7 @@ function agRecall(g) {
  * Set group g's standing order: k (an AG_ORDERS key), pts (tiles [i, j], as many as the order takes), r (Defend area's
  * circle, one of AGROUP.radii), fg (Follow: the group to follow). '' or why not. Paused groups go back to their order.
  */
-function agSetOrder(g, k, pts, r, fg) {
+function agSetOrder(g, k, pts, r, fg, rep) {
   const O = AG_ORDERS[k];
   if (!O) return 'Unknown order.';
   pts = Array.isArray(pts) ? pts.filter((p) => Array.isArray(p) && p.length === 2 && inMap(p[0] | 0, p[1] | 0)).map((p) => [p[0] | 0, p[1] | 0]) : [];
@@ -9240,7 +9260,8 @@ function agSetOrder(g, k, pts, r, fg) {
   pts = pts.slice(0, O.pts[1]);
   for (const p of pts) if (!walkable(tIdx(p[0], p[1]))) return 'Pick ground your units can walk to.';
   const ord = { k, pts, at: 0 };
-  if (O.area) ord.r = AGROUP.radii.includes(r) ? r : AGROUP.rad;
+  if (O.area) ord.r = AGROUP.radii.includes(r) ? r : O.raid ? AGROUP.raid.rad : AGROUP.rad;
+  if (O.raid) { ord.rep = rep === 0 ? 0 : 1; ord.n = 1; }
   if (O.group) {
     const G = agById(fg);
     if (!G || G.owner !== g.owner || G === g) return 'Pick another of your groups to follow.';
@@ -9248,6 +9269,8 @@ function agSetOrder(g, k, pts, r, fg) {
     ord.g = G.id;
   }
   g.ord = ord;
+  const fl = rallyById(g.flag);
+  if (fl) { delete fl.target; delete fl.follow; delete fl.raid; if (!O.raid) delete fl.safe; }
   agResume(g);
   return '';
 }
@@ -9266,9 +9289,244 @@ function agDoing(g) {
   if (g.paused) return 'Paused: under your orders';
   const O = AG_ORDERS[g.ord.k] || AG_ORDERS.hold;
   if (g.ord.k === 'attack' && g.ord.done) return 'Holding where the attack ended';
+  if (g.ord.k === 'raid') {
+    const o = g.ord;
+    if (o.done) return 'Home from the raid, holding';
+    if (o.at === 1) return 'Pulling out of the raid';
+    if (o.at === 2) return o.why === 'none' ? 'Resting: no target in the area' : 'Resting before the next raid';
+    if (!o.tk) return o.why === 'none' ? 'Raid: no target in the area clear of guns' : 'Raiding';
+    const e = o.tk === 'road' ? null : getE(o.tg), what = o.tk === 'road' ? 'a road' : e ? (e.ent === 'b' ? `a ${BDEFS[e.type].name}` : `a ${BOTS[e.type].name}`) : 'a target';
+    return o.sx !== undefined ? 'Raid: forming up' : o.t ? `Raiding ${what}` : `Raid: going for ${what}`;
+  }
   if (g.ord.k === 'follow') { const G = agById(g.ord.g); return G ? `Following the ${G.name}` : O.doing; }
   if (O.pts[1] > 1 && g.ord.pts.length > 1) return `${O.doing} (point ${(g.ord.at | 0) + 1} of ${g.ord.pts.length})`;
   return O.doing;
+}
+
+/* -------------------------------------------------- Army Groups, stage 2: Raid, behaviours */
+/*
+ * Raid (the owner's pick, Nov 2026): the group goes for the enemy's economy in a circle you pick (g.ord.pts[0], g.ord.r),
+ * hits it and comes home. g.ord: at (0 going in and striking, 1 pulling out, 2 resting at home), tk and tg (the target:
+ * 'b' a building's id, 'u' a robot's id, 'road' a road tile), t (when it got to the target; while pulling out or
+ * resting, when that began), n0 (how many set off), n (raids so far), hits (targets wrecked), why (why it last pulled
+ * out: AG_RAID_WHY), rep (1: raid again once mended; 0: hold at home after one), sx and sy (a spot to form up at on the
+ * way, out of sight: the rival AI's), done (1: home after its one raid). Its flag goes from target to target with
+ * r.target (a building: they shoot it first), r.follow (a robot: they chase it) or r.raid (a road: they tear it up),
+ * and r.safe: its units route round enemy guns' reach both ways (the danger map that goods carriers use: routeOpts).
+ * Targets (agRaidPick): Haulers, trucks and Workers, mines and the like, factories, Depots and roads, never defences
+ * nor anything a gun covers, nor where the enemy has more armed robots than the group; the best by value (factories
+ * 7, Depots 6, mines 5, carriers 5, Workers 3, roads 2, junctions 3), less for armor, distance and armed foes near.
+ */
+const AG_RAID_WHY = { losses: 'it lost too many', outnumbered: 'enemy reinforcements outnumber it', damage: 'it is badly damaged', ammo: 'it is out of Ammo',
+  time: 'it has been there long enough', done: 'nothing left to hit there', none: 'no target in the area clear of guns', called: 'you called it home' };
+
+/** Group g's behaviours (Retreat when weak, Reload rotation, Stance): its own, or the defaults (AGROUP.beh). */
+function agBeh(g) { return (g && g.beh) || AGROUP.beh; }
+/** The group whose flag rally r is, if any. */
+function agOfRally(r) { return r && r.grp ? agById(r.grp) : null; }
+/** Is unit u, on group g's flag, holding its fire (Hold fire, nobody of the group hit in the last AGROUP.hitHold s; not a raid's)? */
+function agHoldFire(g, u) {
+  if (!g || agBeh(g).st !== 'hold' || g.ord.k === 'raid') return false;
+  return !(S.time - (u.hurtT ?? -99) < AGROUP.hitHold || S.time - (g.hitT ?? -99) < AGROUP.hitHold);
+}
+
+/** Is group g's unit u off restocking (Ammo on its flag's recharge run, or a tank being filled to come back)? */
+function agAwayReload(g, u) {
+  const t = u.task;
+  return !!t && ((t.type === 'hold' && t.rally === g.flag && t.phase === 'recharge' && t.forAmmo) || (t.type === 'refill' && u.resume && u.resume.type === 'hold' && u.resume.rally === g.flag));
+}
+/** Reload rotation: may another of group g's units go to restock now (fewer than a third of it away)? Always, with it off. */
+function agReloadOk(g) {
+  if (!g || !agBeh(g).rel) return true;
+  const us = agMembers(g).filter((u) => !u.grpNew);
+  return us.filter((u) => agAwayReload(g, u)).length < Math.max(1, Math.floor(us.length / 3));
+}
+/** How full unit u's magazine (or tank) is, 0 to 1 (1: it uses none). */
+function agAmmoFrac(u) {
+  const tk = botTank(u.type);
+  if (tk) return (u.gel ?? tk.cap) / tk.cap;
+  if (BOTS[u.type].shield || u.ammo === undefined) return 1;
+  return u.ammo / botMag(u.type);
+}
+/** Reload rotation: units low on Ammo (a third or less) go to restock, lowest first, so at most a third are away at once. */
+function agRotate(g, r, us) {
+  if (!agBeh(g).rel) return;
+  const live = us.filter((u) => !u.grpNew), cap = Math.max(1, Math.floor(live.length / 3));
+  let away = live.filter((u) => agAwayReload(g, u)).length;
+  if (away >= cap) return;
+  const low = agOnFlag(live, r).filter((u) => agAmmoFrac(u) < 0.34 && !(S.time - (u.hurtT ?? -99) < 1.5)).sort((a, b) => agAmmoFrac(a) - agAmmoFrac(b) || a.id - b.id);
+  for (const u of low) {
+    if (away >= cap) break;
+    const t = u.task;
+    if (botTank(u.type)) {
+      const f = fuelPoint(u);
+      if (!f) continue;
+      u.resume = { type: 'hold', rally: t.rally, slot: t.slot }; u.task = { type: 'refill', bld: f.id }; u.path = null; u.fight = 0;
+    } else {
+      if (!ammoNear(u)) continue;
+      t.phase = 'recharge'; t.forAmmo = true; t.target = 0; u.path = null; u.fight = 0;
+    }
+    away++;
+  }
+}
+
+/** The value of raiding building b (0: not an economy target). */
+function agRaidValue(b) {
+  const d = BDEFS[b.type];
+  if (d.mil || d.barrier || d.mega || d.wild || gunReach(b) > 0) return 0;
+  if (!b.built) return d.staff || d.store ? 2 : 0;
+  return d.store ? 6 : d.staff ? (d.inp ? 7 : 5) : d.charger ? 3 : 0;
+}
+/** Armed enemy army robots (and creatures) of `owner`'s within r tiles of (x, y), out in the open. */
+function agFoesNear(owner, x, y, r) {
+  let n = 0;
+  for (const v of S.bots) if (!v.dead && !v.inside && v.owner >= 0 && foes(v.owner, owner) && isArmy(v) && botArmed(v) && dist2(v.x, v.y, x, y) <= r * r) n++;
+  return n;
+}
+/** Is the tile at (x, y) safe for group g's raiders: in the map and out of every enemy gun's reach? */
+function agRaidSafe(g, x, y) { const i = Math.floor(x), j = Math.floor(y); return inMap(i, j) && !gunCovers(g.owner, tIdx(i, j)); }
+
+/** Group g's best raid target in its area for n raiders, or null: { tk, tg, x, y }. */
+function agRaidPick(g, n) {
+  const o = g.ord, c = o.pts.length ? agPt(o.pts[0]) : agHomeXY(g), R2 = sq(o.r || AGROUP.raid.rad), home = agHomeXY(g) || c;
+  if (!c) return null;
+  let best = null, bs = -Infinity;
+  const consider = (tk, tg, x, y, val, armor) => {
+    if (dist2(x, y, c[0], c[1]) > R2 || !agRaidSafe(g, x, y) || calmAt(x, y)) return;
+    const f = agFoesNear(g.owner, x, y, 6);
+    if (f >= Math.max(1, n)) return;
+    const s = val * 10 / (1 + armor / 40) - Math.sqrt(dist2(x, y, c[0], c[1])) * 0.5 - Math.sqrt(dist2(x, y, home[0], home[1])) * 0.05 - f * 6;
+    if (s > bs + 1e-9) { bs = s; best = { tk, tg, x, y }; }
+  };
+  for (const b of S.buildings) {
+    if (b.dead || b.owner < 0 || !foes(b.owner, g.owner) || calmShield(b)) continue;
+    const v = agRaidValue(b);
+    if (v) consider('b', b.id, b.x + 0.5, b.y + 0.5, v, b.armor || 0);
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || u.under || u.owner < 0 || !foes(u.owner, g.owner)) continue;
+    const bt = BOTS[u.type];
+    if (isArmy(u) || bt.wild || bt.air || bt.sea || bt.siege || bt.rail) continue;
+    if (!inMap(Math.floor(u.x), Math.floor(u.y)) || !walkable(tIdx(Math.floor(u.x), Math.floor(u.y)))) continue;
+    consider('u', u.id, u.x, u.y, u.type === 'worker' ? 3 : 5, (u.maxHp || 5) * 2);
+  }
+  const ri = Math.ceil(o.r || AGROUP.raid.rad), ci = Math.floor(c[0]), cj = Math.floor(c[1]), lanes = convoyLanes(g.owner);
+  for (let j = cj - ri; j <= cj + ri; j++) for (let i = ci - ri; i <= ci + ri; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!S.road[t] || crossTile(t) || !(wayOwner(t) >= 0 && foes(wayOwner(t), g.owner)) || !walkable(t)) continue;
+    consider('road', t, i + 0.5, j + 0.5, lanes.has(t) ? 4 : isJunction(t) ? 3 : 2, 0);
+  }
+  return best;
+}
+
+/** Group g's current raid target, if it's still there and fit to hit: { x, y } of it, or null. */
+function agRaidTarget(g) {
+  const o = g.ord;
+  if (!o.tk) return null;
+  if (o.tk === 'b') { const b = getE(o.tg); return b && !b.dead && b.ent === 'b' && foes(b.owner, g.owner) && agRaidValue(b) && agRaidSafe(g, b.x + 0.5, b.y + 0.5) ? { x: b.x + 0.5, y: b.y + 0.5, b } : null; }
+  if (o.tk === 'u') {
+    const u = getE(o.tg), c = o.pts.length ? agPt(o.pts[0]) : null;
+    if (!u || u.dead || u.ent !== 'u' || u.inside || u.under || !foes(u.owner, g.owner) || !agRaidSafe(g, u.x, u.y)) return null;
+    if (c && dist2(u.x, u.y, c[0], c[1]) > sq((o.r || AGROUP.raid.rad) + (agBeh(g).st === 'agg' ? AGROUP.aggLeash : 3))) return null; // (it got away)
+    return { x: u.x, y: u.y, u };
+  }
+  const t = o.tg | 0;
+  if (!inMap(t % S.W, (t / S.W) | 0)) return null;
+  const dwell = o.t ? S.time - o.t : 0, lane = convoyLanes(g.owner).has(t);
+  if (dwell >= (lane ? AGROUP.raid.lane : AGROUP.raid.road)) return null;
+  return { x: (t % S.W) + 0.5, y: ((t / S.W) | 0) + 0.5, road: t };
+}
+
+/** Group g pulls out of its raid (why: an AG_RAID_WHY key): its flag goes home, and its units march back without stopping to fight. */
+function agRaidOut(g, r, why) {
+  const o = g.ord;
+  o.at = 1; o.t = S.time; o.why = why; delete o.tk; delete o.tg; delete o.sx; delete o.sy;
+  delete r.target; delete r.follow; delete r.raid;
+  for (const u of rallyMembers(r.id)) { u.march = S.time + MARCH_MAX; u.fight = 0; u.path = null; }
+  if (isMe(g.owner) && why !== 'none') postMsg(g.owner, `The ${g.name} pulls out of the raid: ${AG_RAID_WHY[why] || why}.${o.hits ? ` (${o.hits} hit.)` : ''}`, Math.floor(r.x), Math.floor(r.y), why === 'losses' || why === 'outnumbered' ? 'warn' : 'info');
+}
+
+/** Raid: where group g's flag goes (its aim, see AG_ORDERS), and the raid moved on from going in, to striking, home, resting. */
+function agRaid(g, r, us) {
+  const o = g.ord, A = AGROUP.raid, home = agHomeXY(g) || [r.x, r.y];
+  r.safe = true;
+  const live = us.filter((u) => !u.grpNew && !u.inside), on = agOnFlag(live, r);
+  const hpAvg = () => { let h = 0, m = 0; for (const u of live) { h += u.hp; m += u.maxHp; } return m ? h / m : 0; };
+  o.at = o.at | 0;
+  if (o.at === 0) {
+    if (!live.length && !agMembers(g).some((u) => !u.grpNew)) { agRaidOut(g, r, 'losses'); return home; }
+    let at = agRaidTarget(g);
+    if (!at && o.tk) { // (done with that one: the next, if the raid isn't over)
+      const e = o.tk === 'road' ? null : getE(o.tg);
+      if (o.tk === 'road' ? !!o.t : !e || e.dead) o.hits = (o.hits || 0) + 1; // (wrecked, or a road torn up: a hit)
+      delete o.tk; delete o.tg;
+      if (o.t && S.time - o.t > A.strike) { agRaidOut(g, r, 'time'); return home; }
+    }
+    if (!at) {
+      if ((o.lookT || 0) > S.time) { delete r.target; delete r.follow; delete r.raid; return o.t ? [r.x, r.y] : home; }
+      const pk = agRaidPick(g, live.length);
+      if (!pk) {
+        if (o.t || o.hits) { agRaidOut(g, r, 'done'); return home; }
+        o.lookT = S.time + A.look; o.why = 'none';
+        delete r.target; delete r.follow; delete r.raid;
+        return home;
+      }
+      delete o.lookT; delete o.why;
+      o.tk = pk.tk; o.tg = pk.tg;
+      at = agRaidTarget(g);
+      if (!at) return [r.x, r.y];
+    }
+    // (The rival AI's: form up out of sight first, then go in.)
+    if (o.sx !== undefined) {
+      const st = agPt([o.sx, o.sy]);
+      if (on.some((u) => dist2(u.x, u.y, st[0], st[1]) <= 9)) { delete o.sx; delete o.sy; marchTogether(on); }
+      else { delete r.target; delete r.follow; delete r.raid; return st; }
+    }
+    let spot;
+    if (at.b) { r.target = at.b.id; delete r.follow; delete r.raid; spot = agSpot(at.b.x, at.b.y, 1) || [at.b.x, at.b.y]; }
+    else if (at.u) { r.follow = at.u.id; delete r.target; delete r.raid; spot = [Math.floor(at.x), Math.floor(at.y)]; }
+    else { r.raid = true; delete r.target; delete r.follow; spot = [at.road % S.W, (at.road / S.W) | 0]; }
+    const sp = agPt(spot);
+    if (!o.t && on.some((u) => dist2(u.x, u.y, sp[0], sp[1]) <= 16)) { o.t = S.time; o.n0 = Math.max(o.n0 || 0, live.length); }
+    if (o.t) {
+      const armed = live.filter((u) => botArmed(u)).length;
+      if (live.length <= (o.n0 || live.length) * (1 - A.loss) - 1e-9) { agRaidOut(g, r, 'losses'); return home; }
+      if (agFoesNear(g.owner, sp[0], sp[1], A.foeNear) > live.filter((u) => botArmed(u) && dist2(u.x, u.y, sp[0], sp[1]) <= sq(A.foeNear + 2)).length) { agRaidOut(g, r, 'outnumbered'); return home; }
+      if (hpAvg() < A.hp) { agRaidOut(g, r, 'damage'); return home; }
+      if (armed * 2 < live.length) { agRaidOut(g, r, 'ammo'); return home; }
+      if (S.time - o.t > A.strike) { agRaidOut(g, r, 'time'); return home; }
+    }
+    return sp;
+  }
+  delete r.target; delete r.follow; delete r.raid;
+  if (o.at === 1) {
+    const near = on.filter((u) => dist2(u.x, u.y, home[0], home[1]) <= 12.25).length;
+    if (!on.length || near >= Math.ceil(on.length * 0.6) || S.time - (o.t || 0) > A.outMax) { o.at = 2; o.t = S.time; }
+    return home;
+  }
+  // Resting at home: mended (or long enough), then out again; or, raiding once, it holds.
+  if (!o.rep) { o.done = 1; return home; }
+  const rest = S.time - (o.t || 0);
+  if ((live.length && hpAvg() >= A.rest && rest >= A.restMin) || rest >= A.restMax) {
+    if ((o.lookT || 0) > S.time) return home;
+    const pk = live.length ? agRaidPick(g, live.length) : null;
+    if (!pk) { o.lookT = S.time + A.look; o.why = 'none'; return home; }
+    delete o.lookT; delete o.why;
+    o.at = 0; o.t = 0; o.tk = pk.tk; o.tg = pk.tg; o.n = (o.n || 0) + 1; o.n0 = live.length;
+    marchTogether(on);
+  }
+  return home;
+}
+
+/** Set group g's behaviours: ret (Retreat when weak: one of AGROUP.rets), rel (Reload rotation, 0 or 1), st (Stance: one of AGROUP.stances). */
+function agSetBeh(g, ret, rel, st) {
+  const b = Object.assign({}, agBeh(g));
+  if (AGROUP.rets.includes(ret)) b.ret = ret;
+  if (rel === 0 || rel === 1) b.rel = rel;
+  if (AGROUP.stances.includes(st)) b.st = st;
+  g.beh = b;
+  return b;
 }
 
 /* ------------------------------------------------------------------ missiles */
@@ -19421,7 +19679,11 @@ function hashState() {
     int(g.id); int(g.owner); int(g.n); str(g.name); int(g.size); int(g.paused); str(g.ord.k); int(g.ord.at || 0); int(g.ord.done || 0); num(g.ord.t || 0); int(g.ord.r || 0); int(g.ord.g || 0); num(g.pendT || 0);
     for (const p of g.ord.pts) { int(p[0]); int(p[1]); }
     int(g.home.b || 0); int(g.home.x ?? -1); int(g.home.y ?? -1);
-    const r = rallyById(g.flag); if (r) { int(r.id); num(r.x); num(r.y); int(r.rad || 0); }
+    const r = rallyById(g.flag); if (r) { int(r.id); num(r.x); num(r.y); int(r.rad || 0); int(r.safe ? 1 : 0); int(r.target || 0); int(r.follow || 0); int(r.raid ? 1 : 0); }
+    // (stage 2: its behaviours, when it was last hit, a raid's state)
+    if (g.beh) { int(g.beh.ret); int(g.beh.rel); str(g.beh.st); }
+    num(g.hitT ?? -99);
+    if (g.ord.k === 'raid') { const o = g.ord; int(o.rep ?? 1); str(o.tk || ''); int(o.tg || 0); int(o.n0 || 0); int(o.n || 0); int(o.hits || 0); str(o.why || ''); int(o.sx ?? -1); int(o.sy ?? -1); num(o.lookT || 0); }
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.

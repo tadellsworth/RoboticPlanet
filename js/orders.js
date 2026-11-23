@@ -582,8 +582,12 @@ const ORDERS = {
     }
     return '';
   },
-  /** Group gid's standing order: k (hold, defend, patrol, attack, follow), its points [[i, j]...], Defend area's radius r, the group fg to follow. '' or why not. */
-  agOrder(p, gid, k, pts, r, fg) { const g = agById(gid); if (!g || g.owner !== p) return 'That group is gone.'; return agSetOrder(g, String(k), pts, r | 0, fg | 0); },
+  /** Group gid's standing order: k (hold, defend, patrol, attack, follow, raid), its points [[i, j]...], Defend area's or the Raid's radius r, the group fg to follow, a Raid's rep (1 again and again, 0 once). '' or why not. */
+  agOrder(p, gid, k, pts, r, fg, rep) { const g = agById(gid); if (!g || g.owner !== p) return 'That group is gone.'; return agSetOrder(g, String(k), pts, r | 0, fg | 0, rep === 0 ? 0 : 1); },
+  /** Group gid's behaviours: ret (Retreat when weak: 0, 25 or 50 % health), rel (Reload rotation: 0 or 1), st (Stance: 'agg', 'def' or 'hold'); null leaves one as it is. The behaviours. */
+  agBeh(p, gid, ret, rel, st) { const g = agById(gid); if (!g || g.owner !== p) return null; return agSetBeh(g, ret == null ? null : ret | 0, rel == null ? null : rel | 0, st == null ? null : String(st)); },
+  /** A Raid's Repeat (1) or Once (0), the raid going on as it is. */
+  agRaidRep(p, gid, rep) { const g = agById(gid); if (!g || g.owner !== p || g.ord.k !== 'raid') return false; g.ord.rep = rep ? 1 : 0; if (rep) delete g.ord.done; return true; },
   /** Back to order: group gid's standing order goes on, its units back on it. */
   agResume(p, gid) { const g = agById(gid); if (g && g.owner === p) agResume(g); },
   /** Disband group gid: its units go back to the Reserve. */

@@ -1751,6 +1751,39 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   still save control groups. Cards (`#agcards`, `refreshAgCards`): tap selects, again jumps, right-click or a 550 ms hold
   opens the panel (`openAgSheet`), a drag onto the map or minimap gives an Attack order to that tile (`agSendTo`); map
   picks for points and home (`R.mode` `agpick`, `agPickTap`, `agPickDone`); plans drawn by `drawAgPlans` in `js/render.js`.
+- **Army Groups, stage 2** (sim.js "Army Groups, stage 2"; orders `agOrder` with a Raid's `rep`, `agBeh`, `agRaidRep`;
+  numbers in `AGROUP.raid`, `AGROUP.rets`, `AGROUP.stances`, `AGROUP.aggLeash`, `AGROUP.hitHold`, `AGROUP.beh`).
+  **Raid** (`AG_ORDERS.raid`, `agRaid`; panel key **R**, its area picked like Defend area's, 8 tiles to start): `g.ord`
+  keeps `at` (0 going in and striking, 1 pulling out, 2 resting at home), the target (`tk` 'b' building, 'u' robot,
+  'road' tile; `tg`), `t`, `n0`, `n`, `hits`, `why` (`AG_RAID_WHY`), `rep` (1 Repeat, 0 Once then hold: `done`), and
+  for the AI a forming-up spot `sx, sy`. `agRaidPick` takes the best economy target in the circle (factories 7, Depots
+  6, mines and the like 5, Haulers and trucks 5, Workers 3, roads 2, junctions 3; less for armor, distance and armed
+  foes near) that no enemy gun covers (`gunCovers`, the danger map) and where armed foes don't outnumber the group;
+  never defences (`agRaidValue`). The flag goes to it with `r.target` (they shoot it first), `r.follow` (they chase
+  it) or `r.raid` (they tear the road up, `sabotageRoads`); `followRallies` leaves group flags alone. `r.safe`: a
+  group unit on that flag, marching, routes with `opts.safe` (the goods carriers' way round the guns' reach; with no
+  way round, `squadRoute` falls back to the usual dear-through-cover route), both ways. It pulls out (`agRaidOut`:
+  flag home, units marching, `u.march`) on losses (40% of `n0`), armed foes within 7 tiles of the target
+  outnumbering its armed units there, average health under 35%, half out of Ammo, 120 s at the targets, or nothing
+  safe left; at home it rests until 70% health (10 to 60 s), then raids again or holds. **Behaviours** (`g.beh`
+  `{ ret, rel, st }`, `agBeh`, defaults `AGROUP.beh` 25/on/def): Retreat when weak (`warbotAct`: a group unit on its
+  flag below `ret`% goes to a Repair Station, close fight or not, and comes back by `u.resume`; 0 never; groups
+  ignore `REPAIR_RETREAT`); Reload rotation (`agRotate` in `agTick` sends the lowest on Ammo, a third or less left,
+  `agReloadOk` holds back `holdRally`'s own Ammo and tank runs, so at most a third (at least 1) are away at once,
+  `agAwayReload`; each fills up); Stance (`warbotAct`, `holdRally`): `agg` adds `AGROUP.aggLeash` (7) tiles to the
+  leash and the flag's reach, scans that much further and anywhere, and hits buildings 3 tiles further; `def` as
+  stage 1; `hold` (`agHoldFire`): no new targets, no buildings, crates or roads until one of the group was hit in the
+  last `AGROUP.hitHold` (5) s (`g.hitT`, kept by `agTick`); not on a Raid. **Command view** (`drawCommandView`,
+  `cmdViewOn` in render.js; `toggleCmdView`, `cmdGrab` in ui.js): at zoom `CMDV.z` (13) or less, or with `UI.cmdView`
+  (**Tab**, the minimap's `#mm-cmd`; Tab or Esc again restores the camera), a banner per group (badge, count, health
+  bar, order word) over its units, a line and arrow to its flag, and every group's plan (`drawAgPlans`), all drawn on
+  the map canvas from one pass over the robots; the banners' rectangles (`UI.cmdIcons`) are hit-tested by `mapGrab`
+  (input.js `onGrab`, now for a mouse too): a drag drops an Attack there (`agSendTo`), a tap opens the panel.
+  **Rivals** (ai.js): `aiGroupRaid` sends each raid but a Torch's farm raid as a "Raiders" group on Raid (that road
+  first, `AI_RAID_RAD` 8, Once; a Salvager's forms up at its staging spot), broken up once home (`aiRaid`); and
+  `aiHomeGuard` brings the Command Base's home guard out under siege as a "Home Guard" group on Defend area (8 tiles;
+  not a Salvager), broken up 30 s after. New state in `hashState`, saves and `checkSave` (`g.beh`, `g.hitT`, the
+  raid's fields, `r.safe`). Tests: `army-groups2-test.js` (the test kit).
 - **Saving:** solo games keep up to five restore points about a game minute apart in localStorage
   (`terrafall.restorePoints.v1`: the newest first, each `{ time, json, at }`, `at` the real time it was kept; a full
   storage drops the oldest until the rest fit). The pause menu's **Restore points** item (`#p-checkpoint-group`,

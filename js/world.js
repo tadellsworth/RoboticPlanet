@@ -5882,10 +5882,17 @@ function checkSave(o) {
       const d = g.ord;
       if (!obj(d) || !ownKey(AG_ORDERS, d.k) || !Array.isArray(d.pts) || d.pts.length > AG_ORDERS[d.k].pts[1] || !d.pts.every(pt) || !int(d.at || 0, 0, 4) ||
         (d.t != null && !Number.isFinite(d.t)) || (d.done != null && ![0, 1].includes(d.done)) || (d.r != null && !AGROUP.radii.includes(d.r)) || (d.g != null && !id(d.g))) bad();
+      // (stage 2: a raid's state; the group's behaviours; when it was last hit)
+      if ((d.rep != null && ![0, 1].includes(d.rep)) || (d.tk != null && !['b', 'u', 'road'].includes(d.tk)) || (d.tg != null && !id(d.tg)) ||
+        [d.n0, d.n, d.hits].some((v) => v != null && !int(v, 0, 1e6)) || (d.why != null && !ownKey(AG_RAID_WHY, d.why)) ||
+        (d.sx != null && !(int(d.sx, 0, o.W - 1) && int(d.sy, 0, o.H - 1))) || (d.lookT != null && !Number.isFinite(d.lookT))) bad();
+      const B = g.beh;
+      if (B != null && (!obj(B) || !AGROUP.rets.includes(B.ret) || ![0, 1].includes(B.rel) || !AGROUP.stances.includes(B.st))) bad();
+      if (g.hitT != null && !Number.isFinite(g.hitT)) bad();
     }
   }
   for (const u of o.bots) if ((u.grp != null && !Number.isSafeInteger(u.grp)) || (u.grpNew != null && u.grpNew !== 1) || (u.grpGo != null && u.grpGo !== 1)) bad();
-  if (o.rallies != null && !(Array.isArray(o.rallies) && o.rallies.every((r) => obj(r) && (r.grp == null || Number.isSafeInteger(r.grp)) && (r.rad == null || AGROUP.radii.includes(r.rad))))) bad();
+  if (o.rallies != null && !(Array.isArray(o.rallies) && o.rallies.every((r) => obj(r) && (r.grp == null || Number.isSafeInteger(r.grp)) && (r.rad == null || AGROUP.radii.includes(r.rad)) && (r.safe == null || typeof r.safe === 'boolean')))) bad();
   // No markup anywhere (the map layers are numbers, whatever they hold). A name with markup in it is refused (the game's
   // own names never have any); in text (a message, a status, a player's name) <, > and " are swapped for look-alikes
   // that can't make markup, so a crafted file can't run script while a line of the game's own with a stray " in it

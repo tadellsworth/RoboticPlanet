@@ -1163,6 +1163,7 @@ function aiThink(p) {
     // (A Salvager keeps only the usual one, threatened or not: its home guard is thin, its bands go out from five minutes
     // in. A Warden used to keep a third home until its push, outnumbered or not: about four wins in 16 lost to it, Nov 2026.)
     if (smart) P.homeGuard = st.harass ? 0 : P.homeCall > S.time ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
+    if (smart) aiHomeGuard(p, lander, P.homeCall > S.time && !st.harass);
     const allIn = (smart && army >= lvl.threshold * 2 && army >= them * 2 + 2) || pushing, massing = P.massFor && S.time <= P.massFor.until;
     for (const b of me) {
       if (b.type !== 'outpost' || b.dead || !b.built) continue;
@@ -3055,6 +3056,17 @@ const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
 const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {
   const P = S.players[p], enemy = rivalOf(p);
+  // A raid made by an Army Group (aiGroupRaid): the Raid order does the rest. When it's home (or gone), the group is
+  // broken up and its units go back to their garrisons; past its time, it's called out.
+  if (P.raid && P.raid.g) {
+    const g = agById(P.raid.g);
+    if (!g || g.owner !== p || g.ord.k !== 'raid' || g.ord.done || !agMembers(g).length) {
+      if (g && g.owner === p) agDisband(g, true);
+      P.raid = null;
+      P.nextRaid = S.time + (RAID_GAP[S.difficulty] || 170) / (aiStyle(p).raids || 1);
+    } else if (S.time > P.raid.until && (g.ord.at | 0) === 0) agRaidOut(g, agFlag(g), 'time');
+    return;
+  }
   if (P.raid) {
     const r = rallyById(P.raid.id), band = r ? rallyMembers(P.raid.id) : [];
     // A Salvager's band forms up out of the enemy's land first (P.raid.to: the road tile it is going for, see below): once
@@ -3139,6 +3151,8 @@ function aiRaid(p, lvl) {
     // warbots aren't waiting at the road when it arrives (they answer a flag in their land: aiCounterRaid).
     const L = getE(P.lander), stage = H && L ? aiRaidStage(p, t, L) : -1;
     const at = stage >= 0 ? stage : t, ai = at % S.W, aj = (at / S.W) | 0;
+    // (As an Army Group with the Raid order, but a Torch's farm raid: aiGroupRaid.)
+    if (!farmRaid && aiGroupRaid(p, t, stage, size, H, lane, L)) { P.raidN = (P.raidN || 0) + 1; return; }
     const { sent, rally } = sendToRally(p, ai, aj, size, H);
     if (sent) {
       rally.raid = stage < 0;
@@ -3150,6 +3164,69 @@ function aiRaid(p, lvl) {
     }
     return;
   }
+}
+
+/**
+ * Rivals use Army Groups: under siege (P.homeCall; not a Salvager, whose home guard is thin by doctrine) the warbots the
+ * Command Base keeps (P.homeGuard) come out of it as a group, "Home Guard", on Defend area round the base
+ * (AI_GUARD_RAD tiles): they take on what comes into that circle and come back, instead of each sortieing on its own.
+ * Half a minute after the siege lifts the group is broken up and they go back in. Its behaviours are the defaults.
+ */
+const AI_GUARD_RAD = 8, AI_GUARD_LINGER = 30;
+function aiHomeGuard(p, lander, siege) {
+  const P = S.players[p];
+  let g = P.guardG ? agById(P.guardG) : null;
+  if (g && g.owner !== p) g = null;
+  if (siege) P.guardT = S.time;
+  if (!g) {
+    P.guardG = 0;
+    if (!siege || agList(p).length >= AGROUP.max) return;
+    const us = [];
+    while (us.length < (P.homeGuard || 0) && spareFrom(lander, false, false) > 0) { const u = takeArmed(lander, false); if (!u) break; u.inside = 0; u.path = null; u.task = null; us.push(u); }
+    if (us.length < 2) { for (const u of us) goGarrison(u); return; }
+    const gid = agNew(p, []);
+    g = typeof gid === 'number' ? agById(gid) : null;
+    if (!g) { for (const u of us) goGarrison(u); return; }
+    g.name = 'Home Guard'; g.size = us.length;
+    agTake(g, us);
+    agSetOrder(g, 'defend', [], AI_GUARD_RAD);
+    P.guardG = g.id;
+    return;
+  }
+  if (!agMembers(g).length || S.time - (P.guardT || 0) > AI_GUARD_LINGER) { agDisband(g, true); P.guardG = 0; }
+}
+
+/**
+ * Rivals use Army Groups (stage 2 of the owner's design): a raid goes out as a group of its own, "Raiders", with the Raid
+ * order on the road tile t that aiRaid picked (that road first, then whatever the order finds worth hitting within
+ * AI_RAID_RAD tiles, out of the guns' reach both ways), raiding once: it pulls out when the trade turns bad (losses,
+ * enemy reinforcements, damage, Ammo, time) and comes home, where the group is broken up (aiRaid). A Salvager's forms up
+ * at `stage` first, out of sight. The squad is drawn as sendToRally draws a raid's (`rear`: a fort's last warbot too).
+ * True if it went.
+ */
+const AI_RAID_RAD = 8;
+function aiGroupRaid(p, t, stage, size, rear, lane, L) {
+  if (!L || agList(p).length >= AGROUP.max) return false;
+  const ti = t % S.W, tj = (t / S.W) | 0, us = [];
+  for (const b of rallySources(p, ti, tj, rear, false)) {
+    while (spareFrom(b, rear, false) > 0 && us.length < size) {
+      const u = takeArmed(b, false);
+      if (!u) break;
+      u.inside = 0; u.path = null; u.task = null;
+      us.push(u);
+    }
+  }
+  if (!us.length) return false;
+  const gid = agNew(p, []), g = typeof gid === 'number' ? agById(gid) : null;
+  if (!g) { for (const u of us) goGarrison(u); return false; }
+  g.name = 'Raiders';
+  g.size = us.length;
+  agTake(g, us);
+  if (agSetOrder(g, 'raid', [[ti, tj]], AI_RAID_RAD, 0, 0)) { agDisband(g, true); return false; }
+  g.ord.tk = 'road'; g.ord.tg = t;
+  if (stage >= 0) { g.ord.sx = stage % S.W; g.ord.sy = (stage / S.W) | 0; }
+  S.players[p].raid = { g: g.id, until: S.time + RAID_TIME + (lane ? 60 : 0) + 30 + 2 * dist(ti, tj, L.x, L.y) };
+  return true;
 }
 
 /** The road tiles player q's trade convoys drive (the lanes of its Trade Terminals that run a route). */

@@ -88,14 +88,16 @@ function onPointerDown(e) {
     const mouse = e.pointerType === 'mouse', armed = !mouse && INPUT.boxArmed && R.mode === 'normal' && !!INPUT.onBox;
     const box = armed || (mouse && e.button === 0 && (R.mode === 'normal' || R.mode === 'bppick') && !!INPUT.onBox); // (bppick: buildings for a blueprint)
     // (grab: something on the map this finger has taken hold of, the aiming crosshair say; its drag moves that, not the map)
-    const grab = !mouse && INPUT.onGrab ? INPUT.onGrab(e.clientX, e.clientY) : null;
-    const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, armed, grab, button: e.button, hold: 0, shift: !!e.shiftKey }; // (shift: the Express tool lays a single lane)
+    // (a mouse too, on a command-view banner (ui.js cmdGrab): its drag sends the group, a click opens its panel)
+    const grab = INPUT.onGrab && !panOnly ? INPUT.onGrab(e.clientX, e.clientY, mouse) : null;
+    const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box: box && !grab, armed, grab, button: e.button, hold: 0, shift: !!e.shiftKey }; // (shift: the Express tool lays a single lane)
     // ...or once the finger has rested where it landed for LONG_PRESS ms (a short buzz says so), if there are warbots to box.
-    if (!mouse && !box && R.mode === 'normal' && INPUT.onBox && (!INPUT.canBox || INPUT.canBox())) {
+    if (!mouse && !box && !grab && R.mode === 'normal' && INPUT.onBox && (!INPUT.canBox || INPUT.canBox())) {
       g.hold = setTimeout(() => { if (INPUT.gesture === g && !g.moved) { g.box = true; haptic('hold'); } }, LONG_PRESS);
     }
   } else if (INPUT.pointers.size === 2) {
     if (INPUT.gesture) clearTimeout(INPUT.gesture.hold);
+    if (INPUT.gesture && INPUT.gesture.grab && INPUT.gesture.grab.cancel) INPUT.gesture.grab.cancel();
     R.box = null;
     const [a, b] = [...INPUT.pointers.values()];
     INPUT.gesture = {
@@ -162,7 +164,12 @@ function onPointerUp(e) {
   const wasSingle = g && g.type === 'single' && INPUT.pointers.size === 1;
   INPUT.pointers.delete(e.pointerId);
   if (g) clearTimeout(g.hold);
-  if (wasSingle && e.type === 'pointerup') {
+  if (wasSingle && g.grab && (g.grab.end || g.grab.tap)) {
+    // (a command-view banner: dropped on the map, or tapped)
+    if (e.type !== 'pointerup') { if (g.grab.cancel) g.grab.cancel(); }
+    else if (g.moved) { if (g.grab.end) g.grab.end(e.clientX, e.clientY); }
+    else if (g.grab.tap) { INPUT.tap = e.pointerType === 'mouse' ? null : { at: performance.now(), x: e.clientX, y: e.clientY }; g.grab.tap(); }
+  } else if (wasSingle && e.type === 'pointerup') {
     INPUT.shift = e.shiftKey;
     if (g.box && g.moved && R.box) {
       if (INPUT.onBox) INPUT.onBox(R.box, e.shiftKey, g.armed);

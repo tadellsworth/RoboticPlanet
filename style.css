@@ -191,6 +191,12 @@ body::before {
   position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; padding: 0; border-radius: 7px; border: 0;
   background: rgba(14, 15, 20, 0.72); color: var(--text); display: grid; place-items: center;
 }
+/* The command view's button (Army Groups): beside the hide button. */
+.mm-cmd {
+  position: absolute; top: 3px; right: 28px; width: 22px; height: 22px; padding: 0; border-radius: 7px; border: 0;
+  background: rgba(14, 15, 20, 0.72); color: var(--text); display: grid; place-items: center;
+}
+.mm-cmd.on { color: #0a0f15; background: #38d4ff; }
 .mm-show { position: fixed; right: calc(var(--safe-r) + 8px); top: calc(var(--safe-t) + 96px); z-index: 5; min-height: 36px; }
 /* Under a finger the minimap's close button hangs under it as a tab, 44 px to press. On the minimap itself, sized
    for a finger, it took the taps meant for the map beneath (the top right corner, where a rival's base often is). */
@@ -200,6 +206,9 @@ body::before {
   .mm-hide { top: calc(100% + 1px); right: 8px; width: 44px; height: 24px; border-radius: 0 0 10px 10px;
     background: #0c0d11; border: 1px solid rgba(255, 255, 255, 0.2); border-top: 0; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.35); }
   .mm-hide::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; }
+  .mm-cmd { top: calc(100% + 1px); right: 56px; width: 44px; height: 24px; border-radius: 0 0 10px 10px;
+    background: #0c0d11; border: 1px solid rgba(255, 255, 255, 0.2); border-top: 0; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.35); }
+  .mm-cmd::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; }
   .mm-show { min-width: 44px; min-height: 44px; }
 }
 body.mm-on .objrow { margin-right: calc(var(--mm-w, 100px) + 8px); }
@@ -2788,8 +2797,13 @@ body.deck .minimap::before { content: 'Survey'; position: absolute; left: 9px; t
 body.deck .minimap canvas { border: 1px solid rgba(56, 212, 255, 0.25); border-radius: 0; }
 body.deck .mm-hide { top: 0; right: 0; width: 22px; height: 20px; border-radius: 0; background: transparent; color: var(--dk-mut); }
 body.deck .mm-show { background: var(--dk-pan2); border: 1px solid rgba(56, 212, 255, 0.22); border-radius: 0; }
+body.deck .mm-cmd { top: 0; right: 24px; width: 22px; height: 20px; border-radius: 0; background: transparent; color: var(--dk-mut); }
+body.deck .mm-cmd:hover { color: var(--dk-c); }
+body.deck .mm-cmd.on { color: #0a0f15; background: var(--dk-c); }
 @media (pointer: coarse) {
   body.deck .mm-hide { top: calc(100% + 1px); width: 44px; height: 24px; background: var(--dk-pan); border: 1px solid rgba(56, 212, 255, 0.22); border-top: 0; }
+  body.deck .mm-cmd { top: calc(100% + 1px); right: 56px; width: 44px; height: 24px; background: var(--dk-pan); border: 1px solid rgba(56, 212, 255, 0.22); border-top: 0; }
+  body.deck .mm-cmd.on { background: var(--dk-c); }
 }
 
 /* ---- Army Group cards: a diamond badge, a segmented health meter, an Ammo light ---- */
