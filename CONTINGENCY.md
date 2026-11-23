@@ -271,8 +271,9 @@ battle.
 
 ## Screens
 
-- **Main menu:** a Contingency button that opens the run screen: continue, or start a new run (callsign,
-  difficulty, Advanced).
+- **Main menu:** a Contingency button that opens the Campaigns screen (up to 5 saved campaigns: Continue, Delete,
+  Save to file; New campaign, Load from file), and from it the new-run sheet (callsign, difficulty, Advanced). The
+  globe's top bar has Campaigns to switch at any time.
 - **The globe:**
   - spin it by drag, swipe or arrow keys;
   - tap a territory to open its card: owner, income, specials, fortification, Murmur level, megastructure,

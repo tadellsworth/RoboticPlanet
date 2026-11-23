@@ -2274,7 +2274,8 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .cg-clockchip b { color: #ffd9a8; }
 .cg-meter { display: inline-block; align-self: center; width: 54px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .cg-meter span { display: block; height: 100%; width: var(--m, 0%); background: linear-gradient(90deg, #7a4fc9, #d18cff); }
-.cg-exit { display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 19, 28, 0.82); }
+.cg-exit, .cg-camps { display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 19, 28, 0.82); min-height: 44px; }
+.cg-camps { border-color: rgba(255, 217, 168, 0.45); }
 .cg-help { margin-left: auto; width: 34px; font-weight: 800; background: rgba(16, 19, 28, 0.82); }
 .cg-foot {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 8px;
@@ -2354,6 +2355,16 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .cg-pct i { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.45; }
 .cg-btns { display: flex; gap: 10px; flex-wrap: wrap; }
 .cg-btns .btn { flex: 1 1 200px; }
+/* The Campaigns screen (cgSlotsSheet): a row a campaign, its callsign's colour down the left. */
+.cg-tap { min-height: 44px; }
+.cg-slots li.cg-slot { flex-wrap: wrap; border-left: 4px solid var(--c); padding: 8px 0 8px 10px; margin-top: 4px; }
+.cg-slots li.cg-slot.on { background: rgba(255, 255, 255, 0.05); }
+.cg-slot-what { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; }
+.cg-slot-what b { color: var(--c); letter-spacing: 0.06em; font-size: 15px; }
+.cg-slot-what small { color: var(--muted); }
+.cg-slot-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; flex: 1 1 auto; }
+.cg-slot-ask { flex: 1 1 100%; font-size: 13px; color: var(--warn); text-align: right; }
+@media (max-width: 480px) { .cg-slot-btns { justify-content: stretch; } .cg-slot-btns .btn { flex: 1 1 auto; } .cg-slot-ask { text-align: left; } }
 .cg-log { font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #e6ddcf; }
 .cg-log p { margin: 0 0 4px; }
 .cg-sheet-box .seg { flex-wrap: wrap; }
@@ -2363,6 +2374,7 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
   .cg-top { gap: 5px; padding-left: calc(var(--safe-l) + 8px); padding-right: calc(var(--safe-r) + 8px); }
   .cg-chip { padding: 4px 8px; gap: 4px; }
   .cg-clockchip small, .cg-exit span { display: none; }
+  .cg-exit, .cg-camps { min-width: 44px; justify-content: center; }
   .cg-meter { width: 34px; }
   #cg-upchip:not(.warn):not(.good) #cg-upcount { display: none; }
   .cg-help { margin-left: 0; }

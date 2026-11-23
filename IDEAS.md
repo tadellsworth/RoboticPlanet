@@ -117,6 +117,18 @@ The open questions, decided by the owner ("do your recs", Nov 23 2026):
 - **The look:** the buildings are rendered sprites (ART_GUIDE.md, Batch 33); the ground is drawn in code. Roads on the
   town's ground (the avenues, and any a colony lays) show through its paving.
 
+## Contingency campaigns (built Nov 23 2026: the owner was locked into one run)
+
+Contingency now keeps up to 5 campaigns on the device and opens on a Campaigns screen (Continue, Delete, New campaign,
+Save to file, Load from file); the globe's top bar has Campaigns to switch, and a battle always reports back to its own
+campaign. The old single save became campaign 1. Open for the owner:
+- Is 5 the right number of slots? (Each run is small, about 20 KB.)
+- Should a finished run stay in the list (as a record, with its ending to reread) instead of leaving it?
+- Should campaigns sync through the cloud codes as games do? Today a file is the way to move one; Ironman campaigns
+  can't be moved at all.
+- Only one battle can be under way in the normal game save; another campaign's is kept aside, but the main menu's
+  Continue only ever shows the latest battle.
+
 ## The Dam (built Nov 23 2026; design calls for the owner)
 
 The owner's idea (approved): a high lake behind a dam over a colony's valley; wreck the dam and the lake floods the
