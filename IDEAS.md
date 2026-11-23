@@ -99,6 +99,27 @@ calls made in building it, each a default for the owner to keep or change:
   robots among its legs still count. Open: B's lit deck ring and knee lights carried over for more of a "still running"
   feel at night; a Warbot seen rolling down the chute as one is built.
 
+## Army Groups (brainstormed with the owner Nov 23 2026; to build later, design first)
+
+The army ends up as one blob that splits itself between Outposts; on big maps the owner wants several armies, each
+with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selections.
+
+- **Army Groups** (up to **6**, the owner's pick): a name and a colour badge, a home (Outpost, Keep or a spot), a target
+  size and mix (e.g. 12 warbots, 2 Bulwarks) and a standing order: **Hold**, **Defend area** (engage what enters a
+  circle, then return), **Patrol** (loop 2-3 points), **Attack** (attack-move along waypoints), **Follow** (shadow
+  another group). Suggested extras for the owner: **Escort** (stay with a convoy, train or Road Train) and **Raid** (hit
+  the nearest enemy economy in a region, then come home).
+- **Reinforcements:** the Bot Foundry sends each new warbot to the group most under strength, by a priority you set;
+  overflow to a Reserve. They travel in batches. Outpost garrisons stay separate ("keep N warbots").
+- **The rally point sits alongside** groups (the owner's pick): it is the Reserve's home.
+- **Group cards** on screen: badge, count, health, Ammo, order. Tap selects, twice jumps; drag onto the map or
+  minimap to send it.
+- **Later:** per-group behaviours (retreat below a health level, reload a few at a time, aggressive/defensive/hold
+  fire); a zoomed-out command view of group icons and order arrows; group banners and minimap marks; rivals using
+  groups (defence, raid, main army).
+- **Order of work:** groups, reinforcement routing and group cards first; a Claude Design canvas for the group cards
+  and panel before building (the owner: later on).
+
 ## Three new maps (the owner's ideas, Nov 23 2026; to build later)
 
 - **Orbital platforms** (high atmosphere). A few large orbital platforms high over the planet, the clouds and the
