@@ -6033,11 +6033,13 @@ function drawWorkUnder(ctx, u, pose, ox, oy, z) {
     if (horiz) ctx.fillRect(g0, y + inset, sw, w); else ctx.fillRect(x + inset, g0, w, sw);
     ctx.fillStyle = pose.kind === 'asphalt' ? 'rgba(0,0,0,0.25)' : 'rgba(90,96,104,0.28)';
     for (let k = 1; k < 6; k++) { const o = inset + (w * k) / 6; if (horiz) ctx.fillRect(back === 0 ? x : x + z - at, y + o, at, Math.max(0.5, z * 0.008)); else ctx.fillRect(x + o, back === 0 ? y : y + z - at, Math.max(0.5, z * 0.008), at); }
-    if (pose.kind !== 'asphalt') { // the wet edge itself, a bright lip of concrete pushed ahead of the screed
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    { // the wet edge itself: a bright lip of concrete pushed ahead of the screed; on asphalt, a hot glowing seam of fresh mix
+      const hot = pose.kind === 'asphalt';
+      if (hot) { ctx.fillStyle = `rgba(255,${140 + 30 * Math.sin(R.time * 7 + u.id)},60,0.45)`; const e2 = e * 2.2; if (horiz) ctx.fillRect(back === 0 ? x + at - e2 : x + z - at, y + inset, e2, w); else ctx.fillRect(x + inset, back === 0 ? y + at - e2 : y + z - at, w, e2); }
+      ctx.fillStyle = hot ? 'rgba(20,20,22,0.9)' : 'rgba(255,255,255,0.6)';
       if (horiz) ctx.fillRect(back === 0 ? x + at - e : x + z - at, y + inset, e, w); else ctx.fillRect(x + inset, back === 0 ? y + at - e : y + z - at, w, e);
     }
-    if (pose.kind !== 'asphalt' && z >= 14) { // the screed bar on its arm, drawn across the road at the wet edge, shaking as it levels
+    if (z >= 14) { // the screed bar on its arm (the Paver's heated screed on asphalt), drawn across the road at the wet edge, shaking as it levels
       const jig = Math.sin(R.time * 31 + u.id) * z * 0.008, ex = horiz ? (back === 0 ? x + at : x + z - at) + jig : x + z / 2, ey = horiz ? y + z / 2 : (back === 0 ? y + at : y + z - at) + jig;
       const bx = ox + u.x * z, by = oy + u.y * z;
       drawToolArm(ctx, bx, by, ex, ey, z, 0.3);
@@ -6089,8 +6091,14 @@ function drawWorkOver(ctx, u, pose, sx, sy, z) {
     const pf = (T * 0.6 + seed) % 1;
     harvPuff(ctx, fx + Math.sin(pf * 5) * z * 0.04, fy - pf * z * 0.35, z * (0.04 + pf * 0.12), '210,215,225', 0.22 * (1 - pf));
   } else if (pose.kind === 'asphalt') {
-    // Heat coming off the hot asphalt behind the Paver: soft puffs of steam curling up and drifting.
+    // Heat coming off the hot asphalt behind the Paver: soft puffs of steam curling up and drifting; now and then a
+    // fleck of hot mix spits off the screed, glowing as it falls.
     const bx = sx - Math.cos(u.face) * z * 0.3, by = sy - Math.sin(u.face) * z * 0.3;
+    ctx.lineCap = 'round';
+    harvBits(6, 1.8, u.id, 67, (k, ph, born) => {
+      const ang = u.face + Math.PI + (hash2(k, born, u.id) - 0.5) * 2.2, d = ph * z * (0.12 + 0.12 * hash2(born, k, 4)), d0 = Math.max(0, d - z * 0.05);
+      workSpark(ctx, bx + Math.cos(ang) * d0, by + Math.sin(ang) * d0 + ph * ph * z * 0.08, bx + Math.cos(ang) * d, by + Math.sin(ang) * d + ph * ph * z * 0.14, ph, z, true);
+    });
     for (let k = 0; k < 5; k++) {
       const ph = (T * 0.8 + k / 5 + hash2(k, u.id, 5)) % 1;
       harvPuff(ctx, bx + Math.sin(ph * 6 + k) * z * 0.08 + (k - 2) * z * 0.08 + ph * z * 0.1, by - ph * z * 0.6, z * (0.07 + ph * 0.16), '236,236,232', 0.32 * (1 - ph) * Math.min(1, ph * 6));
