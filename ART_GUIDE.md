@@ -147,6 +147,27 @@ worn and dirty, lit by a few glowing neon accents.
 
 Then ask for each asset with the prompts below.
 
+### Command Deck interface
+
+The look of Contingency's screens (the globe, its panels and sheets, the Campaigns screen and the new run), and the one
+the rest of the game's interface will move to. A ship's command deck seen in the dark: glass readouts over the planet.
+
+- **Palette.** Panels `rgba(5, 12, 20, 0.9)` (near opaque: no backdrop blur, for speed), text `#e3f4fb`, quiet text
+  `#93b4c4`. Accents in the player's callsign colour, `--c` (COBALT `#38d4ff`, VERMILION `#ff5a6e`, VIRIDIAN `#5be06c`,
+  TYRIAN `#b36bff`): the panel hairlines, the corner brackets, section headings, lit diamonds and the primary button
+  (dark ink `#031620` on it). Fixed meanings: amber `#ffc457` for warnings and charged weapons, green `#7ee08a` for
+  income, violet `#c58cff` for the Murmur, yellow `#ffdc78` for orders, alarm red `#ff5a6e` for a battle.
+- **Panels.** Square corners, a 1 px border in the accent at 20%, a 14 × 2 px bracket on each corner in the full accent,
+  faint scanlines every 3 px, and a soft drop shadow. Rows inside are split by dashed hairlines. A faint 48 px grid and
+  a vignette lie over the globe, and a ticked orbit ring round it.
+- **Type.** Labels, headings and buttons in **Chakra Petch** (600 and 700, bundled in `style.css` as a 20 KB latin
+  subset, OFL), labels uppercase with wide tracking (0.14 to 0.16 em). Numbers, logs and readouts in the system
+  monospace (`ui-monospace`, SF Mono, Menlo, Consolas). Body text in the system sans.
+- **Marks.** Status lights (8 px glowing dots), diamonds for Uplinks and stars, short bars for levels, segments for
+  meters. Buttons are square, uppercase, at least 44 px tall, with a 2 px white focus ring.
+- **Where it lives.** The Contingency block of `style.css` (`#screen-contingency`, `.cg-*`), and the markup in
+  `index.html` (`#screen-contingency`) and `js/contingency-ui.js`.
+
 ---
 
 ## 3. The asset list

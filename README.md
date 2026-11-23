@@ -127,7 +127,18 @@ how goods move.
   moon beside it (`cglMoon`) with its two halves, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
   pill (or its territory's marker) onto a neighbour (`cgDown` picks it up, `cgUp` gives the order); a territory card (`cgCard`), the Spend panel, the battle
   card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
-  screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
+  screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). **The layout** (the
+  Command Deck look: ART_GUIDE.md, "Command Deck interface"; its CSS is the Contingency block of `style.css`): the top
+  bar (`#cg-top`, filled by `cgSync`: callsign, Arrival clock with "ends T+31" when the turn cap is on, Reserve and its
+  income a year, the Uplinks as five diamonds `#cg-uppips`, the Murmur meter as 20 segments `#cg-meter`) and the foot
+  (`#cg-foot`: Spend, Report, the orders listed by group in `#cg-orders`, the year and phase `#cg-phase`, End turn) are
+  glass panels; the territory card docks on the right (a sheet across the bottom under 760 px). `cgSheet` gives
+  `#cg-sheet` a class per kind (`cg-sheet-spend`, `cg-sheet-battle`...); Spend and the report (`CG_DOCK`) dock on the
+  left from 1000 px (`cg-dock`), and `cgResize` centres the globe between the docked panels and sets `--cg-top` and
+  `--cg-foot` for the CSS; `cgFlags` marks which columns are taken (`cg-carded`, `cg-docked`) so the walkthrough and
+  the weapons strip go in a free one. The battle card sits under its territory (`cgPlaceBattle` turns the globe so it
+  is just above the card), ringed in red by `cgReticle`; `cgBezel` draws the orbit ring with the view's centre. The panels
+  wear the player's callsign colour (`--c` on `#screen-contingency`). The campaign theme plays
   at Contingency's place in the story (`MUSIC.loreLevel`). **The bridge to battles** (`js/contingency-battle.js`):
   `contBattleSetup` (engine) turns a battle into a setup: the region's biome and a map type from `CONT_REGION_SHAPES`
   (a free-for-all one for three sides), Small or Medium (Large at a home), a 25-minute cap (35 at a home), Uplinks

@@ -89,8 +89,8 @@ function cgInit() {
   c.addEventListener('wheel', (e) => { e.preventDefault(); CG.yaw += e.deltaX * 0.004; CG.pitch = clamp(CG.pitch - e.deltaY * 0.003, -CGV.tilt, CGV.tilt); CG.dirty = true; }, { passive: false });
   document.addEventListener('keydown', cgKey);
   $('cg-end').onclick = () => cgEndTurn();
-  $('cg-spend').onclick = () => { sfx('click'); cgSheet('spend'); };
-  $('cg-report').onclick = () => { sfx('click'); cgSheet('report'); };
+  $('cg-spend').onclick = () => { if (CG.sheet === 'spend') { cgSheetAct('close', {}); return; } sfx('click'); cgSheet('spend'); };
+  $('cg-report').onclick = () => { if (CG.sheet === 'report') { cgSheetAct('close', {}); return; } sfx('click'); cgSheet('report'); };
   $('cg-exit').onclick = () => { sfx('click'); closeContingency(); };
   $('cg-camps').onclick = () => { sfx('click'); cgToCampaigns(); };
   $('cg-import-file').onchange = () => { const f = $('cg-import-file').files && $('cg-import-file').files[0]; $('cg-import-file').value = ''; if (f) cgImport(f); };
@@ -112,18 +112,59 @@ function cgMusic() {
 
 /* ------------------------------------------------------------------ the globe */
 
+/** Spend and the year report dock on the left of a wide screen (the globe stays live beside them); the rest cover it. */
+const CG_DOCK = { spend: 1, report: 1 };
+const CG_DOCK_W = 1000;
+/**
+ * Fit the globe to the room the panels leave: under the top bar, over the foot, between a docked sheet on the left and
+ * the territory card on the right (a wide screen), or above the card (a phone, where it's a sheet across the bottom).
+ * It also tells the CSS where the panels start and end (--cg-top, --cg-foot).
+ */
 function cgResize() {
-  const c = $('cg-globe'), dpr = Math.min(2, window.devicePixelRatio || 1), w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
+  const c = $('cg-globe'), scr = $('screen-contingency'), dpr = Math.min(2, window.devicePixelRatio || 1), w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
   c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
-  const top = $('cg-top').offsetHeight + 8, foot = $('cg-foot').offsetHeight + 8, side = w >= 760 && !$('cg-card').hidden ? 360 : 0;
-  const cardUp = w < 760 && !$('cg-card').hidden ? Math.min($('cg-card').offsetHeight, h * 0.46) : 0;
-  const aw = w - side, ah = h - top - foot - cardUp;
-  const r = Math.max(CGV.minR * 0.6, Math.min(aw * 0.4, ah * 0.42));
-  CG.v = { w, h, dpr, cx: aw / 2, cy: top + ah / 2 + r * 0.06, r, moon: { x: aw / 2 + r * 0.98, y: top + ah / 2 - r * 0.78, r: Math.max(18, Math.min(60, r * 0.17)) } };
-  if (CG.v.moon.x + CG.v.moon.r > aw - 6) CG.v.moon.x = aw - 6 - CG.v.moon.r;
+  const gap = w < 760 ? 8 : 16, tb = $('cg-top').hidden ? 0 : $('cg-top').getBoundingClientRect().bottom, fb = $('cg-foot').hidden ? h : $('cg-foot').getBoundingClientRect().top;
+  scr.style.setProperty('--cg-top', `${Math.round(tb + gap)}px`);
+  scr.style.setProperty('--cg-foot', `${Math.round(h - fb + gap)}px`);
+  const card = $('cg-card'), box = $('cg-sheet-box'), top = tb + 8, foot = h - fb + 8;
+  const right = w >= 760 && !card.hidden ? w - card.getBoundingClientRect().left + 8 : 0;
+  const left = w >= CG_DOCK_W && CG_DOCK[CG.sheet] && !$('cg-sheet').hidden ? box.getBoundingClientRect().right + 8 : 0;
+  const cardUp = w < 760 && !card.hidden ? Math.min(card.offsetHeight, h * 0.46) : 0;
+  const aw = w - left - right, ah = h - top - foot - cardUp, wide = w >= CG_DOCK_W;
+  const r = Math.max(CGV.minR * 0.6, Math.min(aw * (wide ? 0.44 : 0.4), ah * (wide ? 0.45 : 0.42)));
+  const cx = left + aw / 2;
+  CG.v = { w, h, dpr, cx, cy: top + ah / 2 + r * 0.06, r, top: tb + gap, bottom: fb - gap, moon: { x: cx + r * 0.98, y: top + ah / 2 - r * 0.78, r: Math.max(18, Math.min(60, r * 0.17)) } };
+  if (CG.v.moon.x + CG.v.moon.r > left + aw - 6) CG.v.moon.x = left + aw - 6 - CG.v.moon.r;
   if (CG.v.moon.y - CG.v.moon.r < top + 4) CG.v.moon.y = top + 4 + CG.v.moon.r;
   cglStars(); cglPlace();
   CG.dirty = true;
+  cgPlaceBattle();
+}
+/**
+ * The battle card on a wide screen: across the bottom of the globe, its territory turned to just above it (where
+ * cgOverlay rings it), so the card reads as that territory's. On a small screen it stays a panel in the middle.
+ */
+function cgPlaceBattle() {
+  const box = $('cg-sheet-box'), run = CG.run, V = CG.v;
+  const b = run && CG.sheet === 'battle' ? run.battles.find((x) => !x.result) : null, on = !!b && V.w >= 760 && V.h >= 560;
+  box.classList.toggle('cg-placed', on);
+  if (!on) { box.style.left = box.style.top = ''; return; }
+  const bw = box.offsetWidth, bh = box.offsetHeight, top = Math.max(V.top, V.bottom - bh);
+  box.style.left = `${Math.round(clamp(V.cx - bw / 2, 16, V.w - bw - 16))}px`;
+  box.style.top = `${Math.round(top)}px`;
+  if (contIsArgos(b.at)) return;
+  const T = CONT_MAP.T[b.at], up = (V.cy - (top - 70)) / V.r;
+  CG.yaw = T.lon * Math.PI / 180;
+  CG.pitch = clamp(T.lat * Math.PI / 180 - Math.asin(clamp(up, -0.9, 0.9)), -CGV.tilt, CGV.tilt);
+  CG.dirty = true;
+}
+/** Which columns are taken (the CSS puts the walkthrough and the weapons in a free one). */
+function cgFlags() {
+  const scr = $('screen-contingency');
+  scr.classList.toggle('cg-carded', !$('cg-card').hidden);
+  scr.classList.toggle('cg-docked', !!CG_DOCK[CG.sheet]);
+  $('cg-spend').setAttribute('aria-pressed', CG.sheet === 'spend' ? 'true' : 'false');
+  $('cg-report').setAttribute('aria-pressed', CG.sheet === 'report' ? 'true' : 'false');
 }
 /** Turn the globe to face territory t. */
 function cgFace(t) {
@@ -194,6 +235,7 @@ function cgDraw() {
 function cgOverlay(g) {
   const run = CG.run, V = CG.v, small = V.r < 190, marks = [];
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+  cgBezel(g);
   // orbit: a dashed line from the launch sites to the moon
   run.t.forEach((T, t) => {
     if (!contLaunch(run, t)) return;
@@ -227,13 +269,15 @@ function cgOverlay(g) {
   // your weapons' aims this year: a red line from the weapon to its target
   for (const [w, a] of Object.entries(run.aims || {})) if (a && !a.skip && run.t[+w].owner === 0) cgArc(g, +w, a.to, '#ff6a5a');
   if (CG.pick >= 0) { const p = cgSpot(CG.pick); if (p) { g.strokeStyle = '#ff6a5a'; g.lineWidth = 3; g.setLineDash([5, 4]); g.beginPath(); g.arc(p.x, p.y, 20, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); } }
-  // the battles waiting
+  // the battles waiting; the one on the battle card in its target ring
   for (const b of run.battles) if (!b.result) {
     const p = cgSpot(b.at);
     if (!p) continue;
     g.strokeStyle = `rgba(255,90,90,${0.5 + 0.5 * pulse})`; g.lineWidth = 3;
     g.beginPath(); g.arc(p.x, p.y, 16 + 4 * pulse, 0, Math.PI * 2); g.stroke();
   }
+  const fight = CG.sheet === 'battle' ? run.battles.find((b) => !b.result) : null, fp = fight && cgSpot(fight.at);
+  if (fp) cgReticle(g, fp, contName(fight.at));
   // each territory's marker: its owner's colour, an Uplink's diamond, a home's ring; groups above, forts below
   for (let t = 0; t < CONT_MAP.n; t++) {
     if (contIsArgos(t)) { cgMarker(g, t, cgSpot(t), small, marks, true); continue; }
@@ -252,6 +296,44 @@ function cgOverlay(g) {
   CG.marks = marks;
 }
 function PI_2() { return Math.PI / 2; }
+/** The orbit bezel round the globe (a wide one): a ring, its ticks, the four marks, and where the view is centred. */
+function cgBezel(g) {
+  const V = CG.v;
+  if (V.r < 150) return;
+  const [r, gg, b] = cgRgb(cgColor(0)), R = V.r + 8, c = cgUnproject(V.cx, V.cy);
+  g.save();
+  g.strokeStyle = `rgba(${r},${gg},${b},0.26)`; g.lineWidth = 1;
+  g.beginPath(); g.arc(V.cx, V.cy, R, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = `rgba(${r},${gg},${b},0.32)`; g.lineWidth = 6; g.setLineDash([1, (2 * Math.PI * (R + 8)) / 200 - 1]);
+  g.beginPath(); g.arc(V.cx, V.cy, R + 8, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.strokeStyle = `rgb(${r},${gg},${b})`; g.lineWidth = 1.5; g.beginPath();
+  for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { g.moveTo(V.cx + dx * (R - 2), V.cy + dy * (R - 2)); g.lineTo(V.cx + dx * (R + 18), V.cy + dy * (R + 18)); }
+  g.stroke();
+  g.font = '500 11px ui-monospace, Menlo, Consolas, monospace'; g.textAlign = 'left'; g.fillStyle = 'rgba(147,180,196,0.9)';
+  if (c) g.fillText(cgCoords(c.lon, c.lat), V.cx + 8, V.cy - R - 6);
+  if (V.cy + R + 16 < V.bottom - 6) g.fillText('ITHACA I · ORBIT VIEW', V.cx + 8, V.cy + R + 16);
+  g.restore();
+}
+/** A battle's target ring: two rings, a crosshair and its name, in the alarm red. */
+function cgReticle(g, p, name) {
+  g.save();
+  g.strokeStyle = '#ff5a6e'; g.lineWidth = 1.5; g.setLineDash([6, 5]);
+  g.beginPath(); g.arc(p.x, p.y, 34, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.lineWidth = 1; g.beginPath(); g.arc(p.x, p.y, 22, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 2; g.beginPath();
+  for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { g.moveTo(p.x + dx * 28, p.y + dy * 28); g.lineTo(p.x + dx * 44, p.y + dy * 44); }
+  g.stroke();
+  g.font = '500 12px ui-monospace, Menlo, Consolas, monospace'; g.textAlign = 'left';
+  const label = `CONTACT · ${name.toUpperCase()}`, x = p.x + 46 + g.measureText(label).width > CG.v.w - 8 ? p.x - 46 - g.measureText(label).width : p.x + 46;
+  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.strokeText(label, x, p.y - 30);
+  g.fillStyle = '#ffb3bd'; g.fillText(label, x, p.y - 30);
+  g.restore();
+}
+/** Degrees as the atlas gives them, as a position: "22°W 20°N". */
+function cgCoords(lon, lat) {
+  const a = Math.round(lon), b = Math.round(lat);
+  return `${Math.abs(a)}°${a < 0 ? 'W' : a > 0 ? 'E' : ''} ${Math.abs(b)}°${b < 0 ? 'S' : b > 0 ? 'N' : ''}`;
+}
 /** Where territory t's marker sits now ({ x, y, z }), or null when it's round the back. */
 function cgSpot(t) {
   const V = CG.v, T = CONT_MAP.T[t];
@@ -413,21 +495,28 @@ function cgAfter() {
 }
 
 function cgSync() {
-  const run = CG.run;
+  const run = CG.run, scr = $('screen-contingency');
   CG.dirty = true;
   $('cg-top').hidden = $('cg-foot').hidden = !run;
-  if (!run) { $('cg-card').hidden = true; return; }
+  if (!run) { $('cg-card').hidden = true; scr.style.removeProperty('--c'); cgFlags(); return; }
+  scr.style.setProperty('--c', CONT_CS_COLORS[run.sides[0].cs]);
+  $('cg-cs').textContent = CONT_CS_NAMES[run.sides[0].cs];
   const S = run.sides[0], up = contUplinksToward(run, 0), leaders = [1, 2, 3].filter((s) => run.sides[s].alive && run.sides[s].streak > 0 && contAlly(run, 0) !== s);
   $('cg-clock').textContent = `T+${run.turn}`;
   $('cg-clock').title = `Arrival clock: T+${run.turn} (one turn is one year). ${run.window ? 'The window: the last turn.' : `The run ends at T+${CONT.lastTurn}${run.opts.turnCap ? '' : ' (turn cap off: it runs until someone wins)'}.`}`;
+  $('cg-clock-end').textContent = run.window ? 'the last turn' : run.opts.turnCap ? `ends T+${CONT.lastTurn}` : '';
+  const inc = contIncome(run, 0);
   $('cg-reserve').textContent = `${S.reserve}`;
-  $('cg-reserve-inc').textContent = `+${contIncome(run, 0)}`;
+  $('cg-reserve-inc').textContent = `${inc >= 0 ? '+' : ''}${inc} / yr`;
   $('cg-uplinks').textContent = `${up}/5`;
+  [...$('cg-uppips').children].forEach((i, k) => i.classList.toggle('on', k < up));
   const count = S.streak ? `year ${S.streak} of ${CONT.uplinkYears}` : leaders.length ? `${contSideName(run, leaders[0])}: year ${run.sides[leaders[0]].streak} of ${CONT.uplinkYears}` : `hold ${CONT.uplinksToWin} for ${CONT.uplinkYears} years`;
   $('cg-upcount').textContent = count;
   $('cg-upchip').classList.toggle('warn', !!leaders.length);
   $('cg-upchip').classList.toggle('good', !!S.streak);
-  $('cg-meter').style.setProperty('--m', `${Math.round(run.meter)}%`);
+  const seg = $('cg-meter'), lit = Math.ceil(clamp(run.meter, 0, 100) / 5);
+  if (seg.children.length !== 20) seg.innerHTML = '<i></i>'.repeat(20);
+  [...seg.children].forEach((i, k) => i.classList.toggle('on', k < lit));
   $('cg-meter-v').textContent = Math.round(run.meter);
   const pend = run.battles.filter((b) => !b.result).length;
   $('cg-battles').hidden = !pend;
@@ -435,10 +524,15 @@ function cgSync() {
   $('cg-end').disabled = run.phase !== 'plan';
   $('cg-end').textContent = run.window ? 'End the last turn' : 'End turn';
   $('cg-spend').disabled = run.phase !== 'plan';
-  const n = Object.keys(run.orders).length;
-  $('cg-orders').textContent = n ? `${n} order${n > 1 ? 's' : ''}` : contGroups(run, 0).length ? 'No orders yet' : '';
+  // the orders given: each Command Group and where it goes
+  const ords = Object.entries(run.orders).map(([id, p]) => [+id, p]).filter(([id, p]) => p.length && contGroup(run, id) && contGroup(run, id).side === 0).sort((a, b) => a[0] - b[0]);
+  $('cg-orders').innerHTML = ords.length
+    ? `<span class="cg-led amber" aria-hidden="true"></span><span class="cg-lbl">Orders</span><b>${ords.length}</b><span class="cg-olist">${ords.map(([id, p]) => `Group ${id} <em>→ ${p.map((t) => esc(contName(t))).join(' → ')}</em>`).join(' · ')}</span>`
+    : contGroups(run, 0).length ? '<span class="cg-led off" aria-hidden="true"></span><span class="cg-lbl">Orders</span><span class="cg-olist">No orders yet</span>' : '';
+  $('cg-phase').textContent = `Year T+${run.turn} · ${CG.sheet === 'report' ? 'report' : run.phase === 'plan' ? 'plan' : 'battles'}`;
   cgCard();
   cgWeapons();
+  cgFlags();
   cgResize();
 }
 
@@ -462,22 +556,24 @@ function cgCard() {
   if (t === CONT_MAP.hollow) spec.push(run.hollowDone ? 'The Deep\'s mound was destroyed at T+' + run.hollowDone + '.' : 'An optional assault from Violet Reach: destroy the Deep\'s mound and every territory\'s Murmur falls to 0.');
   const inc = T.owner >= 0 ? contIncomeOf(run, t) : 0;
   const fort = contFortOf(run, t), mur = ['none', 'Quiet', 'Active', 'Active, with nests'][T.murmur];
-  let h = `<header class="cg-card-head"><div><h3>${esc(M.name)}</h3><p class="cg-sub">${esc(region)} · ${owner}</p></div><button type="button" class="sheet-close" id="cg-card-x" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button></header>`;
-  h += '<dl class="cg-facts">';
-  if (T.owner >= 0) h += `<dt>Income</dt><dd>${inc >= 0 ? '+' : ''}${inc} Reserve a year</dd>`;
-  h += `<dt>Fortification</dt><dd>${fort ? 'level ' + fort : 'none'}${T.mega === 'city' && T.fort < 3 ? ' (Arrival City)' : ''}${mine && plan && T.fort < CONT.maxFort ? ` <button type="button" class="btn small" data-act="fort">Fortify (${CONT.fortCost})</button>` : ''}</dd>`;
-  if (!contIsArgos(t)) h += `<dt>The Murmur</dt><dd>${T.murmur ? `level ${T.murmur}: ${mur}` : 'none'}</dd>`;
-  if (T.mega) h += `<dt>Megastructure</dt><dd><b>${CONT_MEGA[T.mega].name}</b>: ${CONT_MEGA[T.mega].desc}</dd>`;
+  const where = contIsArgos(t) ? 'Argos, by orbit' : cgCoords(M.lon, M.lat);
+  let h = `<header class="cg-card-head"><div><p class="cg-lbl">Territory · ${where}</p><h3>${esc(M.name)}</h3><p class="cg-sub">${esc(region)} · ${owner}</p></div><button type="button" class="sheet-close" id="cg-card-x" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button></header>`;
+  h += '<div class="cg-sec"><dl class="cg-facts">';
+  if (T.owner >= 0) h += `<dt>Income</dt><dd><span><span class="cg-inc">${inc >= 0 ? '+' : ''}${inc}</span> <small>Reserve a year</small></span></dd>`;
+  h += `<dt>Fortification</dt><dd><span>${fort || 'none'}${cgLevel(fort, CONT.maxFort)}${T.mega === 'city' && T.fort < 3 ? ' <small>(Arrival City)</small>' : ''}</span>${mine && plan && T.fort < CONT.maxFort ? `<button type="button" class="btn small" data-act="fort">Fortify <span class="cg-cost">${CONT.fortCost}</span></button>` : ''}</dd>`;
+  if (!contIsArgos(t)) h += `<dt>The Murmur</dt><dd><span><span class="cg-led ${T.murmur ? '' : 'off'}" style="${T.murmur ? 'background:#c58cff;box-shadow:0 0 6px #c58cff;' : ''}margin-right:8px" aria-hidden="true"></span>${T.murmur ? `level ${T.murmur}: ${mur}` : 'none'}</span></dd>`;
+  if (T.mega) h += `<dt>Megastructure</dt><dd><span><b>${CONT_MEGA[T.mega].name}</b>: <small>${CONT_MEGA[T.mega].desc}</small></span></dd>`;
   h += '</dl>';
   if (spec.length) h += `<ul class="cg-spec">${spec.map((s) => `<li>${s}</li>`).join('')}</ul>`;
+  h += '</div>';
   // the groups here
   const gs = contGroupAt(run, t);
+  if (gs.length || (mine && plan && contCanBuyGroup(run, me))) h += '<div class="cg-sec">';
   if (gs.length) {
     h += '<h4>Command Groups here</h4><ul class="cg-groups">';
     for (const gr of gs) {
       const ord = run.orders[gr.id], picked = CG.group === gr.id;
-      const stars = '★'.repeat(gr.stars) + '☆'.repeat(CONT.maxStars - gr.stars);
-      h += `<li class="${picked ? 'on' : ''}"><span class="cg-dot" style="background:${cgColor(gr.side)}"></span><span class="cg-gname">${gr.side === me ? 'Group ' + gr.id : contSideName(run, gr.side)} <span class="cg-stars" aria-label="${gr.stars} stars">${stars}</span> <small>${contWarbots(run, gr)} warbots</small>${ord ? `<small class="cg-ord"> → ${ord.map(contName).join(' → ')}</small>` : ''}</span>`;
+      h += `<li class="${picked ? 'on' : ''}"><span class="cg-dot" style="background:${cgColor(gr.side)};color:${cgColor(gr.side)}"></span><span class="cg-gname"><b>${gr.side === me ? 'Group ' + gr.id : contSideName(run, gr.side)}${cgStars(gr.stars)}</b><small>${contWarbots(run, gr)} warbots${ord ? ` <span class="cg-ord">→ ${ord.map((x) => esc(contName(x))).join(' → ')}</span>` : ''}</small></span>`;
       if (gr.side === me && plan) {
         h += `<button type="button" class="btn small ${picked ? 'primary' : ''}" data-act="pick" data-g="${gr.id}">${picked ? 'Tap where to' : 'Move'}</button>`;
         if (ord) h += `<button type="button" class="btn small ghost" data-act="hold" data-g="${gr.id}">Hold</button>`;
@@ -487,28 +583,35 @@ function cgCard() {
     }
     h += '</ul>';
   }
-  if (mine && plan && contCanBuyGroup(run, me)) h += `<p><button type="button" class="btn small" data-act="buy">Ready a Command Group here (${CONT.groupCost})</button></p>`;
+  if (mine && plan && contCanBuyGroup(run, me)) h += `<p><button type="button" class="btn small" data-act="buy">Ready a Command Group here <span class="cg-cost">${CONT.groupCost}</span></button></p>`;
+  if (gs.length || (mine && plan && contCanBuyGroup(run, me))) h += '</div>';
   // the neighbours, with odds for the picked group
   const links = CONT_MAP.links[t].filter((L) => L.kind !== 'orbit').concat(contLaunch(run, t) ? CONT_MAP.argos.map((m) => ({ to: m, kind: 'orbit' })) : []);
   if (contIsArgos(t)) run.t.forEach((X, i) => { if (contLaunch(run, i)) links.push({ to: i, kind: 'orbit' }); });
   const gr = CG.group ? contGroup(run, CG.group) : null, targets = cgTargets();
-  h += '<h4>Borders</h4><ul class="cg-links">';
+  h += '<div class="cg-sec"><h4>Borders</h4><ul class="cg-links">';
   for (const L of links) {
     const N = run.t[L.to], how = { land: '', sea: ` (by sea: ${L.sea || ''})`, orbit: ' (by orbit)', below: ' (down the Breach Fields)' }[L.kind];
     let odds = '';
     if (gr && targets.has(L.to)) { const o = contOddsAgainst(run, 0, gr, L.to); odds = ` <span class="cg-odds">${o >= 1 ? 'walk in' : Math.round(o * 100) + '%'}</span>`; }
-    h += `<li><button type="button" class="cg-link ${targets.has(L.to) ? 'go' : ''}" data-act="to" data-t="${L.to}"><span class="cg-dot" style="background:${N.owner >= 0 ? cgColor(N.owner) : '#555'}"></span>${esc(contName(L.to))}${how}${odds}</button></li>`;
+    const dc = N.owner >= 0 ? cgColor(N.owner) : '#6b7480';
+    h += `<li><button type="button" class="cg-link ${targets.has(L.to) ? 'go' : ''}" data-act="to" data-t="${L.to}"><span class="cg-dot" style="background:${dc};color:${N.owner >= 0 ? dc : 'transparent'}"></span>${esc(contName(L.to))}${how}${odds}</button></li>`;
   }
   h += '</ul>';
   if (T.owner > 0 && plan) {
     const tr = contTruce(run, 0, T.owner), al = contAlly(run, 0) === T.owner;
     h += `<p class="cg-truce">${al ? 'Allied for the run.' : tr ? `Truce: ${tr.left} year${tr.left > 1 ? 's' : ''} left. <button type="button" class="btn small danger" data-act="break">Break the truce</button>` : `<button type="button" class="btn small" data-act="truce">Offer a truce</button>`}</p>`;
   }
+  h += '</div>';
   if (CG.note) h += `<p class="cg-note" role="status">${esc(CG.note)}</p>`;
   el.innerHTML = h;
   $('cg-card-x').onclick = () => { CG.sel = -1; CG.group = 0; cgSync(); };
   el.querySelectorAll('[data-act]').forEach((b) => { b.onclick = () => cgCardAct(b.dataset.act, +b.dataset.g || 0, b.dataset.t !== undefined ? +b.dataset.t : -1); });
 }
+/** A level as lit bars (fortification): n of max. */
+function cgLevel(n, max) { return `<span class="cg-lv" aria-hidden="true">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(Math.max(0, max - n))}</span>`; }
+/** A Command Group's stars as diamonds, lit to its rank. */
+function cgStars(n) { return ` <span class="cg-stars" role="img" aria-label="${n} star${n === 1 ? '' : 's'}">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(Math.max(0, CONT.maxStars - n))}</span>`; }
 function cgCardAct(act, gid, to) {
   const run = CG.run, t = CG.sel;
   sfx('click');
@@ -537,11 +640,14 @@ function cgSheet(kind) {
   CG.sheet = kind;
   const el = $('cg-sheet'), box = $('cg-sheet-box');
   el.hidden = !kind;
+  el.className = `cg-sheet${kind ? ' cg-sheet-' + kind : ''}${CG_DOCK[kind] ? ' cg-dock' : ''}`;
   if (!kind) { cgSync(); return; }
   const html = { slots: cgSlotsSheet, replace: cgReplace, new: cgNewRun, spend: cgSpend, battle: cgBattle, report: cgReport, offer: cgOffer, over: cgOver }[kind]();
   box.innerHTML = html;
   box.scrollTop = 0;
+  if (kind === 'new') box.style.setProperty('--c', CONT_CS_COLORS[CGN.cs]); else box.style.removeProperty('--c'); // (the new run wears the callsign picked)
   box.querySelectorAll('[data-x]').forEach((b) => { b.onclick = () => cgSheetAct(b.dataset.x, b.dataset); });
+  cgSync(); // (the globe makes room for a docked sheet; the battle card goes under its territory)
   const first = box.querySelector('.cg-focus') || box.querySelector('button');
   if (first) first.focus({ preventScroll: true });
 }
@@ -562,7 +668,7 @@ function cgWhen(at) {
 /** The Campaigns screen: every campaign on this device (Continue, Delete, Save to file), New campaign, Load from file. */
 function cgSlotsSheet() {
   const ix = contSlots(), list = ix.list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
-  let h = '<header class="cg-sh-head"><h2>Campaigns <small>' + list.length + ' of ' + CONT.slots + '</small></h2><button type="button" class="btn small ghost cg-tap" data-x="back">Main menu</button></header>';
+  let h = '<header class="cg-sh-head"><div><p class="cg-lbl">Contingency · Ithaca I</p><h2>Campaigns <small>' + list.length + ' of ' + CONT.slots + '</small></h2></div><button type="button" class="btn small ghost cg-tap" data-x="back">Main menu</button></header>';
   h += `<p class="cg-lede">Each campaign is its own war for Ithaca I, saved after every step. Keep up to ${CONT.slots} on this device, and switch between them from the globe's <b>Campaigns</b> button.</p>`;
   h += '<ul class="cg-list cg-slots">';
   for (const x of list) {
@@ -587,7 +693,7 @@ function cgSlotsSheet() {
 /** Every slot is taken: which campaign does the new one (or the one loaded from a file) replace? */
 function cgReplace() {
   const list = contSlots().list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
-  let h = `<header class="cg-sh-head"><h2>Replace a campaign</h2><button type="button" class="btn small ghost cg-tap" data-x="back">Cancel</button></header>`;
+  let h = `<header class="cg-sh-head"><div><p class="cg-lbl">Campaigns · every slot taken</p><h2>Replace a campaign</h2></div><button type="button" class="btn small ghost cg-tap" data-x="back">Cancel</button></header>`;
   h += `<p class="cg-lede">All ${CONT.slots} campaign slots are full. Which campaign should ${CG.pending ? 'the one from the file' : 'the new one'} replace? The one you pick is deleted${CG.pending ? '' : ' when the new run starts'}.</p><ul class="cg-list cg-slots">`;
   for (const x of list) h += `<li class="cg-slot" style="--c:${CONT_CS_COLORS[x.cs] || '#8a8f99'}"><span class="cg-slot-what"><b>${CONT_CS_NAMES[x.cs] || '?'}</b><span>${cgSlotLine(x)}</span><small>Last played ${esc(cgWhen(x.at))}</small></span><span class="cg-slot-btns"><button type="button" class="btn danger cg-tap" data-x="replace" data-id="${x.id}">Replace</button></span></li>`;
   return h + '</ul>';
@@ -636,7 +742,7 @@ function cgImportDone() {
 const CGN = { cs: 0, diff: 'normal', docs: ['random', 'random', 'random'], murmur: 'normal', events: true, cap: true, ironman: false, seed: '' };
 function cgNewRun() {
   const rep = CG.replace ? contSlots().list.find((x) => x.id === CG.replace) : null;
-  let h = `<header class="cg-sh-head"><h2>New campaign</h2><button type="button" class="btn small ghost cg-tap" data-x="back">${contSlots().list.length ? 'Campaigns' : 'Back'}</button></header>`;
+  let h = `<header class="cg-sh-head"><div><p class="cg-lbl">Sealed orders</p><h2>New campaign</h2></div><button type="button" class="btn small ghost cg-tap" data-x="back">${contSlots().list.length ? 'Campaigns' : 'Back'}</button></header>`;
   h += '<p class="cg-lede">Arrival clock: T+1. The Accord has been ruled void, and every vanguard\'s sealed orders open: <i>secure Ithaca I for us.</i> Take the planet territory by territory, one year a turn, until T+31.</p>';
   h += '<h3>Your callsign</h3><div class="cg-cs" role="radiogroup" aria-label="Your callsign">';
   CONT_CS_NAMES.forEach((c, k) => {
@@ -657,7 +763,7 @@ function cgNewRun() {
   h += `<label class="cg-row"><span>Ironman (one save, no reloading a lost battle)</span><input type="checkbox" id="cg-o-iron" ${CGN.ironman ? 'checked' : ''}></label>`;
   h += `<label class="cg-row"><span>Run seed (blank: a new one)</span><input type="text" inputmode="numeric" id="cg-o-seed" value="${esc(CGN.seed)}" maxlength="10" size="10"></label>`;
   h += '</details>';
-  h += `<button type="button" class="btn primary big cg-focus" data-x="start">${rep ? `Start the run (replaces ${CONT_CS_NAMES[rep.cs]}, T+${rep.turn})` : 'Start the run'}</button>`;
+  h += `<button type="button" class="btn primary big cg-focus cg-start" data-x="start">${rep ? `Start the run (replaces ${CONT_CS_NAMES[rep.cs]}, T+${rep.turn})` : 'Start the run'}</button>`;
   return h;
 }
 function cgReadNew() {
@@ -668,28 +774,28 @@ function cgReadNew() {
 
 function cgSpend() {
   const run = CG.run, S = run.sides[0], held = contHeld(run, 0);
-  let h = `<header class="cg-sh-head"><h2>Spend <small>Reserve ${S.reserve}</small></h2><button type="button" class="btn small cg-focus" data-x="close">Done</button></header>`;
+  let h = `<header class="cg-sh-head"><div><p class="cg-lbl">Carrier stock</p><h2>Spend</h2></div><div class="cg-sh-tools"><span class="cg-rd"><small>Reserve</small><b>${S.reserve}</b></span><button type="button" class="btn small primary cg-focus" data-x="close">Done</button></div></header>`;
   // Command Groups
   const n = contGroups(run, 0).length, cap = contGroupCap(run, 0);
   h += `<section><h3>Command Groups <small>${n} of ${cap}</small></h3><p class="hint">A reserve Command Base with its landing kit. You hold 2, +1 for every ${CONT.groupsPer} territories, never more than ${CONT.maxGroups}. A new one lands at 1 star.</p>`;
-  h += `<div class="cg-buyrow"><select id="cg-buy-at" aria-label="Where it lands">${held.map((t) => `<option value="${t}" ${t === CG.sel ? 'selected' : ''}>${esc(contName(t))}</option>`).join('')}</select><button type="button" class="btn small" data-x="group" ${contCanBuyGroup(run, 0) ? '' : 'disabled'}>Ready one (${CONT.groupCost})</button></div></section>`;
+  h += `<div class="cg-buyrow"><select id="cg-buy-at" aria-label="Where it lands">${held.map((t) => `<option value="${t}" ${t === CG.sel ? 'selected' : ''}>${esc(contName(t))}</option>`).join('')}</select><button type="button" class="btn small" data-x="group" ${contCanBuyGroup(run, 0) ? '' : 'disabled'}>Ready one <span class="cg-cost">${CONT.groupCost}</span></button></div></section>`;
   // Fortify
   h += `<section><h3>Fortify <small>${CONT.fortCost} a level, up to ${CONT.maxFort}</small></h3><p class="hint">Level 1: two turrets. Level 2: walls and a Keep. Level 3: a Shield Dome site and Mortar Pits. A fortified territory stops the Murmur spreading in.</p><ul class="cg-list">`;
-  for (const t of held) h += `<li><span>${esc(contName(t))} <small>level ${run.t[t].fort}</small></span><button type="button" class="btn small" data-x="fort" data-t="${t}" ${run.t[t].fort >= CONT.maxFort || S.reserve < CONT.fortCost ? 'disabled' : ''}>+1</button></li>`;
+  for (const t of held) h += `<li><span><b>${esc(contName(t))}</b>${run.t[t].uplink ? ' <span class="cg-tag">UPLINK</span>' : ''}${cgLevel(run.t[t].fort, CONT.maxFort)} <small class="vh">level ${run.t[t].fort}</small></span><button type="button" class="btn small" data-x="fort" data-t="${t}" aria-label="Fortify ${esc(contName(t))}, ${CONT.fortCost} Reserve" ${run.t[t].fort >= CONT.maxFort || S.reserve < CONT.fortCost ? 'disabled' : ''}>+1 <span class="cg-cost">${CONT.fortCost}</span></button></li>`;
   h += '</ul></section>';
   // Refits
   h += '<section><h3>Refits <small>for the whole run</small></h3><ul class="cg-list">';
   for (const [k, R] of Object.entries(CONT_REFITS)) {
     const own = S.refits.includes(k);
     const pick = k === 'research' ? (own ? ` <small>(${TECHS[S.sealed || 'tools'].name})</small>` : `<select id="cg-sealed" aria-label="The Research Lab upgrade to seal">${TECH_ORDER.map((t) => `<option value="${t}"${t === 'tools' ? ' selected' : ''}>${TECHS[t].name}</option>`).join('')}</select>`) : '';
-    h += `<li><span><b>${R.name}</b>: ${R.desc}.${own ? pick : ''}</span>${own ? '<small class="cg-own">Fitted</small>' : `${pick}<button type="button" class="btn small" data-x="refit" data-k="${k}" ${S.reserve < R.cost ? 'disabled' : ''}>${R.cost}</button>`}</li>`;
+    h += `<li><span><b>${R.name}</b>: ${R.desc}.${own ? pick : ''}</span>${own ? '<small class="cg-own">Fitted</small>' : `${pick}<button type="button" class="btn small" data-x="refit" data-k="${k}" aria-label="Fit ${R.name}, ${R.cost} Reserve" ${S.reserve < R.cost ? 'disabled' : ''}><span class="cg-cost">${R.cost}</span></button>`}</li>`;
   }
   h += '</ul></section>';
   // Cards
   h += '<section><h3>Cards <small>one use each</small></h3><ul class="cg-list">';
   for (const k of contCardsFor(run, 0)) {
     const C = CONT_CARDS[k], cost = contCardCost(run, 0, k);
-    h += `<li><span><b>${C.name}</b>${C.own !== undefined ? ' <small>(your callsign\'s)</small>' : ''}: ${C.desc}.${C.battle ? ' <small>Played in a battle.</small>' : ''}</span><button type="button" class="btn small" data-x="card" data-k="${k}" ${S.reserve < cost || S.cards.length >= 6 ? 'disabled' : ''}>${cost}</button></li>`;
+    h += `<li><span><b>${C.name}</b>${C.own !== undefined ? ' <small>(your callsign\'s)</small>' : ''}: ${C.desc}.${C.battle ? ' <small>Played in a battle.</small>' : ''}</span><button type="button" class="btn small" data-x="card" data-k="${k}" aria-label="Buy ${C.name}, ${cost} Reserve" ${S.reserve < cost || S.cards.length >= 6 ? 'disabled' : ''}><span class="cg-cost">${cost}</span></button></li>`;
   }
   h += '</ul>';
   if (S.cards.length) {
@@ -709,7 +815,7 @@ function cgSpend() {
   h += '<section><h3>The rivals</h3><ul class="cg-list">';
   for (let r = 1; r < 4; r++) {
     const R = run.sides[r], tr = contTruce(run, 0, r), al = contAlly(run, 0) === r;
-    h += `<li><span><span class="cg-dot" style="background:${cgColor(r)}"></span><b>${contSideName(run, r)}</b> · ${docLabel(R.doctrine)} · ${R.alive ? `${contHeld(run, r).length} territories, ${contUplinks(run, r)} Uplinks` : 'carrier dark'}${al ? ' · <i>allied</i>' : tr ? ` · <i>truce, ${tr.left} years left</i>` : ''}</span>${R.alive && !tr && !al ? `<button type="button" class="btn small" data-x="truce" data-r="${r}">Offer a truce</button>` : ''}</li>`;
+    h += `<li><span><span class="cg-dot" style="background:${cgColor(r)};color:${cgColor(r)}"></span><b>${contSideName(run, r)}</b> · ${docLabel(R.doctrine)} · ${R.alive ? `${contHeld(run, r).length} territories, ${contUplinks(run, r)} Uplinks` : 'carrier dark'}${al ? ' · <i>allied</i>' : tr ? ` · <i>truce, ${tr.left} years left</i>` : ''}</span>${R.alive && !tr && !al ? `<button type="button" class="btn small" data-x="truce" data-r="${r}">Offer a truce</button>` : ''}</li>`;
   }
   h += '</ul></section>';
   if (CG.note) h += `<p class="cg-note" role="status">${esc(CG.note)}</p>`;
@@ -723,8 +829,8 @@ function cgBattle() {
   const T = run.t[b.at], M = CONT_MAP.T[b.at], setup = typeof contBattleSetup === 'function' ? contBattleSetup(run, b) : null;
   const kind = { assault: 'Assault', claim: 'Landing', murmur: 'Landing on Murmur ground', surge: 'Murmur surge: hold until dawn', hollow: 'The Hollow assault' }[b.kind];
   const left = run.battles.filter((x) => !x.result).length;
-  let h = `<header class="cg-sh-head"><h2>Battle for ${esc(contName(b.at))}</h2><small>${left > 1 ? left + ' battles this year' : 'the last battle this year'}</small></header>`;
-  h += `<p class="cg-sub">${kind} · ${esc(CONT_REGIONS[M.region][0])}${setup ? ` · ${esc(setup.shapeName)} · ${esc(setup.sizeName)} · ${setup.minutes}-minute cap` : ''}${T.murmur && b.kind !== 'surge' ? ` · Murmur level ${T.murmur}` : ''}</p>`;
+  let h = `<header class="cg-sh-head"><div><p class="cg-lbl"><span class="cg-led" aria-hidden="true"></span> Battle · ${left > 1 ? left + ' battles this year' : 'the last battle this year'}</p><h2>Battle for ${esc(contName(b.at))}</h2>`;
+  h += `<p class="cg-sub">${kind} · ${esc(CONT_REGIONS[M.region][0])}${setup ? ` · ${esc(setup.shapeName)} · ${esc(setup.sizeName)} · ${setup.minutes}-minute cap` : ''}${T.murmur && b.kind !== 'surge' ? ` · Murmur level ${T.murmur}` : ''}</p></div></header>`;
   h += '<ul class="cg-sides">';
   b.sides.forEach((s, k) => {
     const pct = Math.round(b.odds[k] * 100);
@@ -737,23 +843,24 @@ function cgBattle() {
       if (b.defender === s && contFortOf(run, b.at)) kit += `; fortification level ${contFortOf(run, b.at)}`;
       if (b.cards[s]) kit += `; ${CONT_CARDS[b.cards[s]].name}`;
     }
-    h += `<li><span class="cg-dot" style="background:${s === CONT_MURMUR ? '#a070e0' : cgColor(s)}"></span><span><b>${esc(who)}</b><small>${esc(kit)}</small></span><span class="cg-pct"><i style="width:${pct}%;background:${s === CONT_MURMUR ? '#a070e0' : cgColor(s)}"></i>${pct}%</span></li>`;
+    const sc = s === CONT_MURMUR ? '#a070e0' : cgColor(s);
+    h += `<li><span class="cg-dot" style="background:${sc};color:${sc}"></span><span><b>${esc(who)}</b><small>${esc(kit)}</small></span><span class="cg-pct"><i style="width:${pct}%;background:${sc}"></i><b>${pct}%</b></span></li>`;
   });
-  h += '</ul><p class="hint">The odds are auto-resolve\'s: a seeded roll on them, set a little below what playing it well gets you.</p>';
+  h += '</ul>';
   const hand = run.sides[0].cards.filter((k) => CONT_CARDS[k].battle);
-  if (hand.length && !b.cards[0]) h += `<div class="cg-buyrow"><select id="cg-bcard" aria-label="A card for this battle">${hand.map((k) => `<option value="${k}">${CONT_CARDS[k].name}</option>`).join('')}</select><button type="button" class="btn small" data-x="bcard">Play this card</button></div>`;
+  if (hand.length && !b.cards[0]) h += `<div class="cg-buyrow"><span class="cg-lbl">Card</span><select id="cg-bcard" aria-label="A card for this battle">${hand.map((k) => `<option value="${k}">${CONT_CARDS[k].name}</option>`).join('')}</select><button type="button" class="btn small ghost" data-x="bcard">Play this card</button></div>`;
   const live = typeof contPlayBattle === 'function', resume = live && contBattleWaiting(run, b);
-  h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button>${resume && run.opts.ironman ? '' : `<button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button>`}</div>${resume && run.opts.ironman ? '<p class="hint">Ironman: this battle has begun, so it is played to its end (or withdrawn from).</p>' : ''}`;
+  h += `<div class="cg-bfoot"><p class="hint">The odds are auto-resolve's: a seeded roll on them, set a little below what playing it well gets you.</p>${resume && run.opts.ironman ? '' : `<button type="button" class="btn ${live ? 'ghost' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button>`}<button type="button" class="btn ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button></div>${resume && run.opts.ironman ? '<p class="hint">Ironman: this battle has begun, so it is played to its end (or withdrawn from).</p>' : ''}`;
   if (CG.lastBattle) h += `<p class="cg-note" role="status">${esc(CG.lastBattle)}</p>`;
   return h;
 }
 
 function cgReport() {
   const run = CG.run, R = run.reports[run.reports.length - 1];
-  let h = `<header class="cg-sh-head"><h2>Year report${R ? ` <small>T+${R.turn}</small>` : ''}</h2><button type="button" class="btn small cg-focus" data-x="close">Continue</button></header>`;
+  let h = `<header class="cg-sh-head"><div><p class="cg-lbl">Command log</p><h2>Year report${R ? ` <small>T+${R.turn}</small>` : ''}</h2></div><button type="button" class="btn small primary cg-focus" data-x="close">Continue</button></header>`;
   if (!R) return h + '<p class="cg-log">Arrival clock: T+1. No reports yet.</p>';
   h += cgLog(R.lines);
-  if (run.reports.length > 1) h += `<details class="cg-adv"><summary>Earlier years</summary>${run.reports.slice(0, -1).reverse().map((r) => cgLog(r.lines)).join('<hr>')}</details>`;
+  if (run.reports.length > 1) h += `<details class="cg-adv"><summary>Earlier years <small>T+${run.reports[0].turn}${run.reports.length > 2 ? ` – T+${run.reports[run.reports.length - 2].turn}` : ''}</small></summary>${run.reports.slice(0, -1).reverse().map((r) => cgLog(r.lines)).join('<hr>')}</details>`;
   return h;
 }
 /** A report's lines as the log: its '§' lines as headings, a rival's quoted line set apart. */
@@ -764,13 +871,13 @@ function cgOffer() {
   const run = CG.run, O = run.offers[0];
   if (!O) return '';
   const what = O.kind === 'alliance' ? 'an alliance for the run (allied Command Groups next door join each other\'s battles, and your Uplinks count together, until a win is near)' : `a truce for ${CONT.truceTurns} years (neither side moves into the other's territory)`;
-  return `<header class="cg-sh-head"><h2>${contSideName(run, O.from)} offers ${O.kind === 'alliance' ? 'an alliance' : 'a truce'}</h2></header>
+  return `<header class="cg-sh-head"><div><p class="cg-lbl">On open channels</p><h2>${contSideName(run, O.from)} offers ${O.kind === 'alliance' ? 'an alliance' : 'a truce'}</h2></div></header>
     <p class="cg-log">“${esc(O.line)}”</p><p>${contSideName(run, O.from)} (${docLabel(run.sides[O.from].doctrine)}) offers ${what}.</p>
     <div class="cg-btns"><button type="button" class="btn big primary cg-focus" data-x="yes">Accept</button><button type="button" class="btn big" data-x="no">Decline</button></div>`;
 }
 function cgOver() {
   const run = CG.run, R = run.reports[run.reports.length - 1], won = run.over.winner === 0;
-  return `<header class="cg-sh-head"><h2>${won ? 'Ithaca I secured' : run.over.winner < 0 ? 'Carrier dark' : 'The run is over'}</h2></header>
+  return `<header class="cg-sh-head"><div><p class="cg-lbl">Arrival clock: T+${run.turn}</p><h2>${won ? 'Ithaca I secured' : run.over.winner < 0 ? 'Carrier dark' : 'The run is over'}</h2></div></header>
     ${cgLog(R ? R.lines.slice(Math.max(0, R.lines.indexOf('§ The end of the run'))) : contEnding(run))}
     <div class="cg-btns"><button type="button" class="btn big primary cg-focus" data-x="again">New run</button><button type="button" class="btn big" data-x="camps">Campaigns</button><button type="button" class="btn big" data-x="back">Main menu</button></div>`;
 }
@@ -916,7 +1023,7 @@ function cgWeapons() {
     let btns = `<button type="button" class="btn small ${picking ? 'primary' : ''}" data-w="${t}" data-wa="pick">${picking ? 'Tap a territory in range' : a && !a.skip ? 'Change' : 'Pick a target'}</button><button type="button" class="btn small ghost" data-w="${t}" data-wa="skip">Skip</button>`;
     if (picking && CG.pickTo >= 0) btns = `<button type="button" class="btn small primary" data-w="${t}" data-wa="murmur">Quake the Murmur (−1)</button><button type="button" class="btn small" data-w="${t}" data-wa="fort">Crack their walls (−1)</button><button type="button" class="btn small ghost" data-w="${t}" data-wa="cancel">Cancel</button>`;
     const range = T.mega === 'lance' ? 'strikes a territory two borders away: −1 fortification, its groups −1 star' : 'quakes a neighbour: −1 Murmur, or −1 enemy fortification';
-    return `<div class="cg-weapon"><p><b>${name}</b> at ${esc(contName(t))} is charged and fires at the year's end: it ${range}. ${what}</p><div class="cg-weapon-btns">${btns}</div></div>`;
+    return `<div class="cg-weapon"><p class="cg-lbl"><span class="cg-led" aria-hidden="true"></span>Charged · fires at the year's end</p><p><b>${name}</b> at ${esc(contName(t))} is charged and fires at the year's end: it ${range}. ${what}</p><div class="cg-weapon-btns">${btns}</div></div>`;
   }).join('');
   el.querySelectorAll('[data-wa]').forEach((b) => { b.onclick = () => cgWeaponAct(+b.dataset.w, b.dataset.wa); });
 }
