@@ -3374,6 +3374,20 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
 - **Keyboard shortcut sheet:** press **/** during a game, or tap **Keys** in the pause menu. **/** or **Esc** closes
   it. The sheet pauses single-player games while open, and multiplayer play continues. **?** still opens **How to play**.
+- **Command Deck look (the game's interface):** `body.deck` (on by default in `index.html`) dresses the whole in-game
+  interface in Contingency's Command Deck look (ART_GUIDE.md, "Command Deck interface"; the "Command Deck in game" block
+  at the end of `style.css`): near-opaque glass panels with corner brackets and scanlines, labels and buttons in Chakra
+  Petch, numbers in the system monospace, the Missions' light in amber. It reskins the top bar, goal card, minimap
+  ("Survey"), Army Group cards, tools, messages, panels, selection bar, banners and the screens over a game (pause and
+  Settings, Statistics, How to play, Missions, Keys, the end, Boosts, multiplayer, saves); the main menu keeps its look.
+  Markup it adds: the callsign block first in the top bar on a wide screen (`#callsign`: `CALLSIGNS[ME]` in
+  `PLAYER_COLORS[ME]`, set in `updateHUD`; in multiplayer each player's own), the robot counter's names under the counts
+  (`#pop .pn`), the clock's time of day (`.ck-l`), each message's game time (`.toast[data-t]`, drawn by CSS), a label
+  line over each panel's name (`sheetEyebrow`, `SHEET_EYEBROW` in js/ui.js: "Construction · sites 1/6", "Make · Yours",
+  "Army group · priority 1 of 3"), and `body[data-sheet]` to light the tool whose panel is open. On an upright phone a
+  panel docks above the bottom bar instead of over it (`sheetMoved` measures from the panel's top), and the Army Group
+  cards are a row of small cards across the top left (`.agcards.row`, placed in `refreshAgCards`). Without the class the
+  old look comes back.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,

@@ -7356,10 +7356,42 @@ function openSheet(kind, id, html) {
   $('sheet').hidden = false;
   document.body.classList.add('sheet-open');
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
+  document.body.dataset.sheet = kind; // (the Command Deck look lights the tool whose panel is open)
   $('banner').hidden = true;
   markSheetKeys();
+  sheetEyebrow(kind, id);
   panelHelp(kind, id); // (its ? for How to play: js/polish.js)
   if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); }
+}
+
+/**
+ * The Command Deck look's label line over a panel's name: a status light and what kind of panel it is ("Construction"
+ * over Build, "Make · Yours" over a factory of yours). Plain words for the interface (LORE.md's: Command, survey,
+ * construction); none for a panel without a title.
+ */
+const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots',
+  goods: 'Command · Stores', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
+  move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral' };
+function sheetEyebrow(kind, id) {
+  const head = $('sheet-body').querySelector('.sheet-title'), h3 = head && head.querySelector('h3');
+  if (!h3 || head.querySelector('.sh-eye')) return;
+  let t = SHEET_EYEBROW[kind] || '', led = '';
+  if (kind === 'bld') {
+    const b = getE(id), g = b && BUILD_GROUPS.find((q) => q.types.includes(b.type));
+    if (!b) return;
+    t = (g ? g.name : 'Structure') + ' · ' + (b.owner === ME ? 'Yours' : b.owner < 0 || b.owner === undefined ? 'Neutral' : allies(ME, b.owner) ? 'Ally' : 'Rival');
+    if (b.owner >= 0 && b.owner !== ME && !allies(ME, b.owner)) led = ' red';
+  } else if (kind === 'build') {
+    t = `Construction · sites ${siteCount(ME)}/${MAX_SITES}`;
+  } else if (kind === 'agroup') {
+    const gs = agMine(), k = gs.findIndex((g) => g.id === id);
+    if (k >= 0) t = `Army group · priority ${k + 1} of ${gs.length}`;
+  } else if (kind === 'army' && UI.armyTab === 'air') t = SHEET_EYEBROW.air;
+  if (!t) return;
+  const e = document.createElement('span');
+  e.className = 'sh-eye'; e.setAttribute('aria-hidden', 'true');
+  e.innerHTML = `<i class="led${led}"></i>${esc(t)}`;
+  h3.parentNode.insertBefore(e, h3);
 }
 
 /*
@@ -7399,7 +7431,8 @@ function sheetSpot() {
  */
 function sheetMoved() {
   const s = $('sheet'), open = !s.hidden, bottom = open && $('sheet-grab').getClientRects().length > 0, side = open && !bottom && !isWide();
-  R.lift = bottom ? s.offsetHeight / R.h : 0;
+  const sTop = open ? s.getBoundingClientRect().top : R.h; // (above the tools on a phone in the Command Deck look, not over them)
+  R.lift = bottom ? (R.h - sTop) / R.h : 0;
   UI.glide = null;
   if (!(bottom || side) || (bottom && UI.sheetSize === 'full') || !S) return;
   const at = sheetSpot();
@@ -7411,7 +7444,7 @@ function sheetMoved() {
   let top = $('topbar').getBoundingClientRect().bottom, bot = R.h, left = 0, right = R.w;
   if (side) { left = $('bottombar').getBoundingClientRect().right; right = s.getBoundingClientRect().left; }
   else {
-    bot = R.h - s.offsetHeight - 22;
+    bot = sTop - 22;
     if (mm && mm.bottom > top) { if (bot - mm.bottom >= 130) top = mm.bottom + 26; else right = mm.left; }
   }
   const p = worldToScreen(at.x, at.y), m = Math.max(4, Math.min(R.cam.z * 0.75, (bot - top) / 3, (right - left) / 3));
@@ -7434,7 +7467,7 @@ function initSheetGrab() {
     const dy = e.clientY - d.y;
     if (!dragged && Math.abs(dy) < 8) return;
     dragged = true;
-    s.style.maxHeight = clamp(d.h - dy, 24, R.h - document.querySelector('.toprow').getBoundingClientRect().bottom - 6) + 'px';
+    s.style.maxHeight = clamp(d.h - dy, 24, s.getBoundingClientRect().bottom - document.querySelector('.toprow').getBoundingClientRect().bottom - 6) + 'px';
   });
   const end = (e) => {
     if (!d) return;
@@ -7457,6 +7490,7 @@ function closeSheet() {
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
   document.body.classList.remove('sheet-open', 'sheet-build');
+  delete document.body.dataset.sheet;
   UI.sheetKind = null;
   UI.sheetFor = 0;
   R.selected = 0;
@@ -9211,7 +9245,7 @@ function refreshArmyTab() {
   }
   const ags = agMine();
   h += `<div class="section-label">Army Groups <span class="label-note">${ags.length} of ${AGROUP.max}</span></div>
-    <div class="army-cmds">${ags.length < AGROUP.max ? '<button class="btn" id="ar-agnew" data-act="agnew">New group</button>' : ''}${ags.map((g) => `<button class="btn small ghost" data-act="agopen" data-n="${g.n}">${g.n} ${g.name}</button>`).join('')}</div>
+    <div class="army-cmds">${ags.length < AGROUP.max ? '<button class="btn" id="ar-agnew" data-act="agnew">New group</button>' : ''}${ags.map((g) => `<button class="btn small ghost ag-open" data-act="agopen" data-n="${g.n}"><span class="ag-badge" style="--agc:${agColor(g)}">${g.n}</span>${g.name}</button>`).join('')}</div>
     <p class="hint">Standing armies with their own order (Hold, Defend area, Patrol, Attack, Follow) and size: new units from the Bot Foundry fill them, by priority; the rest stay in the Reserve${rallyPostOf(ME) ? ', at the rally point' : ''}. Select warbots, then <b>Army group</b> on the selection bar to make one of them.</p>`;
   h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     <p class="hint">Warbots each Outpost keeps at home, sent from your Command Base (and replaced if lost). Set one Outpost on its own in its panel.</p>`;
@@ -9692,12 +9726,17 @@ function updateHUD() {
     else if (u.type === 'worker') { workers++; if (isIdleWorker(u)) idle++; }
   }
   $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers, trucks and Tankers` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
-  $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
-    ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span>${haulers}<span class="wide"> haulers</span>` +
-    (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
+  // (Each count with its name under it in the Command Deck look; .pn-l are the names, the old look shows the dots.)
+  const ph = `<span class="pn"><span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span><b>${workers}<small class="pn-free"> (${idle} free)</small></b><span class="pn-l">Workers</span></span>` +
+    ` <span class="pn"><span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span><b>${haulers}</b><span class="pn-l">Haulers</span></span>` +
+    (warOn() ? ` <span class="pn"><span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span><b>${war}</b><span class="pn-l">Warbots</span></span>` : '');
+  if ($('pop').innerHTML !== ph) $('pop').innerHTML = ph;
+  // The callsign block (Command Deck look): your callsign in your colour; in multiplayer, each player's own.
+  const cs = $('callsign');
+  if (cs && cs.dataset.k !== CALLSIGNS[ME] + PLAYER_COLORS[ME]) { cs.dataset.k = CALLSIGNS[ME] + PLAYER_COLORS[ME]; cs.style.setProperty('--pc', PLAYER_COLORS[ME]); $('callsign-name').textContent = callsign(ME); }
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)); // (a Contingency battle against the Murmur: dawn and the nests)
+  const ct = (todEnabled() ? `<small class="ck-l">${TOD_NAMES[tn]}</small>` : '') + '<span class="ck-v">' + tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)) + '</span>'; // (a Contingency battle against the Murmur: dawn and the nests)
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
@@ -9915,6 +9954,7 @@ function toast(text, kind, x, y) {
   }
   const el = document.createElement('div'), line = document.createElement('span');
   el.className = 'toast ' + (kind || 'info');
+  if (UI.inGame && S) el.dataset.t = fmtTime(S.time); // (the game time, shown before the line in the Command Deck look)
   line.textContent = text;
   el.appendChild(line);
   if (where) {
@@ -10133,6 +10173,17 @@ function refreshAgCards() {
   }
   const bb = $('bottombar'), br = bb && bb.getClientRects().length ? bb.getBoundingClientRect() : null;
   if (br && br.right > window.innerWidth - right - 200 && br.top > t) bottom = Math.min(bottom, br.top - 8);
+  // An upright phone in the Command Deck look: a row of small cards (badge and count) across the top left, under the
+  // goal card and beside the minimap; out of sight while a panel reaches up over it.
+  const row = document.body.classList.contains('deck') && matchMedia('(max-width: 699px) and (min-height: 520px)').matches;
+  el.classList.toggle('row', row);
+  if (row) {
+    const rt = Math.round(top - 2), rr = mr && mr.width && mr.bottom > rt ? Math.round(window.innerWidth - mr.left + 6) : 6;
+    el.style.top = rt + 'px'; el.style.right = rr + 'px'; el.style.maxHeight = '';
+    el.style.visibility = sr && sr.width && sr.top < rt + 52 ? 'hidden' : '';
+    return;
+  }
+  el.style.visibility = '';
   el.style.top = Math.round(t) + 'px';
   el.style.right = Math.round(right) + 'px';
   el.style.maxHeight = Math.max(52, Math.round(bottom - t)) + 'px';
