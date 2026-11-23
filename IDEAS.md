@@ -209,7 +209,7 @@ to play, The Murmur, "A nest fights back"; `lh/nest-retaliate-test.js`). The cal
   3 in Versus), and any colony building at any distance (the guards never go for buildings by themselves): a Mortar
   Pit or turret shelling the guards, a warbot or Railgunner firing from further off, a Bunker, a Missile from a Silo
   close by. **Howitzers and bombers can't hurt the Murmur at all** (their shells and bombs skip them, and a Mortar Pit
-  "can't reach down" to a nest), so they never stir a nest; letting a Howitzer shell a nest is open.
+  "can't reach down" to a nest), so they never stir a nest. **Decided (owner, Nov 23 2026): Mortar Pits and Howitzers must not destroy nests themselves;** they stay as they are (a Mortar can still shell the guards, which raises the alarm).
 - **Who comes:** its guards by day or night; at night also the plain packs up within 10 tiles of it (never a strike's,
   hunt's or form's, which keep to their part). By day there are no packs up, so only the guards (night-only packs kept).
 - **The shooter itself**, building or robot (a robot in a building: the building); Scuttlers batter a building to 1
