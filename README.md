@@ -444,10 +444,15 @@ any other game.
 - **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
-In a Custom Game with computer rivals, use **Rival difficulty** in the pause menu. Settler, Pioneer, Colonist, Commander and Warlord
-apply to all computer colonies from that point in the match. In multiplayer only the host can send the
-`rivalDifficulty` order, which takes effect on the same turn for everyone. Changing the setting updates AI pace
-and production without changing stock already on the map. Missions keep the level picked in the mission list.
+In a game with computer colonies, use **Rival difficulty** in the pause menu. Settler, Pioneer, Colonist, Commander and Warlord
+apply to all computer colonies from that point in the match (`rivalDifficultyTargets` in `js/orders.js`). In multiplayer only the
+host can send the `rivalDifficulty` order (the row is hidden for everyone else), which takes effect on the same turn for
+everyone, and every player gets a message naming who changed it. Changing the setting updates `S.difficulty` (which `aiLevel`
+and the rest of the AI read) and each computer colony's `mult` and think time, without changing stock already on the
+map. `S.diffLow` keeps the easiest level the rivals were at this game (hashed and saved): records and achievements go by
+it, so switching to Hard for the last minute of a win earns no Hard win. Hidden and refused where the level is fixed
+(`rivalDifficultyFixed`): Missions (the level picked in the mission list), Contingency battles (Ironman or not) and
+Observer mode.
 
 Solo games keep up to five minute-by-minute restore points on this device. Pick a point under **Restore points** in the pause menu (each listed by its game time and how long ago it was kept) and choose **Restore** to confirm. The same history is available after defeat or from the main menu. **Continue** also saves when you leave.
 Besides the autosave there are five named **save slots** (pause menu **Save → Slots**, main menu **Saved games**), and
@@ -1346,9 +1351,16 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
     menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
-    mound as a nest everywhere), the night windows are surges. The Deep also sends local packs of its own: two every 32 seconds below
-    75% armor, three every 24 seconds below two-thirds, and four every 16 seconds below one-third (while under its
-    live guard cap). Its violet pulses grow stronger and each burst rumbles deeper (`deepSurgeAt`/`deepSurgeTier`), and
+    mound as a nest everywhere), the night windows are surges. The Deep spouts more Murmur the nearer it is to death (`DEEP_SURGES`, `deepSurgeTier`):
+    below 75%, 50% and 25% of its armor its own packs come out of the mound (two every 32 seconds, three every 24,
+    four every 16, every third a Brute from the second step), while fewer than 5, 8 or 12 are out, counting those out
+    after a shooter on its alarm (`MURMUR.alarm`), so the alarm and the bursts never stack past the cap; and its
+    tunnels hold 1, 2 or 3 more exits at once, opened every 20, 15 or 10 s instead of 25 (`deepExitsDue`, also topped
+    up at once when it drops a step mid-surge), with packs 1.25, 1.5 or 1.75 times as big up through them (`deepPack`,
+    in `murmurWave` and the craft waves; still within `murmurRoom`). Under 12% it makes its last stand once
+    (`DEEP_LAST`, `deepLastStand`, `b.deepLast`): 10 Scuttlers and 3 Brutes out of the mound and 2 up through each of
+    its exits, after its alarm's shooter or the nearest colony, and every colony is told. Its violet pulses grow
+    stronger and each burst rumbles deeper (`deepSurgeAt`/`deepSurgeTier`), and
     `veinLure` still pulls packs and tunnels toward a lured colony's veins (`murmurPrey`, `murmurGoals`). In Colony,
     `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
     night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,
@@ -1544,7 +1556,12 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   up or a Ramp is finished); a fort captured is noted in `captureBuilding`. Totals that mustn't shrink with the cap
   are in `P.stats` (`lostBld`, `lostMat`, `lostIn`, `lostAboard`); open shortages in `P.dry`. A save from before the
   log starts it where it was loaded (`S.logFrom`).
-- **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
+- **Ammo:** warbots carry 10 shots (each Ammo is 5: `AMMO_SHOTS`; a Railgunner's 2 slugs of its 4) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant.
+  A reload fills to full (`reloadAmmo`): the spare shots of an Ammo it opened earlier (`u.ammoCr`, fewer than one
+  Ammo's worth) go in first, then a whole Ammo from the garrison if it's still short, and what of that doesn't fit
+  becomes its spare. No Ammo is made or lost: every Ammo taken is all its shots, loaded or spare (both lost with the
+  robot, as loaded shots always were). The same in every garrison, Bunkers and Keeps included (their warbots reload
+  inside after every shot). Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
   On an attack, one that runs dry while the target stands and squad-mates are still on it goes to reload at a garrison
   with Ammo within `RELOAD_REACH` (16) tiles (a Torch: refills where Fuel is kept) and comes back, once per attack

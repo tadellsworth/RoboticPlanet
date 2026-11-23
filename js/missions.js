@@ -1935,7 +1935,7 @@ const MISSIONS = [
     id: 'supply', name: 'Supply Lines', chapter: 'War',
     brief: 'Warbots win nothing on empty magazines. Keep the Ammo flowing, mend the wounded and take the rival base.',
     intro: [
-      'An <b>Ammo Plant</b> packs Alloy and Cement into Ammo (5 shots each). Haulers stock your Command Base and Outposts.',
+      'An <b>Ammo Plant</b> packs Alloy and Cement into Ammo (5 shots each; a reload fills a warbot up). Haulers stock your Command Base and Outposts.',
       'A <b>Repair Station</b> mends hurt robots with Alloy, three at a time.',
       'An Outpost near the front can be the <b>rally point</b>, where new warbots gather.',
       '<b>Army</b> → <b>Hold ground</b> plants a flag: by their roads warbots tear them up, beside a building they storm it.',

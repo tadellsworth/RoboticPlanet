@@ -2095,7 +2095,8 @@ function initDialogs() {
 
 function syncRivalDifficulty() {
   const diff = $('p-difficulty');
-  $('p-difficulty-row').hidden = !S || S.winner >= 0 || !!S.mission || !!UI.watch ||
+  // (hidden where the level is fixed, a mission, a Contingency battle or a watched game, and for everyone but the host)
+  $('p-difficulty-row').hidden = !S || S.winner >= 0 || rivalDifficultyFixed() || !!UI.watch ||
     (MP.on && !mpIsHost()) || !rivalDifficultyTargets().length;
   if (S) diff.value = S.difficulty;
 }
@@ -9567,7 +9568,7 @@ function refreshSheet() {
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
       (BOTS[u.type].arc ? `<div class="kv"><span>Capacitors</span><span>${Math.floor(u.gel ?? ARC.cells)} / ${ARC.cells} bolts${(u.gel ?? ARC.cells) < 1 ? ' (empty: going to recharge with Crystal)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? ARC.cells) / ARC.cells)}%;background:#8fd8ff"></div></div>` : '') +
-      (u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].railgun ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? botMag(u.type)} / ${botMag(u.type)} ${BOTS[u.type].railgun ? 'slugs' : 'shots'}${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (u.type === 'warbot' || BOTS[u.type].flank || BOTS[u.type].railgun ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? botMag(u.type)} / ${botMag(u.type)} ${BOTS[u.type].railgun ? 'slugs' : 'shots'}${u.ammoCr > 0 ? ` (+${u.ammoCr} spare for its next reload)` : ''}${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (BOTS[u.type].railgun && u.rc > S.time ? '<div class="kv"><span>Rail</span><span>charging</span></div>' : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +

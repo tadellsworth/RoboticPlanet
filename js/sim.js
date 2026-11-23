@@ -5459,7 +5459,7 @@ function reloadArmy(u, b) {
     u.gel = Math.min(tk.cap, (u.gel ?? 0) + tk.per);
     return true;
   }
-  return (u.ammo ?? botMag(u.type)) <= botMag(u.type) - botAmmoShots(u.type) ? reloadAmmo(u, b) : false;
+  return reloadAmmo(u, b);
 }
 
 /* ------------------------------------------------------------------ the Skirmisher, the Arc Caster and the Railgunner */
@@ -7830,12 +7830,24 @@ function takeArmed(b, posted, lead) {
   return null;
 }
 
-/** Reload a warbot from a garrison's Ammo (one Ammo = AMMO_SHOTS shots). */
+/**
+ * Reload a warbot at a garrison (a Command Base, Outpost, Bunker, Keep...): one Ammo is AMMO_SHOTS shots (a
+ * Railgunner's ammoShots slugs). It fills to a full load: the shots it still has spare from a crate it opened earlier
+ * (u.ammoCr, fewer than one Ammo's worth) go in first, then a whole Ammo from the garrison's stock if it is still short;
+ * what of that Ammo doesn't fit rides along in u.ammoCr for the next reload. No Ammo is made or lost on the way: every
+ * Ammo taken is all its shots, in the gun or spare. True if it took any.
+ */
 function reloadAmmo(u, b) {
-  if (!b || b.owner !== u.owner || !BDEFS[b.type].mil || !((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
+  if (!b || b.owner !== u.owner || !BDEFS[b.type].mil) return false;
+  const mag = botMag(u.type), have = u.ammo ?? mag;
+  if (have >= mag) return false;
+  if (u.ammoCr > 0) { const k = Math.min(mag - have, u.ammoCr); u.ammo = have + k; u.ammoCr -= k; return true; }
+  if (!((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
   bump(b.stock, 'ammo', -1);
   usedGood(b.owner, 'ammo', 1);
-  u.ammo = Math.min(botMag(u.type), (u.ammo ?? 0) + botAmmoShots(u.type));
+  const per = botAmmoShots(u.type), k = Math.min(mag - have, per);
+  u.ammo = have + k;
+  u.ammoCr = per - k;
   return true;
 }
 
@@ -12471,6 +12483,46 @@ function deepSurgeTier(b) {
   return 0;
 }
 
+/** The Deep's step (DEEP_SURGES) for nest b: its extra exits, how often one opens, its packs' size; nothing for any other nest. */
+function deepStep(b) { const t = deepSurgeTier(b); return t ? DEEP_SURGES[t - 1] : null; }
+/** How big a pack of `size` up through an exit of nest b is (the Deep's step makes its packs bigger). */
+function deepPack(b, size) { const st = deepStep(b); return st ? Math.round(size * st.pack) : size; }
+/** The exits nest b is due tonight (night n): as many as the night opens, up to the most it may hold, the Deep's step more. */
+function deepExitsDue(b, n, C) {
+  const open = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id).length, more = (deepStep(b) || { exits: 0 }).exits;
+  return Math.max(0, Math.min(murmurBy(C.exits, n) + more, murmurMaxExits(n, C) + more - open));
+}
+
+/**
+ * The Deep's last stand (DEEP_LAST): the mound under `health` of its armor, once a game (b.deepLast). A great wave
+ * pours out of the mound and up through each of its open exits, after the colonies' nearest (whoever shot at it last,
+ * if it can), and every colony is told. Only where the Murmur are in the game.
+ */
+function deepLastStand(b) {
+  if (b.deepLast || b.dead || b.type !== 'mound' || !murmurCfg() || b.armor > BDEFS.mound.armor * DEEP_LAST.health) return;
+  b.deepLast = 1;
+  const L = DEEP_LAST, until = S.time + L.last, c = bCentre(b);
+  const foe = b.alT > S.time ? nestAlarmFoe(b) : null, f = foe ? nestFoeXY(foe) : null;
+  const aim = (x, y) => f || murmurPrey(x, y, L.reach) || wildPrey(x, y, L.reach);
+  const send = (from, type, g) => {
+    const u = spawnCritter(from, type, g ? { type: 'raid', x: Math.floor(g.x), y: Math.floor(g.y), until } : null);
+    u.nest = b.id; u.deepGuard = true;
+    if (from !== b) u.exit = from.id;
+  };
+  const g0 = aim(c.x, c.y);
+  for (let k = 0; k < L.brutes + L.scuttlers; k++) send(b, k < L.brutes ? 'brute' : 'scuttler', g0);
+  for (const e of S.buildings) {
+    if (e.dead || e.type !== 'burrow' || e.nest !== b.id) continue;
+    const g = aim(e.x + 0.5, e.y + 0.5);
+    for (let k = 0; k < L.perExit; k++) send(e, 'scuttler', g);
+    addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1 });
+  }
+  addFx('ring', c.x, c.y, { color: '#d797ff', r: 4, life: 1.6 });
+  sfx('deepsurge', c.x, c.y, DEEP_SURGES.length + 1);
+  for (const P of S.players) if (!P.absent && !isWild(P.id)) postMsg(P.id, 'The Deep\'s mound is splitting open, and the Deep is making its last stand: a great wave of Murmur pours out of the mound and its tunnels. Hold, then finish it.', b.x, b.y, 'warn');
+  if (!S.players[ME] || !S.players[ME].absent) sfx('alert');
+}
+
 /**
  * A nest: keeps its guards up and grows. Runs once a second. It sends no packs of its own, in Colony as in Versus (the
  * owner's decision): its Murmur come up through the tunnels at night (murmurTick). Days are for striking the nests,
@@ -12489,13 +12541,16 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  if (b.type === 'mound') harrowMound(b); // (almost down: two Harrows burst out of it)
+  if (b.type === 'mound') { harrowMound(b); deepLastStand(b); } // (almost down: two Harrows burst out of it; nearer death, its last stand)
   const tier = deepSurgeTier(b);
   if (tier && (S.time >= (b.deepSurgeAt || 0) || tier > (b.deepSurgeTier || 0))) {
     const surge = DEEP_SURGES[tier - 1];
+    // (a step down mid-surge: its extra exits are due at once, not at the next nightfall)
+    if (tier > (b.deepSurgeTier || 0) && S.mur && S.mur.night) b.exitsDue = Math.max(b.exitsDue || 0, deepExitsDue(b, murmurNights(S.time), murmurCfg()));
     b.deepSurgeAt = S.time + surge.every;
     b.deepSurgeTier = tier;
-    const live = S.bots.filter((u) => !u.dead && u.nest === b.id && u.deepGuard).length;
+    // (those out after whoever shot at it count too: the alarm and the bursts never stack past the cap)
+    const live = S.bots.filter((u) => !u.dead && u.nest === b.id && (u.deepGuard || (u.task && u.task.type === 'avenge' && u.task.n === b.id))).length;
     const count = Math.min(surge.size, surge.cap - live);
     if (count > 0) {
       const target = wildPrey(b.x + 0.5, b.y + 0.5, 18);
@@ -12957,7 +13012,7 @@ function murmurTick() {
     if (b.exitsDue > 0 && S.time >= (b.exitAt || 0)) {
       // (Up to the cap, where there is one: past it, the exit waits for one to be collapsed.)
       const room = murmurExitCap() > S.buildings.filter((e) => !e.dead && e.type === 'burrow').length;
-      if (room && murmurOpenExit(b)) { b.exitsDue--; b.exitAt = S.time + 25; } else b.exitAt = S.time + 10;
+      if (room && murmurOpenExit(b)) { b.exitsDue--; b.exitAt = S.time + (deepStep(b) || { gap: 25 }).gap; } else b.exitAt = S.time + 10;
     }
   }
   // The packs: `waves` a night, the first a minute after nightfall (the night's first exits are open by then), the
@@ -12999,8 +13054,7 @@ function murmurNightfall(n) {
       if (share > 0) b.br.push({ h: murmurFrom(k, goals[g]), g: goals[g], k: share });
     }
     b.tunAcc = 0; b.tunRate = budget / 120; // (dug in the first two minutes of the night)
-    const open = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id).length;
-    b.exitsDue = Math.max(0, Math.min(murmurBy(C.exits, n), murmurMaxExits(n, C) - open));
+    b.exitsDue = deepExitsDue(b, n, C); // (the Deep's mound, nearer death: more: DEEP_SURGES)
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
@@ -13247,7 +13301,7 @@ function murmurWave(n, C) {
     if (!nest || nest.dead) continue;
     if (nest.sQuiet === n) continue; // (shaken by a Sundering Ray's Strike the Deep: no raid from it tonight)
     // (a Sundering Ray they heard within SUNDER.lure tiles: they go for it first)
-    const lure = sunderLure(nest, n), g = lure ? { x: lure.x + 1, y: lure.y + 2, owner: lure.owner } : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey), sz = lure ? sunderPack(size) : size;
+    const lure = sunderLure(nest, n), g = lure ? { x: lure.x + 1, y: lure.y + 2, owner: lure.owner } : murmurPrey(e.x + 0.5, e.y + 0.5, MURMUR.prey), sz = deepPack(nest, lure ? sunderPack(size) : size);
     if (!g || up + made + sz > room) continue;
     for (let k = 0; k < sz; k++) {
       const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: g.x, y: g.y, until, night: 1 });
@@ -13615,7 +13669,7 @@ function murmurCraftWave(n, C, wave) {
     // A Sundering Ray they heard within SUNDER.lure tiles: this exit's pack goes for it first, half again bigger.
     const lure = sunderLure(nest, n);
     if (lure && murmurRoute(e, lure.x + 1, lure.y + 2, SUNDER.lure * 1.6)) {
-      const sz = Math.min(sunderPack(size), room - up), task = { type: 'raid', x: lure.x + 1, y: lure.y + 2, until, night: 1 };
+      const sz = Math.min(deepPack(nest, sunderPack(size)), room - up), task = { type: 'raid', x: lure.x + 1, y: lure.y + 2, until, night: 1 };
       for (let k = 0; k < sz; k++) {
         const u = spawnCritter(e, k < brutes ? 'brute' : 'scuttler', { ...task });
         u.nest = nest.id; u.exit = e.id;
@@ -13631,7 +13685,7 @@ function murmurCraftWave(n, C, wave) {
     if (!pl && (!g || dr?.pl.p === g.owner || !murmurRoute(e, g.x, g.y))) continue;
     const task = pl ? { type: 'rally', x: pl.rx, y: pl.ry, fx: pl.tx, fy: pl.ty, until, night: 1 } : { type: 'raid', x: g.x, y: g.y, until, night: 1 };
     // (later in the game, bigger packs for a bigger colony: murmurPressure; as before on the first nights)
-    const sz = Math.max(1, Math.min(murmurPack(size, pl ? pl.p : g.owner), room - up)), br = n >= C.brutes ? Math.max(brutes, Math.floor(sz / 4)) : 0;
+    const sz = Math.max(1, Math.min(deepPack(nest, murmurPack(size, pl ? pl.p : g.owner)), room - up)), br = n >= C.brutes ? Math.max(brutes, Math.floor(sz / 4)) : 0;
     for (let k = 0; k < sz; k++) {
       const u = spawnCritter(e, k < br ? 'brute' : 'scuttler', { ...task });
       u.nest = nest.id; u.exit = e.id;
@@ -19650,13 +19704,13 @@ function hashState() {
   const num = (v) => { if (typeof v !== 'number') { int(v === undefined ? -7 : v === null ? -8 : v === true ? -9 : v === false ? -10 : -11); return; } _hv[0] = v; int(_hu[0]); int(_hu[1]); };
   const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
   const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
-  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); num(S.settings?.size);
+  int(S.tick); num(S.time); int(S.nextId); int(S.winner); str(S.difficulty); str(S.diffLow); num(S.settings?.size);
   if (S.settings?.biome2) { str(S.settings.biome2); num(S.settings.biomeBoundary); }
   if (S.mission?.id === 'arterial') { int(S.mission.arterialDepot); int(S.mission.arterialRuns); }
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
-    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0); num(u.task && u.task.pace); // (marching together: marchTogether)
+    num(u.ammo); int(u.ammoCr || 0); int(u.deepGuard ? 1 : 0); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0); num(u.task && u.task.pace); // (marching together: marchTogether)
     if (u.rc || u.dashT) { num(u.rc); int(u.rcTo || 0); num(u.rcX); num(u.rcY); num(u.dashT); num(u.dashCd); } // (a Railgunner charging, a Skirmisher's dash)
     if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
@@ -19741,7 +19795,7 @@ function hashState() {
     if (b.magEdit || b.magEditSite || b.magFar) { int(b.id); int(b.magEdit || 0); int(b.magEditSite || 0); int(b.magFar || 0); } // (a bends edit going up)
     if (b.magMore || b.magNear || b.magKey || b.magNext) { int(b.id); for (const id of b.magMore || []) int(id); num(b.magNear || 0); int(b.magKey || 0); if (b.magNext) { int(b.magNext[0]); int(b.magNext[1]); } } // (hubs, line keys, a route via a hub)
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
-    if (b.deepSurgeTier) { int(b.id); int(b.deepSurgeTier); num(b.deepSurgeAt); }
+    if (b.deepSurgeTier || b.deepLast) { int(b.id); int(b.deepSurgeTier || 0); num(b.deepSurgeAt || 0); int(b.deepLast || 0); }
     if (b.crater) { int(b.id); int(b.nest || 0); } // (a Harrow's crater, a tunnel exit)
     if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
   }

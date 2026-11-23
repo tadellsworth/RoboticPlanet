@@ -924,10 +924,17 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 - **The main base beacon doesn't go so far up the screen at night** (BUILT Nov 20 2026: shorter, dimmer beams).
 - **Night lights: fewer bugs and less clutter** (BUILT Nov 18 2026: under half the moths round each light, smaller,
   none on a phone or on Saver; Nov 20, the lamps themselves fitted to their buildings and none on dead or dark ones).
-- **Change the AI's difficulty mid-game** (a setting on the pause menu; rivals' difficulty is read from `P.diff`;
-  lockstep: it must be an order so every device agrees, and a note in a multiplayer game).
-- **The Deep spouts more Murmur the nearer it is to death** (the Hollow's mound: raise its exit/pack rate and size as its
-  armor falls; `aiMurmur`/the nest code in js/sim.js; a last-stand surge).
+- **Change the AI's difficulty mid-game** (BUILT Nov 23 2026): the pause menu's **Rival difficulty** (one setting for
+  every computer colony, the order `rivalDifficulty`, in lockstep; host only in multiplayer, every player told who
+  changed it), hidden and refused in Missions, Contingency battles (Ironman or not) and Observer mode. `S.diffLow` keeps
+  the easiest level played, which records and achievements go by. *Open:* a level for each rival apart.
+- **The Deep spouts more Murmur the nearer it is to death** (BUILT Nov 23 2026): steps at 75%, 50% and 25% of its armor
+  (its own bursts, more exits opened faster, packs 1.25/1.5/1.75 times as big; `DEEP_SURGES`), and a last stand under
+  12% (`DEEP_LAST`: one big wave out of the mound and its exits, everyone warned). The alarm's avengers count toward the
+  bursts' cap; all packs stay within `murmurRoom`. See README (the Hollow). *Open:* the owner to play it and tune.
+- **Reloads fill to full** (BUILT Nov 23 2026): a warbot used to take an Ammo only when all 5 shots fitted, so it sat at
+  about 6 of 10 after restocking. Now the shots that don't fit ride along as spare (`u.ammoCr`) for its next reload; no
+  Ammo made or lost. In every garrison, Bunkers and Keeps too (`reloadAmmo`; README, Ammo).
 - **A rolling autosave to go back to** (BUILT Nov 18–22 2026): the last 5 restore points, a game minute apart, kept in
   localStorage (the oldest dropped when storage is full); the pause menu's **Restore points** item lists each by game
   time and how long ago ("14:00 in game · 3 min ago") and loads one after a confirm; also on the game-over screen and

@@ -23,8 +23,14 @@ function liveE(id) { return liveB(id) || liveU(id); }
 /** How many warbots an order sends: `want` of the `avail` that can go (-1: all of them). */
 function armyN(want, avail) { return want < 0 ? avail : Math.min(avail, want | 0); }
 
-/** The computer colonies affected by the shared rival difficulty. Human seats can reconnect. */
+/**
+ * The computer colonies the pause menu's Rival difficulty changes (ORDERS.rivalDifficulty): every computer colony still
+ * in, not a person's seat (in multiplayer one can reconnect). None where the level is fixed: a mission, a Contingency
+ * battle (Ironman or not: its campaign set it), a watched game.
+ */
+function rivalDifficultyFixed() { return !!(S.mission || S.contingency || S.watch); }
 function rivalDifficultyTargets() {
+  if (rivalDifficultyFixed()) return [];
   const multiplayer = typeof MP !== 'undefined' && MP.on;
   const humanColonies = multiplayer ? new Set(MP.humans.map(mpCol)) : null;
   return S.players.filter((r) => r.ai && !r.out && !r.absent && !isWild(r.id) && !humanColonies?.has(r.id));
@@ -32,7 +38,7 @@ function rivalDifficultyTargets() {
 
 const ORDERS = {
   rivalDifficulty(p, diff) {
-    if (S.mission || S.watch || S.winner >= 0 || !human(p) || !ownKey(DIFFICULTY, diff)) return false;
+    if (rivalDifficultyFixed() || S.winner >= 0 || !human(p) || !ownKey(DIFFICULTY, diff)) return false;
     if (typeof MP !== 'undefined' && MP.on) {
       // Check the sender's person seat, including co-op. Current connection status can be ahead of this turn.
       const host = MP.humans.find((seat) => !mpAI(seat, MP.turn));
@@ -42,6 +48,10 @@ const ORDERS = {
     if (!rivals.length) return false;
     if (S.difficulty === diff) return true;
     const after = DIFFICULTY[diff];
+    // (the easiest level they were at this game, S.diffLow: records and achievements go by it, so Hard for the last
+    // minute of a win is no Hard win)
+    if (DIFF_ORDER.indexOf(diff) < DIFF_ORDER.indexOf(S.diffLow || S.difficulty)) S.diffLow = diff;
+    else if (!S.diffLow) S.diffLow = S.difficulty;
     S.difficulty = diff;
     for (const r of rivals) {
       // (keeping its personality's economy bonus, as newGame gives it, and the Tools tech's)
@@ -49,7 +59,8 @@ const ORDERS = {
       r.mult = after.mult * econ * (tech(r.id, 'tools') ? 1.15 : 1);
       r.aiT = Math.min(r.aiT || 0, after.think);
     }
-    for (const r of S.players) if (!r.ai && !r.absent) postMsg(r.id, `Rival difficulty is now ${after.label}.`, undefined, undefined, 'info');
+    const who = typeof MP !== 'undefined' && MP.on ? `${playerName(p)} set the rival difficulty to ${after.label}` : `Rival difficulty is now ${after.label}`;
+    for (const r of S.players) if (!r.ai && !r.absent && !isWild(r.id)) postMsg(r.id, `${who}: the computer colonies play at that level from now on.`, undefined, undefined, 'info');
     return true;
   },
   /**

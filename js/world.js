@@ -5590,6 +5590,7 @@ function checkSave(o) {
   if (o.settings?.size != null && (!Number.isInteger(o.settings.size) || !SIZE_PRESETS[o.settings.size])) bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
+  if (o.diffLow != null && !ownKey(DIFFICULTY, o.diffLow)) bad(); // (the easiest level the rivals were at: ORDERS.rivalDifficulty)
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
   // (as many colonies as there are colours, and the Murmur's own slot after them: see murmurStart)
   if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length + (o.wildSlot ? 1 : 0) || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
@@ -5762,6 +5763,10 @@ function checkSave(o) {
     if (b.alT != null && !(Number.isFinite(b.alT) && isNestB(b))) bad();
     if (b.alId != null && !(Number.isSafeInteger(b.alId) && b.alId >= 0)) bad();
     if (b.alMsg != null && !Number.isFinite(b.alMsg)) bad();
+    // the Deep's mound nearer death (DEEP_SURGES): its step, when its next burst comes, its last stand made (DEEP_LAST)
+    if (b.deepSurgeTier != null && !(Number.isInteger(b.deepSurgeTier) && b.deepSurgeTier >= 0 && b.deepSurgeTier <= DEEP_SURGES.length && b.type === 'mound')) bad();
+    if (b.deepSurgeAt != null && !Number.isFinite(b.deepSurgeAt)) bad();
+    if (b.deepLast != null && !(b.deepLast === 1 && b.type === 'mound')) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -5771,6 +5776,8 @@ function checkSave(o) {
     if (u.task?.arterialTiles != null && (!Number.isSafeInteger(u.task.arterialTiles) || u.task.arterialTiles < 0)) bad();
     if (u.idleSince != null && (!Number.isFinite(u.idleSince) || u.idleSince < 0)) bad();
     if (u.stunT != null && !Number.isFinite(u.stunT)) bad();
+    if (u.ammoCr != null && !(Number.isInteger(u.ammoCr) && u.ammoCr >= 0 && u.ammoCr < botAmmoShots(u.type))) bad(); // (the spare shots of a part-used Ammo: reloadAmmo)
+    if (u.deepGuard != null && u.deepGuard !== true) bad(); // (one of the Deep's own defenders: DEEP_SURGES)
     // A creature fighting an armed robot (its id, until when) or falling back from one (how often tonight): murmurThreat.
     if (u.task?.thr != null && !(Number.isSafeInteger(u.task.thr) && u.task.thr >= 0)) bad();
     if (u.task?.av != null && !(Number.isInteger(u.task.av) && u.task.av >= 0 && u.task.av <= 99)) bad();

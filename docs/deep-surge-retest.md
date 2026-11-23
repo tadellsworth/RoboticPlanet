@@ -1,5 +1,7 @@
 # The Deep surge retest
 
+*Superseded on Nov 23 2026: the steps are now at 75%, 50% and 25% of its armor, its tunnels spout more too, and it makes a last stand under 12% (README, the Hollow; IDEAS.md).*
+
 Headless computer vs. computer on the Hollow, with two Normal rivals, Active Murmur, and a 75-minute game-time cutoff. The baseline is the working branch immediately after the upstream merge. The only simulation change in the retest is the Deep's defense bursts. Colony numbers are the in-game one-based slots.
 
 | Size | Seed | Before | After |

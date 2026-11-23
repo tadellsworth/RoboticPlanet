@@ -455,7 +455,7 @@ function metaStormTick() {
     if (Q.out && !META.out[Q.id]) {
       META.out[Q.id] = true;
       const most = Math.max(0, ...(META.near[Q.id] || []));
-      if (L && !L.dead && L.owner === ME && most >= STORM_MIN && S.difficulty !== 'easy' && metaCounts()) metaEarn('storm');
+      if (L && !L.dead && L.owner === ME && most >= STORM_MIN && (S.diffLow || S.difficulty) !== 'easy' && metaCounts()) metaEarn('storm');
     }
   }
 }
@@ -514,7 +514,7 @@ function metaGameOver() {
       metaRecordsTick();
       const R0 = metaRecords();
       if (won) {
-        const shape = metaShape(), diff = S.difficulty, t = Math.floor(S.time), mods = metaMods();
+        const shape = metaShape(), diff = S.diffLow || S.difficulty, t = Math.floor(S.time), mods = metaMods();
         const row = R0.fast[shape] = R0.fast[shape] || {}, old = row[diff];
         // (a modifier that changes the pace, Fragile robots, keeps it out of the fastest wins)
         const pace = (mods || []).filter((k) => MODS[k].pace);

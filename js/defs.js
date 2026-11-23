@@ -911,12 +911,24 @@ const HOLLOW = {
   deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
   relics: { alloy: [3, 5], chip: [1, 2] },
 };
-// The Deep's local defenders, from its first cracks to critical damage.
+/*
+ * The Deep spouts more Murmur the nearer it is to death (deepSurgeTier and updateNest in js/sim.js; the owner's call,
+ * Nov 23 2026). Under `health` of its armor (75%, 50%, 25%) the mound is at that step:
+ *   every, size, cap  its own bursts: `size` defenders out of the mound every `every` seconds, at most `cap` of them up
+ *                     at once (the Scuttlers and Brutes out after whoever shot at it, MURMUR.alarm, count toward the
+ *                     cap too, so an alarm and the bursts never stack past it)
+ *   exits             its tunnels: that many more exits open and stay open at once (one opened every `gap` seconds,
+ *                     not 25), and each pack up through them is `pack` times as big; all within the Murmur's usual
+ *                     number up at once (murmurRoom)
+ * DEEP_LAST: under `health` its last stand, once: `scuttlers` and `brutes` pour out of the mound and `perExit` up
+ * through each of its open exits, all after the colonies' nearest, and every colony is told.
+ */
 const DEEP_SURGES = [
-  { health: 0.75, every: 32, size: 2, cap: 5 },
-  { health: 2 / 3, every: 24, size: 3, cap: 8 },
-  { health: 1 / 3, every: 16, size: 4, cap: 12 },
+  { health: 0.75, every: 32, size: 2, cap: 5, exits: 1, gap: 20, pack: 1.25 },
+  { health: 0.5, every: 24, size: 3, cap: 8, exits: 2, gap: 15, pack: 1.5 },
+  { health: 0.25, every: 16, size: 4, cap: 12, exits: 3, gap: 10, pack: 1.75 },
 ];
+const DEEP_LAST = { health: 0.12, scuttlers: 10, brutes: 3, perExit: 2, reach: 30, last: 90 };
 /**
  * Bloom veins (R_VEIN, the Hollow): cut down to nothing, a vein grows back in `regrow` seconds (the Bloom spreads back
  * along its ridge). Cutting veins draws the Murmur: a Harvester that cut one in the last `lure` seconds looks `pull`
