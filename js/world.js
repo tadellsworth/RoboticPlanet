@@ -226,8 +226,8 @@ function generateMap(seed, W, H, cfg) {
   // Crossroads: in a corner quarter (with four, in the corner of the bottom-left quarter, as far in from both edges).
   // (Long Haul 2v2: at the south end, about 21 tiles from the ally's base beside it, close enough to share roads.)
   // (Passenger Town for four: each colony on an edge, a little to the left of its middle, in front of an avenue: townQuad.)
-  const qc = quad ? Math.max(10, Math.round(hw * 0.42)) : 0, edge4 = quad && SH.city;
-  const bx = edge4 ? hw - 1 - townQuad(W).off : quad ? qc : h4 ? clamp(Math.round(hw - 11), 9, hw - 9) : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad && !edge4 ? H - 1 - qc : H - 7;
+  const qc = quad ? Math.max(10, Math.round(hw * 0.42)) : 0, edge4 = quad && (SH.city || SH.dam); // (The Dam for four: each on an edge, at its middle)
+  const bx = edge4 ? hw - 1 - (SH.city ? townQuad(W).off : 0) : quad ? qc : h4 ? clamp(Math.round(hw - 11), 9, hw - 9) : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad && !edge4 ? H - 1 - qc : H - 7;
   const bases = [{ x: bx, y: by }];
   if (np === 2) bases.push({ x: W - 1 - bx, y: H - 1 - by });
   else if (h4) for (const t of orbit(id(bx, by)).slice(1)) bases.push({ x: t % W, y: (t / W) | 0 });
@@ -1144,7 +1144,7 @@ function generateMap(seed, W, H, cfg) {
   const shapeExtras = () => {
     if (h4) haul4Shape();
     else if (quad) {
-      if (SH.twin || SH.city) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is)
+      if (SH.twin || SH.city || SH.dam) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is)
       if (SH.pinwheel) pinwheelShape();
       else if (SH.isles4) isles4Shape();
       else crossShape4();
@@ -2081,10 +2081,165 @@ function generateMap(seed, W, H, cfg) {
     if (RICH_TYPES.includes(res[t])) amt[t] = clamp(Math.round(amt[t] * 1.6), 1, 255);
   }
   const any = (arr) => { for (let t = 0; t < N; t++) if (arr[t]) return arr; return null; };
-  return {
+  const out = {
     terrain, res, amt, grow, elev, ramp, fert, bases: spare ? [bases[0], bases[2], bases[3]] : bases, spare, choke: choke ? chokeInfo.map((ts) => ts.slice()) : null,
     lava: any(lavaA), ford: any(fordA), tidal: any(tidalA), fault: any(faultA), volcano: volcanoAt,
   };
+  if (SH.dam) damShape(out, seed, W, H, cfg); // (The Dam: the shelf, the reservoirs and their dams, laid over the flat land)
+  return out;
+}
+
+/* ------------------------------------------------------------------ The Dam */
+
+/**
+ * Each colony's frame on The Dam (SHAPE_PRESETS dam), for `np` colonies: for tile (i, j), [u, v], u from the middle of
+ * the map toward that colony's base and v across. The frames are the map's own turns (the half turn for two, a quarter
+ * turn for four, a third for three), so a tile and its twin on another side get the same numbers in their own frames,
+ * to the last bit (two and four): anything laid out by (u, v) in every frame is the same on every side.
+ */
+function damFrames(W, H, np) {
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2, out = [];
+  for (let k = 0; k < np; k++) {
+    if (np === 3) { const a = -k * (2 * Math.PI) / 3, c = dcos(a), s = dsin(a); out.push((i, j) => { const dx = i - ccx, dy = j - ccy; return [dx * s + dy * c, dx * c - dy * s]; }); }
+    else if (np === 4) out.push([(i, j) => [j - ccy, i - ccx], (i, j) => [ccx - i, j - ccy], (i, j) => [ccy - j, ccx - i], (i, j) => [i - ccx, ccy - j]][k]);
+    else out.push(k ? (i, j) => [ccy - j, ccx - i] : (i, j) => [j - ccy, i - ccx]);
+  }
+  return out;
+}
+
+/**
+ * The Dam: lay the high ground, the reservoirs and their dams over the flat map m (generateMap's, its bases placed).
+ * In every colony's frame (damFrames): a shelf one level up runs from behind the middle of the map to `rim` (DAM.rim of
+ * the way to its base, DAM.room short of it at least), DAM.shelf of the map wide each side, its edges wobbling; the
+ * shelves meet in the middle as one high ground. On each shelf a reservoir (water, one level up), its throat reaching
+ * the front edge, where the dam (rock, under its art) closes a notch between two crags; below it a short gorge between
+ * two more opens onto the valley. Two ramps up, one at each front corner of the shelf, and a rich Crystal field on
+ * each side of the lake. Anything cut off by the cliffs becomes crag. Then, from the dam's foot, the ground its flood
+ * would cover: the valley's open ground, fanning out DAM.spread a tile, stopping DAM.keep short of the Command Base
+ * (by steps over the map, round crags), each tile with when the front reaches it (its distance from the dam's foot), and
+ * the river it leaves down the middle (to DAM.chan of the way, ending in a pool). Writes m.dam: S.dam for newGame.
+ */
+function damShape(m, seed, W, H, cfg) {
+  const N = W * H, np = m.bases.length, fr = damFrames(W, H, np);
+  const { terrain, res, amt, elev, ramp, fert, grow } = m;
+  if (!m.ford) m.ford = new Uint8Array(N);
+  const ford = m.ford, RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
+  const [Db] = fr[0](m.bases[0].x, m.bases[0].y);
+  const rim = Math.min(Db * DAM.rim, Db - DAM.room), ws = clamp(Math.round(Db * DAM.shelf), 6, 11);
+  const au = Math.max(2.5, rim * 0.3), av = ws - 2.5, ul = rim - 1.5 - au, G = DAM.gap;
+  const sW = seed * 41 + 17;
+  const wob = (u, v) => (fbm(u / 4.5, v / 4.5, sW, 2) - 0.5) * 3;
+  const r0 = Math.max(ws - 3.5, G + 3), rampBand = (v) => Math.abs(v) >= r0 && Math.abs(v) < r0 + 2; // (two tiles wide)
+  // What a tile is in frame f's own layout: 0 low ground, 1 shelf, 2 lake, 3 dam, 4 crag at the dam (elev 1),
+  // 5 crag at the gorge (elev 0), 6 ramp top, 7 ramp foot.
+  const kind = (u, v) => {
+    const a = Math.abs(v), du = u - rim;
+    if (Math.abs(du) < 0.5 && a <= G) return 3;
+    if (du >= -1.5 && du < 0.5 && a > G && a <= G + 2) return 4;
+    if (du >= 0.5 && du < 2.5 && a > G + 1 && a <= G + 2.5) return 5;
+    if ((sq((u - ul) / au) + sq(v / av) <= 1 + wob(u, v) * 0.08) || (a <= G && u >= ul && du < -0.5)) return 2;
+    if (rampBand(v) && Math.abs(du) < 0.5) return 6;
+    if (rampBand(v) && du >= 0.5 && du < 1.5) return 7;
+    const edge = a <= G + 3 || (a >= r0 - 1 && a < r0 + 3) ? rim : rim + wob(u, v * 0.7);
+    if (u >= -ws && u < edge + 0.5 && a <= ws + wob(v, u) * 0.6) return 1;
+    return 0;
+  };
+  const K = new Uint8Array(N), of = new Int8Array(N).fill(-1);
+  for (let t = 0; t < N; t++) {
+    const i = t % W, j = (t / W) | 0;
+    for (let f = 0; f < np; f++) {
+      const [u, v] = fr[f](i, j), k = kind(u, v);
+      if (k > K[t] || (k === 2 && K[t] === 1)) { K[t] = k; of[t] = f; }
+      else if (k === 1 && !K[t]) K[t] = 1;
+    }
+    const k = K[t];
+    if (!k) continue;
+    if (k > 1) { res[t] = R_NONE; fert[t] = 0; }
+    ramp[t] = 0; ford[t] = 0;
+    if (k === 1 || k === 6) { if (terrain[t] !== T_GROUND) { terrain[t] = T_GROUND; res[t] = R_NONE; } elev[t] = 1; }
+    if (k === 2) { terrain[t] = T_WATER; elev[t] = 1; }
+    if (k === 3 || k === 4) { terrain[t] = T_ROCK; elev[t] = 1; }
+    if (k === 5) { terrain[t] = T_ROCK; elev[t] = 0; }
+    if (k === 6 || k === 7) { terrain[t] = T_GROUND; res[t] = R_NONE; ramp[t] = 1; elev[t] = k === 6 ? 1 : 0; }
+  }
+  // The ramps' ways in, kept open: low ground in front of each foot, shelf ground behind each top. The gorge's floor too.
+  for (let t = 0; t < N; t++) {
+    if (K[t] >= 2) continue;
+    const i = t % W, j = (t / W) | 0;
+    for (let f = 0; f < np; f++) {
+      const [u, v] = fr[f](i, j), du = u - rim, a = Math.abs(v);
+      const foot = Math.abs(a - (r0 + 1)) <= 2.2 && du >= 1.5 && du < 4.5, top = Math.abs(a - (r0 + 1)) <= 1.6 && du >= -3.5 && du < -0.5;
+      const gorge = a <= G + 1 && du >= 0.5 && du < 4.5;
+      if (!foot && !top && !gorge) continue;
+      if (terrain[t] !== T_GROUND) { terrain[t] = T_GROUND; res[t] = R_NONE; }
+      if (gorge && res[t] !== R_NONE) res[t] = R_NONE;
+      elev[t] = top ? 1 : 0;
+      if (top) K[t] = 1;
+    }
+  }
+  // A rich Crystal field each side of the lake, out toward the middle.
+  for (let t = 0; t < N; t++) {
+    if (K[t] !== 1) continue;
+    const i = t % W, j = (t / W) | 0;
+    for (let f = 0; f < np; f++) {
+      const [u, v] = fr[f](i, j);
+      if (dist(u, Math.abs(v), ul - au * 0.2, av + 0.9) > 1.7 || terrain[t] !== T_GROUND) continue;
+      if (fbm(u * 1.7, Math.abs(v) * 1.7, sW + 5, 1) < 0.35) continue;
+      res[t] = R_CRYSTAL; amt[t] = clamp(Math.round(RES[R_CRYSTAL].amount * RPR.amount * 1.8), 1, 255); grow[t] = 1; fert[t] = 0;
+    }
+  }
+  // Ground the cliffs cut off from every base becomes crag (by steps over the land, up and down the ramps).
+  const seen = new Uint8Array(N), q = [];
+  for (const b of m.bases) { const t = b.y * W + b.x; if (!seen[t]) { seen[t] = 1; q.push(t); } }
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (b < 0 || b >= N || seen[b] || terrain[b] !== T_GROUND) continue;
+      const d = elev[a] - elev[b];
+      if (d && !(Math.abs(d) === 1 && (ramp[a] || ramp[b]))) continue;
+      seen[b] = 1; q.push(b);
+    }
+  }
+  for (let t = 0; t < N; t++) if (terrain[t] === T_GROUND && !seen[t]) { terrain[t] = T_ROCK; res[t] = R_NONE; fert[t] = 0; ramp[t] = 0; }
+  // Each dam, and the flood it would let loose.
+  const dams = [];
+  for (let f = 0; f < np; f++) {
+    const base = m.bases[f], tiles = [], gap = [], lake = [], stream = [];
+    for (let t = 0; t < N; t++) {
+      const i = t % W, j = (t / W) | 0, [u, v] = fr[f](i, j);
+      if (K[t] === 3 && of[t] === f) { tiles.push(t); if (Math.abs(v) <= DAM.breach) gap.push(t); }
+      if (K[t] === 2 && of[t] === f) { lake.push(t); if (Math.abs(v) <= 1 && u >= ul - au * 0.85) stream.push(t); }
+    }
+    // (the lake drains toward the dam: the far shore first)
+    const far = (t) => { const [u, v] = fr[f](t % W, (t / W) | 0); return dist(u, v, rim, 0); };
+    lake.sort((a, b) => far(b) - far(a) || a - b);
+    // The flood: open low ground from the gorge down the valley, by steps (4-way), within the fan, short of the base.
+    const D = new Float64Array(N).fill(-1), fq = [];
+    for (let t = 0; t < N; t++) {
+      const [u, v] = fr[f](t % W, (t / W) | 0);
+      if (u - rim >= 0.5 && u - rim < 1.5 && Math.abs(v) <= G && terrain[t] !== T_ROCK && !elev[t]) { D[t] = dist(u, v, rim, 0); fq.push(t); }
+    }
+    const L = Db - rim - 1;
+    for (let h = 0; h < fq.length; h++) {
+      const a = fq[h], i = a % W;
+      for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+        if (b < 0 || b >= N || D[b] >= 0 || terrain[b] === T_ROCK || elev[b] || ramp[b]) continue;
+        const bi = b % W, bj = (b / W) | 0, [u, v] = fr[f](bi, bj), du = u - rim;
+        if (du < 0.5 || Math.abs(v) > G + 0.5 + du * DAM.spread || dist(u, v, rim, 0) > L || dist(bi, bj, base.x, base.y) < DAM.keep) continue;
+        D[b] = dist(u, v, rim, 0); fq.push(b);
+      }
+    }
+    fq.sort((a, b) => D[a] - D[b] || a - b);
+    const cl = (Db - rim) * DAM.chan;
+    const chan = fq.filter((t) => { const [u, v] = fr[f](t % W, (t / W) | 0), du = u - rim; return (Math.abs(v) <= 1 && du <= cl) || dist(du, v, cl, 0) <= 1.8; });
+    const xs = tiles.map((t) => t % W), ys = tiles.map((t) => (t / W) | 0);
+    dams.push({
+      k: f, hp: DAM.hp, by: 0, mend: 0, hitT: -1e9, hitBy: -1, warn: 0, broke: -1, brokeBy: -1, fi: 0, ri: 0, li: 0,
+      x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys),
+      tiles, gap, lake, stream, flood: fq, fd: fq.map((t) => Math.round(D[t] * 100)), chan, wet: [],
+    });
+  }
+  m.dam = { v: 1, ver: 0, d: dams };
 }
 
 /* ------------------------------------------------------------------ the Hollow */
@@ -2474,9 +2629,9 @@ function mapSizeForPlayers(size, players) {
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
  */
-function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!sh.city)); }
+function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!(sh.city || sh.dam))); }
 /** Does map type `sh` turn four ways with `n` colonies (Crossroads and the four-quarter maps; Passenger Town with four)? */
-function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || (sh.city && n === 4))); }
+function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || ((sh.city || sh.dam) && n === 4))); }
 
 /**
  * Is this Long Haul 2v2: a tall map with two colonies side by side at each end (south-west, south-east, north-east,
@@ -2679,6 +2834,7 @@ function newGame(opts) {
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
+  if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
@@ -3682,6 +3838,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
+  if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Wreck it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
@@ -4013,6 +4170,7 @@ function canRoad(owner, i, j) {
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
+  if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -5476,6 +5634,19 @@ function checkSave(o) {
       if (!int(r.n0, 0, 99999) || !int(r.cache, 0, TOWN.caches.length) || !(Number.isFinite(r.sen) && r.sen >= 0) || !(Number.isFinite(r.scd || 0) && (r.scd || 0) >= 0) || !int(r.by, 0, 255) || ![0, 1].includes(r.gone)) bad();
     }
   }
+  // The Dam (damShape): each dam's state, its tiles, lake, flood (with when the front reaches each tile) and river.
+  if (o.dam != null) {
+    const D = o.dam, N = o.W * o.H, int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    const tl = (a) => Array.isArray(a) && a.length <= N && a.every((t) => int(t, 0, N - 1));
+    if (!obj(D) || D.v !== 1 || !Array.isArray(D.d) || D.d.length > 4 || (D.ver != null && !int(D.ver, 0, 1e6))) bad();
+    for (const d of D.d) {
+      if (!obj(d) || !int(d.k, 0, o.players.length - 1) || !(Number.isFinite(d.hp) && d.hp >= 0 && d.hp <= DAM.hp) || !int(d.by, 0, 255) || !int(d.mend, 0, 255)) bad();
+      if (!Number.isFinite(d.hitT) || !int(d.hitBy, -1, o.players.length - 1) || !Number.isFinite(d.broke) || !int(d.brokeBy, -1, o.players.length - 1)) bad();
+      if (![d.x0, d.x1].every((v) => int(v, 0, o.W - 1)) || ![d.y0, d.y1].every((v) => int(v, 0, o.H - 1))) bad();
+      if (!['tiles', 'gap', 'lake', 'stream', 'flood', 'chan', 'wet'].every((k) => tl(d[k])) || !Array.isArray(d.fd) || d.fd.length !== d.flood.length || !d.fd.every((v) => int(v, 0, 1e7))) bad();
+      if (!int(d.fi, 0, d.flood.length) || !int(d.ri, 0, d.wet.length) || !int(d.li, 0, d.lake.length) || (d.warn != null && !int(d.warn, 0, 255))) bad();
+    }
+  }
   // A Contingency battle (js/contingency-battle.js): the run and battle, the seats' sides, the clock, the colours, and
   // each seat's cards for the battle (CONT_CARDS keys that act in battle) with the ones already played.
   if (o.contingency != null) {
@@ -5597,6 +5768,7 @@ function checkSave(o) {
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'strip' && (!Number.isSafeInteger(u.task.r) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !Number.isFinite(u.task.w) || !Number.isInteger(u.task.n) ||
       !obj(u.task.load) || Object.keys(u.task.load).some((g) => !['cement', 'alloy', 'chip'].includes(g) || !Number.isInteger(u.task.load[g])))) bad(); // (Passenger Town: stripping a building)
+    if (u.task?.type === 'dammend' && (!(o.dam && Number.isInteger(u.task.d) && o.dam.d && o.dam.d[u.task.d]) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !['go', 'mend'].includes(u.task.phase))) bad(); // (The Dam: shoring one up)
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
   }

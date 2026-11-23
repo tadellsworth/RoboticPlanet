@@ -569,8 +569,9 @@ const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
 function modeInfo(mode, n, teams) {
   const m = UI.menu, SH = SHAPE_PRESETS[m.shape || 0], quad = !m.shapeRnd && !!(SH.cross || SH.quad4), onCross = n === 4 || quad;
   const haul = !m.shapeRnd && !!SH.haul4; // (Long Haul 2v2: two colonies side by side at each end)
-  const where = m.shapeRnd ? 'a square planet' : quad || SH.city ? SH.name : 'a square planet';
+  const where = m.shapeRnd ? 'a square planet' : quad || SH.city || SH.dam ? SH.name : 'a square planet';
   const town = !m.shapeRnd && !!SH.city; // (Passenger Town: four on the edges of a square town, three round a round one)
+  const dam = !m.shapeRnd && !!SH.dam; // (The Dam: a colony on each side of the high ground, a reservoir over each valley)
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
     ? (menuMurmurLevel() !== 'off' ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them, and come up through their tunnels by night. Build, research and spread across the planet.'
@@ -578,6 +579,7 @@ function modeInfo(mode, n, teams) {
     : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
       : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
     : n === 4 && haul ? `Free-for-all · 4 on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
+    : n >= 3 && dam ? `Free-for-all · ${n}: you and ${n === 4 ? 'three rival colonies (red, green and purple)' : 'two rival colonies'} round the high ground of ${SH.name}, each valley under its own reservoir and dam. ${win}`
     : n === 4 && town ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
     : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
       : n === 3 && town ? `Free-for-all: you and two rival colonies round ${where}, a round town in the middle with an old avenue from each colony to its heart. ${win}`
@@ -1588,6 +1590,16 @@ function drawShapeThumb(cv, P) {
     }
     crags = 0;
   }
+  if (P.dam) {
+    // The Dam: the high shelf down the middle, a lake on it toward each base behind a dam, the valley below fanning out.
+    ctx.fillStyle = THUMB.hi; ctx.fillRect(X(0.32), Y(0.2), 0.36 * mw, 0.6 * mh);
+    for (const [v, s] of [[0.66, 1], [0.34, -1]]) {
+      ctx.fillStyle = '#3f7fae'; ctx.beginPath(); ctx.ellipse(X(0.5), Y(v), 0.14 * mw, 0.07 * mh, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#d8d2c2'; ctx.fillRect(X(0.45), Y(v + s * 0.1) - Math.max(1, U * 0.02), 0.1 * mw, Math.max(2, U * 0.04));
+      ctx.fillStyle = THUMB.ramp; for (const u of [0.36, 0.6]) ctx.fillRect(X(u), Y(v + s * 0.12) - U * 0.02, U * 0.05, U * 0.04);
+    }
+    crags = 0;
+  }
   if (P.maze) {
     // A labyrinth carved from a grid (the same every time for this map type).
     const cw = 5, ch = Math.max(5, Math.round(cw / a)), seen = new Uint8Array(cw * ch), walls = [];
@@ -2340,6 +2352,10 @@ const SHEET_KEYS = {
   'sh-gup-stop': ['c', 'Stand down the Uplink'],
   'sh-strip': ['s', 'Passenger Town: Strip for salvage'],
   'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
+  'sh-damwreck': ['w', 'The Dam: Wreck the dam'],
+  'sh-damstop': ['w', 'The Dam: Stop wrecking'],
+  'sh-dammend': ['u', 'The Dam: Shore it up'],
+  'sh-damunmend': ['u', 'The Dam: Stop shoring up'],
 };
 const ARMY_SIZE_KEYS = Object.fromEntries(Object.entries(SHEET_KEYS)
   .filter(([id]) => id.startsWith('ar-n')).map(([id, [key]]) => [key, id]));
@@ -6183,6 +6199,7 @@ function onMapTap(i, j, wx, wy) {
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
   if (inMap(i, j) && S.town && typeof townSheet === 'function' && townRuinAt(tIdx(i, j))) { sfx('click'); townSheet(townRuinAt(tIdx(i, j))); return; } // (a building of Passenger Town: js/city.js)
+  if (inMap(i, j) && S.dam && typeof damSheet === 'function' && damAt(tIdx(i, j))) { sfx('click'); damSheet(S.dam.d.indexOf(damAt(tIdx(i, j)))); return; } // (a dam: js/dam.js)
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && burntSoil(tIdx(i, j)) && S.terrain[tIdx(i, j)] === T_GROUND && !S.road[tIdx(i, j)]) { sfx('click'); openBurntSheet(tIdx(i, j)); return; }
@@ -8523,6 +8540,7 @@ function botActivity(u) {
   if (t.type === 'dock') return 'Trade convoy: waiting at the Trade Post for the ledger to take its run';
   if (t.type === 'haul' && u.trade) return t.dst === u.trade ? (t.phase === 'toSrc' ? `Trade convoy: loading ${GOOD[t.good].name} at the ${nm(t.src)}` : `Trade convoy: taking ${GOOD[t.good].name} out to the Trade Terminal`) : t.phase === 'toSrc' ? `Trade convoy: going to the Trade Post for its ${GOOD[t.good].name}` : `Trade convoy: bringing ${GOOD[t.good].name} home from the Trade Post`;
   if (t.type === 'salvage') return t.phase === 'cut' ? 'Salvaging scrap: cutting it up for Alloy' : 'Driving out to salvage scrap';
+  if (t.type === 'dammend') return t.phase === 'go' ? 'Walking to shore up the dam' : 'Shoring up the dam';
   if (t.type === 'strip') { const r = townById(t.r), nm = r ? TOWN_KINDS[r.k].name.replace(/^The /, 'the ').toLowerCase() : 'a building'; return t.phase === 'go' ? `Walking to strip ${/^the /.test(nm) ? nm : aOrAn(nm)}` : `Stripping ${/^the /.test(nm) ? nm : aOrAn(nm)} for salvage`; }
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
   if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : t.phase === 'wait' ? `Waiting at ${a} for goods on their way` : `Constructing ${a}`; }
@@ -9839,6 +9857,7 @@ function uiTick(dt) {
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
   if (typeof contBarTick === 'function') contBarTick();
   if (typeof townUiTick === 'function') townUiTick(); // (a Passenger Town building's panel: js/city.js)
+  if (typeof damUiTick === 'function') damUiTick(); // (a dam's panel: js/dam.js)
   if (typeof lmUiTick === 'function') lmUiTick(); // (a wreck's log recovered: js/landmarks.js) // (a Contingency battle's clock and cards: js/contingency-battle.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;

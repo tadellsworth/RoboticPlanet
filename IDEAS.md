@@ -71,6 +71,41 @@ The open questions, decided by the owner ("do your recs", Nov 23 2026):
 - **The look:** the buildings are rendered sprites (ART_GUIDE.md, Batch 33); the ground is drawn in code. Roads on the
   town's ground (the avenues, and any a colony lays) show through its paving.
 
+## The Dam (built Nov 23 2026; design calls for the owner)
+
+The owner's idea (approved): a high lake behind a dam over a colony's valley; wreck the dam and the lake floods the
+valley. Built as `SHAPE_PRESETS` `dam` (README, The Dam; How to play, The Dam); the mission *The Dam* (First Contact)
+teaches it. The calls made in building it, open for the owner:
+
+- **Symmetric, not upper and lower colonies.** Every colony has its own valley under its own reservoir and dam, on a
+  shared high shelf in the middle; so it works for two (turned half round), three and four (a star, turned a quarter
+  at a time), every side the same. The "upper colony with a threat to wield" is whoever holds the high ground: your
+  rival's dam stands across the shelf from you, its face over their valley, and both of you have the same reason to
+  strike early and the same thing to guard. An asymmetric two-player version (one colony up, one down) would need a
+  different plan for each side; not built.
+- **How it's wrecked:** a strength of 400. The colony orders it wrecked from its panel (W), then its armed army robots
+  within 3 tiles of the face take 1 a second off it (ten warbots: 40 seconds), a Howitzer within 6 tiles 3. Shells,
+  bombs, Missiles and Mortars don't touch it (it was built to hold a lake): to be asked. Anyone can wreck any dam,
+  their own included.
+- **Defending and repairing:** warbots guard it; Shore it up (U) sends up to 3 free Workers, 2.5 a second each, only
+  once nothing has hit it for 6 seconds and no enemy is about, and it costs nothing. A Cement cost per point mended
+  is the obvious lever if it proves too cheap.
+- **The flood:** 3.5 tiles a second down a fan from the dam's foot, stopping about 4 tiles short of the Command Base.
+  Robots it reaches take 4 (in the river's path they're carried to the bank); buildings lose half their full armour,
+  those in the river's path are wrecked (the Command Base never: it keeps 1); crops and Stalks wash away; roads, track
+  and pipes on the river wash out; open ground is shallows for a minute (robots wade), then goes down leaving fertile
+  silt on about half. A shallow river and its pool stay for good (Haulers and trucks need a bridge). The lake drains
+  to a muddy bed with rich Ore and Crystal in the mud, and the breach becomes a ramp up from the gorge: a burst dam
+  costs its valley and opens the high ground to it. Open: whether roads off the river's path should wash out too.
+- **The rival computer:** guards its dam when your army comes near or hits it, shores it up after, and from 7 minutes
+  in (14 on Easy) wrecks a foe's dam when it has 8 armed robots to spare and at least 3 foe buildings stand in the
+  flood's way (never with its own there). It doesn't yet avoid building in its own flood's path.
+- **Lore:** the panel calls the dams the Pathfinder's reservoirs for the first colony ("Reservoir 4. Capacity for the
+  first colony: 200 years. Gauge read daily. Reading: full."). LORE.md isn't changed: whether the Pathfinder built
+  dams is the owner's to say.
+- **Not built:** Flood season (the planetary event) and a dam that can be opened on purpose (a spillway gate to drain
+  it safely, or to flood a valley on cue); the ART_GUIDE look is drawn in code, no rendered sprite yet.
+
 ## The owner's notes, Nov 21 2026 (for later)
 
 - **Lance of Corvane cooling down (BUILT, Nov 21 2026):** while it reloads, the barrel glows red-hot and smokes, fading slowly back to its
@@ -1436,7 +1471,7 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   - **The Spine:** a mountain range down the middle with three crossings of different character: a wide, easy pass, a
     narrow high pass that can be walled off, and a tunnel through the rock (the game's tunnels). The far side is
     richer. Clean chokepoint warfare, each crossing suiting a different plan; the easiest of these to build.
-  - **The Dam:** a high valley lake held back by a dam above a low valley with a colony in it. Wreck the dam and the lake
+  - **The Dam (BUILT Nov 23 2026: see The Dam above):** a high valley lake held back by a dam above a low valley with a colony in it. Wreck the dam and the lake
     floods the lower valley. The upper colony has a threat to wield, the lower one a reason to strike early. Pairs
     with Flood season (see the planetary events idea).
   - **Isthmus:** two landmasses joined by a narrow neck, sea on both sides. Land armies fight over a tiny bridge while

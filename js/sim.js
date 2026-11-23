@@ -94,6 +94,7 @@ function simStep(dt) {
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)
   if (S.landmarks && S.landmarks.length && S.tick % 10 === 7 && typeof lmTick === 'function') lmTick(10 * dt); // (a landmark's clock or wreck: js/landmarks.js)
   if (S.town && S.tick % 3 === 1) townTick(3 * dt); // (Passenger Town's sentries)
+  if (S.dam && S.tick % 3 === 2) damTick(3 * dt); // (The Dam: robots at the dams, Workers mending, the floods)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -2520,6 +2521,7 @@ function dispatch(p) {
   }
   // 5b) Passenger Town: Workers to the buildings the colony ordered stripped (townRun).
   if (S.town) townRun(p, idle);
+  if (S.dam) damRun(p, idle); // (The Dam: Workers to the dams the colony ordered shored up)
   // 6) Free workers pave planned roads (see nextPaveTile). The tile one picks goes to the free worker on its ground
   //    nearest to it: the one at home takes the tile at the home end, not one standing out at the far end.
   //    No more than the colony's road crew limit of them at once (roadCrew): a Roadworks' Pavers lay road too, and
@@ -3386,6 +3388,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'crate') doCrate(u, t, dt);
   else if (t.type === 'salvage') doSalvage(u, t, dt);
   else if (t.type === 'strip') townDoStrip(u, t, dt); // (Passenger Town: stripping a building)
+  else if (t.type === 'dammend') damDoMend(u, t, dt); // (The Dam: shoring one up)
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
@@ -10284,6 +10287,278 @@ function openFault() {
   const n = lost.get(0) || 0;
   postMsg(ME, 'Earthquake! The fault has opened into a chasm' + (n ? `, and ${n} of your buildings fell in` : '') +
     '. Cross at the rock arches, or open a new way with a Sky bridge (Paths).', undefined, undefined, 'bad');
+}
+
+/* ------------------------------------------------------------------ The Dam: wrecking, mending, the flood */
+
+/*
+ * The Dam (S.dam: laid out by damShape in world.js; DAM in defs.js). Each dam d stands over colony d.k's valley. Any
+ * colony orders any dam wrecked (bit p of d.by) or shored up (bit p of d.mend) from its panel (the damOrder order).
+ * Three times a second (damTick): every armed army robot of a colony that ordered it wrecked, within DAM.reach of the
+ * dam's face, takes DAM.hit a second off it (a Howitzer within DAM.siegeReach, DAM.siege); free Workers of a colony that
+ * ordered it shored up (damRun, from dispatch) mend it while nothing has hit it for DAM.calm seconds. At 0 it breaks
+ * (damBreak): its middle goes, a ramp of rubble up to the lakebed. Then the flood (damFlood): its front runs down the
+ * valley at DAM.speed tiles a second over the tiles damShape found (d.flood, with when it gets to each: d.fd, a
+ * hundredth of a tile), and where it gets to: robots are swept (DAM.botHit; off the river's path), buildings lose
+ * DAM.hurt of their armour (on the river's path, d.chan: wrecked, a Command Base kept at 1), crops and Stalks wash away,
+ * roads and track on the river's path wash out, and open ground goes under (shallows: robots wade). After DAM.stay
+ * seconds the flood plain goes down again (the far end first), part of it left fertile; the river and its pool stay as
+ * shallows. The lake drains to a muddy bed, a stream down its middle, with rich Ore and Crystal left in the mud. All
+ * from the simulation's own clock and the map: the same on every device.
+ */
+const _dam = { of: null, ver: -1, at: null, chan: null };
+/** The dams' standing tiles indexed (at[t]: the dam's index + 1) and each one's river tiles (chan[k]: a Set). */
+function damIndex() {
+  const D = S.dam, N = S.W * S.H;
+  if (_dam.of === D && _dam.ver === (D.ver || 0) && _dam.at && _dam.at.length === N) return _dam;
+  const at = new Int32Array(N);
+  D.d.forEach((d, k) => { for (const t of d.tiles) if (d.broke < 0 || !d.gap.includes(t)) at[t] = k + 1; });
+  Object.assign(_dam, { of: D, ver: D.ver || 0, at, chan: D.d.map((d) => new Set(d.chan)) });
+  return _dam;
+}
+/** The dam standing on tile t (intact, or a breached one's stubs), or null. */
+function damAt(t) { if (!S || !S.dam) return null; const k = damIndex().at[t]; return k ? S.dam.d[k - 1] : null; }
+/** Dam k (its index in S.dam.d), or null. */
+function damByK(k) { return S && S.dam && Number.isInteger(k) && S.dam.d[k] ? S.dam.d[k] : null; }
+/** How far point (x, y) is from dam d's face (its tiles' rectangle). */
+function damDist(d, x, y) { const dx = Math.max(d.x0 - x, 0, x - (d.x1 + 1)), dy = Math.max(d.y0 - y, 0, y - (d.y1 + 1)); return Math.sqrt(dx * dx + dy * dy); }
+/** Dam d's middle. */
+function damMid(d) { return { x: (d.x0 + d.x1 + 1) / 2, y: (d.y0 + d.y1 + 1) / 2 }; }
+/** Open tiles robots can stand on beside dam d (within 2 tiles of its face): where Workers mend it from. */
+function damStands(d) {
+  const out = [];
+  for (let j = d.y0 - 3; j <= d.y1 + 3; j++) for (let i = d.x0 - 3; i <= d.x1 + 3; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (walkable(t) && !S.bAt[t] && !damAt(t) && S.terrain[t] === T_GROUND && damDist(d, i + 0.5, j + 0.5) <= 2.2) out.push(t);
+  }
+  return out;
+}
+/** Colony p orders dam k wrecked or shored up (what: 'wreck' or 'mend'), or calls it off. '' or why not. */
+function damOrder(p, k, what, on) {
+  const d = damByK(k);
+  if (!d) return 'No dam there.';
+  if (what !== 'wreck' && what !== 'mend') return 'Wreck it or shore it up.';
+  if (on && d.broke >= 0) return 'This dam has already burst.';
+  const bit = 1 << p;
+  if (what === 'wreck') { if (on) { d.by |= bit; d.mend &= ~bit; } else d.by &= ~bit; }
+  else { if (on) { d.mend |= bit; d.by &= ~bit; } else d.mend &= ~bit; }
+  if (!((d.mend >> p) & 1)) for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'dammend' && u.task.d === k) { cancelTask(u); u.task = null; u.path = null; }
+  return '';
+}
+/** Whose valley lies under dam d (its colony's name, for the messages): 'your' for yours. */
+function damWhose(d, p) { return d.k === p ? 'your' : `${playerName(d.k, true)}'s`; }
+/** Three times a second: robots chip at the dams their colonies ordered wrecked, Workers mend, floods run. */
+function damTick(dt) {
+  S.dam.d.forEach((d, k) => {
+    if (d.broke >= 0) { damFlood(d, k); return; }
+    let dmg = 0;
+    const by = new Map();
+    if (d.by) for (const u of S.bots) {
+      if (u.dead || u.inside || u.owner < 0 || !((d.by >> u.owner) & 1) || BOTS[u.type].air || aloft(u)) continue;
+      const siege = !!BOTS[u.type].siege;
+      if (!siege && !(isArmy(u) && botArmed(u))) continue;
+      if (damDist(d, u.x, u.y) > (siege ? DAM.siegeReach : DAM.reach)) continue;
+      const h = (siege ? DAM.siege : DAM.hit) * dt * (S.players[u.owner].ai ? S.players[u.owner].mult || 1 : 1);
+      dmg += h; by.set(u.owner, (by.get(u.owner) || 0) + h);
+      if (hash2(u.id, S.tick, 77) < 0.25) { const c = damMid(d); addFx('tracer', u.x, u.y - 0.2, { x2: clamp(u.x, d.x0, d.x1 + 1), y2: clamp(u.y, d.y0, d.y1 + 1) - 0.3, life: 0.08, color: PLAYER_COLORS[u.owner] }); if (hash2(u.id, S.tick, 78) < 0.3) addFx('dust', c.x + (hash2(u.id, S.tick, 79) - 0.5) * (d.x1 - d.x0 + 1), c.y - 0.3, { r: 0.4 }); }
+    }
+    if (dmg > 0) {
+      const was = d.hp / DAM.hp;
+      d.hp = Math.max(0, d.hp - dmg);
+      const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+      for (const [q, h] of by) { const P = S.players[q]; P.stats.damHit = (P.stats.damHit || 0) + h; }
+      if (S.time - d.hitT > 15) {
+        const c = damMid(d);
+        postMsg(d.k, `Your dam is under attack! If it breaks, its lake floods your valley. Send warbots to it, and Shore it up (U) once they're gone.`, Math.floor(c.x), Math.floor(c.y), 'bad');
+        if (isMe(d.k)) sfx('alert');
+      }
+      d.hitT = S.time; d.hitBy = top;
+      const now = d.hp / DAM.hp;
+      for (const f of [0.5, 0.25]) if (was > f && now <= f) {
+        const c = damMid(d);
+        for (const P of S.players) if (!P.absent) postMsg(P.id, `The dam over ${damWhose(d, P.id)} valley is cracking: ${Math.round(now * 100)}% left.`, Math.floor(c.x), Math.floor(c.y), P.id === d.k ? 'bad' : 'warn');
+        if (isMe(d.k)) sfx('alert');
+      }
+      if (d.hp <= 0) { damBreak(d, k, top); return; }
+    }
+    // Workers shoring it up: DAM.mend a second each, while nothing has hit it lately.
+    if (d.hp < DAM.hp && S.time - d.hitT >= DAM.calm) {
+      for (const u of S.bots) {
+        if (u.dead || !u.task || u.task.type !== 'dammend' || u.task.d !== k || u.task.phase !== 'mend') continue;
+        const h = Math.min(DAM.hp - d.hp, DAM.mend * dt * (S.players[u.owner].ai ? S.players[u.owner].mult || 1 : 1));
+        d.hp += h;
+        const P = S.players[u.owner]; P.stats.damMend = (P.stats.damMend || 0) + h;
+        if (hash2(u.id, S.tick, 81) < 0.15) addFx('spark', clamp(u.x, d.x0, d.x1 + 1), clamp(u.y, d.y0, d.y1 + 1) - 0.2, { color: '#ffd27a', life: 0.35, hit: true });
+        if (d.hp >= DAM.hp) break;
+      }
+      if (d.hp >= DAM.hp) { d.hp = DAM.hp; for (let p = 0; p < S.players.length; p++) if ((d.mend >> p) & 1) { postMsg(p, 'The dam is shored up: back to full strength.', d.x0, d.y0, 'good'); damOrder(p, k, 'mend', false); } }
+    }
+  });
+}
+/**
+ * Dispatch (beside Passenger Town's, before the paving): player p's free Workers go to the dams it ordered shored up, up
+ * to DAM.crew on each, none while foes are about or it was hit lately, nor to one already at full strength.
+ */
+function damRun(p, idle) {
+  if (!idle.length) return;
+  S.dam.d.forEach((d, k) => {
+    if (!((d.mend >> p) & 1) || d.broke >= 0) return;
+    if (d.hp >= DAM.hp) { damOrder(p, k, 'mend', false); return; }
+    const c = damMid(d);
+    if (S.time - d.hitT < DAM.calm || foesNear(p, c.x, c.y, CRATE_SAFE)) return;
+    let on = 0;
+    const at = new Set();
+    for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'dammend' && u.task.d === k) { on++; at.add(u.task.tile); }
+    const stands = damStands(d).filter((t) => !hotFor(p, t));
+    while (on < DAM.crew && stands.length) {
+      let best = -1, bt = -1, bd = Infinity;
+      for (let q = 0; q < idle.length; q++) {
+        const u = idle[q];
+        if (u.type !== 'worker' || u.failUntil > S.time) continue;
+        const z = botZone(u);
+        for (const t of stands) {
+          if (S.zone[t] !== z) continue;
+          const dd = dist2(u.x, u.y, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5) + (at.has(t) ? 40 : 0);
+          if (dd < bd) { bd = dd; best = q; bt = t; }
+        }
+      }
+      if (best < 0) break;
+      const u = idle.splice(best, 1)[0];
+      cancelTask(u);
+      u.task = { type: 'dammend', d: k, tile: bt, phase: 'go' };
+      if (!goTo(u, bt % S.W, (bt / S.W) | 0)) { u.task = null; u.failGoal = bt; u.failUntil = S.time + 20; continue; }
+      on++; at.add(bt);
+    }
+  });
+}
+/** A Worker shoring up dam t.d: to its spot beside it, then mending (damTick counts the work) until it's whole. */
+function damDoMend(u, t, dt) {
+  const d = damByK(t.d);
+  if (!d || d.broke >= 0 || !((d.mend >> u.owner) & 1) || d.hp >= DAM.hp) { u.task = null; u.path = null; return; }
+  if (t.phase === 'go') {
+    const a = travel(u, t.tile % S.W, (t.tile / S.W) | 0, dt);
+    if (a === null) { u.task = null; u.failGoal = t.tile; u.failUntil = S.time + 20; return; }
+    if (a) { t.phase = 'mend'; u.vel = 0; }
+    return;
+  }
+  if (S.tick % 15 === u.id % 15 && foesNear(u.owner, u.x, u.y, CRATE_SAFE)) { cancelTask(u); u.task = null; return; }
+  u.busy = 1;
+  u.face = datan2(clamp(u.y, d.y0, d.y1 + 1) - u.y, clamp(u.x, d.x0, d.x1 + 1) - u.x);
+}
+/** Dam d (index k) breaks, wrecked by colony `by`: its middle goes, and the flood starts (damFlood). */
+function damBreak(d, k, by) {
+  d.hp = 0; d.broke = S.time; d.brokeBy = by; d.by = 0; d.mend = 0;
+  S.dam.ver = (S.dam.ver || 0) + 1;
+  for (const t of d.gap) { S.terrain[t] = T_GROUND; S.ramp[t] = 1; S.res[t] = R_NONE; S.dirtyTiles.push(t); }
+  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'dammend' && u.task.d === k) { cancelTask(u); u.task = null; u.path = null; }
+  const P = S.players[by];
+  if (P) P.stats.dams = (P.stats.dams || 0) + 1;
+  const c = damMid(d);
+  addFx('quake', c.x, c.y, { life: 4, amp: 5 });
+  for (let q = 0; q < 6; q++) addFx('dustcloud', c.x + (hash2(k, q, 83) - 0.5) * 4, c.y + (hash2(k, q, 84) - 0.5) * 2, { r: 1.4 });
+  addFx('boom', c.x, c.y, { r: 1.2 });
+  sfx('boom', c.x, c.y); sfx('rumble');
+  for (const Q of S.players) {
+    if (Q.absent) continue;
+    postMsg(Q.id, Q.id === d.k ? 'Your dam has burst! The lake is flooding your valley: get your robots to high ground.'
+      : by === Q.id ? `The dam has burst! The lake is flooding ${damWhose(d, Q.id)} valley.`
+        : `A dam has burst: the lake is flooding ${damWhose(d, Q.id)} valley.`, Math.floor(c.x), Math.floor(c.y), Q.id === d.k ? 'bad' : 'warn');
+  }
+  if (isMe(d.k)) sfx('alert');
+  terrainChanged();
+  damFlood(d, k);
+}
+/** Dam d's flood, lake and drying, up to now (from damTick, three times a second, once it has broken). */
+function damFlood(d, k) {
+  const el = S.time - d.broke, front = el * DAM.speed * 100, ch = damIndex().chan[k], changed = new Set();
+  // The front: what it reaches now.
+  if (d.fi < d.flood.length && d.fd[d.fi] <= front) {
+    const reach = [];
+    while (d.fi < d.flood.length && d.fd[d.fi] <= front) reach.push(d.flood[d.fi++]);
+    damFloodReach(d, reach, ch, changed);
+  }
+  // The flood plain going down, the far end first (the river and its pool stay).
+  if (el >= DAM.stay && d.ri < d.wet.length) {
+    const n = Math.min(d.wet.length, Math.floor(((el - DAM.stay) / DAM.recede) * d.wet.length) + 1);
+    while (d.ri < n) {
+      const t = d.wet[d.wet.length - 1 - d.ri++];
+      if (S.terrain[t] !== T_WATER || !S.ford[t]) continue;
+      S.terrain[t] = T_GROUND; S.ford[t] = 0;
+      if (!S.res[t] && hash2(t, S.seed, 85) < DAM.silt) S.fert[t] = 1; // (silt: fertile for a Bio Farm)
+      changed.add(t);
+    }
+  }
+  // The lake draining, the far shore first: a muddy bed, a stream down its middle, Ore and Crystal in the mud.
+  const span = DAM.drain[1] - DAM.drain[0], ln = Math.min(d.lake.length, Math.max(0, Math.floor(((el - DAM.drain[0]) / span) * d.lake.length)));
+  if (d.li < ln) {
+    const st = new Set(d.stream), pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+    while (d.li < ln) {
+      const t = d.lake[d.li++];
+      if (S.terrain[t] !== T_WATER) continue;
+      if (st.has(t)) { S.ford[t] = 1; changed.add(t); continue; }
+      S.terrain[t] = T_GROUND;
+      const h = hash2(t, S.seed, 86);
+      if (!S.road[t] && h < DAM.bed) { const r = h < DAM.bed / 2 ? R_CRYSTAL : R_ORE; S.res[t] = r; S.amt[t] = clamp(Math.round(RES[r].amount * pr.amount * 1.6), 1, 255); S.grow[t] = 1; }
+      else if (h < DAM.bed + DAM.silt * 0.5) S.fert[t] = 1;
+      changed.add(t);
+    }
+  }
+  if (changed.size) damChanged(changed);
+}
+/** The flood front reaches tiles `reach` (ch: the river's tiles): what it does to them and to what stands on them. */
+function damFloodReach(d, reach, ch, changed) {
+  const set = new Set(reach), hit = new Map(), lost = new Map();
+  for (const t of reach) {
+    const i = t % S.W, j = (t / S.W) | 0, river = ch.has(t);
+    if (S.bAt[t]) { const b = getE(S.bAt[t]); if (b && !b.dead) hit.set(b.id, (hit.get(b.id) || 0) | (river ? 2 : 1)); }
+    if (S.res[t] === R_STALK || S.res[t] === R_CROP || (river && S.res[t])) { S.res[t] = R_NONE; S.amt[t] = 0; changed.add(t); }
+    if (S.decor) S.decor[t] = 0;
+    if (river) {
+      if (S.road[t]) setRoad(i, j, false);
+      if (S.rail && S.rail[t]) { S.rail[t] = 0; S.railVer = (S.railVer || 0) + 1; }
+      if (S.pipe[t]) setPipe(t, 0);
+      S.plan[t] = 0; S.owe[t] = 0; if (S.railPlan) S.railPlan[t] = 0; if (S.pipePlan) S.pipePlan[t] = 0;
+    }
+    if ((i + j) % 4 === 0) addFx('dust', i + 0.5, j + 0.5, { r: 0.5 });
+  }
+  for (const [id, how] of hit) {
+    const b = getE(id), def = b && BDEFS[b.type];
+    if (!b || b.dead || !def) continue;
+    const full = def.armor || 1, river = how & 2;
+    b.armor -= river ? full : full * DAM.hurt; b.lastHit = S.time;
+    if (b.armor > 0) continue;
+    if (b.type === 'lander') { b.armor = 1; continue; }
+    if (b.owner >= 0) lost.set(b.owner, (lost.get(b.owner) || 0) + 1);
+    destroyBuilding(b, true, true);
+  }
+  for (const t of reach) {
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.ramp[t] || S.res[t] || S.road[t]) continue;
+    S.terrain[t] = T_WATER; S.ford[t] = 1;
+    if (!ch.has(t)) d.wet.push(t);
+    changed.add(t);
+  }
+  const swept = new Map(), fl = new Map(d.flood.map((t, q) => [t, q]));
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air || BOTS[u.type].sea || aloft(u)) continue;
+    const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (!set.has(t)) continue;
+    if (u.owner >= 0 && !isWild(u.owner)) swept.set(u.owner, (swept.get(u.owner) || 0) + 1);
+    // (in the river's path: carried to the nearest dry bank the flood has been over already, or won't reach)
+    if (ch.has(t)) { const to = nearestTile(t, (v) => walkable(v) && !ch.has(v) && !S.bAt[v] && S.terrain[v] === T_GROUND && !(fl.has(v) && fl.get(v) >= d.fi)); if (to >= 0) moveOff(u, to, DAM.botHit); else damageBot(u, DAM.botHit, undefined, undefined, true); }
+    else { damageBot(u, DAM.botHit, undefined, undefined, true); if (!u.dead && !isArmy(u)) dropPath(u); }
+  }
+  for (const [p, n] of lost) postMsg(p, `The flood wrecked ${n} of your building${n === 1 ? '' : 's'}.`, d.x0, d.y0, 'lost');
+  for (const [p, n] of swept) postMsg(p, `The flood swept ${n} of your robot${n === 1 ? '' : 's'} off their feet.`, d.x0, d.y0, 'bad');
+}
+/** Tiles `changed` (a Set) by a flood or a draining lake: the map's areas again, routes over them dropped, redrawn. */
+function damChanged(changed) {
+  for (const t of changed) S.dirtyTiles.push(t);
+  terrainChanged();
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !u.path || BOTS[u.type].air || BOTS[u.type].sea) continue;
+    for (let q = u.pi || 0; q < u.path.length; q++) if (changed.has(u.path[q])) { dropPath(u); break; }
+  }
 }
 
 /* ------------------------------------------------------------------ planet events */
@@ -18384,6 +18659,7 @@ function hashState() {
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
   if (S.town) for (const r of S.town.r) { int(r.id); int(r.gone); int(r.by); int(r.cache); num(r.sen); num(r.scd || 0); int(r.g.cement || 0); int(r.g.alloy || 0); int(r.g.chip || 0); } // (Passenger Town's buildings)
+  if (S.dam) for (const d of S.dam.d) { num(d.hp); int(d.by); int(d.mend); num(d.hitT); int(d.hitBy); num(d.broke); int(d.fi); int(d.ri); int(d.li); int(d.wet.length); } // (The Dam: its dams and floods)
   for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
   if (S.crater) { int(S.scarN || 0); for (const s of S.scrap) { int(s.id); num(s.x); num(s.y); num(s.n); int(s.k); } int(S.bones.length); }

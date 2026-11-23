@@ -1676,6 +1676,36 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-select' },
     ],
   },
+  // The Dam (SHAPE_PRESETS dam): a dam over your valley to guard and shore up, and the rival's to wreck with warbots.
+  {
+    id: 'dam', name: 'The Dam', chapter: 'First Contact',
+    brief: 'The Pathfinder\'s reservoirs stand on the high ground between you and a rival, one over each valley. Shore yours up, and break theirs.',
+    intro: [
+      'A high shelf runs down the middle of this planet. On it, in front of each colony, a lake held back by an old dam.',
+      'Your dam holds the lake over your valley. Something has hit it already: tap it and <b>Shore it up</b> (<kbd>U</kbd>).',
+      'Your free Workers mend it, but only while nothing is shooting at it.',
+      'The rival\'s dam stands over their valley, across the high ground. Tap it and <b>Wreck the dam</b> (<kbd>W</kbd>).',
+      'Then send warbots to it: every armed one within 3 tiles of its face chips at it. The ramps beside each dam lead up.',
+      'Burst, its lake floods the valley below: robots swept, buildings damaged, roads washed out, and a river left behind.',
+    ],
+    mode: 'versus', seed: 7, size: 0, rough: 1, rich: 3, biome: 'jungle', players: 2, style: 'balanced', shape: SHAPE_PRESETS.findIndex((p) => p.dam),
+    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 25],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with an Ammo Plant)
+      const L = getE(S.players[0].lander);
+      for (let k = 0; k < mPick([8, 7, 6], diff); k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      S.players[0].stats.startBots = S.players[0].stats.bots;
+      S.dam.d[0].hp = Math.round(DAM.hp * 0.6); // (struck already: the first goal is to shore it up)
+    },
+    goals: [
+      { kind: 'dammend', text: 'Shore your dam up to full strength', count: (P, S) => (S.dam && S.dam.d[0].broke < 0 && S.dam.d[0].hp >= DAM.hp ? 1 : 0),
+        hint: 'Tap your dam (the concrete wall above your valley) → <b>Shore it up</b> (<kbd>U</kbd>). Free Workers mend it.',
+        ui: '#sh-dammend' },
+      { kind: 'dams', text: 'Burst the rival\'s dam', count: (P) => P.stats.dams || 0,
+        hint: 'Tap their dam → <b>Wreck the dam</b> (<kbd>W</kbd>). Then select warbots and tap the dam to send them.',
+        ui: '#sh-damwreck, #btn-attack, #ar-select' },
+    ],
+  },
   {
     id: 'border', name: 'Border Dispute', chapter: 'First Contact',
     brief: 'A rival shares this plateau, and the rich fields lie between you. Take their Outposts, carry off loot and hold the land.',
