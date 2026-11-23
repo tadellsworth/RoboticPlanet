@@ -2684,8 +2684,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     3, faint by day (`deepGlow`), the gauge's lamps (the next one blinking while it works toward it), the floodlit wheels at
     night, and its light pools. Sound (`js/audio.js`): `deepHum` (its winding engine and drill on screen, sinking with each
     stage; the wheels' clank) and `deepstage` (a stage reached). Rivals: `aiDeep` (outside `AI_MEGA_KIND`, so never under
-    the cap): any rival, from `DEEP.aiAt` (30 min), once it has dug Ore and none of its Ore Mines has any left in reach,
-    half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
+    the cap): any rival, from `DEEP.aiAt` (20 min; it was 30 and waited for its last Ore Mine to run dry until the
+    owner's call of Nov 22 2026), with half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
     a Generator then going up beside it; `aiMegaSpot`), the goods of both first; `aiDeepGuard` rallies up to 8 warbots by it before dusk on a call
     night (`P.deepRally`, called back at dawn). The Salvager marches on a foe's stage-3 Core (`aiMarch`).
   - **The Atmosphere Engine** (`BDEFS.atmos`, `ATMOS`; key N (A pans); 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20
@@ -2750,7 +2750,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     young trees). Wildlife (`js/wildlife.js`): a cell with a dozen Garden tiles gets deer and songbirds (`hab.garden`),
     whatever its biome. Sound: `atmosHum` (the air through it on screen; rain from stage 2) and `atmosstage`. Rivals
     (`aiAtmos`): the Steward's main project (`aiMegaMain` → 'atmos', `AI_MEGA_KIND` main) in place of Arrival City when
-    `aiAtmosHome` (The Rust or Cinderlands, or Planetary events on), from `ATMOS.aiAt` (21 min), with half its Cement and
+    `aiAtmosHome` (Planetary events on; until Nov 22 2026 also The Rust and Cinderlands, where it made the Steward the
+    strongest doctrine), from `ATMOS.aiAt` (21 min), with half its Cement and
     Crystal and its Fiber in hand, near its Command Base, its 2 Generators going up beside it. The Herald (`aiAtmosBurn`):
     every `burnEvery` (120) s, up to `burnN` (2) of its Torches with full tanks go to scorch the fertile ground nearest a
     foe's Engine at Rain or more, where no gun of the foe's covers it (`P.stats.aeBurnSent`); rained out of a powered
@@ -2884,12 +2885,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Lance and the nukes: its doctrine's lean (`AI_MEGA_LEAN`: Architect +2, Warden +1, Steward 0, Salvager −1, Herald
     −2), +1 for the Lance when its enemy's buildings lie strung out (the best line through them takes 2 or more more than
     the best blast), −1 when they're bunched, +1 when the enemy has a Shield Dome (it swallows a nuke whole), +1 when
-    Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. Its Lance
+    Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. The Lance
+    only with half its cost in hand (`aiHalfway`; the owner's call of Nov 22 2026: chosen without it, 28 rivals in 160
+    games gave up their Silo for a Lance none of them placed): short of that it doesn't choose yet (looked at again every
+    `look`, 20 s) and its Nuclear Silo plan goes on, and once a Nuclear Silo stands or is going up it's the nukes. Its Lance
     goes within reach of its Reactor, on the enemy's side of it so its own buildings stay off its lines (`aiMegaSpot`;
     with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
     (`aiLanceWorth`: its foes' buildings and army in the core, 0.3 of that for those only in the scorched edge, its own side's six times over, 5 for dropping a foe's Dome), if worth
     `worth` (6). The Sundering Ray (`aiSunder`, `AI_SUNDER`, kind 'weapon' in `AI_MEGA_KIND`): a Warden picks it as its
-    one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min) when the Murmur are Active and a
+    one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min), with half its cost in hand and no
+    Nuclear Silo of its own standing or going up (as the Lance, since Nov 22 2026), when the Murmur are Active and a
     nest's tunnels reach within `near` (12) tiles of its Command Base (`aiTunnelNear`); it goes up near home
     (`aiMegaSpot`, its goods first) with its 2 Generators going down with the site (again as any is lost), Use Reactor
     off. By day, after a night the Murmur raided it (or with their tunnels that close, or every `every` (2) nights while

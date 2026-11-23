@@ -2377,6 +2377,10 @@ function aiMegaPick(p) {
   if (S.buildings.some((b) => !b.dead && b.owner === enemy && BDEFS[b.type].dome)) { score++; why.push('enemy Dome +1'); }
   if (goodTotal(p, 'uranium') + 2 * goodTotal(p, 'fissile') < 12 && !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) { score++; why.push('little Uranium +1'); }
   P.megaWhy = `${why.join(', ')} = ${score} (line ${line}, blast ${blast})`;
+  // (The Lance only with half its cost in hand, the owner's call of Nov 22 2026: chosen without it, 28 rivals in 160
+  // games gave up their Silo for a Lance none of them ever placed. Short of it: no choice yet, and the Nuclear Silo
+  // plan goes on; once a Silo stands or is going up, the nukes it is.)
+  if (score > 0 && !aiHalfway(p, 'lance')) return S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'nukesilo') ? 'nuke' : null;
   return score > 0 ? 'lance' : 'nuke';
 }
 
@@ -2393,7 +2397,11 @@ function aiMega(p, me, lander, canBuild) {
   // The Warden's other answer: the Sundering Ray, when the Murmur dig toward it (aiSunder: its own pick, build and use).
   aiSunder(p, me, lander, canBuild);
   // The choice, once it has a Reactor fed with Uranium, late in the game.
-  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon')) P.megaPick = aiMegaPick(p);
+  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon') && S.time - (P.megaTry ?? -999) >= AI_MEGA.look) {
+    P.megaTry = S.time; // (no choice yet, short of the Lance's half: looked at again every AI_MEGA.look s)
+    const k = aiMegaPick(p);
+    if (k) P.megaPick = k;
+  }
   aiCity(p, me, lander, canBuild);
   aiLift(p, me, lander, canBuild);
   aiLiftAmbush(p);
@@ -2441,8 +2449,8 @@ function aiMega(p, me, lander, canBuild) {
 
 /*
  * The Deep Core (DEEP), for any rival: it never counts against its two megastructures (it has no AI_MEGA_KIND). Once a
- * game is DEEP.aiAt s in and its last Ore Mine has run dry (it has dug Ore, and none of its Mines has any left in reach),
- * with half its Cement and Crystal in hand it puts one up by a Generator (or Reactor) near its Command Base, or near
+ * game is DEEP.aiAt s in (20 minutes since the owner's call of Nov 22 2026; it was 30 and waited for its last Ore Mine to
+ * run dry, and 13 Cores were placed in 160 games, none finished), with half its Cement and Crystal in hand it puts one up by a Generator (or Reactor) near its Command Base, or near
  * the Base with a Generator going up beside it, the goods of both first. Built, before dusk on a night the Core has called the Murmur for (b.dcCall), its spare warbots rally to
  * it (P.deepRally), called back at dawn. (The Salvager goes for foes' stage-3 Cores: see the marches.)
  */
@@ -2461,7 +2469,6 @@ function aiDeep(p, me, lander, canBuild) {
   }
   if (P.deepRally) { recallRally(P.deepRally); P.deepRally = 0; }
   if (!canBuild || !lander || S.time < DEEP.aiAt || worldBan('deepcore') || megaBlocked(p, 'deepcore')) return;
-  if (!((P.made && P.made.ore) > 0) || me.some((b) => b.type === 'mine' && b.built && !b.depleted)) return; // (its last Ore Mine has run dry)
   // (half its Cement and Crystal in hand: its Alloy and Chips never pile up, going into warbots as made, so the site
   // waits for those and gets them first, as Arrival City's does)
   const have = playerGoods(p), c = BDEFS.deepcore.cost;
@@ -2475,8 +2482,8 @@ function aiDeep(p, me, lander, canBuild) {
   if (r && r.ok) { P.deepAt = Math.round(S.time); r.building.prio = 'high'; r.building.sitePrio = 1; }
 }
 /*
- * The Atmosphere Engine (ATMOS). The Steward's main project in place of Arrival City (aiMegaMain) on a barren home (The
- * Rust, Cinderlands) or with Planetary events on (aiAtmosHome), from ATMOS.aiAt s once its economy runs (a Bot Foundry,
+ * The Atmosphere Engine (ATMOS). The Steward's main project in place of Arrival City (aiMegaMain) with Planetary events
+ * on (aiAtmosHome), from ATMOS.aiAt s once its economy runs (a Bot Foundry,
  * half its Cement and Crystal and its Fiber in hand): near its Command Base, with its 2 Generators going up beside it,
  * their goods first, and again as one is lost. And the Herald, its clock frozen at "Arrival in one day", sees a foe's
  * greening as overgrowth on the landing zone: every ATMOS.burnEvery s, up to ATMOS.burnN of its Torches with full tanks
@@ -2484,7 +2491,10 @@ function aiDeep(p, me, lander, canBuild) {
  * Engine has power its rain puts their fire out there, so they go for its Generators (or Reactor) instead. Any rival with
  * an Engine at Rain sets its Storm Front down (aiAtmosStorm).
  */
-function aiAtmosHome() { return !worldBan('atmos') && (!!S.events || biome() === 'desert' || biome() === 'volcanic'); }
+// (Only with Planetary events on, the owner's call of Nov 22 2026: on The Rust and Cinderlands with them off, the Engine
+// as the Steward's main project made it the strongest doctrine, 11 of 16 against 7 with Arrival City. The player's own
+// Engine is unchanged.)
+function aiAtmosHome() { return !worldBan('atmos') && !!S.events; }
 function aiAtmos(p, me, lander, canBuild) {
   const P = S.players[p];
   if (P.style === 'rusher') aiAtmosBurn(p);
@@ -4855,7 +4865,10 @@ function aiSunder(p, me, lander, canBuild) {
   const P = S.players[p];
   if (!lander || worldBan('sunder')) return;
   const ray = me.find((b) => BDEFS[b.type].sunder);
-  if (!P.megaPick && P.style === 'turtle' && murmurLevel() === 'active' && S.time >= AI_SUNDER.pickAt && aiMegaRoom(p, 'weapon') && aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near)) {
+  // (With half its cost in hand only, as the Lance: aiMegaPick. Chosen without it, 19 Wardens in 160 games gave up their
+  // Nuclear Silo for a Ray none of them placed.)
+  if (!P.megaPick && P.style === 'turtle' && murmurLevel() === 'active' && S.time >= AI_SUNDER.pickAt && aiMegaRoom(p, 'weapon') && aiHalfway(p, 'sunder') &&
+    !me.some((b) => b.type === 'nukesilo') && aiTunnelNear(lander.x + 0.5, lander.y + 0.5, AI_SUNDER.near)) {
     P.megaPick = 'sunder'; P.megaWhy = 'the Murmur dig toward its base';
   }
   if (!ray) {

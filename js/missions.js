@@ -1687,7 +1687,10 @@ const MISSIONS = [
       'In free play, holding most of the land for 3 minutes wins a Domination game.',
     ],
     mode: 'versus', seed: 6603, size: 0, rough: 1, rich: 3, biome: 'autumn', players: 2, style: 'balanced',
-    rival: ['easy', 'easy', 'normal'], passive: [true, false, false], limit: [0, 0, 25],
+    rival: ['easy', 'easy', 'easy', 'normal', 'normal'], passive: [true, false, false], limit: [0, 0, 25],
+    // (Five-long since the balance audit of Nov 22 2026, the owner's call: Warlord keeps Commander's Normal rival. With
+    // mPick's Hard one the AI on your side, playing the hints' steps, lost at all three work speeds, its Command Base
+    // falling at 3½ to 13 minutes; with the Normal rival it won all three, at 7 to 13 minutes.)
     layout(m, W) {
       const H = m.terrain.length / W;
       mirrored(W, H, Math.floor(W / 2) - 5, Math.floor(H / 2) + 2, (x, y) => placeField(m, W, x, y, 1.8, R_ORE, 0.75, 3));
