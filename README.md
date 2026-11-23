@@ -117,7 +117,11 @@ how goods move.
   WebGL, on a software renderer (`WEBGL_debug_renderer_info`: SwiftShader, llvmpipe...), when the first
   `CGL.slowChecks` full draws average over `CGL.slowMs` (50 ms), or from a page opened as a file, the globe is shaded
   per pixel instead for the rest of the session (`cgDraw2d`: the same 2048 picture and clouds read as pixels, up to
-  `CGL.flatMax` px across, `CGL.flatMove` while it turns, made again only when the view or tints change). Each
+  `CGL.flatMax` px across, `CGL.flatMove` while it turns, made again only when the view or tints change). The clouds
+  are a layer of their own drifting slowly east over the ground (`cglCloud`: `CGL.cloudDrift`, a lap in about 18 minutes,
+  by the page's clock, still with reduce motion on): in WebGL only `#cg-gl` is drawn again, each `CGL.cloudStep` device
+  px of drift (at most every `cloudMinMs`); per pixel the shaded planet is kept without them (`CGS.f2`) and they are laid
+  over it again (`cglClouds2d`) every `flatCloudMs` at most, `flatCloudRows` rows a frame, so no frame takes long. Each
   owner's territories are tinted (a soft fill, stronger at the edge, painted onto a 1024 × 512 picture of the globe by
   `cglTint` when owners, the pick or the targets change) and outlined in their colour with a dark casing, the picked
   territory in white and the move or weapon targets in yellow (dashed for a weapon), and the borders on land are thin
@@ -322,7 +326,10 @@ The look (js/city.js; ART_GUIDE.md, Batch 33): the buildings are rendered sprite
 each kind and lot size, by day, at night and stripped twice: `townState` maps the eighths of `townStep` onto them), loaded
 only for this map (`ensureTownArt`: `art/town/town-art.js` and the pictures of the lots in play; one-file:
 `dist/town.js`), morning and evening made from day and night; of a lot's looks the one nearest the building's `hgt`
-(so `TOWN_KINDS` heights are the art's); a building in front of one of your robots fades. The ground, shadows (one
+(so `TOWN_KINDS` heights are the art's); a building whose picture covers one of your robots (or one selected) fades
+(`townHides`: the robot drawn before it, a point of its body on the building's solid pixels, `townSprite` and
+`artMask`, so never its neighbour); a tap picks a building by its picture too, upper floors and roof included, the
+one in front where they overlap (`townAtTap`; a robot drawn in front of it first). The ground, shadows (one
 layer), lamps, sentries, haze and the name are drawn in code. The mission **Passenger Town** (First Contact)
 teaches it (and joining a road to the avenue). `node tools/city-test.js [--games n minutes] [--only k]` checks the
 layouts for two, three and four (symmetry and fairness, joined, the avenues, the Trade Posts), stripping, sentries (and
@@ -3442,7 +3449,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,
   right-click an enemy to aim it there; Shift+right-click, every defence that reaches it). Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
-  tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
+  tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). A
+  tall building is picked by its picture too (`buildingUpperAt`: the solid pixels of its art and turning head above its
+  tiles, a Mooring Mast's cup, a Keep's walls; the one in front where they overlap; the Walking Factory's whole sprite,
+  `walkerAtTap`; Passenger Town's buildings, `townAtTap`), robots drawn in front of it still first. Keys:
   **B** build, then **1–6** a tab (Gather, Make, Move, Defend, All, Mega; **Tab** steps; a new game opens on Gather, then on the last one used) and the
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D or B;
   R is Ore Mine on Gather and Refinery on Make; on All a card shows "2 C"; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths

@@ -58,13 +58,19 @@ to the approved design, with new textures and sprites). In order:
 1. **The Contingency globe** (built Nov 23 2026: concept A, "Satellite"; ART_GUIDE.md, The Contingency globe): a
    realistic planet, natural coastlines, relief, smooth borders, drawn in WebGL. The menu planet shares its colours
    (its face is recoloured from the same picture). Canvas: https://claude.ai/artifact/Erzr8o7X7ZxnmTbbeNZ9Wb
+   Loose end done (Nov 23 2026): the clouds drift slowly east over the ground as a layer of their own (WebGL and
+   per pixel; still with reduce motion on).
 2. **Passenger Town's buildings** (BUILT Nov 23 2026; ART_GUIDE Batch 33): rendered 3D buildings in place of the
    code-drawn boxes. The owner's decisions on the concepts ("looks great"): day and night renders shipped (morning and
    evening made in code from them), in a bundle of their own loaded only for the map; the town's night lifted a little
    over the shared night (more roof lights, some of the day render in the night one); a building in front of your
    robots fades; the arcade's ribs thinner and the zebra crossings lighter; heights in `TOWN_KINDS` matched to the art
    (they only draw: where a sentry's shots come from); stripping in two art steps (scaffold, frame), faltering lights
-   small code overlays.
+   small code overlays. Loose ends done (Nov 23 2026): the fade is judged by each building's picture (its solid pixels
+   over the robot), so a robot behind one building no longer fades its neighbour; a tap picks a building by its
+   picture, upper floors and roof included, the one in front where they overlap (robots in front still first). Other
+   tall sprites the same way: Mooring Masts, Keeps, turrets' heads and the like (`buildingUpperAt`), and the Walking
+   Factory's whole sprite.
 3. **Weapon effects:** laser beams, muzzle flashes, the white blast flash, tracers, missile trails, impacts.
 4. **Sunsets, sunrises and the sky light** of each biome.
 5. **Weather:** rain, snow, sandstorms, fog, storms and lightning (the Atmosphere Engine's too).

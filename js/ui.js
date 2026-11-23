@@ -3142,6 +3142,9 @@ function onMapCommand(i, j, wx, wy, done) {
   if (dpick && !dpick.dead && dpick.owner === ME && dpick.built && canFocus(BDEFS[dpick.type])) { focusAt(dpick, i, j, wx, wy, !!INPUT.shift, null, done); return; }
   if (!UI.sel.length) return;
   const b = buildingAtTap(i, j, wx, wy);
+  // (Passenger Town: a building tapped by its upper floors or roof, in front of what's on the tile, is the one meant)
+  const tw = !b && S.town && typeof townAtTap === 'function' ? townAtTap(wx, wy) : null;
+  if (tw) { i = tw.r.x; j = tw.r.y; }
   // Your Ferry, off a shore: the selected warbots walk to the shore beside it and board.
   const ferry = S.bots.find((v) => !v.dead && v.owner === ME && BOTS[v.type].ferry && !v.inside && dist2(v.x, v.y, wx, wy) < 0.9);
   if (ferry) {
@@ -6024,11 +6027,47 @@ function viaductTap(i, j) {
 }
 
 function buildingAtTap(i, j, wx, wy) {
-  if (inMap(i, j) && S.bAt[tIdx(i, j)]) return getE(S.bAt[tIdx(i, j)]);
-  for (const b of S.buildings) {
-    if (!b.dead && b.type === 'lander' && dist2(b.x + 0.5, b.y + 0.5, wx, wy) < 1.1) return b;
+  let at = inMap(i, j) && S.bAt[tIdx(i, j)] ? getE(S.bAt[tIdx(i, j)]) : null;
+  if (!at) for (const b of S.buildings) {
+    if (!b.dead && b.type === 'lander' && dist2(b.x + 0.5, b.y + 0.5, wx, wy) < 1.1) { at = b; break; }
   }
-  return null;
+  // A tall one's upper floors and roof (its picture above its tiles): it, when it stands in front of what's on the tile.
+  const up = wx === undefined ? null : buildingUpperAt(wx, wy);
+  return up && (!at || bldSortY(up) > bldSortY(at)) ? up : at;
+}
+
+/** Where building b sorts among the robots and buildings as they're drawn (render.js's sortY): further down is in front. */
+function bldSortY(b) { const F = BDEFS[b.type] && BDEFS[b.type].foot; return b.y + (F ? F - 0.5 : 0.5); }
+
+/**
+ * The building whose picture is drawn over map point (wx, wy) above its own tiles (a Keep's walls, a tower's top, a
+ * Mooring Mast's cup): the solid pixels of its art as drawArt places it, over its tiles' width; the one in front where
+ * several are. Null if none. (On its own tiles S.bAt answers; the megastructures drawn in code have their big squares.)
+ */
+const UPPER_HEADS = new Set(['turret', 'mortar', 'keep', 'flak', 'minigun', 'lance']);
+function buildingUpperAt(wx, wy) {
+  let best = null;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || wy >= b.y || wy < b.y - 3 || wx < b.x || wx > b.x + 4) continue;
+    const d = BDEFS[b.type];
+    if (!d || ['crawlerbase', 'wall', 'gate', 'magpylon', 'viaduct', 'ramp', 'city', 'lift', 'gup', 'sunder', 'deepcore', 'atmos'].includes(b.type)) continue; // (drawn in code, or low)
+    const w = d.foot || (d.long && b.mdAxis !== 'ns' ? 2 : 1);
+    if (wx >= b.x + w) continue;
+    const art = artFor(b.type, b.owner);
+    if (!art || !art.img) continue;
+    // (and a turning head on top: a Keep's roof cannon, a turret's, a Flak Gun's barrels...)
+    const head = UPPER_HEADS.has(b.type) && (b.type !== 'turret' || art.anchor) ? turretHead(b.owner, b.aim !== undefined ? b.aim : -Math.PI / 4, b.type) : null;
+    const c = bCentre(b), on = (a) => {
+      if (!a || !a.img) return false;
+      const s = b.type === 'lander' && !a.scale ? 1.6 : 1, sz = s * (a.scale || 1);
+      let x0 = c.x - sz / 2, y0 = c.y - sz / 2;
+      if (Array.isArray(a.anchor)) { x0 = c.x - a.anchor[0] * sz; y0 = c.y - a.anchor[1] * sz; } else if (a.anchor === 'bottom') y0 += (s - sz) / 2;
+      return artSolidAt(a.img, x0, y0, x0 + sz, y0 + sz, wx, wy);
+    };
+    if (!on(art) && !on(head)) continue;
+    if (!best || bldSortY(b) > bldSortY(best)) best = b;
+  }
+  return best;
 }
 
 /**
@@ -6316,16 +6355,30 @@ function onMapTap(i, j, wx, wy) {
   }
   // Under a finger: with warbots selected and their bar showing, a tap on another of yours selects it and a tap
   // anywhere else is their order; with none selected, a tap on one of yours out in the open selects it.
+  // What's drawn over the spot, upper floors and roofs included: a tall building (buildingAtTap) or one of Passenger
+  // Town's (js/city.js), whichever is in front. A robot drawn in front of it comes first; one behind it only while the
+  // building is faded to see-through (your robot behind it), as that's what shows.
+  const tw = S.town && typeof townAtTap === 'function' ? townAtTap(wx, wy) : null;
+  const town = tw && !(b && bldSortY(b) >= tw.foot) ? tw.r : null, bb = town ? null : b;
+  const upper = bb && bb.type !== 'lander' && wy < bb.y ? bb : null; // (picked by its picture above its tiles)
+  const overFoot = town ? tw.foot : upper ? bldSortY(upper) : -Infinity, seeThrough = !!town && townFade(town) > 0.5;
+  const ahead = (u) => u.y >= overFoot || seeThrough;
   if (!INPUT.mouse && R.mode === 'normal') {
     const unit = unitAtTap(wx, wy);
-    if (selBarShowing()) { if (unit) touchSelect(unit); else touchOrder(i, j, wx, wy); return; }
-    if (unit && !b && !rally) { closeSheet(); touchSelect(unit); return; }
+    if (selBarShowing()) { if (unit && (!(town || upper) || ahead(unit))) touchSelect(unit); else touchOrder(i, j, wx, wy); return; }
+    if (unit && !rally && (!bb || upper) && ahead(unit)) { closeSheet(); touchSelect(unit); return; }
   }
   // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot
-  // again steps on to the next (a Crawler parked on a Foundry, a worker at a site, two warbots together).
-  const stack = tapStack(rally, b, wx, wy);
+  // again steps on to the next (a Crawler parked on a Foundry, a worker at a site, two warbots together). A building
+  // picked by its upper floors, or the town's, comes after the robots in front of it and before those behind.
+  const stack = tapStack(rally, upper ? null : bb, wx, wy);
+  if (upper || town) {
+    const behind = stack.filter((s) => s.kind === 'bot' && !ahead(s.e)), rest = stack.filter((s) => !behind.includes(s));
+    stack.length = 0;
+    stack.push(...rest, town ? { kind: 'town', e: town } : { kind: 'bld', e: upper }, ...behind);
+  }
   // A Viaduct's deck or a Ropeway's cable over the spot comes last; past it, what's on the ground below (see the end).
-  const cross = !b ? crossingAtTap(i, j, wx, wy) : null;
+  const cross = !b && !town ? crossingAtTap(i, j, wx, wy) : null;
   if (cross) stack.push({ kind: 'bld', e: cross, cross: true });
   const L0 = UI.lastTap, again = L0 && Math.hypot(L0.wx - wx, L0.wy - wy) < 0.7, t0 = inMap(i, j) ? tIdx(i, j) : -1;
   const below = t0 >= 0 && (postAt(t0) || uplinkAt(t0) || S.res[t0] || (S.fert[t0] && S.terrain[t0] === T_GROUND) || (S.road[t0] && wayOwner(t0) === 0));
@@ -6342,6 +6395,7 @@ function onMapTap(i, j, wx, wy) {
     sfx('click');
     if (s.kind === 'rally') { setMode('normal'); openRallySheet(s.e); }
     else if (s.kind === 'bld') openBuildingSheet(s.e);
+    else if (s.kind === 'town') townSheet(s.e);
     else {
       const bot = s.e, mine = bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege);
       if (mine && !INPUT.mouse) { closeSheet(); touchSelect(bot); return; } // (a finger selects it: its panel is behind Info on the selection bar)
@@ -6357,7 +6411,7 @@ function onMapTap(i, j, wx, wy) {
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
   if (inMap(i, j) && S.town && typeof townSheet === 'function' && townRuinAt(tIdx(i, j))) { sfx('click'); townSheet(townRuinAt(tIdx(i, j))); return; } // (a building of Passenger Town: js/city.js)
-  if (inMap(i, j) && S.walker && typeof walkerSheet === 'function' && walkerAtTap(i, j)) { sfx('click'); walkerSheet(); return; } // (the Walking Factory: js/walker.js)
+  if (inMap(i, j) && S.walker && typeof walkerSheet === 'function' && walkerAtTap(i, j, wx, wy)) { sfx('click'); walkerSheet(); return; } // (the Walking Factory: js/walker.js)
   if (inMap(i, j) && S.dam && typeof damSheet === 'function' && damAt(tIdx(i, j))) { sfx('click'); damSheet(S.dam.d.indexOf(damAt(tIdx(i, j)))); return; } // (a dam: js/dam.js)
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }

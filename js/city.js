@@ -346,16 +346,65 @@ function townItems(items, inView) {
   _ta.budget = { n: 6 }; // (graded versions made a frame, at most)
 }
 
-/** Is one of your robots behind building r (drawn before it, inside its picture)? `top`: how high it stands, tiles. */
-function townHides(r, top) {
+/**
+ * Building r's picture on the map as it's drawn now, in tiles (the map's picture: straight down, a building standing up
+ * toward the camera from its lot): { x0, y0, x1, y1, name (the picture), foot (its sort line among the robots) }, or
+ * null while there's no art for it. Looks only.
+ */
+function townSprite(r) {
+  const look = townLook(r);
+  if (!look) return null;
+  const st0 = TOWN_STATES[townState(r)], st = look.L[st0] ? st0 : 'd', S0 = look.L[st], p = S0.p || window.TOWN_ART.ppt, sx = look.sx;
+  const x0 = r.x - (S0.fl[0] / p) * sx, y0 = r.y + r.h - S0.fl[1] / p;
+  return { x0, y0, x1: x0 + (S0.size[0] / p) * sx, y1: y0 + S0.size[1] / p, name: st === 'd' ? look.key : S0.src, foot: r.y + r.h - 0.02 };
+}
+
+/** Does building r's picture (townSprite) cover map point (x, y)? Its solid pixels (artSolidAt), not its box or lot. */
+function townCovers(sp, x, y) {
+  if (!sp || x < sp.x0 || x >= sp.x1 || y < sp.y0 || y >= sp.y1) return false;
+  const img = townImg(sp.name);
+  return img ? artSolidAt(img, sp.x0, sp.y0, sp.x1, sp.y1, x, y) : true;
+}
+
+/** Points on a robot's body as drawn (its middle, either side, and up to its top), from its foot (x, y). */
+const TOWN_BODY = [[0, -0.05], [-0.13, -0.05], [0.13, -0.05], [0, -0.3], [-0.13, -0.3], [0.13, -0.3]];
+
+/**
+ * Is one of your robots (or one you have selected) behind building r, hidden by it: drawn before it (its foot behind
+ * the building's) and inside the building's picture as drawn (any point of its body on the building's solid pixels)?
+ * Judged by each building's own picture, so a robot behind one building never fades the one beside it.
+ */
+function townHides(r, sp) {
+  if (!sp) return false;
+  const hid = (u) => {
+    if (u.y >= sp.foot || u.x < sp.x0 - 0.2 || u.x > sp.x1 + 0.2 || u.y < sp.y0 || u.y > sp.y1 + 0.1) return false;
+    for (const [dx, dy] of TOWN_BODY) if (townCovers(sp, u.x + dx, u.y + dy)) return true;
+    return false;
+  };
+  for (const u of _ta.mine || []) if (hid(u)) return true;
   const sel = typeof UI !== 'undefined' && UI.sel && UI.sel.length ? UI.sel : null;
-  for (const u of _ta.mine || []) {
-    if (u.y >= r.y + r.h - 0.05 || u.y < r.y + r.h - top - 0.1 || u.x < r.x - 0.15 || u.x > r.x + r.w + 0.15) continue;
-    if (u.y >= r.y - 0.05 && u.x > r.x + 0.2 && u.x < r.x + r.w - 0.2) return true; // (beside it, inside its lot: stripping it)
-    if (u.y < r.y) return true;
-  }
-  if (sel) for (const id of sel) { const u = getE(id); if (u && !u.dead && u.x >= r.x - 0.15 && u.x <= r.x + r.w + 0.15 && u.y < r.y + r.h - 0.05 && u.y > r.y + r.h - top - 0.1) return true; }
+  if (sel) for (const id of sel) { const u = getE(id); if (u && !u.dead && !u.inside && hid(u)) return true; }
   return false;
+}
+
+/** How faded building r is now (0..1: see-through while one of your robots is behind it). */
+function townFade(r) { return _tf.get(r.id) || 0; }
+
+/**
+ * The town building a tap at map point (wx, wy) is on: on its lot, or on its picture as drawn, its upper floors and
+ * roof included; where pictures overlap, the one in front (drawn last). { r, foot } or null. Looks only (what's tapped).
+ */
+function townAtTap(wx, wy) {
+  const T = S && S.town;
+  if (!T) return null;
+  let best = null;
+  for (const r of T.r) {
+    if (r.gone || wx < r.x - 0.5 || wx > r.x + r.w + 0.5 || wy > r.y + r.h + 0.5 || wy < r.y - 12) continue;
+    const sp = townSprite(r), foot = sp ? sp.foot : r.y + r.h - 0.02;
+    const on = (wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) || townCovers(sp, wx, wy);
+    if (on && (!best || foot > best.foot)) best = { r, foot };
+  }
+  return best;
 }
 
 /** One of townItems' pieces. */
@@ -384,7 +433,7 @@ function townDraw(ctx, e, ox, oy, z) {
   let A1 = townVersion(look, st, late ? tb : ta, px, budget), B1 = tb !== ta ? townVersion(look, st, late ? ta : tb, px, budget) : null;
   if (!A1) { A1 = B1 || townVersion(look, st, 'day', px, budget); B1 = null; } // (its version for now not made yet: another stands in for a frame)
   // fading while one of your robots is behind it
-  const top = (S0.fl[1] - S0.roof[1]) / (S0.p || A.ppt) + 0.3, f0 = _tf.get(r.id) || 0, hide = live && townHides(r, top) ? 1 : 0;
+  const f0 = _tf.get(r.id) || 0, hide = live && townHides(r, townSprite(r)) ? 1 : 0;
   const fade = f0 + (hide - f0) * Math.min(1, (R.dt || 0.016) * 8);
   if (fade > 0.01) _tf.set(r.id, fade); else _tf.delete(r.id);
   const ga = ctx.globalAlpha;
