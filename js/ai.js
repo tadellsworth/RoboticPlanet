@@ -5010,8 +5010,8 @@ function aiWalker(p, lvl) {
  *    quiet, it orders it shored up (its Workers mend it).
  *  - A foe's dam: from DAM.ai.from seconds in (twice that on Easy), with at least DAM.ai.army armed robots to spare and
  *    DAM.ai.worth or more of that foe's buildings where the flood would go, it orders the dam wrecked and sends a band
- *    to stand at it (again every two minutes while it stands and none of its band is left). Once it bursts, the band
- *    comes home.
+ *    to stand at it (again every two minutes while it stands and none of its band is left), and with a ready Silo in
+ *    range it fires a Missile at it (one every DAM.ai.missile seconds at most). Once it bursts, the band comes home.
  */
 function aiDamSpot(p, d, lander) {
   const z = S.zone[tIdx(lander.x, lander.y)];
@@ -5063,6 +5063,12 @@ function aiDam(p, lander) {
     for (const b of S.buildings) if (!b.dead && b.owner >= 0 && foes(b.owner, p) && fl.has(tIdx(b.x, b.y))) worth++;
     if (worth < A.worth) return;
     if (S.buildings.some((b) => !b.dead && b.owner === p && fl.has(tIdx(b.x, b.y)))) return; // (never on its own)
+    // A Missile at it, from a ready Silo in range (one every DAM.ai.missile s at most): it takes two fifths of it.
+    const mid = d.gap[Math.floor(d.gap.length / 2)], mi = mid % S.W, mj = (mid / S.W) | 0;
+    if (!allyHeld(p) && S.time - ((P.damMis && P.damMis[k]) ?? -1e9) >= A.missile) {
+      const silo = S.buildings.find((b) => !b.dead && b.owner === p && b.type === 'silo' && siloReady(b) && !missileBlocked(b, mi, mj));
+      if (silo && fireMissileAt(silo, mi, mj)) (P.damMis = P.damMis || {})[k] = S.time;
+    }
     const t = aiDamSpot(p, d, lander);
     if (t < 0) return;
     const avail = aiSpare(p, { x: t % S.W, y: (t / S.W) | 0 }, 'flag').n;

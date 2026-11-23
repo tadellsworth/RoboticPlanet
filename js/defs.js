@@ -860,8 +860,13 @@ const TOWN_SENTRY_LINE = 'Accord Civil Security. Position held. Day {day}.';
  *   silt          the share of the flood plain left fertile when the water goes down; `bed`, the share of the lakebed
  *                 left with Ore or Crystal (rich)
  *   ai            a rival: thinks about its dams every `every` s; breaches a foe's from `from` s with at least `army`
- *                 armed robots spare and `worth` of the foe's buildings in the flood; defends its own when foes come
- *                 within `watch` tiles
+ *                 armed robots spare and `worth` of the foe's buildings in the flood (with a ready Silo in range, a
+ *                 Missile at it too, one every `missile` s at most); defends its own when foes come within `watch` tiles
+ *   missile, blast   a Missile landing on a foe's dam or within blast.on tiles of its face takes `missile` off it (two
+ *                 fifths), blast.edge of that out to the Missile's splash; a nuclear blast within its radius bursts it
+ *                 outright; a bomb within its splash takes `bomb` (the owner's call, Nov 23 2026: Missiles hurt dams;
+ *                 bombs a little; Mortar and Howitzer shells don't, a Howitzer wrecks one only ordered, as above). A
+ *                 colony's own blasts and its allies' never hurt the dam over its valley
  */
 const DAM = {
   hp: 400, reach: 3, hit: 1, siegeReach: 6, siege: 3,
@@ -870,7 +875,8 @@ const DAM = {
   spread: 0.8, keep: 4.5, chan: 0.6,
   speed: 3.5, stay: 60, recede: 20, drain: [3, 30],
   botHit: 4, hurt: 0.5, silt: 0.55, bed: 0.12,
-  ai: { every: 6, from: 420, army: 8, worth: 3, watch: 7 },
+  ai: { every: 6, from: 420, army: 8, worth: 3, watch: 7, missile: 90 },
+  missile: 160, blast: { on: 1, edge: 0.5 }, bomb: 12,
 };
 /** The dam's plate (LORE.md: the Pathfinder built for the colonists who never came). */
 const DAM_LINE = 'Reservoir 4. Capacity for the first colony: 200 years. Gauge read daily. Reading: full.';
@@ -2107,6 +2113,10 @@ const MURMUR = {
     huntFrom: 4, huntEvery: 40, teamN: 2, teamBrute: 5, teams: [1, 0.5, 4], huntR: 40,
     hordeFrom: 5, hordeEvery: 35, hordeN: 2, idle: 8, quarryR: 6,
   },
+  // A nest fights back (nestAlarm in js/sim.js; the owner's call, Nov 23 2026): shot at from out of its guards' reach, its
+  // guards (and at night the plain packs up within `packR` tiles) go for the shooter while it stays within `leash` tiles
+  // of the nest, until `last` seconds after the latest hit; the shooter's colony is told, at most every `tell` seconds.
+  alarm: { leash: 16, packR: 10, last: 20, tell: 30 },
   craft: {
     watch: 12, rally: 9, wait: 14, waitMax: 50, join: 46, cutR: 10, cutTime: 3, cutWait: 30, dark: 5, lampDark: 2, leadGap: 3,
     joinMost: 3, spread: 1.6, half: 0.5, again: 45, againLeft: 70, scatter: 4.5, scatterN: 2, scatterFor: 4, scatterCd: 12, dragR: 8,

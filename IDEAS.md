@@ -181,6 +181,30 @@ campaign. The old single save became campaign 1. Open for the owner:
 - Only one battle can be under way in the normal game save; another campaign's is kept aside, but the main menu's
   Continue only ever shows the latest battle.
 
+## A Murmur nest fights back (built Nov 23 2026; design calls for the owner)
+
+The owner asked for nests to answer ranged attackers instead of sitting there being shelled (README, The Murmur; How
+to play, The Murmur, "A nest fights back"; `lh/nest-retaliate-test.js`). The calls made, open for the owner:
+
+- **What stirs them:** anything that hits the nest or its guards from out of the guards' own reach (7 tiles in Colony,
+  3 in Versus), and any colony building at any distance (the guards never go for buildings by themselves): a Mortar
+  Pit or turret shelling the guards, a warbot or Railgunner firing from further off, a Bunker, a Missile from a Silo
+  close by. **Howitzers and bombers can't hurt the Murmur at all** (their shells and bombs skip them, and a Mortar Pit
+  "can't reach down" to a nest), so they never stir a nest; letting a Howitzer shell a nest is open.
+- **Who comes:** its guards by day or night; at night also the plain packs up within 10 tiles of it (never a strike's,
+  hunt's or form's, which keep to their part). By day there are no packs up, so only the guards (night-only packs kept).
+- **The shooter itself**, building or robot (a robot in a building: the building); Scuttlers batter a building to 1
+  armor at most, as on any raid; walled off, they go for the Wall in the way. Never aircraft (out of reach) or ships.
+- **The leash:** 16 tiles from the nest; past it they let it be (a Silo across the map raises nothing). The alarm lasts
+  20 s from the latest hit; the shooter gone, out of the leash or quiet, the guards go back on guard, the packs back to
+  their raid. Its colony is told when one stirs a nest.
+- **Measured** (`lh/nest-alarm-batch.sh`, 12 Versus AI-vs-AI games on Active, 60-minute cap, mostly Warden/turtle
+  pairings; before → after): mean length 28.0 → 28.7 min; same winner at the same time in 9 of 12; nests cleared 7 →
+  10; robots lost to the Murmur 101 → 83; alarms 0 to 5 a game, avenging Murmur biting 0 to 13 robots and 0 to 5
+  buildings a game. One Warden-vs-Warden game (Chokepoint seed 31) that ran to the cap now ends at 35.5 min, another
+  (seed 32) that ended at 24.7 now runs to the cap. No turtle base was overrun: the guards that come out mostly die to
+  its guns.
+
 ## The Dam (built Nov 23 2026; design calls for the owner)
 
 The owner's idea (approved): a high lake behind a dam over a colony's valley; wreck the dam and the lake floods the
@@ -194,9 +218,16 @@ teaches it. The calls made in building it, open for the owner:
   strike early and the same thing to guard. An asymmetric two-player version (one colony up, one down) would need a
   different plan for each side; not built.
 - **How it's wrecked:** a strength of 400. The colony orders it wrecked from its panel (W), then its armed army robots
-  within 3 tiles of the face take 1 a second off it (ten warbots: 40 seconds), a Howitzer within 6 tiles 3. Shells,
-  bombs, Missiles and Mortars don't touch it (it was built to hold a lake): to be asked. Anyone can wreck any dam,
-  their own included.
+  within 3 tiles of the face take 1 a second off it (ten warbots: 40 seconds), a Howitzer within 6 tiles 3. Anyone
+  can wreck any dam, their own included. **Blasts (the owner's call, Nov 23 2026: Missiles damage dams):** a Missile on
+  a foe's dam (or within a tile of its face) takes 160, two fifths (three burst a full one: one alone never does, so a
+  Silo softens it and warbots or more Missiles finish it); within the Missile's 2.2-tile splash, half that; a nuclear
+  blast within its 6 tiles bursts it outright; a bomb by it chips 12 (modest: bombers can't be aimed at a dam, so
+  only a bomb dropped on something beside it). Mortar and Howitzer shells don't (a Mortar Pit defending its own dam
+  would wear it down; a Howitzer already wrecks one when ordered). A colony's own blasts and its allies' never hurt
+  the dam over its valley. The rival fires a Missile at a foe's dam it means to burst when it has a ready Silo in range
+  (one every 90 s at most). Open: whether shells should chip it too, and whether a burst should need warbots at the
+  end (a Missile floor, like a Command Base's).
 - **Defending and repairing:** warbots guard it; Shore it up (U) sends up to 3 free Workers, 2.5 a second each, only
   once nothing has hit it for 6 seconds and no enemy is about, and it costs nothing. A Cement cost per point mended
   is the obvious lever if it proves too cheap.

@@ -366,7 +366,13 @@ The `ford` layer is always made on this map. **Rules** (sim.js, three times a se
 (panel: Wreck the dam W, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
 the wreck bit within `DAM.reach` (3) of the dam's face takes `DAM.hit` (1) a second off its `DAM.hp` (400); a Howitzer
 within `DAM.siegeReach` (6), `DAM.siege` (3) (rivals' times their difficulty's mult). Its colony is told when it is
-first hit, everyone at half and a quarter. **Shoring up**: dispatch's step 5b (`damRun`) sends up to `DAM.crew` (3)
+first hit, everyone at half and a quarter (`damHurt`). **Blasts** (`damBlast`, the owner's call of Nov 23 2026): a
+Missile (`missileImpact`) landing on a foe's dam or within `DAM.blast.on` (1) of its face takes `DAM.missile` (160, two
+fifths), `DAM.blast.edge` (half) of that out to the Missile's splash (2.2); a nuclear blast within `NUKE.radius` bursts
+it outright; a bomb within `BOMBER.splash`, `DAM.bomb` (12); Mortar and Howitzer shells don't (a Howitzer wrecks one
+only ordered, above). A colony's own blasts and its allies' never hurt the dam over its valley. A Missile aimed at a
+dam tile goes for the dam, never a robot by it (`missileDamAt` in `fireMissileAt`; the aim banner says so), and its
+colony is warned. **Shoring up**: dispatch's step 5b (`damRun`) sends up to `DAM.crew` (3)
 free Workers of a colony with the mend bit to stand within 2 tiles of it; each mends `DAM.mend` (2.5) a second, only
 once nothing has hit it for `DAM.calm` (6) s and no foe is within `CRATE_SAFE`; full, the order ends. Tiles of a dam:
 no road, tunnel or building (`damAt` in canRoad and canPlace). Selected robots tapped on a dam stand within reach of it
@@ -384,7 +390,8 @@ guards its own dam (or an ally's) when foes' army robots come within `DAM.ai.wat
 a band on a flag within reach of the face (`aiDamSpot`), called back after a quiet minute; shores it up when hurt and
 quiet; from `DAM.ai.from` (7 min; twice that on Easy), with `DAM.ai.army` armed robots to spare and at least
 `DAM.ai.worth` foe buildings in the flood's way (none of its own), orders a foe's dam wrecked and sends up to 16 to
-stand at it, again after two minutes if the band is gone. The look (js/dam.js): the concrete wall drawn in code (crest,
+stand at it, again after two minutes if the band is gone; with a ready Silo in range (and not held back by an ally) it
+fires a Missile at the dam's middle too, one every `DAM.ai.missile` (90) s at most. The look (js/dam.js): the concrete wall drawn in code (crest,
 valley face with a spillway gate and a trickle, cracks spreading as it weakens, seeping below half, chips while hit, a
 strength bar while hurt, your order as a dashed outline; burst, rubble and the lake pouring through), the flood under
 the robots (water spreading with a foaming front and streaks running down the valley, then wet silt), the lakebed's mud.
@@ -2346,6 +2353,20 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     driven, and 6 of 8 games there ran to the cap). Nests send
     nothing by day (`updateNest` keeps the guards up and grows the nest), **in Colony as in Versus** (the owner's call,
     Nov 2026: Colony's daytime raids are gone; packs come only at night, through the exits).
+    **A nest fights back** (`MURMUR.alarm`; `nestAlarm`, `nestRally`, `murmurAvenge`; the owner's call of Nov 23 2026):
+    hit from out of its guards' reach (`guardKeep`: 7 in Colony, `GUARD_VERSUS` in Versus; a colony building at any
+    distance, since the guards never go for buildings on their own), by a warbot, Railgunner, Torch or Arc Caster
+    (`hitBuilding`'s `src`), a gun or Bunker shooting its guards (`damageBot` with a source point: `nestShooterAt`), a
+    Mortar Pit's shell among them (`shellImpact`), a Missile on or by it (the Silo), the nest raises an alarm on the
+    shooter (b.alT until `alarm.last` (20) s after the latest hit, b.alId; the nearer shooter first; its colony told,
+    b.alMsg, at most every `alarm.tell` s), only within `alarm.leash` (16) tiles of the nest. Once a second while it's on
+    (`updateNest`) its guards, by day or night, and at night the plain packs up within `alarm.packR` (10) tiles (a raid
+    with no role or focus: never a strike's, hunt's or form's) take `{ type: 'avenge', target, n, g }`: they bite what
+    gets in their way and then the shooter, a robot or a building (to 1 armor; a Wall in the way when walled off), never
+    anything in the air or at sea (`nestFoe`; a robot inside a building means the building). The shooter gone, out of the
+    leash, or 20 quiet seconds, the guards go back on guard and the packs back to their raid (`murmurAvengeEnd`); none
+    goes further than the leash and 3 tiles. Howitzers and bombers can't hurt the Murmur, so never stir them. Avenging
+    guards still count as the nest's guards (`nestGuarding`). Hashed and checked in saves.
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,
     so every device agrees; on a map type with `alwaysNight`, the Hollow, the same windows are **surges**, with a silent
     lull, `murmurLull`, `SURGE_LULL` (60 s) before each). `murmurTick`, once a second: `MURMUR.warn` (40 s) before

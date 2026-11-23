@@ -5758,6 +5758,10 @@ function checkSave(o) {
     // a Murmur tunnel exit (its nest's id) and a Harrow's crater that stays one (b.crater)
     if (b.crater != null && !(b.crater === 1 && b.type === 'burrow')) bad();
     if (b.type === 'burrow' && b.nest != null && !(Number.isSafeInteger(b.nest) && b.nest > 0)) bad();
+    // a Murmur nest's alarm (nestAlarm): until when, the shooter's id, when its colony was told
+    if (b.alT != null && !(Number.isFinite(b.alT) && isNestB(b))) bad();
+    if (b.alId != null && !(Number.isSafeInteger(b.alId) && b.alId >= 0)) bad();
+    if (b.alMsg != null && !Number.isFinite(b.alMsg)) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
@@ -5783,6 +5787,11 @@ function checkSave(o) {
     if (u.recycleTo != null && !(Number.isSafeInteger(u.recycleTo) && u.recycleTo >= 0)) bad();
     if (u.task?.type === 'strip' && (!Number.isSafeInteger(u.task.r) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !Number.isFinite(u.task.w) || !Number.isInteger(u.task.n) ||
       !obj(u.task.load) || Object.keys(u.task.load).some((g) => !['cement', 'alloy', 'chip'].includes(g) || !Number.isInteger(u.task.load[g])))) bad(); // (Passenger Town: stripping a building)
+    // A creature out after what shot at its nest (murmurAvenge): the shooter, the nest, a guard's flag, the Wall in the
+    // way, and a pack's raid to go back to.
+    if (u.task?.type === 'avenge' && (!BOTS[u.type].wild || !(Number.isSafeInteger(u.task.target) && u.task.target >= 0) || !(Number.isSafeInteger(u.task.n) && u.task.n > 0) ||
+      (u.task.g != null && u.task.g !== 1) || (u.task.wall != null && !(Number.isSafeInteger(u.task.wall) && u.task.wall >= 0)) ||
+      ['x', 'y'].some((k) => u.task[k] != null && !Number.isInteger(u.task[k])) || (u.task.until != null && !Number.isFinite(u.task.until)))) bad();
     if (u.task?.type === 'dammend' && (!(o.dam && Number.isInteger(u.task.d) && o.dam.d && o.dam.d[u.task.d]) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !['go', 'mend'].includes(u.task.phase))) bad(); // (The Dam: shoring one up)
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();

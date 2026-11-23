@@ -1231,7 +1231,7 @@ function breachHit(u, b) {
   u.fought = 1;
   shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
   if (isMe(u.owner) || isMe(b.owner)) sfx('hit');
-  hitBuilding(b, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
+  hitBuilding(b, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner, u);
 }
 
 let ROUTES = { s: null, tick: -1, list: [] };
@@ -5135,10 +5135,13 @@ function shellImpact(m) {
     if (d2 <= md.splash * md.splash) hit.push([d2, u]);
   }
   hit.sort((a, b) => a[0] - b[0]);
+  const guard = wildOn() ? hit.find(([, u]) => BOTS[u.type].wild && u.task && u.task.type === 'guard') : null; // (before they're hurt)
   for (const [d2, u] of hit.slice(0, md.most || hit.length)) damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
   // Aimed at a building (ORDERS.focus): the shell lands on it.
   const t = m.bld ? getE(m.bld) : null;
   if (t && !t.dead && BDEFS[t.type] && S.buildings.includes(t) && foes(t.owner, m.owner) && t.owner >= 0) rocketHit(t, md.bld, m.owner);
+  // (a nest's guards shelled: the nest's Murmur come for the Mortar Pit, if it's in their reach: nestAlarm)
+  if (guard) nestAlarm(getE(guard[1].nest), getE(m.from));
 }
 
 /**
@@ -5413,7 +5416,7 @@ function torchFire(u, tx, ty, power, bld) {
   }
   if (bld && !bld.dead) {
     const def = BDEFS[bld.type], fort = def.barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
-    hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1) * (S.contingency && isWild(bld.owner) && typeof contTorch === 'function' ? contTorch(u.owner) : 1), u.owner);
+    hitBuilding(bld, TORCH.bld * power * (fort ? TORCH.fort : 1) * (S.contingency && isWild(bld.owner) && typeof contTorch === 'function' ? contTorch(u.owner) : 1), u.owner, u);
     if (hash2(u.id, S.tick, 11) < 0.12 && !atmosRainAt(bld.x + 0.5, bld.y + 0.5, u.owner)) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
@@ -5556,7 +5559,7 @@ function arcFire(u, foe, power, bld) {
     const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
     u.face = datan2(bld.y + 0.5 - u.y, bld.x + 0.5 - u.x);
     pts.push([bld.x + 0.5, bld.y + 0.5]);
-    hitBuilding(bld, ARC.bld * power * (fort ? ARC.fort : 1), u.owner);
+    hitBuilding(bld, ARC.bld * power * (fort ? ARC.fort : 1), u.owner, u);
   } else {
     u.face = datan2(foe.y - u.y, foe.x - u.x);
     const hit = new Set();
@@ -5597,7 +5600,7 @@ function railFire(u, tx, ty, power, bld) {
   let ex = u.x + ca * reach, ey = u.y + sa * reach;
   if (bld) {
     const fort = BDEFS[bld.type].barrier || DEFENCE_TYPES.has(bld.type) || bld.type === 'outpost';
-    hitBuilding(bld, RAIL.bld * power * (fort ? RAIL.fort : 1), u.owner);
+    hitBuilding(bld, RAIL.bld * power * (fort ? RAIL.fort : 1), u.owner, u);
     ex = bld.x + 0.5; ey = bld.y + 0.5;
     addFx('railhit', ex, ey, { a: ang, life: 0.5, structure: true });
   } else {
@@ -5959,13 +5962,14 @@ function damageBot(u, dmg, sx, sy, nat, small) {
   if (S.town) dmg *= townCover(u); // (cover beside Passenger Town's buildings)
   u.hp -= dmg;
   u.hurtT = S.time;
-  if (sx !== undefined && BOTS[u.type].wild) { u.hitX = sx; u.hitY = sy; u.hitT = S.time; } // (the Murmur remember what killed them: murmurBody)
+  if (sx !== undefined && BOTS[u.type].wild) { u.hitX = sx; u.hitY = sy; u.hitT = S.time; if (u.task && u.task.type === 'guard' && !nat) nestAlarm(getE(u.nest), nestShooterAt(sx, sy)); } // (the Murmur remember what killed them: murmurBody; a nest's guard shot at: nestAlarm)
   if (u.trade && dmg > 0 && !nat) convoyHit(u); // a trade convoy: its owner hears of it
   if (u.hp <= 0) { if (u.trade) convoyLost(u); noteDanger(u); killBot(u); }
 }
 
-function hitBuilding(b, dmg, by) {
+function hitBuilding(b, dmg, by, src) {
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
+  if (src && isNestB(b)) nestAlarm(b, src); // (a Murmur nest shot at from out of its guards' reach: they come for the shooter)
   dmg = keepShield(b, dmg);
   if (b.crack && BDEFS[b.type].barrier) dmg *= SUNDER.wallTakes; // (a Wall or Gate a Quake cracked, until repaired to full)
   b.armor -= dmg;
@@ -7531,7 +7535,7 @@ function strikeBuilding(u, b, dt, power) {
       if (u.cd <= 0) {
         u.cd = BULWARK.reload; u.fought = 1;
         for (const sd of [-1, 1]) shotFx(u.x + dcos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + dsin((u.shAim ?? 0) + sd * 1.57) * 0.08, b.x + 0.5, b.y + 0.5, { color: '#c89bff', pulse: true, structure: true });
-        hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building) * 0.5, u.owner);
+        hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building) * 0.5, u.owner, u);
       }
       return true;
     }
@@ -7539,7 +7543,7 @@ function strikeBuilding(u, b, dt, power) {
       u.cd = 1.0;
       u.fought = 1;
       shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
-      hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
+      hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner, u);
     }
     return true;
   }
@@ -8848,6 +8852,9 @@ function missileTargetAt(owner, i, j) {
   return null;
 }
 
+/** The standing dam on tile (i, j) a Missile aimed there strikes (The Dam), or null. */
+function missileDamAt(i, j) { if (!S.dam || !inMap(i, j)) return null; const d = damAt(tIdx(i, j)); return d && d.broke < 0 ? d : null; }
+
 /**
  * The rival robot or vehicle on the ground a missile aimed at tile (i, j) would lock onto, if there's no building
  * there: the nearest within MISSILE_LOCK tiles of the tile's middle (not in the air, not inside a building).
@@ -8881,7 +8888,7 @@ function missileBlocked(silo, i, j) {
 function fireMissileAt(silo, i, j) {
   if (missileBlocked(silo, i, j)) return false;
   const owner = silo.owner, md = BDEFS[silo.type].missile;
-  const target = missileTargetAt(owner, i, j), unit = target ? null : missileBotAt(owner, i, j);
+  const target = missileTargetAt(owner, i, j), dam = !target && missileDamAt(i, j), unit = target || dam ? null : missileBotAt(owner, i, j); // (aimed at a dam: at the dam, never a robot by it)
   const tx = target ? target.x : i, ty = target ? target.y : j;
   bump(silo.stock, 'warhead', -1);
   usedGood(silo.owner, 'warhead', 1);
@@ -8896,6 +8903,7 @@ function fireMissileAt(silo, i, j) {
   sfx('launch');
   const hit = target ? target.owner : S.owner[tIdx(tx, ty)];
   if (target) postMsg(target.owner, `Incoming missile from ${playerName(owner)}! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
+  else if (dam) { if (foes(dam.k, owner)) postMsg(dam.k, `Incoming missile from ${playerName(owner)}! It is heading for your dam.`, tx, ty, 'bad'); }
   else if (unit) postMsg(unit.owner, `Incoming missile from ${playerName(owner)}! It is aimed at one of your ${BOTS[unit.type].plural}: move it!`, unit.x, unit.y, 'bad');
   else if (hit >= 0 && foes(hit, owner)) postMsg(hit, `Incoming missile from ${playerName(owner)}!`, tx, ty, 'bad');
   if (hit >= 0) doctrineVoice(owner, hit, 'missile', tx, ty, 90);
@@ -9002,6 +9010,8 @@ function missileImpact(m) {
       if (e.armor <= 0) { e.armor = 0; cityDown(e, m.owner); } // (Arrival City knocked down)
     }
   }
+  if (wildOn()) { const silo = getE(m.from); if (silo) for (const e of S.buildings) if (!e.dead && isNestB(e) && dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) <= sq(md.splash + 3)) nestAlarm(e, silo); } // (a nest struck or its guards: they come for the Silo, if in reach)
+  if (S.dam) damBlast(m.x1, m.y1, m.owner, 'missile'); // (The Dam: a Missile on or by a foe's dam takes a big piece of it)
   const hitU = m.bot ? getE(m.bot) : null; // (the robot it was locked onto takes the full hit if it's still under it)
   const direct = hitU && !hitU.dead && !hitU.inside && dist2(hitU.x, hitU.y, m.x1, m.y1) <= 0.6 * 0.6 ? hitU : null;
   if (direct) { hitByNow(direct.owner, m.owner); damageBot(direct, isHarrow(direct) ? HARROW.missile : md.damage); }
@@ -9251,6 +9261,7 @@ function nukeImpact(m) {
     LAND_HOLD = 0;
     if (zones) computeZones();
   }
+  if (S.dam) damBlast(cx, cy, m.owner, 'nuke'); // (The Dam: a nuclear blast bursts a foe's dam outright)
   S.blasts = (S.blasts || []).filter((b) => b.until > S.time).concat([{ x: cx, y: cy, until: S.time + NUKE.scorch }]);
   computeTerritory();
   const theirs = lost.reduce((a, n, p) => a + (p === m.owner ? 0 : n), 0);
@@ -10464,25 +10475,7 @@ function damTick(dt) {
       dmg += h; by.set(u.owner, (by.get(u.owner) || 0) + h);
       if (hash2(u.id, S.tick, 77) < 0.25) { const c = damMid(d); addFx('tracer', u.x, u.y - 0.2, { x2: clamp(u.x, d.x0, d.x1 + 1), y2: clamp(u.y, d.y0, d.y1 + 1) - 0.3, life: 0.08, color: PLAYER_COLORS[u.owner] }); if (hash2(u.id, S.tick, 78) < 0.3) addFx('dust', c.x + (hash2(u.id, S.tick, 79) - 0.5) * (d.x1 - d.x0 + 1), c.y - 0.3, { r: 0.4 }); }
     }
-    if (dmg > 0) {
-      const was = d.hp / DAM.hp;
-      d.hp = Math.max(0, d.hp - dmg);
-      const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
-      for (const [q, h] of by) { const P = S.players[q]; P.stats.damHit = (P.stats.damHit || 0) + h; }
-      if (S.time - d.hitT > 15) {
-        const c = damMid(d);
-        postMsg(d.k, `Your dam is under attack! If it breaks, its lake floods your valley. Send warbots to it, and Shore it up (U) once they're gone.`, Math.floor(c.x), Math.floor(c.y), 'bad');
-        if (isMe(d.k)) sfx('alert');
-      }
-      d.hitT = S.time; d.hitBy = top;
-      const now = d.hp / DAM.hp;
-      for (const f of [0.5, 0.25]) if (was > f && now <= f) {
-        const c = damMid(d);
-        for (const P of S.players) if (!P.absent) postMsg(P.id, `The dam over ${damWhose(d, P.id)} valley is cracking: ${Math.round(now * 100)}% left.`, Math.floor(c.x), Math.floor(c.y), P.id === d.k ? 'bad' : 'warn');
-        if (isMe(d.k)) sfx('alert');
-      }
-      if (d.hp <= 0) { damBreak(d, k, top); return; }
-    }
+    if (dmg > 0 && damHurt(d, k, dmg, by)) return;
     // Workers shoring it up: DAM.mend a second each, while nothing has hit it lately.
     if (d.hp < DAM.hp && S.time - d.hitT >= DAM.calm) {
       for (const u of S.bots) {
@@ -10495,6 +10488,55 @@ function damTick(dt) {
       }
       if (d.hp >= DAM.hp) { d.hp = DAM.hp; for (let p = 0; p < S.players.length; p++) if ((d.mend >> p) & 1) { postMsg(p, 'The dam is shored up: back to full strength.', d.x0, d.y0, 'good'); damOrder(p, k, 'mend', false); } }
     }
+  });
+}
+/**
+ * Dam d (index k) takes `dmg` (by: colony -> its share): its strength drops, its colony is warned, everyone hears as it
+ * cracks past a half and a quarter, and at 0 it breaks (damBreak, by the colony that did the most). `kind`: 'missile',
+ * 'nuke' or 'bomb' for a blast (damBlast), else robots at it (damTick). True if it broke.
+ */
+function damHurt(d, k, dmg, by, kind) {
+  const was = d.hp / DAM.hp, c = damMid(d);
+  d.hp = Math.max(0, d.hp - dmg);
+  const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+  for (const [q, h] of by) { const P = S.players[q]; P.stats.damHit = (P.stats.damHit || 0) + h; }
+  if (kind === 'missile' || kind === 'nuke') {
+    // (a Missile: told every time, it's a big blow; a bomb is told like robots at it, below)
+    if (d.hp > 0) postMsg(d.k, `A Missile hit your dam: ${Math.round((d.hp / DAM.hp) * 100)}% left. If it breaks, its lake floods your valley. Shore it up (U).`, Math.floor(c.x), Math.floor(c.y), 'bad');
+    if (top !== d.k && d.hp > 0) postMsg(top, `Your ${kind === 'nuke' ? 'nuclear missile' : 'Missile'} hit the dam over ${damWhose(d, top)} valley: ${Math.round((d.hp / DAM.hp) * 100)}% left.`, Math.floor(c.x), Math.floor(c.y), 'good');
+    if (isMe(d.k)) sfx('alert');
+  } else if (S.time - d.hitT > 15) {
+    postMsg(d.k, `Your dam is under attack! If it breaks, its lake floods your valley. Send warbots to it, and Shore it up (U) once they're gone.`, Math.floor(c.x), Math.floor(c.y), 'bad');
+    if (isMe(d.k)) sfx('alert');
+  }
+  d.hitT = S.time; d.hitBy = top;
+  const now = d.hp / DAM.hp;
+  for (const f of [0.5, 0.25]) if (was > f && now <= f && now > 0) {
+    for (const P of S.players) if (!P.absent) postMsg(P.id, `The dam over ${damWhose(d, P.id)} valley is cracking: ${Math.round(now * 100)}% left.`, Math.floor(c.x), Math.floor(c.y), P.id === d.k ? 'bad' : 'warn');
+    if (isMe(d.k)) sfx('alert');
+  }
+  if (d.hp <= 0) { damBreak(d, k, top); return true; }
+  return false;
+}
+/**
+ * A blast lands at (x, y), fired by colony `owner` (kind 'missile', 'nuke' or 'bomb'): every standing dam it reaches
+ * over a foe's valley takes its share (DAM.missile on or within DAM.blast.on tiles of its face, DAM.blast.edge of that out
+ * to the Missile's splash; a nuke within NUKE.radius bursts it; a bomb DAM.bomb within BOMBER.splash). A colony's own
+ * blasts (and its allies') never hurt the dam over its valley: defending it with a Silo doesn't flood it.
+ */
+function damBlast(x, y, owner, kind) {
+  if (!S.dam || !(owner >= 0) || isWild(owner)) return;
+  S.dam.d.forEach((d, k) => {
+    if (d.broke >= 0 || !foes(owner, d.k)) return;
+    const dd = damDist(d, x, y);
+    const h = kind === 'nuke' ? (dd <= NUKE.radius ? d.hp : 0)
+      : kind === 'missile' ? (dd <= DAM.blast.on ? DAM.missile : dd <= BDEFS.silo.missile.splash ? DAM.missile * DAM.blast.edge : 0)
+        : dd <= BOMBER.splash ? DAM.bomb : 0;
+    if (!(h > 0)) return;
+    const hx = clamp(x, d.x0, d.x1 + 1), hy = clamp(y, d.y0, d.y1 + 1);
+    addFx('boom', hx, hy - 0.3, { r: kind === 'bomb' ? 0.5 : 0.9 });
+    for (let q = 0; q < (kind === 'bomb' ? 1 : 3); q++) addFx('dust', hx + (hash2(k, S.tick, 87 + q) - 0.5) * 2, hy - 0.3, { r: 0.6 });
+    damHurt(d, k, h, new Map([[owner, h]]), kind);
   });
 }
 /**
@@ -11726,7 +11768,8 @@ function updateNest(b) {
     for (const g in WILD.loot) bump(b.stock, g, Math.round(WILD.loot[g] / 2));
   }
   let guards = 0;
-  for (const u of S.bots) if (!u.dead && u.nest === b.id && u.task && u.task.type === 'guard') guards++;
+  for (const u of S.bots) if (!u.dead && u.nest === b.id && nestGuarding(u)) guards++;
+  if (b.alT) nestRally(b); // (shot at from out of reach: its guards, and at night the packs by it, go for the shooter)
   if (guards < nestGuards(b) && S.time >= (b.guardT || 0)) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
@@ -11751,6 +11794,137 @@ function updateNest(b) {
     }
   }
   b.status = `Level ${b.level} nest · ${guards} on guard`;
+}
+
+/*
+ * A nest fights back (MURMUR.alarm; the owner's call, Nov 23 2026). Shot at from out of its guards' reach (guardKeep):
+ * a Mortar Pit or a turret shooting its guards, a Silo's Missile, a Railgunner, a warbot or a Bunker firing from further
+ * off, or any colony building at all (the guards never go for buildings by themselves), its Murmur come out for the
+ * shooter (a Howitzer's shells and a bomber's bombs never touch the Murmur, so those never stir them):
+ * its guards by day or night, and at night the plain packs up within `packR` tiles of it (by day there are none up:
+ * the nests send no packs by day). They go for the shooter itself, a building as much as a robot (a Scuttler batters a
+ * building down to 1 armor at most, as on any raid; a Brute breaks through a Wall or Gate; walled off, they go for the
+ * Wall in the way), biting what gets in their way; never anything in the air (a plane is out of their reach, and a
+ * bomber's bombs never touch the Murmur) or out at sea. The alarm lasts `last` seconds from the latest hit, and only
+ * while the shooter is within `leash` tiles of the nest: past that (a Silo across the map, a Howitzer that drives off)
+ * they let it be, and the guards go back to the nest, the packs to their raid. The nest keeps it in b.alT (until when),
+ * b.alId (the shooter) and b.alMsg (when its owner was last told); a creature's task { type: 'avenge', target, n (the
+ * nest), g (a guard), wall, and a pack's raid to go back to: x, y, until, night }.
+ */
+/** How far from its nest a guard goes for what comes near (Colony 7 tiles, Versus GUARD_VERSUS). */
+function guardKeep() { return S.mode === 'colony' ? 7 : GUARD_VERSUS; }
+/** Is creature u one of its nest's guards (on guard, or out after what shot at the nest)? */
+function nestGuarding(u) { return !!(u.task && (u.task.type === 'guard' || (u.task.type === 'avenge' && u.task.g))); }
+/** What fired from (x, y): a colony building standing there, else the colony robot nearest it (within 1.2 tiles). */
+function nestShooterAt(x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !inMap(Math.floor(x), Math.floor(y))) return null;
+  const b = getE(S.bAt[tIdx(Math.floor(x), Math.floor(y))]);
+  if (b && !b.dead && b.owner >= 0 && !isWild(b.owner)) return b;
+  let best = null, bd = 1.2 * 1.2;
+  for (const v of S.bots) { if (v.dead || v.owner < 0 || isWildBot(v)) continue; const d = dist2(v.x, v.y, x, y); if (d < bd) { bd = d; best = v; } }
+  return best;
+}
+/** Shooter e as the Murmur can go for it (a robot inside a building: the building), or null if they can't. */
+function nestFoe(e) {
+  if (!e || e.dead) return null;
+  if (BDEFS[e.type]) return e.owner >= 0 && !isWild(e.owner) && !calmB(e) ? e : null;
+  if (e.inside) return nestFoe(getE(e.inside));
+  const bt = BOTS[e.type];
+  return bt && e.owner >= 0 && !bt.wild && !bt.air && !bt.sea && !aloft(e) && !calmAt(e.x, e.y) ? e : null;
+}
+function nestFoeXY(e) { return BDEFS[e.type] ? { x: e.x + 0.5, y: e.y + 0.5 } : { x: e.x, y: e.y }; }
+/** Nest b was hit, or one of its guards, by `src`: its alarm (see above), if src is out of the guards' reach and in the leash's. */
+function nestAlarm(b, src) {
+  if (!b || b.dead || !isNestB(b) || !murmurCfg()) return;
+  const e = nestFoe(src);
+  if (!e || !foes(e.owner, b.owner)) return;
+  const A = MURMUR.alarm, c = nestFoeXY(e), d = dist(c.x, c.y, b.x + 0.5, b.y + 0.5);
+  if (d > A.leash) return; // (out of their reach: they let it be)
+  if (!BDEFS[e.type] && d <= guardKeep() + 0.5) return; // (a robot up close: the guards see to it themselves)
+  const cur = b.alT > S.time ? nestFoe(getE(b.alId)) : null;
+  if (cur && cur !== e) { const k = nestFoeXY(cur); if (dist2(k.x, k.y, b.x + 0.5, b.y + 0.5) <= d * d) { b.alT = S.time + A.last; return; } } // (the nearer one first)
+  if (!(b.alT > S.time) && S.time - (b.alMsg ?? -1e9) >= A.tell) {
+    b.alMsg = S.time;
+    const what = BDEFS[e.type] ? BDEFS[e.type].name : BOTS[e.type].name;
+    postMsg(e.owner, `Your ${what} stirred up a Murmur nest: its Murmur are coming out for it!`, Math.floor(c.x), Math.floor(c.y), 'warn');
+  }
+  b.alId = e.id; b.alT = S.time + A.last;
+}
+/** Nest b's alarm target, if it's still on: the shooter, where the Murmur can get at it, within the leash. */
+function nestAlarmFoe(b) {
+  if (!(b.alT > S.time)) return null;
+  const e = nestFoe(getE(b.alId));
+  if (!e) return null;
+  const c = nestFoeXY(e);
+  return dist2(c.x, c.y, b.x + 0.5, b.y + 0.5) <= sq(MURMUR.alarm.leash) ? e : null;
+}
+/** Once a second while nest b's alarm is on: its guards (and at night the plain packs up near it) go for the shooter. */
+function nestRally(b) {
+  const e = nestAlarmFoe(b);
+  if (!e) { b.alT = 0; b.alId = 0; return; }
+  const r2 = sq(MURMUR.alarm.packR), night = murmurNight(S.time) || alwaysNightMap();
+  for (const u of S.bots) {
+    if (u.dead || u.under || !BOTS[u.type].wild || BOTS[u.type].behemoth || !u.task) continue;
+    const t = u.task;
+    if (t.type === 'avenge') { if (t.n === b.id && t.target !== e.id) { t.target = e.id; t.wall = 0; u.path = null; } continue; }
+    if (u.nest === b.id && t.type === 'guard') { u.task = { type: 'avenge', target: e.id, n: b.id, g: 1 }; u.path = null; u.fight = 0; continue; }
+    // (at night, the plain packs up by it: not a strike's, a hunt's or a form's, which keep to their part)
+    if (night && t.night && t.type === 'raid' && !t.role && !t.focus && !(t.wait > S.time) && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= r2) {
+      u.task = { type: 'avenge', target: e.id, n: b.id, x: t.x, y: t.y, until: t.until, night: 1 }; u.path = null; u.fight = 0;
+    }
+  }
+}
+/** Creature u done with an alarm: a guard back on guard (it walks back to the nest), a pack back to its raid. */
+function murmurAvengeEnd(u, t) {
+  u.path = null; u.fight = 0;
+  u.task = t.g ? { type: 'guard' } : t.night ? { type: 'raid', x: t.x, y: t.y, until: t.until, night: 1 } : { type: 'home' };
+}
+/** Creature u out after what shot at its nest (task.type 'avenge'): biting what's in its way, then the shooter. */
+function murmurAvenge(u, t, dt) {
+  const b = getE(t.n), A = MURMUR.alarm;
+  const e = b && !b.dead ? nestAlarmFoe(b) : null;
+  if (e && e.id !== t.target) { t.target = e.id; t.wall = 0; u.path = null; } // (the nest's alarm moved on to a nearer shooter)
+  if (!e || dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) > sq(A.leash + 3)) { murmurAvengeEnd(u, t); return; }
+  // In the way: a colony robot within reach gets bitten first (what it's after, if that's a robot, too).
+  let foe = u.fight ? getE(u.fight) : null;
+  if (foe && (foe.dead || foe.inside || aloft(foe) || dist2(foe.x, foe.y, u.x, u.y) > 4)) foe = null;
+  if (!foe) {
+    u.fight = 0;
+    u.scanT -= dt;
+    if (u.scanT <= 0) {
+      u.scanT = 0.4;
+      foe = wildPrey(u.x, u.y, 1.6, undefined, (v) => !aloft(v) && !BOTS[v.type].sea && !(v.id === u.ignoreFoe && S.time < u.ignoreUntil));
+      if (foe) u.fight = foe.id;
+    }
+  }
+  if (foe) {
+    if (dist(u.x, u.y, foe.x, foe.y) > 0.75) { if (!moveDirect(u, foe.x, foe.y, dt)) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5; } }
+    else if (u.cd <= 0) critterBite(u, foe);
+    return;
+  }
+  if (!BDEFS[e.type]) {
+    if (dist(u.x, u.y, e.x, e.y) > 0.75) { if (!moveDirect(u, e.x, e.y, dt) && travel(u, Math.floor(e.x), Math.floor(e.y), dt) === null) murmurAvengeEnd(u, t); }
+    else { u.path = null; if (u.cd <= 0) critterBite(u, e); }
+    return;
+  }
+  // A building: at it, or at the Wall in the way.
+  let g = t.wall ? getE(t.wall) : null;
+  if (g && (g.dead || g.owner !== e.owner)) { g = null; t.wall = 0; }
+  g = g || e;
+  if (dist2(u.x, u.y, g.x + 0.5, g.y + 0.5) <= 1.7) { u.path = null; if (u.cd <= 0) critterBite(u, g); return; }
+  if (travel(u, g.x, g.y, dt) !== null) return;
+  u.path = null;
+  if (g === e) {
+    // Walled off: the nearest Wall or Gate of its colony between them, within 8 tiles of it.
+    let w = null, wd = Infinity;
+    for (const v of S.buildings) {
+      if (v.dead || v.owner !== e.owner || !BDEFS[v.type].barrier || dist2(v.x, v.y, e.x, e.y) > 64) continue;
+      const d = dist2(v.x + 0.5, v.y + 0.5, u.x, u.y);
+      if (d < wd) { wd = d; w = v; }
+    }
+    if (w) { t.wall = w.id; return; }
+  }
+  murmurAvengeEnd(u, t);
 }
 
 /** The nearest colony bot out in the open. The zone and candidate filter are optional. */
@@ -11855,6 +12029,7 @@ function updateCritter(u, dt) {
     return;
   }
   if (t.type === 'drag') { murmurDrag(u, t, dt, nest); return; }
+  if (t.type === 'avenge') { murmurAvenge(u, t, dt); return; } // (after what shot at its nest from out of reach: nestAlarm)
   if (t.type === 'back') {
     const ex = getE(t.exit);
     if (!ex || ex.dead || travel(u, ex.x, ex.y, dt) === null) { murmurBack(u, t.exit); return; }
@@ -11983,7 +12158,7 @@ function updateCritter(u, dt) {
     const r = travel(u, nest.x, nest.y, dt);
     if (r || r === null || dist2(u.x, u.y, nest.x + 0.5, nest.y + 0.5) < 2.2) {
       let guards = 0;
-      for (const v of S.bots) if (!v.dead && v.nest === nest.id && v.task && v.task.type === 'guard') guards++;
+      for (const v of S.bots) if (!v.dead && v.nest === nest.id && nestGuarding(v)) guards++;
       if (guards < nestGuards(nest) && u.type === 'scuttler') { u.task = { type: 'guard' }; u.path = null; } else despawnCritter(u);
     }
     return;
@@ -16812,6 +16987,7 @@ function bombImpact(m) {
     if (u.dead || u.inside || !foes(u.owner, m.owner) || BOTS[u.type].wild || BOTS[u.type].air || dist2(u.x, u.y, m.x1, m.y1) > s2) continue;
     damageBot(u, u === tg ? BOMBER.botDamage * 2 : BOMBER.botDamage); // a direct hit on a vehicle does double
   }
+  if (S.dam) damBlast(m.x1, m.y1, m.owner, 'bomb'); // (The Dam: a bomb by a foe's dam chips it, a little)
 }
 
 function bombHit(b, dmg, by) {
@@ -18772,11 +18948,13 @@ function hashState() {
     if (u.task?.arterialTiles) int(u.task.arterialTiles);
     if (u.task?.waitT !== undefined) { num(u.task.waitT); int(u.task.via || 0); } // (a Worker waiting at a site for goods: doBuild)
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
+    if (u.task?.type === 'avenge') { int(u.task.n); int(u.task.g || 0); int(u.task.wall || 0); } // (out after what shot at its nest: murmurAvenge)
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
     obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
+    if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
