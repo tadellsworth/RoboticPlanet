@@ -252,6 +252,10 @@ function initUI() {
   const syncScouts = () => pauseSwitch('p-scouts', SCOUT.on);
   syncScouts();
   $('p-scouts').onclick = () => { setScoutsOn(!SCOUT.on); syncScouts(); sfx('click'); };
+  // Blueprints (js/blueprint.js): off unless switched on here (remembered on this device).
+  const syncBp = () => pauseSwitch('p-blueprints', bpOn());
+  syncBp();
+  $('p-blueprints').onclick = () => { setBpOn(!bpOn()); syncBp(); sfx('click'); if (typeof refreshSheet === 'function') refreshSheet(); };
   // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
   const syncHaptics = () => pauseSwitch('p-haptics', HAPTIC.on);
   const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
@@ -7470,8 +7474,8 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Maglev lines, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Maglev lines, Viaducts and Ropeways</div></button>${bpOn() ? `<button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>` : ''}${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`; }).join('')}</div>`;
@@ -7480,7 +7484,7 @@ function openBuildMenu() {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
   $('build-roads').onclick = () => openRoadDraw();
-  $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
+  if ($('build-bp')) $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
   const show = (g) => {
     UI.buildTab = g;

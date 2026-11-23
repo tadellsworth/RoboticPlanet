@@ -226,7 +226,7 @@ how goods move.
   saved (see Observer mode below).
 - **Scout reports:** in your own games, a message now and then on what a computer rival is up to (massing for a push on
   your east Outpost, a band heading for your north road, a storm forming), once as it starts, with Go to the place.
-- **Blueprints:** keep a block of your buildings and the roads between them on the device, and place it again elsewhere
+- **Blueprints** (off by default; pause menu → Settings → Blueprints): keep a block of your buildings and the roads between them on the device, and place it again elsewhere
   with a ghost that turns; every site and road is planned at once.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
@@ -1883,7 +1883,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   look every 0.1 s): lit over any building or one of your robots, the coral reticle over a rival's with warbots picked
   (`canvas#game[data-cur]`). **Custom cursor** (a switch in the pause menu's Settings, shown only with a mouse), kept
   on the device (`botfall.cursor`). Display only.
-- **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
+- **Blueprints** (`js/blueprint.js`): off unless switched on (`bpOn`, `terrafall.blueprints.on`, the `#p-blueprints` Settings switch; off hides the `#build-bp` card and the box chip). Kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
   each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
   **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode
   `bppick` (`UI.bpPick`: tap your buildings to pick or drop them, a mouse drag boxes several, `onSelectBox`), or with a

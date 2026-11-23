@@ -18,6 +18,10 @@
  */
 
 const BP_KEY = 'terrafall.blueprints';
+const BP_ON_KEY = 'terrafall.blueprints.on';
+/** Blueprints are off unless switched on in Settings (kept on this device): no Build card, no Save as blueprint chip. */
+function bpOn() { try { return localStorage.getItem(BP_ON_KEY) === '1'; } catch (e) { return false; } }
+function setBpOn(on) { try { localStorage.setItem(BP_ON_KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ } }
 const BP_MAX = 8;      // blueprints kept on a device
 const BP_PIECES = 30;  // buildings in one blueprint at most
 const BP_OFFER = 8000; // ms the Save as blueprint chip stays after a box
@@ -193,6 +197,7 @@ function bpPickBox(box) {
  * foot of the map offers to save them as a blueprint, for a few seconds. True if it did.
  */
 function bpBoxOffer(box) {
+  if (!bpOn()) return false;
   const ids = bpInBox(box).slice(0, BP_PIECES);
   if (!ids.length) return false;
   UI.bpOffer = { ids, of: S };
