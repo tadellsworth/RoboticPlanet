@@ -159,7 +159,7 @@ Sixty years on, Earth's animals thrive on a world made ready for people who neve
 
 - **Where it took.** The green and temperate regions are mostly Earth's now: deer and songbirds in Greenreach, geese and foxes in Emberwood, herds on the Long Grass, herons in Blackwater, hares and owls in the Polar Caps, bison among the springs of Steamwells, and gulls and sea turtles on the beaches of the Shoals. Only the hardiest Earth life holds on in the Rust: lizards, a hawk.
 - **Where it didn't.** The land the ringfall made strange keeps small native creatures of its own: ash beetles and ember moths in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and blind crawlers, hinge-backs, cave sailwings and glow-worms in the Hollow. Argos has nothing.
-- **What the robots make of it.** Their orders file the animals as colony stock, held for the colonists, so no vanguard harms them on purpose. Flocks lift at the first shot and herds scatter from convoys. Even in quiet stretches, roads and outposts break up the places where they feed. The survey still counts the acres made ready for Arrival. Carrion birds circle every new wreck.
+- **What the robots make of it.** Their orders file the animals as colony stock, held for the colonists, so no vanguard harms them on purpose. Flocks lift at the first shot and herds scatter from convoys. Even in quiet stretches, roads and outposts break up the places where they feed. The survey still counts the acres made ready for Arrival. (No birds come to the wrecks: a robot leaves nothing to eat.)
 - **The animals know first.** Before the Murmur come up, the birds stop singing and the herds move off. A colony that listens learns to read the quiet. At dawn they come back.
 - **Tone.** The garden is the planet's beauty and its sharpest sadness. Show it, never explain it: deer grazing the lawns of an empty town, birds nesting in a passenger shelter, a herd crossing a road lit for traffic that never comes.
 
@@ -454,7 +454,7 @@ the hardiest at the Rust's edges (lizards, a hawk), and native creatures where t
 ember moths in the Cinderlands, hinge-backs, switchtails and sailwings in the Bloom, and blind crawlers, hinge-backs, cave
 sailwings and glow-worms in the Hollow; the owner dropped the Bloom's jellyfish-like floaters, Nov 19 2026, and wants
 at least two land animals and one bird on every map). They scatter
-from the fighting, carrion birds circle new wrecks, moths circle the colony lights, and before a Murmur night the
+from the fighting, moths circle the colony lights, and before a Murmur night the
 birds fall silent and the animals near the nests move off; at dawn they come back. Wrecks slowly overgrow, cloud
 shadows drift by day, and from dusk to dawn every Command Base shines a beam straight up into the sky, with nothing
 to say what it is for.

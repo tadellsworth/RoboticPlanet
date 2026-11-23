@@ -2234,7 +2234,7 @@ Campaign's picture is unchanged.
   picking and planting) are drawn in code, with the tool on a drawn arm (`drawToolArm`: a heavy upper arm with its
   hydraulic ram, a lighter forearm, bolted joints, its shadow). The tool heads are small sprites made once in code
   (`workTool`, `WORK_TOOLS`: the scythe blade, the drill head and bit, the hammer head, the gripper's palm, the welding
-  torch, the repair wrench, the screed bar; 64 px, straight down, lit from the top left), so painted ones could replace
+  torch, the repair wrench, the screed bar (workers spread concrete with it; the Paver drags it as a heated screed over its asphalt, with a glowing seam of hot mix and spitting flecks); 64 px, straight down, lit from the top left), so painted ones could replace
   them one for one (same keys, pointing +x). Sparks are short hot streaks that cool from white to orange (`workSpark`);
   a weld's sparks fall and skip off the ground. Mending (a Worker repairing a building) works one spot, then moves round;
   a Worker's load is small steel-framed crates with the good's colour on the lid (`goodsCrate`), and when it picks one up
