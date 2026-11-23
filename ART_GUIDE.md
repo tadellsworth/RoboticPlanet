@@ -1533,7 +1533,7 @@ Drawn by `js/contingency-draw.js` (README: Contingency, the screens).
 |---|---|---|
 | `globe/ithaca-2048.webp` | 2048×1024 | The surface, equirectangular (longitude −180° at the left edge, north up): each region's colours and detail (the Rust's dunes, mesas and salt pans, Greenreach's forest, Emberwood's reds, the Long Grass, Blackwater's wetlands, the Cinderlands' flows and Cinder Rift's graben, the Steamwells' vents, the Shoals' islets and reefs, the Bloom's veins), rivers, beaches, the atlas's craters and Ringfall Basin, the caps' ice and floes, the relief baked in as hillshade from the north-west. Alpha is the land (255; 224 the sea), for the sea's glint. About 300 KB: the one fetched by default. |
 | `globe/ithaca-4096.webp` | 4096×2048 | The same, sharper: fetched only when the globe is over 1100 device px across (a big or sharp screen) and the GPU takes it. About 790 KB. |
-| `globe/ithaca-clouds.webp` | 1024×512 | The clouds' cover as grey (zonal bands, wisps), turned 0.45 of the way round on the globe (`CGL.cloudShift`). About 13 KB. |
+| `globe/ithaca-clouds.webp` | 1024×512 | The clouds' cover as grey (zonal bands, wisps), turned 0.45 of the way round on the globe at the start (`CGL.cloudShift`), then drifting slowly east over the ground (below). It wraps left to right, so it can turn for ever. About 13 KB. |
 
 How they're made (reproducible, no randomness outside fixed seeds): `python3 tools/atlas/globe_texture.py` (W 4096 by
 default, about 5 minutes on 4 cores; numpy, scipy, Pillow) evaluates the atlas's own fields at every texel
@@ -1546,6 +1546,15 @@ picks agree with the atlas's `CONT_CELLS` on 99.9% of their land cells. To chang
 detail in `globe_texture.py` (`PAL`, the per-region blocks) and the light, halo and glint in the shader
 (`CGL_FS` in `js/contingency-draw.js`). In the one-file build the pictures are `dist/globe.js` (2048 and clouds) and
 `dist/globe-hd.js` (4096), fetched when Contingency first opens.
+
+**The clouds drift** (the owner's loose end, Nov 23 2026): they are a layer of their own over the ground, turning a
+little faster than it, east, so the globe reads as having weather: `CGL.cloudDrift` (1/1100 of the way round a second,
+a lap in about 18 minutes; by the page's clock, never the run's), still when the device asks to reduce motion. The
+picture moves as a whole (no bands sliding at different speeds, which would smear it over a long session). In WebGL only
+the planet's canvas is drawn again, each `CGL.cloudStep` (0.5) device px of drift; the per-pixel globe keeps the shaded
+planet without its clouds and lays them over it again, a few rows a frame, every `CGL.flatCloudMs` (240 ms). To make
+them faster or slower, change `cloudDrift`; to make them read more as weather, the cover itself (thicker bands, more
+breaks) is in `globe_texture.py`.
 
 ### The Lore guide's pictures (`art/lore/`)
 

@@ -32,11 +32,28 @@ const CGL = {
   allowSoftware: false, // (true: keep WebGL even on a software renderer; for tests and screenshots)
   flatMax: 900, flatMove: 480, // the per-pixel globe's image: at most this many pixels across, and while it turns
   light: [-0.44, 0.48, 0.76], // towards the light (x right, y up, z out of the screen)
-  cloudShift: 0.45,  // the clouds turned this much of the way round from the picture's own place
+  cloudShift: 0.45,  // the clouds turned this much of the way round from the picture's own place (at the start)
+  cloudDrift: 1 / 1100, // ...and drifting east over the ground this much of the way round a second (a lap in about 18 min)
+  cloudStep: 0.5,    // drawn again as they've drifted this many device px at the globe's middle (WebGL)
+  cloudMinMs: 50,    //   but at most this often
+  flatCloudStep: 0.6, flatCloudMs: 240, // per pixel: as they've drifted this many pixels of its image, at most this often,
+  flatCloudRows: 90,  //   laid again this many rows of it a frame (spread over a few frames, so no frame takes long)
   stars: 1 / 500,    // stars a square css px
   tint: { fill: 0.13, edge: [[9, 0.05], [6, 0.05], [3.5, 0.06], [1.5, 0.07]] }, // an owner's tint, and its strokes in from the edge (texels, alpha)
 };
-const CGS = { gl: null, failed: false, tex: {}, hd: '', loaded: '', key: '', rings: null, borders: null, tint: null, tintKey: '', tintData: null, tintN: 0, moon: null, bundles: {} };
+const CGS = { gl: null, failed: false, tex: {}, hd: '', loaded: '', key: '', rings: null, borders: null, tint: null, tintKey: '', tintData: null, tintN: 0, moon: null, bundles: {}, cloud: 0, cloudAt: 0 };
+
+/**
+ * The clouds' turn now (0..1 of the way round the picture), in whole steps of q: a layer of its own over the ground,
+ * drifting slowly east (CGL.cloudDrift) so it reads as weather; still with the device set to reduce motion. By the
+ * page's clock: looks only, never the run.
+ */
+function cglCloud(q) {
+  const still = typeof LESS_MOTION !== 'undefined' && LESS_MOTION && LESS_MOTION.matches;
+  let c = CGL.cloudShift - (still ? 0 : (performance.now() / 1000) * CGL.cloudDrift);
+  c -= Math.floor(c);
+  return q > 0 ? Math.round(c / q) * q : c;
+}
 
 /* ------------------------------------------------------------------ the outlines (js/contingency-globe.js) */
 
@@ -307,7 +324,6 @@ function cglInit() {
   for (const n of ['uTex', 'uCloud', 'uTint', 'uView', 'uRot', 'uL', 'uCloudS', 'uReady']) U[n] = gl.getUniformLocation(prog, n);
   gl.uniform1i(U.uTex, 0); gl.uniform1i(U.uCloud, 1); gl.uniform1i(U.uTint, 2);
   const L = cglLight(); gl.uniform3f(U.uL, L[0], L[1], L[2]);
-  gl.uniform1f(U.uCloudS, CGL.cloudShift);
   const aniso = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
   CGS.gl = { gl, v2, prog, U, aniso, max: gl.getParameter(gl.MAX_TEXTURE_SIZE) };
   // a blank texel for each picture until it comes
@@ -406,9 +422,10 @@ function cglRender(tintChanged) {
   const view = yaw + ',' + CG.pitch;
   if (view !== CGS.view) { CGS.view = view; CGS.turning = now - (CGS.viewAt || 0) < 200; CGS.viewAt = now; }
   cglSize(CGS.turning && now - CGS.viewAt < 150 ? P.move : P.full);
-  const key = [view, V.cx, V.cy, V.r, P.k, CGS.loaded, CGS.cloudsReady].join();
+  const cloud = cglCloud(CGL.cloudStep / (2 * Math.PI * Math.max(1, V.r * P.k)));
+  const key = [view, V.cx, V.cy, V.r, P.k, CGS.loaded, CGS.cloudsReady, cloud].join();
   if (key === CGS.key) return true;
-  CGS.key = key;
+  CGS.key = key; CGS.cloud = cloud; CGS.cloudAt = now;
   const n = gl.canvas.width;
   gl.viewport(0, 0, n, n);
   gl.useProgram(G.prog);
@@ -418,6 +435,7 @@ function cglRender(tintChanged) {
   gl.uniform4f(G.U.uView, (V.cx - P.x) * P.k, (V.cy - P.y) * P.k, V.r * P.k, n);
   gl.uniform3f(G.U.uRot, yaw, Math.cos(CG.pitch), Math.sin(CG.pitch));
   gl.uniform1f(G.U.uReady, CGS.loaded ? 1 : 0);
+  gl.uniform1f(G.U.uCloudS, cloud);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
   // the first few full draws (with the picture in) are timed, waiting for the GPU: too slow, and it's per pixel from now on
   const timed = !CGL.allowSoftware && CGS.loaded && n === P.full && (CGS.timed || []).length < CGL.slowChecks, t0 = timed ? performance.now() : 0;
@@ -431,9 +449,29 @@ function cglRender(tintChanged) {
   return true;
 }
 
-/** Each frame (cgLoop): once the globe has stopped turning, draw it sharp again. */
+/**
+ * Each frame (cgLoop): once the globe has stopped turning, draw it sharp again; and the clouds on as they drift. In
+ * WebGL only the planet's own canvas is drawn again for them (a step of CGL.cloudStep px, at most every cloudMinMs);
+ * per pixel, the clouds alone are laid again over the shaded planet (cglClouds2d), every flatCloudMs at most, a few
+ * rows a frame (flatCloudRows), and the picture goes on the screen once they're all done.
+ */
 function cglTick() {
-  if (CGS.turning && performance.now() - CGS.viewAt > 160) { CGS.turning = false; CG.dirty = true; }
+  const now = performance.now();
+  if (CGS.turning && now - CGS.viewAt > 160) { CGS.turning = false; CG.dirty = true; }
+  if (CGS.gl) {
+    if (CGS.cloudsReady && CGS.key && CGS.tintN >= 0 && !CG.dirty && now - CGS.cloudAt >= CGL.cloudMinMs) cglRender(false);
+  } else if (CGS.flat && CGS.flat.clouds && CGS.flatN && CG.off) {
+    const J = CGS.flatJob, n = CGS.flatN;
+    if (J && J.n === n) { // (the next rows; once all are done, onto the screen)
+      const j1 = Math.min(n, J.j + CGL.flatCloudRows);
+      cglClouds2d(n, CGS.flat.clouds, J.cloud, J.j, j1);
+      J.j = j1;
+      if (j1 >= n) { CGS.flatJob = null; CGS.flatCloud = J.cloud; CG.off.getContext('2d').putImageData(CG.img, 0, 0); CG.dirty = true; }
+    } else if (now - CGS.cloudAt >= CGL.flatCloudMs) {
+      const cloud = cglCloud(CGL.flatCloudStep / (Math.PI * n));
+      if (cloud !== CGS.flatCloud) { CGS.flatJob = { n, cloud, j: 0 }; CGS.cloudAt = now; }
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ the planet, per pixel (no WebGL) */
@@ -467,7 +505,12 @@ function cgDraw2d(g) {
   const n = Math.max(64, Math.min(turning ? CGL.flatMove : CGL.flatMax, Math.round(V.r * 2 * Math.min(dpr, turning ? 1 : 1.5))));
   const key = [view, n, CGS.tintKey, S ? 1 : 0, C ? 1 : 0, CG.map && CG.map.done].join();
   if (!CG.off || CG.off.width !== n) { CG.off = document.createElement('canvas'); CG.off.width = CG.off.height = n; CG.img = CG.off.getContext('2d').createImageData(n, n); CGS.flatKey = ''; }
-  if (key !== CGS.flatKey) { CGS.flatKey = key; cglShade2d(n, S, C); }
+  if (key !== CGS.flatKey) {
+    CGS.flatKey = key; CGS.flatN = n; CGS.flatJob = null;
+    cglShade2d(n, S, C);
+    if (C) { CGS.flatCloud = cglCloud(CGL.flatCloudStep / (Math.PI * n)); CGS.cloudAt = now; cglClouds2d(n, C, CGS.flatCloud, 0, n); }
+    CG.off.getContext('2d').putImageData(CG.img, 0, 0);
+  }
   const PI = Math.PI;
   const glow = g.createRadialGradient(V.cx, V.cy, V.r * 0.98, V.cx, V.cy, V.r * 1.16);
   glow.addColorStop(0, 'rgba(92,158,255,0.5)'); glow.addColorStop(0.3, 'rgba(92,158,255,0.14)'); glow.addColorStop(1, 'rgba(92,158,255,0)');
@@ -475,15 +518,21 @@ function cgDraw2d(g) {
   g.imageSmoothingEnabled = true;
   g.drawImage(CG.off, V.cx - V.r, V.cy - V.r, V.r * 2, V.r * 2);
 }
+/**
+ * The planet shaded per pixel without its clouds (cglClouds2d lays them over): each pixel's lit colour, its light, its
+ * air and where it falls on the clouds' picture are kept (CGS.f2), so the clouds can drift without shading it again.
+ */
 function cglShade2d(n, S, C) {
   if (!CGS.tintData && CGS.tint) CGS.tintData = CGS.tint.getContext('2d').getImageData(0, 0, CGS.tint.width, CGS.tint.height).data;
   const px = CG.img.data, M = CG.map, ti = CGS.tintData, KW = CGS.tint ? CGS.tint.width : 1, KH = CGS.tint ? CGS.tint.height : 1;
-  const TW = S ? S.W : M.W, TH = S ? S.H : M.H, tex = S ? S.d : M.tex, st = S ? 4 : 3, CW = C ? C.W : 1, CH = C ? C.H : 1, cs = CGL.cloudShift;
+  const TW = S ? S.W : M.W, TH = S ? S.H : M.H, tex = S ? S.d : M.tex, st = S ? 4 : 3, CH = C ? C.H : 1;
   const cp = Math.cos(CG.pitch), sp = Math.sin(CG.pitch), yaw = CG.yaw, PI = Math.PI, L = cglLight();
+  let F = CGS.f2;
+  if (!F || F.n !== n) F = CGS.f2 = { n, lit: new Uint8ClampedArray(n * n * 3), k: new Uint8ClampedArray(n * n), air: new Uint8ClampedArray(n * n), row: new Uint16Array(n * n), lon: new Uint16Array(n * n) };
   for (let j = 0; j < n; j++) {
     const v = -(((j + 0.5) / n) * 2 - 1);
     for (let i = 0; i < n; i++) {
-      const u = ((i + 0.5) / n) * 2 - 1, rr = u * u + v * v, o = (j * n + i) * 4;
+      const u = ((i + 0.5) / n) * 2 - 1, rr = u * u + v * v, q = j * n + i, o = q * 4;
       if (rr > 1) { px[o + 3] = 0; continue; }
       const z = Math.sqrt(1 - rr), Y = v * cp + z * sp, Z = -v * sp + z * cp, lat = Math.asin(Y);
       let lon = (Math.atan2(u, Z) + yaw) / (2 * PI) + 0.5;
@@ -496,17 +545,33 @@ function cglShade2d(n, S, C) {
         const am = a * Math.max(land, 0.3);
         if (am) { r += (ti[k] - r) * am; gg += (ti[k + 1] - gg) * am; b += (ti[k + 2] - b) * am; }
       }
-      if (C) {
-        let uc = lon + cs; uc -= Math.floor(uc);
-        const cl = C.d[(Math.min(CH - 1, Math.max(0, (fy * CH) | 0)) * CW + ((uc * CW) | 0)) * 4] / 255, k = 1 - 0.2 * cl, m = cl * 0.92;
-        r = r * k + (247 - r * k) * m; gg = gg * k + (247 - gg * k) * m; b = b * k + (250 - b * k) * m;
-      }
       // light from the upper left with a soft terminator, the haze of air towards the limb
       const ndl = u * L[0] + v * L[1] + z * L[2], day = ndl < -0.18 ? 0 : ndl > 0.55 ? 1 : smoothstep01((ndl + 0.18) / 0.73);
       const lit = 0.2 + 0.85 * day * (0.55 + 0.45 * Math.max(0, ndl)), fres = Math.pow(1 - z, 2.2), air = 0.55 * fres * clamp(ndl + 0.35, 0, 1) * 255, k = lit * (1 - 0.35 * fres);
       px[o] = r * k + 0.3 * air; px[o + 1] = gg * k + 0.55 * air; px[o + 2] = b * k + air;
       px[o + 3] = 255 * Math.min(1, (1 - Math.sqrt(rr)) * n * 0.5);
+      F.lit[q * 3] = r * k; F.lit[q * 3 + 1] = gg * k; F.lit[q * 3 + 2] = b * k; F.k[q] = k * 240; F.air[q] = air;
+      F.row[q] = Math.min(CH - 1, Math.max(0, (fy * CH) | 0)); F.lon[q] = lon * 65535;
     }
   }
-  CG.off.getContext('2d').putImageData(CG.img, 0, 0);
+}
+
+/** The clouds over rows j0..j1 of the per-pixel planet (cglShade2d), turned `cloud` of the way round, blended as the shader does. */
+function cglClouds2d(n, C, cloud, j0, j1) {
+  const F = CGS.f2;
+  if (!C || !F || F.n !== n) return;
+  const px = CG.img.data, CW = C.W, cd = C.d;
+  for (let q = j0 * n, N = j1 * n; q < N; q++) {
+    const o = q * 4;
+    if (!px[o + 3]) continue;
+    // (between two texels across, so the drift is smooth)
+    let x = (F.lon[q] / 65535 + cloud) * CW;
+    x -= Math.floor(x / CW) * CW;
+    const x0 = x | 0, f = x - x0, base = F.row[q] * CW;
+    const cl = (cd[(base + x0) * 4] * (1 - f) + cd[(base + (x0 + 1 === CW ? 0 : x0 + 1)) * 4] * f) / 255;
+    const m = cl * 0.92, keep = (1 - 0.2 * cl) * (1 - m), white = m * F.k[q] / 240, air = F.air[q];
+    px[o] = F.lit[q * 3] * keep + 247 * white + 0.3 * air;
+    px[o + 1] = F.lit[q * 3 + 1] * keep + 247 * white + 0.55 * air;
+    px[o + 2] = F.lit[q * 3 + 2] * keep + 250 * white + air;
+  }
 }

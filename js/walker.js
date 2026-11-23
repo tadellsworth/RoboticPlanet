@@ -400,8 +400,19 @@ function walkerMarks(ctx, ox, oy, z) {
 
 /* ------------------------------------------------------------------ its panel */
 
-/** Is map tile (i, j) on its deck (a tap there opens its panel)? */
-function walkerAtTap(i, j) { const w = S && S.walker; return !!w && dist2(i + 0.5, j + 0.5, w.x, w.y) <= WALKER.deck * WALKER.deck; }
+/**
+ * Is a tap on it (its panel opens)? On map tile (i, j) on its deck, or at map point (wx, wy) on its picture as drawn
+ * (its works, stacks and crane standing up off it: the frame's solid pixels, turned as it's facing). Looks only.
+ */
+function walkerAtTap(i, j, wx, wy) {
+  const w = S && S.walker;
+  if (!w) return false;
+  if (dist2(i + 0.5, j + 0.5, w.x, w.y) <= WALKER.deck * WALKER.deck) return true;
+  const A = wx !== undefined && walkerArtReady() && window.WALKER_ART, f = A && walkerImg(walkerFrame(w));
+  if (!f || !f.img) return false;
+  const h = _wf.w === w ? _wf.h : w.h, c = Math.cos(h), s = Math.sin(h), dx = wx - w.x, dy = wy - w.y, n = A.tiles / 2;
+  return artSolidAt(f.img, -n, -n, n, n, dx * c + dy * s, -dx * s + dy * c);
+}
 
 /** Tapped: its panel (who holds it, who's aboard, its line; Send warbots aboard). */
 function walkerSheet() {

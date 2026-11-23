@@ -573,6 +573,37 @@ function drawArtRaw(ctx, art, cx, cy, sizePx, angle) {
 }
 
 /**
+ * Where image `img` is solid, coarsely, for telling what a sprite covers on screen (picking a tall building by its
+ * upper floors, Passenger Town's fade): { W, H, a } (a cell of `a` is 1 where the picture is mostly opaque, the
+ * picture cut into W × H cells, at most 256 a side), worked out once an image. Null when the pixels can't be read (a
+ * page opened from a file): then the whole picture counts. Looks only.
+ */
+const _artMasks = new WeakMap();
+function artMask(img) {
+  if (!img || !img.width) return null;
+  let m = _artMasks.get(img);
+  if (m !== undefined) return m;
+  m = null;
+  try {
+    const k = Math.max(1, Math.ceil(Math.max(img.width, img.height) / 256)), W = Math.ceil(img.width / k), H = Math.ceil(img.height / k);
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, W, H);
+    const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
+    for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3] > 110 ? 1 : 0;
+    m = { W, H, a };
+  } catch (e) { m = null; }
+  _artMasks.set(img, m);
+  return m;
+}
+/** Is picture `img`, drawn over (x0, y0)-(x1, y1), solid at (x, y)? (All in one unit; the whole box when unreadable.) */
+function artSolidAt(img, x0, y0, x1, y1, x, y) {
+  if (x < x0 || x >= x1 || y < y0 || y >= y1) return false;
+  const m = artMask(img);
+  if (!m) return true;
+  return m.a[Math.min(m.H - 1, ((y - y0) / (y1 - y0) * m.H) | 0) * m.W + Math.min(m.W - 1, ((x - x0) / (x1 - x0) * m.W) | 0)] === 1;
+}
+
+/**
  * The copy of an art image to draw at `px` device pixels wide. Big images shrunk a long way in one
  * step come out jagged and shimmer as they move, so each image keeps a chain of half-size copies
  * (made once, smoothly) and draws from the smallest one that is still at least as big as needed.
