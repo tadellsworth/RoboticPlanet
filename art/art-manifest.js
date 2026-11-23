@@ -294,6 +294,21 @@ const ART_MANIFEST = {
   // A fuel blast (a Tanker or Refinery going up): 16 frames of 256 x 256 (4 x 4), ground zero 2/3 down. Made with
   // renderer/fx/fuelblast.py.
   'fx-fuel-blast': { src: 'effects/fx-fuel-blast.webp', frames: 16, cols: 4 },
+  // The battle effects (ART_GUIDE Batch 15, redrawn Nov 2026): painted sheets made with renderer/fx/battle.py, in the
+  // fuel blast's look. The fireball, the muzzle flash and the tracers keep their light on the ground drawn in code.
+  'fx-explosion': { src: 'effects/fx-explosion.webp', frames: 16, cols: 4, slice: true },
+  'fx-muzzle': { src: 'effects/fx-muzzle.webp', frames: 4, cols: 4, slice: true },
+  'fx-impact': { src: 'effects/fx-impact.webp', frames: 8, cols: 4, slice: true },
+  'fx-spark': { src: 'effects/fx-spark.webp', frames: 6, cols: 6, slice: true },
+  'fx-smoke': { src: 'effects/fx-smoke.webp', frames: 16, cols: 4, slice: true },
+  'fx-debris': { src: 'effects/fx-debris.webp', frames: 12, cols: 4, slice: true },
+  'fx-dustcloud': { src: 'effects/fx-dustcloud.webp', frames: 16, cols: 4, slice: true },
+  'decal-scorch': { src: 'effects/decal-scorch.webp', frames: 4, cols: 4, slice: true },
+  'decal-pock': { src: 'effects/decal-pock.webp', frames: 4, cols: 4, slice: true },
+  'decal-burn': { src: 'effects/decal-burn.webp', frames: 4, cols: 4, slice: true },
+  // War scars' holes, lit heightfields baked into the ground (renderer/fx/scars.py): each frame a variant.
+  'scar-crater': { src: 'effects/scar-crater.webp', frames: 4, cols: 4 },
+  'scar-hole': { src: 'effects/scar-hole.webp', frames: 8, cols: 8 },
   // Pipeline tiles (renderer/b/pipe.js), 256 px straight down, turned to fit like the rail pieces.
   ...files('pipes', ['pipe-straight', 'pipe-corner', 'pipe-tee', 'pipe-cross', 'pipe-end', 'pipe-raised']),
   'smoke-exhaust-heavy': { src: 'effects/fx-exhaust-heavy.webp', frames: 12, cols: 4 },

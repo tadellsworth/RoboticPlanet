@@ -256,6 +256,8 @@ Its noise comes from `terrain/tex.py`. The scripts that use it are:
 - `fx/particles.py`: chimney smoke, steam, black smoke and the flare;
 - `fx/exhaust.py`: light and heavy truck exhaust.
 - `fx/fuelblast.py`: the fuel blast (`fx-fuel-blast`: a Tanker or Refinery going up), 16 frames in a 4 x 4 grid.
+- `fx/battle.py`: the battle effects (ART_GUIDE Batch 15): `fx-explosion` (with `explosion.py`), `fx-muzzle`, `fx-impact`, `fx-spark`, `fx-smoke`, `fx-debris`, `fx-dustcloud` and the ground marks `decal-scorch`, `decal-pock`, `decal-burn`, as WebP.
+- `fx/scars.py`: the War scars' shell holes and big craters (`scar-hole`, `scar-crater`), lit heightfields.
 
 Each writes into the folder you give it (default `out/fx`). Every sheet has a transparent background, and its grid reads left to right, then top to bottom.
 

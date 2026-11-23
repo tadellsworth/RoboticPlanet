@@ -111,6 +111,17 @@ function drawTracerFx(ctx, f, x, y, x2, y2, z, k) {
 /** A muzzle flash: a hot star of fire out of the barrel, a glow round it, and a flicker of light on the ground. */
 function drawMuzzleFx(ctx, f, x, y, z, k) {
   const big = !!f.big, a = 1 - k, L = z * (big ? 0.62 : 0.36), W = L * 0.38, col = f.pulse ? f.color : '#ffc65a';
+  const sheet = !f.pulse && ART['fx-muzzle'];
+  if (sheet) {
+    // The painted flash (renderer/fx/battle.py): the barrel's end is the middle of the frame's left edge, so it bursts
+    // forward; a little glow round it, and its flicker of light on the ground (brighter at night).
+    const w = z * (big ? 1.15 : 0.78), an = f.a || 0;
+    fxGlow(ctx, x, y, z * (big ? 0.6 : 0.36), '#ffb347', 0.8 * a);
+    ctx.globalAlpha = 1;
+    drawSheetFrame(ctx, sheet, Math.floor(k * sheet.frames), x + Math.cos(an) * w * 0.5, y + Math.sin(an) * w * 0.5, w, w * 0.5, an);
+    fxGround(ctx, x, y + z * 0.25, z * (big ? 1.4 : 0.85), '#ffb45a', 0.7 * a);
+    return;
+  }
   fxGlow(ctx, x, y, z * (big ? 0.7 : 0.42) * (0.8 + 0.4 * a), f.pulse ? f.color : '#ffb347', 0.9 * a);
   ctx.save();
   ctx.translate(x, y); ctx.rotate(f.a || 0);
@@ -137,13 +148,19 @@ function drawBoomFx(ctx, f, x, y, z, k) {
   // light on the ground: a burst, dying away
   fxGround(ctx, x, y, r * 3.2, '#ff9a3c', Math.pow(1 - k, 1.6) * 1.1);
   // the shock ring
-  if (k < 0.45) {
-    const q = k / 0.45, rr = r * (0.4 + 1.9 * Math.sqrt(q));
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = `rgba(255,228,180,${0.75 * (1 - q)})`; ctx.lineWidth = Math.max(1.5, r * 0.09 * (1 - q));
-    ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
+  if (k < 0.45) fxShockRing(ctx, x, y, r * (0.4 + 1.9 * Math.sqrt(k / 0.45)), 1 - k / 0.45);
+  const sheet = ART['fx-explosion'];
+  if (sheet) {
+    // The painted fireball (renderer/fx/explosion.py, in the fuel blast's look): ground zero 2/3 down its frame and the
+    // fireball about a quarter of the frame across, so the frame is drawn four blast radii wide. A hot glow over its
+    // first moments, and a few sparks flying out, stay drawn in code.
+    const w = r * 3.6;
+    if (k < 0.3) fxGlow(ctx, x, y - r * 0.3, r * (1.2 + k), '#ffcf6b', 0.7 * (1 - k / 0.3));
+    // (its smoke thins sooner than the sheet's, so a fight under it stays readable; the smoke effect carries on)
+    ctx.globalAlpha = k < 0.45 ? 1 : Math.max(0, 1 - (k - 0.45) / 0.55 * 0.85);
+    drawSheetFrame(ctx, sheet, Math.floor(k * sheet.frames), x, y - w / 6, w, w, 0);
+    fxSparks(ctx, x, y, r, z, k, sd, fxCount(f.small ? 4 : 7));
+    return;
   }
   // the fire: lobes swelling and rising, white-yellow at first, then orange, red and finally sooty
   const n = 7;
@@ -168,10 +185,30 @@ function drawBoomFx(ctx, f, x, y, z, k) {
   // the white-hot heart and its glow
   if (k < 0.35) fxGlow(ctx, x, y - r * 0.15, r * (1.1 + k), '#ffcf6b', 1 - k / 0.35);
   // sparks and embers: streaks flying out and falling, glowing
+  fxSparks(ctx, x, y, r, z, k, sd, fxCount(f.small ? 8 : 14));
+}
+
+/**
+ * A blast's shock ring racing out along the ground: a soft band of hot light with a dusty edge, rr px across, a its
+ * strength (0..1). (Soft, not a line: it reads as air and dust pushed out, not a drawn circle.)
+ */
+function fxShockRing(ctx, x, y, rr, a) {
+  if (!(a > 0.01) || !(rr > 2)) return;
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(1, 0.62);
+  const g = ctx.createRadialGradient(0, 0, rr * 0.55, 0, 0, rr * 1.08);
+  g.addColorStop(0, 'rgba(255,220,170,0)'); g.addColorStop(0.72, `rgba(255,226,182,${0.22 * a})`);
+  g.addColorStop(0.86, `rgba(255,240,214,${0.5 * a})`); g.addColorStop(1, 'rgba(255,230,190,0)');
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr * 1.08, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** Sparks and embers thrown out of a blast of radius r px: ns glowing streaks flying out and falling. */
+function fxSparks(ctx, x, y, r, z, k, sd, ns) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
-  const ns = fxCount(f.small ? 8 : 14);
   for (let i = 0; i < ns; i++) {
     const ang = hash2(sd, i, 7) * Math.PI * 2, sp = r * (1.2 + 1.6 * hash2(sd, i, 8)), up = r * (0.6 + 1.4 * hash2(sd, i, 9));
     const t1 = Math.min(1, k * 1.25), t0 = Math.max(0, t1 - 0.08);

@@ -53,6 +53,46 @@ function wxCloud(rgb) {
 /** Wrap screen coordinate v (px) into [-m, span + m). */
 function wxWrap(v, span, m) { const w = span + 2 * m; return ((v % w) + w) % w - m; }
 
+/*
+ * Volumes of air (the Nov 2026 redraw): the weather's haze, mist, dust and drifting snow are layers of a soft noise
+ * (the world's noise of js/render.js, scarNoise: tileable, made once) instead of round blobs, tiled over the view and
+ * stretched along the wind, so a storm reads as turbulent air rolling past, not as balloons. Each layer is one
+ * full-screen pattern fill; Saver draws the first layer of each only.
+ */
+
+/** A 256 px tileable texture of the noise in rgb, its alpha rising from lo to hi of the noise (cached). fine: 4x finer. */
+function wxTex(rgb, lo, hi, fine) {
+  R.wxTex = R.wxTex || {};
+  const key = rgb + lo + hi + (fine ? 'f' : '');
+  if (R.wxTex[key]) return R.wxTex[key];
+  const T = scarNoise(), N = 256, c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d'), img = g.createImageData(N, N), [r, gg, b] = rgb.split(',').map(Number);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let v = fine ? (T[((y * 4) & 255) * N + ((x * 4) & 255)] * 0.6 + T[y * N + x] * 0.4) : T[y * N + x];
+    v = clamp((v - lo) / (hi - lo), 0, 1); v = v * v * (3 - 2 * v);
+    const o = (y * N + x) * 4;
+    img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = v * 255;
+  }
+  g.putImageData(img, 0, 0);
+  return (R.wxTex[key] = { c, pat: null });
+}
+
+/** One layer of air over the view: texture X tiled at sx x sy times its size, shifted by (ox, oy) px, at alpha a. */
+function wxLayer(ctx, X, sx, sy, ox, oy, a) {
+  if (!(a > 0.004)) return;
+  if (!X.pat) X.pat = ctx.createPattern(X.c, 'repeat');
+  const w = 256 * sx, h = 256 * sy;
+  X.pat.setTransform(new DOMMatrix([sx, 0, 0, sy, ((ox % w) + w) % w, ((oy % h) + h) % h]));
+  ctx.globalAlpha = a;
+  ctx.fillStyle = X.pat;
+  ctx.fillRect(0, 0, R.w, R.h);
+  ctx.globalAlpha = 1;
+}
+
+/** Is the Graphics step Saver (one layer of air, fewer specks)? */
+function wxLean() { return typeof gfxStep === 'function' && gfxStep() === 'saver'; }
+
 /**
  * A storm front blowing across the view (the sandstorm and the blizzard): a haze that sweeps in from upwind and
  * then fills the view, thicker toward its edges (you can't see far), billows rolling past with the wind, and
@@ -71,17 +111,14 @@ function wxStorm(ctx, W, C, camX, camY) {
   const v = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.18, cw / 2, ch / 2, Math.max(cw, ch) * 0.72);
   v.addColorStop(0, `rgba(${C.edge},0)`); v.addColorStop(1, `rgba(${C.edge},${0.62 * k * W.front})`);
   ctx.fillStyle = v; ctx.fillRect(0, 0, cw, ch);
-  // billows rolling past
-  const cloud = wxCloud(C.cloud);
-  for (let n = 0; n < 22; n++) {
-    const h1 = hash2(n, 3, 91), h2 = hash2(n, 5, 93), sp = (110 + 170 * hash2(n, 7, 95)) * dir;
-    const s = Math.max(cw, ch) * (0.22 + 0.32 * hash2(n, 9, 97));
-    const x = wxWrap(h1 * cw + t * sp - camX, cw, s), y = wxWrap(h2 * ch + Math.sin(t * 0.3 + n) * 30 - camY, ch, s / 2);
-    if (ahead(x)) continue;
-    ctx.globalAlpha = 0.62 * k;
-    ctx.drawImage(cloud, x - s / 2, y - s * 0.3, s, s * 0.6);
-  }
-  ctx.globalAlpha = 1;
+  // turbulent air rolling past: two layers of the noise stretched along the wind, the nearer faster (behind the front)
+  ctx.save();
+  if (W.front < 1) { ctx.beginPath(); if (dir > 0) ctx.rect(0, 0, Math.max(0, fx), ch); else ctx.rect(fx, 0, Math.max(0, cw - fx), ch); ctx.clip(); }
+  // (a darker body of dust or snow, lighter billows over it, and fine bright streaks whipping past)
+  wxLayer(ctx, wxTex(C.edge, 0.42, 0.8), 7, 2.4, -camX * 0.85 + t * 120 * dir, -camY * 0.85 + Math.sin(t * 0.3) * 20, 0.38 * k);
+  wxLayer(ctx, wxTex(C.cloud, 0.4, 0.78), 5, 1.8, -camX * 1.0 + t * 190 * dir + 140, -camY + 60, 0.45 * k);
+  if (!wxLean()) wxLayer(ctx, wxTex(C.streak, 0.6, 0.92, true), 9, 0.9, -camX * 1.2 + t * 420 * dir + 97, -camY * 1.2 + 41, 0.32 * k);
+  ctx.restore();
   // driven streaks: long and fast, plus a finer, faster layer of grains or flakes
   ctx.strokeStyle = `rgba(${C.streak},${0.6 * k})`;
   ctx.lineWidth = 1.6;
@@ -133,42 +170,66 @@ function drawWeather(ctx, ox, oy, z) {
   else {
     // the rainstorm: a dark overcast, sheets of driving rain, splashes, fog banks drifting through, and lightning
     ctx.fillStyle = `rgba(20,28,40,${(night ? 0.3 : 0.32) * k})`; ctx.fillRect(0, 0, cw, ch);
-    const fog = wxCloud(night ? '112,124,140' : '206,214,222');
-    for (let n = 0; n < 12; n++) {
-      const h1 = hash2(n, 43, 11), h2 = hash2(n, 47, 13), s = Math.max(cw, ch) * (0.35 + 0.4 * hash2(n, 53, 17));
-      const x = wxWrap(h1 * cw + t * (14 + 18 * h2) * dir - camX, cw, s), y = wxWrap(h2 * ch + Math.sin(t * 0.15 + n) * 20 - camY, ch, s / 3);
-      ctx.globalAlpha = (night ? 0.35 : 0.5) * k;
-      ctx.drawImage(fog, x - s / 2, y - s * 0.2, s, s * 0.4);
-    }
-    ctx.globalAlpha = 1;
+    // mist banks drifting through, and sheets of heavier rain sweeping across with the gusts
+    const mist = night ? '112,124,140' : '206,214,222';
+    wxLayer(ctx, wxTex(mist, 0.42, 0.88), 5, 3.2, -camX + t * 16 * dir, -camY + Math.sin(t * 0.15) * 20, (night ? 0.4 : 0.5) * k);
+    if (!wxLean()) wxLayer(ctx, wxTex(night ? '150,166,188' : '226,234,244', 0.55, 0.92, true), 7, 1.6, -camX + t * 260 * dir + 31, -camY + t * 90 + 77, (night ? 0.26 : 0.3) * k);
     const v = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.25, cw / 2, ch / 2, Math.max(cw, ch) * 0.75);
     v.addColorStop(0, 'rgba(150,160,172,0)'); v.addColorStop(1, `rgba(${night ? '60,68,80' : '170,178,188'},${0.45 * k})`);
     ctx.fillStyle = v; ctx.fillRect(0, 0, cw, ch);
-    ctx.strokeStyle = night ? `rgba(170,190,215,${0.42 * k})` : `rgba(220,232,248,${0.5 * k})`;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    for (let n = 0, N = wxCount(380); n < N; n++) {
-      const h1 = hash2(n, 17, 41), h2 = hash2(n, 19, 43), fall = 900 + 600 * h2;
-      const x = wxWrap(h1 * cw + t * fall * 0.3 * dir - camX, cw, 40), y = wxWrap(h2 * ch + t * fall - camY, ch, 40);
-      ctx.moveTo(x, y); ctx.lineTo(x - dir * 8, y - 24 - 14 * h1);
-    }
-    ctx.stroke();
-    // splashes on the ground: little rings that flicker up and fade
-    ctx.strokeStyle = night ? `rgba(160,180,205,${0.4 * k})` : `rgba(225,235,250,${0.45 * k})`;
+    // the rain in three depths: a fine far haze of drops, the main fall, and a few big near streaks, falling faster the
+    // nearer they are, slanted by the wind; heavier where a gust sheet passes (the noise again), so it comes in waves
+    const T = scarNoise(), rc = night ? '170,190,215' : '222,234,250';
+    const depths = [[wxCount(240), 0.55, 10, 0.8, 0.3, 700], [wxCount(300), 1, 24, 1.2, 0.48, 1000], [wxCount(48), 1.5, 46, 2.1, 0.5, 1500]];
+    ctx.lineCap = 'round';
+    depths.forEach(([N, par, len, lw, al, fall], L) => {
+      if (L === 0 && wxLean()) return;
+      for (const heavy of [0, 1]) {
+        ctx.strokeStyle = `rgba(${rc},${al * k * (heavy ? 1 : 0.45)})`;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        for (let n = 0; n < N; n++) {
+          const h1 = hash2(n, 17 + L, 41), h2 = hash2(n, 19 + L, 43), f = fall * (0.8 + 0.4 * h2);
+          const x = wxWrap(h1 * cw + t * f * 0.3 * dir - camX * par, cw, 60), y = wxWrap(h2 * ch + t * f - camY * par, ch, 60);
+          const g = scarNz(T, (x + camX - t * 260 * dir) / 7 + 31, (y + camY - t * 90) / 1.6 + 77) > 0.55;
+          if (g !== !!heavy) continue;
+          const l = len * (0.75 + 0.5 * h1);
+          ctx.moveTo(x, y); ctx.lineTo(x - dir * l * 0.3, y - l);
+        }
+        ctx.stroke();
+      }
+    });
+    // splashes on the ground: a crown of water thrown up (droplets) and its ring spreading and fading
+    ctx.strokeStyle = night ? `rgba(160,180,205,${0.42 * k})` : `rgba(228,238,252,${0.5 * k})`;
+    ctx.fillStyle = night ? `rgba(170,190,215,${0.5 * k})` : `rgba(240,246,255,${0.6 * k})`;
     ctx.lineWidth = 1;
+    const N = wxCount(90);
     ctx.beginPath();
-    for (let n = 0, N = wxCount(70); n < N; n++) {
+    for (let n = 0; n < N; n++) {
       const ph = (t * 2.2 + hash2(n, 59, 19)) % 1, cyc = Math.floor(t * 2.2 + hash2(n, 59, 19));
-      const x = wxWrap(hash2(n, cyc, 61) * cw - camX, cw, 10), y = wxWrap(hash2(cyc, n, 67) * ch - camY, ch, 10), r = 2 + ph * 5;
-      ctx.moveTo(x + r, y); ctx.ellipse(x, y, r, r * 0.45, 0, 0, Math.PI * 2);
+      const x = wxWrap(hash2(n, cyc, 61) * cw - camX, cw, 10), y = wxWrap(hash2(cyc, n, 67) * ch - camY, ch, 10), r = 1.5 + ph * 6;
+      ctx.moveTo(x + r, y); ctx.ellipse(x, y, r, r * 0.42, 0, 0, Math.PI * 2);
     }
     ctx.stroke();
+    ctx.beginPath();
+    for (let n = 0; n < N; n++) {
+      const ph = (t * 2.2 + hash2(n, 59, 19)) % 1, cyc = Math.floor(t * 2.2 + hash2(n, 59, 19));
+      if (ph > 0.45) continue;
+      const x = wxWrap(hash2(n, cyc, 61) * cw - camX, cw, 10), y = wxWrap(hash2(cyc, n, 67) * ch - camY, ch, 10), q = ph / 0.45;
+      for (let d = 0; d < 4; d++) { const a = (d / 4) * Math.PI * 2 + n, dx = Math.cos(a) * (2 + 5 * q), dy = Math.sin(a) * (1 + 2 * q) - 7 * q * (1 - q) * 2; ctx.moveTo(x + dx + 0.9, y + dy); ctx.arc(x + dx, y + dy, 0.9 * (1 - q * 0.5), 0, Math.PI * 2); }
+    }
+    ctx.fill();
     // lightning: a flash of the whole sky now and then (brighter at night), sometimes a double flicker
     const bolt = Math.floor(S.time / 5), at = hash2(S.seed | 0, bolt, 81) * 5, since = S.time - bolt * 5 - at;
     if (hash2(bolt, 3, 83) < 0.4 && since > 0 && since < 0.4) {
       const on = since < 0.07 || (since > 0.15 && since < 0.21) ? 1 : 0.25;
-      ctx.fillStyle = `rgba(225,232,255,${(night ? 0.42 : 0.22) * k * on})`;
+      ctx.fillStyle = `rgba(225,232,255,${(night ? 0.24 : 0.12) * k * on})`;
       ctx.fillRect(0, 0, cw, ch);
+      const lx = hash2(bolt, 5, 85) * cw, ly = hash2(bolt, 7, 87) * ch, lr = Math.max(cw, ch) * 0.55;
+      const lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+      lg.addColorStop(0, `rgba(235,240,255,${(night ? 0.5 : 0.25) * k * on})`); lg.addColorStop(1, 'rgba(225,232,255,0)');
+      ctx.fillStyle = lg; ctx.fillRect(0, 0, cw, ch);
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
   ctx.restore();
@@ -178,12 +239,7 @@ function drawWeather(ctx, ox, oy, z) {
 function wxAsh(ctx, W, night, camX, camY) {
   const k = W.k, t = R.time, cw = R.w, ch = R.h, dir = W.dir;
   ctx.fillStyle = `rgba(${night ? '40,26,22' : '86,72,64'},${(night ? 0.36 : 0.36) * k})`; ctx.fillRect(0, 0, cw, ch);
-  const smoke = wxCloud(night ? '70,52,46' : '120,108,100');
-  for (let n = 0; n < 10; n++) {
-    const s = Math.max(cw, ch) * (0.3 + 0.35 * hash2(n, 3, 11)), x = wxWrap(hash2(n, 5, 13) * cw + t * 12 * dir - camX, cw, s), y = wxWrap(hash2(n, 7, 17) * ch - camY, ch, s / 3);
-    ctx.globalAlpha = 0.4 * k; ctx.drawImage(smoke, x - s / 2, y - s * 0.2, s, s * 0.4);
-  }
-  ctx.globalAlpha = 1;
+  wxLayer(ctx, wxTex(night ? '70,52,46' : '120,108,100', 0.38, 0.85), 5.5, 3, -camX + t * 12 * dir, -camY, 0.5 * k);
   ctx.fillStyle = `rgba(${night ? '130,122,118' : '226,222,216'},${0.85 * k})`;
   ctx.beginPath();
   for (let n = 0, N = wxCount(420); n < N; n++) {
@@ -308,14 +364,10 @@ function wxAurora(ctx, W, night, camX, camY) {
 function wxFog(ctx, W, night, camX, camY) {
   const k = W.k, t = R.time, cw = R.w, ch = R.h, dir = W.dir;
   ctx.fillStyle = `rgba(${night ? '70,84,80' : '196,206,196'},${(night ? 0.26 : 0.34) * k})`; ctx.fillRect(0, 0, cw, ch);
-  const fog = wxCloud(night ? '96,112,108' : '222,230,222');
-  for (let n = 0; n < 16; n++) {
-    const h1 = hash2(n, 61, 11), h2 = hash2(n, 67, 13), s = Math.max(cw, ch) * (0.35 + 0.45 * hash2(n, 71, 17));
-    const x = wxWrap(h1 * cw + t * (8 + 10 * h2) * dir - camX, cw, s), y = wxWrap(h2 * ch + Math.sin(t * 0.1 + n) * 24 - camY, ch, s / 3);
-    ctx.globalAlpha = (night ? 0.45 : 0.6) * k;
-    ctx.drawImage(fog, x - s / 2, y - s * 0.2, s, s * 0.4);
-  }
-  ctx.globalAlpha = 1;
+  // banks of mist rolling slowly through: a big slow layer and a finer, quicker one (wisps)
+  const fc = night ? '96,112,108' : '222,230,222';
+  wxLayer(ctx, wxTex(fc, 0.3, 0.8), 6, 3.6, -camX + t * 9 * dir, -camY + Math.sin(t * 0.1) * 24, (night ? 0.55 : 0.7) * k);
+  if (!wxLean()) wxLayer(ctx, wxTex(fc, 0.5, 0.9, true), 3.2, 1.6, -camX * 1.05 + t * 22 * dir + 53, -camY * 1.05 + 19, (night ? 0.35 : 0.45) * k);
   if (!night || biome() === 'springs') return;
   ctx.globalCompositeOperation = 'lighter';
   for (let n = 0, N = wxCount(110); n < N; n++) {

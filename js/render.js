@@ -298,7 +298,7 @@ function bakedArtPending() { return artBakedLeft; }
  * resources, the pieces of bridges and track): only these arriving call for the map to be baked again.
  */
 function bakedArt(key) {
-  return /^((ground|water|rock|cliff|chasm|lava)(-|$)|plant-|bridge-|skybridge-|railbridge-|rail-)/.test(key) || Object.values(RES).some((r) => r.key === key);
+  return /^((ground|water|rock|cliff|chasm|lava)(-|$)|plant-|bridge-|skybridge-|railbridge-|rail-|scar-)/.test(key) || Object.values(RES).some((r) => r.key === key);
 }
 
 /*
@@ -402,7 +402,7 @@ function loadArtKey(key, entry) {
   if (baked) artBakedLeft++;
   {
     loadImg(/^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src, (img) => {
-      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };
+      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0, slice: !!entry.slice };
       artLoaded++;
       if (baked) artBakedLeft--;
       // The third and fourth teams (green, purple) get the rival's red art recoloured, made the first
@@ -777,20 +777,45 @@ function bakeMap() {
 }
 
 function flushDirtyTiles() {
+  // A scarred tile's ground blends into the tiles round it (paintScarGround), so they're painted again too: not with it
+  // (a big blast would hold up the frame), but a few a frame after (scarLater), so a seam shows for a moment at most.
+  if (R.scarLater && R.scarLater.of !== S) R.scarLater = null;
+  R.scarKeep = new Map();
+  try { flushTiles(); } finally { R.scarKeep = null; }
+}
+
+/** (flushDirtyTiles, inside: the deferred scar tiles first, then the changed tiles.) */
+function flushTiles() {
+  if (R.scarLater && R.scarLater.q.size) {
+    const t0 = performance.now(), L = R.scarLater.q;
+    for (const t of L) { L.delete(t); repaintTile(t); if (performance.now() - t0 > 2) break; }
+  }
   if (!S.dirtyTiles.length) return;
   MM.dirty = true;
   const seen = new Set();
-  const chunks = R.hd ? [...R.hd.chunks.values()] : [];
   for (const t of S.dirtyTiles) {
     if (seen.has(t)) continue;
     seen.add(t);
-    const i = t % S.W, j = (t / S.W) | 0;
-    redrawAround(R.mapCtx, i, j);
-    if (R.glowMap) glowTiles(i - 1, j - 1, i + 1, j + 1);
-    if (typeof duskSilTiles === 'function') duskSilTiles(i - 1, j - 1, i + 1, j + 1); // (the plants' sunset silhouettes)
-    for (const ch of chunks) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
+    repaintTile(t);
+  }
+  if (S.crater && S.ash) {
+    for (const t of seen) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!(S.ash[t] || S.crater[t] || scarBlight(i, j) || scarSpill(i, j))) continue;
+      R.scarLater = R.scarLater || { of: S, q: new Set() };
+      for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) { const u = inMap(a, b) ? tIdx(a, b) : -1; if (u >= 0 && !seen.has(u)) R.scarLater.q.add(u); }
+    }
   }
   S.dirtyTiles.length = 0;
+}
+
+/** Paint tile t again everywhere it's baked: the map, its glow and sunset silhouettes, and the sharp chunks. */
+function repaintTile(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  redrawAround(R.mapCtx, i, j);
+  if (R.glowMap) glowTiles(i - 1, j - 1, i + 1, j + 1);
+  if (typeof duskSilTiles === 'function') duskSilTiles(i - 1, j - 1, i + 1, j + 1); // (the plants' sunset silhouettes)
+  if (R.hd) for (const ch of R.hd.chunks.values()) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
 }
 
 /**
@@ -6982,6 +7007,7 @@ function render(dtReal) {
     ctx.restore();
     for (const e of items) if ((e.type === 'turret' || e.type === 'minigun') && buildingNightOn(e) && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
+  if (typeof duskCastShadows === 'function') duskCastShadows(ctx, ox, oy, z, items); // (the low sun's long shadows: js/sunset.js)
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
@@ -8696,8 +8722,29 @@ function drawSheetFrame(ctx, art, fr, x, y, w, h, a) {
   const n = Math.max(1, art.frames || 1), cols = art.cols || n, rows = Math.ceil(n / cols);
   const fw = art.img.width / cols, fh = art.img.height / rows, i = Math.min(n - 1, Math.max(0, fr));
   h = h || w * (fh / fw);
+  if (art.slice) {
+    // A sheet marked `slice` (the battle effects): each frame cut out once into its own small canvas, halved while it's
+    // drawn small, so a frame never samples the whole big sheet (slow on some devices, many times a frame in a fight).
+    const c = sheetSlice(art, i, fw, fh, cols, Math.max(w, h) * (R.drawScale || 1));
+    if (a) { ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.drawImage(c, -w / 2, -h / 2, w, h); ctx.restore(); }
+    else ctx.drawImage(c, x - w / 2, y - h / 2, w, h);
+    return;
+  }
   if (a) { ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.drawImage(art.img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, -w / 2, -h / 2, w, h); ctx.restore(); }
   else ctx.drawImage(art.img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, x - w / 2, y - h / 2, w, h);
+}
+
+/** Frame i of sheet `art` as its own canvas, at full size or halved (once or twice) when drawn px wide or less (cached). */
+function sheetSlice(art, i, fw, fh, cols, px) {
+  const S0 = art.slices || (art.slices = []);
+  const lv = px < fw / 3 && fw >= 128 ? 2 : px < fw * 0.6 && fw >= 64 ? 1 : 0, k = i * 3 + lv;
+  if (S0[k]) return S0[k];
+  const c = document.createElement('canvas'), d = 1 << lv;
+  c.width = Math.max(1, Math.round(fw / d)); c.height = Math.max(1, Math.round(fh / d));
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(art.img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, 0, 0, c.width, c.height);
+  return (S0[k] = c);
 }
 
 /** Bullet pockmarks, burns, scorch marks and rubble on the ground, fading out at the end of their life. */
@@ -8849,7 +8896,9 @@ function drawEffects(ctx, ox, oy, z) {
     // Pulse-laser glows and coloured sparks (scuffles, creatures) stay drawn in code, in their own colour.
     if (sheet && sheet.frames && !f.pulse && (f.type !== 'spark' || f.hit)) {
       const fr = Math.floor(k * sheet.frames);
-      ctx.globalAlpha = 1;
+      // (smoke and dust don't glow: thinner in the dark, so the night's lights show through; a fuel fire's smoke thicker)
+      ctx.globalAlpha = f.type === 'smoke' || f.type === 'puff' || f.type === 'dust' || f.type === 'dustcloud' ? Math.min(1, (1 - 0.4 * fxNight()) * (f.dark ? 1.25 : 1)) * (f.type === 'smoke' ? Math.min(1, k / 0.18) : 1) // (a blast's smoke rises out of the fireball: it comes in as the fire dies)
+        : f.type === 'debris' ? clamp((k - 0.3) * 4, 0, 1) : 1; // (the chunks come out of the fireball, not in front of it)
       if (f.type === 'tracer' || f.type === 'arc') {
         const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, len = Math.hypot(x2 - x, y2 - y), a = Math.atan2(y2 - y, x2 - x);
         drawSheetFrame(ctx, sheet, fr, (x + x2) / 2, (y + y2) / 2, len, z * 0.5, a);
@@ -11894,49 +11943,14 @@ function scarCrater(t) {
 
 /** The scars of tile (i, j) (open ground), into the baked ground: its scorch or ash, churned mud, shell holes, then the big craters that reach it. */
 function paintScars(ctx, i, j, x, y, t) {
-  const a = S.ash[t], c = S.crater[t], lo = c & 15;
-  const near = (di, dj, f) => inMap(i + di, j + dj) && f(tIdx(i + di, j + dj));
-  // Healing where nobody has fought for a while (js/warfx.js): the scorch and ash fade back into the ground, the mud a little.
+  const lo = S.crater[t] & 15;
+  // Healing where nobody has fought for a while (js/warfx.js): the scorch and ash fade back into the ground, the mud a
+  // little (scarFieldsAt takes it in), and grass and flowers come up (paintScarHeal).
   const heal = typeof warHeal === 'function' ? warHeal(t) : 0, ga = ctx.globalAlpha;
-  if (heal) ctx.globalAlpha = ga * (1 - heal * (a >= SCARS.glass ? 0.45 : 0.82));
-  // The grass dying back round the fighting: khaki, dead ground, deeper the more scarred tiles there are round it.
-  const bl = scarBlight(i, j);
-  if (bl >= 2) scarPatch(ctx, i, j, x, y, (u) => scarBlight(u % S.W, (u / S.W) | 0) >= 2, '#5e4d36', Math.min(0.85, 0.2 * bl));
-  if (a) {
-    if (a > SCARS.light) {
-      const same = (u) => S.ash[u] > SCARS.light && S.terrain[u] === T_GROUND;
-      scarPatch(ctx, i, j, x, y, same, a >= SCARS.glass ? SCAR_COL.glass : SCAR_COL.ash, 0.93);
-      // flecks of grey ash (on glass: streaks of sheen) and a few dark cinders
-      for (let k = 0; k < 9; k++) {
-        const px = x + 3 + hash2(i, j, 440 + k) * (TP - 7), py = y + 3 + hash2(i, j, 460 + k) * (TP - 6);
-        if (a >= SCARS.glass) { ctx.fillStyle = `rgba(120,140,150,${0.12 + 0.12 * hash2(i, j, 480 + k)})`; ctx.fillRect(px, py, 4 + 3 * hash2(i, j, 500 + k), 1); }
-        else { ctx.fillStyle = k < 7 ? SCAR_COL.ashHi + (0.16 + 0.2 * hash2(i, j, 480 + k)) + ')' : 'rgba(16,12,10,0.6)'; ctx.fillRect(px, py, 1 + (k % 3), 1 + (k % 2)); }
-      }
-    } else {
-      // a light scorch: dry, browned ground in ragged patches, stronger for the first third of its time
-      const k = Math.ceil(a / 20) / 3;
-      const same = (u) => S.ash[u] > 0 && S.terrain[u] === T_GROUND;
-      scarPatch(ctx, i, j, x, y, same, `rgba(${SCAR_COL.scorch},${0.22 + 0.4 * k})`, 1);
-      ctx.fillStyle = `rgba(30,22,14,${0.12 + 0.2 * k})`;
-      for (let n = 0; n < 4; n++) { const px = x + 4 + hash2(i, j, 520 + n) * (TP - 12), py = y + 4 + hash2(i, j, 530 + n) * (TP - 10); ctx.beginPath(); ctx.ellipse(px, py, 3 + 4 * hash2(i, j, 540 + n), 2 + 2 * hash2(i, j, 550 + n), 0, 0, Math.PI * 2); ctx.fill(); }
-    }
-  }
-  // Torn earth round shell holes, browner with each, churned into mud with its ridges where they overlap (or big
-  // craters crowd round).
-  if (heal) ctx.globalAlpha = ga * (1 - heal * 0.7);
-  let churn = lo >= 4 ? 1 : 0;
-  if (!churn && lo >= 2) { let m = 0; for (const [di, dj] of ARM_DIRS) if (near(di, dj, (u) => S.crater[u])) m++; churn = m >= 3 ? 1 : 0; }
-  if (lo && !churn) scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) > 0 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.85, 0.32 + lo * 0.16));
-  if (churn) {
-    scarPatch(ctx, i, j, x, y, (u) => (S.crater[u] & 15) >= 2 && S.terrain[u] === T_GROUND, SCAR_COL.mud, Math.min(0.95, 0.7 + lo * 0.04));
-    ctx.lineCap = 'round';
-    for (let n = 0; n < 5; n++) {
-      const px = x + 2 + hash2(i, j, 560 + n) * (TP - 8), py = y + 3 + hash2(i, j, 570 + n) * (TP - 6), w = 5 + 7 * hash2(i, j, 580 + n);
-      ctx.strokeStyle = n % 2 ? SCAR_COL.mudDark : SCAR_COL.mudHi; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + w / 2, py - 2 + 4 * hash2(i, j, 590 + n), px + w, py + 1); ctx.stroke();
-    }
-  }
-  if (heal) ctx.globalAlpha = ga; // (the holes and craters themselves stay)
+  // The ground: the grass dying back round the fighting, light scorch, ash or glass, torn earth and churned mud, painted
+  // pixel by pixel from fields that run smoothly across the tiles and a noise of the world, so they meet with no seams
+  // and end in ragged, organic edges (paintScarGround).
+  paintScarGround(ctx, i, j, x, y);
   // Shell holes: each a dark bowl with a lighter lip of thrown earth (light from the upper left).
   for (let n = 0, m = Math.min(lo, 7); n < m; n++) {
     const r = TP * (0.09 + 0.07 * hash2(i, j, 600 + n)), px = x + r + 2 + hash2(i, j, 610 + n) * (TP - 2 * r - 4), py = y + r + 2 + hash2(i, j, 620 + n) * (TP - 2 * r - 4);
@@ -11978,8 +11992,150 @@ function scarPatch(ctx, i, j, x, y, same, fill, alpha) {
   ctx.globalAlpha = 1;
 }
 
+/*
+ * The scarred ground of a tile, painted pixel by pixel into the baked ground (the Nov 2026 redraw: no flat tile-sized
+ * patches). Each scar is a field with a value at every tile's middle (scarFieldsAt); a pixel blends the four nearest,
+ * so the fields run smoothly across tiles, and a noise of the world (scarNoise: the same wherever it's sampled, so two
+ * tiles meet cleanly) breaks their edges into ragged, organic shapes and gives the earth its grain. Toward a tile that
+ * isn't painted at all the ground fades out before the edge. Layers, bottom up: the grass dying back (khaki), a light
+ * scorch, ash or glass (flecked; glass streaked with sheen), torn earth and churned mud (ridged). Drawn at the bake's own
+ * scale, so the sharp chunks close up get the full detail. Costs nothing a frame: it is baked.
+ */
+const SCAR_LAYERS = [
+  [94, 77, 54],   // the grass dying back
+  [68, 54, 36],   // a light scorch
+  [59, 53, 48],   // ash (glass: SCAR_GLASS)
+  [85, 64, 43],   // torn earth, churned mud
+];
+const SCAR_GLASS = [20, 19, 22];
+
+/** A 256 x 256 tileable value-noise field (0..1, made once): the grain of the scarred ground. */
+function scarNoise() {
+  if (R.scarNoise) return R.scarNoise;
+  const N = 256, out = new Float32Array(N * N);
+  let amp = 1;
+  for (const cell of [64, 32, 16, 8, 4]) {
+    const g = N / cell, h = (a, b) => hash2(((a % g) + g) % g, ((b % g) + g) % g, cell * 7 + 3);
+    for (let y = 0; y < N; y++) {
+      const gy = y / cell, y0 = Math.floor(gy), fy = gy - y0, sy = fy * fy * (3 - 2 * fy);
+      for (let x = 0; x < N; x++) {
+        const gx = x / cell, x0 = Math.floor(gx), fx = gx - x0, sx = fx * fx * (3 - 2 * fx);
+        out[y * N + x] += amp * (h(x0, y0) * (1 - sx) * (1 - sy) + h(x0 + 1, y0) * sx * (1 - sy) + h(x0, y0 + 1) * (1 - sx) * sy + h(x0 + 1, y0 + 1) * sx * sy);
+      }
+    }
+    amp *= 0.55;
+  }
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k < N * N; k++) { lo = Math.min(lo, out[k]); hi = Math.max(hi, out[k]); }
+  for (let k = 0; k < N * N; k++) out[k] = (out[k] - lo) / (hi - lo);
+  return (R.scarNoise = out);
+}
+
+/** The noise at (x, y) (noise pixels, any value: it wraps), smoothly between its pixels. */
+function scarNz(T, x, y) {
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, a = x0 & 255, b = y0 & 255, c = (x0 + 1) & 255, d = (y0 + 1) & 255;
+  return (T[b * 256 + a] * (1 - fx) + T[b * 256 + c] * fx) * (1 - fy) + (T[d * 256 + a] * (1 - fx) + T[d * 256 + c] * fx) * fy;
+}
+
+/** Is tile u painted with scars (the test drawTile uses)? */
+function scarPainted(u) {
+  const i = u % S.W, j = (u / S.W) | 0;
+  return S.terrain[u] === T_GROUND && (S.ash[u] || S.crater[u] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[u] && !pillarAt(u);
+}
+
+/** The scar fields at tile (i, j)'s middle: [painted, blight, scorch, ash, mud, glass (0/1), churned (0/1)]. */
+function scarFieldsAt(i, j) {
+  if (!inMap(i, j)) return [0, 0, 0, 0, 0, 0, 0];
+  const u = tIdx(i, j);
+  if (!scarPainted(u)) return [0, 0, 0, 0, 0, 0, 0];
+  const heal = typeof warHeal === 'function' ? warHeal(u) : 0, a = S.ash[u], lo = S.crater[u] & 15, heavy = a > SCARS.light, glass = a >= SCARS.glass;
+  const bl = scarBlight(i, j);
+  let churn = lo >= 4 ? 1 : 0;
+  if (!churn && lo >= 2) { let m = 0; for (const [di, dj] of ARM_DIRS) if (inMap(i + di, j + dj) && S.crater[tIdx(i + di, j + dj)]) m++; churn = m >= 3 ? 1 : 0; }
+  return [
+    1,
+    bl >= 2 ? Math.min(0.85, 0.2 * bl) * (1 - heal * 0.82) : 0,
+    a && !heavy ? (0.22 + 0.4 * Math.ceil(a / 20) / 3) * (1 - heal * 0.82) : 0,
+    heavy ? 0.93 * (1 - heal * (glass ? 0.45 : 0.82)) : 0,
+    lo ? (churn ? Math.min(0.95, 0.7 + lo * 0.04) : Math.min(0.85, 0.32 + lo * 0.16)) * (1 - heal * 0.7) : 0,
+    glass ? 1 : 0, churn,
+  ];
+}
+
+/** Paint tile (i, j)'s scarred ground at (x, y) in the bake (see above). */
+function paintScarGround(ctx, i, j, x, y) {
+  const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) || 1, res = clamp(Math.round(TP * sc), 8, 48); // (48 px a tile at most: the fields and the noise are soft, and drawn up smoothly)
+  const F = [];
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) F.push(scarFieldsAt(i + di, j + dj));
+  if (!F[4][1] && !F[4][2] && !F[4][3] && !F[4][4]) { let any = false; for (const f of F) if (f[1] || f[2] || f[3] || f[4]) any = true; if (!any) return; }
+  // (while the changed tiles are painted again, a tile painted once at a size is kept for the sharp chunks that need it
+  // too: R.scarKeep, made and dropped by flushDirtyTiles)
+  const keep = R.scarKeep, kk = keep && tIdx(i, j) + ':' + res;
+  if (keep && keep.has(kk)) { ctx.drawImage(keep.get(kk), x, y, TP, TP); return; }
+  R.scarCv = R.scarCv || {};
+  let C = R.scarCv[res];
+  if (!C) { const c = document.createElement('canvas'); c.width = c.height = res; const g = c.getContext('2d'); C = R.scarCv[res] = { c, g, img: g.createImageData(res, res) }; }
+  const T = scarNoise(), D = C.img.data, inv = 1 / res;
+  const sm = (v) => (v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v));
+  const val = [0, 0, 0, 0, 0, 0, 0];
+  for (let py = 0; py < res; py++) {
+    const v = (py + 0.5) * inv, gy = v - 0.5, oy = gy < 0 ? 0 : 1, fy = gy < 0 ? gy + 1 : gy, wy = j + v;
+    for (let px = 0; px < res; px++) {
+      const u = (px + 0.5) * inv, gx = u - 0.5, ox = gx < 0 ? 0 : 1, fx = gx < 0 ? gx + 1 : gx, wx = i + u;
+      // the four nearest tiles' middles (rows oy, oy+1 and columns ox, ox+1 of the 3 x 3), blended
+      const A = F[oy * 3 + ox], B = F[oy * 3 + ox + 1], Cc = F[(oy + 1) * 3 + ox], Dd = F[(oy + 1) * 3 + ox + 1];
+      const wa = (1 - fx) * (1 - fy), wb = fx * (1 - fy), wc = (1 - fx) * fy, wd = fx * fy;
+      const n1 = scarNz(T, wx * 32, wy * 32), n2 = scarNz(T, wx * 128 + 97, wy * 128 + 41);
+      // fading out toward a tile not painted at all (sides and corners), along a ragged line
+      let e = 1;
+      const rag = (n1 - 0.5) * 0.3;
+      if (!F[1][0]) e *= sm((v + rag) / 0.4); if (!F[7][0]) e *= sm((1 - v + rag) / 0.4);
+      if (!F[3][0]) e *= sm((u + rag) / 0.4); if (!F[5][0]) e *= sm((1 - u + rag) / 0.4);
+      if (!F[0][0]) e *= sm((Math.hypot(u, v) + rag) / 0.45); if (!F[2][0]) e *= sm((Math.hypot(1 - u, v) + rag) / 0.45);
+      if (!F[6][0]) e *= sm((Math.hypot(u, 1 - v) + rag) / 0.45); if (!F[8][0]) e *= sm((Math.hypot(1 - u, 1 - v) + rag) / 0.45);
+      let r = 0, g = 0, b = 0, al = 0;
+      if (e > 0.003) for (let L = 0; L < 4; L++) {
+        const k = L + 1, pa = A[k] > 0 ? wa : 0, pb = B[k] > 0 ? wb : 0, pc = Cc[k] > 0 ? wc : 0, pd = Dd[k] > 0 ? wd : 0, p = pa + pb + pc + pd;
+        if (p <= 0.001) continue;
+        const str = (pa * A[k] + pb * B[k] + pc * Cc[k] + pd * Dd[k]) / p;
+        const nl = L < 2 ? n1 : L === 2 ? 1 - n1 * 0.7 - n2 * 0.3 : n1 * 0.7 + (1 - n2) * 0.3; // (each its own edge, from the two samples)
+        let a = sm((p - 0.5) * 2.4 + (nl - 0.5) * 1.7 + 0.5) * str * e;
+        if (a <= 0.003) continue;
+        const grain = 0.86 + 0.28 * n2;
+        let cr = SCAR_LAYERS[L][0] * grain, cg = SCAR_LAYERS[L][1] * grain, cb = SCAR_LAYERS[L][2] * grain;
+        if (L === 2) {
+          const gl = (A[5] * wa + B[5] * wb + Cc[5] * wc + Dd[5] * wd);
+          if (gl > 0) { const sheen = sm((scarNz(T, wx * 24 + 11, wy * 200) - 0.68) * 6) * 0.35; cr = cr + (SCAR_GLASS[0] + 100 * sheen - cr) * gl; cg = cg + (SCAR_GLASS[1] + 120 * sheen - cg) * gl; cb = cb + (SCAR_GLASS[2] + 128 * sheen - cb) * gl; }
+          const n3 = scarNz(T, wx * 256 + 13, wy * 256 + 171), fleck = sm((n3 - 0.74) * 8) * (1 - gl);
+          cr += (170 - cr) * fleck * 0.55; cg += (162 - cg) * fleck * 0.55; cb += (152 - cb) * fleck * 0.55;
+          const cinder = sm((0.2 - n3) * 8); cr *= 1 - cinder * 0.6; cg *= 1 - cinder * 0.6; cb *= 1 - cinder * 0.6;
+        } else if (L === 3) {
+          const ch = A[6] * wa + B[6] * wb + Cc[6] * wc + Dd[6] * wd;
+          if (ch > 0) {
+            // churned mud: ridges of thrown earth, lit on their upper-left faces, the furrows between them dark and wet
+            const q = n1 * 9 + n2 * 0.7, f = q - Math.floor(q);
+            const dark = sm((f - 0.78) / 0.12) * (1 - sm((f - 0.93) / 0.05)), lite = sm((f - 0.93) / 0.05);
+            const k2 = ch * 0.7;
+            cr *= 1 - dark * 0.45 * k2; cg *= 1 - dark * 0.45 * k2; cb *= 1 - dark * 0.42 * k2;
+            cr += (128 - cr) * lite * 0.5 * k2; cg += (102 - cg) * lite * 0.5 * k2; cb += (74 - cb) * lite * 0.5 * k2;
+            a = Math.min(1, a + 0.05 * ch);
+          }
+        }
+        r = cr * a + r * (1 - a); g = cg * a + g * (1 - a); b = cb * a + b * (1 - a); al = a + al * (1 - a);
+      }
+      const o = (py * res + px) * 4;
+      if (al > 0.001) { D[o] = r / al; D[o + 1] = g / al; D[o + 2] = b / al; D[o + 3] = al * 255; } else D[o + 3] = 0;
+    }
+  }
+  C.g.putImageData(C.img, 0, 0);
+  ctx.drawImage(C.c, x, y, TP, TP);
+  if (keep) { const c = document.createElement('canvas'); c.width = c.height = res; c.getContext('2d').drawImage(C.c, 0, 0); keep.set(kk, c); }
+}
+
 /** A shell hole of radius r (px) at (x, y): the lip, the bowl, its shadowed far side. */
 function scarHole(ctx, x, y, r) {
+  const art = ART['scar-hole'];
+  if (art) { drawSheetFrame(ctx, art, Math.floor(hash2(Math.round(x * 3), Math.round(y * 3), 913) * art.frames), x, y, r * 2 / 0.32 * 1.15, 0, 0); return; }
   ctx.fillStyle = 'rgba(122,98,68,0.75)';
   ctx.beginPath(); ctx.ellipse(x - r * 0.1, y - r * 0.12, r * 1.3, r * 1.1, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(38,28,20,0.92)';
@@ -11990,6 +12146,8 @@ function scarHole(ctx, x, y, r) {
 
 /** A big crater of radius r (px) at (x, y), seeded by its tile s: thrown earth round it in clods, a deep bowl, the shade. */
 function scarBigCrater(ctx, x, y, r, s) {
+  const art = ART['scar-crater'];
+  if (art) { drawSheetFrame(ctx, art, s % art.frames, x, y, r * 2 / 0.3 * 1.08, 0, 0); return; } // (the rim at 0.3 of the frame)
   const h = (k) => hash2(s, k, 701);
   // the spray of earth thrown out, then the raised rim
   ctx.fillStyle = 'rgba(92,72,48,0.55)';
