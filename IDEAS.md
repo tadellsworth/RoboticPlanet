@@ -99,6 +99,25 @@ calls made in building it, each a default for the owner to keep or change:
   robots among its legs still count. Open: B's lit deck ring and knee lights carried over for more of a "still running"
   feel at night; a Warbot seen rolling down the chute as one is built.
 
+## Three new maps (the owner's ideas, Nov 23 2026; to build later)
+
+- **Orbital platforms** (high atmosphere). A few large orbital platforms high over the planet, the clouds and the
+  planet's curve far below, joined by **bridges that can be raised and lowered** (drawbridges). Each bridge has a
+  **control box**: whoever holds it raises or lowers the bridge, cutting a route or opening one. The owner's model is a
+  StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
+  Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
+  (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
+- **The Ring** (in space, among the Ring's big asteroids). Like Sky islands but out in the Ring itself: base asteroids
+  and resource rocks with open space between, so armies must **fly to the other asteroids** (or bridge them) to fight.
+  A moving space background: drifting rubble, the planet and Argos turning, ringfall streaking down. Lore fit: the
+  Ring is the broken twin of Argos, and Ring Crystal makes rock float (LORE.md). Open: airless like Argos (no Murmur,
+  no farms?), how robots cross (Airships, cargo flights, tethers, Ropeways), and whether rocks drift over time.
+- **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
+  Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
+  reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
+  live outside and raid in. Pairs with the Hollow's underground tech (its cave drawing, tunnels and Murmur). Open:
+  how the entrances work as chokepoints, whether the Murmur live in the caves, and 2/3/4-player layouts.
+
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
 The owner's design (approved): the empty Accord town between the bases, its streets a maze, its buildings stripped
