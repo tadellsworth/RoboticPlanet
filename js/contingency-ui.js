@@ -5,16 +5,16 @@
  * passes the person's choices to it (contBuy*, contOrder, contEndTurn...), saving it to the Contingency slot after
  * each step (contStore).
  *
- * The globe is the menu planet's (js/menuplanet.js): its face is the atlas picture (mplMakeMap reads
- * art/lore/ithaca-map.webp), shaded per pixel into a small image as the menu planet's is, turned by drag, swipe or
- * the arrow keys, with each territory tinted by its owner and its borders drawn from the atlas's territory map
- * (CONT_CELLS). Markers over it: each territory's Uplink, home, Command Groups, fortifications and Murmur; the moon,
- * Argos, beside it with its two territories; the orders as arcs. Drawn only when something changed.
+ * The globe is Ithaca I seen from orbit (js/contingency-draw.js: drawn in WebGL from art/globe/, per pixel without it),
+ * turned by drag, swipe or the arrow keys, each territory tinted by its owner and outlined in its colour, the borders
+ * smooth lines from the atlas (js/contingency-globe.js), and a tap picks the territory whose outline holds it.
+ * Markers over it: each territory's Uplink, home, Command Groups, fortifications and Murmur; the moon, Argos, beside it
+ * with its two territories; the orders as arcs. Drawn only when something changed.
  *
  * openContingency() is the one way in (from the main menu's Contingency button, #m-contingency).
  */
 
-const CGV = { maxRes: 560, turnKey: 0.18, tilt: 1.25, tint: 0.42, minR: 120 };
+const CGV = { maxRes: 560, turnKey: 0.18, tilt: 1.25, minR: 120 };
 const CG = { pick: -1, pickTo: -1, coach: -1, run: null, on: false, yaw: 0, pitch: 0.3, sel: -1, group: 0, sheet: null, dirty: true, raf: 0, map: null, cells: null,
   geo: null, img: null, off: null, drag: null, v: { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, r: 100, moon: null }, note: '', battleAt: 0, marks: [] };
 const CG_RES_ICON = { ore: 'Ore', fiber: 'Fiber', stone: 'Stone', crude: 'Crude', fuel: 'Fuel', crystal: 'Crystal' };
@@ -59,6 +59,7 @@ function cgInit() {
     for (const m of row.matchAll(/([a-zA-Z.])(\d+)/g)) { const v = m[1] === '.' ? -1 : ALPHA.indexOf(m[1]); for (let k = 0; k < +m[2]; k++) cells[j * W + i++] = v; }
   });
   CG.cells = cells;
+  cglInit();
   window.addEventListener('resize', () => { if (CG.on) cgResize(); });
   c.addEventListener('pointerdown', cgDown);
   c.addEventListener('pointermove', cgMove);
@@ -98,6 +99,7 @@ function cgResize() {
   CG.v = { w, h, dpr, cx: aw / 2, cy: top + ah / 2 + r * 0.06, r, moon: { x: aw / 2 + r * 0.98, y: top + ah / 2 - r * 0.78, r: Math.max(18, Math.min(60, r * 0.17)) } };
   if (CG.v.moon.x + CG.v.moon.r > aw - 6) CG.v.moon.x = aw - 6 - CG.v.moon.r;
   if (CG.v.moon.y - CG.v.moon.r < top + 4) CG.v.moon.y = top + 4 + CG.v.moon.r;
+  cglStars(); cglPlace();
   CG.dirty = true;
 }
 /** Turn the globe to face territory t. */
@@ -110,8 +112,8 @@ function cgLoop() {
   cancelAnimationFrame(CG.raf);
   const step = () => {
     if (!CG.on) return;
-    if (!CG.map) { CG.map = mplMakeMap(); }
-    if (!CG.map.done) { CG.map.step(6); if (CG.map.done) CG.dirty = true; }
+    cglTick();
+    if (!CGS.gl && CG.map && !CG.map.done) { CG.map.step(6); if (CG.map.done) CG.dirty = true; } // (the per-pixel globe's face, being made)
     const battling = CG.run && CG.run.battles.some((b) => !b.result);
     if (CG.dirty || battling) { CG.dirty = false; cgDraw(); }
     CG.raf = requestAnimationFrame(step);
@@ -155,64 +157,13 @@ function cgTargets() {
 }
 
 function cgDraw() {
-  const V = CG.v, g = CG.g, dpr = V.dpr, run = CG.run;
+  const V = CG.v, g = CG.g, dpr = V.dpr, run = CG.run, targets = cgTargets();
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, V.w, V.h);
-  // the sphere: shaded per pixel into a small image, drawn smoothly at its size
-  const n = Math.max(64, Math.min(CGV.maxRes, Math.round(V.r * 2 * Math.min(dpr, 1.5))));
-  if (!CG.off || CG.off.width !== n) { CG.off = document.createElement('canvas'); CG.off.width = CG.off.height = n; CG.img = CG.off.getContext('2d').createImageData(n, n); }
-  const px = CG.img.data, M = CG.map, TW = M ? M.W : 1, TH = M ? M.H : 1, CW = CONT_CELLS.w, CH = CONT_CELLS.h, cells = CG.cells;
-  const cp = Math.cos(CG.pitch), sp = Math.sin(CG.pitch), yaw = CG.yaw, PI = Math.PI;
-  const tint = [], tAmt = [], targets = cgTargets(), sel = CG.sel;
-  for (let t = 0; t < CONT_MAP.n; t++) {
-    const T = run ? run.t[t] : null;
-    tint[t] = T && T.owner >= 0 ? cgRgb(cgColor(T.owner)) : T && T.murmur ? [150, 90, 220] : null;
-    tAmt[t] = T && T.owner >= 0 ? CGV.tint : T && T.murmur ? 0.08 * T.murmur : 0;
-  }
-  for (let j = 0; j < n; j++) {
-    const v = -(((j + 0.5) / n) * 2 - 1);
-    for (let i = 0; i < n; i++) {
-      const u = ((i + 0.5) / n) * 2 - 1, rr = u * u + v * v, o = (j * n + i) * 4;
-      if (rr > 1) { px[o + 3] = 0; continue; }
-      const z = Math.sqrt(1 - rr), Y = v * cp + z * sp, Z = -v * sp + z * cp;
-      const lat = Math.asin(Y);
-      let lon = Math.atan2(u, Z) + yaw;
-      lon = (lon / (2 * PI) + 0.5) % 1; if (lon < 0) lon += 1; // (0..1 from −180°)
-      const ty = Math.min(TH - 1, Math.max(0, ((0.5 - lat / PI) * TH) | 0)), ti = ty * TW + ((lon * TW) | 0);
-      let r = M ? M.tex[ti * 3] : 60, gg = M ? M.tex[ti * 3 + 1] : 90, b = M ? M.tex[ti * 3 + 2] : 110;
-      // the territory here, and whether a border runs through this spot
-      const fx = lon * CW, fy = (0.5 - lat / PI) * CH, ci = Math.min(CW - 1, fx | 0), cj = Math.min(CH - 1, Math.max(0, fy | 0));
-      const t = cells[cj * CW + ci];
-      if (t >= 0) {
-        const ex = fx - ci, ey = fy - cj;
-        let edge = false;
-        if (ex < 0.2) { const q = cells[cj * CW + (ci + CW - 1) % CW]; edge = q >= 0 && q !== t; }
-        else if (ex > 0.8) { const q = cells[cj * CW + (ci + 1) % CW]; edge = q >= 0 && q !== t; }
-        if (!edge && ey < 0.2 && cj > 0) { const q = cells[(cj - 1) * CW + ci]; edge = q >= 0 && q !== t; }
-        else if (!edge && ey > 0.8 && cj < CH - 1) { const q = cells[(cj + 1) * CW + ci]; edge = q >= 0 && q !== t; }
-        const tc = tint[t];
-        if (tc) { const a = tAmt[t]; r += (tc[0] - r) * a; gg += (tc[1] - gg) * a; b += (tc[2] - b) * a; }
-        if (t === sel) { r = r * 1.18 + 18; gg = gg * 1.18 + 18; b = b * 1.18 + 18; }
-        else if (targets.has(t)) { r = r * 1.08 + 26; gg = gg * 1.08 + 22; b = b * 1.04; }
-        if (edge) {
-          if (t === sel || targets.has(t)) { r = 255; gg = t === sel ? 255 : 220; b = t === sel ? 255 : 120; }
-          else { r *= 0.45; gg *= 0.45; b *= 0.45; }
-        }
-      }
-      // light from the upper left, a soft limb and a thin blue edge of air
-      const lit = 0.5 + 0.55 * Math.max(0, -0.35 * u + 0.42 * v + 0.84 * z), limb = 1 - Math.pow(1 - z, 3) * 0.6;
-      const k = lit * limb, air = Math.pow(1 - z, 4) * 0.7;
-      px[o] = r * k + 90 * air; px[o + 1] = gg * k + 140 * air; px[o + 2] = b * k + 220 * air;
-      px[o + 3] = 255 * Math.min(1, (1 - Math.sqrt(rr)) * n * 0.5);
-    }
-  }
-  CG.off.getContext('2d').putImageData(CG.img, 0, 0);
-  // a glow of air round it
-  const glow = g.createRadialGradient(V.cx, V.cy, V.r * 0.96, V.cx, V.cy, V.r * 1.12);
-  glow.addColorStop(0, 'rgba(110,170,255,0.32)'); glow.addColorStop(1, 'rgba(110,170,255,0)');
-  g.fillStyle = glow; g.beginPath(); g.arc(V.cx, V.cy, V.r * 1.12, 0, PI * 2); g.fill();
-  g.imageSmoothingEnabled = true;
-  g.drawImage(CG.off, V.cx - V.r, V.cy - V.r, V.r * 2, V.r * 2);
+  // the planet (js/contingency-draw.js): in WebGL beneath this canvas, or per pixel on it; then the lines over it
+  const tinted = cglTint(run, targets);
+  if (!cglRender(tinted)) cgDraw2d(g);
+  cglLines(g, run, targets);
   if (run) cgOverlay(g);
 }
 
@@ -230,17 +181,19 @@ function cgOverlay(g) {
   });
   // the moon, Argos: its two territories as its two halves
   const Mo = V.moon;
+  g.drawImage(cglMoon(Mo.r, V.dpr), Mo.x - Mo.r, Mo.y - Mo.r, Mo.r * 2, Mo.r * 2);
   [CONT_MAP.ix.lunar, CONT_MAP.ix.silent].forEach((t, k) => {
     const T = run.t[t];
     g.beginPath(); g.moveTo(Mo.x, Mo.y - Mo.r); g.arc(Mo.x, Mo.y, Mo.r, -PI_2(), PI_2(), k === 0); g.closePath();
-    g.fillStyle = '#7d7f86'; g.fill();
-    if (T.owner >= 0) { g.fillStyle = cgColor(T.owner); g.globalAlpha = 0.45; g.fill(); g.globalAlpha = 1; }
-    g.lineWidth = CG.sel === t ? 3 : cgTargets().has(t) ? 2.5 : 1;
-    g.strokeStyle = CG.sel === t ? '#fff' : cgTargets().has(t) ? '#ffdc78' : 'rgba(255,255,255,0.35)'; g.stroke();
+    if (T.owner >= 0) { g.fillStyle = cgColor(T.owner); g.globalAlpha = 0.3; g.fill(); g.globalAlpha = 1; }
+    else if (CG.sel === t) { g.fillStyle = 'rgba(255,255,255,0.12)'; g.fill(); }
+    g.lineWidth = CG.sel === t ? 2.4 : cgTargets().has(t) ? 2 : 1;
+    g.strokeStyle = CG.sel === t ? '#fff' : cgTargets().has(t) ? '#ffdc78' : T.owner >= 0 ? cgColor(T.owner) : 'rgba(255,255,255,0.35)'; g.stroke();
     marks.push({ t, x: Mo.x + (k === 0 ? -Mo.r * 0.45 : Mo.r * 0.45), y: Mo.y, r: Mo.r * 0.6 });
   });
-  g.fillStyle = 'rgba(230,235,245,0.85)'; g.font = `600 ${small ? 10 : 11}px system-ui, sans-serif`; g.textAlign = 'center';
-  g.fillText('Argos', Mo.x, Mo.y + Mo.r + 13);
+  g.font = `700 ${small ? 10 : 11}px system-ui, sans-serif`; g.textAlign = 'center';
+  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.strokeText('Argos', Mo.x, Mo.y + Mo.r + 13);
+  g.fillStyle = 'rgba(230,235,245,0.9)'; g.fillText('Argos', Mo.x, Mo.y + Mo.r + 13);
   // the orders: arcs from where each group stands to where it goes
   for (const [id, path] of Object.entries(run.orders)) {
     const gr = contGroup(run, +id);
@@ -341,7 +294,7 @@ function cgAt(e) { const r = $('cg-globe').getBoundingClientRect(); return { x: 
 function cgPick(x, y) {
   let t = -1, best = 1e9;
   for (const m of CG.marks) { const d = Math.hypot(m.x - x, m.y - y); if (d < m.r && d < best) { best = d; t = m.t; } }
-  if (t < 0) { const q = cgUnproject(x, y); if (q) t = cgCellAt(q.lon, q.lat); }
+  if (t < 0) { const q = cgUnproject(x, y); if (q) t = CGS.rings && !CGS.rings.length ? cgCellAt(q.lon, q.lat) : cglPick(q.lon, q.lat); }
   return t;
 }
 /**
