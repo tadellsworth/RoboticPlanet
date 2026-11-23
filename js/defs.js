@@ -1141,10 +1141,10 @@ const SUNDER = { at: 1080, charge: 60, reactorCharge: 40, reload: 300, reactorRe
  * `hollow` times as big. With the Murmur off a stage costs nothing. Destroyed, its stock and depth are lost; with the
  * Murmur on the open shaft becomes their exit (a burrow, e.shaft its colony's id) until a Worker of that colony caps it
  * (`capT` s of work, `capCement` Cement from storage), or warbots cave it in. It never counts against a rival's two
- * megastructures: any rival builds one once it is `aiAt` s in and its last Ore Mine has run dry. One per colony.
+ * megastructures: any rival builds one once it is `aiAt` s in. One per colony.
  */
 const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ ore: 6 }, { ore: 8, crystal: 3 }, { ore: 10, crystal: 4, uranium: 0.25 }],
-  cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1800 };
+  cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1200 };
 /*
  * The Atmosphere Engine (BDEFS.atmos; the owner's look A, the Rain Tower, Nov 21 2026): a 4 x 4 cooling-tower shell that
  * slowly changes the weather and the land round it, finishing the Pathfinder's work. It opens `at` s into a free-play game
@@ -1162,8 +1162,8 @@ const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ o
  * a foe's Torches can't burn the ground or leave fires in it (the rain puts them out: atmosRainAt).
  * The Murmur: they go for it first every night; each new stage, the next night `sappers[stage - 1]` Sappers dig in under it.
  * Destroyed: what is green stays green; its calm and its hold on the Bloom shrink back to nothing over `fade` s (S.aeFade).
- * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's on a barren home (The Rust,
- * Cinderlands) or with Planetary events on, from `aiAt` s; the Herald sends Torches to burn a foe's greening.
+ * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's with Planetary events on, from
+ * `aiAt` s; the Herald sends Torches to burn a foe's greening.
  */
 const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12, 16, 20], stages: [0, 360, 960, 1680], spread: 0.25,
   crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2, mud: 0.5 };
