@@ -11726,7 +11726,7 @@ function murmurGoals(b, want) {
   for (const e of S.buildings) {
     if (e.dead || isWild(e.owner) || e.owner < 0) continue;
     const d = dist(e.x, e.y, b.x, b.y);
-    const w = chargeWorth(e) * murmurFair(e.owner) + (veinLure(e) ? 2 : 0); // (a Harvester on the Bloom veins draws the tunnels too; murmurFair spreads them across the colonies)
+    const w = chargeWorth(e) + (veinLure(e) ? 2 : 0); // (a Harvester on the Bloom veins draws the tunnels too)
     list.push({ t: tIdx(e.x, e.y), x: e.x, y: e.y, s: (d <= MURMUR.reach ? 4 : 0) + w * 3 - d * 0.12 + hash2(e.id, b.id, Math.floor(S.time / TOD_LEN)) * 1.5 });
   }
   // War scars: big heaps of scrap draw them too (they drain the charge left in wreckage), though less than a power plant.
@@ -12835,22 +12835,19 @@ function murmurColonyPower(p) {
 /** Colony p's power as a share of MURMUR.bold.powerRef, from powerMin to powerMost: a small or beaten colony draws them less. */
 function murmurPowerMul(p) {
   const B = MURMUR.bold, P = p >= 0 ? S.players[p] : null;
-  if (!P || isWild(p)) return 1;
-  // (With two colonies or more, the mean of their powers: every colony feels the same pressure, the owner's call of Nov
-  // 23 2026. By its own power the biggest economy took the biggest packs and the lean ones were let be. See murmurFair.)
-  const all = murmurColonies(), pw = all.length >= 2 ? all.reduce((n, q) => n + murmurColonyPower(q), 0) / all.length : murmurColonyPower(p);
-  return clamp(pw / B.powerRef, B.powerMin, B.powerMost);
+  return P && !isWild(p) ? clamp(murmurColonyPower(p) / B.powerRef, B.powerMin, B.powerMost) : 1;
 }
 
 /** The colonies still in the game (not the Murmur's, not out or absent): their ids. */
 function murmurColonies() { return S.players.filter((P) => !P.absent && !P.out && !isWild(P.id)).map((P) => P.id); }
 
 /**
- * How much more (or less) colony q's charge draws the Murmur than its own worth says, so their attacks spread across the
- * colonies about evenly (the owner's call of Nov 23 2026): the colonies' mean charge over q's own (chargeWorth, summed
- * over its buildings), from MURMUR.fair[0] to [1]; 1 with a single colony. Before, every tunnel and pack went for the
- * most charge, so the Murmur hit the biggest economy and left the leanest alone (in AI-against-AI games the Salvager
- * won 14 or 15 of 16 with them on, 10 without). Used where tunnels head (murmurGoals) and what packs go for (murmurPrey).
+ * How much less colony q's charge draws a pack than its own worth says, so their attacks spread across the colonies
+ * more evenly (the owner's call of Nov 23 2026): the colonies' mean charge over q's own (chargeWorth, summed over its
+ * buildings), from MURMUR.fair[0] to [1] (0.5 to 1: the richest draws them less, a lean colony no more than its
+ * worth); 1 with a single colony. Used for what packs go for (murmurPrey). (Measured in AI-against-AI games: on where
+ * tunnels head too (murmurGoals), or drawing a lean colony up to twice its worth, or with the pressure by the colonies'
+ * mean power, three Standard Large games on Active ran past 90 minutes with both sides worn down; this way none more.)
  */
 function murmurFair(q) {
   if (q < 0 || isWild(q)) return 1;

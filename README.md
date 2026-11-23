@@ -2231,10 +2231,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     nightfall the dusk warning ("The Murmur are stirring", or "The ground has gone silent"); at nightfall
     (`murmurNightfall`, night `n`) each live nest's network sets out along `branches` branches (`murmurGoals`: power
     within `MURMUR.reach` first, by `chargeWorth`: Generators, Fuel Stations and chargers, Refineries 3, storage holding
-    10 Crystal and Fuel 2, any other colony building 1; times `murmurFair(owner)`: with two colonies or more, the
-    colonies' mean charge over that colony's own, clamped to `MURMUR.fair` (0.5 to 2), so the tunnels, and what packs go
-    for (`murmurPrey`, the same factor), spread across the colonies about evenly; the owner's call of Nov 23 2026, when
-    every tunnel went for the most charge and the leanest colony was let be), digging `tiles` that night (up to `cap` in all) over its first
+    10 Crystal and Fuel 2, any other colony building 1), digging `tiles` that night (up to `cap` in all) over its first
     two minutes (`murmurGrow`, `murmurDig`: a tile at a time toward the goal, wandering a little, stopping 6 tiles short
     of it, under any ground, roads, buildings and Walls, not water, chasms, rock, lava or the tide); `exits` new exits
     open along it (`murmurOpenExit`: on open ground over a tunnel, not a road, building, resource, ramp or a Trade
@@ -2243,7 +2240,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     least `exitFromBase` (12) from a Command Base and `exitFromBld` (4) from any colony building, about six from the
     nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later): one
     through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
-    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night
+    then roads; with two colonies or more a building's charge counts times `murmurFair(owner)`, the colonies' mean charge
+    over its colony's own clamped to `MURMUR.fair`, 0.5 to 1, so the richest draws them less and their attacks spread
+    more evenly: the owner's call of Nov 23 2026; on where tunnels head too, or up to twice for a lean colony, or with
+    the pressure by the colonies' mean power, three Standard Large games on Active ran past 90 minutes), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night
     raiders (`task.night`) move on to the next thing near them when there's nothing left where they went
     (`murmurOnward`). At dawn (`murmurDawn`) they go back down: into the nearest exit of their nest within
     `MURMUR.retreat` (16) tiles (task `down`), or dig down where they stand (task `dig`). Each [base, per night after
@@ -2388,8 +2388,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on a robot that just hit them, and never fall back. Not the watcher, a feeding Leech, a Sapper digging in or under, or one going home. **Pressure**
     (`murmurBold`: Active, and not in a mission unless it sets `bold`): `murmurPressure(p, n)` is 1 for the first nights,
     then from `nightFrom` (3) 1 and `perNight` (0.25) for that night and each after (1.25 on the 3rd, at most `nightMost`, 2.2) times colony p's power
-    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick; with two colonies or more the
-    mean of the colonies' powers since Nov 23 2026, so every colony feels the same pressure) over `powerRef` (40), clamped
+    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick) over `powerRef` (40), clamped
     to `powerMin` (0.6) to `powerMost` (1.6) (`murmurPowerMul`), and never under 1: a small or beaten colony draws them
     less, and gets fewer hunting teams. It scales a craft wave's packs (`murmurPack`, Brutes a quarter), how many may be up at
     once (`murmurRoom`: `room` × the mean pressure on the colonies still in), a nest's open exits (`murmurMaxExits`: one
