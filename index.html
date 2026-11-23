@@ -798,6 +798,7 @@
           <a href="#hs-maps" data-jump="hs-maps">Maps, biomes and terrain</a>
           <a href="#hs-hollow" data-jump="hs-hollow">The Hollow</a>
           <a href="#hs-town" data-jump="hs-town">Passenger Town: the city map</a>
+          <a href="#hs-walker" data-jump="hs-walker">The Walking Factory</a>
           <a href="#hs-story" data-jump="hs-story">The story</a>
           <a href="#hs-missions" data-jump="hs-missions">Missions</a>
           <a href="#hs-contingency" data-jump="hs-contingency">Contingency: the globe campaign</a>
@@ -1506,6 +1507,7 @@
           <li><b>Standard</b>: open ground with hills, cliffs and fields between the bases. <b>Long haul</b>: a narrow planet with the bases far apart, built for long supply lines. <b>Oases</b>: a barren waste with a few rich oases joined by narrow passes.</li>
           <li><b>Chokepoint</b>: a belt of crags across the middle with one to three narrow channels, different every game. <b>Rift</b>: a chasm crossed only by a few rock arches (a Sky bridge opens another way). <b>Ring valley</b>: a massif too steep to climb, with a valley round each side; a long tunnel is the only shortcut. <b>Canyon maze</b>: narrow canyons with riches in the dead ends.</li>
           <li><b>Passenger Town</b> (two to four players): the Pathfinder's empty town fills the middle, its old avenues still roads, its buildings blocking the way and its streets a maze. Strip a building for salvage and its lot opens a new way through (see <a href="#hs-town" data-jump="hs-town">Passenger Town</a>).</li>
+          <li><b>The Walking Factory</b> (under <i>Open ground</i>, two to four players): an old Accord mobile factory lies dormant in the middle. Board it with armed robots to claim it: it walks a loop round the middle and builds Warbots for whoever holds it (see <a href="#hs-walker" data-jump="hs-walker">The Walking Factory</a>).</li>
           <li><b>Fault line</b>: a scar across the middle that an earthquake splits into a chasm about 15 minutes in (with tremors first), swallowing what stands on it and leaving two rock arches.</li>
           <li><b>Islands</b>: each base on its own island, with medium islands and islets between, a wide sea apart. <b>Lakes</b>: many small lakes, roads weaving between them. <b>Tidal flats</b>: low islands joined by sandbars, dry at low tide and under the sea at high tide (low for the first 5 minutes, then they take turns, with a warning); bots walk across at low tide, anything caught out there is washed ashore, and nothing can be built on the flats. <b>River delta</b>: a braided river across the planet whose shallow fords Workers and warbots wade at under half speed; Haulers, trucks and trains need a bridge.</li>
           <li><b>Crater</b>: the richest fields (and Uranium) on a sunken crater floor, one ramp down on each side. <b>Plateaus</b>: each base on a high plateau with only two slopes down. <b>Crossroads</b>: a mesa in each corner, two levels above an open lowland whose four arms meet at a rich plaza in the middle; three slopes lead down off every mesa, one toward each neighbouring corner and one toward the plaza, so attacks can come from more than one side. With two players the two other mesas are free and rich, and it takes up to four. <b>Grand Canyon</b> (two players): each base on a high rim above rocky shelves and fertile river basins. The Ore- and Crystal-rich floor alternates between wide bends and narrows, and the river splits around two islands. Each rim has two single-lane natural descents, a switchback and a side-canyon trail. Robots wade at the fords, and ships can sail the river. <b>Sky islands</b>: mesas over a canyon floor far below, with no slopes down: cross with Viaducts (a Ropeway reaches the floor); deposits on the mesas hold almost twice as much. <b>Volcano</b>: lava rivers and the richest deposits on its slopes; from about 7 minutes in it erupts every five to seven minutes, rumbling first, and its lava bombs dent buildings and hurt bots. <b>The Hollow</b>: the Murmur's cavern lair, always night, with its own look whatever the Biome (see The Hollow).</li>
@@ -1566,6 +1568,25 @@
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
+      <section id="hs-walker">
+        <h3>The Walking Factory</h3>
+        <p><b>The Walking Factory</b> (a map type under <i>Open ground</i>, for two to four) is an Accord mobile works: a huge old factory on six legs, built to walk a circuit and build for the crew aboard. It lies dormant in its cradle in the middle of the map, as far from every colony. Round it is its <b>yard</b>, open, bare, flat ground with its loop worn into it; nothing can be built on the yard, and a lane is opened from each base out to it. With two colonies both halves of the map are the same, turned half round; with four (a colony in each corner) all four quarters are, turned a quarter at a time; with three, a round planet with each third as alike as a grid allows.</p>
+        <ul class="chain">
+          <li><b>Aboard.</b> Armed robots (Warbots, Bulwarks, Torches, Skirmishers, Arc Casters, Railgunners) standing on its deck, inside the ring drawn round it, are aboard. Workers and aircraft don't count.</li>
+          <li><b>Warming up.</b> For the first 4 minutes of a game it can't be claimed (its name reads WAKES IN and the time left): build up, and be there when it wakes.</li>
+          <li><b>Claiming it.</b> Your robots alone aboard claim it: one robot in 15 seconds, each more a quarter faster (two at most twice as fast). The ring round it fills in your colour as they do. Leave before it's done and the claim fades.</li>
+          <li><b>Contested.</b> Robots of two sides aboard (allies count as one side): nothing changes, its name reads <b>CONTESTED</b> and its line stops, until one side is gone. Fight it out on the deck.</li>
+          <li><b>Taking it back.</b> Its holder keeps it with no one aboard. Enemy robots alone aboard take the holder's hold down (the ring empties) and then claim it for themselves. Keep guards on its deck.</li>
+          <li><b>It walks.</b> Claimed the first time, it wakes and walks out of its cradle toward the side of the colony that claimed it, then round its loop, slowly (about a third of a tile a second), for good. Each time it changes hands it turns round its loop toward its new holder's side. It can't be harmed.</li>
+          <li><b>Boarding it.</b> Tap it → <b>Send warbots aboard</b> (<kbd>E</kbd>) sends up to four from your garrisons. Or select robots and tap its deck. Robots sent onto its deck walk with it: their flag rides on it, so they keep pace, fight whoever boards it and stay aboard until you give them another order.</li>
+          <li><b>Its line.</b> While you hold it and no enemy is aboard, a <b>Warbot</b> rolls off its line every 50 seconds and joins your robots on its deck (at most 5 of its Warbots out at once, and never past the robot limit). The thin arc inside the ring counts down to the next one; its ramp glows as it nears. Your front line walks with it.</li>
+          <li><b>Its care.</b> Your robots aboard recharge their batteries and get a round of Ammo every 3 seconds while you hold it.</li>
+          <li><b>Its look.</b> Its flanks, lamps and pennant are its holder's colour (old Accord yellow while no one holds it); its legs step and its stacks smoke as it walks; its name and state (DORMANT, CLAIMING, its holder, CONTESTED) are written over it.</li>
+          <li><b>The rivals</b> play for it: they send a band aboard to claim it or take it back (more for every enemy robot aboard), and keep two to four guards on its deck while they hold it.</li>
+        </ul>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
       <section id="hs-story">
         <h3>The story</h3>
         <p>The planet is <b>Ithaca I</b>. Four robot vanguards were sent here to make it ready for colonists, and each game is one more landing, a <i>terrafall</i>: a Command Base dropped from orbit, run by a Command intelligence. That's you. The story stays in the margins; nothing in it changes how the game plays.</p>
@@ -1584,7 +1605,7 @@
         <h3>Missions</h3>
         <p><b>Missions</b> (main menu, <b>Campaigns</b>) are the tutorial campaign: hand-made planets, each with its own goals, that teach the game a step at a time, from your very first building to all-out war. Play them in order to learn (the first one you haven't finished is marked <b>Next up</b>), or pick any you like: every mission is open from the start.</p>
         <ul class="chain">
-          <li>They come in chapters, each building on the last: <b>First Steps</b> (your first building and road, Stone and Cement, batteries, the first Alloy), <b>Growing the Colony</b> (bots, farmed Fuel, regrowing groves, Outposts, and bringing the rain with an Atmosphere Engine), <b>Roads and Traffic</b>, <b>Industry and Trade</b> and <b>Sea and Sky</b>, all in peace, then <b>First Contact</b> (the Murmur's nests, their cavern lair the Hollow, how they hunt and their other forms, greening the land under the dust and the Bloom, your first rivals, stripping Passenger Town for salvage, and at the end of it <b>The Harrow</b>, the biggest of them, brought down by an army) and <b>War</b>. In War, <i>Landing Zone</i> holds a greened valley against a Herald's Torches; <b>King of the Hill</b> is an Uplinks race against two rivals on The Wheel, followed by <b>Final Descent</b>.</li>
+          <li>They come in chapters, each building on the last: <b>First Steps</b> (your first building and road, Stone and Cement, batteries, the first Alloy), <b>Growing the Colony</b> (bots, farmed Fuel, regrowing groves, Outposts, and bringing the rain with an Atmosphere Engine), <b>Roads and Traffic</b>, <b>Industry and Trade</b> and <b>Sea and Sky</b>, all in peace, then <b>First Contact</b> (the Murmur's nests, their cavern lair the Hollow, how they hunt and their other forms, greening the land under the dust and the Bloom, your first rivals, stripping Passenger Town for salvage, boarding and holding the Walking Factory, and at the end of it <b>The Harrow</b>, the biggest of them, brought down by an army) and <b>War</b>. In War, <i>Landing Zone</i> holds a greened valley against a Herald's Torches; <b>King of the Hill</b> is an Uplinks race against two rivals on The Wheel, followed by <b>Final Descent</b>.</li>
           <li><b>Arterial</b> follows Blacktop in <b>Roads and Traffic</b>. Mark a pair of Express lanes, connect the on-ramps, then send Freight Truck deliveries to the survey Depot.</li>
           <li>Each mission teaches one new idea. From the second one on you land with the colony the earlier missions taught already built and joined up, so you can get straight to it.</li>
           <li>Each has the same five difficulty levels as rivals: <b>Settler</b>, <b>Pioneer</b>, <b>Colonist</b> (picked to begin with), <b>Commander</b> and <b>Warlord</b>. Settler lands you with half as much again in the Command Base and the smallest goals; each level up gives you less, bigger goals and a tougher rival, and Commander and Warlord put most missions on the clock. The line under the levels says what the one picked does. A mission's rival is set for each level (often milder than a Custom Game rival of that name), named in the line below; on Warlord it is a level above Commander's.</li>
@@ -2232,6 +2253,7 @@
 <script src="js/contingency-battle.js"></script>
 <script src="js/landmarks.js"></script>
 <script src="js/city.js"></script>
+<script src="js/walker.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

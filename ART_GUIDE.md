@@ -2068,6 +2068,19 @@ redrawn as images:
   into the atmosphere; the Wren's speck and thruster trail coming in from the system's edge. A deep starfield (far stars
   and a faint nebula, nearer stars drifting a little), and a soft dark shade behind the card.
 
+### The Walking Factory (drawn in code; no images)
+
+The old Accord mobile works on its map (`SHAPE_PRESETS` walker) is drawn in code, in `js/walker.js` (`WALKER_LOOK`: its
+sizes and colours). Straight down like the rest of the map, its stacks and crane standing up toward the camera:
+weathered grey plate with rust streaks, old Accord yellow (`#d8b04a`: knees, crane, the Accord's ring-of-four mark), its
+holder's colour on its flanks (with hazard chevrons), corner lamps, stack bands and a pennant on the crane. Six legs in a
+tripod gait, stepping by the tiles it has walked, their knees raised; a grating deck at the front where the robots
+aboard stand (drawn under them), the works at the back, its line's ramp at the front glowing as the next Warbot nears;
+its stacks smoke while it walks (not with reduced motion). The yard round it is a paler disc with two worn ruts of
+footprints and the cradle's dashed pad in the middle. On top: the deck's ring (dashed in its holder's colour; flashing
+red and white when contested), the claim's arc in the claimant's colour, the next Warbot's countdown arc, and THE
+WALKING FACTORY with its state over it. A rendered sprite set (a walk cycle in eight headings) could replace it later.
+
 ### Radiation (drawn in code; one optional image)
 
 Fallout zones and breached Reactors (README, Nuclear race, "Radiation"; `js/radfx.js`). All drawn in code:

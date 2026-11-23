@@ -746,8 +746,40 @@ const SHAPE_PRESETS = [
   // square one (turned 90°). Its avenues are old Accord roads (townSetup).
   { name: 'Passenger Town', group: 'divided', blurb: 'The empty Accord town between the bases: its streets are a maze, its buildings block the way, and its old avenues are still roads. Strip a building for Cement, Alloy and Chips, and its lot opens a new way through.', w: 1, h: 1.1, city: true, flat: true, players: 4,
     tip: 'Passenger Town: the empty town between the bases. Its buildings block the way and its streets are a maze, but its old avenue is still a road (worn: plain road speed) that Haulers can use once your roads join it. Tap a building and Strip for salvage (S): your Workers take it apart for Cement, Alloy and Chips, carried home as crates, and its lot opens a new street. Robots beside a building are in cover. Some still have an old Accord sentry on duty: it shoots robots and Murmur alike, so clear it with warbots first.',
-    quadTip: 'Passenger Town: a colony on each edge of the empty town, the town square in the middle with its civic tower. An old avenue runs into the town in front of you and right across it, crossing your neighbours\' avenues: they are worn roads Haulers can use once your roads join them. The streets between are a maze: tap a building and Strip for salvage (S) to open a way. Old Accord sentries shoot robots and Murmur alike: clear one with warbots first.' },
+    quadTip: 'Passenger Town: a colony on each edge of the empty town, the town square in the middle with its civic tower. An old avenue runs into the town in front of you and right across it, crossing your neighbours\' avenues: they are worn roads Haulers can use once your roads join them. The streets between are a maze: tap a building and Strip for salvage (S) to open a way. Old Accord sentries shoot robots and Murmur alike: clear one with warbots first.' },  // The Walking Factory: an old Accord mobile factory, dormant in the middle of the map, that walks a loop round it once
+  // it's claimed (walkerSetup in world.js, the rules in sim.js, the look in js/walker.js). Two colonies face each other
+  // across it; three ring a round planet; four take a corner each of a square one (turned 90°).
+  { name: 'The Walking Factory', group: 'open', blurb: 'An old Accord mobile factory lies dormant in the middle of the map. Park warbots aboard to claim it: it wakes, walks a slow loop round the middle, and builds warbots for whoever holds it.', w: 1, h: 1, walker: true, flat: true, players: 4,
+    tip: 'The Walking Factory: the old Accord machine in the middle of the map builds a Warbot for whoever holds it, every 50 seconds. From 4 minutes in, send armed robots aboard (select them and tap its deck, or tap it and Send warbots aboard): alone aboard, they claim it in about 15 seconds. It wakes, walks out to its loop toward you, and goes round. Robots on board walk with it and its warbots join them, so your front line moves with it. Enemy robots aboard stall it, then take it back: keep guards on its deck. Nothing can be built on its yard.',
+    quadTip: 'The Walking Factory: a colony in each corner, and the old Accord factory dormant in the middle. From 4 minutes in, send armed robots aboard to claim it (select them and tap its deck): it walks a loop round the middle, past every colony, and builds a Warbot for its holder every 50 seconds. Enemy robots aboard stall it, then take it back. Nothing can be built on its yard.' },
 ];
+/**
+ * The Walking Factory (SHAPE_PRESETS walker: walkerSetup in world.js, the rules in sim.js, the look in js/walker.js).
+ *   ring      its loop's radius about the middle of the map: a share of the way from the middle to a base (`min` tiles
+ *             at least, and at least `gap` short of a base's landing zone)
+ *   yard      the yard: open, bare ground `yard` tiles either side of its loop (and all the way in to the cradle in the
+ *             middle, where it lies dormant); nothing can be built on it. A lane `lane` tiles wide (each side of its
+ *             line) is opened from each base to it.
+ *   speed     tiles a second it walks (its loop, and the spur out from the cradle)
+ *   deck      robots within this many tiles of its middle are aboard
+ *   wake      seconds into a game before it can be claimed at all (its systems warming up: in a mission, at once)
+ *   capture   seconds one armed robot alone aboard takes to claim it from no one (or to take a holder's claim down to
+ *             nothing); each more aboard makes it `more` faster, at most `most` times as fast. Two sides aboard: contested,
+ *             nothing changes and it builds nothing. Left alone, a claim no one finished fades at the same pace.
+ *   every     while held and not contested, a Warbot rolls off its line every `every` s (to its holder, its own flag)
+ *   kids      at most this many of the Warbots it built alive for one holder (it waits); never past the robot limit
+ *   charge    its holder's robots aboard recharge this much battery a second, and get a round of Ammo every `ammo` s
+ *   ai        a rival: guards on board while it holds it (from `guards`, by difficulty, and two more for every enemy
+ *             robot aboard); a band of at least `band` to board it otherwise, every `every` s at most (`hot` s with
+ *             enemies aboard)
+ */
+const WALKER = {
+  ring: 0.45, min: 5, gap: 9, yard: 3, lane: 1.5, speed: 0.32, deck: 2.8,
+  wake: 240, capture: 15, more: 0.25, most: 2, every: 50, kids: 5, charge: 4, ammo: 3,
+  ai: { guards: [2, 4], band: 4, every: 25, hot: 8 },
+};
+/** The Walking Factory's log line (LORE.md's register: a machine's status, the Accord's words). */
+const WALKER_LINE = 'Accord Mobile Works. Circuit held for the Accord. Output allocated to the crew aboard.';
 /**
  * Passenger Town (SHAPE_PRESETS city: townSetup in world.js, the rules in sim.js, the look in js/city.js).
  *   band, clear   half the town's height (share of the map's), and the rows kept clear in front of each base

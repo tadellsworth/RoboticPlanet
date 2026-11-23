@@ -218,7 +218,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -303,6 +303,30 @@ layer), lamps, sentries, haze and the name are drawn in code. The mission **Pass
 teaches it (and joining a road to the avenue). `node tools/city-test.js [--games n minutes] [--only k]` checks the
 layouts for two, three and four (symmetry and fairness, joined, the avenues, the Trade Posts), stripping, sentries (and
 the Murmur), the save (and an older one) and AI games with two, three and four colonies.
+
+**The Walking Factory** (`SHAPE_PRESETS` `walker`, under Open ground, two to four players; flat) is an old Accord mobile
+works dormant in a cradle at the middle of the map. `walkerSetup` (js/world.js) lays its **yard** round the middle (its
+loop of radius `R`, `WALKER.ring` of the way to a base, at least `WALKER.min` and `WALKER.gap` short of a base's landing
+zone, plus `WALKER.yard` tiles either side and everything inside: bare, level ground, no deposits; `walkerYard`), opens a
+lane `WALKER.lane` wide from each base to it, and keeps it clear of building (`canPlace`), Trade Posts, Uplinks and Murmur
+nests. Four colonies take a corner each of a square map (`quadMap`, turned 90°), three a round planet, two the usual half
+turn. The rules (js/sim.js, `walkerTick`): armed robots within `WALKER.deck` (2.8) tiles of its middle are aboard
+(`walkerAboard`, `walkerCrew`); from `WALKER.wake` (240) s into a game (at once in a mission: `walkerWakeAt`) one side (a colony, or a team) alone aboard claims it in `WALKER.capture` (15) s for one
+robot, `WALKER.more` faster for each more (at most `WALKER.most` times), and an enemy's hold has to be taken down to
+nothing first (`walkerLost`); two sides aboard: contested (`hot`), nothing changes; a claim nobody finished fades. Claimed
+(`walkerTaken`), it wakes and walks out a spur toward its holder's base, then round its loop at `WALKER.speed` tiles a
+second for good, turning toward each new holder (`walkerTurn`). Held and not contested, a Warbot every `WALKER.every`
+(50) s (`walkerBuild`; at most `WALKER.kids` alive per holder, never past the robot limit), on its holder's riding flag.
+A rally flag planted on its deck (an order to move there, a rally, its Warbots': `walkerFlag` in `sendToRally` and
+`orderMove`) gets `walker` and moves with it every step, so the robots holding it ride along. Its holder's robots aboard
+recharge (`WALKER.charge`) and get a round of Ammo every `WALKER.ammo` s. It can't be harmed. State: `S.walker` (see
+`walkerSetup`), hashed and checked in saves (`checkSave`). The rival AI (`aiWalker`, js/ai.js) keeps guards on deck while
+it holds it (`WALKER.ai.guards` by difficulty, two more per enemy aboard) and sends a band (`WALKER.ai.band` at least) to
+claim or retake it. The look (js/walker.js): the yard, its worn ruts and footprints and the cradle with the ground; six
+legs in a tripod gait by `od` (tiles walked), its hull and deck (under the robots aboard) and its stacks and crane (sorted
+with the items), its holder's colour on flanks, lamps and pennant; on top, the deck's ring, the claim's arc, the next
+Warbot's countdown, CONTESTED, its name and state. Tapped: its panel (`walkerSheet`) with **Send warbots aboard** (`E`:
+the rally order, four warbots, to its deck). The mission **The Walking Factory** (First Contact) teaches it.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and

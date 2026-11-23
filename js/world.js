@@ -1144,7 +1144,7 @@ function generateMap(seed, W, H, cfg) {
   const shapeExtras = () => {
     if (h4) haul4Shape();
     else if (quad) {
-      if (SH.twin || SH.city) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is)
+      if (SH.twin || SH.city || SH.walker) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is; the Walking Factory: its yard is)
       if (SH.pinwheel) pinwheelShape();
       else if (SH.isles4) isles4Shape();
       else crossShape4();
@@ -2474,9 +2474,9 @@ function mapSizeForPlayers(size, players) {
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
  */
-function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!sh.city)); }
-/** Does map type `sh` turn four ways with `n` colonies (Crossroads and the four-quarter maps; Passenger Town with four)? */
-function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || (sh.city && n === 4))); }
+function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!(sh.city || sh.walker))); }
+/** Does map type `sh` turn four ways with `n` colonies (Crossroads and the four-quarter maps; Passenger Town and the Walking Factory with four)? */
+function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || ((sh.city || sh.walker) && n === 4))); }
 
 /**
  * Is this Long Haul 2v2: a tall map with two colonies side by side at each end (south-west, south-east, north-east,
@@ -2680,6 +2680,7 @@ function newGame(opts) {
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
+  if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
@@ -2749,6 +2750,7 @@ function newGame(opts) {
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
   if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
+  if (S.walker) for (let t = 0; t < S.W * S.H; t++) if (walkerYard(t % S.W, (t / S.W) | 0)) S.decor[t] = 0; // (nor on the Walking Factory's yard)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
@@ -3683,6 +3685,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
+  if (S.walker && walkerYard(i, j)) return { ok: false, reason: 'The Walking Factory\'s yard: it walks here, so nothing can be built on it.' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
@@ -5476,6 +5479,15 @@ function checkSave(o) {
       if (!int(r.n0, 0, 99999) || !int(r.cache, 0, TOWN.caches.length) || !(Number.isFinite(r.sen) && r.sen >= 0) || !(Number.isFinite(r.scd || 0) && (r.scd || 0) >= 0) || !int(r.by, 0, 255) || ![0, 1].includes(r.gone)) bad();
     }
   }
+  // The Walking Factory (walkerSetup): its loop and yard, where it is, its holder and claim, and the Warbots it built.
+  if (o.walker != null) {
+    const w = o.walker, fin = (v) => Number.isFinite(v), pl = (v) => Number.isInteger(v) && v >= -1 && v < o.players.length, M = Math.max(o.W, o.H);
+    if (!obj(w) || w.v !== 1 || !['cx', 'cy', 'R', 'Y', 'hr', 'x', 'y', 'h', 'od', 'a', 'tx', 'ty', 'prog', 't'].every((k) => fin(w[k]))) bad();
+    if (w.R <= 0 || w.R > M || w.Y < 0 || w.Y > M || w.x < -1 || w.y < -1 || w.x > o.W + 1 || w.y > o.H + 1 || w.prog < 0 || w.prog > 1) bad();
+    if (![0, 1, 2].includes(w.ph) || ![1, -1].includes(w.dir) || ![0, 1].includes(w.hot) || !pl(w.owner) || !pl(w.cap)) bad();
+    if (!Array.isArray(w.home) || w.home.length > 8 || !w.home.every((q) => Array.isArray(q) && q.length === 2 && Number.isInteger(q[0]) && Number.isInteger(q[1]))) bad();
+    if (!Array.isArray(w.kids) || w.kids.length > 64 || !w.kids.every((id) => Number.isSafeInteger(id) && id > 0)) bad();
+  }
   // A Contingency battle (js/contingency-battle.js): the run and battle, the seats' sides, the clock, the colours, and
   // each seat's cards for the battle (CONT_CARDS keys that act in battle) with the ones already played.
   if (o.contingency != null) {
@@ -6411,4 +6423,64 @@ function townSetup(seed, bases) {
     T.signs.push([sx0, Math.min(H - 1, y1 + 1)], [W - 1 - sx0, Math.max(0, y0 - 1)]);
   }
   return T;
+}
+
+/* ------------------------------------------------------------------ The Walking Factory */
+
+/*
+ * The Walking Factory (SHAPE_PRESETS walker): an old Accord mobile factory, a huge dormant machine in the cradle at the
+ * middle of the map. Armed robots aboard claim it (walkerClaim in sim.js); claimed, it wakes, walks out along a spur to
+ * its loop on the side of the colony that claimed it, and goes round the loop for good, turning toward each new holder;
+ * while held it builds Warbots for its holder (walkerBuild). Its yard, the loop and everything inside it (WALKER.yard
+ * tiles either side of it), is open, bare, level ground nothing can be built on; a lane is opened from each base to it.
+ * Laid on the map's own symmetry (two: the half turn; four: the quarter turn; three: as near as a grid allows), from the
+ * middle of the map, so every colony is as far from its cradle and its loop.
+ *
+ * S.walker: { v: 1, cx, cy (the middle of the map, in map units), R (the loop's radius), Y (the yard's reach either side
+ * of it), hr, home: [[x, y]] (the landing spots: the yard stops `hr` tiles short of them, 8 or as near as the loop
+ * leaves on a small map), x, y (its middle), h (its
+ * heading), od (tiles walked: its stride), ph (0: dormant in the cradle; 1: walking out the spur to its loop; 2: on the
+ * loop), a (its place on the loop, radians; on the spur, where it will join it), dir (+1 or -1 round the loop), tx, ty
+ * (the spur's end), owner (its holder, -1: no one), cap (whose claim is building while no one holds it, -1), prog (0 to
+ * 1: the holder's hold, or cap's claim), t (seconds to its next Warbot), hot (1: contested), kids (ids of the Warbots it
+ * built) }. The rules are in sim.js (walkerTick); the look in js/walker.js.
+ */
+function walkerSetup(bases) {
+  const W = S.W, H = S.H, cx = W / 2, cy = H / 2;
+  const d0 = Math.min(...bases.map((b) => dist(b.x + 0.5, b.y + 0.5, cx, cy))), Y = WALKER.yard;
+  const R = Math.max(WALKER.min, Math.min(Math.round(d0 * WALKER.ring), Math.floor(d0 - WALKER.gap - Y), Math.floor(Math.min(cx, cy) - Y - 2)));
+  S.walker = { v: 1, cx, cy, R, Y, hr: Math.min(8, d0 - R - WALKER.deck - 0.6), home: bases.map((b) => [b.x, b.y]), x: cx, y: cy, h: Math.PI / 2, od: 0, ph: 0, a: 0, dir: 1, tx: cx, ty: cy, owner: -1, cap: -1, prog: 0, t: WALKER.every, hot: 0, kids: [] };
+  const e0 = S.elev ? S.elev[tIdx(W >> 1, H >> 1)] : 0, L2 = WALKER.lane * WALKER.lane;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i, x = i + 0.5, y = j + 0.5;
+    if (walkerYard(i, j)) {
+      S.terrain[t] = T_GROUND; S.res[t] = 0; S.amt[t] = 0;
+      if (S.fert) S.fert[t] = 0;
+      if (S.grow) S.grow[t] = 0;
+      if (S.ramp) S.ramp[t] = 0;
+      if (S.elev) S.elev[t] = e0;
+      continue;
+    }
+    // A lane from each base out to the yard: any crag or water on the way opened up (the base's own ground left be).
+    if (S.terrain[t] === T_GROUND) continue;
+    for (const b of bases) {
+      const ax = b.x + 0.5, ay = b.y + 0.5, vx = cx - ax, vy = cy - ay, ux = x - ax, uy = y - ay, vv = vx * vx + vy * vy, dot = ux * vx + uy * vy;
+      if (dot <= 0 || dot >= vv || ux * ux + uy * uy <= S.walker.hr * S.walker.hr) continue;
+      const cr = ux * vy - uy * vx;
+      if ((cr * cr) / vv > L2) continue;
+      S.terrain[t] = T_GROUND; S.res[t] = 0; S.amt[t] = 0;
+      if (S.elev) S.elev[t] = e0;
+      break;
+    }
+  }
+}
+
+/** Is tile (i, j) on the Walking Factory's yard (its loop and all inside, short of the bases' own ground)? */
+function walkerYard(i, j) {
+  const w = S && S.walker;
+  if (!w) return false;
+  const x = i + 0.5, y = j + 0.5, r = w.R + w.Y;
+  if (dist2(x, y, w.cx, w.cy) > r * r) return false;
+  for (const [bx, by] of w.home) if (dist2(i, j, bx, by) <= w.hr * w.hr) return false;
+  return true;
 }

@@ -38,6 +38,46 @@ to the approved design, with new textures and sprites). In order:
 9. **The robots' work animations** (welding, paving, drilling, scything): small tool sprites.
 10. **The menu planet** (shares the globe's new look: its face already has the globe's colours; its shading, lights and clouds still to do), **the minimap** and **the interface** (panels, buttons, icons).
 
+## The Walking Factory (built Nov 23 2026: open questions for the owner)
+
+The owner's pitch (approved): "a huge old Accord mobile factory, a dormant machine, crawling slowly around a loop through
+the middle of the map. Park robots aboard to claim it. While you hold it, it builds for you as it walks, so your front
+line moves with it and both sides fight to board it." Built as `SHAPE_PRESETS` `walker` (README, The Walking Factory;
+the help's section; js/walker.js for the look); the mission *The Walking Factory* (First Contact) teaches it. The design
+calls made in building it, each a default for the owner to keep or change:
+
+- **Size and speed:** its deck (where robots count as aboard) reaches 2.8 tiles from its middle (a hull about 5.4 × 3.4
+  tiles on six legs); it walks 0.32 tiles a second, so a loop takes about three minutes on a Medium map (`WALKER`).
+- **Its path:** dormant in a cradle at the very middle (as far from every colony), it wakes when first claimed and
+  walks out a spur toward the claimer's base to a circular loop round the middle (radius 0.45 of the way to a base,
+  kept 9 tiles short of a landing zone), then round it for good, turning round toward each new holder. A loop round the
+  middle is fair for two, three and four (the map's symmetry carries it); the spur toward the claimer rewards the
+  first claim. Open: a loop that pauses at each colony's side, or a figure-eight through the middle for two players.
+- **Its yard:** the loop and everything inside it (3 tiles out past it) is bare, flat ground where nothing can be built
+  (no turrets parked on its track, no Trade Post, Uplink or nest on it), and a lane is opened from each base to it.
+  The map is flat (one level). Open: let colonies build inside the loop, or allow roads only.
+- **Warm-up:** it can't be claimed for the first 4 minutes (`WALKER.wake`; at once in the mission). Without it the
+  first band of starting warbots to arrive (20 s in) took it, and in AI games the first holder won every game (12 to
+  14 minutes) without it ever changing hands.
+- **Boarding and capture (king of the hill):** armed robots on its deck are aboard. One side alone aboard claims it in
+  15 s for one robot, each more 25% faster (at most twice as fast); two sides aboard (allies are one side) is contested,
+  frozen; an enemy alone aboard first takes the holder's hold down to nothing, then claims it. Its holder keeps it with
+  no one aboard. An unfinished claim fades.
+- **Riding:** a rally flag planted on its deck (a move order, the Send warbots aboard button, or its own Warbots') rides
+  with it, so the robots holding it walk along and keep pace; they stay aboard until given another order. Robots aboard
+  that belong to its holder recharge (4 a second) and get a round of Ammo every 3 s.
+- **What it builds:** a Warbot every 50 s while held and not contested, onto the holder's flag on its deck (at most 5 of
+  its Warbots alive per holder, never past the robot limit). Open: other robots by stage of the game, goods (crates
+  dropped as it walks), or production that speeds up the longer it's held.
+- **It can't be damaged** or destroyed: only boarded. Open: armour that guns can knock down to stall it for a while.
+- **The rivals:** keep 2 to 4 guards aboard while they hold it (two more per enemy aboard), and send a band of at least
+  4 (or what they have, at least 3) to claim or retake it, every 25 s at most (8 s with enemies aboard).
+- **Lore:** named an "Accord Mobile Works", walking its circuit for the crew aboard ("Circuit held for the Accord. Output
+  allocated to the crew aboard."). Where it stands on Ithaca I (a region, a name on the atlas) is the owner's to place;
+  nothing in LORE.md was changed.
+- **Balance watch:** holding it early snowballs (free Warbots plus a recharging, reloading crew); the cap of 5 and the
+  50 s line are the knobs.
+
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
 The owner's design (approved): the empty Accord town between the bases, its streets a maze, its buildings stripped
