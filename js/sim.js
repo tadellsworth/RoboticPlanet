@@ -1251,6 +1251,12 @@ function squadRoute(u, st, x, y) {
   return p && p.slice();
 }
 
+/** Bot u found no way to tile `goal`: it doesn't try again for 2 seconds (longer if there's no safe way: noSafeRoute). */
+function routeFailed(u, goal) {
+  if (u.failGoal === goal && u.failUntil > S.time + 2) return;
+  u.failGoal = goal; u.failUntil = S.time + 2;
+}
+
 function goTo(u, x, y, arrivalComps) {
   const goal = y * S.W + x;
   // Sent somewhere new while waiting for a ferry: it stops waiting (but can't get off one under way).
@@ -1275,23 +1281,23 @@ function goTo(u, x, y, arrivalComps) {
   }
   // Halfway across a Ropeway: finish the ride first, then go on from the far station.
   if (u.ride >= 0 && u.path && u.path[u.pi] === u.ride) {
-    const st = u.ride, rest = st === goal ? [] : findPath(st % S.W, (st / S.W) | 0, x, y, !isArmy(u) ? u.owner : undefined, routeOpts(u));
-    if (!rest) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    const st = u.ride, rest = st === goal ? [] : safeRoute(u, st % S.W, (st / S.W) | 0, x, y, findPath(st % S.W, (st / S.W) | 0, x, y, !isArmy(u) ? u.owner : undefined, routeOpts(u)));
+    if (!rest) { routeFailed(u, goal); return false; }
     u.path = [st].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
     return true;
   }
   // Out on a Viaduct's deck: the route starts at its nearer end (the ground below doesn't count).
   const deck = deckEnds(u);
   if (deck) {
-    const e = deck[0], rest = e === goal ? [] : findPath(e % S.W, (e / S.W) | 0, x, y, !isArmy(u) && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
-    if (!rest) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    const e = deck[0], rest = e === goal ? [] : safeRoute(u, e % S.W, (e / S.W) | 0, x, y, findPath(e % S.W, (e / S.W) | 0, x, y, !isArmy(u) && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u)));
+    if (!rest) { routeFailed(u, goal); return false; }
     u.path = [e].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
     return true;
   }
   const p = isArmy(u) ? squadRoute(u, tIdx(Math.floor(u.x), Math.floor(u.y)), x, y)
-    : findPath(Math.floor(u.x), Math.floor(u.y), x, y, !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
+    : safeRoute(u, Math.floor(u.x), Math.floor(u.y), x, y, findPath(Math.floor(u.x), Math.floor(u.y), x, y, !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u)));
   u.breach = 0;
-  if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+  if (!p) { routeFailed(u, goal); return false; }
   // Starting on a Viaduct's abutment straight across it: keep the abutment in the route, so the
   // crossing is seen as one (see moveAlong) from the moment it leaves.
   const st = tIdx(Math.floor(u.x), Math.floor(u.y));
@@ -1592,7 +1598,10 @@ function routeCheck(u) {
     else if (onRoad && !S.road[t]) gap++;
   }
   if (turn && !bad) bad = 1;
-  if (!bad && !gap) return true;
+  // A goods carrier whose way ahead now runs into an enemy gun's reach (one put up or loaded since it set off: see
+  // dangerSweep) plans again, round it; with no safe way round it stops and drops the job (haltUnsafe).
+  const hot = civ && !bad && safeHaul(u) && hotStep(dangerMap(u.owner), here, p, u.pi) >= 0;
+  if (!bad && !gap && !hot) return true;
   if (bad === 2 && !walkable(here) && !S.bAt[here]) {
     // Standing where the bridge was: back to the nearest tile of its route that still stands (as offDeck does on a Viaduct).
     let best = -1, bd = Infinity;
@@ -1602,10 +1611,11 @@ function routeCheck(u) {
   if (!civ) { if (bad === 2 || turn) { u.path = null; u.vel = 0; return false; } return true; }
   const pi = u.pi, g = p[last];
   if (goTo(u, g % W, (g / W) | 0)) {
-    if (!bad && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
+    if (!bad && !hot && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
     return true;
   }
   u.path = p; u.pi = pi;
+  if (hot) { haltUnsafe(u); return false; }
   if (bad === 2) { u.vel = 0; cancelTask(u, true); u.task = null; u.path = null; return false; }
   return true;
 }
@@ -6230,6 +6240,72 @@ const GUARD_VERSUS = 3;  // a nest's guards in Versus go for what comes within t
 const SHY_LOOK = 6;      // how far ahead along its way a robot looks out for them (tiles)
 const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's given work again
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
+const SAFE_POCKET = 4;   // a goods carrier caught in a gun's reach may cross this many tiles of it to get out (safeRoute)
+const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried again (noSafeRoute)
+const SAFE_FREE = new Set(['flee', 'cover', 'home', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
+
+/*
+ * Goods carriers never drive into enemy guns (the owner, Nov 23 2026: on Volcano the rival joined its road to the far
+ * end of his, the short way to his far sites ran through its base, and his Haulers and trucks drove in and were shot
+ * one after another). A route's cost already counts every tile a gun reaches (DANGER_COST, findPath), so they go round
+ * where there's a way round; but with none they drove in anyway, and a route planned before a gun went up (or was
+ * loaded) was never looked at again. Now (safeRoute) a carrier's route that still runs into a gun's reach is searched
+ * again with that ground closed (opts.safe); with no way round there either, it doesn't go: the job waits
+ * (noSafeRoute: NOSAFE_WAIT), the building says "No safe route" and its owner is told. And once a second (dangerSweep)
+ * a carrier on its way whose route ahead now runs into a gun plans again (routeCheck), or stops and drops the job
+ * (haltUnsafe). The carriers: Haulers, Freight Trucks, Tankers, Road Trains, Workers and Pavers (gunShy), the rival
+ * AI's as well. Enemy warbots out in the open move about: routes pay to go round them (DANGER_COST), and a carrier
+ * whose way runs into them turns back (foeSweep).
+ */
+/** Does bot u keep its routes out of enemy guns' reach (a goods carrier at work: gunShy, not running for cover or sent by hand)? */
+function safeHaul(u) {
+  const bt = BOTS[u.type];
+  return u.owner >= 0 && !isWild(u.owner) && gunShy(u) && !bt.crawler && !bt.rail && !bt.sea && !(u.task && SAFE_FREE.has(u.task.type)) && u.coverT !== S.time;
+}
+/**
+ * Where route `path` (from index `from`, setting off from tile `start`) first runs into an enemy gun's reach on danger
+ * map m, or -1. The first SAFE_POCKET tiles out of the reach it's in already don't count: it has to get out.
+ */
+function hotStep(m, start, path, from) {
+  let k = from || 0;
+  if (m[start] & 1) for (let d = 0; k < path.length && d < SAFE_POCKET && (m[path[k]] & 1); d++) k++;
+  for (; k < path.length; k++) if (m[path[k]] & 1) return k;
+  return -1;
+}
+/** Goods carrier u's route p from (sx, sy) to (x, y): p, the way round any enemy gun it runs into, or null if there's none (noSafeRoute). */
+function safeRoute(u, sx, sy, x, y, p) {
+  if (!p || !p.length || !safeHaul(u)) return p;
+  const m = dangerMap(u.owner);
+  if (hotStep(m, tIdx(sx, sy), p, 0) < 0) return p;
+  const o = routeOpts(u);
+  o.safe = m;
+  const q = findPath(sx, sy, x, y, u.owner, o);
+  if (q) return q;
+  noSafeRoute(u, tIdx(x, y));
+  return null;
+}
+/**
+ * No safe way for goods carrier u to tile `goal`: it waits (the route isn't tried again for NOSAFE_WAIT seconds, nor
+ * is a job at the building there handed out), the building says so (b.noSafe), and its owner is told.
+ */
+function noSafeRoute(u, goal) {
+  u.failGoal = goal; u.failUntil = S.time + NOSAFE_WAIT;
+  const b = S.bAt[goal] ? getE(S.bAt[goal]) : null, P = S.players[u.owner];
+  if (b && b.owner === u.owner) { b.noSafe = S.time; b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT); }
+  if (isMe(u.owner) && P && S.time - (P.safeMsgAt ?? -999) > 45) {
+    P.safeMsgAt = S.time;
+    const what = b && b.owner === u.owner ? ` to your ${BDEFS[b.type].name}${b.built ? '' : ' site'}` : '';
+    postMsg(ME, `No safe route${what}: enemy defences are in the way. Your ${BOTS[u.type].plural} wait rather than drive into their fire: destroy the guns, or build a road round them.`, goal % S.W, (goal / S.W) | 0, 'warn');
+    sfx('alert');
+  }
+}
+/** Goods carrier u, on its way, would run into an enemy gun with no way round: it stops where it is and drops the job (a load aboard stays, for safe storage). */
+function haltUnsafe(u) {
+  const t = u.task;
+  cancelTask(u, !!(t && (t.type === 'haul' || t.type === 'crate') && u.carry));
+  u.task = null; u.path = null; u.vel = 0;
+  u.shyUntil = S.time + SHY_WAIT;
+}
 
 /** How far building b can shoot enemy robots right now (tiles), or 0. */
 function gunReach(b) {
@@ -6354,7 +6430,7 @@ function foeReach(v) {
   if (v.armored) return TRAIN_ARMOR.pulse.range + 1; // an armored train's pulse cannon (it fires from a station too)
   if (v.inside || v.under) return 0;
   if (BOTS[v.type].wild) return v.task && v.task.type === 'guard' ? (S.mode === 'colony' ? FOE_SHY : GUARD_VERSUS) : FOE_SHY_WILD; // (a nest's guards only go for what comes near it)
-  return isArmy(v) && botArmed(v) ? FOE_SHY : 0;
+  return isArmy(v) && botArmed(v) ? Math.max(FOE_SHY, (BOTS[v.type].range || 0) + 1.7) : 0; // (a Railgunner shoots further than a warbot)
 }
 
 /** The ground player p's robots should keep off (1 = an enemy gun reaches it). */
@@ -6426,6 +6502,11 @@ function dangerSweep() {
     if (!b || b.owner !== u.owner || !b.underFire) continue;
     if (u.inside === b.id) exitBuilding(u);
     cancelTask(u); u.task = null; u.path = null;
+  }
+  // Goods carriers on their way whose route ahead now runs into an enemy gun: they look at it again (routeCheck).
+  for (const u of S.bots) {
+    if (u.dead || !u.path || u.inside || u.pi >= u.path.length || !safeHaul(u)) continue;
+    if (hotStep(dangerMap(u.owner), tIdx(Math.floor(u.x), Math.floor(u.y)), u.path, u.pi) >= 0) u.rv = -1;
   }
 }
 
@@ -19331,6 +19412,7 @@ function hashState() {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
     obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
+    if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }

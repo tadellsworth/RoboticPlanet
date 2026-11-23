@@ -1463,6 +1463,22 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   ticks rebuilds the same maps from them (`dangerMap` → `updateDanger(true)`) instead of from where things stand after
   loading, so a save plays on exactly as the game would have (it could part ways before). Saved; `checkSave` checks
   them; not in `hashState`.
+- **Safe routes for goods carriers** (the owner's Volcano report, Nov 23 2026: the rival joined its road to the far end
+  of his, the short way to his far sites ran through its base, and his Haulers and trucks drove in and were shot). A
+  civilian's route already paid `DANGER_COST` (24) a tile for the danger map (`findPath` with `avoidFor`), but with no
+  way round it drove through, and a route planned before a gun went up or was loaded was never looked at again. Now a
+  goods carrier at work (`safeHaul`: `gunShy` robots, so Haulers, Freight Trucks, Tankers, Road Trains, Workers and
+  Pavers, the rival AI's too; not one running for cover or on a task in `SAFE_FREE`) whose route still runs into a
+  gun's reach (`hotStep`: `dangerMap` bit 1, past the first `SAFE_POCKET` (4) tiles out of a reach it starts in) is
+  searched again with that ground closed (`safeRoute`, `findPath` `opts.safe`; only then, so it costs nothing on a
+  peaceful map). With no way round, it waits (`noSafeRoute`): the route isn't tried for `NOSAFE_WAIT` (10 s), nor
+  is a job at the building there handed out (`unreachUntil`), the building's panel says *No safe route: enemy
+  defences in the way* (`b.noSafe`, in `hashState`) and its owner is told (every 45 s at most, `P.safeMsgAt`). Once a
+  second (`dangerSweep`) a carrier on its way whose route ahead now runs into a gun is flagged (`u.rv = -1`) so
+  `routeCheck` plans again, round it, or stops it where it is and drops the job (`haltUnsafe`: a load aboard stays,
+  for `stashCarry`). The danger map is the cached one (per player, every 15 ticks), never rebuilt per search. Enemy
+  warbots stay a cost and `foeSweep`'s turning back; how far robots keep from one is its real reach now (`foeReach`:
+  a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all).
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
   not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own

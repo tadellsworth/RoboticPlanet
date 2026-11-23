@@ -8127,6 +8127,7 @@ function refreshBuildingSheet(b) {
   const foes = mine && !gun && !BDEFS[b.type].war && !(def.staff && b.staff) && foesAt(b); // (a staffed building says so itself)
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
+    : mine && S.time - (b.noSafe ?? -99) < NOSAFE_WAIT * 2 ? 'No safe route: enemy defences in the way. Your carriers wait until the way is clear (destroy the guns, or build a road round them).'
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
   if (!b.built) {

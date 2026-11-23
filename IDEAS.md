@@ -18,6 +18,27 @@ out-shell Howitzers on plain buildings); a Disruptor Tower has no aim. Open:
   sharper opponent.
 - Should an aimed defence also hold fire at everything else while its target is out of reach (a "hold for it" mode)?
 
+## Safe routes for goods carriers (fixed Nov 23 2026: calls made, open questions for the owner)
+
+The owner's Volcano report: the rival joined its road to the far end of his, the short way to his far sites ran
+through its base, and his Haulers and trucks drove in and were blown up. Routes already paid for every tile an enemy
+gun reaches, but with no way round they drove through anyway, and a route planned before a gun went up (or was
+loaded) was never looked at again. Fixed: a carrier's route that still runs into a gun is searched again with that
+ground closed; one already on its way plans again within a second of a gun going up ahead (`routeCheck`).
+- **Call made: with no safe way, they wait.** The job isn't handed out again for 10 s, the building's panel says
+  *No safe route: enemy defences in the way*, and a message says so (every 45 s at most). Workers and Pavers, who can
+  walk off the road, go round on foot when the roads all run through the guns. Haulers don't: they crawl off-road at a
+  quarter speed and could be shot on the way. Open: should a Hauler crawl round a short gap after all?
+- **Enemy warbots stay a cost, not a wall:** routes pay to go round them and a carrier turns back when they're ahead
+  (`foeSweep`), but a road with warbots on it isn't refused outright (they move about; the carriers would stand idle
+  every time a patrol crossed). Open: a short memory of where enemy warbots stood (a decaying sightings map, saved for
+  multiplayer), so a road a rival keeps guarded is avoided between sightings too.
+- **Rival roads** cost no more than any road on open ground; on the rival's land they already cost more. Open: an
+  extra cost on a rival-owned road anywhere.
+- AI-vs-AI games don't stall (two players, ten seeds on Volcano, Standard and Long haul: every one finished, most
+  within a few minutes of before; one Long haul game ran 10 minutes longer, one Volcano game changed winner, chaos
+  from small changes); almost all their carrier losses are raids, not routes.
+
 ## Built in November: city layout and a siege gun
 
 Feed links (a factory beside its supplier is fed straight across), the Keep (a fortified base whose aura

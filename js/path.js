@@ -6,7 +6,7 @@
  * resource tiles are slower to cross.
  */
 
-const _pf = { n: 0, g: null, from: null, stamp: null, closed: null, gen: 0, heap: new MinHeap() };
+const _pf = { n: 0, g: null, from: null, stamp: null, closed: null, pkS: null, pkD: null, gen: 0, heap: new MinHeap() };
 
 function _pfEnsure(N) {
   if (_pf.n === N) return;
@@ -15,6 +15,8 @@ function _pfEnsure(N) {
   _pf.from = new Int32Array(N);
   _pf.stamp = new Uint32Array(N);
   _pf.closed = new Uint32Array(N);
+  _pf.pkS = new Uint32Array(N); // (opts.safe: the tiles of the gun cover a route starts in that it may cross to get out)
+  _pf.pkD = new Uint8Array(N);
   _pf.gen = 0;
 }
 
@@ -51,6 +53,8 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  * opts.coverMap: the same from a map of its own (1 where a gun reaches): the Murmur's on Active (murmurGunMap).
  * opts.rad: tiles in a radiation zone cost RAD.path more (a rival's army on the march); with `avoidFor` set they always do.
+ * opts.safe: a danger map (dangerMap): a goods carrier's way round enemy guns, or none. Tiles a gun covers (bit 1) are
+ *   closed, but for the first SAFE_POCKET tiles out of the cover it starts in (see safeRoute).
  * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
  * opts.lane: the bot's speed factor along an Express lane (laneSpeed), 0 or unset for a bot barred from them: it may
  *   only step onto a lane across its direction (crossing it, at an overpass or a ramp), never along it.
@@ -68,6 +72,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const lineTile = (t) => (ferryOk && ferryLink(t) >= 0) || (airOk && airLink(t) >= 0); // a Port or Mast where a ride starts
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;
   const rad = (opts && opts.rad) || (avoidFor !== undefined && avoidFor >= 0) ? (S.rads && S.rads.length && typeof radMap === 'function' ? radMap() : null) : null; // (radiation: robots that don't fight, and a rival's army, go round)
+  const safe = (opts && opts.safe) || null, pkS = _pf.pkS, pkD = _pf.pkD;
   const cover = opts && opts.coverMap ? opts.coverMap : opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
   const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
   if (!inMap(gx, gy)) return null;
@@ -84,18 +89,23 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * minStep;
   };
   g[start] = 0; stamp[start] = gen; from[start] = -1;
+  if (safe && (safe[start] & 1)) { pkS[start] = gen; pkD[start] = 0; }
+  // (opts.safe: may the route step from cur onto tile t? Not into a gun's cover, unless still getting out of the one it started in.)
+  const shut = (cur, t) => (safe[t] & 1) !== 0 && (pkS[cur] !== gen || pkD[cur] >= SAFE_POCKET);
+  const pocket = (cur, t) => { if (safe[t] & 1) { pkS[t] = gen; pkD[t] = pkD[cur] + 1; } };
   heap.push(start, h(sx, sy));
   // Straight on from cur onto overpass tile a (direction dir) and out the far side: the tile after it (and after any
   // more overpasses in a row), or the goal if it lies on one of them. The way there is kept as from = -2 - cur.
   const overpass = (cur, a, dir, wall) => {
     const dx = dir[0], dy = dir[1];
+    if (safe && (safe[a] & 1)) return;
     let ng = g[cur] + (tileCost(cur, dx, dy, offMul, lane) + tileCost(a, dx, dy, offMul, lane)) * 0.5 + wall + extra(a);
     let ai = a % W, aj = (a / W) | 0, b = a;
     while (b !== goal && S.over[b]) {
       const bi = ai + dx, bj = aj + dy;
       if (bi < 0 || bj < 0 || bi >= W || bj >= H) return;
       const nb = bj * W + bi;
-      if (!walkable(nb) || !canStep(b, nb)) return;
+      if (!walkable(nb) || !canStep(b, nb) || (safe && (safe[nb] & 1))) return;
       let w = 0;
       if (S.bAt[nb] && nb !== goal && !passTile(nb, who) && !(lineTile(nb) && getE(S.bAt[nb]).owner === who)) {
         if (!breach || !breachable(nb, who)) return;
@@ -153,6 +163,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
       else if (ov && S.road[nt] && S.over[nt] && nt !== goal) { overpass(cur, nt, dir, wall); continue; }
+      if (safe && shut(cur, nt)) continue;
       let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul, lane) + tileCost(nt, dir[0], dir[1], offMul, lane)) * 0.5 + wall;
       // Workers steer clear of enemy territory unless there is no other way, and well clear of enemy guns.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; if (guns && guns[nt]) ng += DANGER_COST; }
@@ -162,13 +173,14 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (rad && rad[nt]) ng += RAD.path * dir[2];
       if (stamp[nt] !== gen || ng < g[nt]) {
         stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+        if (safe) pocket(cur, nt);
         heap.push(nt, ng + h(ni, nj));
       }
     }
     // A Viaduct: drive straight across to the far abutment (anyone), at plain road cost.
     if (S.bAt[cur]) {
       const nt = viaLink(cur);
-      if (nt >= 0 && closed[nt] !== gen) {
+      if (nt >= 0 && closed[nt] !== gen && !(safe && (safe[nt] & 1))) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.abs(ni - ci) + Math.abs(nj - cj)) * ROAD_PREFERENCE / PAVE[1].speed;
         if (stamp[nt] !== gen || ng < g[nt]) {
@@ -180,7 +192,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     // A Port with a ferry line: take the ferry to the far Port (its owner's bots, Crawlers and creatures excepted).
     if (S.bAt[cur] && ferryOk) {
       const nt = ferryLink(cur);
-      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who) {
+      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who && !(safe && (safe[nt] & 1))) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * FERRY_COST + FERRY_BOARD) * minStep;
         if (stamp[nt] !== gen || ng < g[nt]) {
@@ -192,7 +204,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     // A Mooring Mast on an Airship line: fly to the far Mast (its owner's Workers and Warbots).
     if (S.bAt[cur] && airOk) {
       const nt = airLink(cur);
-      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who) {
+      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who && !(safe && (safe[nt] & 1))) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * AIRSHIP.routeCost + AIRSHIP.routeBoard) * minStep;
         if (stamp[nt] !== gen || ng < g[nt]) {
@@ -204,7 +216,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     // A Ropeway station: ride the cable to the far station (light bots of its owner only).
     if (S.bAt[cur] && !(opts && opts.noRope)) {
       const nt = ropeLink(cur);
-      if (nt >= 0 && closed[nt] !== gen && passTile(nt, who)) {
+      if (nt >= 0 && closed[nt] !== gen && passTile(nt, who) && !(safe && (safe[nt] & 1))) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * minStep * ROPE_COST;
         if (stamp[nt] !== gen || ng < g[nt]) {
