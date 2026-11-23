@@ -149,8 +149,10 @@ Then ask for each asset with the prompts below.
 
 ### Command Deck interface
 
-The look of Contingency's screens (the globe, its panels and sheets, the Campaigns screen and the new run), and the one
-the rest of the game's interface will move to. A ship's command deck seen in the dark: glass readouts over the planet.
+The look of the whole game's interface: Contingency's screens (the globe, its panels and sheets, the Campaigns screen and
+the new run) and, since the Command Deck in game, everything over a game too (the top bar, goal card, minimap, Army Group
+cards, tools, messages, panels, selection bar, the pause menu and the screens over a game). The main menu keeps its own
+look for now. A ship's command deck seen in the dark: glass readouts over the planet.
 
 - **Palette.** Panels `rgba(5, 12, 20, 0.9)` (near opaque: no backdrop blur, for speed), text `#e3f4fb`, quiet text
   `#93b4c4`. Accents in the player's callsign colour, `--c` (COBALT `#38d4ff`, VERMILION `#ff5a6e`, VIRIDIAN `#5be06c`,
@@ -165,8 +167,14 @@ the rest of the game's interface will move to. A ship's command deck seen in the
   monospace (`ui-monospace`, SF Mono, Menlo, Consolas). Body text in the system sans.
 - **Marks.** Status lights (8 px glowing dots), diamonds for Uplinks and stars, short bars for levels, segments for
   meters. Buttons are square, uppercase, at least 44 px tall, with a 2 px white focus ring.
+- **In game.** Over the bright, busy map the panels are a touch more solid (`rgba(6, 12, 19, 0.94)`, with a 1 px dark
+  outer line to lift them off it) and the accent stays cyan whatever your colour; your callsign, first in the top bar,
+  wears your colour. Brackets 14 × 2 px on a computer, 9 × 1 px on a phone. Labels over panel names have a status light
+  (cyan, amber for standby, red over a rival's building). The Missions' light is amber (`#ffc457`), an outline and a soft
+  glow, so it never reads as a selected (cyan) button. Army Group badges are diamonds, health a segmented bar.
 - **Where it lives.** The Contingency block of `style.css` (`#screen-contingency`, `.cg-*`), and the markup in
-  `index.html` (`#screen-contingency`) and `js/contingency-ui.js`.
+  `index.html` (`#screen-contingency`) and `js/contingency-ui.js`; in game, the "Command Deck in game" block at the end of
+  `style.css` (all under `body.deck`, which `index.html` sets) and the few lines of markup README.md lists.
 
 ---
 

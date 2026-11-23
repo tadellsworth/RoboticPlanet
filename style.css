@@ -2681,3 +2681,389 @@ body.mm-on .watch-card { width: min(calc(100% - var(--mm-w, 100px) - 8px), 440px
 .sheet-close { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.12)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.35); }
 .minimap { border-color: rgba(255, 255, 255, 0.16); border-top-color: rgba(56, 212, 255, 0.35); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 6px 18px rgba(0, 0, 0, 0.45); }
 .card { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 120px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.45); }
+
+/* (The robot counts and the clock's time-of-day word: the old look shows the counts in a line and leaves the word out.) */
+#pop .pn { display: inline-flex; align-items: center; gap: 4px; }
+#pop .pn b { font-weight: inherit; }
+#pop .pn-free { font-size: inherit; color: var(--muted); }
+#pop .pn-l { text-transform: lowercase; }
+@media (max-width: 499px) { #pop .pn-l { display: none; } }
+.ck-l, .callsign, .sh-eye { display: none; }
+
+/* ==========================================================================================================================
+   Command Deck in game (body.deck, on by default in index.html): the top bar, goal card, minimap, Army Group cards, tools,
+   messages, panels, selection bar, the pause menu and the other screens over a game, in Contingency's Command Deck look
+   (ART_GUIDE.md, "Command Deck interface"), made a little more solid for the bright, busy map. It reskins: colours, type,
+   corners, brackets. The layout is the game's own (the same places and sizes), except where noted: one glass top bar with
+   the callsign block on a wide screen, the robot counts with their names under them, and on an upright phone the panels
+   docked above the tools and the Army Group cards a row across the top. Every id, class and data attribute the Missions
+   light up is kept. No backdrop blur: the panels are near opaque. Chakra Petch is the one Contingency bundles (above);
+   numbers are in the system monospace, as there.
+   ========================================================================================================================== */
+body.deck {
+  --dk-c: #38d4ff; --dk-cd: rgba(56, 212, 255, 0.32); --dk-cl: rgba(56, 212, 255, 0.16); --dk-ink: #e6f5fb; --dk-mut: #9dbccb;
+  --dk-pan: rgba(6, 12, 19, 0.94); --dk-pan2: rgba(6, 12, 19, 0.9); --dk-bad: #ff6b6b; --dk-bk: 14px; --dk-bw: 2px;
+  --dk-disp: 'Chakra Petch', system-ui, sans-serif; --dk-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --dk-dash: 1px dashed rgba(56, 212, 255, 0.14);
+}
+/* the palette the game's own rules use, inside a game and the screens over it (the main menu keeps its look) */
+body.deck #hud, body.deck .agcards, body.deck .speed-menu, body.deck .map-tip, body.deck #good-tip, body.deck .now-playing,
+body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) {
+  --panel: var(--dk-pan); --panel-2: rgba(14, 30, 42, 0.96); --line: rgba(56, 212, 255, 0.16); --text: var(--dk-ink); --muted: var(--dk-mut); --radius: 3px;
+}
+/* glass: the near-solid plate, a hairline, a dark outer line to lift it off a bright map, a bracket on each corner, scanlines */
+body.deck #sheet, body.deck .selbar, body.deck #banner, body.deck .br-card, body.deck #bottombar, body.deck .minimap, body.deck .objective, body.deck .mp-banner,
+body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) .card {
+  background-color: var(--dk-pan); color: var(--dk-ink); border: 1px solid rgba(56, 212, 255, 0.22); border-radius: 0;
+  background-image: linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)),
+    linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)), linear-gradient(var(--dk-c), var(--dk-c)),
+    repeating-linear-gradient(0deg, rgba(140, 220, 255, 0.03) 0 1px, transparent 1px 3px);
+  background-size: var(--dk-bk) var(--dk-bw), var(--dk-bw) var(--dk-bk), var(--dk-bk) var(--dk-bw), var(--dk-bw) var(--dk-bk), var(--dk-bk) var(--dk-bw), var(--dk-bw) var(--dk-bk), var(--dk-bk) var(--dk-bw), var(--dk-bw) var(--dk-bk), auto;
+  background-position: top left, top left, top right, top right, bottom left, bottom left, bottom right, bottom right, 0 0;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+body.deck .objective, body.deck .minimap, body.deck .selbar, body.deck .mp-banner { --dk-bk: 9px; background-color: var(--dk-pan2); }
+body.deck :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* the label line over a panel's name: a status light and what the panel is */
+body.deck .sh-eye { display: flex; align-items: center; gap: 7px; flex-basis: 100%; order: -1; margin: 0 0 6px; font: 600 11px/1.2 var(--dk-disp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck .led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--dk-c); box-shadow: 0 0 6px var(--dk-c); }
+body.deck .led.amber { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+body.deck .led.red { background: var(--dk-bad); box-shadow: 0 0 6px var(--dk-bad); }
+
+/* ---- the top bar: one glass bar (on a wide screen with the callsign block first), the goods as readouts in it ---- */
+body.deck #topbar::before { content: ''; grid-row: 1 / 3; grid-column: 1 / -1; align-self: stretch; justify-self: stretch; margin: -4px; pointer-events: none;
+  background: var(--dk-pan) repeating-linear-gradient(0deg, rgba(140, 220, 255, 0.03) 0 1px, transparent 1px 3px);
+  border: 1px solid rgba(56, 212, 255, 0.18); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 4px 14px rgba(0, 0, 0, 0.45); }
+body.deck #topbar { display: grid; grid-template-columns: minmax(0, 1fr); padding-left: calc(var(--safe-l) + 10px); padding-right: calc(var(--safe-r) + 10px); padding-top: calc(var(--safe-t) + 10px); }
+body.deck #topbar > .goods { grid-row: 1; grid-column: 1; }
+body.deck #topbar > .toprow { grid-row: 2; grid-column: 1; border-top: 1px solid var(--dk-cl); padding-top: 2px; }
+body.deck #topbar > .objrow { margin-top: 6px; }
+body.deck .res-chip, body.deck .goods.two-rows .res-chip, body.deck .chip {
+  background: transparent; border: 1px solid transparent; border-radius: 3px; box-shadow: none; color: #fff; }
+body.deck .res-chip { font: 700 15px/1 var(--dk-mono); gap: 6px; }
+body.deck .res-chip .rate { font: 500 10.5px/1 var(--dk-mono); color: var(--good); align-self: flex-start; margin: 2px 0 0 -2px; opacity: 1; }
+body.deck .res-chip .rate.neg { color: #ff9f9f; }
+body.deck .res-chip.starved { border-color: rgba(255, 107, 107, 0.6); background: rgba(255, 107, 107, 0.1); box-shadow: none; color: #ffc2c2; }
+body.deck .res-chip.full { border-color: rgba(255, 196, 87, 0.55); box-shadow: none; }
+body.deck .res-chip.flash { animation: dkflash 0.6s; }
+@keyframes dkflash { from { background: rgba(126, 224, 138, 0.25); } }
+body.deck .chip-btn:not(#pop):not(#clock) { border-color: rgba(157, 188, 203, 0.3); min-width: 44px; justify-content: center; font: 600 13px/1 var(--dk-mono); color: var(--dk-ink); }
+body.deck .chip-btn:hover, body.deck .res-chip:hover { border-color: var(--dk-cd); background: rgba(56, 212, 255, 0.06); }
+body.deck #pop { gap: 12px; padding: 2px 10px; font: 700 15px/1 var(--dk-mono); }
+body.deck #pop .dot { display: none; }
+body.deck #pop .pn { flex-direction: column; align-items: flex-start; gap: 4px; }
+body.deck #pop .pn b { font-weight: 700; color: #fff; white-space: nowrap; }
+body.deck #pop .pn-free { font-size: 11px; font-weight: 500; color: var(--dk-mut); }
+body.deck #pop .pn-l, body.deck .ck-l { display: block; font: 600 9.5px/1 var(--dk-disp); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck #clock { flex-direction: column-reverse; align-items: flex-start; justify-content: center; gap: 4px; font: 700 15px/1 var(--dk-mono); padding: 2px 10px; }
+body.deck #clock .ck-l { color: var(--warn); }
+body.deck #btn-speed.slow { color: var(--good); } body.deck #btn-speed.fast { color: var(--warn); }
+body.deck .callsign { flex-direction: column; justify-content: center; gap: 5px; padding: 0 14px 0 6px; min-height: 40px; border-right: 1px solid var(--dk-cl); white-space: nowrap; }
+body.deck .callsign small { font: 600 10.5px/1 var(--dk-disp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck .callsign b { display: flex; align-items: center; gap: 7px; font: 700 14px/1 var(--dk-disp); letter-spacing: 0.12em; color: var(--pc, var(--dk-c)); }
+body.deck .callsign .led { background: var(--pc, var(--dk-c)); box-shadow: 0 0 6px var(--pc, var(--dk-c)); }
+/* the goal card (and the messages button beside it) */
+body.deck .objective { font-size: 13.5px; line-height: 1.35; color: var(--dk-ink); padding: 8px 12px; }
+body.deck .objective b { color: var(--dk-c); font-weight: 600; }
+body.deck .obj-hint { border-top: var(--dk-dash); color: #cfeefa; }
+body.deck .msgs-btn { background: var(--dk-pan2); border: 1px solid rgba(56, 212, 255, 0.22); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+body.deck .event-card { border-radius: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.45); }
+@media (min-width: 1000px) and (min-height: 520px) {
+  body.deck #topbar { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "cs goods row" "obj obj obj"; align-items: center; column-gap: 6px; }
+  body.deck #topbar::before { grid-row: 1; margin: -6px -6px; }
+  body.deck #topbar > .callsign { display: flex; grid-area: cs; }
+  body.deck #topbar > .goods { grid-area: goods; gap: 2px; align-items: center; }
+  body.deck #topbar > .toprow { grid-area: row; border-top: 0; padding: 0 0 0 8px; border-left: 1px solid var(--dk-cl); align-items: center; }
+  body.deck #topbar > .objrow { grid-area: obj; margin-top: 8px; }
+  body.deck #topbar > :not(.goods):not(.toprow):not(.callsign):not(.objrow) { grid-column: 1 / -1; justify-self: start; }
+  body.deck .res-chip, body.deck .goods.two-rows .res-chip { min-width: 50px; height: 40px; padding: 0 5px 0 7px; justify-content: flex-start; font-size: 16px; }
+  body.deck .toprow .chip { min-height: 40px; }
+  body.deck .objective { max-width: 600px; }
+}
+
+/* ---- the minimap ("Survey") ---- */
+body.deck .minimap { overflow: visible; padding: 20px 6px 6px; }
+body.deck .minimap::before { content: 'Survey'; position: absolute; left: 9px; top: 6px; font: 600 9.5px/1 var(--dk-disp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-mut); pointer-events: none; }
+body.deck .minimap canvas { border: 1px solid rgba(56, 212, 255, 0.25); border-radius: 0; }
+body.deck .mm-hide { top: 0; right: 0; width: 22px; height: 20px; border-radius: 0; background: transparent; color: var(--dk-mut); }
+body.deck .mm-show { background: var(--dk-pan2); border: 1px solid rgba(56, 212, 255, 0.22); border-radius: 0; }
+@media (pointer: coarse) {
+  body.deck .mm-hide { top: calc(100% + 1px); width: 44px; height: 24px; background: var(--dk-pan); border: 1px solid rgba(56, 212, 255, 0.22); border-top: 0; }
+}
+
+/* ---- Army Group cards: a diamond badge, a segmented health meter, an Ammo light ---- */
+body.deck .agcard { background: var(--dk-pan2); border: 1px solid rgba(56, 212, 255, 0.2); border-left: 3px solid var(--agc, #fff); border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4); color: var(--dk-ink); min-height: 60px; padding: 8px 9px 8px 8px; gap: 9px; }
+body.deck .agcard:hover { border-color: var(--dk-cd); border-left-color: var(--agc, #fff); }
+body.deck .agcard.on { background: rgba(10, 28, 40, 0.96); border-color: var(--agc, #fff); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 0 14px color-mix(in srgb, var(--agc, #fff) 40%, transparent); }
+body.deck .agcard:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+body.deck .ag-badge { width: 26px; height: 26px; border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); color: #071018; font: 700 13px/1 var(--dk-mono); }
+body.deck .agcard.reserve { --agc: #9aa6b2; }
+body.deck .ag-name { font: 700 14px/1.1 var(--dk-disp); letter-spacing: 0.05em; color: #fff; }
+body.deck .ag-count { font: 700 13px/1 var(--dk-mono); color: #fff; }
+body.deck .ag-doing { font: 500 11.5px/1.3 var(--dk-mono); color: var(--dk-mut); }
+body.deck .ag-hp { height: 5px; border-radius: 0; background: rgba(126, 224, 138, 0.2);
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px); mask-image: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px); }
+body.deck .ag-hp i { background: var(--good); }
+body.deck .ag-hp.mid i { background: var(--warn); } body.deck .ag-hp.bad i { background: var(--dk-bad); }
+body.deck .ag-ammo { display: inline-flex; align-items: center; gap: 5px; font: 600 9.5px/1 var(--dk-disp); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck .ag-ammo::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--good); box-shadow: 0 0 5px var(--good); }
+body.deck .ag-ammo.low { color: #ffd98a; } body.deck .ag-ammo.low::before { background: var(--warn); box-shadow: 0 0 5px var(--warn); }
+body.deck .ag-ammo.out { color: #ffb0b0; } body.deck .ag-ammo.out::before { background: var(--dk-bad); box-shadow: 0 0 5px var(--dk-bad); }
+body.deck .ag-ghost { border-radius: 2px; background: var(--dk-pan); font-family: var(--dk-disp); letter-spacing: 0.04em; }
+@media (max-width: 699px), (max-height: 519px) {
+  body.deck .agcard { padding: 5px 5px 5px 4px; min-height: 52px; gap: 3px; }
+  body.deck .agcard .ag-badge { width: 20px; height: 20px; margin: 0 auto; font-size: 11px; }
+  body.deck .agcard .ag-ammo { width: 8px; height: 8px; gap: 0; font-size: 0; background: none; }
+  body.deck .agcard .ag-ammo::before { width: 7px; height: 7px; }
+}
+/* an upright phone: a row of small cards across the top left (refreshAgCards places it) */
+body.deck .agcards.row { left: calc(var(--safe-l) + 6px); width: auto; flex-direction: row; gap: 4px; overflow: visible; padding: 0; }
+body.deck .agcards.row .agcard { position: relative; flex-direction: row; align-items: center; width: 62px; min-height: 44px; height: 44px; padding: 0 6px; gap: 6px;
+  border-left-width: 1px; border-bottom: 2px solid var(--agc, #fff); }
+body.deck .agcards.row .agcard.reserve { width: 52px; }
+body.deck .agcards.row .ag-main { flex-direction: row; align-items: center; gap: 0; }
+body.deck .agcards.row .ag-badge { width: 18px; height: 18px; margin: 0; font-size: 10.5px; }
+body.deck .agcards.row .ag-top { justify-content: flex-start; }
+body.deck .agcards.row .ag-count { font-size: 12px; }
+body.deck .agcards.row .ag-hp { display: none; }
+body.deck .agcards.row .ag-meta { position: absolute; right: 3px; top: 3px; }
+body.deck .agcards.row .ag-ammo { width: 6px; height: 6px; }
+body.deck .agcards.row .ag-ammo:not(.low):not(.out) { display: none; }
+body.deck .agcards.row .ag-ammo::before { width: 5px; height: 5px; }
+
+/* ---- the tools: one glass dock, uppercase, the one in use lit along its foot ---- */
+body.deck #bottombar { gap: 2px; }
+body.deck .tool { background: transparent; border: 1px solid transparent; border-radius: 3px; box-shadow: none; color: var(--dk-ink);
+  font: 600 11px/1 var(--dk-disp); letter-spacing: 0.08em; text-transform: uppercase; gap: 5px; }
+body.deck .tool svg { color: var(--dk-c); }
+body.deck .tool.on { background: rgba(56, 212, 255, 0.14); color: #fff; border-color: var(--dk-cd); box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck[data-sheet="build"] #btn-build, body.deck[data-sheet="army"] #btn-attack, body.deck[data-sheet="agroup"] #btn-attack, body.deck[data-sheet="ally"] #btn-ally {
+  background: rgba(56, 212, 255, 0.14); color: #fff; border-color: var(--dk-cd); box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck .tool.none { opacity: 1; color: var(--dk-mut); } body.deck .tool.none svg { color: var(--dk-mut); }
+body.deck .tool:hover { border-color: var(--dk-cd); }
+body.deck .tool kbd, body.deck .tool.on kbd { min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid rgba(157, 188, 203, 0.4); border-radius: 2px; font: 600 10.5px/16px var(--dk-mono); color: var(--dk-mut); background: rgba(0, 0, 0, 0.25); opacity: 1; }
+body.deck .tool-n { border-radius: 9px; background: var(--warn); color: #1a1000; font: 700 11px/18px var(--dk-mono); }
+@media (min-width: 1000px) and (min-height: 520px) {
+  body.deck #bottombar { padding: 6px; bottom: calc(var(--safe-b) + 12px); gap: 4px; }
+  body.deck .tool { min-width: 116px; height: 52px; padding: 0 14px; font-size: 14px; letter-spacing: 0.1em; gap: 9px; }
+}
+/* (an upright phone: a dock across the bottom, the icons over the names) */
+@media (max-width: 699px) and (min-height: 520px) {
+  body.deck #bottombar { --dk-bk: 9px; --dk-bw: 1px; height: calc(var(--safe-b) + 64px); padding: 4px calc(var(--safe-r) + 4px) calc(var(--safe-b) + 4px) calc(var(--safe-l) + 4px); gap: 0; border-width: 1px 0 0; }
+  body.deck .tool { height: 56px; padding: 0; justify-content: center; }
+}
+@media (orientation: landscape) and (max-height: 519px) {
+  body.deck #bottombar { --dk-bk: 9px; --dk-bw: 1px; border-width: 0 1px 0 0; }
+  body.deck .tool { font-size: 10px; letter-spacing: 0.04em; }
+}
+
+/* ---- messages: a coloured edge, the game time they came at, Go ---- */
+body.deck .toast { background: var(--dk-pan2); border: 1px solid rgba(56, 212, 255, 0.18); border-left: 3px solid var(--dk-c); border-radius: 2px; min-height: 44px;
+  padding: 6px 6px 6px 12px; font-size: 13px; line-height: 1.4; color: var(--dk-ink); gap: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.45); }
+body.deck .toast[data-t]::before { content: attr(data-t); flex: none; min-width: 34px; font: 500 10.5px/1 var(--dk-mono); color: var(--dk-mut); }
+body.deck .toast.lost[data-t]::before { content: attr(data-t) '  \26A0\FE0E'; color: var(--danger); font-weight: 700; }
+body.deck .toast.bad, body.deck .toast.lost { border-left-color: var(--dk-bad); } body.deck .toast.warn { border-left-color: var(--warn); } body.deck .toast.good { border-left-color: var(--good); }
+body.deck .toast.lost { background: rgba(40, 12, 16, 0.94); border-color: rgba(255, 107, 107, 0.45); }
+body.deck .toast.narr, body.deck .toast.voice { font: italic 400 12.5px/1.45 var(--dk-mono); color: #cfeefa; }
+body.deck .toast.narr { border-left-color: #8fb0c0; } body.deck .toast.voice { border-left-color: var(--dk-mur, #c58cff); }
+body.deck .toast-go { margin: 0; min-height: 36px; border: 1px solid var(--dk-cd); border-radius: 3px; background: rgba(56, 212, 255, 0.06); color: var(--dk-ink);
+  font: 600 12px/1 var(--dk-disp); letter-spacing: 0.08em; text-transform: uppercase; }
+body.deck .msg-row { border-top: var(--dk-dash); }
+body.deck .msg-row .msg-t { font-family: var(--dk-mono); }
+
+/* ---- panels: the header (label line, name, ?, close), then dashed rows ---- */
+body.deck #sheet { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 8px 28px rgba(0, 0, 0, 0.5); }
+body.deck .sheet-title { flex-wrap: wrap; align-items: center; row-gap: 0; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--dk-cl); }
+body.deck .sheet-title > div { min-width: 0; }
+body.deck .sheet-title h3 { font: 700 21px/1.15 var(--dk-disp); letter-spacing: 0.02em; color: #fff; }
+body.deck .sheet-title .owner, body.deck .sheet-title .sub { font: 500 12px/1.3 var(--dk-mono); color: var(--dk-mut); }
+body.deck .sheet-title img { width: 42px; height: 42px; }
+body.deck .sheet-title .sh-help, body.deck .sheet-close { width: 44px; height: 44px; border-radius: 3px; border: 1px solid rgba(157, 188, 203, 0.3); background: transparent; box-shadow: none; color: var(--dk-ink);
+  font: 600 14px/1 var(--dk-disp); }
+body.deck .sheet-close { top: 14px; right: calc(var(--safe-r) + 12px); margin: 0; }
+body.deck .sheet-title { margin-right: 50px; }
+body.deck .sheet-title .sh-help { margin-left: auto; }
+body.deck .sheet-title .sh-help:hover, body.deck .sheet-close:hover { border-color: var(--dk-c); }
+body.deck .sheet-grab::before { background: rgba(157, 188, 203, 0.5); height: 3px; border-radius: 2px; }
+body.deck #sheet-body { padding-top: 14px; }
+body.deck .sheet-grab + .sheet-close + #sheet-body, body.deck #sheet-body { scrollbar-color: rgba(56, 212, 255, 0.35) transparent; scrollbar-width: thin; }
+body.deck .desc, body.deck #hud .hint { color: var(--dk-mut); font-size: 13px; line-height: 1.45; }
+body.deck .desc b, body.deck #hud .hint b { color: var(--dk-ink); }
+body.deck .status { font: 600 13px/1.4 var(--dk-mono); color: var(--dk-ink); }
+body.deck .flavor { font-family: var(--dk-mono); font-size: 12px; color: var(--dk-mut); border-left: 2px solid var(--dk-cl); padding-left: 10px; }
+body.deck .section-label, body.deck .trade-side { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; font: 600 11px/1.2 var(--dk-disp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-c); }
+body.deck .section-label::after, body.deck .trade-side::after { content: ''; flex: 1; height: 1px; background: var(--dk-cl); }
+body.deck .label-note { font: 500 11px/1 var(--dk-mono); color: var(--dk-mut); }
+body.deck .kv { align-items: center; min-height: 34px; padding: 5px 0; border-top: var(--dk-dash); font-size: 13px; }
+body.deck .kv > span:first-child { font: 600 10.5px/1.3 var(--dk-disp); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck .kv > span:last-child { font: 500 13px/1.35 var(--dk-mono); color: #fff; }
+body.deck .kv.army-row > span:first-child, body.deck .kv.trade-row > span:first-child { font: 600 13px/1.3 var(--dk-disp); letter-spacing: 0.03em; text-transform: none; color: #fff; }
+body.deck .bar { height: 8px; border-radius: 0; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(157, 188, 203, 0.25); }
+body.deck .bar > div { background: var(--dk-c); box-shadow: 0 0 8px var(--dk-c); }
+body.deck .bar.armor > div { background: var(--warn); box-shadow: none; }
+body.deck .gtag { border-radius: 2px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--dk-cl); font: 600 12px/1.2 var(--dk-mono); }
+body.deck .gtag.short { color: #ffb0b0; border-color: rgba(255, 107, 107, 0.4); background: rgba(255, 107, 107, 0.1); }
+/* buttons: square, uppercase, at least 44 px */
+body.deck #hud .btn, body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) .btn {
+  min-height: 44px; border-radius: 3px; border: 1px solid var(--dk-cd); background: rgba(56, 212, 255, 0.06); color: var(--dk-ink);
+  font: 600 13px/1.15 var(--dk-disp); letter-spacing: 0.08em; text-transform: uppercase; box-shadow: none; background-image: none; }
+body.deck #hud .btn.small, body.deck :is(#screen-pause, #screen-stats, #screen-help, #screen-over, #screen-mp) .btn.small { font-size: 12px; }
+body.deck #hud .btn.primary, body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) .btn.primary {
+  background: var(--dk-c); color: #031620; border-color: var(--dk-c); box-shadow: 0 0 16px rgba(56, 212, 255, 0.3); }
+body.deck #hud .btn.ghost, body.deck :is(#screen-pause, #screen-over, #screen-mp, #screen-stats, #screen-help, #screen-missions) .btn.ghost { background: transparent; border-color: rgba(157, 188, 203, 0.32); }
+body.deck #hud .btn.danger, body.deck :is(#screen-pause, #screen-over) .btn.danger { background: rgba(255, 107, 107, 0.08); border-color: rgba(255, 107, 107, 0.5); color: #ffc9c9; }
+body.deck #hud .btn.danger-glow { background: #ff4b4b; color: #fff; border-color: #ff7a7a; }
+body.deck #hud .btn.on, body.deck .ag-orders .btn.on, body.deck .ag-row .btn.on, body.deck .selbar #sel-box.on { background: rgba(56, 212, 255, 0.2); color: #fff; border-color: var(--dk-c); box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck #hud .btn:hover:not(:disabled) { filter: none; border-color: var(--dk-c); }
+body.deck #hud .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+body.deck #sheet button[data-key]::after, body.deck kbd { border-radius: 2px; border: 1px solid rgba(157, 188, 203, 0.4); border-bottom-width: 1px; background: rgba(0, 0, 0, 0.25); color: var(--dk-mut); font-family: var(--dk-mono); }
+body.deck .btn.primary kbd, body.deck .btn.primary[data-key]::after { color: #031620; border-color: rgba(3, 22, 32, 0.45); background: transparent; }
+/* segmented choices (and the Build tabs) */
+body.deck .seg { gap: 2px; padding: 2px; border: 1px solid var(--dk-cl); background: rgba(0, 0, 0, 0.3); border-radius: 3px; }
+body.deck .seg button { border-radius: 2px; color: var(--dk-mut); font: 600 12.5px/1.1 var(--dk-disp); letter-spacing: 0.06em; text-transform: uppercase; }
+body.deck .seg button.on { background: rgba(56, 212, 255, 0.16); color: #fff; box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck .build-tabs .n { font-family: var(--dk-mono); border-radius: 2px; }
+/* the Build list's cards */
+body.deck .bcard { background: rgba(56, 212, 255, 0.04); border: 1px solid rgba(56, 212, 255, 0.18); border-radius: 3px; color: var(--dk-ink); }
+body.deck .bcard:hover:not(:disabled) { border-color: var(--dk-c); background: rgba(56, 212, 255, 0.1); }
+body.deck .bcard .bname { font: 600 13.5px/1.15 var(--dk-disp); letter-spacing: 0.03em; color: #fff; }
+body.deck .bcard .bcost { font: 600 12px/1.2 var(--dk-mono); color: #fff; gap: 3px 9px; }
+body.deck .bcard .bcost .short { color: #ffb0b0; background: rgba(255, 107, 107, 0.16); padding: 1px 3px; border-radius: 2px; }
+body.deck .bcard .bhave { font: 500 11px/1.25 var(--dk-mono); color: var(--dk-mut); }
+body.deck .bcard .bhave.some { color: var(--dk-mut); }
+body.deck .bcard.next { border-color: var(--dk-c); background: rgba(56, 212, 255, 0.08); }
+body.deck .bcard.next .bhave::before { color: var(--dk-c); font-weight: 600; }
+body.deck .bcard kbd { left: auto; right: 6px; top: 6px; font-size: 10.5px; }
+/* the Bot Foundry's (and the yards') orders */
+body.deck .order-row { border-radius: 0; border-top: var(--dk-dash); padding-top: 6px; margin: 0; min-height: 52px; font: 600 14px/1.2 var(--dk-disp); letter-spacing: 0.03em; color: #fff; }
+body.deck .order-row small { font: 500 11px/1.4 var(--dk-mono); letter-spacing: 0; }
+body.deck .order-row.next { background: linear-gradient(90deg, rgba(56, 212, 255, 0.1), transparent 70%); box-shadow: none; }
+body.deck .order-row .btn { font-family: var(--dk-mono); letter-spacing: 0; }
+body.deck .stepper .n, body.deck .ag-n { font: 700 18px/1 var(--dk-mono); }
+body.deck .ag-rename input, body.deck .bp-name, body.deck #p-difficulty, body.deck #p-checkpoint, body.deck #hud select, body.deck .chat-form input {
+  border-radius: 3px; border: 1px solid var(--dk-cd); background: rgba(0, 0, 0, 0.35); color: #fff; font-family: var(--dk-mono); }
+body.deck .ag-list .btn, body.deck .ag-pickg { justify-content: flex-start; }
+body.deck .ag-h .ag-badge { width: 32px; height: 32px; font-size: 15px; }
+body.deck .tech, body.deck .keep-cell, body.deck .bp-row, body.deck .gs-stats div, body.deck .stat-tile, body.deck .boost-row, body.deck .ms-item, body.deck .ks-group, body.deck .lift-loads .btn {
+  border-radius: 3px; border-color: rgba(56, 212, 255, 0.18); background: rgba(56, 212, 255, 0.04); }
+body.deck .gs-alert, body.deck .road-warn { border-radius: 0; border-left: 2px solid currentColor; }
+
+/* ---- a mode's banner, the selection bar, the control-group chips, the undo chip, the speed menu, tips ---- */
+body.deck #banner-text { font-size: 13.5px; line-height: 1.4; }
+body.deck .selbar { padding: 12px 52px 12px 14px; font-size: 12.5px; line-height: 1.45; color: var(--dk-ink); }
+body.deck .selbar b { color: var(--good); font: 700 15px/1.25 var(--dk-disp); letter-spacing: 0.03em; }
+body.deck .selbar .muted, body.deck .selbar #sel-status { font-family: var(--dk-mono); font-size: 11.5px; color: var(--dk-mut); }
+body.deck .selbar .hint { color: var(--dk-mut); }
+body.deck .selbar #selbar-clear { top: 8px; right: 8px; width: 44px; height: 44px; padding: 0; }
+body.deck .selbar .sel-tools .btn { font-size: 12px; letter-spacing: 0.05em; }
+body.deck .selbar.touch #selbar-clear { position: static; }
+body.deck .gchip, body.deck .undo-site, body.deck .speed-menu, body.deck .map-tip, body.deck #good-tip, body.deck .now-playing, body.deck .chat-fab {
+  border-radius: 3px; background: var(--dk-pan); border: 1px solid rgba(56, 212, 255, 0.24); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.45); }
+body.deck .gchip { font-family: var(--dk-disp); letter-spacing: 0.04em; }
+body.deck .gchip.on { border-color: var(--good); }
+body.deck .undo-site b { color: var(--dk-c); font-family: var(--dk-disp); text-transform: uppercase; letter-spacing: 0.08em; }
+body.deck .speed-menu button { border-radius: 2px; font-family: var(--dk-mono); }
+body.deck .speed-menu button.on { background: rgba(56, 212, 255, 0.2); color: #fff; box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck .map-tip b, body.deck #good-tip b { font-family: var(--dk-disp); letter-spacing: 0.03em; }
+body.deck .mp-banner { border-radius: 0; }
+body.deck .plan-banner { border-color: var(--warn); }
+body.deck .plan-tag { font-family: var(--dk-disp); letter-spacing: 0.16em; }
+body.deck .br-head b { font: 700 19px/1.2 var(--dk-disp); color: #fff; }
+body.deck .br-state { font: 600 11px/1 var(--dk-disp); letter-spacing: 0.16em; color: var(--warn); }
+body.deck .br-list li { border-radius: 0; background: rgba(56, 212, 255, 0.05); }
+body.deck .chat-log li { font-family: var(--dk-mono); }
+
+/* ---- the Missions' light: amber, the one colour nothing else uses for a button ---- */
+body.deck .tut-glow { animation-name: dktutglow; outline: 2px solid var(--warn); outline-offset: 2px; }
+@keyframes dktutglow {
+  0%, 100% { box-shadow: 0 0 0 5px rgba(255, 196, 87, 0.16), 0 0 14px rgba(255, 196, 87, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 196, 87, 0.26), 0 0 22px rgba(255, 196, 87, 0.6); }
+}
+@media (prefers-reduced-motion: reduce) { body.deck .tut-glow { animation: none; box-shadow: 0 0 0 5px rgba(255, 196, 87, 0.2), 0 0 16px rgba(255, 196, 87, 0.45); } }
+
+/* ---- the screens over a game: the pause menu and Settings, Statistics, How to play, Missions, Keys, the end, Boosts,
+   the multiplayer lobby, saves ---- */
+body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) {
+  background: rgba(3, 7, 11, 0.66); }
+body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) :is(h2, h3) {
+  font-family: var(--dk-disp); font-weight: 700; letter-spacing: 0.02em; }
+body.deck :is(#screen-pause, #screen-boost, #screen-missions, #screen-records, #screen-stats, #screen-keys, #screen-help, #screen-lore, #screen-feedback, #screen-saves, #screen-cloud, #screen-over, #screen-mp) h2 { color: #fff; }
+body.deck :is(#screen-missions, #screen-stats, #screen-help, #screen-lore, #screen-records) h3, body.deck .ks-group h3 { color: var(--dk-c); }
+body.deck :is(#screen-pause, #screen-stats, #screen-over, #screen-mp, #screen-boost) .hint, body.deck .mode-desc, body.deck .chart-block .sub { color: var(--dk-mut); }
+body.deck .p-head { align-items: center; }
+body.deck .p-head .sh-eye, body.deck .p-set-head .sh-eye { margin-bottom: 4px; }
+body.deck .p-label { display: flex; align-items: center; gap: 8px; font: 600 11px/1.2 var(--dk-disp); letter-spacing: 0.16em; color: var(--dk-c); }
+body.deck .p-label::after { content: ''; flex: 1; height: 1px; background: var(--dk-cl); }
+body.deck .p-save .p-label { margin-top: 4px; }
+body.deck .p-box { border: 0; border-radius: 0; background: transparent; padding: 0; }
+body.deck .p-box > :not([hidden]) ~ :not([hidden]) { border-top: var(--dk-dash); }
+body.deck .p-sw { font: 600 10.5px/1 var(--dk-disp); letter-spacing: 0.14em; text-transform: uppercase; }
+body.deck .p-sw i { width: 38px; height: 20px; border-radius: 2px; border: 1px solid var(--dk-cd); background: rgba(0, 0, 0, 0.35); }
+body.deck .p-sw i::after { top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 0; background: #4a5d6a; }
+body.deck .p-sw-row[aria-checked="true"] .p-sw i { border-color: var(--dk-c); background: rgba(56, 212, 255, 0.15); }
+body.deck .p-sw-row[aria-checked="true"] .p-sw i::after { transform: translateX(18px); background: var(--dk-c); box-shadow: 0 0 6px var(--dk-c); }
+body.deck .slider-row output, body.deck .gfx-row output { font-family: var(--dk-mono); color: var(--dk-c); }
+body.deck .slider-row input { accent-color: var(--dk-c); }
+body.deck .p-mods { font-family: var(--dk-mono); font-size: 12px; }
+body.deck #p-saved, body.deck #p-checkpoint-hint, body.deck .gfx-note { font-family: var(--dk-mono); color: var(--dk-mut); }
+body.deck .stat-tile span, body.deck .gs-stats span { font: 600 10.5px/1.3 var(--dk-disp); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dk-mut); }
+body.deck .stat-tile b, body.deck .gs-stats b, body.deck .stats span:nth-child(even) { font-family: var(--dk-mono); }
+body.deck .pick-row button, body.deck .help-toc a, body.deck #screen-mp .chips button { border-radius: 2px; border-color: var(--dk-cl); }
+body.deck .pick-row button.on { background: rgba(56, 212, 255, 0.16); border-color: var(--dk-c); color: #fff; }
+body.deck .help-toc a:hover { border-color: var(--dk-c); }
+body.deck .ms-num { border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: var(--dk-c); color: #031620; font-family: var(--dk-mono); }
+body.deck .ms-name { font-family: var(--dk-disp); letter-spacing: 0.03em; }
+body.deck .ms-meta, body.deck .ms-done { font-family: var(--dk-mono); }
+body.deck .ms-item.next { border-color: var(--dk-c); background: rgba(56, 212, 255, 0.1); }
+body.deck .help-body kbd, body.deck .obj-hint kbd { border-radius: 2px; border-bottom-width: 1px; font-family: var(--dk-mono); }
+body.deck .touch-card { border-radius: 0; border-width: 0 0 0 2px; }
+body.deck .code-box { border-radius: 0; }
+body.deck .code-box b { font-family: var(--dk-mono); }
+body.deck .keys-card, body.deck .card.missions-card, body.deck .card.stats-card { background-color: var(--dk-pan); }
+body.deck .ks-head { border-bottom-color: var(--dk-cl); }
+body.deck .ks-row + .ks-row { border-top: var(--dk-dash); }
+body.deck .mp-players li { border-radius: 2px; }
+
+/* ---- an upright phone: thinner frames; a panel docks above the tools, which stay in view with the one in use lit ---- */
+@media (max-width: 699px) and (min-height: 520px) {
+  body.deck { --dk-bk: 9px; --dk-bw: 1px; }
+  body.deck #topbar { padding-left: calc(var(--safe-l) + 10px); padding-right: calc(var(--safe-r) + 10px); padding-top: calc(var(--safe-t) + 10px); }
+  body.deck .res-chip, body.deck .goods.two-rows .res-chip { min-height: 32px; font-size: 14px; }
+  body.deck .toprow .chip { min-height: 44px; }
+  body.deck #pop { flex: 1; gap: 9px; }
+  body.deck #pop .pn-free { display: none; }
+  body.deck #sheet { bottom: calc(var(--safe-b) + 64px); border-width: 1px 0; border-radius: 0; z-index: 9;
+    max-height: calc(46vh - 30px); max-height: calc(46dvh - 30px); }
+  body.deck #sheet.full { max-height: calc(100vh - var(--hud-top, 130px) - 64px - var(--safe-b)); max-height: calc(100dvh - var(--hud-top, 130px) - 64px - var(--safe-b)); }
+  body.deck #sheet-body { padding-bottom: 16px; }
+  body.deck .sheet-close { top: 16px; }
+  body.deck .sheet-title h3 { font-size: 19px; }
+  body.deck.sheet-open #bottombar { display: grid; }
+}
+@media (min-width: 1000px) and (min-height: 520px) {
+  body.deck .build-tabs button { flex-direction: column; gap: 5px; min-height: 48px; }
+  body.deck .build-tabs kbd { height: 15px; min-width: 15px; padding: 0 3px; font-size: 9.5px; line-height: 13px; }
+}
+@media (orientation: landscape) and (max-height: 519px) {
+  body.deck .toast[data-t]::before { display: none; }
+  body.deck .toast.lost[data-t]::before { display: inline; content: '\26A0\FE0E'; }
+}
+/* (a narrower wide screen, a tablet: the tools as wide as their names, so the dock fits beside an open panel) */
+@media (min-width: 1000px) and (max-width: 1299px) and (min-height: 520px) {
+  body.deck .tool { min-width: 0; padding: 0 12px; letter-spacing: 0.06em; }
+  body.deck .tool kbd { display: none; }
+}
+.army-cmds .ag-open { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+.army-cmds .ag-open .ag-badge { width: 20px; height: 20px; font-size: 11px; }
+body.deck #sheet .btn.primary[data-key]::after { color: #031620; border-color: rgba(3, 22, 32, 0.45); background: transparent; opacity: 0.8; }
+/* (the Paths banner on a phone, upright or on its side: tighter words on its buttons, so the row of tools keeps its room) */
+@media (max-width: 699px) and (min-height: 520px), (orientation: landscape) and (max-height: 519px) {
+  body.deck.mode-road #banner .banner-actions .btn { letter-spacing: 0.02em; padding-left: 8px; padding-right: 8px; font-size: 12px; }
+  body.deck.mode-road #banner .banner-actions .road-seg button { letter-spacing: 0.02em; }
+}
+body.deck #banner-text details.how summary, body.deck #banner-text details.how[open] { border-radius: 0; background: var(--dk-pan); border-color: rgba(56, 212, 255, 0.22); }
+@media (pointer: coarse) and (min-height: 520px) { body.deck .toprow .chip { min-height: 44px; } }
+/* (with a mouse the multiplayer and Plan banners keep their slim height: they sit over the map) */
+@media (pointer: fine) { body.deck #hud .mp-banner .btn { min-height: 30px; padding-top: 4px; padding-bottom: 4px; } }
