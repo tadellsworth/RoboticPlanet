@@ -94,8 +94,21 @@ how goods move.
   the person has something to do. Auto-resolve (`contOdds`) weighs each side's strength (`contPower`: kit warbots by
   rank, Heavier Kit, fortification ×(1 + 0.15 a level), home, cold or island or lunar ground, an ally next door,
   refits, supply lines, a battle card, the difficulty for rivals and `CONT.playedEdge` 0.92 for yours) to the power
-  2.2. Saving: `contSave` / `contLoad` (JSON with an FNV checksum and a shape check: a corrupt save is refused), one
-  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw
+  2.2. Saving: `contSave` / `contLoad` (JSON with an FNV checksum and a shape check: a corrupt save is refused), kept
+  as **campaigns**: up to `CONT.slots` (5) runs on this device, each under `terrafall.contingency.slot.<id>`, with an
+  index (`terrafall.contingency.slots`: the active campaign, and a line each: seed, callsign, difficulty, year,
+  territories, Ironman, a battle under way, last played; `contSlots`, `contSlotInfo`). `contStore` and `contRestore`
+  work on the active campaign (`contSlotUse`, `contSlotNew`, `contSlotDelete`, `contSlotRun`); the old single save
+  (`terrafall.contingency`) becomes campaign 1 the first time the index is read. A battle's match carries its campaign
+  (`S.contingency.slot`), and `contBattleOver` makes that campaign active again (or the one with its run's seed) before
+  the result goes back. The match saves in the normal game save; when another campaign's battle would overwrite one
+  there, `contPlayBattle` keeps it beside its campaign (`terrafall.contingency.slot.<id>.battle`) and puts it back when
+  that campaign plays on (`contBattleWaiting` shows Resume). Files: `contFileText` / `contFromFile`
+  (`{ terrafall, kind: 'contingency', save }`; an Ironman campaign is never written to or read from one). **The
+  Campaigns screen** (`cgSlotsSheet`) is the first sheet `openContingency()` shows (the new-run sheet when there are
+  none; `openContingency(true)`, after a battle, goes straight back to its campaign): Continue, Delete (confirmed), Save
+  to file, New campaign (`cgReplace` first when every slot is taken), Load from file (`#cg-import-file`, `cgImport`);
+  the globe's top bar has **Campaigns** (`#cg-camps`, `cgToCampaigns`). Headless test: `lh/cg-slots-test.js`. **The screens** draw
   Ithaca I as a planet seen from orbit (`js/contingency-draw.js`, only when something changes; turned by drag, swipe,
   wheel or the arrow keys): over the stars (`#cg-stars`), a WebGL canvas just round the globe (`#cg-gl`, `cglRender`:
   one fragment shader samples `art/globe/ithaca-2048.webp`, or `ithaca-4096.webp` once the globe is over `CGL.hdAt`
@@ -152,8 +165,8 @@ how goods move.
   nest wins one, as does the hold.
   The first turn of a run shows a four-step walkthrough (`cgCoach`, `#cg-coach`: turning the globe, moving a group,
   Spend and the Uplinks, End turn and the battles), moved on by Next or by the first order, ended by Skip or End turn
-  and remembered on the device (`terrafall.contingency.coach`). The main menu's Campaigns card reads the run's line
-  from `contingencyMenuLine()` ("Year T+7 · COBALT · 11 of 28 territories · 2 Uplinks").
+  and remembered on the device (`terrafall.contingency.coach`). The main menu's Campaigns card reads the line of the
+  campaign last played from `contingencyMenuLine()` ("Year T+7 · COBALT · 11 of 28 territories · 2 Uplinks · 3 campaigns").
   A kit's warbots come in waves (`CONT_WAVES`): 4 with the base (6 for the defender), the rest half at 3 minutes and
   half at 6 (`S.contingency.waves`, `waveN`, checked by `checkSave`), so a high rank doesn't flatten a landing in the
   first minutes. Battle length: `lh/contingency-length-test.js` plays battles through the bridge with the computer on

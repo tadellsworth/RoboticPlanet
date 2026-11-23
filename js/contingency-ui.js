@@ -20,20 +20,41 @@ const CG = { pick: -1, pickTo: -1, coach: -1, run: null, on: false, yaw: 0, pitc
 const CG_RES_ICON = { ore: 'Ore', fiber: 'Fiber', stone: 'Stone', crude: 'Crude', fuel: 'Fuel', crystal: 'Crystal' };
 const CG_REGION_SHAPES_NOTE = 'Each battle is a Terrafall match on the territory\'s ground.';
 
-/** The one way in: the main menu's Contingency button. Continue a run, or start one. */
-function openContingency() {
+/**
+ * The one way in: the main menu's Contingency button, to the Campaigns screen (or, with none saved, a new run). After
+ * a battle, resume: straight back to the campaign it belongs to (contBattleOver makes that one active first).
+ */
+function openContingency(resume) {
   if (typeof audioUnlock === 'function') audioUnlock();
   const scr = $('screen-contingency');
   scr.hidden = false;
   $('screen-menu').hidden = true;
   CG.on = true;
   cgInit();
-  const run = contRestore();
-  CG.run = run && run.phase !== 'over' ? run : null;
-  if (CG.run) { cgFace(CG.run.sides[0].home); cgAfter(); } else cgSheet('new');
+  CG.run = null; CG.confirm = 0; CG.replace = 0; CG.pending = null;
+  const run = resume ? contRestore() : null;
+  if (run) cgOpenRun(run);
+  else { cgSync(); cgSheet(contSlots().list.length ? 'slots' : 'new'); }
   cgMusic();
   cgResize();
   cgLoop();
+}
+/** Carry on with this run (the active campaign's): to the globe, and whatever it waits on. */
+function cgOpenRun(run) {
+  CG.run = run; CG.sel = -1; CG.group = 0; CG.pick = -1; CG.pickTo = -1; CG.note = '';
+  cgFace(run.sides[0].home);
+  cgSheet(null);
+  cgAfter();
+  cgMusic();
+}
+/** The top bar's Campaigns: leave this run (saved already) for the Campaigns screen. */
+function cgToCampaigns() {
+  cgSave();
+  CG.run = null; CG.sel = -1; CG.group = 0; CG.pick = -1; CG.pickTo = -1; CG.confirm = 0; CG.replace = 0; CG.pending = null; CG.note = '';
+  $('cg-coach').hidden = true; CG.coach = -1;
+  cgSync();
+  cgSheet('slots');
+  cgMusic();
 }
 /** Back to the main menu (the run is saved already). */
 function closeContingency() {
@@ -71,6 +92,8 @@ function cgInit() {
   $('cg-spend').onclick = () => { sfx('click'); cgSheet('spend'); };
   $('cg-report').onclick = () => { sfx('click'); cgSheet('report'); };
   $('cg-exit').onclick = () => { sfx('click'); closeContingency(); };
+  $('cg-camps').onclick = () => { sfx('click'); cgToCampaigns(); };
+  $('cg-import-file').onchange = () => { const f = $('cg-import-file').files && $('cg-import-file').files[0]; $('cg-import-file').value = ''; if (f) cgImport(f); };
   $('cg-help').onclick = () => { sfx('click'); cgHelp(); };
   $('cg-battles').onclick = () => { sfx('click'); cgSheet('battle'); };
 }
@@ -343,8 +366,9 @@ function cgKey(e) {
   if (e.key === 'Escape') {
     e.preventDefault();
     if (CG.pick >= 0) { CG.pick = -1; CG.pickTo = -1; cgSync(); return; } // (aiming a weapon: put it down)
-    if (CG.sheet && CG.sheet !== 'new' && CG.sheet !== 'battle') cgSheet(null);
-    else if (CG.sheet === 'new' && CG.run) cgSheet(null);
+    if (CG.sheet === 'slots') closeContingency();
+    else if ((CG.sheet === 'new' || CG.sheet === 'replace') && !CG.run) cgSheetAct('back', {});
+    else if (CG.sheet && CG.sheet !== 'new' && CG.sheet !== 'battle' && CG.sheet !== 'over') cgSheet(null);
     else if (CG.group) { CG.group = 0; cgSync(); }
     else if (CG.sel >= 0) { CG.sel = -1; cgSync(); }
     else closeContingency();
@@ -375,7 +399,7 @@ function cgTap(t) {
 
 /* ------------------------------------------------------------------ the bars and the territory card */
 
-function cgSave() { if (CG.run) contStore(CG.run); }
+function cgSave() { if (CG.run && CG.run.phase !== 'over') contStore(CG.run); } // (a run that's over is forgotten: cgAfter)
 /** After every step of the engine: save, redraw, and open what the person has to see or do next. */
 function cgAfter() {
   const run = CG.run;
@@ -514,7 +538,7 @@ function cgSheet(kind) {
   const el = $('cg-sheet'), box = $('cg-sheet-box');
   el.hidden = !kind;
   if (!kind) { cgSync(); return; }
-  const html = { new: cgNewRun, spend: cgSpend, battle: cgBattle, report: cgReport, offer: cgOffer, over: cgOver }[kind]();
+  const html = { slots: cgSlotsSheet, replace: cgReplace, new: cgNewRun, spend: cgSpend, battle: cgBattle, report: cgReport, offer: cgOffer, over: cgOver }[kind]();
   box.innerHTML = html;
   box.scrollTop = 0;
   box.querySelectorAll('[data-x]').forEach((b) => { b.onclick = () => cgSheetAct(b.dataset.x, b.dataset); });
@@ -522,13 +546,98 @@ function cgSheet(kind) {
   if (first) first.focus({ preventScroll: true });
 }
 
-/** The new-run screen: Continue, or your callsign, the difficulty and the Advanced options. */
+/* ------------------------------------------------------------------ the Campaigns screen */
+
+/** A campaign's line: callsign, year, territories, difficulty, Ironman, a battle under way. */
+function cgSlotLine(x) {
+  const diff = DIFFICULTY[x.diff] ? DIFFICULTY[x.diff].label : x.diff;
+  return `T+${x.turn} · ${x.held} ${x.held === 1 ? 'territory' : 'territories'} · ${esc(diff)}${x.iron ? ' · Ironman' : ''}${x.playing ? ' · a battle under way' : ''}`;
+}
+function cgWhen(at) {
+  if (!at) return '';
+  const d = new Date(at), now = new Date(), pad = (n) => String(n).padStart(2, '0');
+  const day = d.toDateString() === now.toDateString() ? 'today' : d.toDateString() === new Date(now - 864e5).toDateString() ? 'yesterday' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+  return `${day}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+/** The Campaigns screen: every campaign on this device (Continue, Delete, Save to file), New campaign, Load from file. */
+function cgSlotsSheet() {
+  const ix = contSlots(), list = ix.list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
+  let h = '<header class="cg-sh-head"><h2>Campaigns <small>' + list.length + ' of ' + CONT.slots + '</small></h2><button type="button" class="btn small ghost cg-tap" data-x="back">Main menu</button></header>';
+  h += `<p class="cg-lede">Each campaign is its own war for Ithaca I, saved after every step. Keep up to ${CONT.slots} on this device, and switch between them from the globe's <b>Campaigns</b> button.</p>`;
+  h += '<ul class="cg-list cg-slots">';
+  for (const x of list) {
+    const name = CONT_CS_NAMES[x.cs] || '?';
+    h += `<li class="cg-slot${x.id === ix.active ? ' on' : ''}" style="--c:${CONT_CS_COLORS[x.cs] || '#8a8f99'}"><span class="cg-slot-what"><b>${name}</b><span>${cgSlotLine(x)}</span><small>Last played ${esc(cgWhen(x.at))}</small></span>`;
+    if (CG.confirm === x.id) {
+      h += `<span class="cg-slot-btns"><span class="cg-slot-ask">Delete ${name}, T+${x.turn}? It can't be undone.</span><button type="button" class="btn danger cg-tap" data-x="del-yes" data-id="${x.id}">Delete</button><button type="button" class="btn ghost cg-tap cg-focus" data-x="del-no">Keep it</button></span>`;
+    } else {
+      h += `<span class="cg-slot-btns"><button type="button" class="btn primary cg-tap${x.id === ix.active ? ' cg-focus' : ''}" data-x="slot-go" data-id="${x.id}">Continue</button>`;
+      if (!x.iron) h += `<button type="button" class="btn ghost cg-tap" data-x="slot-file" data-id="${x.id}" aria-label="Save ${name} T+${x.turn} to a file">Save to file</button>`;
+      h += `<button type="button" class="btn ghost cg-tap" data-x="del" data-id="${x.id}" aria-label="Delete ${name} T+${x.turn}">Delete</button></span>`;
+    }
+    h += '</li>';
+  }
+  h += '</ul>';
+  if (!list.length) h += '<p class="hint">No campaigns yet.</p>';
+  h += `<div class="cg-btns"><button type="button" class="btn big ${list.length ? '' : 'primary cg-focus'} cg-tap" data-x="new-camp">New campaign</button><button type="button" class="btn big ghost cg-tap" data-x="load-file">Load from file</button></div>`;
+  if (list.length >= CONT.slots) h += `<p class="hint">All ${CONT.slots} slots are taken: a new campaign replaces one, and you pick which.</p>`;
+  if (CG.note) h += `<p class="cg-note" role="status">${esc(CG.note)}</p>`;
+  return h;
+}
+/** Every slot is taken: which campaign does the new one (or the one loaded from a file) replace? */
+function cgReplace() {
+  const list = contSlots().list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
+  let h = `<header class="cg-sh-head"><h2>Replace a campaign</h2><button type="button" class="btn small ghost cg-tap" data-x="back">Cancel</button></header>`;
+  h += `<p class="cg-lede">All ${CONT.slots} campaign slots are full. Which campaign should ${CG.pending ? 'the one from the file' : 'the new one'} replace? The one you pick is deleted${CG.pending ? '' : ' when the new run starts'}.</p><ul class="cg-list cg-slots">`;
+  for (const x of list) h += `<li class="cg-slot" style="--c:${CONT_CS_COLORS[x.cs] || '#8a8f99'}"><span class="cg-slot-what"><b>${CONT_CS_NAMES[x.cs] || '?'}</b><span>${cgSlotLine(x)}</span><small>Last played ${esc(cgWhen(x.at))}</small></span><span class="cg-slot-btns"><button type="button" class="btn danger cg-tap" data-x="replace" data-id="${x.id}">Replace</button></span></li>`;
+  return h + '</ul>';
+}
+/** A campaign to a file (terrafall-contingency-<callsign>-T<year>-<date>.json), as the pause menu's Save → File does. */
+async function cgExport(id) {
+  const run = contSlotRun(id);
+  if (!run || run.opts.ironman) return;
+  const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+  const name = `terrafall-contingency-${CONT_CS_NAMES[run.sides[0].cs].toLowerCase()}-T${run.turn}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+  const text = contFileText(run), ok = `Saved ${name}: load it here with Load from file, on any device.`;
+  const say = (m) => { CG.note = m; if (CG.sheet === 'slots') cgSheet('slots'); };
+  let dl = null;
+  try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+  if (dl) {
+    try { await dl.save({ filename: name, data: text }); say(ok); } catch (e) {
+      const c = e && e.code;
+      say(c === 'declined' ? 'Download cancelled.' : c === 'rate_limited' ? 'A download is already waiting for your OK.' : plainDownload(name, text) ? ok : 'Downloads aren\'t possible here.');
+    }
+    return;
+  }
+  say(plainDownload(name, text) ? ok : 'Downloads aren\'t possible here.');
+}
+/** A campaign file picked with Load from file: a new campaign (or, with every slot taken, one you pick to replace). */
+function cgImport(file) {
+  const r = new FileReader();
+  r.onerror = () => { CG.note = 'That file couldn\'t be read.'; cgSheet('slots'); };
+  r.onload = () => {
+    const run = contFromFile(r.result);
+    if (!run) { CG.note = 'That isn\'t a Contingency campaign file (or it\'s from a version this one can\'t read). Ironman campaigns aren\'t saved to files.'; cgSheet('slots'); return; }
+    CG.pending = run;
+    if (contSlotsFull()) { cgSheet('replace'); return; }
+    cgImportDone();
+  };
+  r.readAsText(file);
+}
+function cgImportDone() {
+  const run = CG.pending;
+  CG.pending = null;
+  if (!run || !contSlotNew() || !contStore(run)) { CG.note = 'That campaign couldn\'t be kept on this device (storage full?).'; cgSheet('slots'); return; }
+  CG.note = `Loaded ${CONT_CS_NAMES[run.sides[0].cs]}, T+${run.turn}, as a campaign of its own.`;
+  cgSheet('slots');
+}
+
+/** The new-run screen: your callsign, the difficulty and the Advanced options. */
 const CGN = { cs: 0, diff: 'normal', docs: ['random', 'random', 'random'], murmur: 'normal', events: true, cap: true, ironman: false, seed: '' };
 function cgNewRun() {
-  const saved = contRestore(), cont = saved && saved.phase !== 'over' ? saved : null;
-  let h = '<header class="cg-sh-head"><h2>Contingency</h2><button type="button" class="btn small ghost" data-x="back">Back</button></header>';
+  const rep = CG.replace ? contSlots().list.find((x) => x.id === CG.replace) : null;
+  let h = `<header class="cg-sh-head"><h2>New campaign</h2><button type="button" class="btn small ghost cg-tap" data-x="back">${contSlots().list.length ? 'Campaigns' : 'Back'}</button></header>`;
   h += '<p class="cg-lede">Arrival clock: T+1. The Accord has been ruled void, and every vanguard\'s sealed orders open: <i>secure Ithaca I for us.</i> Take the planet territory by territory, one year a turn, until T+31.</p>';
-  if (cont) h += `<button type="button" class="btn primary big cg-focus" data-x="continue">Continue: T+${cont.turn} · ${CONT_CS_NAMES[cont.sides[0].cs]} · ${contHeld(cont, 0).length} territories</button>`;
   h += '<h3>Your callsign</h3><div class="cg-cs" role="radiogroup" aria-label="Your callsign">';
   CONT_CS_NAMES.forEach((c, k) => {
     const C = CONT_CALLSIGNS[k], card = CONT_CARDS[C.card];
@@ -548,7 +657,7 @@ function cgNewRun() {
   h += `<label class="cg-row"><span>Ironman (one save, no reloading a lost battle)</span><input type="checkbox" id="cg-o-iron" ${CGN.ironman ? 'checked' : ''}></label>`;
   h += `<label class="cg-row"><span>Run seed (blank: a new one)</span><input type="text" inputmode="numeric" id="cg-o-seed" value="${esc(CGN.seed)}" maxlength="10" size="10"></label>`;
   h += '</details>';
-  h += `<button type="button" class="btn ${cont ? '' : 'primary'} big ${cont ? '' : 'cg-focus'}" data-x="start">${cont ? 'Start a new run (ends the one in progress)' : 'Start the run'}</button>`;
+  h += `<button type="button" class="btn primary big cg-focus" data-x="start">${rep ? `Start the run (replaces ${CONT_CS_NAMES[rep.cs]}, T+${rep.turn})` : 'Start the run'}</button>`;
   return h;
 }
 function cgReadNew() {
@@ -633,7 +742,7 @@ function cgBattle() {
   h += '</ul><p class="hint">The odds are auto-resolve\'s: a seeded roll on them, set a little below what playing it well gets you.</p>';
   const hand = run.sides[0].cards.filter((k) => CONT_CARDS[k].battle);
   if (hand.length && !b.cards[0]) h += `<div class="cg-buyrow"><select id="cg-bcard" aria-label="A card for this battle">${hand.map((k) => `<option value="${k}">${CONT_CARDS[k].name}</option>`).join('')}</select><button type="button" class="btn small" data-x="bcard">Play this card</button></div>`;
-  const live = typeof contPlayBattle === 'function', resume = live && run.playing === b.id && contSavedBattle();
+  const live = typeof contPlayBattle === 'function', resume = live && contBattleWaiting(run, b);
   h += `<div class="cg-btns"><button type="button" class="btn big ${live ? 'primary cg-focus' : ''}" data-x="play">${resume ? 'Resume the battle' : live ? 'Play' : 'Play (battles coming soon: auto-resolves for now)'}</button>${resume && run.opts.ironman ? '' : `<button type="button" class="btn big ${live ? '' : 'primary cg-focus'}" data-x="auto">Auto-resolve</button>`}</div>${resume && run.opts.ironman ? '<p class="hint">Ironman: this battle has begun, so it is played to its end (or withdrawn from).</p>' : ''}`;
   if (CG.lastBattle) h += `<p class="cg-note" role="status">${esc(CG.lastBattle)}</p>`;
   return h;
@@ -663,16 +772,37 @@ function cgOver() {
   const run = CG.run, R = run.reports[run.reports.length - 1], won = run.over.winner === 0;
   return `<header class="cg-sh-head"><h2>${won ? 'Ithaca I secured' : run.over.winner < 0 ? 'Carrier dark' : 'The run is over'}</h2></header>
     ${cgLog(R ? R.lines.slice(Math.max(0, R.lines.indexOf('§ The end of the run'))) : contEnding(run))}
-    <div class="cg-btns"><button type="button" class="btn big primary cg-focus" data-x="again">New run</button><button type="button" class="btn big" data-x="back">Main menu</button></div>`;
+    <div class="cg-btns"><button type="button" class="btn big primary cg-focus" data-x="again">New run</button><button type="button" class="btn big" data-x="camps">Campaigns</button><button type="button" class="btn big" data-x="back">Main menu</button></div>`;
 }
 
 function cgSheetAct(x, d) {
   const run = CG.run;
   sfx('click');
   CG.note = '';
-  if (x === 'back') { if (CG.sheet === 'new' && CG.run) { cgSheet(null); return; } closeContingency(); return; }
+  if (x === 'back') {
+    if (CG.sheet === 'new' && CG.run) { cgSheet(null); return; }
+    if ((CG.sheet === 'new' || CG.sheet === 'replace') && contSlots().list.length) { CG.replace = 0; CG.pending = null; cgSheet('slots'); return; }
+    closeContingency(); return;
+  }
+  // the Campaigns screen
+  if (x === 'slot-go') { CG.confirm = 0; if (contSlotUse(+d.id)) { const r = contRestore(); if (r) { cgOpenRun(r); return; } } CG.note = 'That campaign couldn\'t be read.'; cgSheet('slots'); return; }
+  if (x === 'del') { CG.confirm = +d.id; cgSheet('slots'); return; }
+  if (x === 'del-no') { CG.confirm = 0; cgSheet('slots'); return; }
+  if (x === 'del-yes') {
+    const id = +d.id, sb = typeof contSavedBattle === 'function' && contSavedBattle(), r = contSlotRun(id);
+    if (sb && r && sb.run === r.seed && (!sb.slot || sb.slot === id)) clearSave(); // (its battle in the normal save goes with it)
+    contSlotDelete(id); CG.confirm = 0; CG.note = 'Campaign deleted.';
+    cgSheet(contSlots().list.length ? 'slots' : 'new'); return;
+  }
+  if (x === 'slot-file') { cgExport(+d.id); return; }
+  if (x === 'load-file') { $('cg-import-file').click(); return; }
+  if (x === 'new-camp') { CG.confirm = 0; CG.replace = 0; CG.pending = null; cgSheet(contSlotsFull() ? 'replace' : 'new'); return; }
+  if (x === 'replace') {
+    if (CG.pending) { contSlotDelete(+d.id); cgImportDone(); return; }
+    CG.replace = +d.id; cgSheet('new'); return;
+  }
   if (x === 'close') { cgSheet(null); cgAfter(); return; }
-  if (x === 'continue') { CG.run = contRestore(); cgFace(CG.run.sides[0].home); cgSheet(null); cgAfter(); return; }
+  if (x === 'camps') { CG.run = null; cgSync(); cgSheet('slots'); return; }
   if (x === 'cs' || x === 'diff' || x === 'murmur') {
     cgReadNew();
     if (x === 'cs') CGN.cs = +d.k; else if (x === 'diff') CGN.diff = d.k; else CGN.murmur = d.k;
@@ -683,6 +813,8 @@ function cgSheetAct(x, d) {
   }
   if (x === 'start') {
     cgReadNew();
+    if (CG.replace) { contSlotDelete(CG.replace); CG.replace = 0; }
+    if (!contSlotNew()) { cgSheet('replace'); return; }
     const seed = CGN.seed ? (+CGN.seed >>> 0) || 1 : (Math.floor(Math.random() * 0xffffffff) >>> 0) || 1;
     CG.run = contNewRun({ seed, callsign: CGN.cs, difficulty: CGN.diff, doctrines: CGN.docs, murmur: CGN.murmur, events: CGN.events, turnCap: CGN.cap, ironman: CGN.ironman });
     CG.sel = CG.run.sides[0].home; CG.group = 0;
@@ -717,7 +849,7 @@ function cgSheetAct(x, d) {
     return;
   }
   if (x === 'yes' || x === 'no') { contAnswer(run, 0, x === 'yes'); cgSave(); if (run.offers.length) cgSheet('offer'); else cgSheet(null); return; }
-  if (x === 'again') { CG.run = null; cgSheet('new'); return; }
+  if (x === 'again') { CG.run = null; CG.replace = 0; cgSheet(contSlotsFull() ? 'replace' : 'new'); return; }
   cgSave();
   if (CG.sheet === 'spend') cgSheet('spend');
   cgSync();
@@ -759,12 +891,12 @@ function cgCoach(k) {
 }
 function cgCoachDone() { try { localStorage.setItem(CG_COACH_KEY, '1'); } catch (e) { /* storage unavailable */ } $('cg-coach').hidden = true; CG.coach = -1; }
 
-/** The main menu's Campaigns card line for Contingency: the run in progress, if there is one. */
+/** The main menu's Campaigns card line for Contingency: the campaign last played (and how many there are), if any. */
 function contingencyMenuLine() {
-  const run = contRestore();
+  const ix = contSlots(), n = ix.list.length, run = contRestore() || (n ? contSlotRun(ix.list.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0].id) : null);
   if (!run || run.phase === 'over') return null;
   const held = contHeld(run, 0).length, up = contUplinksToward(run, 0);
-  return `Year T+${run.turn} · ${CONT_CS_NAMES[run.sides[0].cs]} · ${held} of ${CONT_MAP.n} territories${up ? ` · ${up} Uplink${up > 1 ? 's' : ''}` : ''}${run.playing ? ' · a battle under way' : ''}`;
+  return `Year T+${run.turn} · ${CONT_CS_NAMES[run.sides[0].cs]} · ${held} of ${CONT_MAP.n} territories${up ? ` · ${up} Uplink${up > 1 ? 's' : ''}` : ''}${run.playing ? ' · a battle under way' : ''}${n > 1 ? ` · ${n} campaigns` : ''}`;
 }
 
 /* ------------------------------------------------------------------ your weapons: aiming the Lance and the Ray */

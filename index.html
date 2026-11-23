@@ -628,8 +628,8 @@
 <!-- Contingency (CONTINGENCY.md): the globe campaign, conquering Ithaca I territory by territory, a year a turn. The engine is
      js/contingency.js and these screens js/contingency-ui.js (openContingency, from the main menu's #m-contingency): the globe
      (#cg-globe, over the stars #cg-stars and the planet #cg-gl: js/contingency-draw.js), its top bar (the Arrival clock, Reserve, the Uplinks and their countdown, the Murmur meter), the territory
-     card (#cg-card), the foot (Spend, the year report, End turn) and one sheet at a time over them (#cg-sheet: the new run,
-     Spend, a battle, the report, an offer). -->
+     card (#cg-card), the foot (Spend, the year report, End turn) and one sheet at a time over them (#cg-sheet: the
+     Campaigns screen, the new run, Spend, a battle, the report, an offer). -->
 <div id="screen-contingency" class="screen cg" role="dialog" aria-modal="true" aria-label="Contingency" tabindex="-1" hidden>
   <canvas id="cg-stars" aria-hidden="true"></canvas>
   <canvas id="cg-gl" aria-hidden="true"></canvas>
@@ -637,6 +637,9 @@
   <header class="cg-top" id="cg-top" hidden>
     <button type="button" class="btn small ghost cg-exit" id="cg-exit" aria-label="Back to the main menu (the run is saved)">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Menu</span>
+    </button>
+    <button type="button" class="btn small ghost cg-camps" id="cg-camps" aria-label="Campaigns: switch, start or delete a campaign (this one is saved)">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span>Campaigns</span>
     </button>
     <span class="cg-chip cg-clockchip" title="Arrival clock"><small>Arrival clock</small><b id="cg-clock">T+1</b></span>
     <span class="cg-chip" title="Reserve: the Carrier's stock. It comes in each year from the territories you hold."><small>Reserve</small><b id="cg-reserve">0</b><i id="cg-reserve-inc"></i></span>
@@ -656,6 +659,8 @@
   <div class="cg-weapons" id="cg-weapons" role="region" aria-label="Your weapons this year" hidden></div>
   <!-- The first-turn walkthrough (cgCoach): a few steps over the globe, dismissable, remembered on this device. -->
   <div class="cg-coach" id="cg-coach" role="status" aria-live="polite" hidden><p id="cg-coach-text"></p><div class="cg-coach-btns"><span id="cg-coach-n"></span><button type="button" class="btn small ghost" id="cg-coach-skip">Skip</button><button type="button" class="btn small primary" id="cg-coach-next">Next</button></div></div>
+  <!-- Load from file on the Campaigns screen (cgImport). -->
+  <input type="file" id="cg-import-file" accept=".json,application/json" hidden>
   <div class="cg-sheet" id="cg-sheet" hidden><div class="cg-sheet-box card" id="cg-sheet-box" role="document"></div></div>
 </div>
 
@@ -1636,9 +1641,9 @@
 
       <section id="hs-contingency">
         <h3>Contingency: the globe campaign</h3>
-        <p><b>Contingency</b> (on the main menu) is a replayable campaign apart from the Missions: you conquer Ithaca I territory by territory on a turning globe. It starts at T+1, when the Accord is ruled void and every vanguard's sealed orders open: <i>secure Ithaca I for us.</i> One turn is one year on the Arrival clock, and a run lasts until T+31. The run saves itself after every step, in a Contingency slot of its own; <b>Continue</b> picks it up, and the Contingency card in <b>Campaigns</b> shows how the run stands (its year, your territories and Uplinks). The first turn of your first run has a short walkthrough over the globe (<b>Next</b>, or <b>Skip</b>); it isn't shown again on this device.</p>
+        <p><b>Contingency</b> (on the main menu) is a replayable campaign apart from the Missions: you conquer Ithaca I territory by territory on a turning globe. It starts at T+1, when the Accord is ruled void and every vanguard's sealed orders open: <i>secure Ithaca I for us.</i> One turn is one year on the Arrival clock, and a run lasts until T+31. The run saves itself after every step. The first thing you see is the <b>Campaigns</b> screen: up to <b>5 campaigns</b> on this device, a row each with its callsign's colour, the year (T+), the territories held, the difficulty, Ironman, a battle under way and when it was last played. <b>Continue</b> opens one; <b>Delete</b> asks once more, then deletes it; <b>New campaign</b> starts another (with all 5 slots taken it first asks which campaign to replace, and that one goes when the new run starts); <b>Save to file</b> keeps a copy as a file and <b>Load from file</b> brings one back as a campaign of its own, on any device (not for Ironman campaigns). On the globe, <b>Campaigns</b> in the top bar (beside <b>Menu</b>) goes back to that screen at any time: the run is already saved. A battle under way stays with its campaign: switch, play another campaign's battles, and it waits to be resumed, and its result always goes back to its own campaign. The Contingency card in the main menu's <b>Campaigns</b> shows the campaign last played (its year, your territories and Uplinks). The first turn of your first run has a short walkthrough over the globe (<b>Next</b>, or <b>Skip</b>); it isn't shown again on this device.</p>
         <ul class="chain">
-          <li><b>A new run:</b> pick your callsign. Each has a perk in every battle and a card only it has: <b>COBALT</b> (cheaper, faster roads; <i>Road Standard</i>), <b>VERMILION</b> (faster Ore Mines and Smelters; <i>Foundry Surge</i>), <b>VIRIDIAN</b> (faster Bio Farms and Agribots; <i>Reseed</i>) or <b>TYRIAN</b> (better Trade Post rates; <i>Ledger Credit</i>). The other three callsigns are your rivals, each with a doctrine (random, or set in <b>Advanced</b>). The difficulty, Settler to Warlord, sets the rivals in battle and their income on the globe. Advanced also has the Murmur (Off, Normal, Rampant), events, the turn cap, <b>Ironman</b> and a fixed run seed.</li>
+          <li><b>A new run:</b> pick your callsign. Each has a perk in every battle and a card only it has: <b>COBALT</b> (cheaper, faster roads; <i>Road Standard</i>), <b>VERMILION</b> (faster Ore Mines and Smelters; <i>Foundry Surge</i>), <b>VIRIDIAN</b> (faster Bio Farms and Agribots; <i>Reseed</i>) or <b>TYRIAN</b> (better Trade Post rates; <i>Ledger Credit</i>). The other three callsigns are your rivals, each with a doctrine (random, or set in <b>Advanced</b>). The difficulty, Settler to Warlord, sets the rivals in battle and their income on the globe. Advanced also has the Murmur (Off, Normal, Rampant), events, the turn cap, <b>Ironman</b> (the campaign keeps one save: no file copies, no reloading) and a fixed run seed. A run that ends (won or lost) leaves the list; <b>New run</b> on its last page starts another.</li>
           <li><b>The globe:</b> drag or swipe to turn it (or the arrow keys). Its 28 territories are the atlas's (see the Lore guide), each tinted and outlined in its owner's colour; the territory you tapped is outlined in white, and the ones a group can move to (or a weapon can strike, dashed) in yellow. Markers show an Uplink (a diamond), a home (a ring), Command Groups (a pill with their stars), fortification (white squares) and the Murmur (violet dots). Argos, the moon, sits beside the planet: only the Pathfinder's landing site, or an Orbital Lift, launches there (3 Reserve a move, 1 with the Orbital Lift Charter). The Hollow lies under Violet Reach.</li>
           <li><b>Tap a territory</b> for its card: owner, income, specials, fortification, Murmur level, megastructure, the Command Groups there and its borders (land, sea or orbit). The Shoals and the other sea crossings are reached from a coastal territory.</li>
           <li><b>Orders:</b> on a group's row tap <b>Move</b>, then a highlighted territory (on the globe or in the Borders list, which shows your odds), or drag a group's pill on the globe onto a neighbour; tap the group's own territory, or <b>Hold</b>, to keep it there. When your orders are in, tap <b>End turn</b>. Everyone's orders are revealed together and nobody is intercepted on the way.</li>

@@ -25,6 +25,7 @@
 const CONT = {
   version: 1,
   saveKey: 'terrafall.contingency',
+  slots: 5,               // campaigns kept on this device (the Campaigns screen)
   lastTurn: 31,           // T+31: the window (the last turn), when the turn cap is on
   maxTurns: 120,          // (with the turn cap off: a run still ends somewhere)
   groupCost: 14, fortCost: 5, startGroups: 2, groupsPer: 6, maxGroups: 5, maxFort: 3, maxStars: 5,
@@ -1264,7 +1265,7 @@ function contAutoTurn(run) {
   return run.phase;
 }
 
-/* ------------------------------------------------------------------ saving: one Contingency slot */
+/* ------------------------------------------------------------------ saving: the campaigns */
 
 /** A checksum of a string (FNV-1a, 32 bits). */
 function contSum(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
@@ -1295,10 +1296,95 @@ function contValid(run) {
   if (run.logs != null && !(Array.isArray(run.logs) && run.logs.length <= 3 && run.logs.every((k) => ['kestrel', 'survey', 'halvard'].includes(k)))) return false; // (the wrecks' logs recovered: js/landmarks.js)
   return Array.isArray(run.battles) && run.opts && typeof run.opts === 'object';
 }
-/** The Contingency slot in this device's storage (apart from the normal save slots). */
-function contStore(run) { try { localStorage.setItem(CONT.saveKey, contSave(run)); return true; } catch (e) { return false; } }
-function contRestore() { try { const s = localStorage.getItem(CONT.saveKey); return s ? contLoad(s) : null; } catch (e) { return null; } }
-function contForget() { try { localStorage.removeItem(CONT.saveKey); } catch (e) { /* storage unavailable */ } }
+/*
+ * The campaigns on this device: up to CONT.slots runs, each in a storage key of its own (CONT.saveKey + '.slot.' + id),
+ * with a small index (CONT.saveKey + '.slots': { active, list: [{ id, cs, diff, turn, held, iron, at }] }) for the
+ * Campaigns screen. contStore and contRestore work on the active campaign. A run saved before there were campaigns (the
+ * one key CONT.saveKey) becomes campaign 1 the first time the index is read. A battle in progress lives in the normal
+ * game save (SAVE_KEY) as any game does; one from another campaign that would be overwritten is kept beside its
+ * campaign (contSlotKey(id) + '.battle') until that campaign plays it again (js/contingency-battle.js).
+ */
+const CONT_SLOTS_KEY = CONT.saveKey + '.slots';
+function contSlotKey(id) { return `${CONT.saveKey}.slot.${id}`; }
+function contLS() { try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch (e) { return null; } }
+/** The index of campaigns (migrating the old single save into campaign 1 the first time). */
+function contSlots() {
+  const L = contLS();
+  if (!L) return { active: 0, list: [] };
+  let ix = null;
+  try { ix = JSON.parse(L.getItem(CONT_SLOTS_KEY) || 'null'); } catch (e) { ix = null; }
+  if (ix && Array.isArray(ix.list)) { ix.list = ix.list.filter((x) => x && Number.isInteger(x.id) && x.id > 0); return ix; }
+  ix = { active: 0, list: [] };
+  try {
+    const old = L.getItem(CONT.saveKey), run = old ? contLoad(old) : null;
+    if (run && run.phase !== 'over') { L.setItem(contSlotKey(1), old); ix.list.push(contSlotInfo(1, run)); ix.active = 1; }
+    L.setItem(CONT_SLOTS_KEY, JSON.stringify(ix));
+    if (old) L.removeItem(CONT.saveKey);
+  } catch (e) { /* storage unavailable or full */ }
+  return ix;
+}
+function contSlotsPut(ix) { try { contLS().setItem(CONT_SLOTS_KEY, JSON.stringify(ix)); return true; } catch (e) { return false; } }
+/** A campaign's line in the index: callsign, difficulty, year, territories held, Ironman, when last played. */
+function contSlotInfo(id, run) {
+  return { id, seed: run.seed, cs: run.sides[0].cs, diff: run.opts.difficulty || 'normal', turn: run.turn, held: contHeld(run, 0).length, iron: !!run.opts.ironman, playing: !!run.playing, at: Date.now() }; // lint-ok: when last played, for the Campaigns screen (not the run)
+}
+/** The active campaign's id (0: none). */
+function contSlotActive() { return contSlots().active || 0; }
+/** Make campaign id the active one (false if there's no such campaign). */
+function contSlotUse(id) {
+  const ix = contSlots();
+  if (!ix.list.some((x) => x.id === id)) return false;
+  ix.active = id;
+  return contSlotsPut(ix);
+}
+/** Room for another campaign? */
+function contSlotsFull() { return contSlots().list.length >= CONT.slots; }
+/** A new, empty campaign made active (its run comes with the next contStore); 0 if every slot is taken. */
+function contSlotNew() {
+  const ix = contSlots();
+  if (ix.list.length >= CONT.slots) return 0;
+  const id = ix.list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  ix.active = id;
+  contSlotsPut(ix);
+  return id;
+}
+/** Campaign id's run (or null). */
+function contSlotRun(id) { try { const s = contLS().getItem(contSlotKey(id)); return s ? contLoad(s) : null; } catch (e) { return null; } }
+/** The campaign whose run has this seed (0: none). */
+function contSlotOfSeed(seed) { const x = contSlots().list.find((y) => y.seed === seed); return x ? x.id : 0; }
+/** Delete campaign id: its run, any battle kept beside it, its line in the index. */
+function contSlotDelete(id) {
+  const ix = contSlots(), L = contLS();
+  ix.list = ix.list.filter((x) => x.id !== id);
+  if (ix.active === id) ix.active = 0;
+  try { L.removeItem(contSlotKey(id)); L.removeItem(contSlotKey(id) + '.battle'); } catch (e) { /* storage unavailable */ }
+  return contSlotsPut(ix);
+}
+/** The active campaign's run saved (with no campaign active, a new one is made, if there's room). */
+function contStore(run) {
+  try {
+    const ix = contSlots();
+    let id = ix.active && ix.list.some((x) => x.id === ix.active) ? ix.active : 0;
+    if (!id) { if (ix.list.length >= CONT.slots) return false; id = ix.list.reduce((m, x) => Math.max(m, x.id), 0) + 1; }
+    contLS().setItem(contSlotKey(id), contSave(run));
+    ix.list = ix.list.filter((x) => x.id !== id).concat([contSlotInfo(id, run)]).sort((a, b) => a.id - b.id);
+    ix.active = id;
+    return contSlotsPut(ix);
+  } catch (e) { return false; }
+}
+/** The active campaign's run, or null. */
+function contRestore() { const id = contSlotActive(); return id ? contSlotRun(id) : null; }
+/** The active campaign forgotten (a run that's over). */
+function contForget() { const id = contSlotActive(); if (id) contSlotDelete(id); }
+/** A campaign as a file's text (Ironman campaigns aren't offered: they keep one save). */
+function contFileText(run) { return JSON.stringify({ terrafall: 1, kind: 'contingency', savedAt: new Date().toISOString(), save: contSave(run) }); } // lint-ok: the file's date
+/** A campaign file's text back to a run, or null (not a Contingency file, or an Ironman one). */
+function contFromFile(text) {
+  let save = String(text || '');
+  try { const o = JSON.parse(save); if (o && o.terrafall && o.kind === 'contingency' && typeof o.save === 'string') save = o.save; } catch (e) { return null; }
+  const run = contLoad(save);
+  return run && !run.opts.ironman ? run : null;
+}
 
 /* ------------------------------------------------------------------ a battle as a match (the bridge: js/contingency-battle.js plays it) */
 

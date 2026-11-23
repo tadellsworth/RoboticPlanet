@@ -31,7 +31,7 @@ function contBattleOptions(run, b) {
     setup(S) {
       S.contingency = { run: run.seed, battle: b.id, turn: run.turn, at: b.at, kind: B.kind, sides: B.seat.map((x) => x.side), def,
         cap: B.minutes * 60, hold: B.hold * 60, harrow: B.harrow ? 0 : -1, look, mega0: B.mega ? CONT_MEGA_TYPE[B.mega] : null,
-        ironman: !!run.opts.ironman, torch: [], waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1 };
+        ironman: !!run.opts.ironman, torch: [], waves: B.seat.map(() => 0), waveN: 0, hands: B.seat.map((X) => contBattleHand(run, X)), pre: B.seat.map((X) => (X.card && CONT_IN_BATTLE.includes(X.card) ? 0 : -1)), used: B.seat.map(() => []), surge: -1, slot: typeof contSlotActive === 'function' ? contSlotActive() : 0 };
       // the territory's landmark (js/landmarks.js), before the kits land: a wreck whose log this run has already has none to give
       const lm = contLandmark(b.at);
       if (lm && b.kind !== 'hollow') lmSetup(lm, B.seed, !!LANDMARKS[lm].wreck && (run.logs || []).includes(LANDMARKS[lm].wreck));
@@ -104,12 +104,26 @@ function contWalls(S, p) {
 function contPlayBattle(run, b) {
   run.playing = b.id;
   contStore(run);
-  // (a battle already under way, saved: carry on with it)
-  const saved = contSavedBattle();
+  const slot = contSlotActive();
+  // the normal save holding another campaign's battle: kept beside that campaign, to be played there later
+  let saved = contSavedBattle();
+  if (saved && !(saved.run === run.seed && saved.battle === b.id && (!saved.slot || saved.slot === slot))) {
+    const other = saved.slot && contSlotRun(saved.slot) && contSlotRun(saved.slot).seed === saved.run ? saved.slot : contSlotOfSeed(saved.run);
+    if (other && other !== slot) { try { localStorage.setItem(contSlotKey(other) + '.battle', localStorage.getItem(SAVE_KEY)); } catch (e) { /* storage full: that battle is lost */ } }
+    saved = null;
+  }
+  // (this campaign's battle kept aside: back into the normal save, to carry on with it)
+  if (!saved) {
+    try {
+      const k = contSlotKey(slot) + '.battle', j = localStorage.getItem(k), m = j && /"contingency":\{"run":(\d+),"battle":(\d+)/.exec(j);
+      if (m && +m[1] === run.seed && +m[2] === b.id) { localStorage.setItem(SAVE_KEY, j); saved = { run: +m[1], battle: +m[2] }; }
+      if (j) localStorage.removeItem(k);
+    } catch (e) { /* storage unavailable */ }
+  }
   $('screen-contingency').hidden = true;
   CG.on = false; cancelAnimationFrame(CG.raf);
   if (typeof musicLore === 'function') { MUSIC.loreLevel = null; musicLore(false); }
-  if (saved && saved.run === run.seed && saved.battle === b.id) { continueGame(); return; }
+  if (saved) { continueGame(); return; }
   clearSave();
   newGame({ ...contBattleOptions(run, b), scars: typeof scarsPref === 'function' ? scarsPref() : 'full' });
   UI.lastGame = null;
@@ -128,7 +142,18 @@ function contPlayBattle(run, b) {
 }
 /** The saved game's Contingency battle, if the save is one: { run, battle }. */
 function contSavedBattle() {
-  try { const j = localStorage.getItem(SAVE_KEY); if (!j) return null; const m = /"contingency":\{"run":(\d+),"battle":(\d+)/.exec(j); return m ? { run: +m[1], battle: +m[2] } : null; } catch (e) { return null; }
+  try {
+    const j = localStorage.getItem(SAVE_KEY); if (!j) return null;
+    const m = /"contingency":\{"run":(\d+),"battle":(\d+)/.exec(j), sl = /"contingency":\{[^{}]*?"slot":(\d+)/.exec(j);
+    return m ? { run: +m[1], battle: +m[2], slot: sl ? +sl[1] : 0 } : null;
+  } catch (e) { return null; }
+}
+/** Is battle b of this run waiting, begun, to be resumed (in the normal save, or kept beside its campaign)? */
+function contBattleWaiting(run, b) {
+  if (run.playing !== b.id) return false;
+  const s = contSavedBattle();
+  if (s && s.run === run.seed && s.battle === b.id && (!s.slot || s.slot === contSlotActive())) return true;
+  try { const j = localStorage.getItem(contSlotKey(contSlotActive()) + '.battle'), m = j && /"contingency":\{"run":(\d+),"battle":(\d+)/.exec(j); return !!(m && +m[1] === run.seed && +m[2] === b.id); } catch (e) { return false; }
 }
 
 /** From the simulation, a few times a second (deterministic): the cap, the hold, the Hollow's mound, the Harrow. */
@@ -177,7 +202,13 @@ function contBattleCheck() {
 
 /** The match is over (showGameOver hands it here): its result to the globe, and back to the globe. */
 function contBattleOver(withdrew) {
-  const C = S.contingency, run = contRestore();
+  const C = S.contingency;
+  // back to the campaign this battle belongs to (its slot, or the one with its run's seed), whichever was open since
+  if (typeof contSlotUse === 'function') {
+    const own = C.slot && (contSlotRun(C.slot) || {}).seed === C.run ? C.slot : contSlotOfSeed(C.run);
+    if (own) contSlotUse(own);
+  }
+  const run = contRestore();
   const b = run && run.battles.find((x) => x.id === C.battle && !x.result);
   const logs = (S.landmarks || []).filter((L) => L.got === 1 && LANDMARKS[L.id].wreck).map((L) => LANDMARKS[L.id].wreck); // (a wreck's log recovered: kept in the run, won or lost)
   clearSave();
@@ -215,7 +246,7 @@ function contBattleOver(withdrew) {
   contStore(run);
   toMenu();
   CG.lastBattle = `${contName(b.at)}: ${winner === 0 ? 'won' : withdrew ? 'withdrawn' : 'lost'}${survivors && winner === 0 ? `, ${survivors} warbots standing` : ''}.`;
-  openContingency();
+  openContingency(true);
   if (CG.run && CG.run.phase === 'plan') { CG.lastBattle = ''; cgSheet('report'); }
 }
 
