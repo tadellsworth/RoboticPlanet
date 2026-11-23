@@ -301,7 +301,7 @@ function faunaActive(e) {
   return true;
 }
 
-/** New shots, blasts and wrecks (S.fx, read only): they put the animals up, and wrecks draw the carrion birds. */
+/** New shots and blasts (S.fx, read only): they put the animals up. (No carrion birds over wrecks: robots leave nothing to eat.) */
 function faunaHear(v) {
   const F = FAUNA;
   F.fear.length = 0;
@@ -309,7 +309,6 @@ function faunaHear(v) {
     if (F.seen.has(f)) continue;
     F.seen.add(f);
     let r = FAUNA_FEAR[f.type] || 0;
-    if (f.type === 'fire' && f.life >= 5) faunaCarrion(f.x, f.y); // (a wreck burning: a robot or a building)
     if (!r) continue;
     if (f.type === 'boom' && S.ash) faunaKilled(f.x, f.y, (f.r || 0.6) * 1.3); // (War scars: the blast kills what it catches; its bones are the game's, S.bones)
     if (f.type === 'boom' || f.type === 'flash') r += 4 * Math.min(2, f.r || 0.6);

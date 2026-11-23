@@ -287,9 +287,9 @@ function needsOf(b) {
     }
   }
   // Garrisons keep Ammo for their warbots (Versus only): an Outpost a full reload (2) for each warbot
-  // stationed there (at least 2), up to its ammoStock, so empty Outposts don't tie up Alloy.
+  // stationed there or on its way, up to its ammoStock; an empty Outpost asks for none, so it doesn't tie up Alloy.
   if (def.ammoStock && b.built && warOn()) {
-    const want = def.store ? def.ammoStock : Math.min(def.ammoStock, Math.max(2, 2 * (b.garrison.length + (b.garInc || 0))));
+    const want = def.store ? def.ammoStock : Math.min(def.ammoStock, 2 * (b.garrison.length + (b.garInc || 0)));
     out.push(['ammo', want - (b.stock.ammo || 0) - (b.inc.ammo || 0)]);
   }
   return out;

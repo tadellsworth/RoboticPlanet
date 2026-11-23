@@ -3498,9 +3498,8 @@ the game reads them: they live in `FAUNA` (never in `S`, a save or an order), mo
 - **The war** (`faunaHear`): new effects in `S.fx` (read only) are heard within `FAUNA_FEAR` tiles: flocks lift and fly
   off the view (with a soft flutter near the camera, `faunaFlutter`), herds bolt, small things hide. The cells round
   the noise stay empty until it has been quiet `FAUNA_QUIET` (40) game seconds; then the animals come back in from off
-  the view. They step aside from robots and convoys, and a warbot on the move puts a herd to flight. A burning wreck
-  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures) to circle
-  over it for a minute or two (`faunaCarrion`).
+  the view. They step aside from robots and convoys, and a warbot on the move puts a herd to flight. No carrion birds come to wrecks
+  (the owner, Nov 23 2026: robots leave nothing to eat); `faunaCarrion` is no longer called.
 - **The Murmur** (read only: `murmurNight`, `dayClock` and `NIGHT_FROM`, the nests, mounds and tunnel exits, the
   packs; `faunaMurmur`): `FAUNA_DREAD` (75) seconds before a Murmur night the day animals within 18 tiles of a nest or
   exit flee from it and the rest bed down early, and `faunaHush` hushes the day calls and the insects' daytime drone in
@@ -3659,8 +3658,7 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   Argos). A fresh one smoulders (`ambSmoulder`: thin smoke off the hull for `AMB.ruin.smoulder` s, its embers glowing
   after dark for `AMB.ruin.embers` s). After dark every wreck is lit faintly so it shows (`ambWreckNight`, the owner's
   call): a few small flames along the hull, coming in as the embers die and dwindling to one as it overgrows, firelight
-  on the ground and the hull, and a red light at one end blinking every 2.4 s. Its crash fires bring the carrion birds
-  (`faunaCarrion`), as any wreck's do.
+  on the ground and the hull, and a red light at one end blinking every 2.4 s. (No carrion birds come to it.)
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
   it, shines a short beam from its mast, up to four tiles or 16% of the view height, a hint of its owner's colour in it, with a soft halo, light
