@@ -937,6 +937,15 @@ const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
 const MARCH_MAX = 90;
 const HUNT_CHAIN = 7; // (tiles round a hunted robot's death in which a person's hunters take the next enemy robot: huntNext)
+/*
+ * Army Groups (sim.js, Army Groups): up to `max` standing armies a player, each with a badge (its number and colour).
+ * New army units for a group wait at the Reserve until `batch` of them (or as many as the group lacks) are ready, or
+ * the first has waited `batchWait` seconds, then set off together. A Patrol or Attack moves on from a point once the
+ * group has stood there `dwell` seconds with nothing to fight. Defend area's circle: `radii` (tiles), `rad` at first.
+ * A group's target size runs 1 to `maxSize`; Patrol takes 2 to 3 points, Attack 1 to 5 waypoints.
+ */
+const AGROUP = { max: 6, batch: 3, batchWait: 30, dwell: 3, radii: [4, 6, 8, 10], rad: 6, maxSize: 40, nameMax: 16,
+  colors: ['#ffcf4a', '#4ad6ff', '#ff7ad9', '#9dff6a', '#ff9a4a', '#c8a8ff'] };
 const RECALL_NO_LOOT = 60; // a warbot called home (Recall all, or its rally flag taken down) leaves crates be this long (see lootNear)
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass

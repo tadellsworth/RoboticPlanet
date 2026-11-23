@@ -2345,6 +2345,14 @@ const SHEET_KEYS = {
   'sh-pack': ['m', 'Pack up to move'],
   'sh-pause': ['p', 'Pause or resume production'],
   'sh-fixbtn': ['e', 'Repair'],
+  'ag-resume': ['b', 'Back to order (Army Group)'],
+  'ag-order-hold': ['h', 'Hold (Army Group)'],
+  'ag-order-defend': ['g', 'Defend area (Army Group)'],
+  'ag-order-patrol': ['p', 'Patrol (Army Group)'],
+  'ag-order-attack': ['q', 'Attack (Army Group)'],
+  'ag-order-follow': ['f', 'Follow (Army Group)'],
+  'ag-select': ['v', 'Select the group'],
+  'ag-goto': ['c', 'Go to the group'],
   'sh-layroad': ['r', 'Lay road'],
   'sh-pipe': ['k', 'Pipe it in'],
   'sh-recall': ['c', 'Call back this squad'],
@@ -2599,8 +2607,10 @@ function renderKeys() {
     section('Selection and control groups', [
       ...map('selection'),
       [['Shift + drag'], 'Add warbots to selection'],
-      [['Ctrl/Cmd/Alt/Shift+1–9'], 'Save selected warbots or the open building'],
+      [['Ctrl/Cmd/Shift+1–9'], 'Save selected warbots or the open building'],
       [['1–9'], 'Recall a group or building; twice to center'],
+      [['Alt/⌥+1–6'], 'Select Army Group 1–6; twice to go to it'],
+      [['Alt/⌥+Shift+1–6'], 'Open Army Group 1–6’s panel'],
     ]),
     section('Game', [
       [['Space'], 'Pause or resume. Save from the pause menu.'],
@@ -2662,8 +2672,8 @@ function initKeyboard() {
     }
     // Send feedback open: no key is the game's (its own keys stop there; this is one from outside it, the focus lost).
     if (!$('screen-feedback').hidden) { if (e.key === 'Escape') { e.preventDefault(); closeFeedback(); } return; }
-    // Control groups: Cmd/Ctrl (or Shift, or Option/Alt) + 1–9 saves the selected warbots and Howitzers as
-    // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
+    // Control groups: Cmd/Ctrl (or Shift; Option/Alt for 7–9, since Option/Alt + 1–6 is the Army Groups') + 1–9 saves the
+    // selected warbots and Howitzers as a group, 1–9 selects it again (press twice to jump to it). Shift always reaches the game;
     // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
     // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All, 6 Mega).
@@ -2686,6 +2696,12 @@ function initKeyboard() {
       e.preventDefault();
       const tabs = [...$('build-tabs').children], i = tabs.findIndex((b) => b.classList.contains('on'));
       tabs[(i + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length].click();
+      return;
+    }
+    // Army Groups: Alt/Option + 1–6 selects group N (twice: goes to it); with Shift, its panel.
+    if (digit && $('screen-pause').hidden && e.altKey && !e.ctrlKey && !e.metaKey && +digit[1] <= AGROUP.max) {
+      e.preventDefault();
+      if (!e.repeat) agKey(+digit[1], e.shiftKey);
       return;
     }
     if (digit && $('screen-pause').hidden) {
@@ -2798,9 +2814,10 @@ function initSelBar() {
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl or Shift + 1–9)"></button><button class="btn small ghost" id="sel-agroup" title="Add them to an Army Group, or make a new one">Army group</button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
+  $('sel-agroup').onclick = () => { sfx('click'); openAgSelSheet(); };
   $('sel-undo').onclick = () => undoOrder();
   $('sel-view').onclick = () => { sfx('click'); selectBots(unitsInView(), false); if (!UI.sel.length) toast('None of your warbots are in view.', 'info'); };
   $('sel-army').onclick = () => { sfx('click'); selectBots(armyIds(ME).concat(S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id)), false); };
@@ -3050,8 +3067,9 @@ function refreshSelection() {
   bar.classList.toggle('touch', touch);
   if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
   // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
-  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-recycle', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
+  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-recycle', 'selbar-group', 'sel-agroup'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
   $('sel-scorch').hidden = !orderable(ME, UI.sel).some((u) => BOTS[u.type].flame); // (Torches selected: Scorch the earth)
+  $('sel-agroup').hidden = !orderable(ME, UI.sel).length || !!UI.watch; // (army units selected: Army group)
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
@@ -3206,7 +3224,7 @@ function saveGroup(k) {
     refreshGroupBar();
     return;
   }
-  if (!UI.sel.length) { toast(onTouch() ? `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (tap one), then Save as group.` : `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
+  if (!UI.sel.length) { toast(onTouch() ? `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (tap one), then Save as group.` : `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or Shift' : 'Ctrl or Shift'}+${k} saves them as group ${k}.`, 'info'); return; }
   const G = ctrlGroups();
   // A robot is in one group at a time: putting it in this one takes it out of any other.
   for (const g in G) G[g] = G[g].filter((id) => !UI.sel.includes(id));
@@ -4434,6 +4452,7 @@ function setMode(mode, keepPlan) {
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
   if (mode !== 'airdrop') { R.dropAt = null; UI.dropPlane = 0; }
   if (mode !== 'attack') UI.armyCmd = null;
+  if (mode !== 'agpick') UI.agPick = null; // (picking an Army Group's points or home)
   R.ghost = null;
   R.overlay = null;
   R.ropeEnd = null;
@@ -5894,6 +5913,7 @@ function confirmBanner() {
     setMode('normal');
     return;
   }
+  if (R.mode === 'agpick') { agPickDone(); return; }
   if (R.mode === 'land') { confirmLanding(); return; }
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
   if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
@@ -6272,6 +6292,7 @@ function onMapTap(i, j, wx, wy) {
     return;
   }
   if (R.mode === 'aim') { aimTap(i, j); return; }
+  if (R.mode === 'agpick') { agPickTap(i, j, wx, wy); return; } // (an Army Group's points or home)
   if (R.mode === 'land') { landTap(i, j); return; }
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   if (R.mode === 'mastlink') { mastLinkTap(i, j, wx, wy); return; }
@@ -7363,6 +7384,7 @@ function sheetSpot() {
   if (k === 'bld') { const b = getE(id); return b ? { x: b.x + 0.5, y: b.y + 0.5 } : null; }
   if (k === 'bot') { const u = getE(id); if (!u) return null; const h = u.inside ? getE(u.inside) : null; return h ? { x: h.x + 0.5, y: h.y + 0.5 } : { x: u.x, y: u.y }; }
   if (k === 'rally') { const r = rallyById(id); return r ? { x: r.x, y: r.y } : null; }
+  if (k === 'agroup') { const g = agById(id), r = g && rallyById(g.flag); return r ? { x: r.x, y: r.y } : null; }
   if (k === 'move' || k === 'res' || k === 'road' || k === 'soil' || k === 'post' || k === 'uplink') return { x: (id % S.W) + 0.5, y: ((id / S.W) | 0) + 0.5 };
   return null;
 }
@@ -8662,7 +8684,7 @@ function botActivity(u) {
       if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
       if (t.type === 'defend' && t.ax !== undefined) return `Defending a building near the ${nm(t.home)}`; // (area defence: garrisonDefense)
       if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
-      if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
+      if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : u.grp && agById(u.grp) && agById(u.grp).flag === t.rally ? `The ${agById(u.grp).name}: ${agDoing(agById(u.grp)).replace(/^Paused: under your orders$/, 'holding (paused)')}` : 'Holding the rally point';
       if (t.type === 'repair') return u.retreat ? 'Badly hurt: pulling out of the fight for repairs' + (u.resume ? ', then back to it' : '') : 'Going for repairs';
       if (t.type === 'topup') return 'Topping up its battery';
       if (t.type === 'refill') return `Tank empty: going to refill it with Fuel at the ${nm(t.bld)}` + (u.resume ? ', then back to it' : '');
@@ -8871,6 +8893,7 @@ function openMoveSheet(i, j) {
 }
 
 function openRallySheet(r) {
+  if (r.grp && agById(r.grp)) { openAgSheet(agById(r.grp)); return; } // (an Army Group's flag: the group's panel)
   R.selected = 0; R.selTile = tIdx(Math.floor(r.x), Math.floor(r.y)); UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Rally point</h3></div></div>
     <p class="desc">Warbots here hold the area until you call them back. Ones with a flat battery walk to the nearest garrison to recharge, then return.</p>
@@ -9153,10 +9176,10 @@ function refreshArmyTab() {
   const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
   const rockets = mine.filter((u) => BOTS[u.type].siege);
   // The groups out in the field: each rally flag, and each building under attack.
-  const flags = S.rallies.filter((r) => r.owner === ME).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
+  const flags = S.rallies.filter((r) => r.owner === ME && !r.grp).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
   const atk = new Map();
   for (const u of g.attack) { const t = getE(u.task.target); if (t && !t.dead) atk.set(t.id, (atk.get(t.id) || 0) + 1); }
-  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[ME].keepW ?? 0, !!INPUT.mouse, recallArmed()]);
+  const sig = JSON.stringify([agMine().map((g) => [g.n, g.name]), rallyPostOf(ME) ? 1 : 0, UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[ME].keepW ?? 0, !!INPUT.mouse, recallArmed()]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
   const L = getE(S.players[ME].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
@@ -9186,6 +9209,10 @@ function refreshArmyTab() {
     });
     h += `<div class="army-cmds"><button class="btn ghost" id="ar-select-rockets" data-act="selectrockets">Select all Howitzers</button></div>`;
   }
+  const ags = agMine();
+  h += `<div class="section-label">Army Groups <span class="label-note">${ags.length} of ${AGROUP.max}</span></div>
+    <div class="army-cmds">${ags.length < AGROUP.max ? '<button class="btn" id="ar-agnew" data-act="agnew">New group</button>' : ''}${ags.map((g) => `<button class="btn small ghost" data-act="agopen" data-n="${g.n}">${g.n} ${g.name}</button>`).join('')}</div>
+    <p class="hint">Standing armies with their own order (Hold, Defend area, Patrol, Attack, Follow) and size: new units from the Bot Foundry fill them, by priority; the rest stay in the Reserve${rallyPostOf(ME) ? ', at the rally point' : ''}. Select warbots, then <b>Army group</b> on the selection bar to make one of them.</p>`;
   h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     <p class="hint">Warbots each Outpost keeps at home, sent from your Command Base (and replaced if lost). Set one Outpost on its own in its panel.</p>`;
   $('ar-body').innerHTML = h;
@@ -9232,6 +9259,8 @@ function armyButton(btn) {
   switch (what) {
     case 'size': UI.armyN = btn.dataset.n === 'all' ? 'all' : +btn.dataset.n; UI.armySig = ''; refreshArmySheet(); return;
     case 'cmd': armyCmd(btn.dataset.c); return;
+    case 'agnew': agNewGroup([]); return;
+    case 'agopen': { const g = agByN(+btn.dataset.n); if (g) openAgSheet(g); return; }
     case 'recall': recallAllTap(); return;
     case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return;
     case 'selectkind': { const k = btn.dataset.k, ids = armyIds(ME).filter((i) => { const u = getE(i); return u && u.type === k; }); selectBots(ids, false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} ${UI.sel.length > 1 ? BOTS[k].plural : BOTS[k].name} selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return; }
@@ -9471,6 +9500,7 @@ function refreshSheet() {
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
+  if (UI.sheetKind === 'agroup') { refreshAgSheet(); return; }
   if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
@@ -10031,7 +10061,374 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); qolHudTick(); polishHudTick(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; if (!$('screen-pause').hidden) syncRivalDifficulty(); updateHUD(); qolHudTick(); polishHudTick(); refreshSheet(); placeMinimap(); refreshSelection(); refreshAgCards(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
+}
+
+/* ------------------------------------------------------------------ Army Groups: the cards, the panel, the map picks */
+/*
+ * The group cards (#agcards): a strip down the right edge, under the minimap (beside an open panel on a computer),
+ * a card a group: its badge and name, how many against its target, their average health, Ammo and its order (on a
+ * phone just the badge, the count, a health bar and an Ammo dot), then the Reserve (the army units in no group: at
+ * the rally point or the Command Base). Each card is a <button>. Tap (click, Enter) selects the group; again (or
+ * twice quickly) the camera goes to it. Right-click, a long press or Alt+Shift+its number opens its panel (openAgSheet).
+ * Drag a card onto the map or the minimap: an Attack order to there. Alt+1–6 selects a group (twice: goes to it).
+ */
+const AGK = { tapN: 0, tapAt: 0, press: null, noClick: 0 };
+
+function agMine() { return S && S.agroups ? agList(ME) : []; }
+function agByN(n) { return agMine().find((g) => g.n === n) || null; }
+function agColor(g) { return AGROUP.colors[(g.n - 1) % AGROUP.colors.length]; }
+/** The army units of yours in no group (the Reserve): all of them, garrisons too, but those posted at an Outpost. */
+function agReserve() { return S.bots.filter((u) => !u.dead && u.owner === ME && isArmy(u) && !u.grp && !postOf(u)); }
+
+/** Group g at a glance: { n, coming, hp (average health, %), empty, low } (out of Ammo, low on it). */
+function agStats(g) {
+  const us = agMembers(g);
+  let hp = 0, max = 0, empty = 0, low = 0, coming = 0;
+  for (const u of us) {
+    hp += u.hp; max += u.maxHp;
+    if (u.grpNew || u.grpGo) coming++;
+    if (!botArmed(u)) empty++;
+    else if (!botTank(u.type) && u.ammo !== undefined && u.ammo / botMag(u.type) < 0.34) low++;
+  }
+  return { n: us.length, coming, hp: max ? Math.round((100 * hp) / max) : 0, empty, low };
+}
+function agAmmoText(s) { return s.empty ? `${s.empty} out of Ammo` : s.low ? `${s.low} low on Ammo` : 'Ammo OK'; }
+
+/** The strip of cards: made again when what it shows changes, placed under the minimap and clear of an open panel. */
+function refreshAgCards() {
+  let el = $('agcards');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'agcards'; el.className = 'agcards'; el.setAttribute('role', 'toolbar'); el.setAttribute('aria-label', 'Army Groups');
+    document.body.appendChild(el);
+    initAgCards(el);
+  }
+  const gs = UI.inGame && S && warOn() && !UI.watch ? agMine() : [];
+  el.hidden = !gs.length;
+  if (!gs.length) { el.dataset.html = ''; return; }
+  const selAll = (ids) => ids.length && UI.selSet && ids.every((id) => UI.selSet.has(id));
+  let h = '';
+  for (const g of gs) {
+    const s = agStats(g), ids = agMembers(g).map((u) => u.id), hpc = s.hp >= 66 ? 'ok' : s.hp >= 33 ? 'mid' : 'bad';
+    h += `<button class="agcard${selAll(ids) ? ' on' : ''}${g.paused ? ' paused' : ''}" data-g="${g.n}" style="--agc:${agColor(g)}" title="${g.name}: ${s.n} of ${g.size}${s.coming ? ` (${s.coming} coming)` : ''}, health ${s.hp}%, ${agAmmoText(s)}. ${agDoing(g)}. Tap to select, again to go to it; right-click or hold for its panel; drag onto the map to send it (Alt+${g.n})." aria-label="${g.name}, ${s.n} of ${g.size}, ${agDoing(g)}">` +
+      `<span class="ag-badge">${g.n}</span><span class="ag-main"><span class="ag-top"><b class="ag-name">${g.name}</b><span class="ag-count">${s.n}/${g.size}</span></span>` +
+      `<span class="ag-doing">${agDoing(g).replace(/ \(point.*\)$/, '')}</span>` +
+      `<span class="ag-meta"><span class="ag-hp ${hpc}"><i style="width:${s.hp}%"></i></span><span class="ag-ammo ${s.empty ? 'out' : s.low ? 'low' : 'ok'}">${agAmmoText(s)}</span></span></span></button>`;
+  }
+  const rs = agReserve().length;
+  h += `<button class="agcard reserve" data-g="0" title="The Reserve: your army units in no group (${rs}), at the rally point or the Command Base. New units come here when every group is full. Tap to select them, again to go to the rally point." aria-label="Reserve, ${rs}">` +
+    `<span class="ag-badge">R</span><span class="ag-main"><span class="ag-top"><b class="ag-name">Reserve</b><span class="ag-count">${rs}</span></span><span class="ag-doing">${rallyPostOf(ME) ? 'At the rally point' : 'At the Command Base'}</span></span></button>`;
+  if (el.dataset.html !== h) { el.dataset.html = h; el.innerHTML = h; }
+  // Under the minimap (or the top bar), down the right; beside an open panel that covers that edge; above a bottom panel.
+  const mm = $('minimap'), sh = $('sheet');
+  const mr = mm && !mm.hidden ? mm.getBoundingClientRect() : null, sr = sh && !sh.hidden ? sh.getBoundingClientRect() : null;
+  const top = $('topbar').getBoundingClientRect().bottom + 8;
+  const tab = mr && $('mm-hide') ? $('mm-hide').getBoundingClientRect() : null; // (on a touch screen its hide tab hangs under it)
+  let t = mr && mr.height ? Math.max(mr.bottom, tab && tab.height ? tab.bottom : 0) + 10 : top, right = mr && mr.width ? window.innerWidth - mr.right : 12, bottom = window.innerHeight - 8;
+  if (sr && sr.width) {
+    if (sr.left > window.innerWidth * 0.35 && sr.top < window.innerHeight * 0.5) { right = window.innerWidth - sr.left + 10; t = top; }
+    else bottom = Math.min(bottom, sr.top - 8);
+  }
+  const bb = $('bottombar'), br = bb && bb.getClientRects().length ? bb.getBoundingClientRect() : null;
+  if (br && br.right > window.innerWidth - right - 200 && br.top > t) bottom = Math.min(bottom, br.top - 8);
+  el.style.top = Math.round(t) + 'px';
+  el.style.right = Math.round(right) + 'px';
+  el.style.maxHeight = Math.max(52, Math.round(bottom - t)) + 'px';
+}
+
+/** The strip's pointer and key handling (made once). */
+function initAgCards(el) {
+  const cardAt = (e) => e.target && e.target.closest && e.target.closest('.agcard');
+  el.addEventListener('click', (e) => {
+    const c = cardAt(e); if (!c) return;
+    if (AGK.noClick > performance.now()) return;
+    agCardTap(+c.dataset.g);
+  });
+  el.addEventListener('contextmenu', (e) => { const c = cardAt(e); if (!c) return; e.preventDefault(); agCardPanel(+c.dataset.g); });
+  el.addEventListener('pointerdown', (e) => {
+    const c = cardAt(e); if (!c || (e.button !== undefined && e.button > 0)) return;
+    const n = +c.dataset.g;
+    AGK.press = { n, x: e.clientX, y: e.clientY, id: e.pointerId, drag: false, long: false, ghost: null, c };
+    AGK.press.timer = setTimeout(() => { const p = AGK.press; if (p && !p.drag) { p.long = true; AGK.noClick = performance.now() + 600; haptic('order'); agCardPanel(p.n); } }, 550);
+  });
+  el.addEventListener('pointermove', (e) => {
+    const p = AGK.press; if (!p || p.id !== e.pointerId || p.n === 0) return;
+    if (!p.drag && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 12 && !p.long) {
+      p.drag = true; clearTimeout(p.timer);
+      try { p.c.setPointerCapture(e.pointerId); } catch (err) { /* (it's gone) */ }
+      const g = agByN(p.n);
+      p.ghost = document.createElement('div'); p.ghost.className = 'ag-ghost'; p.ghost.style.setProperty('--agc', g ? agColor(g) : '#fff');
+      p.ghost.textContent = g ? `${g.n} ${g.name}: drop to attack there` : '';
+      document.body.appendChild(p.ghost);
+    }
+    if (p.drag && p.ghost) { p.ghost.style.left = e.clientX + 'px'; p.ghost.style.top = e.clientY + 'px'; }
+  });
+  const end = (e) => {
+    const p = AGK.press; if (!p || p.id !== e.pointerId) return;
+    clearTimeout(p.timer); AGK.press = null;
+    if (!p.drag) return;
+    AGK.noClick = performance.now() + 400;
+    if (p.ghost) p.ghost.remove();
+    if (e.type === 'pointercancel') return;
+    const at = document.elementFromPoint(e.clientX, e.clientY), g = agByN(p.n);
+    if (!g || !at) return;
+    let w = null;
+    if (at.id === 'mm-canvas') { const r = at.getBoundingClientRect(); w = { x: ((e.clientX - r.left) / r.width) * S.W, y: ((e.clientY - r.top) / r.height) * S.H }; }
+    else if (at.id === 'game') w = screenToWorld(e.clientX, e.clientY);
+    if (w) agSendTo(g, Math.floor(w.x), Math.floor(w.y));
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+/** A card tapped: its group selected, or (already selected, or a quick second tap) the camera to it. 0: the Reserve. */
+function agCardTap(n) {
+  const g = n ? agByN(n) : null;
+  if (n && !g) return;
+  const us = g ? agMembers(g) : agReserve(), ids = selectable(ME, us.map((u) => u.id)).map((u) => u.id);
+  const now = performance.now(), twice = AGK.tapN === n && now - AGK.tapAt < 450;
+  const same = ids.length && UI.sel.length === ids.length && ids.every((id) => UI.selSet && UI.selSet.has(id));
+  AGK.tapN = n; AGK.tapAt = now;
+  sfx('click');
+  if (same || twice || !ids.length) {
+    agCenter(g);
+    if (!ids.length) toast(g ? `The ${g.name} has no units yet: new ones from your Bot Foundry fill it (up to ${g.size}).` : 'No army units in the Reserve.', 'info');
+    return;
+  }
+  selectBots(ids, false);
+  if (g && g.paused) toast(`The ${g.name} is paused under your orders: open its panel (right-click or hold) for Back to order.`, 'info');
+}
+
+/** The camera to group g (null: the Reserve): the middle of its units out in the open, else its flag (the rally point or Base). */
+function agCenter(g) {
+  const us = g ? agMembers(g) : agReserve();
+  let x = 0, y = 0, k = 0;
+  for (const u of us) if (!u.inside) { x += u.x; y += u.y; k++; }
+  if (k) centerOn(x / k, y / k);
+  else if (g) { const r = rallyById(g.flag); if (r) centerOn(r.x, r.y); }
+  else { const b = rallyPostOf(ME) || getE(S.players[ME].lander); if (b) centerOn(b.x + 0.5, b.y + 0.5); }
+}
+
+/** A card's panel: the group's, or for the Reserve the Army panel. */
+function agCardPanel(n) {
+  sfx('click');
+  if (!n) { setMode('normal'); openArmySheet('army'); return; }
+  const g = agByN(n); if (g) openAgSheet(g);
+}
+
+/** Alt+1–6: group n selected (twice: the camera to it); with Shift, its panel. */
+function agKey(n, panel) {
+  const g = agByN(n);
+  if (!g) { toast(agMine().length ? `No group ${n}: your groups are ${agMine().map((q) => q.n).join(', ')}.` : 'No Army Groups yet: select warbots, then Army group on the selection bar (or New group in the Army panel).', 'info'); return; }
+  if (panel) agCardPanel(n); else agCardTap(n);
+}
+
+/** Drop a card on the map: the group attacks toward (i, j) and holds there. */
+function agSendTo(g, i, j) {
+  if (!inMap(i, j) || !walkable(tIdx(i, j))) { sfx('error'); toast('Drop it on ground your units can walk to.', 'warn'); return; }
+  act('agOrder', [g.id, 'attack', [[i, j]]], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('order'); haptic('order'); addFx('ring', i + 0.5, j + 0.5, { color: agColor(g) });
+    toast(`The ${g.name} attacks toward there, then holds it.`, 'info');
+  });
+}
+
+/** New group: of the selection's army units (or none, at the Command Base). Its panel opens. */
+function agNewGroup(ids) {
+  act('agNew', [ids || []], (r) => {
+    if (typeof r !== 'number') { sfx('error'); toast(r || 'No new group.', 'warn'); return; }
+    sfx('order');
+    const g = agById(r);
+    toast(`New group: the ${g.name}${(ids || []).length ? '' : `, empty: new units from your Bot Foundry fill it (up to ${g.size})`}. Pick its order in its panel.`, 'good');
+    refreshAgCards();
+    openAgSheet(g);
+  });
+}
+
+/** The selection bar's Army group: add the selection to a group, a new one, or take it out of its groups. */
+function openAgSelSheet() {
+  const ids = orderable(ME, UI.sel).map((u) => u.id);
+  if (!ids.length) { sfx('error'); toast('Select warbots (or other army units) first.', 'info'); return; }
+  const gs = agMine(), inG = ids.filter((id) => getE(id).grp).length;
+  let h = `<div class="sheet-title"><div><h3>Army group</h3></div></div><p class="desc">${ids.length} unit${ids.length > 1 ? 's' : ''} selected${inG ? `, ${inG} in a group` : ''}. A unit is in one group at a time.</p><div class="ag-list">`;
+  for (const g of gs) { const s = agStats(g); h += `<button class="btn ag-pickg" id="ag-add-${g.n}" data-g="${g.n}" style="--agc:${agColor(g)}"><span class="ag-badge">${g.n}</span>Add to the ${g.name} <span class="label-note">${s.n}/${g.size}</span></button>`; }
+  h += `</div><div class="army-cmds">${gs.length < AGROUP.max ? '<button class="btn primary" id="ag-new-sel">New group from these</button>' : `<span class="hint">${AGROUP.max} groups is the most: disband one for a new one.</span>`}${inG ? '<button class="btn ghost" id="ag-leave">Take them out of their groups</button>' : ''}</div>`;
+  openSheet('agsel', 0, h);
+  for (const b of document.querySelectorAll('.ag-pickg')) b.onclick = () => {
+    const g = agByN(+b.dataset.g); if (!g) return;
+    act('agAdd', [g.id, ids], (n) => { sfx('order'); toast(`${n} added to the ${g.name}${g.paused ? ' (paused: Back to order in its panel)' : ''}.`, 'info'); closeSheet(); refreshAgCards(); });
+  };
+  if ($('ag-new-sel')) $('ag-new-sel').onclick = () => agNewGroup(ids);
+  if ($('ag-leave')) $('ag-leave').onclick = () => act('agLeave', [ids], (n) => { sfx('click'); toast(`${n} back in the Reserve.`, 'info'); closeSheet(); refreshAgCards(); });
+}
+
+/** Group g's panel: rename, target size, priority, its order (with the map picks), home, select, go to, disband. */
+function openAgSheet(g) {
+  if (!g) return;
+  setMode('normal');
+  UI.agDisbandArm = 0;
+  UI.agOpt = '';
+  UI.agRad = g.ord.r || UI.agRad || AGROUP.rad;
+  const orders = Object.keys(AG_ORDERS).map((k) => `<button class="btn" id="ag-order-${k}" data-k="${k}">${AG_ORDERS[k].name}</button>`).join('');
+  openSheet('agroup', g.id, `<div class="sheet-title"><div><h3 class="ag-h"><span class="ag-badge" style="--agc:${agColor(g)}">${g.n}</span><span id="ag-title"></span></h3><p class="sub" id="ag-doing"></p></div></div>
+    <div id="ag-dyn"></div>
+    <div class="ag-rename"><input id="ag-name-in" type="text" maxlength="${AGROUP.nameMax}" aria-label="Group name" autocomplete="off" spellcheck="false"><button class="btn" id="ag-name">Rename</button></div>
+    <div class="section-label">Target size and priority <span class="label-note">new units fill the groups in priority order</span></div>
+    <div class="ag-row"><button class="btn" id="ag-size-down" aria-label="Smaller">−</button><b class="ag-n" id="ag-size"></b><button class="btn" id="ag-size-up" aria-label="Bigger">+</button></div>
+    <div class="ag-row"><span id="ag-prio" class="ag-prio"></span><span class="ag-sep"></span><button class="btn" id="ag-up" aria-label="Higher priority">▲ Up</button><button class="btn" id="ag-down" aria-label="Lower priority">▼ Down</button></div>
+    <div class="section-label">Standing order</div>
+    <div class="ag-orders" id="ag-orders">${orders}</div>
+    <div class="ag-row" id="ag-rads"><span class="label-note">Defend area:</span>${AGROUP.radii.map((r) => `<button class="btn small" id="ag-rad-${r}" data-r="${r}">${r} tiles</button>`).join('')}</div>
+    <div id="ag-opt"></div>
+    <p class="hint" id="ag-how"></p>
+    <div class="army-cmds"><button class="btn primary" id="ag-resume">Back to order</button><button class="btn" id="ag-select">Select</button><button class="btn" id="ag-goto">Go to</button><button class="btn" id="ag-home">Set home</button><button class="btn danger" id="ag-disband">Disband</button></div>`);
+  $('ag-name-in').value = g.name;
+  $('ag-name-in').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); $('ag-name').click(); } if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); } };
+  const G = () => agById(g.id);
+  $('ag-name').onclick = () => { const q = G(); if (!q) return; act('agName', [q.id, $('ag-name-in').value], (nm) => { sfx('click'); $('ag-name-in').value = nm; toast(`Renamed: the ${nm}.`, 'info'); refreshAgCards(); refreshAgSheet(); }); };
+  $('ag-size-down').onclick = () => { const q = G(); if (q) { sfx('click'); act('agSize', [q.id, q.size - 1], () => refreshAgSheet()); } };
+  $('ag-size-up').onclick = () => { const q = G(); if (q) { sfx('click'); act('agSize', [q.id, q.size + 1], () => refreshAgSheet()); } };
+  $('ag-up').onclick = () => { const q = G(); if (q) { sfx('click'); act('agPrio', [q.id, -1], () => { refreshAgSheet(); refreshAgCards(); }); } };
+  $('ag-down').onclick = () => { const q = G(); if (q) { sfx('click'); act('agPrio', [q.id, 1], () => { refreshAgSheet(); refreshAgCards(); }); } };
+  for (const b of $('ag-orders').children) b.onclick = () => agOrderButton(G(), b.dataset.k);
+  for (const b of $('ag-rads').querySelectorAll('[data-r]')) b.onclick = () => {
+    const q = G(); if (!q) return;
+    sfx('click'); UI.agRad = +b.dataset.r;
+    if (q.ord.k === 'defend') act('agOrder', [q.id, 'defend', q.ord.pts, UI.agRad], () => refreshAgSheet());
+    refreshAgSheet();
+  };
+  $('ag-resume').onclick = () => { const q = G(); if (q) { sfx('order'); act('agResume', [q.id], () => { toast(`The ${q.name} is back on its order.`, 'info'); refreshAgSheet(); }); } };
+  $('ag-select').onclick = () => { const q = G(); if (q) { closeSheet(); AGK.tapN = 0; agCardTap(q.n); } };
+  $('ag-goto').onclick = () => { const q = G(); if (q) { sfx('click'); agCenter(q); } };
+  $('ag-home').onclick = () => agStartPick(G(), 'home');
+  $('ag-disband').onclick = () => {
+    const q = G(); if (!q) return;
+    if (!(UI.agDisbandArm && performance.now() - UI.agDisbandArm < 3000)) { sfx('click'); UI.agDisbandArm = performance.now(); refreshAgSheet(); return; }
+    act('agDisband', [q.id], () => { sfx('click'); toast(`The ${q.name} is disbanded: its units go back to the Reserve.`, 'info'); closeSheet(); refreshAgCards(); });
+  };
+  refreshAgSheet();
+}
+
+/** The open group panel brought up to date. */
+function refreshAgSheet() {
+  if (UI.sheetKind !== 'agroup') return;
+  const g = agById(UI.sheetFor);
+  if (!g) { closeSheet(); return; }
+  const s = agStats(g), mine = agMine(), L = getE(S.players[ME].lander), hb = agHomeB(g), r = rallyById(g.flag);
+  const set = (id, v) => { const el = $(id); if (el && el.textContent !== String(v)) el.textContent = v; };
+  set('ag-title', g.name);
+  set('ag-doing', agDoing(g));
+  set('ag-size', g.size);
+  set('ag-prio', `Priority ${mine.indexOf(g) + 1} of ${mine.length}`);
+  $('ag-up').disabled = mine.indexOf(g) === 0;
+  $('ag-down').disabled = mine.indexOf(g) === mine.length - 1;
+  $('ag-size-down').disabled = g.size <= 1;
+  $('ag-size-up').disabled = g.size >= AGROUP.maxSize;
+  const home = hb ? `${hb === L ? 'the Command Base' : `the ${BDEFS[hb.type].name}`}${L && hb !== L ? ` ${dirText(L, hb)} of the Command Base` : ''}` : g.home.x !== undefined ? `a spot${L ? ` ${dirText(L, { x: g.home.x, y: g.home.y })} of the Command Base` : ''}` : '';
+  const dyn = `<div class="kv"><span>Units</span><span><b>${s.n}</b> of ${g.size}${s.coming ? ` (${s.coming} on the way from the Reserve)` : ''}</span></div>` +
+    `<div class="kv"><span>Health</span><span>${s.n ? `${s.hp}% on average` : '—'}</span></div>` +
+    `<div class="kv"><span>Ammo</span><span class="${s.empty ? 'err' : ''}">${s.n ? agAmmoText(s) : '—'}</span></div>` +
+    `<div class="kv"><span>Home</span><span>${home}</span></div>`;
+  const d = $('ag-dyn'); if (d.dataset.html !== dyn) { d.dataset.html = dyn; d.innerHTML = dyn; }
+  for (const b of $('ag-orders').children) b.classList.toggle('on', b.dataset.k === g.ord.k);
+  for (const b of $('ag-rads').querySelectorAll('[data-r]')) b.classList.toggle('on', +b.dataset.r === (g.ord.k === 'defend' ? g.ord.r : UI.agRad));
+  $('ag-resume').hidden = !g.paused;
+  const arm = UI.agDisbandArm && performance.now() - UI.agDisbandArm < 3000;
+  set('ag-disband', arm ? 'Tap again to disband' : 'Disband');
+  // Follow: which group, when there's a choice.
+  let opt = '';
+  if (UI.agOpt === 'follow') {
+    const others = mine.filter((q) => q !== g);
+    opt = others.length ? `<div class="ag-list"><span class="label-note">Follow which group?</span>${others.map((q) => `<button class="btn ag-fol" id="ag-follow-${q.n}" data-g="${q.n}" style="--agc:${agColor(q)}"><span class="ag-badge">${q.n}</span>The ${q.name}</button>`).join('')}</div>` : '<p class="hint">Follow needs another group to follow: make one first.</p>';
+  }
+  const o = $('ag-opt');
+  if (o.dataset.html !== opt) {
+    o.dataset.html = opt; o.innerHTML = opt;
+    for (const b of o.querySelectorAll('.ag-fol')) b.onclick = () => { const q = agByN(+b.dataset.g), me = agById(g.id); if (!q || !me) return; act('agOrder', [me.id, 'follow', [], 0, q.id], (why) => { if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('order'); UI.agOpt = ''; toast(`The ${me.name} follows the ${q.name}.`, 'info'); refreshAgSheet(); }); };
+  }
+  const how = {
+    hold: 'Hold: they stand guard at home, take on what comes near, and come back.',
+    defend: `Defend area: they take on any enemy robot inside a ${g.ord.r || UI.agRad}-tile circle (round home, or a spot you tap), then come back to its middle.`,
+    patrol: 'Patrol: they walk a loop of 2 or 3 points you tap, fighting what they meet, pausing a few seconds at each.',
+    attack: 'Attack: they fight their way along up to 5 waypoints you tap, clearing each before the next, and hold the last.',
+    follow: 'Follow: they shadow another of your groups, a couple of tiles behind it.',
+  }[g.ord.k] || '';
+  set('ag-how', how + (g.paused ? ' Paused: some were given orders of yours. Back to order puts them all back on it.' : '') + (r && !s.n ? ' No units yet: new ones from the Bot Foundry fill it.' : ''));
+  markSheetKeys();
+}
+
+/** An order button in the group panel. */
+function agOrderButton(g, k) {
+  if (!g) return;
+  sfx('click');
+  if (k === 'hold') { act('agOrder', [g.id, 'hold', []], () => { toast(`The ${g.name} holds at home.`, 'info'); refreshAgSheet(); }); return; }
+  if (k === 'follow') { UI.agOpt = UI.agOpt === 'follow' ? '' : 'follow'; refreshAgSheet(); return; }
+  agStartPick(g, k);
+}
+
+/** Picking on the map for group g: an order's points (Defend area's middle, Patrol's loop, Attack's waypoints) or its home. */
+function agStartPick(g, k) {
+  if (!g) return;
+  sfx('click');
+  setMode('agpick');
+  UI.agPick = { g: g.id, k, pts: [], r: UI.agRad || AGROUP.rad };
+  agPickBanner();
+}
+
+function agPickBanner(note) {
+  const P = UI.agPick, g = P && agById(P.g);
+  if (!g) { setMode('normal'); return; }
+  const O = AG_ORDERS[P.k], n = P.pts.length;
+  const text = P.k === 'home' ? `Tap the <b>${g.name}</b>'s new home: one of your Outposts or Keeps, your Command Base, or open ground.`
+    : P.k === 'defend' ? `Tap the middle of the area the <b>${g.name}</b> defends (a ${P.r}-tile circle), or <b>Around home</b>.`
+    : P.k === 'patrol' ? `Tap ${n ? 'the next point' : '2 or 3 points'} of the <b>${g.name}</b>'s patrol loop (${n} of 3).${n >= 2 ? ' <b>Done</b> to start.' : ''}`
+    : `Tap the <b>${g.name}</b>'s waypoints, up to 5: it holds at the last (${n} of 5).${n ? ' <b>Done</b> to send it.' : ''}`;
+  showBanner((note ? note + ' ' : '') + text, P.k === 'defend' ? 'Around home' : P.k === 'home' ? null : 'Done', 'Cancel');
+  if (P.k !== 'defend' && P.k !== 'home') $('banner-ok').disabled = n < (O ? O.pts[0] : 1);
+}
+
+/** A tap on the map while picking for a group. */
+function agPickTap(i, j, wx, wy) {
+  const P = UI.agPick, g = P && agById(P.g);
+  if (!g) { setMode('normal'); return; }
+  const fail = (why) => { sfx('error'); agPickBanner(`<span class="err">${why}</span>`); };
+  if (P.k === 'home') {
+    const b = buildingAtTap(i, j, wx, wy);
+    if (b && b.owner === ME && b.built && (b.type === 'outpost' || b.type === 'keep' || b.type === 'lander')) { act('agHome', [g.id, b.id, 0, 0], (why) => (why ? fail(why) : agPickEnd(`The ${g.name}'s home is the ${BDEFS[b.type].name} now.`))); return; }
+    if (b) return fail('Tap one of your Outposts or Keeps, your Command Base, or open ground.');
+    act('agHome', [g.id, 0, i, j], (why) => (why ? fail(why) : agPickEnd(`The ${g.name}'s home is that spot now.`)));
+    return;
+  }
+  // (an enemy building tapped for a waypoint: the ground beside it)
+  const b = buildingAtTap(i, j, wx, wy);
+  let t = [i, j];
+  if (b || !inMap(i, j) || !walkable(tIdx(i, j))) { const s = agSpot(b ? b.x : i, b ? b.y : j, b ? 1 : 0); if (!s) return fail('Tap ground your units can walk to.'); t = s; }
+  if (P.k === 'defend') { act('agOrder', [g.id, 'defend', [t], P.r], (why) => (why ? fail(why) : agPickEnd(`The ${g.name} defends the area there.`))); return; }
+  P.pts.push(t);
+  sfx('click');
+  const max = AG_ORDERS[P.k].pts[1];
+  if (P.pts.length >= max) { agPickDone(); return; }
+  agPickBanner();
+}
+
+/** Done (or the banner's main button): the order sent with the points picked. */
+function agPickDone() {
+  const P = UI.agPick, g = P && agById(P.g);
+  if (!g) { setMode('normal'); return; }
+  if (P.k === 'defend') { act('agOrder', [g.id, 'defend', [], P.r], (why) => (why ? agPickBanner(`<span class="err">${why}</span>`) : agPickEnd(`The ${g.name} defends the area round its home.`))); return; }
+  if (P.k === 'home') return;
+  act('agOrder', [g.id, P.k, P.pts.map((p) => p.slice())], (why) => {
+    if (why) { sfx('error'); agPickBanner(`<span class="err">${why}</span>`); return; }
+    agPickEnd(P.k === 'patrol' ? `The ${g.name} patrols ${P.pts.length} points.` : `The ${g.name} attacks along ${P.pts.length} waypoint${P.pts.length > 1 ? 's' : ''}.`);
+  });
+}
+function agPickEnd(text) {
+  const g = UI.agPick && agById(UI.agPick.g);
+  sfx('order'); haptic('order');
+  toast(text, 'info');
+  setMode('normal');
+  refreshAgCards();
+  if (g) openAgSheet(g);
 }

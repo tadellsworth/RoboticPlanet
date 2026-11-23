@@ -318,6 +318,7 @@ const ORDERS = {
    */
   command(p, ids, spec) {
     ids = ownIds(p, ids);
+    agManual(p, ids.map(getE)); // (a direct order: their Army Groups' standing orders wait for Back to order)
     let s = spec || {};
     const out = { kind: '', n: 0, nr: 0 };
     // (Passenger Town: a building tapped, they go and stand beside it: at its sentry, they shoot it down)
@@ -373,6 +374,7 @@ const ORDERS = {
    */
   undoCommand(p, list) {
     let n = 0;
+    agManual(p, (Array.isArray(list) ? list : []).map((e) => ownU(p, Array.isArray(e) ? e[0] : 0)));
     for (const e of Array.isArray(list) ? list : []) {
       const [id, k, a, b, post, auto] = Array.isArray(e) ? e : [], u = ownU(p, id), ids = [id];
       if (!u || !(isArmy(u) || BOTS[u.type].siege)) continue;
@@ -403,7 +405,7 @@ const ORDERS = {
   /** A Vulcan Bomber (uid) sent to drop napalm on the ground at tile (i, j). '' or why not. */
   napalm(p, uid, i, j) { const u = ownU(p, uid, 'bomber'); return u ? orderNapalm(p, u, i, j) : 'That bomber is gone.'; },
   /** Scorch the earth: the Torches among `ids` each burn a patch of fertile soil at or round tile (i, j). { n, why } */
-  scorch(p, ids, i, j) { return orderScorch(p, ownIds(p, ids), i, j); },
+  scorch(p, ids, i, j) { agManual(p, ownIds(p, ids).map(getE)); return orderScorch(p, ownIds(p, ids), i, j); },
   bombard(p, ids, tid) { const t = liveB(tid); return t ? orderBombard(p, ownIds(p, ids), t) : 0; },
   park(p, ids, i, j) { return orderPark(p, ownIds(p, ids), i, j); },
   stance(p, uid, hold) {
@@ -502,7 +504,7 @@ const ORDERS = {
   recallRally(p, rid) { const r = rallyById(rid); return r && r.owner === p ? recallRally(rid) : 0; },
   recallAll(p) { return recallAll(p); },
   /** Robots (a list of ids, or one) sent to the nearest Bot Foundry to be recycled: how many went, or why none could. */
-  recycle(p, ids) { return orderRecycle(p, ownIds(p, Array.isArray(ids) ? ids : [ids])); },
+  recycle(p, ids) { const us = ownIds(p, Array.isArray(ids) ? ids : [ids]); for (const id of us) { const u = getE(id); delete u.grp; delete u.grpNew; delete u.grpGo; } return orderRecycle(p, us); },
   /** Robot `id` kept after all: its trip to be recycled is called off. True if it was on one. */
   unrecycle(p, id) { const u = ownU(p, id); if (!u || !recycling(u)) return false; stopRecycle(u); return true; },
   /** The Workers beyond what the colony needs (see workersWanted, spareBots) sent to be recycled: how many went. */
@@ -538,6 +540,54 @@ const ORDERS = {
   /** Call off bomber `uid`'s strike while it's still on the ground (waiting for Ammo or Fuel, say). '' or why not. */
   strikeCancel(p, uid) { const u = ownU(p, uid, 'bomber'); return u ? cancelStrike(p, u) : 'That bomber is gone.'; },
   /** Put Airship `uid` on the line Mooring Mast `mid` is on (mid 0: on no line). '' or why not. */
+  /* ---------------------------------------------------------------- Army Groups (sim.js: agNew and the rest) */
+  /** A new Army Group of units `ids` (the selection's, or none): its id, or why not. */
+  agNew(p, ids) { if (!human(p)) return 'Only a person\'s colony has Army Groups.'; return agNew(p, ownIds(p, Array.isArray(ids) ? ids : [])); },
+  /** Units `ids` into group gid (out of any other); its target size grows to fit them. How many. */
+  agAdd(p, gid, ids) {
+    const g = agById(gid); if (!g || g.owner !== p) return 0;
+    const us = orderable(p, ownIds(p, Array.isArray(ids) ? ids : []));
+    const was = agMembers(g).length + us.filter((u) => u.grp !== g.id).length;
+    if (was > g.size) g.size = Math.min(AGROUP.maxSize, was);
+    agTake(g, us.filter((u) => u.grp !== g.id));
+    return us.length;
+  },
+  /** Units `ids` out of their groups, back to the Reserve. How many. */
+  agLeave(p, ids) {
+    let n = 0;
+    for (const u of orderable(p, ownIds(p, Array.isArray(ids) ? ids : []))) {
+      if (!u.grp) continue;
+      const g = agById(u.grp);
+      delete u.grp; delete u.grpNew; delete u.grpGo; n++;
+      if (g && u.task && u.task.type === 'hold' && u.task.rally === g.flag) callBack(u);
+    }
+    return n;
+  },
+  /** Rename group gid ('' back to its badge's name). Its name. */
+  agName(p, gid, name) { const g = agById(gid); if (!g || g.owner !== p) return ''; g.name = agCleanName(name) || agOrdinal(g.n); return g.name; },
+  /** Group gid's target size, set to v (1 to AGROUP.maxSize). */
+  agSize(p, gid, v) { const g = agById(gid); if (g && g.owner === p) g.size = clamp(v | 0, 1, AGROUP.maxSize); },
+  /** Group gid a place up (-1) or down (1) in the order reinforcements fill them. */
+  agPrio(p, gid, d) { const g = agById(gid); return !!g && g.owner === p && agMove(g, +d); },
+  /** Group gid's home: building bid (an Outpost, Keep or Command Base of p's) or, with none, the tile (i, j). '' or why not. */
+  agHome(p, gid, bid, i, j) {
+    const g = agById(gid); if (!g || g.owner !== p) return 'That group is gone.';
+    if (bid) {
+      const b = ownB(p, bid);
+      if (!b || !b.built || !(b.type === 'outpost' || b.type === 'keep' || b.type === 'lander')) return 'Pick one of your finished Outposts or Keeps, your Command Base, or open ground.';
+      g.home = { b: b.id };
+    } else {
+      if (!inMap(i | 0, j | 0) || !walkable(tIdx(i | 0, j | 0)) || S.bAt[tIdx(i | 0, j | 0)]) return 'Pick open ground your units can walk to.';
+      g.home = { x: i | 0, y: j | 0 };
+    }
+    return '';
+  },
+  /** Group gid's standing order: k (hold, defend, patrol, attack, follow), its points [[i, j]...], Defend area's radius r, the group fg to follow. '' or why not. */
+  agOrder(p, gid, k, pts, r, fg) { const g = agById(gid); if (!g || g.owner !== p) return 'That group is gone.'; return agSetOrder(g, String(k), pts, r | 0, fg | 0); },
+  /** Back to order: group gid's standing order goes on, its units back on it. */
+  agResume(p, gid) { const g = agById(gid); if (g && g.owner === p) agResume(g); },
+  /** Disband group gid: its units go back to the Reserve. */
+  agDisband(p, gid) { const g = agById(gid); if (!g || g.owner !== p) return false; agDisband(g); return true; },
   shipLine(p, uid, mid) { const u = ownU(p, uid, 'airship'); if (!u) return 'That Airship is gone.'; const b = mid ? ownB(p, mid) : null; if (mid && !b) return 'That Mooring Mast is gone.'; return setShipLine(p, u, b); },
 };
 

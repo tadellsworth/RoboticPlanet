@@ -99,7 +99,7 @@ calls made in building it, each a default for the owner to keep or change:
   robots among its legs still count. Open: B's lit deck ring and knee lights carried over for more of a "still running"
   feel at night; a Warbot seen rolling down the chute as one is built.
 
-## Army Groups (brainstormed with the owner Nov 23 2026; to build later, design first)
+## Army Groups (brainstormed with the owner Nov 23 2026; stage 1 built Nov 23 2026)
 
 The army ends up as one blob that splits itself between Outposts; on big maps the owner wants several armies, each
 with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selections.
@@ -119,6 +119,29 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   groups (defence, raid, main army).
 - **Order of work:** groups, reinforcement routing and group cards first; a Claude Design canvas for the group cards
   and panel before building (the owner: later on).
+- **Stage 1 BUILT (Nov 23 2026):** groups, reinforcement routing and group cards (README, Army Groups; How to play,
+  Army Groups; the mission *Standing Orders* in War). Escort and Raid left out (unconfirmed); the order list
+  (`AG_ORDERS`) takes new ones. Calls made, for the owner to confirm or change:
+  - **Priority is strict:** a new unit goes to the highest group in the list that's under its target size (not
+    spread by shortfall), so moving a group up means "fill this first".
+  - **Garrisons first:** while an Outpost or Keep is short of its "keep N" and the Command Base hasn't the free warbots
+    to send it, new units stay in the Reserve (which refills garrisons). With a rally point set, new warbots stationed
+    there refill no garrison anyway, so groups come first then.
+  - **Batches:** a recruit waits at the Command Base until 3 are ready (or what the group still lacks), or 30 s, then
+    they march out together (the existing squad pacing). Numbers in `AGROUP` (defs.js).
+  - **Direct orders pause the whole group** (its card says Paused); the rest of its units stay on its flag. **Back to
+    order** puts every unit back. **Recall all** brings groups home and pauses them too (their flags stay).
+  - **Keys:** Alt/⌥ + 1-6 selects a group (twice: goes to it), Alt + Shift + 1-6 opens its panel. Control groups keep
+    1-9; saving them with Alt is now only 7-9 (Ctrl/⌘/Shift still save 1-9).
+  - **Home:** a new group's home is the Outpost, Keep or Command Base its units stand by (within 6 tiles), else their
+    spot; an empty one starts at the Command Base with target 6. A group from a selection takes its size as target;
+    adding units raises the target to fit. A lost home becomes the spot where it stood.
+  - **Dragging a card** onto the map or minimap gives an Attack order to that tile (it holds there after).
+  - **The Reserve card** sits at the end of the strip: army units in no group (posted garrisons not counted).
+  - **Defend area** sizes: 4, 6, 8 or 10 tiles, picked in the panel before tapping the middle (or Around home).
+- **Open after stage 1:** should a group's units garrison inside an Outpost home on Hold (they stand beside it now)?
+  Should the Army panel's Attack/Hold be able to draw on groups? A target *mix* (12 warbots, 2 Bulwarks) isn't built:
+  groups take any army unit.
 
 ## Three new maps (the owner's ideas, Nov 23 2026; to build later)
 
