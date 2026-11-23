@@ -117,6 +117,43 @@ The open questions, decided by the owner ("do your recs", Nov 23 2026):
 - **The look:** the buildings are rendered sprites (ART_GUIDE.md, Batch 33); the ground is drawn in code. Roads on the
   town's ground (the avenues, and any a colony lays) show through its paving.
 
+## Contingency: deeper factions with sealed orders (proposal, shelved Nov 23 2026; maybe an overnight job)
+
+The owner wants the four callsigns to play very differently, with strengths that unlock over a campaign. The owner chose
+**pick 1 of 2 at each order** for variety and will review the upgrade list below before it is built. Plan: show the
+Sealed orders panel and the callsign screen as a Claude Design canvas first, then build.
+
+- **Structure.** Each faction has: a founding strength (today's perk, made bigger, plus a globe ability); three sealed
+  orders that open at T+6, T+14 and T+22, or sooner on the faction's own milestone, each a choice of 2 upgrades kept
+  for the campaign; and one weakness. Rivals open orders too, and the yearly Report names them.
+- **COBALT** (roads, movement and supply). Founding: road perk; Command Groups move 2 borders through a chain of held
+  territories. Milestone: 6 connected territories. I: Seawall Standard (cheaper Ports/ships, a Port at the start on
+  naval maps) or Interstate (Express lanes and Maglev from the start, faster trucks). II: Supply Lines (+1 Reserve per
+  territory linked to home) or Relay Convoys (reinforcements drive into battles next to your land). III: The Grand Trunk
+  (once a turn, move a Command Group to any held territory) or Accord Engineers (half-cost bridges, tunnels and
+  viaducts; enemy roads in your land become yours). Weakness: walls and fortifications cost more.
+- **VERMILION** (industry, heavy armies). Founding: mines perk; Command Groups recover stars faster. Milestone: win 4
+  battles. I: War Foundries (cheaper, faster warbots) or Deep Shafts (mines last twice as long, faster Quarries).
+  II: Heavy Patterns (Bulwarks and Howitzers from the first minute, extra armour) or Salvage Rights (wrecks drop Alloy;
+  destroyed enemy buildings pay Reserve). III: Mountain Works (every battle starts with a Keep; new Command Groups half
+  cost) or Siege Doctrine (attacks cut 1 more fortification). Weakness: slower farms and Fuel; digging draws the Murmur.
+- **VIRIDIAN** (growth, holding land, against the Murmur). Founding: farm perk and Reseed; held territories slowly grow
+  +1 income. Milestone: clear the Murmur from 3 territories. I: Firebreak (stronger Torches; the Murmur can't spread
+  into your land) or Green Belt (+1 Reserve per territory held 5 years). II: Living Hedges (regrowing hedgerow walls
+  that slow enemies) or Biofuel (half-cost farm Fuel; Generators run on it). III: The Garden Holds (half-cost
+  Atmosphere Engine; your land heals the Murmur meter) or Last Harvest (once a campaign, every territory pays double for
+  a year). Weakness: warbots cost more early on.
+- **TYRIAN** (money, orbit, deals). Founding: trade perk and Ledger Credit; one card cheaper each turn. Milestone:
+  2 Trade Posts held or 40 Reserve banked. I: Station Keepers (half-price Orbital Drops; Argos without the Lift) or
+  Ledger Keepers (Trade Posts pay double on the globe). II: Pathfinder Codes (Uplinks count faster; neutral Pathfinder
+  sites help you) or Contract Crews (spend Reserve to hire warbots mid-battle). III: Truce Broker (a 4-year
+  non-aggression pact with one rival) or Orbital Strike (a ringfall strike on any territory every 3 turns).
+  Weakness: smaller starting army.
+- **Also needed:** rival AI that picks and uses its upgrades; a Sealed orders panel on the globe (opened, next,
+  milestone progress, a pick when one opens, an icon per upgrade); the callsign screen showing style, weakness and
+  locks; How to play and guide text; AI-vs-AI campaign runs so no faction runs away with it.
+- **Open:** the owner may swap upgrades, or ask for a signature unit only one faction can build.
+
 ## Contingency campaigns (built Nov 23 2026: the owner was locked into one run)
 
 Contingency now keeps up to 5 campaigns on the device and opens on a Campaigns screen (Continue, Delete, New campaign,
