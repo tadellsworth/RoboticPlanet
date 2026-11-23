@@ -1830,10 +1830,41 @@ function drawSlope(ctx, i, j, x, y, t, n) {
   else { ctx.fillRect(x, y, TP, 3); ctx.fillRect(x, y + TP - 3, TP, 3); }
 }
 
-/** Road surfaces: concrete (pale slabs), asphalt (near-black) and the Express lane (darker and bluer, the width of a tile). */
-const ROAD_LOOK = [null, { edge: '#5d636b', fill: '#b9bec5', w: 12 }, { edge: '#15171b', fill: '#33363d', w: 12 }, { edge: '#111317', fill: '#24272e', w: 28 }];
+/**
+ * Road surfaces: concrete (pale slabs), asphalt (near-black) and the Express lane (darker and bluer, the width of a tile).
+ * `kerb`, `hi`: the kerb's stone and its lit top-left edge; `tone`: the surface's light and dark speckle.
+ */
+const ROAD_LOOK = [null,
+  { edge: '#6a6e74', fill: '#b6bac0', w: 12, kerb: '#8d9096', hi: 'rgba(238,236,228,0.55)', joint: 'rgba(70,72,78,0.45)', tyre: 'rgba(60,58,56,0.07)', speck: ['rgba(255,252,244,0.22)', 'rgba(60,62,66,0.18)'] },
+  { edge: '#15171b', fill: '#30333a', w: 12, kerb: '#4c4f55', hi: 'rgba(170,170,165,0.32)', joint: 'rgba(0,0,0,0)', tyre: 'rgba(8,8,10,0.16)', speck: ['rgba(210,205,195,0.16)', 'rgba(0,0,0,0.22)'], line: 'rgba(222,196,120,0.62)' },
+  { edge: '#111317', fill: '#24272e', w: 28 }];
 /** The Express lane's colours (the design sheet's A, renderer/preview/highway_tiles.py): shoulder, median, barrier, lines, cat's-eyes. */
 const XL = { shoulder: '#2f333a', median: '#3a3e44', barrier: '#9ca2a9', barrierSide: '#60666e', amber: 'rgba(255,209,102,0.85)', white: 'rgba(236,238,232,0.85)', red: '#ff463c', cat: '#fafaf0', hazY: '#e8b228', hazK: '#1c1c20' };
+
+/**
+ * The outline of a road tile `ww` wide (TP units, offset dx, dy): a square middle, an arm to each joined side (nb: N E S
+ * W), rounded where it ends or turns (the outer corner of a bend, a dead end) and a small fillet in each inner corner
+ * between two arms, so bends and junctions sweep instead of meeting square. Added to the current path.
+ */
+function roadShape(ctx, x, y, nb, ww, dx, dy) {
+  const c = TP / 2, h = ww / 2, cx = x + c + dx, cy = y + c + dy, n = nb[0] + nb[1] + nb[2] + nb[3];
+  const straight = n === 2 && ((nb[0] && nb[2]) || (nb[1] && nb[3]));
+  if (!straight) { ctx.moveTo(cx + h, cy); ctx.arc(cx, cy, h, 0, Math.PI * 2); }
+  else ctx.rect(cx - h, cy - h, ww, ww);
+  if (nb[0]) ctx.rect(cx - h, y + dy, ww, c);
+  if (nb[1]) ctx.rect(cx, cy - h, c, ww);
+  if (nb[2]) ctx.rect(cx - h, cy, ww, c);
+  if (nb[3]) ctx.rect(x + dx, cy - h, c, ww);
+  // fillets: in the corner between arm k and arm k+1 (N-E, E-S, S-W, W-N), radius r
+  const r = Math.min(4, c - h - 0.5);
+  if (r <= 0.5) return;
+  for (let k = 0; k < 4; k++) {
+    if (!nb[k] || !nb[(k + 1) % 4]) continue;
+    const sx = k === 0 || k === 1 ? 1 : -1, sy = k === 1 || k === 2 ? 1 : -1; // the corner's quadrant
+    const px = cx + sx * h, py = cy + sy * h; // the inner corner
+    ctx.moveTo(px, py); ctx.lineTo(px + sx * r, py); ctx.quadraticCurveTo(px, py, px, py + sy * r); ctx.closePath();
+  }
+}
 
 function drawRoad(ctx, i, j, x, y) {
   const c = TP / 2;
@@ -1841,28 +1872,87 @@ function drawRoad(ctx, i, j, x, y) {
   const tier = S.pave[t] || 1, look = ROAD_LOOK[tier], w = look.w;
   if (tier === 3) { drawExpress(ctx, i, j, x, y, t); return; }
   const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && roadLike(tIdx(i + di, j + dj)) && canStep(t, tIdx(i + di, j + dj)));
-  for (const [col, ww] of [[look.edge, w + 4], [look.fill, w]]) {
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(x + c, y + c, ww / 2, 0, Math.PI * 2);
-    ctx.fill();
-    if (nb[0]) ctx.fillRect(x + c - ww / 2, y, ww, c);
-    if (nb[1]) ctx.fillRect(x + c, y + c - ww / 2, c, ww);
-    if (nb[2]) ctx.fillRect(x + c - ww / 2, y + c, ww, c);
-    if (nb[3]) ctx.fillRect(x, y + c - ww / 2, c, ww);
+  const fillShape = (ww, dx, dy, style) => { ctx.fillStyle = style; ctx.beginPath(); roadShape(ctx, x, y, nb, ww, dx, dy); ctx.fill('nonzero'); };
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip(); // (each tile keeps to its own square, so the shifted layers meet their neighbours' cleanly)
+  // The verge: ground packed and dusted dark by the traffic, soft, a little wider than the road.
+  fillShape(w + 10, 0, 0, 'rgba(48,34,22,0.07)');
+  fillShape(w + 7, 0.4, 0.5, 'rgba(40,28,18,0.10)');
+  // The kerb: its shadow down-right, its lit edge up-left (the light comes from the top left), then the stone.
+  fillShape(w + 4, 0.7, 0.9, 'rgba(12,9,6,0.38)');
+  fillShape(w + 4, -0.45, -0.45, look.hi);
+  fillShape(w + 4, 0, 0, look.kerb);
+  fillShape(w + 1.6, 0, 0, look.edge);
+  fillShape(w, 0, 0, look.fill);
+  // Everything on the surface is kept on it.
+  ctx.save();
+  ctx.beginPath(); roadShape(ctx, x, y, nb, w, 0, 0); ctx.clip();
+  const n = nb[0] + nb[1] + nb[2] + nb[3], straight = n === 2 && ((nb[0] && nb[2]) || (nb[1] && nb[3])), ends = n === 1;
+  const h = (k) => hash2(i * 31 + k, j * 17 - k, 7701);
+  // Concrete: each slab a slightly different shade (laid at different times). (Asphalt is one even surface.)
+  if (tier === 1) { ctx.fillStyle = `rgba(${h(1) > 0.5 ? '255,250,240' : '70,70,72'},${(Math.abs(h(1) - 0.5) * 0.12).toFixed(3)})`; ctx.fillRect(x, y, TP, TP); }
+  // Tyre polish: two darker bands along each arm where the wheels run (in each lane on a two-way road).
+  ctx.fillStyle = look.tyre;
+  for (let k = 0; k < 4; k++) {
+    if (!nb[k]) continue;
+    for (const o of [-w * 0.3, -w * 0.12, w * 0.12, w * 0.3]) {
+      const bw = 1.4;
+      if (k === 0) ctx.fillRect(x + c + o - bw / 2, y, bw, c); else if (k === 2) ctx.fillRect(x + c + o - bw / 2, y + c, bw, c);
+      else if (k === 1) ctx.fillRect(x + c, y + c + o - bw / 2, c, bw); else ctx.fillRect(x, y + c + o - bw / 2, c, bw);
+    }
+  }
+  // Aggregate: fine light and dark grains, more of them on asphalt.
+  const nG = tier === 1 ? 10 : 16;
+  for (let k = 0; k < nG; k++) {
+    ctx.fillStyle = look.speck[k & 1];
+    const s = 0.45 + h(60 + k) * 0.6;
+    ctx.fillRect(x + h(20 + k) * TP, y + h(40 + k) * TP, s, s);
   }
   if (tier === 1) {
-    // Concrete slabs with expansion joints across the run.
-    ctx.fillStyle = 'rgba(60,64,70,0.35)';
-    if (nb[0] || nb[2]) ctx.fillRect(x + c - w / 2, y + 1, w, 1);
-    if (nb[1] || nb[3]) ctx.fillRect(x + 1, y + c - w / 2, 1, w);
+    // Concrete: the slabs' joints, across each arm at the tile's edge, and a faint joint down the middle.
+    ctx.fillStyle = look.joint;
+    for (let k = 0; k < 4; k++) {
+      if (!nb[k]) continue;
+      if (k === 0) ctx.fillRect(x + c - w / 2, y, w, 0.6); else if (k === 2) ctx.fillRect(x + c - w / 2, y + TP - 0.6, w, 0.6);
+      else if (k === 1) ctx.fillRect(x + TP - 0.6, y + c - w / 2, 0.6, w); else ctx.fillRect(x, y + c - w / 2, 0.6, w);
+    }
+    ctx.fillStyle = 'rgba(70,72,78,0.22)';
+    for (let k = 0; k < 4; k++) {
+      if (!nb[k]) continue;
+      if (k === 0) ctx.fillRect(x + c - 0.25, y, 0.5, c - w / 2); else if (k === 2) ctx.fillRect(x + c - 0.25, y + c + w / 2, 0.5, c - w / 2);
+      else if (k === 1) ctx.fillRect(x + c + w / 2, y + c - 0.25, c - w / 2, 0.5); else ctx.fillRect(x, y + c - 0.25, c - w / 2, 0.5);
+    }
+    // a hairline crack or a stain now and then
+    if (h(3) > 0.72) {
+      ctx.strokeStyle = 'rgba(70,72,78,0.35)'; ctx.lineWidth = 0.45;
+      let px = x + c + (h(4) - 0.5) * w * 0.8, py = y + c + (h(5) - 0.5) * w * 0.8;
+      ctx.beginPath(); ctx.moveTo(px, py); for (let s = 0; s < 3; s++) { px += (h(6 + s) - 0.5) * 6; py += (h(9 + s) - 0.5) * 6; ctx.lineTo(px, py); } ctx.stroke();
+    }
+    if (h(12) > 0.8) { ctx.fillStyle = 'rgba(90,80,64,0.13)'; ctx.beginPath(); ctx.ellipse(x + c + (h(13) - 0.5) * w * 0.6, y + c + (h(14) - 0.5) * w * 0.6, 2.4, 1.6, h(15) * 3, 0, Math.PI * 2); ctx.fill(); }
   } else {
-    // Asphalt: a faint aggregate speckle.
-    ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    for (let k = 0; k < 4; k++) ctx.fillRect(x + c - 4 + hash2(i, j, 30 + k) * 8, y + c - 4 + hash2(j, i, 40 + k) * 8, 1, 1);
+    // Asphalt: oil drip down the middle of each lane, and on a two-way road a broken centre line (none in a junction).
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let k = 0; k < 4; k++) {
+      if (!nb[k]) continue;
+      for (const o of [-w * 0.21, w * 0.21]) {
+        if (k === 0) ctx.fillRect(x + c + o - 0.8, y, 1.6, c); else if (k === 2) ctx.fillRect(x + c + o - 0.8, y + c, 1.6, c);
+        else if (k === 1) ctx.fillRect(x + c, y + c + o - 0.8, c, 1.6); else ctx.fillRect(x, y + c + o - 0.8, c, 1.6);
+      }
+    }
+    if (S.road[t] === 1 && (straight || ends)) {
+      ctx.fillStyle = look.line;
+      // dashes 8 long, 8 apart, at the same places on every tile so a straight run lines up
+      for (let k = 0; k < 4; k++) {
+        if (!nb[k]) continue;
+        if (k === 0) ctx.fillRect(x + c - 0.4, y + 4, 0.8, 8); else if (k === 2) ctx.fillRect(x + c - 0.4, y + 20, 0.8, 8);
+        else if (k === 1) ctx.fillRect(x + 20, y + c - 0.4, 8, 0.8); else ctx.fillRect(x + 4, y + c - 0.4, 8, 0.8);
+      }
+    }
     const band = S.wear ? (S.wear[t] / 250) | 0 : 0;
-    if (band) drawWear(ctx, i, j, x, y, w, nb, band);
+    if (band) { ctx.restore(); drawWear(ctx, i, j, x, y, w, nb, band); ctx.save(); }
   }
+  ctx.restore();
+  ctx.restore();
   drawRoadArrow(ctx, t, x, y);
 }
 
@@ -1903,6 +1993,12 @@ function drawExpress(ctx, i, j, x, y, t) {
       else arm(k, RW + grow, 0, 0); // a ramp: the ordinary road joins over the shoulder
     }
   };
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip(); // (kept to its own square: see drawRoad)
+  // (the verge packed dark, the kerb's shadow down-right and its lit edge up-left, as an ordinary road's)
+  const shifted = (dx, dy, grow, style) => { ctx.save(); ctx.translate(dx, dy); ctx.fillStyle = style; shape(grow); ctx.restore(); };
+  shifted(0, 0, 9, 'rgba(48,34,22,0.08)');
+  shifted(0.7, 0.9, 4, 'rgba(12,9,6,0.38)');
+  shifted(-0.45, -0.45, 4, 'rgba(160,165,170,0.3)');
   ctx.fillStyle = look.edge; shape(4);
   ctx.fillStyle = look.fill; shape(0);
   // Markings along the axis, kept on the surface.
@@ -1927,6 +2023,9 @@ function drawExpress(ctx, i, j, x, y, t) {
   // Cat's-eyes at a quarter and three quarters along: white on the lane line, amber by the median, red on the shoulder side.
   const eye = (along, across, col) => { ctx.fillStyle = col; if (ew) ctx.fillRect(x + along - 0.7, y + across - 0.7, 1.4, 1.4); else ctx.fillRect(x + across - 0.7, y + along - 0.7, 1.4, 1.4); };
   for (const a of [TP * 0.25, TP * 0.75]) { eye(a, mid, XL.cat); eye(a, in0 - 1.4, lo ? XL.amber : XL.red); eye(a, in1 + 1.4, hi ? XL.amber : XL.red); }
+  // Tyre polish: the wheel tracks of both lanes a shade darker, and a little oil down the middle of each.
+  for (const f of [0.22, 0.38, 0.62, 0.78]) { const p = in0 + (in1 - in0) * f; band(p - 0.8, p + 0.8, 'rgba(0,0,0,0.12)'); }
+  for (const f of [0.3, 0.7]) { const p = in0 + (in1 - in0) * f; band(p - 1, p + 1, 'rgba(0,0,0,0.07)'); }
   // Ramps: a hazard-striped apron across the shoulder on the side the road joins from.
   for (let k = 0; k < 4 && !S.over[t]; k++) { // (under an overpass nothing joins: no apron)
     if (!nb[k] || lane[k] || axis(k) || k === mate) continue;
@@ -1935,10 +2034,10 @@ function drawExpress(ctx, i, j, x, y, t) {
   }
   ctx.restore();
   // A faint aggregate speckle, then wear and the one-way arrow as any road has them.
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
-  for (let k = 0; k < 6; k++) ctx.fillRect(x + 3 + hash2(i, j, 30 + k) * (TP - 6), y + 3 + hash2(j, i, 40 + k) * (TP - 6), 1, 1);
+  for (let k = 0; k < 18; k++) { ctx.fillStyle = k & 1 ? 'rgba(0,0,0,0.2)' : 'rgba(220,220,225,0.12)'; const sz = 0.45 + hash2(k, i + j, 33) * 0.5; ctx.fillRect(x + 3 + hash2(i, j, 30 + k) * (TP - 6), y + 3 + hash2(j, i, 40 + k) * (TP - 6), sz, sz); }
   const wb = S.wear ? (S.wear[t] / 250) | 0 : 0;
   if (wb) drawWear(ctx, i, j, x, y, LW - 6, nb, wb);
+  ctx.restore();
   drawRoadArrow(ctx, t, x, y);
 }
 
@@ -1977,28 +2076,60 @@ function gantryLamp(e, lane) {
   return TOD.active && !murmurDarkAt(e.i + (e.ew ? 0 : lane), e.j + (e.ew ? lane : 0)) ? TOD.state.lights : 0;
 }
 
-/** A sign gantry: two grey steel posts on the verges, a lattice beam across both carriageways, and a blank green board
- * over each lane (white border); at night a small lamp under each board lights it. */
+/** A sign gantry: two galvanised steel posts on concrete footings on the verges, a box-truss beam across both
+ * carriageways (two chords and the lattice between them), and a blank green board over each lane on its catwalk, with
+ * two lamp hoods along its top; its shadow falls across the road down-sun; at night the lamps light the boards. */
 function drawGantry(ctx, e, ox, oy, z) {
-  // Seen from nearly straight above: a steel beam across both carriageways (lifted a little, its shadow on the road),
-  // a post at each end on the verge, and a blank green board over each lane hanging from the beam.
-  const lift = z * 0.22, steel = '#9aa1a8', dark = '#4f555b', green = '#1f6b3e', rim = '#eef3ef';
+  // Seen from nearly straight above: the beam lifted a little (lift) with its shadow on the road below.
+  const lift = z * 0.22, steel = '#b4bac0', steelHi = '#e2e6e9', steelDk = '#5b6168', green = '#1d6a3d', greenDk = '#134a2a', rim = '#e9efe9';
   // Along u (0..1 across both lanes) and v (thickness across the beam), mapped to the screen for either direction.
   const P = e.ew ? (u, v) => [ox + (e.i + 0.5 + v) * z, oy + (e.j - 0.04 + u * 2.08) * z - lift]
     : (u, v) => [ox + (e.i - 0.04 + u * 2.08) * z, oy + (e.j + 0.5 + v) * z - lift];
-  const rect = (u0, u1, v0, v1, col, dy) => { const [a, b] = P(u0, v0), [c, d] = P(u1, v1); ctx.fillStyle = col; ctx.fillRect(Math.min(a, c), Math.min(b, d) + (dy || 0), Math.abs(c - a), Math.abs(d - b)); };
+  const rect = (u0, u1, v0, v1, col, dx, dy) => { const [a, b] = P(u0, v0), [c, d] = P(u1, v1); ctx.fillStyle = col; ctx.fillRect(Math.min(a, c) + (dx || 0), Math.min(b, d) + (dy || 0), Math.abs(c - a), Math.abs(d - b)); };
+  const line = (u0, v0, u1, v1, dx, dy) => { const [a, b] = P(u0, v0), [c, d] = P(u1, v1); ctx.moveTo(a + (dx || 0), b + (dy || 0)); ctx.lineTo(c + (dx || 0), d + (dy || 0)); };
+  const sh = TOD.active && TOD.state && TOD.state.shadow ? TOD.state.shadow : { dx: 0.05, dy: 0.07, alpha: 0.42 };
+  const sdx = (0.35 + sh.dx * 3) * lift, sdy = lift * 1.05 + sh.dy * lift, sa = Math.min(0.42, (sh.alpha || 0.4)) * 0.8;
+  const N = 14; // lattice bays
   ctx.save();
-  rect(0, 1, -0.05, 0.12, 'rgba(0,0,0,0.25)', lift * 1.1); // shadow
-  for (const u of [0, 1]) { rect(u - 0.02, u + 0.02, -0.06, 0.06, dark, lift * 0.5); rect(u - 0.025, u + 0.025, -0.07, 0.07, dark); } // posts
-  rect(0, 1, -0.06, 0.06, steel);
-  ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1, z * 0.015);
-  for (let k = 0; k < 12; k++) { const [a, b] = P(k / 12, -0.06), [c, d] = P((k + 1) / 12, 0.06); ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); }
+  // the shadow: the chords, the lattice's broken shade, the boards
+  ctx.fillStyle = `rgba(0,0,0,${sa * 0.55})`;
+  rect(0, 1, -0.06, 0.06, ctx.fillStyle, sdx, sdy);
+  ctx.strokeStyle = `rgba(0,0,0,${sa * 0.6})`; ctx.lineWidth = Math.max(1, z * 0.012);
+  ctx.beginPath(); for (let k = 0; k < N; k++) line(k / N, -0.06, (k + 1) / N, 0.06, sdx, sdy); ctx.stroke();
+  [0.25, 0.75].forEach((c, k) => { const sg = e.sides ? e.sides[k] : 1; rect(c - 0.2, c + 0.2, 0.06 * sg, 0.34 * sg, `rgba(0,0,0,${sa})`, sdx, sdy); });
+  // footings and posts (square columns, lit on their top-left faces)
+  for (const u of [0, 1]) {
+    rect(u - 0.035, u + 0.035, -0.09, 0.09, '#8d8a84', 0, lift); // the concrete footing on the verge
+    rect(u - 0.02, u + 0.02, -0.06, 0.06, steelDk, 0, lift * 0.55);
+    rect(u - 0.028, u + 0.028, -0.075, 0.075, steelDk);
+    rect(u - 0.028, u + 0.012, -0.075, 0.06, steel);
+    rect(u - 0.028, u - 0.012, -0.075, 0.075, steelHi);
+  }
+  // the box truss: two chords, the lattice between, a cross tie at each bay
+  rect(0, 1, -0.065, 0.065, 'rgba(40,44,50,0.35)');
+  ctx.strokeStyle = steelDk; ctx.lineWidth = Math.max(1, z * 0.016); ctx.lineCap = 'round';
+  ctx.beginPath(); for (let k = 0; k < N; k++) { line(k / N, -0.055, (k + 0.5) / N, 0.055); line((k + 0.5) / N, 0.055, (k + 1) / N, -0.055); } ctx.stroke();
+  ctx.strokeStyle = steel; ctx.lineWidth = Math.max(0.7, z * 0.009);
+  ctx.beginPath(); for (let k = 0; k < N; k++) { line(k / N, -0.055, (k + 0.5) / N, 0.055); line((k + 0.5) / N, 0.055, (k + 1) / N, -0.055); } ctx.stroke();
+  ctx.strokeStyle = steelDk; ctx.lineWidth = Math.max(0.8, z * 0.012);
+  ctx.beginPath(); for (let k = 0; k <= N; k++) line(k / N, -0.06, k / N, 0.06); ctx.stroke();
+  for (const v of [-0.075, 0.045]) { rect(0, 1, v, v + 0.03, steelDk); rect(0, 1, v, v + 0.018, steel); rect(0, 1, v, v + 0.007, steelHi); }
   [0.25, 0.75].forEach((c, k) => { // the boards, each on its lane's oncoming side of the beam
     const sg = e.sides ? e.sides[k] : 1, V = (a) => a * sg;
-    rect(c - 0.2, c + 0.2, V(0.06), V(0.34), rim);
-    rect(c - 0.19, c + 0.19, V(0.075), V(0.325), green);
+    rect(c - 0.205, c + 0.205, V(0.055), V(0.085), '#6f767d'); // the catwalk grating along the beam
+    ctx.fillStyle = 'rgba(30,34,38,0.6)'; ctx.beginPath(); for (let q = 0; q < 10; q++) line(c - 0.2 + q * 0.04, V(0.058), c - 0.2 + q * 0.04, V(0.082)); ctx.strokeStyle = 'rgba(30,34,38,0.6)'; ctx.lineWidth = Math.max(0.5, z * 0.006); ctx.stroke();
+    rect(c - 0.2, c + 0.2, V(0.085), V(0.345), rim);
+    const [a, b] = P(c - 0.19, V(0.095)), [cc, d] = P(c + 0.19, V(0.335));
+    const gr = ctx.createLinearGradient(a, b, cc, d); gr.addColorStop(0, '#24804a'); gr.addColorStop(0.55, green); gr.addColorStop(1, greenDk);
+    rect(c - 0.19, c + 0.19, V(0.095), V(0.335), gr);
+    rect(c - 0.19, c + 0.19, V(0.095), V(0.11), 'rgba(0,0,0,0.25)'); // the catwalk's shade on the board's top
+    for (const q of [-0.1, 0.1]) { rect(c + q - 0.025, c + q + 0.025, V(0.082), V(0.11), '#3d4248'); rect(c + q - 0.02, c + q + 0.012, V(0.085), V(0.1), '#8a9198'); } // lamp hoods
     const on = gantryLamp(e, k);
-    if (on > 0.02) { ctx.globalAlpha = on * 0.85; rect(c - 0.16, c + 0.16, V(0.335), V(0.36), '#fff3c8'); ctx.globalAlpha = 1; }
+    if (on > 0.02) {
+      ctx.globalAlpha = on * 0.55; rect(c - 0.19, c + 0.19, V(0.11), V(0.335), 'rgba(255,246,214,0.55)');
+      ctx.globalAlpha = on; for (const q of [-0.1, 0.1]) rect(c + q - 0.018, c + q + 0.01, V(0.1), V(0.112), '#fff6d8');
+      ctx.globalAlpha = 1;
+    }
   });
   ctx.restore();
 }
@@ -2075,22 +2206,27 @@ function drawWear(ctx, i, j, x, y, w, nb, band) {
   ctx.restore();
 }
 
-/** One-way paths carry an arrow showing which way traffic flows. */
+/** One-way paths carry an arrow showing which way traffic flows: painted on the surface like a road marking (on an
+ * Express lane, every other tile, as a motorway's are spaced out). */
 function drawRoadArrow(ctx, t, x, y) {
   const c = TP / 2, r = S.road[t];
   if (r >= 2) {
     const a = Math.atan2(ROAD_DIRS[r][1], ROAD_DIRS[r][0]);
     if (ART.oneway) { drawArt(ctx, ART.oneway, x + c, y + c, TP * 0.6, a); return; }
+    const xp = S.pave[t] === 3;
+    if (xp && ((t % S.W) + ((t / S.W) | 0)) % 2) return;
+    const concrete = (S.pave[t] || 1) === 1, L = xp ? 1.25 : 1;
     ctx.save();
     ctx.translate(x + c, y + c);
     ctx.rotate(a);
-    ctx.fillStyle = '#fff3d6';
-    ctx.strokeStyle = 'rgba(40,28,18,0.75)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(6, 0); ctx.lineTo(-1, -5); ctx.lineTo(-1, -1.8); ctx.lineTo(-6, -1.8);
-    ctx.lineTo(-6, 1.8); ctx.lineTo(-1, 1.8); ctx.lineTo(-1, 5); ctx.closePath();
-    ctx.fill(); ctx.stroke();
+    ctx.scale(L, L);
+    const shape = () => { ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(1.5, -3.6); ctx.lineTo(1.5, -1.1); ctx.lineTo(-7, -1.1); ctx.lineTo(-7, 1.1); ctx.lineTo(1.5, 1.1); ctx.lineTo(1.5, 3.6); ctx.closePath(); };
+    shape(); ctx.lineJoin = 'round';
+    ctx.strokeStyle = concrete ? 'rgba(40,42,48,0.55)' : 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.stroke(); // (a dark edge, so it reads on pale concrete)
+    ctx.fillStyle = concrete ? 'rgba(250,246,232,0.95)' : 'rgba(238,236,226,0.82)'; ctx.fill();
+    // worn paint: a few flecks where the tyres have scuffed it
+    ctx.fillStyle = concrete ? 'rgba(160,162,166,0.5)' : 'rgba(40,42,46,0.45)';
+    for (let k = 0; k < 3; k++) ctx.fillRect(-6 + hash2(t, k, 7711) * 11, -0.8 + hash2(k, t, 7712) * 1.4, 0.6, 0.5);
     ctx.restore();
   }
 }
@@ -2577,10 +2713,12 @@ function pipePulses(ctx, net, segs, z) {
   for (const [flow, color, off] of [[net.flow, GOOD.crude.color, 0], [net.fflow || [], GOOD.fuel.color, z * 0.2]]) {
     const flowing = (g) => now - (flow[net.comp[g[4]]] ?? -99) < 2;
     if (!segs.some(flowing)) continue;
+    // each pulse a slug of the good seen through the pipe's sight-glass: a soft halo, its colour, a bright core
     ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, z * 0.055);
     ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9 + off;
-    strokeSegs(ctx, segs, flowing);
+    ctx.globalAlpha = 0.35; ctx.strokeStyle = color; ctx.lineWidth = Math.max(2, z * 0.11); strokeSegs(ctx, segs, flowing);
+    ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1, z * 0.055); strokeSegs(ctx, segs, flowing);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(0.6, z * 0.018); strokeSegs(ctx, segs, flowing);
     ctx.restore();
   }
 }
@@ -4682,7 +4820,9 @@ function tunnelLook(G) {
   const mix = (a, b, t) => a.map((v, k) => Math.round(v + (b[k] - v) * t));
   const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
   const soil = mix(G, [86, 64, 50], 0.2), lit = mix(G, [255, 246, 230], 0.2), shade = mix(G, [20, 14, 20], 0.5);
-  return { soil: rgb(soil), flank: rgb(mix(soil, shade, 0.35)), lit: rgb(lit, 0.4), shade, shadow: rgb(shade, 0.16), crack: rgb(mix(shade, [0, 0, 0], 0.4), 0.75), clod: rgb(shade, 0.55), clodLit: rgb(mix(soil, lit, 0.4)) };
+  return { soil: rgb(soil), flank: rgb(mix(soil, shade, 0.35)), lit: rgb(lit, 0.4), shade, shadow: rgb(shade, 0.16), crack: rgb(mix(shade, [0, 0, 0], 0.4), 0.75), clod: rgb(shade, 0.55), clodLit: rgb(mix(soil, lit, 0.4)),
+    spoil: rgb(mix(G, [214, 196, 170], 0.3), 0.22), damp: rgb(mix(G, [40, 26, 20], 0.5), 0.12), mid: rgb(mix(soil, lit, 0.5), 0.35), crest: rgb(mix(lit, [255, 250, 240], 0.5), 0.4),
+    deep: rgb(mix(soil, shade, 0.55), 0.55), fissure: rgb(mix(shade, [0, 0, 0], 0.3), 0.38), lip: rgb(mix(soil, lit, 0.7), 0.4) };
 }
 
 /** A run's width along it (tiles): full, tapering to nothing over its last tile at a dead end, where it's still digging. */
@@ -4779,11 +4919,39 @@ function runShowsAt(r, s) {
 function paintRidges(g, runs, p, L) {
   g.lineCap = 'round'; g.lineJoin = 'round';
   for (const r of runs) r.pieces = runPieces(r);
+  // The spoil: loose earth pushed up and spilled either side of the heave, paler and drier than the ground, damp at its foot.
+  if (L.spoil) { fillRuns(g, runs, p, 2.1, 0, 0.01, L.spoil); fillRuns(g, runs, p, 1.45, 0.02, 0.03, L.damp); }
   fillRuns(g, runs, p, 1.3, 0.05, 0.065, L.shadow);
   fillRuns(g, runs, p, 1.02, 0.03, 0.04, L.shadow);
   fillRuns(g, runs, p, 0.95, 0.012, 0.015, L.flank);
+  if (L.deep) fillRuns(g, runs, p, 0.9, 0.022, 0.026, L.deep); // (the shaded flank, down-right)
   fillRuns(g, runs, p, 0.8, -0.01, -0.012, L.soil);
+  // its rounded back, lit toward the top left: ever narrower, paler bands toward the crest
+  if (L.mid) fillRuns(g, runs, p, 0.62, -0.025, -0.03, L.mid);
   fillRuns(g, runs, p, 0.42, -0.04, -0.045, L.lit);
+  if (L.crest) fillRuns(g, runs, p, 0.16, -0.05, -0.055, L.crest);
+  // Fissures across the back where the crust split as it heaved: short dark cracks off the crest, a pale lip beside each.
+  if (L.fissure) {
+    g.lineWidth = Math.max(0.6, p * 0.012);
+    for (const [st, ox, oy] of [[L.lip, -0.012, -0.012], [L.fissure, 0, 0]]) {
+      g.strokeStyle = st; g.beginPath();
+      for (const r of runs) {
+        const P = r.pts;
+        for (let k = 1; k < P.length - 1; k++) {
+          const hh = hash2(r.tiles[0] + k * 13, 3, 4161);
+          if (hh < 0.66 || k % 2) continue;
+          const w = ridgeWidth(r, P[k].s);
+          if (w < 0.12 || !runShowsAt(r, P[k].s)) continue;
+          const [nx, ny] = runNormal(P, k), sd = hh > 0.83 ? 1 : -1, len = w * (0.22 + 0.22 * hash2(k, r.tiles[0], 4163)), tw = (hash2(r.tiles[0], k, 4167) - 0.5) * 0.9;
+          const tx = -ny, ty = nx, x0 = P[k][0] + ox + nx * sd * w * 0.06, y0 = P[k][1] + oy + ny * sd * w * 0.06;
+          g.moveTo(x0 * p, y0 * p);
+          g.lineTo((x0 + (nx * sd + tx * tw) * len * 0.5) * p, (y0 + (ny * sd + ty * tw) * len * 0.5) * p);
+          g.lineTo((x0 + (nx * sd - tx * tw * 0.4) * len) * p, (y0 + (ny * sd - ty * tw * 0.4) * len) * p);
+        }
+      }
+      g.stroke();
+    }
+  }
   // clods of the broken crust along both flanks
   for (const r of runs) {
     const P = r.pts;
@@ -5724,13 +5892,11 @@ function drawBot(ctx, u, sx, sy, s) {
   const bed = u.type === 'hauler' && own;
   if (bed && u.carry) drawTruckCargo(ctx, u, sx, sy + bob, -0.387 * s * 0.5, 0.531 * s * 0.5, 0.32 * s * 0.5, s, 2, 1);
   if (u.carry && !truck && !bed) {
-    const c = s * 0.1;
-    for (let k = (u.carryN || 1) - 1; k >= 0; k--) {
+    // The load on its back: small steel-framed crates, each with its good's colour on the lid.
+    const c = s * 0.1, n = (u.carryN || 1) - (HAUL.hide.has(u.id) ? 1 : 0), img = goodsCrate(u.carry);
+    for (let k = n - 1; k >= 0; k--) {
       const ox = k * c * 1.2, oy = -k * c * 0.9;
-      ctx.fillStyle = '#1b1e25';
-      ctx.fillRect(sx - c - 1 + ox, sy - s * 0.3 - c - 1 + bob + oy, c * 2 + 2, c * 2 + 2);
-      ctx.fillStyle = GOOD[u.carry].color;
-      ctx.fillRect(sx - c + ox, sy - s * 0.3 - c + bob + oy, c * 2, c * 2);
+      ctx.drawImage(img, sx - c * 1.25 + ox, sy - s * 0.3 - c * 1.25 + bob + oy, c * 2.5, c * 2.5);
     }
   }
   if (u.owner === ME && !R.clean && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
@@ -5820,6 +5986,12 @@ function workPose(u) {
     const a = R.time * 0.7 + u.id * 1.7, r = 0.33;
     return { kind: 'weld', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8, face: a + Math.PI };
   }
+  if (t.type === 'fix' && t.phase === 'work') {
+    // Mending a building: it works one spot a while, then moves round to the next.
+    const q = R.time / 2.4 + u.id * 0.37, k = Math.floor(q), f = q - k, ang = (n) => (hash2(n, u.id, 7741) * 2 - 1) * Math.PI;
+    const a = ang(k) + wrapAngle(ang(k + 1) - ang(k)) * smoothstep01(clamp((f - 0.78) / 0.22, 0, 1)), r = 0.34;
+    return { kind: 'repair', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8, face: a + Math.PI, on: f < 0.74 };
+  }
   if (t.type === 'pave' && t.phase !== 'go') {
     const c = CROSS[S.terrain[t.tile]], time = c ? c.time : roadClears(t.tile) ? PAVE_CLEAR_TIME : PAVE_TIME;
     return { kind: c ? 'deck' : 'concrete', tile: t.tile, prog: clamp(t.prog / time, 0, 1), dx: 0, dy: 0 };
@@ -5842,7 +6014,7 @@ function drawWorkUnder(ctx, u, pose, ox, oy, z) {
   const horiz = Math.abs(Math.cos(u.face)) >= Math.abs(Math.sin(u.face));
   const back = horiz ? (Math.cos(u.face) >= 0 ? 0 : 1) : (Math.sin(u.face) >= 0 ? 0 : 1); // fill starts at the edge behind it
   const p = pose.prog, w = z * 0.62, inset = (z - w) / 2;
-  const fill = pose.kind === 'asphalt' ? '#2c2f35' : pose.kind === 'deck' ? '#8f979f' : '#c3c8cf';
+  const fill = pose.kind === 'asphalt' ? '#25282d' : pose.kind === 'deck' ? '#8a929a' : '#a9afb6'; // (fresh: darker than it dries)
   ctx.fillStyle = fill;
   if (horiz) {
     const len = z * p, x0 = back === 0 ? x : x + z - len;
@@ -5851,12 +6023,26 @@ function drawWorkUnder(ctx, u, pose, ox, oy, z) {
     const len = z * p, y0 = back === 0 ? y : y + z - len;
     ctx.fillRect(x + inset, y0, w, len);
   }
-  if (pose.kind === 'concrete' || pose.kind === 'deck') {
-    // The wet edge: a brighter line where the fresh concrete is being spread.
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    const e = Math.max(1, z * 0.04), at = z * p;
-    if (horiz) ctx.fillRect(back === 0 ? x + at - e : x + z - at, y + inset, e, w);
-    else ctx.fillRect(x + inset, back === 0 ? y + at - e : y + z - at, w, e);
+  {
+    // Its wet sheen, brightest near the edge being spread, and the screed's fine ridges along it.
+    const at = z * p, e = Math.max(1, z * 0.04), sw = Math.min(at, z * 0.3), wet = pose.kind === 'asphalt' ? '255,255,255' : '235,242,250';
+    const g0 = horiz ? (back === 0 ? x + at - sw : x + z - at) : (back === 0 ? y + at - sw : y + z - at);
+    const gr = horiz ? ctx.createLinearGradient(back === 0 ? g0 : g0 + sw, 0, back === 0 ? g0 + sw : g0, 0) : ctx.createLinearGradient(0, back === 0 ? g0 : g0 + sw, 0, back === 0 ? g0 + sw : g0);
+    gr.addColorStop(0, `rgba(${wet},0)`); gr.addColorStop(1, `rgba(${wet},${pose.kind === 'asphalt' ? 0.14 : 0.3})`);
+    ctx.fillStyle = gr;
+    if (horiz) ctx.fillRect(g0, y + inset, sw, w); else ctx.fillRect(x + inset, g0, w, sw);
+    ctx.fillStyle = pose.kind === 'asphalt' ? 'rgba(0,0,0,0.25)' : 'rgba(90,96,104,0.28)';
+    for (let k = 1; k < 6; k++) { const o = inset + (w * k) / 6; if (horiz) ctx.fillRect(back === 0 ? x : x + z - at, y + o, at, Math.max(0.5, z * 0.008)); else ctx.fillRect(x + o, back === 0 ? y : y + z - at, Math.max(0.5, z * 0.008), at); }
+    if (pose.kind !== 'asphalt') { // the wet edge itself, a bright lip of concrete pushed ahead of the screed
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      if (horiz) ctx.fillRect(back === 0 ? x + at - e : x + z - at, y + inset, e, w); else ctx.fillRect(x + inset, back === 0 ? y + at - e : y + z - at, w, e);
+    }
+    if (pose.kind !== 'asphalt' && z >= 14) { // the screed bar on its arm, drawn across the road at the wet edge, shaking as it levels
+      const jig = Math.sin(R.time * 31 + u.id) * z * 0.008, ex = horiz ? (back === 0 ? x + at : x + z - at) + jig : x + z / 2, ey = horiz ? y + z / 2 : (back === 0 ? y + at : y + z - at) + jig;
+      const bx = ox + u.x * z, by = oy + u.y * z;
+      drawToolArm(ctx, bx, by, ex, ey, z, 0.3);
+      drawWorkTool(ctx, 'screed', ex, ey, horiz ? (back === 0 ? 0 : Math.PI) : (back === 0 ? Math.PI / 2 : -Math.PI / 2), z * 0.6);
+    }
   }
 }
 
@@ -5865,36 +6051,55 @@ function drawWorkOver(ctx, u, pose, sx, sy, z) {
   if (pose.kind === 'walk') return;
   if (pose.kind === 'harvest') { drawHarvest(ctx, u, pose, sx, sy, z); return; }
   const T = R.time, seed = u.id * 7.31;
-  if (pose.kind === 'weld') {
-    // The arc: a hot white-blue point in front of the bot, flickering, and sparks spraying from it.
-    const fx = sx + Math.cos(pose.face) * z * 0.2, fy = sy + Math.sin(pose.face) * z * 0.2;
-    const flick = 0.6 + 0.4 * Math.sin(T * 40 + seed);
-    const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, z * 0.22);
-    g.addColorStop(0, `rgba(235,250,255,${0.95 * flick})`); g.addColorStop(0.4, `rgba(140,210,255,${0.5 * flick})`); g.addColorStop(1, 'rgba(140,210,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(fx, fy, z * 0.22, 0, Math.PI * 2); ctx.fill();
-    for (let k = 0; k < 7; k++) {
-      const ph = (T * 2.6 + k / 7 + hash2(k, u.id, 3)) % 1;
-      const ang = pose.face + Math.PI + (hash2(k, Math.floor(T * 2.6 + k / 7), u.id) - 0.5) * 2.2;
-      const d = ph * z * 0.45;
-      const px = fx + Math.cos(ang) * d, py = fy + Math.sin(ang) * d + ph * ph * z * 0.35; // they arc and fall
-      ctx.fillStyle = `rgba(255,${200 + Math.round(55 * (1 - ph))},${90 + Math.round(120 * (1 - ph))},${1 - ph})`;
-      ctx.fillRect(px - 1, py - 1, Math.max(1.5, z * 0.045), Math.max(1.5, z * 0.045));
+  if (pose.kind === 'weld' || pose.kind === 'repair') {
+    // The arm reaches in to the frame (building) or the damaged panel (mending), the torch or wrench on its end.
+    const rep = pose.kind === 'repair', on = !rep || pose.on, fc = pose.face;
+    const shx = sx + Math.cos(fc) * z * 0.08, shy = sy + Math.sin(fc) * z * 0.08;
+    const reach = rep ? 0.3 + (on ? 0.02 * Math.sin(T * 6 + seed) : -0.06) : 0.3 + 0.03 * Math.sin(T * 1.7 + seed);
+    const fx = sx + Math.cos(fc) * z * reach + Math.cos(fc + 1.57) * z * 0.04 * Math.sin(T * 2.3 + seed), fy = sy + Math.sin(fc) * z * reach + Math.sin(fc + 1.57) * z * 0.04 * Math.sin(T * 2.3 + seed);
+    if (z >= 14) drawToolArm(ctx, shx, shy, fx - Math.cos(fc) * z * 0.06, fy - Math.sin(fc) * z * 0.06, z, rep ? -0.5 : 0.5);
+    drawWorkTool(ctx, rep ? 'wrench' : 'torch', fx - Math.cos(fc) * z * 0.06, fy - Math.sin(fc) * z * 0.06, fc, z * 0.15);
+    if (!on) return;
+    const flick = 0.6 + 0.4 * Math.sin(T * 40 + seed) * Math.sin(T * 23 + seed * 2);
+    if (rep) {
+      // Mending: the wrench's socket spins, and grinding throws a fan of orange sparks off the panel, now and then a puff.
+      harvGlow(ctx, fx, fy, z * 0.14, [255, 170, 80], 0.45 * flick);
+      harvBits(9, 3.2, u.id, 61, (k, ph, born) => {
+        const ang = fc + Math.PI + (hash2(k, born, u.id) - 0.5) * 1.6, d = ph * z * (0.22 + 0.2 * hash2(born, k, 3)), d0 = Math.max(0, d - z * 0.08);
+        workSpark(ctx, fx + Math.cos(ang) * d0, fy + Math.sin(ang) * d0 + ph * ph * z * 0.12, fx + Math.cos(ang) * d, fy + Math.sin(ang) * d + ph * ph * z * 0.2, ph, z, true);
+      });
+      const pf = (T * 0.8 + seed) % 1;
+      harvPuff(ctx, fx - Math.cos(fc) * z * 0.05, fy - pf * z * 0.25, z * (0.05 + pf * 0.1), '200,200,200', 0.25 * (1 - pf));
+      return;
     }
+    // Welding: the arc, hot blue-white with a violet fringe; the molten bead glowing orange behind it; sparks spraying,
+    // arcing down and bouncing off the ground; a wisp of fume rising.
+    harvGlow(ctx, fx, fy, z * 0.3, [120, 170, 255], 0.35 * flick);
+    harvGlow(ctx, fx, fy, z * 0.12, [235, 248, 255], 0.95 * flick);
+    harvGlow(ctx, fx - Math.cos(fc + 1.57) * z * 0.05, fy - Math.sin(fc + 1.57) * z * 0.05, z * 0.07, [255, 150, 60], 0.7);
+    ctx.lineCap = 'round';
+    harvBits(12, 2.6, u.id, 63, (k, ph, born) => {
+      const ang = fc + Math.PI + (hash2(k, born, u.id) - 0.5) * 2.4, sp = 0.35 + 0.35 * hash2(born, k, 5), fall = z * 0.42;
+      const p0 = Math.max(0, ph - 0.07), at = (q) => [fx + Math.cos(ang) * q * sp * z, fy + Math.sin(ang) * q * sp * z + q * q * fall];
+      let [x0, y0] = at(p0), [x1, y1] = at(ph);
+      const ground = fy + z * 0.22; // (they hit the ground and skip on, flatter)
+      if (y1 > ground) { y1 = ground - (y1 - ground) * 0.25; if (y0 > ground) y0 = ground - (y0 - ground) * 0.25; }
+      workSpark(ctx, x0, y0, x1, y1, ph, z, ph > 0.35);
+    });
+    const pf = (T * 0.6 + seed) % 1;
+    harvPuff(ctx, fx + Math.sin(pf * 5) * z * 0.04, fy - pf * z * 0.35, z * (0.04 + pf * 0.12), '210,215,225', 0.22 * (1 - pf));
   } else if (pose.kind === 'asphalt') {
-    // Steam curling up off the hot asphalt behind the Paver.
+    // Heat coming off the hot asphalt behind the Paver: soft puffs of steam curling up and drifting.
     const bx = sx - Math.cos(u.face) * z * 0.3, by = sy - Math.sin(u.face) * z * 0.3;
-    for (let k = 0; k < 4; k++) {
-      const ph = (T * 0.9 + k / 4 + hash2(k, u.id, 5)) % 1;
-      ctx.fillStyle = `rgba(235,235,235,${0.35 * (1 - ph)})`;
-      ctx.beginPath(); ctx.arc(bx + Math.sin(ph * 6 + k) * z * 0.08 + (k - 1.5) * z * 0.1, by - ph * z * 0.6, z * (0.06 + ph * 0.12), 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 5; k++) {
+      const ph = (T * 0.8 + k / 5 + hash2(k, u.id, 5)) % 1;
+      harvPuff(ctx, bx + Math.sin(ph * 6 + k) * z * 0.08 + (k - 2) * z * 0.08 + ph * z * 0.1, by - ph * z * 0.6, z * (0.07 + ph * 0.16), '236,236,232', 0.32 * (1 - ph) * Math.min(1, ph * 6));
     }
   } else {
-    // Concrete dust kicking up as it's spread.
+    // Spreading concrete: dust kicking up off the screed (drawn with the wet concrete, under the robot: drawWorkUnder).
     for (let k = 0; k < 3; k++) {
       const ph = (T * 1.4 + k / 3 + hash2(k, u.id, 9)) % 1;
-      ctx.fillStyle = `rgba(215,205,190,${0.4 * (1 - ph)})`;
-      ctx.beginPath(); ctx.arc(sx + (hash2(k, u.id, 2) - 0.5) * z * 0.5, sy + z * 0.15 - ph * z * 0.3, z * (0.05 + ph * 0.08), 0, Math.PI * 2); ctx.fill();
+      harvPuff(ctx, sx + (hash2(k, u.id, 2) - 0.5) * z * 0.5, sy + z * 0.15 - ph * z * 0.3, z * (0.06 + ph * 0.1), '215,205,190', 0.35 * (1 - ph));
     }
   }
 }
@@ -6099,17 +6304,115 @@ function harvBits(n, rate, id, salt, fn) {
   }
 }
 
-/** The arm from the robot (x0, y0) out to its tool (x1, y1), bent at the elbow (screen pixels). */
+/*
+ * The work tools, drawn once in code into small sprites (WORK_TOOLS, 64 px, seen from straight above, pointing +x, lit
+ * from the top left as the rendered robots are): the scythe blade, the drill head and its bit, the hammer head, the
+ * gripper's palm, the welding torch, the repair wrench. Drawn at about a tenth of a tile on the end of the arm.
+ */
+const WORK_TOOLS = {};
+function workTool(kind) {
+  if (WORK_TOOLS[kind]) return WORK_TOOLS[kind];
+  const n = 64, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d');
+  g.translate(n / 2, n / 2);
+  const steel = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, '#eef2f5'); gr.addColorStop(0.45, '#a9b2bc'); gr.addColorStop(1, '#4d545c'); return gr; };
+  const dark = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, '#5a616a'); gr.addColorStop(1, '#1f2328'); return gr; };
+  const outline = (w) => { g.lineWidth = w || 1.6; g.strokeStyle = 'rgba(10,12,14,0.85)'; g.stroke(); };
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const rr = (x, y, w, h, r) => { if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
+  if (kind === 'blade') {
+    // a curved blade on a short hub: bright edge on the outside of the curve
+    g.beginPath(); g.arc(-6, 0, 22, -1.25, 1.25); g.arc(-12, 0, 17, 1.05, -1.05, true); g.closePath();
+    g.fillStyle = steel(-10, -22, 10, 22); g.fill(); outline(1.4);
+    g.beginPath(); g.arc(-6, 0, 21, -1.15, 1.15); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 1.6; g.stroke();
+    g.beginPath(); g.arc(-14, 0, 7, 0, Math.PI * 2); g.fillStyle = dark(-20, -6, -8, 6); g.fill(); outline(1.2);
+    g.beginPath(); g.arc(-14, 0, 2.4, 0, Math.PI * 2); g.fillStyle = '#d9a72c'; g.fill();
+  } else if (kind === 'drill') {
+    // the motor housing, then the fluted bit reaching out of it
+    g.beginPath(); rr(-24, -11, 26, 22, 5); g.fillStyle = dark(-24, -11, 2, 11); g.fill(); outline();
+    g.fillStyle = '#e8b228'; g.fillRect(-20, -11, 4, 22); g.fillStyle = 'rgba(0,0,0,0.5)'; for (let k = 0; k < 3; k++) g.fillRect(-12 + k * 4, -8, 2, 16);
+    g.beginPath(); g.moveTo(2, -6); g.lineTo(26, -1.5); g.lineTo(28, 0); g.lineTo(26, 1.5); g.lineTo(2, 6); g.closePath();
+    g.fillStyle = steel(2, -6, 2, 6); g.fill(); outline(1.2);
+    g.strokeStyle = 'rgba(40,44,50,0.8)'; g.lineWidth = 1.2; for (let k = 0; k < 5; k++) { const x = 5 + k * 4.4; g.beginPath(); g.moveTo(x, -5 + k * 0.8); g.lineTo(x + 3, 5 - k * 0.8); g.stroke(); }
+  } else if (kind === 'hammer') {
+    // a heavy head square to the haft, its striking face bright
+    g.fillStyle = dark(-24, -3, -24, 3); g.fillRect(-26, -3, 22, 6);
+    g.beginPath(); rr(-6, -16, 20, 32, 3); g.fillStyle = dark(-6, -16, 14, 16); g.fill(); outline();
+    g.fillStyle = steel(10, -16, 16, 16); g.fillRect(9, -15, 6, 30);
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-4, -14, 12, 3);
+    g.fillStyle = '#e8b228'; g.fillRect(-2, -16, 3, 32); g.fillStyle = '#1c1c20'; for (let k = -16; k < 16; k += 6) g.fillRect(-2, k, 3, 3);
+  } else if (kind === 'gripper') {
+    // the palm (the fingers are drawn live, opening and closing)
+    g.beginPath(); rr(-14, -10, 18, 20, 5); g.fillStyle = dark(-14, -10, 4, 10); g.fill(); outline();
+    g.beginPath(); g.arc(-5, 0, 4.5, 0, Math.PI * 2); g.fillStyle = steel(-9, -4, -1, 4); g.fill();
+    g.fillStyle = '#6fbf3e'; g.fillRect(-13, -2, 3, 4);
+  } else if (kind === 'torch') {
+    // the welding torch: a body, a swan-neck and a copper nozzle
+    g.beginPath(); rr(-24, -6, 18, 12, 4); g.fillStyle = dark(-24, -6, -6, 6); g.fill(); outline();
+    g.fillStyle = '#ff9a3c'; g.fillRect(-20, -6, 3, 12);
+    g.beginPath(); g.moveTo(-6, -3); g.quadraticCurveTo(8, -5, 14, 0); g.quadraticCurveTo(8, 5, -6, 3); g.closePath(); g.fillStyle = steel(-6, -4, -6, 4); g.fill(); outline(1.2);
+    g.beginPath(); g.moveTo(12, -4.5); g.lineTo(22, -3); g.lineTo(22, 3); g.lineTo(12, 4.5); g.closePath();
+    const cu = g.createLinearGradient(0, -4, 0, 4); cu.addColorStop(0, '#f2c08a'); cu.addColorStop(0.5, '#c27a3f'); cu.addColorStop(1, '#6b3a18'); g.fillStyle = cu; g.fill(); outline(1.2);
+  } else if (kind === 'wrench') {
+    // a powered wrench: a socket head on a short body, team-neutral, with an amber band
+    g.beginPath(); rr(-24, -6, 22, 12, 4); g.fillStyle = dark(-24, -6, -2, 6); g.fill(); outline();
+    g.fillStyle = '#e8b228'; g.fillRect(-16, -6, 4, 12);
+    g.beginPath(); g.arc(8, 0, 10, 0, Math.PI * 2); g.fillStyle = steel(-2, -10, 18, 10); g.fill(); outline();
+    g.beginPath(); for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; g.lineTo(8 + Math.cos(a) * 5, Math.sin(a) * 5); } g.closePath(); g.fillStyle = '#23272c'; g.fill();
+  } else if (kind === 'screed') {
+    // a screed bar: a long flat blade the width of the road, on a short arm
+    g.beginPath(); rr(-4, -28, 10, 56, 3); g.fillStyle = steel(-4, -28, 6, 28); g.fill(); outline(1.2);
+    g.fillStyle = 'rgba(160,165,170,0.9)'; g.fillRect(4, -27, 2, 54);
+    g.fillStyle = dark(-16, -4, -4, 4); g.fillRect(-18, -4, 14, 8);
+  }
+  return (WORK_TOOLS[kind] = c);
+}
+
+/** Tool sprite `kind` at (x, y), turned to angle a, `size` pixels across (its 64 px canvas). */
+function drawWorkTool(ctx, kind, x, y, a, size) {
+  const img = workTool(kind);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
+/** A spark (a short hot streak from where it was to where it is, so it reads as moving fast), cooling as it goes. */
+function workSpark(ctx, x0, y0, x1, y1, ph, z, warm) {
+  const hot = 1 - ph;
+  ctx.strokeStyle = warm ? `rgba(255,${170 + Math.round(80 * hot)},${60 + Math.round(120 * hot)},${hot})` : `rgba(${220 + Math.round(35 * hot)},${235 + Math.round(20 * hot)},255,${hot})`;
+  ctx.lineWidth = Math.max(0.8, z * 0.014 * (0.6 + hot * 0.6));
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+}
+
+/** The arm from the robot (x0, y0) out to its tool (x1, y1), bent at the elbow (screen pixels): a heavy upper arm with
+ * its hydraulic ram alongside, a lighter forearm, bolted joints, its soft shadow on the ground under it. */
 function drawToolArm(ctx, x0, y0, x1, y1, z, bend) {
   const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
   const mx = (x0 + x1) / 2 - (dy / len) * len * 0.22 * bend, my = (y0 + y1) / 2 + (dx / len) * len * 0.22 * bend;
-  const path = (o) => { ctx.beginPath(); ctx.moveTo(x0 + o, y0 + o * 1.3); ctx.lineTo(mx + o, my + o * 1.3); ctx.lineTo(x1 + o, y1 + o * 1.3); ctx.stroke(); };
+  const seg = (ax, ay, bx, by, o) => { ctx.beginPath(); ctx.moveTo(ax + o, ay + o * 1.3); ctx.lineTo(bx + o, by + o * 1.3); ctx.stroke(); };
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(10,8,5,0.28)'; ctx.lineWidth = Math.max(2, z * 0.045); path(z * 0.03); // (its shadow)
-  ctx.strokeStyle = '#262a30'; ctx.lineWidth = Math.max(1.6, z * 0.04); path(0);
-  ctx.strokeStyle = '#a9b2bc'; ctx.lineWidth = Math.max(0.7, z * 0.013); path(0);
-  ctx.fillStyle = '#d9a72c';
-  ctx.beginPath(); ctx.arc(mx, my, Math.max(1, z * 0.022), 0, Math.PI * 2); ctx.fill();
+  // the shadow
+  ctx.strokeStyle = 'rgba(10,8,5,0.26)'; ctx.lineWidth = Math.max(2, z * 0.05);
+  seg(x0, y0, mx, my, z * 0.035); seg(mx, my, x1, y1, z * 0.035);
+  // upper arm: dark casing, a lit edge
+  ctx.strokeStyle = '#1d2126'; ctx.lineWidth = Math.max(2, z * 0.052); seg(x0, y0, mx, my, 0);
+  ctx.strokeStyle = '#4a515a'; ctx.lineWidth = Math.max(1.2, z * 0.034); seg(x0, y0, mx, my, 0);
+  ctx.strokeStyle = 'rgba(220,228,236,0.55)'; ctx.lineWidth = Math.max(0.6, z * 0.01); seg(x0, y0, mx, my, -z * 0.008);
+  // the ram: a bright rod beside the upper arm
+  const ux = (mx - x0), uy = (my - y0), ul = Math.hypot(ux, uy) || 1, nx = -uy / ul, ny = ux / ul, ro = z * 0.028 * (bend >= 0 ? 1 : -1);
+  ctx.strokeStyle = '#2a2e34'; ctx.lineWidth = Math.max(1, z * 0.018); seg(x0 + nx * ro + ux * 0.15, y0 + ny * ro + uy * 0.15, x0 + nx * ro + ux * 0.6, y0 + ny * ro + uy * 0.6, 0);
+  ctx.strokeStyle = '#d8dee4'; ctx.lineWidth = Math.max(0.6, z * 0.008); seg(x0 + nx * ro + ux * 0.55, y0 + ny * ro + uy * 0.55, x0 + nx * ro + ux * 0.85, y0 + ny * ro + uy * 0.85, 0);
+  // forearm
+  ctx.strokeStyle = '#1d2126'; ctx.lineWidth = Math.max(1.6, z * 0.038); seg(mx, my, x1, y1, 0);
+  ctx.strokeStyle = '#8e98a3'; ctx.lineWidth = Math.max(0.9, z * 0.022); seg(mx, my, x1, y1, 0);
+  ctx.strokeStyle = 'rgba(240,244,248,0.6)'; ctx.lineWidth = Math.max(0.5, z * 0.007); seg(mx, my, x1, y1, -z * 0.006);
+  // joints: the shoulder and the elbow, bolted, the elbow banded amber
+  for (const [x, y, r, col] of [[x0, y0, z * 0.034, '#30353b'], [mx, my, z * 0.03, '#d9a72c']]) {
+    ctx.fillStyle = '#121418'; ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, r * 1.15), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, Math.max(1, r), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, Math.max(0.5, r * 0.35), 0, Math.PI * 2); ctx.fill();
+  }
   ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
 }
 
@@ -6175,8 +6478,8 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
       ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
     }
     const dir = Math.atan2(hy - shy, hx - shx);
-    ctx.strokeStyle = vein ? '#f0dcff' : '#eef3f6'; ctx.lineWidth = Math.max(1, z * 0.018);
-    ctx.beginPath(); ctx.arc(hx, hy, z * 0.05, dir - 1.2, dir + 1.2); ctx.stroke();
+    drawWorkTool(ctx, 'blade', hx, hy, dir, z * 0.17);
+    if (vein) harvGlow(ctx, hx + Math.cos(dir) * z * 0.04, hy + Math.sin(dir) * z * 0.04, z * 0.06, [215, 170, 255], 0.5 * glow);
     ctx.lineCap = 'butt';
     // What it cuts: flecks of cane thrown off the way the blade was going, or the vein's glowing motes rising.
     harvBits(vein ? 8 : 7, vein ? 0.9 : 1.6, u.id, vein ? 23 : 21, (k, ph, born) => {
@@ -6202,12 +6505,17 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
       else harvPuff(ctx, hx, hy, z * (0.16 + 0.02 * Math.sin(tm * 5)), '140,108,84', 0.32);
     }
     if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, -0.5);
-    // The bit, turning while it bores.
-    const br = Math.max(1.5, z * 0.045);
-    ctx.fillStyle = '#41464e'; ctx.beginPath(); ctx.arc(hx, hy, br, 0, TAU); ctx.fill();
-    ctx.strokeStyle = U ? '#b9ffb0' : '#cfd4dc'; ctx.lineWidth = Math.max(0.8, z * 0.012);
-    const spin = a.on ? tm * 40 : 0;
-    for (let k = 0; k < 3; k++) { const s = spin + (k * TAU) / 3; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(s) * br, hy + Math.sin(s) * br); ctx.stroke(); }
+    // The drill head, its bit boring in (a blur of light flickering along the flutes while it turns).
+    const dA = Math.atan2(hy - shy, hx - shx), dsz = z * 0.17;
+    drawWorkTool(ctx, 'drill', hx - Math.cos(dA) * dsz * 0.12, hy - Math.sin(dA) * dsz * 0.12, dA, dsz);
+    if (a.on) {
+      const bx0 = hx + Math.cos(dA) * dsz * 0.05, by0 = hy + Math.sin(dA) * dsz * 0.05, bl = dsz * 0.36;
+      for (let k = 0; k < 3; k++) {
+        const f = ((tm * 9 + k / 3) % 1), px2 = bx0 + Math.cos(dA) * bl * f, py2 = by0 + Math.sin(dA) * bl * f, w2 = dsz * 0.07 * (1 - f * 0.7);
+        ctx.strokeStyle = U ? `rgba(200,255,190,${0.8 * (1 - f)})` : `rgba(255,255,255,${0.75 * (1 - f)})`; ctx.lineWidth = Math.max(0.6, z * 0.008);
+        ctx.beginPath(); ctx.moveTo(px2 - Math.sin(dA) * w2, py2 + Math.cos(dA) * w2); ctx.lineTo(px2 + Math.sin(dA) * w2, py2 - Math.cos(dA) * w2); ctx.stroke();
+      }
+    }
     // Cuttings sprayed out of the hole (glowing green ones from Uranium), and sparks off the bit.
     harvBits(9, 2.4, u.id, 31, (k, ph, born) => {
       const qb = (tm - ph / 2.4) / a.P + a.off * 7, fb = qb - Math.floor(qb);
@@ -6221,9 +6529,8 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
     });
     if (a.on) harvBits(4, 4, u.id, 37, (k, ph, born) => {
       if (hash2(born, k, 9) > 0.5) return;
-      const ang = hash2(k, born, 3) * TAU, d = ph * z * 0.22;
-      ctx.strokeStyle = `rgba(255,${190 + Math.round(60 * (1 - ph))},110,${1 - ph})`; ctx.lineWidth = Math.max(1, z * 0.014);
-      ctx.beginPath(); ctx.moveTo(hx + Math.cos(ang) * d, hy + Math.sin(ang) * d); ctx.lineTo(hx + Math.cos(ang) * (d + z * 0.04), hy + Math.sin(ang) * (d + z * 0.04)); ctx.stroke();
+      const ang = hash2(k, born, 3) * TAU, d = ph * z * 0.24, d0 = Math.max(0, d - z * 0.07);
+      workSpark(ctx, hx + Math.cos(ang) * d0, hy + Math.sin(ang) * d0 + ph * ph * z * 0.05, hx + Math.cos(ang) * d, hy + Math.sin(ang) * d + ph * ph * z * 0.08, ph, z, true);
     });
   } else if (hk === 'break' || hk === 'face') {
     const F = hk === 'face', [ix, iy] = at(a.reachHit + 0.03, a.hitLat), age = a.age;
@@ -6234,10 +6541,7 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
     }
     if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, 0.45);
     // The hammer's head, square to the arm, its striking face bright.
-    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(hy - shy, hx - shx));
-    ctx.fillStyle = '#31353b'; ctx.fillRect(-z * 0.035, -z * 0.048, z * 0.075, z * 0.096);
-    ctx.fillStyle = '#9aa2ab'; ctx.fillRect(z * 0.03, -z * 0.048, Math.max(1, z * 0.014), z * 0.096);
-    ctx.restore();
+    drawWorkTool(ctx, 'hammer', hx, hy, Math.atan2(hy - shy, hx - shx), z * 0.17);
     // The blow: a flash, and chips of stone flung back off the rock, hopping and tumbling.
     if (age < 0.09) {
       harvGlow(ctx, ix, iy, z * 0.2 * (1 - age / 0.09), [255, 240, 205], 0.9);
@@ -6270,7 +6574,7 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
       harvGlow(ctx, qx, qy, z * 0.15, [160, 240, 255], 0.85 * fl * glow);
       harvGlow(ctx, ex, ey, z * 0.08, [120, 220, 255], 0.6 * glow);
     }
-    ctx.fillStyle = '#2a2f36'; ctx.beginPath(); ctx.arc(ex, ey, Math.max(1.2, z * 0.03), 0, TAU); ctx.fill();
+    drawWorkTool(ctx, 'torch', ex - Math.cos(Math.atan2(qy - ey, qx - ex)) * z * 0.05, ey - Math.sin(Math.atan2(qy - ey, qx - ex)) * z * 0.05, Math.atan2(qy - ey, qx - ex), z * 0.13);
     ctx.fillStyle = a.on ? '#bff6ff' : '#4f8fa0'; ctx.beginPath(); ctx.arc(ex, ey, Math.max(0.8, z * 0.014), 0, TAU); ctx.fill();
     // Glints twinkling over the cluster; a piece coming away as each pass ends; slivers off the beam's spot.
     harvBits(4, 0.7, u.id, 41, (k, ph, born) => {
@@ -6290,8 +6594,12 @@ function drawHarvest(ctx, u, pose, sx, sy, z) {
     const pick = hk === 'pick';
     if (fine) drawToolArm(ctx, shx, shy, hx, hy, z, 0.5);
     const dirA = Math.atan2(hy - shy, hx - shx), open = pick ? (a.snip || a.f >= 0.5 ? 0.12 : 0.5) : a.q < 0.5 ? 0.14 : 0.45;
-    ctx.strokeStyle = '#d7dce1'; ctx.lineWidth = Math.max(1, z * 0.016); ctx.lineCap = 'round';
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(dirA + s * open) * z * 0.06, hy + Math.sin(dirA + s * open) * z * 0.06); ctx.stroke(); }
+    drawWorkTool(ctx, 'gripper', hx, hy, dirA, z * 0.12);
+    ctx.lineCap = 'round';
+    for (const [col, lw] of [['#16191d', 0.026], ['#c9d0d7', 0.014]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, z * lw);
+      for (const s of [-1, 1]) { const ex2 = hx + Math.cos(dirA + s * open) * z * 0.05, ey2 = hy + Math.sin(dirA + s * open) * z * 0.05; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(ex2, ey2); ctx.lineTo(ex2 + Math.cos(dirA - s * open * 0.6) * z * 0.03, ey2 + Math.sin(dirA - s * open * 0.6) * z * 0.03); ctx.stroke(); }
+    }
     ctx.lineCap = 'butt';
     if (pick) {
       // The pod it snipped, carried back along the arm to the hopper.
@@ -7084,6 +7392,7 @@ function render(dtReal) {
       const ga = ctx.globalAlpha, apart = recyclingNow(e) ? clamp(e.task.t / recycleTime(e.type), 0, 1) : 0;
       if (apart) ctx.globalAlpha = ga * (1 - 0.8 * apart);
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
+      if (e.type === 'worker' && z >= 10) drawHaulMove(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z); // (an arm loading or unloading its crate)
       if (BOTS[e.type].truck) vehicleSmoke(e, e.x + jx, e.y + jy, e.face || 0);
       if (e.loot) drawCrate(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - z * 0.22, z * 0.2, e.loot);
       ctx.globalAlpha = ga;
@@ -8516,6 +8825,53 @@ function drawAim(ctx, ox, oy, z) {
 
 /** Your rally flags, with how many warbots hold each one. */
 /** A supply crate (side s px) marked with the colour of the good in it. */
+/** A small crate of good g (made once per good, 40 px): a steel frame, a dark body, the good's colour on its lid, lit
+ * from the top left with a soft shadow down-right. */
+const GOODS_CRATES = {};
+function goodsCrate(g) {
+  if (GOODS_CRATES[g]) return GOODS_CRATES[g];
+  const n = 40, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const x = c.getContext('2d'), col = (GOOD[g] && GOOD[g].color) || '#c0c6cc';
+  x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(10, 11, 26, 26); // shadow
+  x.fillStyle = '#16191e'; x.fillRect(6, 6, 28, 28);
+  const fr = x.createLinearGradient(6, 6, 34, 34); fr.addColorStop(0, '#c7ced5'); fr.addColorStop(1, '#4a5058');
+  x.fillStyle = fr; x.fillRect(7, 7, 26, 26);
+  x.fillStyle = col; x.fillRect(10, 10, 20, 20);
+  const sh = x.createLinearGradient(10, 10, 30, 30); sh.addColorStop(0, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.35)');
+  x.fillStyle = sh; x.fillRect(10, 10, 20, 20);
+  x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(19, 10, 2, 20); // the lid's seam
+  x.fillStyle = '#e8ecef'; for (const [a, b] of [[8, 8], [30, 8], [8, 30], [30, 30]]) x.fillRect(a, b, 2, 2); // corner bolts
+  return (GOODS_CRATES[g] = c);
+}
+
+/**
+ * Loading and unloading (drawing only): when a robot's load changes, its arm lifts the crate from in front of it onto
+ * its back (or sets it down in front), over HAUL.dur seconds. Watched from the robots' `carry` alone; nothing is kept
+ * in S.
+ */
+const HAUL = { seen: new Map(), moves: new Map(), hide: new Set(), dur: 0.65, of: null };
+function drawHaulMove(ctx, u, sx, sy, z) {
+  if (HAUL.of !== S) { HAUL.of = S; HAUL.seen.clear(); HAUL.moves.clear(); HAUL.hide.clear(); }
+  const was = HAUL.seen.get(u.id), now = u.carry || null;
+  HAUL.seen.set(u.id, now);
+  if (was !== undefined && was !== now && (now || was)) HAUL.moves.set(u.id, { t0: R.time, good: now || was, up: !!now });
+  const m = HAUL.moves.get(u.id);
+  HAUL.hide.delete(u.id);
+  if (!m) return;
+  const f = (R.time - m.t0) / HAUL.dur;
+  if (f >= 1 || f < 0) { HAUL.moves.delete(u.id); return; }
+  if (m.up) HAUL.hide.add(u.id); // (its top crate is the one on the move)
+  const fc = u.face || 0, s = z, ax = sx + Math.cos(fc) * s * 0.42, ay = sy + Math.sin(fc) * s * 0.42 + s * 0.04, bx = sx, by = sy - s * 0.3;
+  const k = smoothstep01(m.up ? f : 1 - f), x = ax + (bx - ax) * k, y = ay + (by - ay) * k - Math.sin(Math.PI * k) * s * 0.22;
+  if (z >= 14) drawToolArm(ctx, sx + Math.cos(fc) * s * 0.06, sy + Math.sin(fc) * s * 0.06, x, y + s * 0.04, z, 0.6);
+  const c = s * 0.1 * (1 + 0.15 * Math.sin(Math.PI * k));
+  ctx.save(); if (!m.up && f > 0.8) ctx.globalAlpha *= (1 - f) / 0.2;
+  ctx.drawImage(goodsCrate(m.good), x - c * 1.25, y - c * 1.25, c * 2.5, c * 2.5);
+  ctx.restore();
+  drawWorkTool(ctx, 'gripper', x - Math.cos(fc) * c * 0.2, y + c * 0.9, fc - Math.PI / 2, z * 0.1);
+}
+
 function drawCrate(ctx, cx, cy, s, g) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(cx - s / 2 + s * 0.12, cy - s / 2 + s * 0.12, s, s);
@@ -9249,16 +9605,16 @@ function layoutMinimap() {
 }
 
 function rebuildMinimapBase() {
-  if (!MM.base || MM.base.width !== S.W || MM.base.height !== S.H) {
-    MM.base = document.createElement('canvas');
-    MM.base.width = S.W; MM.base.height = S.H;
-    MM.baseCtx = MM.base.getContext('2d');
+  if (!MM.tiles || MM.tiles.width !== S.W || MM.tiles.height !== S.H) {
+    MM.tiles = document.createElement('canvas');
+    MM.tiles.width = S.W; MM.tiles.height = S.H;
+    MM.baseCtx = MM.tiles.getContext('2d');
   }
   const img = MM.baseCtx.createImageData(S.W, S.H);
   const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
-    let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] === R_OIL ? MM_COLORS[R_OIL] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : (S.burnt && S.burnt[t]) || (S.ash && S.ash[t] > SCARS.light) ? MM_COLORS.burnt : S.crater && S.crater[t] >= 3 ? [70, 56, 40] : MM_COLORS.ground;
     const blend = R.biomeMix?.[t] || 0;
     if (blend) {
@@ -9276,7 +9632,7 @@ function rebuildMinimapBase() {
       c = [Math.min(255, c[0] * f), Math.min(255, c[1] * f), Math.min(255, c[2] * f)];
     }
     const o = S.owner[t];
-    const k = o >= 0 && terr === T_GROUND ? 0.32 : 0;
+    const k = o >= 0 && terr === T_GROUND ? 0.22 : 0; // (its border is drawn as a line: minimapDetail)
     const i = t * 4;
     img.data[i] = c[0] + (k ? (team[o][0] - c[0]) * k : 0);
     img.data[i + 1] = c[1] + (k ? (team[o][1] - c[1]) * k : 0);
@@ -9284,9 +9640,79 @@ function rebuildMinimapBase() {
     img.data[i + 3] = 255;
   }
   MM.baseCtx.putImageData(img, 0, 0);
+  minimapDetail(team);
   MM.dirty = false;
+  MM.roadVer = S.roadVer;
   MM.ver = S.territoryVer;
   MM.builtAt = R.time;
+}
+
+/**
+ * The minimap's picture at a few pixels a tile (MM.base): the tile colours smoothed, the land's relief (higher ground
+ * lit along its top-left edges and casting a little shade down-right), a pale line of surf along every shore, the
+ * roads as fine light lines, each colony's border as a crisp line in its colour, and the resources as small dots in
+ * their colours (instead of whole tiles), so it reads as a map rather than a mosaic.
+ */
+function minimapDetail(team) {
+  const W = S.W, H = S.H, K = clamp(Math.ceil(((MM.w || 156) * (R.dpr || 1)) / W), 2, 5);
+  if (!MM.base || MM.base.width !== W * K || MM.base.height !== H * K) { MM.base = document.createElement('canvas'); MM.base.width = W * K; MM.base.height = H * K; }
+  const g = MM.base.getContext('2d');
+  g.imageSmoothingEnabled = true;
+  g.clearRect(0, 0, W * K, H * K);
+  g.drawImage(MM.tiles, 0, 0, W * K, H * K);
+  g.imageSmoothingEnabled = false;
+  g.globalAlpha = 0.45;
+  g.drawImage(MM.tiles, 0, 0, W * K, H * K); // (crisp over the smooth, at half strength: soft but not blurred)
+  g.globalAlpha = 1;
+  const el = (i, j) => (inMap(i, j) && S.terrain[tIdx(i, j)] !== T_WATER && S.terrain[tIdx(i, j)] !== T_CHASM ? S.elev[tIdx(i, j)] + (S.terrain[tIdx(i, j)] === T_ROCK ? 1.5 : 0) : -1);
+  const lit = 'rgba(255,240,215,0.28)', shade = 'rgba(20,10,4,0.32)', surf = 'rgba(205,235,240,0.55)';
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i, e = el(i, j), x = i * K, y = j * K;
+    if (e >= 0) {
+      if (el(i, j - 1) >= 0 && e > el(i, j - 1)) { g.fillStyle = lit; g.fillRect(x, y, K, Math.max(1, K * 0.3)); }
+      if (el(i - 1, j) >= 0 && e > el(i - 1, j)) { g.fillStyle = lit; g.fillRect(x, y, Math.max(1, K * 0.3), K); }
+      if (e > el(i, j + 1) && el(i, j + 1) >= 0) { g.fillStyle = shade; g.fillRect(x, y + K, K, Math.max(1, K * 0.45)); }
+      if (e > el(i + 1, j) && el(i + 1, j) >= 0) { g.fillStyle = shade; g.fillRect(x + K, y, Math.max(1, K * 0.45), K); }
+    } else if (S.terrain[t] === T_WATER) {
+      g.fillStyle = surf;
+      for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        if (!inMap(i + di, j + dj) || S.terrain[tIdx(i + di, j + dj)] === T_WATER) continue;
+        const w = Math.max(1, K * 0.25);
+        if (dj < 0) g.fillRect(x, y, K, w); else if (dj > 0) g.fillRect(x, y + K - w, K, w); else if (di < 0) g.fillRect(x, y, w, K); else g.fillRect(x + K - w, y, w, K);
+      }
+    }
+  }
+  // roads: a fine light line from each tile's middle to its road neighbours
+  g.strokeStyle = 'rgba(232,230,220,0.5)'; g.lineWidth = Math.max(1, K * 0.3); g.lineCap = 'round';
+  g.beginPath();
+  for (let t = 0; t < W * H; t++) {
+    if (!S.road[t]) continue;
+    const i = t % W, j = (t / W) | 0, cx = (i + 0.5) * K, cy = (j + 0.5) * K;
+    g.moveTo(cx, cy); g.lineTo(cx + 0.01, cy);
+    if (i + 1 < W && S.road[t + 1]) { g.moveTo(cx, cy); g.lineTo(cx + K, cy); }
+    if (j + 1 < H && S.road[t + W]) { g.moveTo(cx, cy); g.lineTo(cx, cy + K); }
+  }
+  g.stroke();
+  // borders: each colony's edge, a crisp line just inside its land
+  const bw = Math.max(1, K * 0.4);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i, o = S.owner[t];
+    if (o < 0 || !team[o]) continue;
+    g.fillStyle = `rgb(${team[o][0]},${team[o][1]},${team[o][2]})`;
+    const x = i * K, y = j * K;
+    if (j === 0 || S.owner[t - W] !== o) g.fillRect(x, y, K, bw);
+    if (j === H - 1 || S.owner[t + W] !== o) g.fillRect(x, y + K - bw, K, bw);
+    if (i === 0 || S.owner[t - 1] !== o) g.fillRect(x, y, bw, K);
+    if (i === W - 1 || S.owner[t + 1] !== o) g.fillRect(x + K - bw, y, bw, K);
+  }
+  // resources: a dot each, in its colour with a dark rim
+  for (let t = 0; t < W * H; t++) {
+    const r = S.res[t];
+    if (!r || r === R_OIL || !MM_COLORS[r]) continue;
+    const c = MM_COLORS[r], i = t % W, j = (t / W) | 0, rad = Math.max(0.8, K * 0.32);
+    g.fillStyle = 'rgba(10,10,12,0.55)'; g.beginPath(); g.arc((i + 0.5) * K + 0.3, (j + 0.5) * K + 0.4, rad + 0.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; g.beginPath(); g.arc((i + 0.5) * K, (j + 0.5) * K, rad, 0, Math.PI * 2); g.fill();
+  }
 }
 
 /** The tag on an Airfield with planes in its hangar: a plane and how many (centre x, top y). */
@@ -9322,12 +9748,13 @@ function drawUnitMarker(ctx, x, y, r, color) {
 
 function renderMinimap() {
   if (!MM.on || !S || !MM.ctx || !MM.w) return;
-  if ((MM.dirty || MM.ver !== S.territoryVer) && R.time - MM.builtAt > 0.4) rebuildMinimapBase();
+  if ((MM.dirty || MM.ver !== S.territoryVer || MM.roadVer !== S.roadVer) && R.time - MM.builtAt > 0.4) rebuildMinimapBase();
   if (!MM.base) rebuildMinimapBase();
   const ctx = MM.ctx, sx = MM.w / S.W, sy = MM.h / S.H, k = MM.canvas.width / MM.w;
   ctx.setTransform(k, 0, 0, k, 0, 0); // (from the canvas itself, whatever the drawing resolution is now)
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
   ctx.drawImage(MM.base, 0, 0, MM.w, MM.h);
+  ctx.imageSmoothingEnabled = false;
   // The Murmur's tunnels, violet threads (brighter at night).
   const mmT = S.tun ? minimapTunnels() : null;
   if (mmT) { ctx.globalAlpha = 0.45 + 0.4 * fxNight(); ctx.drawImage(mmT, 0, 0, MM.w, MM.h); ctx.globalAlpha = 1; }
@@ -9336,8 +9763,10 @@ function renderMinimap() {
     const big = b.type === 'lander' ? 2.2 : 1.3;
     const w = Math.max(2.5, sx * big), h = Math.max(2.5, sy * big);
     const x = (b.x + 0.5) * sx - w / 2, y = (b.y + 0.5) * sy - h / 2;
+    ctx.fillStyle = 'rgba(8,12,18,0.75)'; ctx.fillRect(x - 0.6, y - 0.6, w + 1.2, h + 1.2);
     ctx.fillStyle = b.built ? (BDEFS[b.type].wild ? WILD_COLOR : PLAYER_COLORS[b.owner]) : 'rgba(255,255,255,0.7)';
     ctx.fillRect(x, y, w, h);
+    if (b.built) { ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x, y, w, Math.max(0.6, h * 0.3)); }
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
   }
   if (typeof drawRadMinimap === 'function') drawRadMinimap(ctx, sx, sy); // (radiation zones and breached Reactors: js/radfx.js)
@@ -9459,10 +9888,14 @@ function renderMinimap() {
   }
   if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoopMini === 'function') drawCoopMini(ctx, sx, sy); // (co-op: pings and the partner's cursor)
   const a = viewToWorld(0, 0), c = viewToWorld(R.w, R.h);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(clamp(a.x, 0, S.W) * sx, clamp(a.y, 0, S.H) * sy,
-    (clamp(c.x, 0, S.W) - clamp(a.x, 0, S.W)) * sx, (clamp(c.y, 0, S.H) - clamp(a.y, 0, S.H)) * sy);
+  const vx = clamp(a.x, 0, S.W) * sx, vy = clamp(a.y, 0, S.H) * sy, vw = (clamp(c.x, 0, S.W) - clamp(a.x, 0, S.W)) * sx, vh = (clamp(c.y, 0, S.H) - clamp(a.y, 0, S.H)) * sy;
+  // the view: a soft dark edge so it shows on pale ground, a thin white frame, brighter corners
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 2.6; ctx.strokeRect(vx, vy, vw, vh);
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(vx, vy, vw, vh);
+  const cl = Math.min(6, vw / 3, vh / 3);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath();
+  for (const [px, py, dx, dy] of [[vx, vy, 1, 1], [vx + vw, vy, -1, 1], [vx, vy + vh, 1, -1], [vx + vw, vy + vh, -1, -1]]) { ctx.moveTo(px + dx * cl, py); ctx.lineTo(px, py); ctx.lineTo(px, py + dy * cl); }
+  ctx.stroke();
 }
 
 

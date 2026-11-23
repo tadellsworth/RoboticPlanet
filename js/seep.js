@@ -479,6 +479,15 @@ function drawSeepPuddle(ctx, sp) {
     ctx.translate(0, -d);
     ctx.fillStyle = rgb(body, 1);
     ctx.fill(sp.wet);
+    // the sky in it: a faint cool sheen across the top half of the pool, gone toward the bottom (a mirror tilted at us)
+    const X0 = sp.ox * TP, Y0 = sp.oy * TP, X1 = (sp.ox + sp.W) * TP, Y1 = (sp.oy + sp.H) * TP;
+    const sky = ctx.createLinearGradient(0, Y0 + TP * 0.6, 0, Y1 - TP * 0.6);
+    sky.addColorStop(0, `rgba(150,160,178,${(0.2 * F).toFixed(3)})`); sky.addColorStop(0.55, 'rgba(120,128,140,0.03)'); sky.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sky; ctx.fill(sp.wet);
+    // a thin film of colour just inside the edge, as crude has where it thins out (oil's rainbow, very faint)
+    const film = ctx.createLinearGradient(X0, Y0, X1, Y1);
+    film.addColorStop(0, 'rgba(190,90,215,0.2)'); film.addColorStop(0.35, 'rgba(225,175,70,0.17)'); film.addColorStop(0.65, 'rgba(90,175,140,0.13)'); film.addColorStop(1, 'rgba(90,120,230,0.2)');
+    ctx.lineJoin = 'round'; ctx.strokeStyle = film; ctx.lineWidth = TP * 0.1 * (0.5 + 0.5 * F); ctx.stroke(sp.wet);
     ctx.translate(0, d);
     // the faint grey line on the edges that face away: the part of the body the shape shifted down doesn't cover
     const outside = new Path2D(); outside.rect(-1e5, -1e5, 2e5, 2e5); outside.addPath(sp.wet, new DOMMatrix().translate(0, d2));
