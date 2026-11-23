@@ -95,10 +95,23 @@ how goods move.
   rank, Heavier Kit, fortification ×(1 + 0.15 a level), home, cold or island or lunar ground, an ally next door,
   refits, supply lines, a battle card, the difficulty for rivals and `CONT.playedEdge` 0.92 for yours) to the power
   2.2. Saving: `contSave` / `contLoad` (JSON with an FNV checksum and a shape check: a corrupt save is refused), one
-  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw the
-  menu planet's face (`mplMakeMap`) on a sphere shaded per pixel only when something changes (turned by drag, swipe,
-  wheel or the arrow keys), tinted by owner with the atlas's borders, markers for Uplinks, homes, groups, forts and the
-  Murmur, Argos as a disc beside it, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
+  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw
+  Ithaca I as a planet seen from orbit (`js/contingency-draw.js`, only when something changes; turned by drag, swipe,
+  wheel or the arrow keys): over the stars (`#cg-stars`), a WebGL canvas just round the globe (`#cg-gl`, `cglRender`:
+  one fragment shader samples `art/globe/ithaca-2048.webp`, or `ithaca-4096.webp` once the globe is over `CGL.hdAt`
+  device px across, for a soft terminator from the upper-left light, the sea's glint off the picture's land mask, the
+  clouds, the haze at the limb and the halo; at `CGL.moveDpr` while it turns, sharp again when it stops); without
+  WebGL, on a software renderer (`WEBGL_debug_renderer_info`: SwiftShader, llvmpipe...), when the first
+  `CGL.slowChecks` full draws average over `CGL.slowMs` (50 ms), or from a page opened as a file, the globe is shaded
+  per pixel instead for the rest of the session (`cgDraw2d`: the same 2048 picture and clouds read as pixels, up to
+  `CGL.flatMax` px across, `CGL.flatMove` while it turns, made again only when the view or tints change). Each
+  owner's territories are tinted (a soft fill, stronger at the edge, painted onto a 1024 × 512 picture of the globe by
+  `cglTint` when owners, the pick or the targets change) and outlined in their colour with a dark casing, the picked
+  territory in white and the move or weapon targets in yellow (dashed for a weapon), and the borders on land are thin
+  pale lines, a little stronger between regions (`cglLines`): all smooth lines from `js/contingency-globe.js`
+  (`CONT_RINGS`, `CONT_BORDERS`, written by `tools/atlas/globe_borders.py`), and a tap picks the territory whose
+  outline holds it (`cglPick`). Markers for Uplinks, homes, groups, forts and the Murmur, Argos as a little cratered
+  moon beside it (`cglMoon`) with its two halves, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
   pill (or its territory's marker) onto a neighbour (`cgDown` picks it up, `cgUp` gives the order); a territory card (`cgCard`), the Spend panel, the battle
   card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
   screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
@@ -3599,7 +3612,8 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
-js/contingency*.js        Contingency: the atlas table, the campaign's engine, its globe screens and the bridge to battles
+js/contingency*.js        Contingency: the atlas table and outlines, the campaign's engine, the globe's drawing, its
+                          screens and the bridge to battles
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/orders.js              every player action as an order: a name and plain arguments, checked against the player
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
@@ -3629,8 +3643,10 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
                           face (ithaca-map.webp, the atlas made small)
+art/globe/                the Contingency globe's surface (ithaca-2048.webp, ithaca-4096.webp) and clouds
 art/menu/                 the Campaigns cards' pictures: 160 px crops of art/lore/ (inline in the one-file build)
-tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
+tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views;
+                          globe_texture.py the Contingency globe's surface (art/globe/), globe_borders.py its outlines
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/menu-test.js        the main menu: every destination opens (two taps at most) and Esc / Back return (Playwright)

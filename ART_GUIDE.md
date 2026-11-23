@@ -1477,6 +1477,32 @@ colours, no team colour, no glow. Transparent background, the heap filling about
 rival building: you'll see the gunfire, and the blast and collapse when it falls. If an effect plays too fast or too
 slow, tell Claude Code: each effect's length is one number in the code.
 
+### The Contingency globe (`art/globe/`)
+
+The owner's pick of three concepts (Nov 23 2026, concept A, "Satellite"): Ithaca I as a satellite would see it, real
+coastlines with bays and islets, relief, polar ice, clouds, the sea shading from shelf turquoise to deep blue, lit from
+the upper left with a soft terminator, the glint of the sea and a thin halo of air; the territories as smooth borders
+over it, each owner's land tinted (soft, stronger at the edge) and outlined in its colour with a dark casing.
+Drawn by `js/contingency-draw.js` (README: Contingency, the screens).
+
+| File | Size | What |
+|---|---|---|
+| `globe/ithaca-2048.webp` | 2048×1024 | The surface, equirectangular (longitude −180° at the left edge, north up): each region's colours and detail (the Rust's dunes, mesas and salt pans, Greenreach's forest, Emberwood's reds, the Long Grass, Blackwater's wetlands, the Cinderlands' flows and Cinder Rift's graben, the Steamwells' vents, the Shoals' islets and reefs, the Bloom's veins), rivers, beaches, the atlas's craters and Ringfall Basin, the caps' ice and floes, the relief baked in as hillshade from the north-west. Alpha is the land (255; 224 the sea), for the sea's glint. About 300 KB: the one fetched by default. |
+| `globe/ithaca-4096.webp` | 4096×2048 | The same, sharper: fetched only when the globe is over 1100 device px across (a big or sharp screen) and the GPU takes it. About 790 KB. |
+| `globe/ithaca-clouds.webp` | 1024×512 | The clouds' cover as grey (zonal bands, wisps), turned 0.45 of the way round on the globe (`CGL.cloudShift`). About 13 KB. |
+
+How they're made (reproducible, no randomness outside fixed seeds): `python3 tools/atlas/globe_texture.py` (W 4096 by
+default, about 5 minutes on 4 cores; numpy, scipy, Pillow) evaluates the atlas's own fields at every texel
+(`tools/atlas/globe_planet.py`: the same value noise, territories and coast calibration as `atlas.py`, plus fractal
+coast detail, relief and the region palettes), writes the three files and recolours `lore/ithaca-map.webp` (run
+`atlas.py` first if that needs remaking). The outlines are `python3 tools/atlas/globe_borders.py` (a few seconds):
+each territory's edge (where its score meets a neighbour's, the smoothed coast a little offshore, or the caps' edge)
+traced with marching squares on a 2048 × 1024 grid, simplified and delta-coded into `js/contingency-globe.js`; its
+picks agree with the atlas's `CONT_CELLS` on 99.9% of their land cells. To change the look, edit the palettes and
+detail in `globe_texture.py` (`PAL`, the per-region blocks) and the light, halo and glint in the shader
+(`CGL_FS` in `js/contingency-draw.js`). In the one-file build the pictures are `dist/globe.js` (2048 and clouds) and
+`dist/globe-hd.js` (4096), fetched when Contingency first opens.
+
 ### The Lore guide's pictures (`art/lore/`)
 
 The main menu's Lore guide (`#screen-lore` in `index.html`) shows a few pictures of its own. They are plain `<img>`
@@ -1487,7 +1513,7 @@ same size, or point the tag at a new one. Keep them small (WebP; the atlas, the 
 |---|---|---|
 | `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
 | `lore/atlas.webp` | 2400×1620 | The atlas of Ithaca I (LORE.md: The atlas, approved by the owner): every region, territory, sea and named place, the ringfall belt, Argos in the corner. Made by `tools/atlas/atlas.py` (writes `tools/atlas/out/ithaca-atlas.png`, then WebP); shown on the guide's The atlas page, a tap enlarging it. `lore/atlas-globe.webp` (1760×680): three views of the globe from it (`tools/atlas/globe.py`). |
-| `lore/ithaca-map.webp` | 512×256 | Not in the guide: the menu planet's face (`js/menuplanet.js`), the atlas made small, equirectangular (longitude −180° at the left edge), with no labels or borders, the regions blended at their seams and the craters drawn twice as wide. Its alpha holds the night lights (255 none, 254–225 ever brighter). Written by `tools/atlas/atlas.py` itself (`menu_map`), about 15 KB; inline in the one-file build (`window.ITHACA_MAP`). |
+| `lore/ithaca-map.webp` | 512×256 | Not in the guide: the menu planet's face (`js/menuplanet.js`, and the Contingency globe without WebGL), equirectangular (longitude −180° at the left edge), with no labels or borders. Its alpha holds the night lights (255 none, 254–225 ever brighter). Written by `tools/atlas/atlas.py` itself (`menu_map`), then recoloured from the Contingency globe's surface by `tools/atlas/globe_texture.py` (its lights kept where there is land), about 28 KB; inline in the one-file build (`window.ITHACA_MAP`). |
 | `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
 | `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Sapper at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
 
