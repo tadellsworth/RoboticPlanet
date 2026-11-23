@@ -93,7 +93,14 @@ const AI_FUEL_DRY = 60, AI_FUEL_TRADE = 180;
 const AI_FARM_TILES = 5, AI_FARM_MIN = 3;
 
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
-function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
+// (With the Murmur Active, AI_ACTIVE_STYLE over the doctrine: the Warden's army grows as fast as the Salvager's there,
+// the parity pass of Nov 2026, when it won 3 of 16 on Active against 7 on Quiet.)
+const AI_ACTIVE_STYLE = { turtle: { army: 1.15 } }, AI_ACTIVE_CACHE = {};
+function aiStyle(p) {
+  const k = S.players[p].style, st = PERSONALITIES[k] || PERSONALITIES.balanced;
+  if (!AI_ACTIVE_STYLE[k] || murmurLevel() !== 'active') return st;
+  return AI_ACTIVE_CACHE[k] || (AI_ACTIVE_CACHE[k] = Object.assign({}, st, AI_ACTIVE_STYLE[k]));
+}
 /** Player q's army: its warbots, Bulwarks and Torches (none for no player). */
 /** The whole army in a count of robots by kind (warbots and every specialist). */
 function aiArmyKinds(kinds) { let n = 0; for (const k in kinds) if (BOTS[k] && BOTS[k].army) n += kinds[k]; return n; }
@@ -215,8 +222,11 @@ function aiFortWalls(p) {
  * in 16.)
  */
 const AI_TURTLE_WALLS = 12, AI_TURTLE_KEEP = 3;
+// (With the Murmur Active its ring waits until 20 minutes: their Sappers dig in under Walls, and the Cement it sank into
+// a ring they kept breaking cost it its early Outposts. Parity pass, Nov 2026.)
+const AI_TURTLE_ACTIVE = 1200;
 function aiTurtleWalls(p) {
-  if (!aiStyle(p).walls || !warOn() || S.time < 360) return;
+  if (!aiStyle(p).walls || !warOn() || S.time < (murmurLevel() === 'active' ? AI_TURTLE_ACTIVE : 360)) return;
   const P = S.players[p];
   // (Not before its land has AI_TURTLE_KEEP Outposts: its Cement and Workers went into the ring while its first
   // Outposts waited for roads, and it fell behind on land and income for good.)

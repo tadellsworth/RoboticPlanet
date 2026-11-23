@@ -1871,7 +1871,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   rare raids, a square ring of Walls and Gates six tiles round its Command Base (`aiTurtleWalls`: once it has
   `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS` (12) pieces standing,
-  Chokepoint mouths included), up to three Keeps from seven minutes (its first waits for 3 turrets and 3 Outposts),
+  Chokepoint mouths included; with the Murmur Active not before `AI_TURTLE_ACTIVE`, 20 minutes, and its `army` 1.15
+  there, `AI_ACTIVE_STYLE` over its doctrine in `aiStyle`: the parity pass of Nov 2026, when it won 3 of 16 on Active
+  against 7 on Quiet, their Sappers breaking the ring its Cement went into; with it, 7 of 16), up to three Keeps from seven minutes (its first waits for 3 turrets and 3 Outposts),
   four Pulse Turrets (one every six minutes) and three front guns, no bombers, and its big push (`aiPush`, `push`): before
   16 minutes (`AI_PUSH_AT`) with twice its attack threshold and a fifth as many again as its rival's army and two more
   (`AI_PUSH_EARLY`); from then on with its threshold and two more than its rival's (after a push, as many as that push
