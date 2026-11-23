@@ -429,6 +429,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
+- **Construction sites** are built only as far as the goods delivered so far (`siteFrac`); a free Worker comes once
+  some are in (`dispatch` step 1, `roadToSites`). A builder that runs out **waits at the site** if a carrier is bringing
+  goods it still needs and is due within `SITE_WAIT.eta` (35 s: `siteInbound`, the rest of a Hauler's, truck's, train's,
+  ship's, crate-carrying Worker's or supply plane's route at its road speed), and builds on when they're in (task
+  phase `wait`, `t.waitT`, `t.via`; the site reads *Waiting for goods (a Hauler on its way)*). It gives up after
+  `SITE_WAIT.max` (45 s), when nothing it needs is due soon any more (the carrier lost or sent elsewhere), or with
+  enemies within `SITE_WAIT.foes` (8) tiles or on the danger map; any order of yours takes it off too. Otherwise it goes
+  to other jobs and a builder is sent when more arrive, as before. (Before, a builder always walked off and came back:
+  in `worker-wait-test.js`, a Bunker 18 road tiles from home with one Hauler went up in 51 s instead of 60.)
 - **Interrupted deliveries.** Dispatch considers alternate suppliers and checks the carrier's network against both
   endpoints. Trains and ships pick up on a platform or dock that reaches the delivery point. The dispatcher reserves
   stock once the pickup route is found, and the carrier checks the delivery route before loading. A blocked route

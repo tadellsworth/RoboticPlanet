@@ -652,6 +652,7 @@ const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
 const FOOT_CARRY = 12;     // off the road network (a foothold dropped by air), Workers carry goods by hand between buildings this close
 const BUILD_FAR = 16;      // a site doesn't call a Worker from further off than this while one close by (FOOT_CARRY) will soon be free
+const SITE_WAIT = { eta: 35, max: 45, foes: 8 }; // a Worker out of goods at a site waits there for goods a carrier will bring within `eta` s (at most `max` s; not with enemies within `foes` tiles)
 const TOPUP_NEAR = 10;     // seconds' walk: how far an idle Worker goes to top up its battery (a flat one goes as far as it must)
 const AIR_KEEP = 12;       // an Airfield keeps up to this many of each good the places it supplies by air are short of
 const SHIP_MEND = 0.5; // hit points a second a ship tied up in Port gets back
