@@ -205,7 +205,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two players; `townSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -238,17 +238,31 @@ a switchback and a side-canyon trail. Fords link the banks on foot, and Ports ca
 (ships sail the river, but it is a heights map, not a naval one: `river`, so no Naval badge and no Shoals biome).
 Players can cut additional ramps or build crossings through Paths.
 
-**Passenger Town** (`SHAPE_PRESETS` `city`, under Divided, two players; LORE.md's empty town in Greenreach) is a flat map
-with the Pathfinder's town filling the middle. `townSetup` (js/world.js) lays it on the south half and turns it half
-round onto the north, tile for tile: a grid of blocks (`TOWN.blockX` 4 to 6 tiles wide, `blockY` 3 to 5 deep) with
-2-tile streets between and a street down and across the middle, kept `TOWN.clear` rows short of each base. Each block is
-the civic hall (nearest the middle, with a sentry), the civic tower (the next), the school, a parking lot with car
-hulks (`TOWN.lots`, 10%), a plaza (5%) or split into walk-up flats, shopfronts, apartment blocks and towers
-(`TOWN_KINDS`). The buildings are rock under their art (they block robots, roads, tunnels and building: `townRuinAt`
-in canPlace and canRoad; drawn as street by `pillarAt`). Street segments are then closed by covered arcades
-(`TOWN.close`, 40% of them tried) as long as every street tile stays reachable and the bases joined, so the streets are a
-maze. `S.town` holds it all (saved, checked by checkSave, hashed): the rectangle, the blocks' spans, signs, plazas and
-the buildings `{ id, x, y, w, h, k, v, hgt, g (salvage left), n0, cache, sen, scd, by, gone }`.
+**Passenger Town** (`SHAPE_PRESETS` `city`, under Divided, two to four players; LORE.md's empty town in Greenreach) is
+a flat map with the Pathfinder's town filling the middle. `townSetup` (js/world.js) lays a grid of blocks
+(`TOWN.blockX` 4 to 6 tiles wide, `blockY` 3 to 5 deep) with 2-tile streets between, by the map's symmetry:
+**two** colonies, a band across the map with a street down and across the middle, kept `TOWN.clear` rows short of each
+base, laid on the south half and turned half round onto the north, tile for tile; **four** (a square map, `quadMap`), a
+square town `TOWN.ring.four` of the map's side across (`townQuad`), each colony on an edge a little left of its middle
+(generateMap's `edge4`: its starter fields stay in its own quarter), the town square in the middle with the one civic
+tower, laid on the south-west quarter and turned a quarter at a time, tile for tile (2 vs 2: allies side by side);
+**three** (the round planet), a round town, `TOWN.ring.three` of the way to each base in front of it and
+`TOWN.ring.lobe` further between them (`townEdge`), the grid clipped to that outline: as fair as a grid allows, the first
+third's block roles, sentries (`TOWN.sentry.per` a third), caches and arcades matched on the others by where they turn to,
+and each third's salvage scaled to the mean. **The avenues** (`S.town.av`) are old Accord roads laid at setup (`S.road`,
+surface `TOWN.avenue`: 1, plain road speed, `S.wown` -1: no one's until a colony's land takes them, `wayOwner`): with
+two, the middle street from end to end; with four, the street in front of each base right across the town (a #); with
+three, from the middle to each colony's side (straight down the middle street, the others 120° round, two tiles wide).
+No building or arcade stands on one; they wear, are torn up and are removed like any road. Each block is the civic hall
+(nearest the middle, with a sentry), the civic tower (the next; with four, the one in the town square), the school, a
+parking lot with car hulks (`TOWN.lots`, 10%), a plaza (5%) or split into walk-up flats, shopfronts, apartment blocks
+and towers (`TOWN_KINDS`). The buildings are rock under their art (they block robots, roads, tunnels and building:
+`townRuinAt` in canPlace and canRoad; drawn as street by `pillarAt`). Street segments are then closed by covered
+arcades (`TOWN.close`, 40% of them tried) as long as every street tile stays reachable and the bases joined, so the
+streets are a maze. A Trade Post lands in the town only on a square or a parking lot, never by a sign (`townPostOk`).
+`S.town` holds it all (saved, checked by checkSave, hashed): the rectangle (and a round town's `rad`, `lobe`), the
+blocks' spans, signs, plazas, avenue tiles and the buildings `{ id, x, y, w, h, k, v, hgt, g (salvage left), n0, cache,
+sen, scd, by, gone }` (`townIn`: a tile in the town). Saves from before the avenues load as they were (no `av`).
 **Strip for salvage** (a building's panel, key S; the `townStrip` order sets bit p of `r.by`): dispatch's step 5b
 (`townRun`) sends the colony's idle Workers, up to `townCrew` (1 to `TOWN.crew` 3 by size), to open tiles beside it
 that no danger covers (`hotFor`); each strips a unit every `TOWN.unit` (4) s (`townDoStrip`: Cement, then Alloy, then
@@ -256,17 +270,21 @@ Chips, the most left first) and sets every `TOWN.pile` (4) down beside it as cra
 `dismantled` = the colony: its Haulers get first call; idle Workers carry them too; `townRun` keeps one Worker back
 while its crates wait). Salvage is `TOWN.perTile` (0.6 Cement, 0.25 Alloy, 0.06 Chips) a tile times the kind's `mult`
 (0.8 shops to 1.8 the civic tower) plus a few Chips in the school, hall and tower; a car is 2 Alloy. A Medium town holds
-about 240 Cement, 105 Alloy and 25 Chips a side. Stripped bare (`townFall`) a building's tiles turn to open ground
+about 200 Cement, 90 Alloy and 20 Chips a side with two colonies, 120 Cement, 55 Alloy and 15 Chips with three, 115
+Cement, 50 Alloy and 13 Chips with four. Stripped bare (`townFall`) a building's tiles turn to open ground
 (`terrainChanged`), a cache (`TOWN.cacheShare` 15%) spills out, and its lot is drawn cleared. Robots beside a standing
 building take `TOWN.cover` (0.75) of the damage (`townCover`, in damageBot). **Sentries** (`TOWN.sentry`: the civic
-hall's and one more each side) stand on the roof and shoot the nearest robot of any colony within `range` (3.2) of the
-building every second for `dmg` (2.5), not on a Trade Post's ground; every armed army robot within `back` (3.4) shoots
-back, `hit` (1.2) a second off its `hp` (40) (`townTick`, three times a second). Its reach is in everyone's danger map
+hall's and one more each side) stand on the roof and shoot the nearest robot of any colony, or Murmur creature, within
+`range` (3.2) of the building every second for `dmg` (2.5), not on a Trade Post's ground; every armed army robot within
+`back` (3.4) shoots back, `hit` (1.2) a second off its `hp` (40), and a Murmur creature within a tile of the building
+claws at it, `TOWN.murmur` (0.5) of its bite a second (`townTick`, three times a second). Its reach is in everyone's danger map
 (bit 2), so robots that don't fight keep out of it; a guarded building can't be ordered stripped. A rival (`aiTown` in
 js/ai.js) orders one building at a time stripped, up to `TOWN.ai.max` (2), every `TOWN.ai.every` (20) s: the unguarded
 one nearest the line from its base to its enemy's within `TOWN.ai.reach` of its land, the richer the better.
 The look is drawn in code (js/city.js; ART_GUIDE.md, Passenger Town). The mission **Passenger Town** (First Contact)
-teaches it. `node tools/city-test.js [--games n minutes]` checks the layout, stripping, sentries, the save and AI games.
+teaches it (and joining a road to the avenue). `node tools/city-test.js [--games n minutes] [--only k]` checks the
+layouts for two, three and four (symmetry and fairness, joined, the avenues, the Trade Posts), stripping, sentries (and
+the Murmur), the save (and an older one) and AI games with two, three and four colonies.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and

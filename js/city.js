@@ -21,7 +21,7 @@
  */
 
 const TOWN_GROUND_PX = 16;
-const _tg = { of: null, ver: -1, c: null };
+const _tg = { of: null, ver: -1, c: null, rv: -1, rk: 0 };
 const _tb = { key: '', body: new Map() };
 
 /** A number from building r's seed and k (0..1), so its look is the same every time it's drawn. */
@@ -29,15 +29,27 @@ function townHash(r, k) { return hash2(r.v % 9973, k, 4111 + (r.v % 31)); }
 
 /* ------------------------------------------------------------------ the ground */
 
+/** The town's picture's extent: tiles cx0..cx1 × cy0..cy1 (the town and a row round it, on the map). */
+function townGroundBox(T) { return { cx0: Math.max(0, T.x0 - 1), cy0: Math.max(0, T.y0 - 1), cx1: Math.min(S.W - 1, T.x1 + 1), cy1: Math.min(S.H - 1, T.y1 + 1) }; }
+
+/** A number that changes when the roads on the town's ground do (its picture leaves them showing). */
+function townRoadKey(T) {
+  const { cx0, cy0, cx1, cy1 } = townGroundBox(T);
+  let h = 0;
+  for (let j = cy0; j <= cy1; j++) for (let i = cx0; i <= cx1; i++) { const t = j * S.W + i; if (S.road[t]) h = (h * 31 + t * 7 + S.road[t] + (S.pave[t] || 0) * 3) | 0; }
+  return h;
+}
+
 function townGroundCanvas() {
   const T = S.town;
+  if (_tg.rv !== (S.roadVer || 0)) { _tg.rv = S.roadVer || 0; const k = townRoadKey(T); if (k !== _tg.rk) { _tg.rk = k; _tg.ver = -1; } }
   if (_tg.of === T && _tg.ver === (T.ver || 0) && _tg.c) return _tg.c;
-  const G = TOWN_GROUND_PX, y0 = T.y0 - 1, rows = T.y1 - T.y0 + 3, W = S.W;
-  const c = _tg.c && _tg.c.width === W * G && _tg.c.height === rows * G ? _tg.c : document.createElement('canvas');
-  c.width = W * G; c.height = rows * G;
+  const G = TOWN_GROUND_PX, { cx0, cy0, cx1, cy1 } = townGroundBox(T), cols = cx1 - cx0 + 1, rows = cy1 - cy0 + 1, W = S.W;
+  const c = _tg.c && _tg.c.width === cols * G && _tg.c.height === rows * G ? _tg.c : document.createElement('canvas');
+  c.width = cols * G; c.height = rows * G;
   const g = c.getContext('2d');
   g.clearRect(0, 0, c.width, c.height);
-  const X = (x) => x * G, Y = (y) => (y - y0) * G;
+  const X = (x) => (x - cx0) * G, Y = (y) => (y - cy0) * G;
   const speck = (x, y, w, h, n, seed, dark, light) => {
     for (let k = 0; k < n; k++) {
       const a = hash2(k, seed, 4201), b = hash2(seed, k, 4202);
@@ -45,14 +57,28 @@ function townGroundCanvas() {
       g.fillRect(X(x) + a * w * G, Y(y) + b * h * G, 1 + (k % 3 === 0 ? 1 : 0), 1);
     }
   };
-  // the street paving over the whole town, the mouths of its streets fading out into the land
-  g.fillStyle = '#3e4044'; g.fillRect(0, Y(T.y0), W * G, (T.y1 - T.y0 + 1) * G);
-  for (const [yy, dir] of [[T.y0 - 1, 1], [T.y1 + 1, 0]]) {
-    const gr = g.createLinearGradient(0, Y(yy), 0, Y(yy) + G);
-    gr.addColorStop(dir ? 0 : 1, 'rgba(62,64,68,0)'); gr.addColorStop(dir ? 1 : 0, 'rgba(62,64,68,0.85)');
-    g.fillStyle = gr; g.fillRect(0, Y(yy), W * G, G);
+  const tw = T.x1 - T.x0 + 1, th = T.y1 - T.y0 + 1;
+  g.save();
+  if (T.rad) { // a round town (three colonies): its paving inside its outline (townEdge), fading out into the land round it
+    const mx = X(W / 2), my = Y(S.H / 2), edge = (d) => { g.beginPath(); for (let k = 0; k <= 96; k++) { const a = (k / 96) * Math.PI * 2, r = (townEdge(T.rad, T.lobe, a) + d) * G; g.lineTo(mx + Math.cos(a) * r, my + Math.sin(a) * r); } g.closePath(); };
+    for (const [d, a] of [[1.1, 0.25], [0.8, 0.45]]) { g.fillStyle = `rgba(62,64,68,${a})`; edge(d); g.fill(); }
+    edge(0.5); g.clip();
   }
-  speck(0, T.y0, W, T.y1 - T.y0 + 1, W * (T.y1 - T.y0) * 3, 7, 'rgba(0,0,0,0.25)', 'rgba(255,255,255,0.08)');
+  // the street paving over the whole town, the mouths of its streets fading out into the land
+  g.fillStyle = '#3e4044'; g.fillRect(X(T.x0), Y(T.y0), tw * G, th * G);
+  if (!T.rad) {
+    for (const [yy, dir] of [[T.y0 - 1, 1], [T.y1 + 1, 0]]) {
+      const gr = g.createLinearGradient(0, Y(yy), 0, Y(yy) + G);
+      gr.addColorStop(dir ? 0 : 1, 'rgba(62,64,68,0)'); gr.addColorStop(dir ? 1 : 0, 'rgba(62,64,68,0.85)');
+      g.fillStyle = gr; g.fillRect(X(T.x0), Y(yy), tw * G, G);
+    }
+    if (T.x0 > 0 || T.x1 < W - 1) for (const [xx, dir] of [[T.x0 - 1, 1], [T.x1 + 1, 0]]) { // (a square town, four colonies: its sides too)
+      const gr = g.createLinearGradient(X(xx), 0, X(xx) + G, 0);
+      gr.addColorStop(dir ? 0 : 1, 'rgba(62,64,68,0)'); gr.addColorStop(dir ? 1 : 0, 'rgba(62,64,68,0.85)');
+      g.fillStyle = gr; g.fillRect(X(xx), Y(T.y0), G, th * G);
+    }
+  }
+  speck(T.x0, T.y0, tw, th, tw * (th - 1) * 3, 7, 'rgba(0,0,0,0.25)', 'rgba(255,255,255,0.08)');
   // the blocks: a concrete slab with a kerb (the buildings stand on it)
   const plaza = new Map();
   for (const p of T.plazas) plaza.set(p[0] + ',' + p[1], p);
@@ -84,6 +110,7 @@ function townGroundCanvas() {
   for (const [a, b] of colSt) for (const [ya, yb] of T.ys) { const x = X((a + b) / 2); g.beginPath(); g.moveTo(x, Y(ya) + G * 0.2); g.lineTo(x, Y(yb) - G * 0.2); g.stroke(); }
   for (const [a, b] of colSt) { const x = X((a + b) / 2); g.beginPath(); g.moveTo(x, Y(T.y0 - 1) + G * 0.5); g.lineTo(x, Y(T.ys[0][0])); g.moveTo(x, Y(T.ys[T.ys.length - 1][1])); g.lineTo(x, Y(T.y1 + 1) + G * 0.5); g.stroke(); }
   for (const [a, b] of rowSt) for (const [xa, xb] of T.xs) { const y = Y((a + b) / 2); g.beginPath(); g.moveTo(X(xa) + G * 0.2, y); g.lineTo(X(xb) - G * 0.2, y); g.stroke(); }
+  if (T.x0 > 0) for (const [a, b] of rowSt) { const y = Y((a + b) / 2); g.beginPath(); g.moveTo(X(T.x0 - 1) + G * 0.5, y); g.lineTo(X(T.xs[0][0]), y); g.moveTo(X(T.xs[T.xs.length - 1][1]), y); g.lineTo(X(T.x1 + 1) + G * 0.5, y); g.stroke(); }
   g.setLineDash([]);
   // zebra crossings at the crossings' edges, worn
   g.fillStyle = 'rgba(225,220,200,0.32)';
@@ -102,6 +129,20 @@ function townGroundCanvas() {
     g.strokeStyle = 'rgba(120,70,40,0.6)'; g.lineWidth = 1;
     for (let k = 0; k < r.w * r.h; k++) { const a = hash2(k, r.v % 991, 4204), b = hash2(r.v % 991, k, 4205); g.beginPath(); g.moveTo(x + a * w, y + b * h); g.lineTo(x + a * w + (hash2(k, 3, 4206) - 0.5) * G * 0.6, y + b * h + (hash2(k, 4, 4207) - 0.5) * G * 0.4); g.stroke(); }
   }
+  g.restore();
+  // The roads on it (the avenues, and any a colony lays): left showing through, in the shape the map draws them.
+  g.save(); g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
+  const rk = (G / 32) * 0.5, has = (i, j) => i >= 0 && j >= 0 && i < W && j < S.H && S.road[j * W + i];
+  for (let j = cy0; j <= cy1; j++) for (let i = cx0; i <= cx1; i++) {
+    if (!S.road[j * W + i]) continue;
+    const ww = ((typeof ROAD_LOOK !== 'undefined' && ROAD_LOOK[Math.min(2, S.pave[j * W + i] || 1)]) ? ROAD_LOOK[Math.min(2, S.pave[j * W + i] || 1)].w + 4 : 16) * rk * 2, x = X(i), y = Y(j), h = G / 2;
+    g.beginPath(); g.arc(x + h, y + h, ww / 2, 0, 7); g.fill();
+    if (has(i, j - 1)) g.fillRect(x + h - ww / 2, y, ww, h);
+    if (has(i + 1, j)) g.fillRect(x + h, y + h - ww / 2, h, ww);
+    if (has(i, j + 1)) g.fillRect(x + h - ww / 2, y + h, ww, h);
+    if (has(i - 1, j)) g.fillRect(x, y + h - ww / 2, h, ww);
+  }
+  g.restore();
   _tg.of = T; _tg.ver = T.ver || 0; _tg.c = c;
   return c;
 }
@@ -109,9 +150,9 @@ function townGroundCanvas() {
 /** The town's ground, with the rest of the ground (before its light: graded with it). */
 function townGround(ctx, ox, oy, z) {
   if (!S.town || typeof document === 'undefined') return;
-  const c = townGroundCanvas(), T = S.town;
+  const c = townGroundCanvas(), { cx0, cy0, cx1, cy1 } = townGroundBox(S.town);
   ctx.save(); ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(c, ox, oy + (T.y0 - 1) * z, S.W * z, (T.y1 - T.y0 + 3) * z);
+  ctx.drawImage(c, ox + cx0 * z, oy + cy0 * z, (cx1 - cx0 + 1) * z, (cy1 - cy0 + 1) * z);
   ctx.restore();
 }
 
@@ -339,7 +380,7 @@ function townItems(items, inView) {
   for (const [x, y] of T.signs) if (inView(x, y, 4)) items.push({ ent: 'town', sign: [x, y], x, y: y + 0.6 });
   for (let a = 0; a + 1 < T.xs.length; a++) for (let b = 0; b + 1 < T.ys.length; b++) {
     const x = T.xs[a][1], y = T.ys[b][1]; // (a lamp on the north-west corner of each crossing)
-    if (inView(x, y, 3)) items.push({ ent: 'town', lamp: [x + 0.08, y + 0.12], x: x + 0.08, y: y + 0.12 });
+    if (inView(x, y, 3) && townIn(x, y)) items.push({ ent: 'town', lamp: [x + 0.08, y + 0.12], x: x + 0.08, y: y + 0.12 });
   }
 }
 
@@ -398,7 +439,7 @@ function townLights(pool, ox, oy, z, inView) {
   if (k < 0.02) return;
   for (let a = 0; a + 1 < T.xs.length; a++) for (let b = 0; b + 1 < T.ys.length; b++) {
     const x = T.xs[a][1] + 1, y = T.ys[b][1] + 1;
-    if (inView(x, y, 3)) pool(ox + x * z, oy + y * z, z * 0.9, '#ffd9a0');
+    if (inView(x, y, 3) && townIn(x - 1, y - 1)) pool(ox + x * z, oy + y * z, z * 0.9, '#ffd9a0');
   }
   for (const r of T.r) {
     if (r.gone || r.k === 'car' || !inView(r.x + r.w / 2, r.y + r.h, 3)) continue;
@@ -411,7 +452,7 @@ function townLights(pool, ox, oy, z, inView) {
 function townHaze(ctx, ox, oy, z) {
   if (!S.town || (typeof R !== 'undefined' && (R.inMap || R.clean >= 2))) return;
   const T = S.town, night = townNight(), a = 0.05 + 0.13 * night;
-  const x0 = ox, x1 = ox + S.W * z, y0 = oy + (T.y0 - 1.5) * z, y1 = oy + (T.y1 + 2.5) * z;
+  const x0 = ox + T.x0 * z, x1 = ox + (T.x1 + 1) * z, y0 = oy + (T.y0 - 1.5) * z, y1 = oy + (T.y1 + 2.5) * z;
   ctx.save();
   const c = night > 0.5 ? '96,108,138' : '170,180,196';
   const gy = ctx.createLinearGradient(0, y0, 0, y1);
@@ -426,7 +467,7 @@ function townHaze(ctx, ox, oy, z) {
   }
   const t = typeof R !== 'undefined' ? R.time : 0; // (banks of it drifting slowly east)
   for (let k = 0; k < 7; k++) {
-    const cx = ox + (((hash2(k, 1, 4501) * S.W + t * 0.12 * (0.5 + hash2(k, 2, 4502))) % (S.W + 8)) - 4) * z, cy = oy + (T.y0 + hash2(k, 3, 4503) * (T.y1 - T.y0)) * z, rr = z * (3 + hash2(k, 4, 4504) * 4);
+    const cx = ox + (T.x0 + ((hash2(k, 1, 4501) * (T.x1 - T.x0 + 1) + t * 0.12 * (0.5 + hash2(k, 2, 4502))) % (T.x1 - T.x0 + 9)) - 4) * z, cy = oy + (T.y0 + hash2(k, 3, 4503) * (T.y1 - T.y0)) * z, rr = z * (3 + hash2(k, 4, 4504) * 4);
     const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
     gr.addColorStop(0, `rgba(${c},${a * 0.9})`); gr.addColorStop(1, `rgba(${c},0)`);
     ctx.fillStyle = gr; ctx.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);

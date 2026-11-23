@@ -569,7 +569,8 @@ const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
 function modeInfo(mode, n, teams) {
   const m = UI.menu, SH = SHAPE_PRESETS[m.shape || 0], quad = !m.shapeRnd && !!(SH.cross || SH.quad4), onCross = n === 4 || quad;
   const haul = !m.shapeRnd && !!SH.haul4; // (Long Haul 2v2: two colonies side by side at each end)
-  const where = m.shapeRnd ? 'a square planet' : quad ? SH.name : 'a square planet';
+  const where = m.shapeRnd ? 'a square planet' : quad || SH.city ? SH.name : 'a square planet';
+  const town = !m.shapeRnd && !!SH.city; // (Passenger Town: four on the edges of a square town, three round a round one)
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
     ? (menuMurmurLevel() !== 'off' ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them, and come up through their tunnels by night. Build, research and spread across the planet.'
@@ -577,7 +578,9 @@ function modeInfo(mode, n, teams) {
     : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
       : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
     : n === 4 && haul ? `Free-for-all · 4 on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
+    : n === 4 && town ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
     : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
+      : n === 3 && town ? `Free-for-all: you and two rival colonies round ${where}, a round town in the middle with an old avenue from each colony to its heart. ${win}`
       : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
           : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';

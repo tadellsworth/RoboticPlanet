@@ -225,8 +225,9 @@ function generateMap(seed, W, H, cfg) {
   const rng = makeRng(seed ^ 0x5bd1e995);
   // Crossroads: in a corner quarter (with four, in the corner of the bottom-left quarter, as far in from both edges).
   // (Long Haul 2v2: at the south end, about 21 tiles from the ally's base beside it, close enough to share roads.)
-  const qc = quad ? Math.max(10, Math.round(hw * 0.42)) : 0;
-  const bx = quad ? qc : h4 ? clamp(Math.round(hw - 11), 9, hw - 9) : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad ? H - 1 - qc : H - 7;
+  // (Passenger Town for four: each colony on an edge, a little to the left of its middle, in front of an avenue: townQuad.)
+  const qc = quad ? Math.max(10, Math.round(hw * 0.42)) : 0, edge4 = quad && SH.city;
+  const bx = edge4 ? hw - 1 - townQuad(W).off : quad ? qc : h4 ? clamp(Math.round(hw - 11), 9, hw - 9) : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad && !edge4 ? H - 1 - qc : H - 7;
   const bases = [{ x: bx, y: by }];
   if (np === 2) bases.push({ x: W - 1 - bx, y: H - 1 - by });
   else if (h4) for (const t of orbit(id(bx, by)).slice(1)) bases.push({ x: t % W, y: (t / W) | 0 });
@@ -329,7 +330,7 @@ function generateMap(seed, W, H, cfg) {
   // Richer fields just beyond the starting border reward expanding with Outposts. (In a corner
   // quarter, they lie out toward the middle of the map, turned 45° and a little closer on small maps.)
   // (Long Haul 2v2: squeezed into the colony's half of the width, and stretched up the map.)
-  const beyond = quad ? (dx, dy) => { const f = clamp((hw - 4) / 31, 0.7, 1), c = Math.SQRT1_2; return [bx + (dx * c - dy * c) * f, by + (dx * c + dy * c) * f]; }
+  const beyond = quad && !edge4 ? (dx, dy) => { const f = clamp((hw - 4) / 31, 0.7, 1), c = Math.SQRT1_2; return [bx + (dx * c - dy * c) * f, by + (dx * c + dy * c) * f]; }
     : h4 ? (dx, dy) => [bx + dx * 0.7, by + dy * 1.25] : (dx, dy) => [bx + dx, by + dy];
   if (CM) {
     // Crossroads: down in the lowland in front of the mesa, to draw the colony down off it: Ore out past its east face
@@ -1143,7 +1144,7 @@ function generateMap(seed, W, H, cfg) {
   const shapeExtras = () => {
     if (h4) haul4Shape();
     else if (quad) {
-      if (SH.twin) return; // (Twin Valleys: its spine is laid later, after the turns: see below)
+      if (SH.twin || SH.city) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is)
       if (SH.pinwheel) pinwheelShape();
       else if (SH.isles4) isles4Shape();
       else crossShape4();
@@ -2473,7 +2474,9 @@ function mapSizeForPlayers(size, players) {
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
  */
-function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && st.players >= 3 && !!(sh.cross || sh.quad4); }
+function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!sh.city)); }
+/** Does map type `sh` turn four ways with `n` colonies (Crossroads and the four-quarter maps; Passenger Town with four)? */
+function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || (sh.city && n === 4))); }
 
 /**
  * Is this Long Haul 2v2: a tall map with two colonies side by side at each end (south-west, south-east, north-east,
@@ -2745,7 +2748,7 @@ function newGame(opts) {
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
-  if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = 0; i < S.W; i++) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
+  if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
@@ -5463,6 +5466,7 @@ function checkSave(o) {
   if (o.town != null) {
     const T = o.town, int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi, span = (a, n) => Array.isArray(a) && a.length <= 64 && a.every((q) => Array.isArray(q) && q.length === 2 && int(q[0], 0, n) && int(q[1], 0, n));
     if (!obj(T) || T.v !== 1 || !int(T.x0, 0, o.W - 1) || !int(T.x1, 0, o.W - 1) || !int(T.y0, 0, o.H - 1) || !int(T.y1, 0, o.H - 1) || (T.ver != null && !int(T.ver, 0, 1e6))) bad();
+    if ((T.rad != null && !(Number.isFinite(T.rad) && T.rad >= 0 && T.rad <= Math.max(o.W, o.H))) || (T.lobe != null && !(Number.isFinite(T.lobe) && T.lobe >= 0 && T.lobe <= Math.max(o.W, o.H))) || (T.av != null && !(Array.isArray(T.av) && T.av.length <= o.W * o.H && T.av.every((t) => int(t, 0, o.W * o.H - 1))))) bad(); // (a round town's radius; the avenues' tiles: saves from before them have neither)
     if (!span(T.xs, o.W) || !span(T.ys, o.H) || !Array.isArray(T.signs) || T.signs.length > 8 || !T.signs.every((q) => Array.isArray(q) && q.length === 2 && int(q[0], 0, o.W - 1) && int(q[1], 0, o.H - 1))) bad();
     if (!Array.isArray(T.plazas) || T.plazas.length > 512 || !T.plazas.every((q) => Array.isArray(q) && q.length === 5 && q.every((v) => int(v, 0, Math.max(o.W, o.H))))) bad();
     if (!Array.isArray(T.r) || T.r.length > 8192) bad();
@@ -6041,13 +6045,23 @@ function railRoute(u, x, y, arrivalComps) {
 
 /*
  * Passenger Town (SHAPE_PRESETS city; LORE.md: the empty town, in Greenreach): the Pathfinder's town for the first
- * colonists, built and never lived in, fills the middle of the map between the two bases. A grid of streets runs
- * between blocks of empty buildings (S.town.r, the ruins: rock under their art, so they block the way and nothing is
- * built on them); some street segments are closed by an arcade built over them, so the streets are a maze. Laid by
- * townSetup on the canonical half and turned 180° onto the other, tile for tile, so both colonies get the same town.
+ * colonists, built and never lived in, fills the middle of the map between the bases. A grid of streets runs between
+ * blocks of empty buildings (S.town.r, the ruins: rock under their art, so they block the way and nothing is built on
+ * them); some street segments are closed by an arcade built over them, so the streets are a maze. Its avenues are old
+ * Accord roads (S.road, of TOWN.avenue's surface, owned by no one: a colony's land takes them as its own), worn but
+ * still roads, so Haulers can use them once a colony's roads join them.
+ *   Two colonies: a band across the map, one avenue down its middle from base to base; laid on the south half and
+ *     turned 180° onto the north, tile for tile.
+ *   Four (a square map, townQuad): a square town, a colony in front of the middle of each side, a little to its left;
+ *     an avenue in front of each runs right across the town (a # of avenues), the town square in the middle with the
+ *     civic tower; laid on one quarter and turned 90° at a time onto the others, tile for tile.
+ *   Three (a round planet): a round town, the grid clipped to a circle, an avenue from each colony's side to the middle
+ *     (one straight down the middle street, the others across the grid at 120°). As fair as a square grid allows: the
+ *     buildings, sentries, caches and arcades of the first third matched on the others by where they fall when turned.
  *
- * S.town: { v: 1, x0, y0, x1, y1 (its rectangle, inclusive), xs, ys (the blocks' spans along each axis, [a, b)),
- * signs: [[x, y]] (the WELCOME TO ITHACA signs: scenery), plazas: [[x, y, w, h]], r: [ruin] } with a ruin
+ * S.town: { v: 1, x0, y0, x1, y1 (its rectangle, inclusive), rad, lobe (a round town: its radius about the map's
+ * middle in front of each colony and how much further it reaches between them, in tiles, townEdge; unset: none), xs, ys (the blocks' spans along each axis, [a, b)), signs: [[x, y]] (the WELCOME TO ITHACA
+ * signs: scenery), plazas: [[x, y, w, h, lot]], av: [tile] (the avenues' tiles), r: [ruin] } with a ruin
  * { id, x, y, w, h, k (TOWN_KINDS key), v (its look's seed), hgt (tenths of a tile, as drawn), g: { cement, alloy, chip }
  * (salvage left), n0 (salvage it began with), cache (0, or 1 to 3: TOWN.caches), sen (its sentry's armour, 0: none),
  * scd (the sentry's next shot), by (bit p set: colony p has ordered it stripped), gone (1: stripped, its lot open) }.
@@ -6070,35 +6084,126 @@ function townPart(T, lo, hi, rng) {
 }
 
 /**
+ * Passenger Town for four on a W × W map: `s` half the town's side, `off` how far each colony's avenue (and its base)
+ * lies left of the middle of its side (generateMap puts the base there: its starter fields stay in its own quarter).
+ */
+function townQuad(W) {
+  const hw = W / 2, s = Math.min(hw - 13, Math.max(13, Math.round(W * TOWN.ring.four)));
+  return { s, off: Math.min(s - 6, Math.max(6, Math.round(s * 0.55))) };
+}
+
+/**
+ * A round town's edge (three colonies), in tiles from the middle of the map at angle a (y down): its radius `rad` in
+ * front of each colony (a at 90°, and 120° either way), reaching `lobe` further out between them.
+ */
+function townEdge(rad, lobe, a) { return rad + (lobe || 0) * (1 - dcos(3 * (a - Math.PI / 2))) / 2; }
+/** Is tile (i, j) in Passenger Town (its rectangle, and a round town's outline)? */
+function townIn(i, j) {
+  const T = S && S.town;
+  if (!T || i < T.x0 || i > T.x1 || j < T.y0 || j > T.y1) return false;
+  if (!T.rad) return true;
+  const dx = i - (S.W - 1) / 2, dy = j - (S.H - 1) / 2, r = townEdge(T.rad, T.lobe, datan2(dy, dx));
+  return dx * dx + dy * dy <= r * r;
+}
+
+/**
  * Lay Passenger Town on a new game's map (newGame, before the Command Bases land): `bases` the landing spots. Clears
- * the town's ground (no water, crags or deposits), lays the blocks and their ruins, closes street segments with
- * arcades while every street stays reachable and the bases stay joined, and turns it all onto the other half.
+ * the town's ground (no water, crags or deposits), lays the blocks and their ruins, the avenues as roads, closes street
+ * segments with arcades while every street stays reachable and the bases stay joined, and lays it all on the other
+ * sides by the map's symmetry.
  */
 function townSetup(seed, bases) {
   const W = S.W, H = S.H, N = W * H, rng = makeRng((seed ^ 0x7a0c17) >>> 0);
-  const mir = (t) => N - 1 - t;
-  // Along x: blocks from the west edge to a street down the middle (2 wide, or 3 on an odd width), mirrored east.
-  const cwx = W % 2 ? 3 : 2, Tx = (W - cwx) / 2;
-  const sx = townPart(Tx, TOWN.blockX[0], TOWN.blockX[1], rng), xs = [];
-  let p = Tx - sx.reduce((a, b) => a + b, 0) - 2 * (sx.length - 1); // (any slack: on the west edge)
-  for (const s of sx) { xs.push([p, p + s]); p += s + 2; }
-  for (let k = xs.length - 1; k >= 0; k--) xs.push([W - xs[k][1], W - xs[k][0]]);
-  // Along y: a street across the middle, then blocks out toward each base, kept TOWN.clear tiles short of it.
-  const mid = H / 2, by = Math.max(...bases.map((b) => b.y));
-  const Ty = Math.max(TOWN.blockY[0], Math.min(Math.round(H * TOWN.band), by - TOWN.clear - (mid + 1) + 1));
-  const sy = townPart(Ty, TOWN.blockY[0], TOWN.blockY[1], rng), ysB = [];
-  p = mid + 1;
-  for (const s of sy) { ysB.push([p, p + s]); p += s + 2; }
-  const y1 = ysB[ysB.length - 1][1] - 1, y0 = H - 1 - y1;
-  const ys = [...ysB.slice().reverse().map(([a, b]) => [H - b, H - a]), ...ysB];
-  const T = (S.town = { v: 1, x0: 0, y0, x1: W - 1, y1, xs, ys, signs: [], plazas: [], r: [] });
+  const np = bases.length, quad = np === 4, round = np === 3, hw = W / 2, mid = H / 2;
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
+  const { blockX, blockY } = TOWN;
+  // The map's turn: a rect (or a tile) onto the next side (two: the half turn; four: a quarter turn, as generateMap's
+  // r4); every twin of a rect, its own first (three: only itself, matched by place below).
+  const nTw = quad ? 4 : round ? 1 : 2;
+  const turnR = quad ? (r) => ({ ...r, x: W - r.y - r.h, y: r.x, w: r.h, h: r.w }) : (r) => ({ ...r, x: W - r.x - r.w, y: H - r.y - r.h });
+  const turnT = quad ? (t) => { const i = t % W, j = (t / W) | 0; return i * W + (W - 1 - j); } : (t) => N - 1 - t;
+  const twinsOf = (r) => { const out = [r]; for (let k = 1; k < nTw; k++) out.push(turnR(out[k - 1])); return out; };
+  const twinsT = (t) => { const out = [t]; for (let k = 1; k < nTw; k++) out.push(turnT(out[k - 1])); return out; };
+  // (the first side's share, by a rect's middle: two, the south half and the west of the middle row; four, the
+  // south-west quarter, as the turns divide it; three, all of it)
+  const canon = (r) => { const dx = r.x + r.w / 2 - hw, dy = r.y + r.h / 2 - mid; return round || (quad ? dx < 0 && dy >= 0 : dy > 0 || (dy === 0 && dx < 0)); };
+  // Three: which third a spot is in (as generateMap's sector), and a spot turned k thirds round.
+  const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
+  const rot = (x, y, k) => { const a = k * SEC, c = dcos(a), sn = dsin(a), dx = x - ccx, dy = y - ccy; return [ccx + dx * c - dy * sn, ccy + dx * sn + dy * c]; };
+  const mirror = (sp) => sp.slice().reverse().map(([a, b]) => [W - b, W - a]);
+  // The blocks' spans along each axis, the town's rectangle, and (three) its radius.
+  let xs, ys, rad = 0, lobe = 0, cwx = 2;
+  if (quad) {
+    const { s, off } = townQuad(W), bx = bases[0].x; // (bx: the base's column, the right half of its avenue)
+    const outer = townPart(s - off - 2, blockX[0], blockX[1], rng), q = Math.max(2, Math.round(off * 0.4)), Li = off - q - 2;
+    const inner = Li >= blockX[0] ? townPart(Li, blockX[0], blockX[1], rng) : [Li];
+    inner[inner.length - 1] += Li - inner.reduce((a, b) => a + b, 0) - 2 * (inner.length - 1); // (any slack: the block by the square)
+    const west = [];
+    let p = bx - 1 - outer.reduce((a, b) => a + b, 0) - 2 * (outer.length - 1);
+    for (const w of outer) { west.push([p, p + w]); p += w + 2; } // (then the avenue, bx - 1 and bx)
+    p = bx + 1;
+    for (const w of inner) { west.push([p, p + w]); p += w + 2; }
+    xs = [...west, [p, W - p], ...mirror(west)]; // (the middle block, the town square, 2q wide across the middle)
+    ys = xs;
+  } else if (round) {
+    const Rb = (H - 13) / 2; // (from the middle to a base)
+    rad = Math.min(Rb - TOWN.clear - 1, Math.max(6, Math.round(Rb * TOWN.ring.three)));
+    lobe = Math.max(0, Math.min(W / 2 - 4.5, rad * (1 + TOWN.ring.lobe)) - rad);
+    const half = townPart(Math.floor(rad + lobe) - 1, blockX[0], blockX[1], rng), south = [];
+    let p = hw + 1;
+    for (const w of half) { south.push([p, p + w]); p += w + 2; }
+    xs = [...mirror(south), ...south];
+    ys = xs;
+  } else {
+    // Along x: blocks from the west edge to a street down the middle (2 wide, or 3 on an odd width), mirrored east.
+    cwx = W % 2 ? 3 : 2;
+    const Tx = (W - cwx) / 2, sx = townPart(Tx, blockX[0], blockX[1], rng);
+    xs = [];
+    let p = Tx - sx.reduce((a, b) => a + b, 0) - 2 * (sx.length - 1); // (any slack: on the west edge)
+    for (const s of sx) { xs.push([p, p + s]); p += s + 2; }
+    for (let k = xs.length - 1; k >= 0; k--) xs.push([W - xs[k][1], W - xs[k][0]]);
+    // Along y: a street across the middle, then blocks out toward each base, kept TOWN.clear tiles short of it.
+    const by = Math.max(...bases.map((b) => b.y));
+    const Ty = Math.max(blockY[0], Math.min(Math.round(H * TOWN.band), by - TOWN.clear - (mid + 1) + 1));
+    const sy = townPart(Ty, blockY[0], blockY[1], rng), ysB = [];
+    p = mid + 1;
+    for (const s of sy) { ysB.push([p, p + s]); p += s + 2; }
+    ys = [...ysB.slice().reverse().map(([a, b]) => [H - b, H - a]), ...ysB];
+  }
+  const x0 = round ? Math.max(0, Math.floor(ccx - rad - lobe)) : quad ? xs[0][0] : 0, x1 = round ? Math.min(W - 1, Math.ceil(ccx + rad + lobe)) : quad ? xs[xs.length - 1][1] - 1 : W - 1;
+  const y0 = round ? x0 : ys[0][0], y1 = round ? x1 : ys[ys.length - 1][1] - 1;
+  const T = (S.town = { v: 1, x0, y0, x1, y1, xs, ys, signs: [], plazas: [], av: [], r: [] });
+  if (round) { T.rad = rad; T.lobe = lobe; }
+  const inTown = (i, j) => i >= x0 && i <= x1 && j >= y0 && j <= y1 && (!rad || dist2(i, j, ccx, ccy) <= townEdge(rad, lobe, datan2(j - ccy, i - ccx)) ** 2);
+  const rectIn = (r) => inTown(r.x, r.y) && inTown(r.x + r.w - 1, r.y) && inTown(r.x, r.y + r.h - 1) && inTown(r.x + r.w - 1, r.y + r.h - 1);
   // The town's ground (and a row round it): open, level, bare.
-  for (let j = Math.max(0, y0 - 1); j <= Math.min(H - 1, y1 + 1); j++) for (let i = 0; i < W; i++) {
+  const e0 = S.elev ? S.elev[tIdx(W >> 1, H >> 1)] : 0;
+  for (let j = Math.max(0, y0 - 1); j <= Math.min(H - 1, y1 + 1); j++) for (let i = Math.max(0, x0 - 1); i <= Math.min(W - 1, x1 + 1); i++) {
+    if (rad && dist2(i, j, ccx, ccy) > (townEdge(rad, lobe, datan2(j - ccy, i - ccx)) + 1.5) ** 2) continue;
     const t = j * W + i;
     S.terrain[t] = T_GROUND; S.res[t] = 0; S.amt[t] = 0; if (S.fert) S.fert[t] = 0; if (S.grow) S.grow[t] = 0; if (S.ramp) S.ramp[t] = 0;
-    if (S.elev) S.elev[t] = S.elev[mir(t)] = Math.min(S.elev[t], S.elev[mir(t)]);
+    if (S.elev) S.elev[t] = e0;
   }
-  if (S.elev) { const e0 = S.elev[tIdx(W >> 1, mid)]; for (let j = y0; j <= y1; j++) for (let i = 0; i < W; i++) S.elev[j * W + i] = e0; }
+  // The avenues: two colonies, the middle street from end to end; four, the street in front of each base right across
+  // the town (bx - 1 and bx, turned onto the others); three, from the middle out to each colony's side (one straight
+  // down the middle street, the others turned 120°: tiles within a tile of the line, so two wide).
+  const av = new Uint8Array(N);
+  if (quad) {
+    const bx = bases[0].x;
+    for (let j = y0; j <= y1; j++) for (let i = bx - 1; i <= bx; i++) for (const t of twinsT(j * W + i)) av[t] = 1;
+  } else if (round) {
+    for (let k = 0; k < 3; k++) {
+      const [ex, ey] = rot(ccx, ccy + 1, k), dx = ex - ccx, dy = ey - ccy;
+      for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+        const a = (i - ccx) * dx + (j - ccy) * dy, q = Math.abs((i - ccx) * dy - (j - ccy) * dx);
+        if (a >= -0.5 && q < 0.999 && inTown(i, j)) av[j * W + i] = 1;
+      }
+    }
+  } else {
+    const c0 = (W - cwx) / 2;
+    for (let j = y0; j <= y1; j++) for (let i = c0; i < c0 + cwx; i++) av[j * W + i] = 1;
+  }
+  const onAv = (r) => { for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) if (av[j * W + i]) return true; return false; };
   const add = (x, y, w, h, k, extra) => {
     const D = TOWN_KINDS[k], hgt = Math.round((D.h[0] + rng() * (D.h[1] - D.h[0])) * 10), area = w * h;
     const g = D.fixed ? { ...D.fixed } : { cement: Math.max(1, Math.round(area * TOWN.perTile.cement * D.mult)), alloy: Math.round(area * TOWN.perTile.alloy * D.mult), chip: Math.round(area * TOWN.perTile.chip * D.mult) + (D.chips || 0) };
@@ -6107,71 +6212,151 @@ function townSetup(seed, bases) {
     T.r.push(r);
     return r;
   };
-  // The blocks in the south (canonical) half, nearest the middle first: the civic hall, the civic tower, a school;
-  // then parking lots, a plaza, and the rest split into buildings.
-  const blocks = [];
-  for (const [ya, yb] of ysB) for (const [xa, xb] of xs) blocks.push({ x: xa, y: ya, w: xb - xa, h: yb - ya });
-  const cx = (W - 1) / 2, cy = (H - 1) / 2;
-  blocks.sort((a, b) => dist2(a.x + a.w / 2, a.y + a.h / 2, cx, cy) - dist2(b.x + b.w / 2, b.y + b.h / 2, cx, cy) || a.x - b.x);
+  const leaf = (area) => (area <= 4 ? 'house' : area <= 8 ? (rng() < 0.5 ? 'house' : 'shop') : rng() < 0.45 ? 'tower' : 'flats');
   const split = (x, y, w, h, depth) => {
     const area = w * h;
-    if (depth > 0 && (area <= 6 || (area <= 15 && rng() < 0.35))) {
-      const k = area <= 4 ? 'house' : area <= 8 ? (rng() < 0.5 ? 'house' : 'shop') : rng() < 0.45 ? 'tower' : 'flats';
-      add(x, y, w, h, k);
-      return;
-    }
+    if (depth > 0 && (area <= 6 || (area <= 15 && rng() < 0.35))) { add(x, y, w, h, leaf(area)); return; }
     const vert = w > h || (w === h && rng() < 0.5);
     const L = vert ? w : h;
     if (L < 4) { add(x, y, w, h, area <= 4 ? 'house' : 'flats'); return; }
     const c = 2 + Math.floor(rng() * (L - 3));
     if (vert) { split(x, y, c, h, depth + 1); split(x + c, y, w - c, h, depth + 1); } else { split(x, y, w, c, depth + 1); split(x, y + c, w, h - c, depth + 1); }
   };
-  let school = false;
-  blocks.forEach((b, n) => {
-    if (n === 0) { add(b.x, b.y, b.w, b.h, 'hall', { sen: TOWN.sentry.hp }); return; }
-    if (n === 1) { // the civic tower on the block's corner nearest the middle, shops round it
-      const tx = b.x + b.w / 2 < cx ? b.x + b.w - 2 : b.x, ty = b.y;
+  // The blocks of the first side's share, nearest the middle first: the civic hall, the civic tower (four: one, in the
+  // town square), a school; then parking lots, a plaza, and the rest split into buildings.
+  const cen = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+  const blocks = [];
+  for (const [ya, yb] of ys) for (const [xa, xb] of xs) {
+    const b = { x: xa, y: ya, w: xb - xa, h: yb - ya };
+    if (quad && xa < hw && xb > hw && ya < mid && yb > mid) { b.square = 1; blocks.push(b); continue; } // (four: the town square)
+    if (canon(b) && (!round || [[b.x, b.y], [b.x + b.w - 1, b.y], [b.x, b.y + b.h - 1], [b.x + b.w - 1, b.y + b.h - 1]].some(([i, j]) => inTown(i, j)))) blocks.push(b);
+  }
+  const dc = (b) => dist2(b.x + b.w / 2, b.y + b.h / 2, ccx, ccy);
+  blocks.sort((a, b) => dc(a) - dc(b) || a.y - b.y || a.x - b.x);
+  const own = new Set(); // (ruins and plazas that are their own twins: four's town square and its tower)
+  let roles;
+  if (round) { // three: the first third's blocks get their roles, and each other block the role of the one it turns onto
+    const whole = (b) => rectIn(b) && !onAv(b);
+    roles = new Map();
+    const by3 = [0, 1, 2].map((k) => blocks.filter((b) => sector(...cen(b).map((v) => v - 0.5)) === k));
+    const near = (k, b, ok) => { const [x, y] = rot(...cen(b).map((v) => v - 0.5), k); let best = null, bd = Infinity; for (const q of by3[k]) { if (roles.has(q) || !ok(q)) continue; const d = dist2(q.x + q.w / 2 - 0.5, q.y + q.h / 2 - 0.5, x, y); if (d < bd) { bd = d; best = q; } } return best; };
+    let n = 0, school = false;
+    for (const b of by3[0]) {
+      let role = 'split';
+      if (whole(b)) {
+        const roll = rng();
+        if (n === 0) role = 'hall'; else if (n === 1) role = 'spire'; else if (!school && n >= 3 && b.w * b.h >= 12) { role = 'school'; school = true; } else if (roll < TOWN.lots) role = 'lot'; else if (roll < TOWN.lots + TOWN.plaza) role = 'plaza';
+        n++;
+      }
+      roles.set(b, role);
+      if (role === 'split') continue;
+      for (const k of [1, 2]) { const q = near(k, b, whole); if (q) roles.set(q, role); }
+    }
+    for (const k of [1, 2]) for (const b of by3[k]) if (!roles.has(b)) roles.set(b, 'split');
+  }
+  let school = false, n = 0;
+  for (const b of blocks) {
+    if (b.square) { // four: the town square, the civic tower in its middle (its own twin, as the square is)
+      T.plazas.push([b.x, b.y, b.w, b.h, 0]); own.add(T.plazas[T.plazas.length - 1]);
+      own.add(add(hw - 1, mid - 1, 2, 2, 'spire'));
+      continue;
+    }
+    const role = round ? roles.get(b) : null;
+    if (round ? role === 'hall' : n === 0) add(b.x, b.y, b.w, b.h, 'hall', { sen: TOWN.sentry.hp });
+    else if (round ? role === 'spire' : n === 1 && !quad) { // the civic tower on the block's corner nearest the middle, shops round it
+      const tx = b.x + b.w / 2 < ccx ? b.x + b.w - 2 : b.x, ty = b.y;
       add(tx, ty, 2, 2, 'spire');
       if (b.h > 2) split(b.x, b.y + 2, b.w, b.h - 2, 1);
       if (b.w > 2) split(tx === b.x ? b.x + 2 : b.x, b.y, b.w - 2, 2, 1);
-      return;
+    } else if (round ? role === 'school' : !school && n >= 3 && b.w * b.h >= 12) { school = true; add(b.x, b.y, b.w, b.h, 'school'); }
+    else {
+      const roll = round ? 1 : rng();
+      if (round ? role === 'lot' : roll < TOWN.lots) { // a parking lot: open asphalt with a few car hulks
+        T.plazas.push([b.x, b.y, b.w, b.h, 1]);
+        const nc = 2 + Math.floor(rng() * 2);
+        for (let k = 0; k < nc; k++) {
+          const x = b.x + 1 + Math.floor(rng() * Math.max(1, b.w - 2)), y = b.y + Math.floor(rng() * b.h);
+          if (!T.r.some((r) => r.x === x && r.y === y)) add(x, y, 1, 1, 'car');
+        }
+      } else if (round ? role === 'plaza' : roll < TOWN.lots + TOWN.plaza) T.plazas.push([b.x, b.y, b.w, b.h, 0]);
+      else split(b.x, b.y, b.w, b.h, 0);
     }
-    const roll = rng();
-    if (!school && n >= 3 && b.w * b.h >= 12) { school = true; add(b.x, b.y, b.w, b.h, 'school'); return; }
-    if (roll < TOWN.lots) { // a parking lot: open asphalt with a few car hulks
-      T.plazas.push([b.x, b.y, b.w, b.h, 1]);
-      const n = 2 + Math.floor(rng() * 2);
-      for (let k = 0; k < n; k++) {
-        const x = b.x + 1 + Math.floor(rng() * Math.max(1, b.w - 2)), y = b.y + Math.floor(rng() * b.h);
-        if (!T.r.some((r) => r.x === x && r.y === y)) add(x, y, 1, 1, 'car');
+    n++;
+  }
+  if (round) {
+    // Three: nothing outside the circle; buildings an avenue runs through give way to it (what's left of their lot
+    // built up again in smaller ones).
+    const keep = [];
+    for (const r of T.r.slice()) {
+      if (!rectIn(r)) continue;
+      if (!onAv(r)) { keep.push(r); continue; }
+      const used = new Uint8Array(r.w * r.h), free = (a, c) => !used[c * r.w + a] && !av[(r.y + c) * W + r.x + a];
+      for (let c = 0; c < r.h; c++) for (let a = 0; a < r.w; a++) {
+        if (!free(a, c)) continue;
+        let w = 1, h = 1;
+        while (a + w < r.w && free(a + w, c)) w++;
+        while (c + h < r.h) { let ok = true; for (let q = a; q < a + w; q++) if (!free(q, c + h)) { ok = false; break; } if (!ok) break; h++; }
+        for (let cc = c; cc < c + h; cc++) for (let q = a; q < a + w; q++) used[cc * r.w + q] = 1;
+        if (w * h >= 2) keep.push(add(r.x + a, r.y + c, w, h, leaf(w * h)));
       }
-      return;
     }
-    if (roll < TOWN.lots + TOWN.plaza) { T.plazas.push([b.x, b.y, b.w, b.h, 0]); return; }
-    split(b.x, b.y, b.w, b.h, 0);
-  });
+    T.r = keep.filter((r) => rectIn(r) && !onAv(r));
+  }
   // A few caches, and old Accord sentries still at their posts (the civic hall's, and TOWN.sentry.per - 1 more).
-  const big = T.r.filter((r) => r.k === 'tower' || r.k === 'flats');
-  for (let k = 1; k < TOWN.sentry.per && big.length; k++) big.splice(Math.floor(rng() * big.length), 1)[0].sen = TOWN.sentry.hp;
-  for (const r of T.r) if (TOWN_KINDS[r.k].cache && rng() < TOWN.cacheShare) r.cache = 1 + Math.floor(rng() * TOWN.caches.length);
-  // The street segments: a column street beside a block row, or a row street under a block column. Each with its
-  // twin; arcades close some, while every street tile stays reachable and the bases joined.
+  // (Three: the first third's, each matched by the building of the same kind of size its spot turns onto.)
+  const pool = (k, f) => T.r.filter((r) => !own.has(r) && f(r) && (!round || sector(r.x + r.w / 2 - 0.5, r.y + r.h / 2 - 0.5) === k));
+  const match = (r, k, f) => { const [x, y] = rot(r.x + r.w / 2 - 0.5, r.y + r.h / 2 - 0.5, k); let best = null, bd = Infinity; for (const q of pool(k, f)) { const d = dist2(q.x + q.w / 2 - 0.5, q.y + q.h / 2 - 0.5, x, y); if (d < bd) { bd = d; best = q; } } return best; };
+  const bigF = (r) => (r.k === 'tower' || r.k === 'flats') && !r.sen, big = pool(0, bigF);
+  for (let k = 1; k < TOWN.sentry.per && big.length; k++) {
+    const r = big.splice(Math.floor(rng() * big.length), 1)[0];
+    r.sen = TOWN.sentry.hp;
+    if (round) for (const q of [1, 2]) { const m = match(r, q, bigF); if (m) m.sen = TOWN.sentry.hp; }
+  }
+  const cacheF = (r) => TOWN_KINDS[r.k].cache && !r.cache;
+  for (const r of pool(0, () => true)) {
+    if (!TOWN_KINDS[r.k].cache || rng() >= TOWN.cacheShare) continue;
+    r.cache = 1 + Math.floor(rng() * TOWN.caches.length);
+    if (round) for (const q of [1, 2]) { const m = match(r, q, cacheF); if (m) m.cache = r.cache; }
+  }
+  if (round) { // three: the same number of sentries in every third, and the same salvage (each third's buildings scaled to the mean)
+    const sec = (r) => sector(r.x + r.w / 2 - 0.5, r.y + r.h / 2 - 0.5), by3 = [0, 1, 2].map((k) => T.r.filter((r) => sec(r) === k));
+    for (const rs of by3) {
+      const on = rs.filter((r) => r.sen > 0).sort((a, b) => (a.k === 'hall' ? 0 : 1) - (b.k === 'hall' ? 0 : 1) || b.n0 - a.n0 || a.y - b.y || a.x - b.x);
+      for (const r of on.slice(TOWN.sentry.per)) r.sen = 0;
+      const off = rs.filter((r) => !r.sen && r.k !== 'car').sort((a, b) => (['hall', 'tower', 'flats', 'school'].includes(a.k) ? 0 : 1) - (['hall', 'tower', 'flats', 'school'].includes(b.k) ? 0 : 1) || b.n0 - a.n0 || a.y - b.y || a.x - b.x);
+      for (let k = on.length; k < TOWN.sentry.per && off.length; k++) off.shift().sen = TOWN.sentry.hp;
+    }
+    const sum = by3.map((rs) => rs.reduce((a, r) => a + r.n0, 0)), mean = (sum[0] + sum[1] + sum[2]) / 3;
+    by3.forEach((rs, k) => {
+      const f = sum[k] ? mean / sum[k] : 1;
+      for (const r of rs) {
+        if (r.k === 'car') continue;
+        for (const g of ['cement', 'alloy', 'chip']) r.g[g] = Math.round(r.g[g] * f);
+        r.g.cement = Math.max(1, r.g.cement);
+        r.n0 = r.g.cement + r.g.alloy + r.g.chip;
+      }
+      // (what rounding left over: a unit of Cement more or less in the biggest buildings, till it comes out even)
+      const big = rs.filter((r) => r.k !== 'car').sort((a, b) => b.n0 - a.n0 || a.y - b.y || a.x - b.x);
+      let left = Math.round(mean) - rs.reduce((a, r) => a + r.n0, 0);
+      for (let n = 0; left !== 0 && big.length && n < 1000; n++) { const r = big[n % big.length], d = left > 0 ? 1 : -1; if (r.g.cement + d < 1) continue; r.g.cement += d; r.n0 += d; left -= d; }
+    });
+  }
+  // The street segments: a column street beside a block row, or a row street under a block column (none on an avenue,
+  // nor, three, past the circle). Each with its twins; arcades close some, while every street tile stays reachable
+  // and the bases joined.
   const segs = [];
-  const colStreets = [];
-  for (let k = 0; k + 1 < xs.length; k++) colStreets.push([xs[k][1], xs[k + 1][0]]);
-  const rowStreets = [[mid - 1, mid + 1]];
-  for (let k = 0; k + 1 < ysB.length; k++) rowStreets.push([ysB[k][1], ysB[k + 1][0]]);
-  for (const [a, b] of colStreets) for (const [ya, yb] of ysB) segs.push([a, ya, b - a, yb - ya]);
-  for (const [a, b] of rowStreets) for (const [xa, xb] of xs) if (a >= mid - 1 && (a > mid - 1 || xa + xb <= W)) segs.push([xa, a, xb - xa, b - a]); // (the middle row's: the west half's, its twins east)
-  for (let k = segs.length - 1; k > 0; k--) { const m = Math.floor(rng() * (k + 1)); [segs[k], segs[m]] = [segs[m], segs[k]]; }
-  // the town's ruins in the terrain, mirrored
-  const twin = (r) => ({ ...r, x: W - r.x - r.w, y: H - r.y - r.h, g: { ...r.g } });
-  const south = T.r.slice();
-  for (const r of south) T.r.push(twin(r));
-  const solid = (r, v) => { for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) { S.terrain[j * W + i] = v; S.terrain[mir(j * W + i)] = v; } };
-  for (const r of south) solid(r, T_ROCK);
+  for (let k = 0; k + 1 < xs.length; k++) for (const [ya, yb] of ys) segs.push({ x: xs[k][1], y: ya, w: xs[k + 1][0] - xs[k][1], h: yb - ya });
+  for (let k = 0; k + 1 < ys.length; k++) for (const [xa, xb] of xs) segs.push({ x: xa, y: ys[k][1], w: xb - xa, h: ys[k + 1][0] - ys[k][1] });
+  const open = segs.filter((sg) => !onAv(sg) && rectIn(sg));
+  const first = open.filter((sg) => (round ? sector(sg.x + sg.w / 2 - 0.5, sg.y + sg.h / 2 - 0.5) === 0 : canon(sg)));
+  for (let k = first.length - 1; k > 0; k--) { const m = Math.floor(rng() * (k + 1)); [first[k], first[m]] = [first[m], first[k]]; }
+  // the town's ruins in the terrain, with their twins
+  const south = T.r.filter((r) => !own.has(r));
+  for (const r of south) T.r.push(...twinsOf({ ...r, g: { ...r.g } }).slice(1));
+  const solid = (r, v) => { for (const q of twinsOf(r)) for (let j = q.y; j < q.y + q.h; j++) for (let i = q.x; i < q.x + q.w; i++) S.terrain[j * W + i] = v; };
+  for (const r of T.r) for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) S.terrain[j * W + i] = T_ROCK;
   const streets = [];
-  for (let j = y0; j <= y1; j++) for (let i = 0; i < W; i++) if (S.terrain[j * W + i] === T_GROUND) streets.push(j * W + i);
+  for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) if (inTown(i, j) && S.terrain[j * W + i] === T_GROUND) streets.push(j * W + i);
   const seen = new Uint8Array(N);
   const joined = () => {
     seen.fill(0);
@@ -6183,23 +6368,46 @@ function townSetup(seed, bases) {
     }
     return bases.every((b) => seen[tIdx(b.x, b.y)]) && streets.every((t) => seen[t] || S.terrain[t] !== T_GROUND);
   };
-  if (!joined()) { // (the map round the town cut a base off: no arcades, and a lane opened from each base to the town)
-    for (const b of bases) for (let j = Math.min(b.y, y1); j <= Math.max(b.y, y0); j++) if (j < y0 || j > y1) { const t = tIdx(b.x, j); if (S.terrain[t] !== T_GROUND) { S.terrain[t] = T_GROUND; S.res[t] = 0; } }
+  if (!joined()) { // (the map round the town cut a base off: no arcades, and a lane opened from each base into the town)
+    const lane = (t) => { if (S.terrain[t] !== T_GROUND) { S.terrain[t] = T_GROUND; S.res[t] = 0; } };
+    if (round) for (const b of bases) { let x = b.x, y = b.y; for (let k = 0; k < 400 && !inTown(Math.round(x), Math.round(y)); k++) { lane(tIdx(Math.round(x), Math.round(y))); const d = dist(x, y, ccx, ccy) || 1; x += (ccx - x) / d * 0.5; y += (ccy - y) / d * 0.5; } }
+    else for (let j = y1 + 1; j <= bases[0].y; j++) for (const t of twinsT(j * W + bases[0].x)) lane(t);
   }
   const closed = [];
-  for (const sg of segs) {
+  for (const sg of first) {
     if (rng() >= TOWN.close) continue;
-    const r = { x: sg[0], y: sg[1], w: sg[2], h: sg[3] };
-    solid(r, T_ROCK);
-    if (joined()) closed.push(r); else solid(r, T_GROUND);
+    const set = [sg];
+    if (round) for (const k of [1, 2]) {
+      const [x, y] = rot(sg.x + sg.w / 2 - 0.5, sg.y + sg.h / 2 - 0.5, k);
+      let best = null, bd = Infinity;
+      for (const q of open) { if (closed.includes(q) || set.includes(q) || sector(q.x + q.w / 2 - 0.5, q.y + q.h / 2 - 0.5) !== k) continue; const d = dist2(q.x + q.w / 2 - 0.5, q.y + q.h / 2 - 0.5, x, y); if (d < bd) { bd = d; best = q; } }
+      if (best) set.push(best);
+    }
+    if (round && set.length < 3) continue; // (three: only one that every third can match)
+    for (const q of set) solid(q, T_ROCK);
+    if (joined()) closed.push(...set); else for (const q of set) solid(q, T_GROUND);
   }
-  for (const r of closed) { const a = add(r.x, r.y, r.w, r.h, 'arcade'); T.r.push(twin(a)); }
-  // The rest of the street tiles are bare old paving; ids for every ruin, the twins after their own.
+  for (const r of closed) { const a = add(r.x, r.y, r.w, r.h, 'arcade'); T.r.push(...twinsOf({ ...a, g: { ...a.g } }).slice(1)); }
+  // The rest of the street tiles are bare old paving; ids for every ruin, in order of place.
   T.r.sort((a, b) => (a.y * W + a.x) - (b.y * W + b.x));
   for (const r of T.r) r.id = S.nextId++;
-  for (const [x, y, w, h, lot] of T.plazas.slice()) T.plazas.push([W - x - w, H - y - h, w, h, lot]);
-  // WELCOME TO ITHACA, at the mouth of the middle street, facing each base.
-  const sx0 = (W >> 1) + (cwx === 3 ? 2 : 1);
-  T.signs.push([sx0, Math.min(H - 1, y1 + 1)], [W - 1 - sx0, Math.max(0, y0 - 1)]);
+  for (const p of T.plazas.slice()) if (!own.has(p)) for (const q of twinsOf({ x: p[0], y: p[1], w: p[2], h: p[3] }).slice(1)) T.plazas.push([q.x, q.y, q.w, q.h, p[4]]);
+  // The avenues: old Accord roads, worn, no one's till a colony's land takes them.
+  for (let t = 0; t < N; t++) {
+    if (!av[t] || S.terrain[t] !== T_GROUND) continue;
+    S.road[t] = 1; S.pave[t] = TOWN.avenue; S.wown[t] = -1; S.res[t] = 0;
+    T.av.push(t);
+  }
+  S.roadVer = (S.roadVer || 0) + 1;
+  // WELCOME TO ITHACA, at the mouth of each colony's avenue, facing it.
+  if (round) {
+    const sx = hw + 1, sy = Math.min(H - 1, Math.ceil(ccy + rad) + 1);
+    for (let k = 0; k < 3; k++) { const [x, y] = rot(sx, sy, k); T.signs.push([clamp(Math.round(x), 0, W - 1), clamp(Math.round(y), 0, H - 1)]); }
+  } else if (quad) {
+    for (const t of twinsT(Math.min(H - 1, y1 + 1) * W + bases[0].x + 1)) T.signs.push([t % W, (t / W) | 0]);
+  } else {
+    const sx0 = (W >> 1) + (cwx === 3 ? 2 : 1);
+    T.signs.push([sx0, Math.min(H - 1, y1 + 1)], [W - 1 - sx0, Math.max(0, y0 - 1)]);
+  }
   return T;
 }

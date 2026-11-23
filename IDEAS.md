@@ -12,25 +12,38 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
-## Passenger Town, the city map (built Nov 22 2026; open questions for the owner)
+## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
 The owner's design (approved): the empty Accord town between the bases, its streets a maze, its buildings stripped
 for salvage to open new ways through, cover beside them, caches, old sentries, rivals that strip near their routes.
 Built as `SHAPE_PRESETS` `city` (README, Passenger Town); the mission *Passenger Town* (First Contact) teaches it.
-Calls made that the owner may want changed:
+The open questions, decided by the owner ("do your recs", Nov 23 2026):
 
-- **Workers aren't selected and sent.** Workers in Terrafall are never selected, so the order is on the building's
-  panel (Strip for salvage, S) and the colony's free Workers go, up to 3 a building, like Call a worker.
-- **Sentries are part of their building**, not robots: a sentry on the roof shoots any robot within 3.2 tiles and
-  armed robots beside it shoot back; warbots are sent by selecting them and tapping the building. There is no neutral
-  robot side in the game to put them on. They fire at everyone, the Murmur's creatures aside.
-- **Numbers:** a unit of salvage every 4 s a Worker; about 240 Cement, 105 Alloy and 25 Chips a side on Medium (a
-  Smelter makes 12 Alloy a minute); a cache in one building in seven; sentry armour 40, 2.5 damage a second.
-- **The streets are old paving, not roads**: Haulers still need roads laid on them. Pre-laid neutral roads would
-  have needed an owner for them.
-- **For two players only** so far; three or four would need a layout turned three or four ways.
-- **Trade Posts** can land in the town's streets or plazas (the posts go where open ground is); left as it is.
-- **The look** is drawn in code (ART_GUIDE.md, Passenger Town); a renderer sprite set could replace it.
+- **Strip order on the building's panel (S): kept.** Workers in Terrafall are never selected, so the colony's free
+  Workers go, up to 3 a building, like Call a worker.
+- **Sentries stay part of their building**, not robots, **but now guard their post against anything:** they shoot the
+  Murmur that come near as well as any colony's robots, and a Murmur creature right beside the building claws at the
+  sentry (`TOWN.murmur`, half its bite a second: modest, so a pack passing through wears one down, it doesn't strip
+  the town of them). Warbots are still sent by selecting them and tapping the building.
+- **Salvage numbers: kept** (a unit every 4 s a Worker; `TOWN.perTile`; caches; sentry armour 40, 2.5 damage a second).
+- **The avenues are real roads (BUILT):** worn old Accord roads (`TOWN.avenue`: plain road surface, road speed), owned by
+  no one till a colony's land takes them (`S.wown` -1: `wayOwner` falls back to the land's owner), so Haulers and trucks
+  use them once a colony's roads join them, and they wear, are torn up and can be removed like any road. Nothing stands
+  on them and no arcade closes them, so the town has a backbone; the side streets stay old paving. Two colonies: the
+  middle street from base side to base side. They end at the town's edge (the few tiles to the base are the colony's to
+  lay). Recommended, not asked: a mission goal (*Join a road to the town's old avenue*).
+- **Three and four players (BUILT):** four on a square map, a colony on each edge a little left of its middle, a square
+  town with the town square and its one civic tower in the middle and an avenue in front of each colony right across the
+  town (a #), turned 90° tile for tile; 2 vs 2 pairs neighbours (bottom and left against top and right). Three on the
+  round planet, a round town (reaching further out between the colonies than in front of them), an avenue from each
+  colony's side to the middle; a grid can't turn 120° tile for tile, so the thirds are matched as near as it allows
+  (the same sentries, caches and arcades; salvage scaled even), like the rest of the three-player maps. The map card says
+  3–4 players. Open: the three-player town's diagonal avenues are staircases on the grid, so a Hauler's trip along one
+  to the middle is longer than straight down the first colony's (the trip on foot is about the same).
+- **Trade Posts in the town: kept, as the town market:** only on a square or a parking lot, never in a street or by a
+  welcome sign (`townPostOk`).
+- **The look** is drawn in code (ART_GUIDE.md, Passenger Town); a renderer sprite set could replace it. Roads on the
+  town's ground (the avenues, and any a colony lays) now show through its paving.
 
 ## The owner's notes, Nov 21 2026 (for later)
 

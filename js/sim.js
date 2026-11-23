@@ -10910,6 +10910,7 @@ function placePosts(seed) {
   for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
     const t = tIdx(i, j);
     if (!free(t) || S.fert[t] || S.owner[t] >= 0 || (grandCanyon && !homes.has(S.zone[t]))) continue;
+    if (S.town && !townPostOk(i, j)) continue; // (Passenger Town: only on a square or a parking lot, the town market)
     let room = 0;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
     if (room < 14 || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
@@ -11025,7 +11026,7 @@ function uplinkOrbit(t) {
   const W = S.W, H = S.H, N = W * H, np = nColonies(), SH = SHAPE_PRESETS[S.settings.shape || 0];
   if (haul4Map(S.settings)) { const i = t % W, j = (t / W) | 0; return [t, j * W + (W - 1 - i), N - 1 - t, (H - 1 - j) * W + i]; } // (Long Haul 2v2: mirrored both ways)
   if (np === 2 || SH.twin) return [t, N - 1 - t]; // (Twin Valleys: only the half turn)
-  if (SH.cross || SH.quad4) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
+  if (quadShape(SH, np)) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, i = t % W, j = (t / W) | 0, out = [t];
   for (let k = 1; k < 3; k++) {
     const a = (k * 2 * Math.PI) / 3, c = dcos(a), s = dsin(a), x = Math.round(ccx + (i - ccx) * c - (j - ccy) * s), y = Math.round(ccy + (i - ccx) * s + (j - ccy) * c);
@@ -11046,7 +11047,7 @@ function uplinkOrbit(t) {
 function placeUplinks(seed) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
-  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && nColonies() >= 3) || haul4Map(S.settings);
+  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (quadShape(SH, nColonies()) && nColonies() >= 3) || haul4Map(S.settings);
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const canyonZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
@@ -21173,6 +21174,16 @@ function townCover(u) {
 function townDist(r, x, y) { const dx = Math.max(r.x - x, 0, x - (r.x + r.w)), dy = Math.max(r.y - y, 0, y - (r.y + r.h)); return Math.sqrt(dx * dx + dy * dy); }
 /** Where building r's sentry is, for the rules: its post on the roof, over the middle of the building. */
 function townSentryAt(r) { return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+/**
+ * Can a Trade Post land on tile (i, j) of Passenger Town's map? Outside the town, yes; in it, only on a square or a
+ * parking lot (the town market: never in a street, where it could stand in the only way through), and never on or
+ * beside a WELCOME TO ITHACA sign.
+ */
+function townPostOk(i, j) {
+  const T = S.town;
+  if (T.signs.some(([x, y]) => Math.abs(x - i) <= 1 && Math.abs(y - j) <= 1)) return false;
+  return !townIn(i, j) || T.plazas.some(([x, y, w, h]) => i >= x && i < x + w && j >= y && j < y + h);
+}
 /** Workers of one colony on building r at most. */
 function townCrew(r) { return Math.min(TOWN.crew, 1 + Math.floor((r.w * r.h) / 4)); }
 /** Salvage left in building r. */
@@ -21292,7 +21303,11 @@ function townFall(r, p) {
   }
   if (r.k !== 'car') postMsg(p, `${D.name.replace(/^the /i, 'The ')} stripped: its lot is open ground, a new way through the town.`, cx, cy, 'info');
 }
-/** Three times a second: the sentries on duty shoot, and armed robots beside them shoot back. */
+/**
+ * Three times a second: the sentries on duty shoot (the nearest robot or Murmur creature in reach: they guard their post
+ * against anything), armed robots beside them shoot back, and a Murmur creature right beside the building claws at it
+ * (TOWN.murmur of its bite a second).
+ */
 function townTick(dt) {
   for (const r of S.town.r) {
     if (r.gone || !(r.sen > 0)) continue;
@@ -21300,11 +21315,12 @@ function townTick(dt) {
     let tgt = null, td = Infinity, back = 0;
     const hitters = new Set();
     for (const u of S.bots) {
-      if (u.dead || u.inside || u.owner < 0 || BOTS[u.type].wild || BOTS[u.type].air || BOTS[u.type].sea || aloft(u)) continue;
-      const d = townDist(r, u.x, u.y);
+      if (u.dead || u.inside || u.owner < 0 || BOTS[u.type].air || BOTS[u.type].sea || aloft(u)) continue;
+      const d = townDist(r, u.x, u.y), wild = BOTS[u.type].wild;
       if (d > TOWN.sentry.back + 1) continue;
       if (d <= R && (d < td || (d === td && u.id < tgt.id)) && !calmAt(u.x, u.y)) { td = d; tgt = u; } // (nothing shoots on a Trade Post's ground)
-      if (isArmy(u) && botArmed(u) && d <= TOWN.sentry.back) { back += TOWN.sentry.hit * dt; hitters.add(u.owner); if (hash2(u.id, S.tick, 62) < 0.3) addFx('tracer', u.x, u.y - 0.2, { x2: at.x, y2: at.y - r.hgt / 10 + 0.1, life: 0.08, color: PLAYER_COLORS[u.owner] }); }
+      if (wild && d <= 1 && BOTS[u.type].bite) back += BOTS[u.type].bite * TOWN.murmur * dt; // (a creature beside it claws at the post)
+      else if (!wild && isArmy(u) && botArmed(u) && d <= TOWN.sentry.back) { back += TOWN.sentry.hit * dt; hitters.add(u.owner); if (hash2(u.id, S.tick, 62) < 0.3) addFx('tracer', u.x, u.y - 0.2, { x2: at.x, y2: at.y - r.hgt / 10 + 0.1, life: 0.08, color: PLAYER_COLORS[u.owner] }); }
     }
     r.scd = Math.max(0, (r.scd || 0) - dt);
     if (tgt && r.scd <= 0) {

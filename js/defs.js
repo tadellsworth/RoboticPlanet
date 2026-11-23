@@ -741,8 +741,11 @@ const SHAPE_PRESETS = [
   { name: 'Grand Canyon', group: 'heights', blurb: 'Two high rims overlook rocky shelves, green river basins and Ore and Crystal. The river splits around islands between its narrows.', w: 1.2, h: 1.4, grandCanyon: true, minLevels: 4, naval: true, river: true, // (river: ships sail its river, but it's a heights map, not a naval one: no Naval badge, no Shoals biome)
     tip: 'Grand Canyon: your colony starts on a high rim. Two single-lane descents lead down from each rim, a switchback and a side-canyon trail. Ships can sail around the midstream islands, robots can wade at the fords, and a Viaduct can cross at the narrows.' },
   // Passenger Town (LORE.md: the empty town, in Greenreach): the Pathfinder's town fills the middle (townSetup in world.js).
-  { name: 'Passenger Town', group: 'divided', blurb: 'The empty Accord town between the bases: its streets are a maze, its buildings block the way. Strip a building for Cement, Alloy and Chips, and its lot opens a new way through.', w: 1, h: 1.1, city: true, flat: true,
-    tip: 'Passenger Town: the empty town between the bases. Its buildings block the way and its streets are a maze. Tap a building and Strip for salvage (S): your Workers take it apart for Cement, Alloy and Chips, carried home as crates, and its lot opens a new street. Robots beside a building are in cover. Some still have an old Accord sentry on duty: clear it with warbots first.' },
+  // Two colonies face each other across it; three ring a round town (turned 120°), four sit one on each edge of a
+  // square one (turned 90°). Its avenues are old Accord roads (townSetup).
+  { name: 'Passenger Town', group: 'divided', blurb: 'The empty Accord town between the bases: its streets are a maze, its buildings block the way, and its old avenues are still roads. Strip a building for Cement, Alloy and Chips, and its lot opens a new way through.', w: 1, h: 1.1, city: true, flat: true, players: 4,
+    tip: 'Passenger Town: the empty town between the bases. Its buildings block the way and its streets are a maze, but its old avenue is still a road (worn: plain road speed) that Haulers can use once your roads join it. Tap a building and Strip for salvage (S): your Workers take it apart for Cement, Alloy and Chips, carried home as crates, and its lot opens a new street. Robots beside a building are in cover. Some still have an old Accord sentry on duty: it shoots robots and Murmur alike, so clear it with warbots first.',
+    quadTip: 'Passenger Town: a colony on each edge of the empty town, the town square in the middle with its civic tower. An old avenue runs into the town in front of you and right across it, crossing your neighbours\' avenues: they are worn roads Haulers can use once your roads join them. The streets between are a maze: tap a building and Strip for salvage (S) to open a way. Old Accord sentries shoot robots and Murmur alike: clear one with warbots first.' },
 ];
 /**
  * Passenger Town (SHAPE_PRESETS city: townSetup in world.js, the rules in sim.js, the look in js/city.js).
@@ -759,6 +762,13 @@ const SHAPE_PRESETS = [
  *                 its reach from the building's edge, its shot's damage every `every` s, and the damage each armed
  *                 robot of yours within `back` tiles of it does back a second
  *   ai            a rival's strip orders: one every `every` s, at most `max` buildings at once, within `reach` of its land
+ *   ring          three or four colonies: half the town's side (four: square), a share of the map's side, or (three:
+ *                 round) its radius in front of each colony, a share of the way from the middle to a base, reaching
+ *                 `lobe` of that further out between the colonies
+ *   avenue        the avenues (one down the middle with two colonies, one in front of each with three or four) are old
+ *                 Accord roads of this surface (PAVE: 1, plain road speed), owned by no one till a colony's land takes them
+ *   murmur        what a Murmur creature clawing at a sentry's building (within 1 tile) does to its armour a second, per
+ *                 point of its bite; the sentries shoot the Murmur too
  */
 const TOWN = {
   band: 0.2, clear: 6, blockX: [4, 6], blockY: [3, 5], lots: 0.1, plaza: 0.05, close: 0.4,
@@ -766,6 +776,7 @@ const TOWN = {
   cacheShare: 0.15, caches: [{ chip: 5 }, { crystal: 6, chip: 2 }, { alloy: 8 }],
   sentry: { per: 2, hp: 40, range: 3.2, dmg: 2.5, every: 1, back: 3.4, hit: 1.2 },
   ai: { every: 20, max: 2, reach: 6 },
+  ring: { four: 0.27, three: 0.7, lobe: 0.45 }, avenue: 1, murmur: 0.5,
 };
 /** The kinds of building in Passenger Town: name, line (flavour), height range (tiles, as drawn), salvage multiplier. */
 const TOWN_KINDS = {

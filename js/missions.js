@@ -1640,6 +1640,7 @@ const MISSIONS = [
       'The town was built for colonists who never came. Its buildings block the way: the streets are a maze.',
       'Tap a building → <b>Strip for salvage</b> (<kbd>S</kbd>). Your free Workers take it apart for Cement, Alloy and Chips.',
       'They set the salvage down beside it in crates: Haulers with a road to them, or idle Workers, carry them home.',
+      'The town\'s avenue is still an old road: join your roads to it and your Haulers can drive into the town.',
       'A stripped lot is open ground: a new street, for you and the rival alike. Robots beside a building are in cover.',
       'Some buildings still have an old Accord sentry on duty. It shoots anything that comes near: clear it with warbots.',
     ],
@@ -1655,6 +1656,18 @@ const MISSIONS = [
       { kind: 'ruins', n: [2, 3, 4], text: ['Strip a building of the town', 'Strip {n} buildings of the town'], count: (P) => P.stats.ruins || 0,
         hint: 'Tap a building in the town → <b>Strip for salvage</b> (<kbd>S</kbd>). Your free Workers go and take it apart.',
         ui: '#sh-strip' },
+      { kind: 'avenue', text: 'Join a road to the town\'s old avenue',
+        count: (P, S) => { // (a road or planned road of yours, not the avenue's own, beside an avenue tile that's still road)
+          const av = new Set((S.town && S.town.av) || []);
+          for (const t of av) {
+            if (!S.road[t]) continue;
+            const i = t % S.W;
+            for (const u of [i > 0 ? t - 1 : -1, i < S.W - 1 ? t + 1 : -1, t - S.W, t + S.W]) if (u >= 0 && u < S.W * S.H && !av.has(u) && (S.road[u] ? wayOwner(u) === 0 : S.plan[u] === 1)) return 1;
+          }
+          return 0;
+        },
+        hint: '<b>Paths</b> (<kbd>R</kbd>): drag a road from yours to the avenue running into the town, tap <b>Build</b>.',
+        ui: "#btn-road, #banner-seg [data-v='road'], #banner-ok" },
       { kind: 'salvage', n: [20, 30, 45], text: 'Strip {n} units of salvage', count: (P) => P.stats.stripped || 0,
         hint: 'Order more buildings stripped (<kbd>S</kbd> on a building\'s panel). Bigger ones take longer and give more.',
         ui: '#sh-strip' },
