@@ -98,6 +98,13 @@ should keep (`DUSK_BIOMES`: three stops, `sun`, `tint`, `shade`, for golden hour
 | Argos (the moon) | none: no air to redden the light | the evening's warm cast taken out, a hard terminator sweeping east to west in a minute |
 | The Hollow | none: it's underground | |
 
+**Long shadows (Nov 2026 redraw, waiting for the owner's approval):** with the sun low every building throws a long, soft
+shadow away from it (east at dusk, west at dawn), from half again its height in the golden hour to about four times it
+as the sun sets (`duskCastShadows`): its own art as a flat silhouette (made once per building and team), sheared along
+the light, drawn in one third-size layer in the shade's colour so crossing shadows don't double up. The plants throw
+theirs too, up to about a tile long: the whole map's plant silhouettes (`duskSilBake`, now made in every biome with a
+sunset) smeared along the light into the same layer. Not on Saver, Argos or the Hollow.
+
 Dawn uses one cooler palette (violet, rose, pale gold) except the Bloom's own (violet, teal, mint), at about 60%
 strength. The Ring shows as a faint pale arc low over the top of the view when zoomed out, after the land has gone
 into shadow. Robots' drop shadows stretch and turn violet. Keep team colours, buildings and robots clear: the strong
@@ -1269,6 +1276,14 @@ Every weapon now has effects, all drawn in code until art arrives. **The game al
 batch**; these sheets replace the code drawings with richer animation. Do them in any order; each one is used as
 soon as it's in the manifest.
 
+**Installed (Nov 2026 redraw, waiting for the owner's approval):** `fx-explosion`, `fx-muzzle`, `fx-impact`, `fx-spark`,
+`fx-smoke`, `fx-debris`, `fx-dustcloud`, `decal-scorch`, `decal-pock` and `decal-burn`, painted with the effects library
+like the fuel blast (`python3 renderer/fx/battle.py <outdir>`, which also runs `fx/explosion.py`; WebP, about 360 KB
+together). The fireball (`drawBoomFx`) and muzzle flash (`drawMuzzleFx`) draw their sheet frame but keep, in code, their
+light on the ground, a short hot glow and a few sparks; the blast's shock ring is now a soft band of light, not a drawn
+line, and the fireball's late smoke thins sooner than the sheet's. Tracers, the Disruptor's arc and `decal-rubble` are
+still drawn in code. Remove a line from the manifest to get the code drawing back.
+
 **What plays when**
 
 | Event | What you see |
@@ -1960,6 +1975,17 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 | Bones | A bleached spine, ribs, skull and a leg bone with a soft shadow, at three sizes. |
 | Stumps | A charred split stake with an ashen lit side and its shadow, or a burnt fallen log. |
 
+**The Nov 2026 redraw (waiting for the owner's approval).** The ground is no longer flat tile-sized patches:
+`paintScarGround` paints each scarred tile pixel by pixel from fields with a value at every tile's middle (`scarFieldsAt`:
+the blight, a light scorch, ash or glass, torn earth and churned mud), blended between the four nearest tiles, its edges
+broken by a world-space noise (`scarNoise`, a 256 px tileable value noise made once) so neighbouring tiles meet with no
+seams, in ragged organic shapes, fading out before a tile with no scars. The grain, ash flecks and cinders, glass sheen
+and the churned mud's ridges come from the same noise. A changed scar repaints the tiles round it too (`flushDirtyTiles`).
+Shell holes and big craters are lit heightfields (`renderer/fx/scars.py`): `scar-hole` (8 variants, 64 px) and
+`scar-crater` (4 variants, 256 px; the rim at 0.3 of the frame), earth browns with a lit lip, a far wall in light and
+thrown clods; they are baked art (`bakedArt`), so the map is baked again when they arrive. Without them the code holes
+are drawn.
+
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
 
@@ -2039,6 +2065,16 @@ lake pouring through it (white water and spray, fading as the lake drains). The 
 blue water spreading from the dam's foot with a foaming front and streaks running down the valley, then wet silt as it
 goes down; the drained lakebed is dark mud with puddles, fading to a faint stain. A rendered wall sprite (intact,
 cracked, burst; by day and night) would be the art to ask for.
+
+### Weather (drawn in code; no images)
+
+`js/weather.js`. **The Nov 2026 redraw (waiting for the owner's approval):** the haze, mist, dust and driven snow are
+layers of soft noise (`wxTex`, from the war scars' `scarNoise`; `wxLayer` tiles one over the view as a pattern),
+stretched along the wind and scrolling at different speeds, instead of round blobs: the sandstorm and blizzard a darker
+body, lighter billows and fine bright streaks whipping past; the rain's mist banks and gusting sheets; the swamp fog's
+slow banks and quicker wisps; the ashfall's smoke. Rain falls in three depths (a fine far haze of drops, the main fall,
+a few big near streaks), heavier where a gust sheet passes; splashes throw a crown of droplets; lightning lights one part
+of the sky most. Saver draws one layer of each and no far rain. Colours stay those of the old drawing.
 
 ### Wind, water, sky and the planet view (drawn in code; no images)
 

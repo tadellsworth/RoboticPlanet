@@ -602,6 +602,82 @@ function duskWake() {
   return D.B.wake * D.mute * duskSmooth(0.25, 0.85, D.h) * Math.min(1, D.env * 1.4);
 }
 
+/*
+ * Long shadows (the Nov 2026 redraw): with the sun low every building and plant throws a long shadow across the land away from
+ * it, east at dusk and west at dawn, stretching as the sun goes down. Each building's shadow is its own art laid flat
+ * and sheared along the light (a silhouette made once per building and team, duskSilhouette), drawn over the ground
+ * under everything standing, soft, in the shade's colour. Not on Saver; not on Argos (the terminator does that) nor
+ * at full dark (the night has no sun).
+ */
+const DUSK_SIL = { z: 40, n: 8 }; // the silhouettes' scale (px a tile) and canvas (tiles)
+
+/** A building's silhouette (its art in one flat colour), made once per type and team: { c, bx, by } or null. */
+function duskSilhouette(e) {
+  const C = DUSK.cast || (DUSK.cast = { sil: {}, ver: -1 });
+  const ver = typeof ART === 'object' ? Object.keys(ART).length : 0;
+  if (C.ver !== ver) { C.sil = {}; C.ver = ver; } // (made again as art arrives)
+  const key = e.type + '@' + e.owner;
+  if (key in C.sil) return C.sil[key];
+  const n = DUSK_SIL.n * DUSK_SIL.z, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d'), bx = n / 2, by = n * 0.68;
+  try {
+    drawBuilding(g, e.type, bx, by, DUSK_SIL.z, e.owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 4, x: e.x, y: e.y, id: e.id, mdAxis: e.mdAxis });
+  } catch (err) { return (C.sil[key] = null); }
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#000'; g.fillRect(0, 0, n, n);
+  return (C.sil[key] = { c, bx, by });
+}
+
+/** Draw the long shadows of the buildings among the frame's items (before they are drawn). */
+function duskCastShadows(ctx, ox, oy, z, items) {
+  const D = DUSK.st;
+  if (!D || D.saver || D.B.terminator) return;
+  const k = D.env * D.mute;
+  if (k < 0.03) return;
+  // how long: from half again a building's height in the golden hour to four times it as the sun sets (then fading
+  // out as the light goes: env)
+  const len = (0.7 + 3.3 * duskSmooth(0.05, 0.85, D.h)) * D.dir, sq = 0.34, sc = z / DUSK_SIL.z;
+  const col = duskMixRgb([16, 10, 24], duskDeep(D.pal.shade), 0.25);
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.42, 0.46 * k) * (1 - 0.35 * duskSmooth(0.7, 1, D.h));
+  // drawn into one layer first, so where shadows cross they don't double up
+  const L = DUSK.castLayer || (DUSK.castLayer = document.createElement('canvas'));
+  const q = 1 / 3, W = Math.ceil(R.w * q), H = Math.ceil(R.h * q); // (a third of the screen's size: the shadows are soft, and it's quick)
+  if (L.width !== W || L.height !== H) { L.width = W; L.height = H; }
+  const g = L.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  let any = false;
+  // The plants' shadows: their silhouettes (duskSilBake: the whole map's plants, made once) smeared along the light, a
+  // tree's shadow about a tile long at sunset.
+  if (DUSK.sil && DUSK.sil.ready && DUSK.sil.of === S) {
+    const n = 3, pl = 0.5 * len / 2.2; // (a tree is lower than most buildings, and its crown starts off the ground: 1.2 tiles at most)
+    g.setTransform(q, 0, 0, q, 0, 0);
+    for (let k = 1; k <= n; k++) duskMapImage(g, DUSK.sil.c, ox + pl * z * k / n, oy + Math.abs(pl) * 0.22 * z * k / n, z);
+    any = true;
+  }
+  for (const e of items) {
+    if (e.ent !== 'b' || e.dead || !e.built) continue;
+    const S0 = duskSilhouette(e);
+    if (!S0) continue;
+    const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null;
+    const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
+    // the art's ground line stays put, its height laid along the light
+    g.setTransform(q, 0, -q * len, q * sq, cx * q, cy * q);
+    g.drawImage(S0.c, -S0.bx * sc, -S0.by * sc, S0.c.width * sc, S0.c.height * sc);
+    any = true;
+  }
+  if (any) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = duskRgb(col); g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(L, 0, 0, R.w, R.h);
+  }
+  ctx.restore();
+}
+
 /** The colour of a robot's drop shadow now ('r,g,b'): its usual near-black, turning violet in the sunset's long light. */
 function duskShadowRgb() {
   const D = DUSK.st;
@@ -644,7 +720,7 @@ function duskSmokeRgb() {
 function duskSilWanted() {
   if (typeof gfxStep === 'function' && gfxStep() === 'saver') return false;
   const b = [R.biome, R.secondRegion && R.secondRegion.biome];
-  return b.some((x) => x && DUSK_BIOMES[x] && DUSK_BIOMES[x].sil);
+  return b.some((x) => x && DUSK_BIOMES[x] && !DUSK_BIOMES[x].terminator); // (every biome with a sunset: the plants' long shadows, duskCastShadows; the silhouettes themselves only where `sil`)
 }
 /** Let the silhouettes go (a new map is baked: bakeMap). */
 function duskSilReset() { if (DUSK.sil) { DUSK.sil.c.width = DUSK.sil.c.height = 0; DUSK.sil = null; } }

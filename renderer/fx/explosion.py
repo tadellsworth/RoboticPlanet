@@ -55,9 +55,9 @@ def frame(i):
         x, y, z = dx * horiz, dy * horiz * 0.8, dz * D * 0.8 + rise
         r = p['r0'] * (0.32 + 1.15 * (1 - math.exp(-t / 0.16)) + 0.75 * t)
         T = float(np.clip(1.08 - t * (1.25 + 1.1 * (1 - p['hot'])), 0, 1))
-        dens = (1.0 if t < 0.45 else max(0.0, (1.06 - t) / 0.61) ** 1.6) * (0.8 + 0.35 * p['hot'])
+        dens = (1.0 if t < 0.45 else max(0.0, (1.06 - t) / 0.61) ** 2.1) * (0.8 + 0.35 * p['hot'])
         if dens <= 0.01: continue
-        alb = np.array([0.11, 0.10, 0.095]) * (1 - smooth(0.35, 1.0, t)) + np.array([0.30, 0.27, 0.245]) * smooth(0.35, 1.0, t)
+        alb = np.array([0.11, 0.10, 0.095]) * (1 - smooth(0.35, 1.0, t)) + np.array([0.40, 0.37, 0.34]) * smooth(0.35, 1.0, t)
         sx, sy = proj(x, y, z)
         items.append((y * KY + z * 0.55, 'fire', dict(x=sx, y=sy, r=r, dens=dens, temp=T, albedo=tuple(alb), seed=p['seed'], rot=p['rot'] + t,
                                                       underglow=max(0.0, 0.9 - t * 1.6), heat_core=1.05)))
@@ -69,7 +69,7 @@ def frame(i):
             T = float(np.clip(0.9 - t * 1.6 - 0.3 * (1 - h), 0, 1))
             dens = 0.85 * smooth(0.15, 0.3, t) * (1.0 if t < 0.5 else max(0.0, (1.06 - t) / 0.56) ** 1.6)
             sx, sy = proj(math.sin(k * 2.1) * 4, 0, zc)
-            alb = np.array([0.12, 0.11, 0.10]) * (1 - smooth(0.35, 1.0, t)) + np.array([0.30, 0.27, 0.245]) * smooth(0.35, 1.0, t)
+            alb = np.array([0.12, 0.11, 0.10]) * (1 - smooth(0.35, 1.0, t)) + np.array([0.40, 0.37, 0.34]) * smooth(0.35, 1.0, t)
             items.append((zc * 0.55 - 5, 'fire', dict(x=sx, y=sy, r=r, dens=dens, temp=T, albedo=tuple(alb), seed=500 + k, rot=k,
                                                      underglow=max(0.0, 0.7 - t * 1.4), heat_core=0.9)))
     for _, kind, a in sorted(items, key=lambda q: q[0]):
