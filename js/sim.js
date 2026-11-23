@@ -94,6 +94,7 @@ function simStep(dt) {
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)
   if (S.landmarks && S.landmarks.length && S.tick % 10 === 7 && typeof lmTick === 'function') lmTick(10 * dt); // (a landmark's clock or wreck: js/landmarks.js)
   if (S.town && S.tick % 3 === 1) townTick(3 * dt); // (Passenger Town's sentries)
+  if (S.walker) walkerTick(dt); // (the Walking Factory: it walks, its claim, its line)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -8384,6 +8385,7 @@ function attackBreach(owner, target, count, all) {
 function sendToRally(owner, i, j, count, rear, hurry, lead) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
+  if (S.walker) walkerFlag(r); // (planted on the Walking Factory's deck: it rides with it)
   let slot = rallyMembers(r.id).length, sent = 0;
   const squad = [];
   // Free warbots first (the Command Base's), then (yours) those stationed at Outposts, nearest first.
@@ -8505,6 +8507,7 @@ function orderMove(owner, ids, i, j, result) {
   if (result) result.blocked = armed.length - bots.length;
   if (!bots.length) return 0;
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
+  if (S.walker) walkerFlag(r); // (sent onto the Walking Factory's deck: they board it and ride with it)
   let slot = rallyMembers(r.id).length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
   marchTogether(bots);
@@ -10856,7 +10859,8 @@ function placeNestsVersus(seed) {
   const W = S.W, H = S.H, N = W * H, span = dhypot(W, H);
   const zones = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
   const free = (t) => S.terrain[t] === T_GROUND && !S.res[t] && !S.fert[t] && !S.ramp[t] && !S.road[t] && !S.bAt[t] && S.owner[t] < 0 &&
-    !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) && !(S.fault && S.fault[t]) && !(S.rail && S.rail[t]);
+    !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) && !(S.fault && S.fault[t]) && !(S.rail && S.rail[t]) &&
+    !(S.walker && walkerYard(t % W, (t / W) | 0)); // (nor on the Walking Factory's yard)
   const want = clamp(Math.round(N / (C.perTiles * Math.max(1, Ls.length / 2))), 1, C.orbits);
   // Crystal and rich deposits near each spot (a box count, 6 tiles round): what the nests are drawn to.
   const lure = (i, j) => {
@@ -10999,6 +11003,7 @@ function placePosts(seed) {
     const t = tIdx(i, j);
     if (!free(t) || S.fert[t] || S.owner[t] >= 0 || (grandCanyon && !homes.has(S.zone[t]))) continue;
     if (S.town && !townPostOk(i, j)) continue; // (Passenger Town: only on a square or a parking lot, the town market)
+    if (S.walker && walkerYard(i, j)) continue; // (nor on the Walking Factory's yard)
     let room = 0;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
     if (room < 14 || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
@@ -11152,6 +11157,7 @@ function placeUplinks(seed) {
     roomAt[t] = room;
     if (room < 9) continue;
     if (SH.sky && S.elev[t] < 3) continue; // (Sky islands: on a mesa top, which a Viaduct can reach, not the canyon floor)
+    if (S.walker && walkerYard(i, j)) continue; // (nor on the Walking Factory's yard)
     if (S.fault && near(t, 3, (u) => S.fault[u])) continue;
     if (S.lava && near(t, 2, (u) => S.lava[u])) continue;
     if ((S.posts || []).some((p) => Math.abs(p.x - i) <= 2 && Math.abs(p.y - j) <= 2)) continue;
@@ -14459,6 +14465,7 @@ function calmSpillOk(t, from, sameZone) {
   for (const L of [S.rail, S.railPlan, S.pipe, S.pipePlan, S.lava, S.ford, S.tidal, S.fault]) if (L && L[t]) return false;
   const i = t % S.W, j = (t / S.W) | 0;
   if (calmAt(i + 0.5, j + 0.5)) return false;
+  if (S.walker && walkerYard(i, j)) return false; // (nor onto the Walking Factory's yard)
   if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
   if (S.wrecks && S.wrecks.some((w) => w.tiles && w.tiles.includes(t))) return false;
   if (sameZone && S.zone && S.zone[t] !== S.zone[from]) return false;
@@ -18424,6 +18431,7 @@ function hashState() {
   int(S.loot ? S.loot.length : 0); for (const l of S.loot || []) num(l.dismantled);
   int(S.fires ? S.fires.length : 0);
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
+  if (S.walker) { const w = S.walker; num(w.x); num(w.y); num(w.a); num(w.od); num(w.prog); num(w.t); int(w.ph); int(w.dir); int(w.owner); int(w.cap); int(w.hot); for (const id of w.kids) int(id); for (const r of S.rallies) if (r.walker) { int(r.id); num(r.x); num(r.y); } } // (the Walking Factory)
   if (S.town) for (const r of S.town.r) { int(r.id); int(r.gone); int(r.by); int(r.cache); num(r.sen); num(r.scd || 0); int(r.g.cement || 0); int(r.g.alloy || 0); int(r.g.chip || 0); } // (Passenger Town's buildings)
   for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
@@ -21456,4 +21464,164 @@ function townTick(dt) {
       }
     }
   }
+}
+
+/* ------------------------------------------------------------------ The Walking Factory: walking, claims, its line */
+
+/*
+ * The Walking Factory (S.walker: laid by walkerSetup in world.js). Armed robots within WALKER.deck tiles of its middle
+ * are aboard. One side alone aboard (a colony, or a team) claims it: from no one in WALKER.capture seconds for one robot
+ * (faster with more), and a holder's claim has to be taken down to nothing first. Two sides aboard: contested, nothing
+ * changes and its line stops. Its holder keeps it with no one aboard, till an enemy boards it. Claimed, it wakes (out of
+ * the cradle along a spur to its loop toward its holder) and walks for good, turning toward each new holder. While
+ * held and not contested a Warbot rolls off its line every WALKER.every seconds, onto its holder's flag on the deck.
+ * A flag planted on the deck (an order to move there, a rally, its own Warbots') moves with it, so the robots holding it
+ * walk with it: they ride it. Its holder's robots aboard recharge and reload. It can't be harmed.
+ */
+
+/** Its holder's flag on deck: flag r rides it when it was planted on the deck (not a hunt's or an assault's). */
+function walkerFlag(r) {
+  const w = S.walker;
+  if (!w || r.walker || r.follow || r.target) return;
+  if (dist2(r.x, r.y, w.x, w.y) <= sq(WALKER.deck + 0.5)) { r.walker = 1; r.x = w.x; r.y = w.y; }
+}
+
+/** Is robot u aboard (an armed robot on its deck)? */
+function walkerAboard(u) {
+  const w = S.walker;
+  return !!w && !u.dead && !u.inside && !u.dropping && isArmy(u) && !BOTS[u.type].air && !BOTS[u.type].sea && !isWild(u.owner) && dist2(u.x, u.y, w.x, w.y) <= WALKER.deck * WALKER.deck;
+}
+
+/** How many robots of each colony are aboard (an array by player). */
+function walkerCrew() {
+  const n = S.players.map(() => 0);
+  for (const u of S.bots) if (walkerAboard(u)) n[u.owner]++;
+  return n;
+}
+
+/** Where colony p's Command Base is (its landing spot if it has none now). */
+function walkerHome(p) {
+  const L = getE(S.players[p].lander), w = S.walker;
+  return L && !L.dead ? { x: L.x + 0.5, y: L.y + 0.5 } : { x: w.home[p][0] + 0.5, y: w.home[p][1] + 0.5 };
+}
+
+/** Each step: it walks, its flags ride with it, and (every third step) the claim, its line and its crew's care. */
+function walkerTick(dt) {
+  const w = S.walker;
+  walkerMove(w, dt);
+  for (const r of S.rallies) if (r.walker && !r.follow && !r.target) { r.x = w.x; r.y = w.y; }
+  if (S.tick % 3 !== 2) return;
+  walkerClaim(w, 3 * dt);
+}
+
+/** It walks: out of the cradle along the spur, then round the loop. */
+function walkerMove(w, dt) {
+  if (w.ph === 0) return;
+  const v = WALKER.speed * dt;
+  if (w.ph === 1) {
+    const dx = w.tx - w.x, dy = w.ty - w.y, d = Math.sqrt(dx * dx + dy * dy);
+    if (d <= v) { w.x = w.tx; w.y = w.ty; w.ph = 2; w.od += d; w.h = w.a + w.dir * Math.PI / 2; }
+    else { w.x += (dx / d) * v; w.y += (dy / d) * v; w.od += v; w.h = datan2(dy, dx); }
+    return;
+  }
+  const TAU = 2 * Math.PI;
+  w.a += (w.dir * v) / w.R;
+  if (w.a >= TAU) w.a -= TAU; else if (w.a < 0) w.a += TAU;
+  w.x = w.cx + w.R * dcos(w.a); w.y = w.cy + w.R * dsin(w.a);
+  w.h = w.a + w.dir * Math.PI / 2; w.od += v;
+}
+
+/** Claimed by colony p: it wakes and makes for p's side (the spur), or turns round its loop toward p's side. */
+function walkerTurn(w, p) {
+  const h = walkerHome(p), ab = datan2(h.y - w.cy, h.x - w.cx);
+  if (w.ph < 2) { w.ph = 1; w.a = ab; w.dir = 1; w.tx = w.cx + w.R * dcos(ab); w.ty = w.cy + w.R * dsin(ab); return; }
+  const TAU = 2 * Math.PI;
+  let d = (ab - w.a) % TAU;
+  if (d > Math.PI) d -= TAU; else if (d <= -Math.PI) d += TAU;
+  w.dir = d >= 0 ? 1 : -1;
+}
+
+/** The claim: who's aboard, and what that does; then its line, and its holder's crew recharged and reloaded. */
+/** When it can first be claimed (its systems warming up: in a mission, at once). */
+function walkerWakeAt() { return S.mission ? 0 : WALKER.wake; }
+
+function walkerClaim(w, dt) {
+  if (S.time < walkerWakeAt()) return; // (still warming up: no claim yet)
+  if (w.owner >= 0 && S.players[w.owner].out) { w.owner = -1; w.prog = 0; w.cap = -1; }
+  if (w.cap >= 0 && S.players[w.cap].out) { if (w.owner < 0) w.prog = 0; w.cap = -1; }
+  const n = walkerCrew(), sides = [];
+  for (let p = 0; p < n.length; p++) {
+    if (!n[p] || S.players[p].out) continue;
+    const k = teamOf(p);
+    let sd = sides.find((q) => q.k === k);
+    if (!sd) sides.push((sd = { k, n: 0, p, pn: 0 }));
+    sd.n += n[p];
+    if (n[p] > sd.pn) { sd.pn = n[p]; sd.p = p; }
+  }
+  w.hot = sides.length > 1 ? 1 : 0;
+  if (!sides.length) {
+    if (w.owner < 0 && w.prog > 0) { w.prog = Math.max(0, w.prog - dt / WALKER.capture); if (!w.prog) w.cap = -1; } // (a claim left unfinished fades)
+  } else if (sides.length === 1) {
+    const sd = sides[0], rate = (Math.min(WALKER.most, 1 + WALKER.more * (sd.n - 1)) * dt) / WALKER.capture;
+    if (w.owner >= 0) {
+      if (teamOf(w.owner) === sd.k) w.prog = Math.min(1, w.prog + rate);
+      else { w.prog -= rate; if (w.prog <= 0) walkerLost(w, sd.p); }
+    } else if (w.cap >= 0 && teamOf(w.cap) !== sd.k && w.prog > 0) {
+      w.prog = Math.max(0, w.prog - rate); // (someone else's claim to undo first)
+      if (!w.prog) w.cap = -1;
+    } else {
+      if (w.cap < 0 || teamOf(w.cap) !== sd.k) w.cap = sd.p;
+      w.prog = Math.min(1, w.prog + rate);
+      if (w.prog >= 1) walkerTaken(w, w.cap);
+    }
+  }
+  if (w.owner < 0) return;
+  // Its line: a Warbot every WALKER.every seconds while held and not contested.
+  if (!w.hot) { w.t -= dt; if (w.t <= 0) { w.t += WALKER.every; walkerBuild(w); } }
+  // Its holder's robots aboard: recharged, and a round of Ammo every WALKER.ammo seconds.
+  const reload = S.tick % Math.round(WALKER.ammo / SIM_STEP) < 3;
+  for (const u of S.bots) {
+    if (u.owner !== w.owner || !walkerAboard(u)) continue;
+    u.bat = Math.min(100, (u.bat ?? 100) + WALKER.charge * dt);
+    if (reload && u.ammo !== undefined && u.ammo < botMag(u.type)) u.ammo++;
+  }
+}
+
+/** Colony p claims it. */
+function walkerTaken(w, p) {
+  w.owner = p; w.cap = -1; w.prog = 1; w.t = WALKER.every;
+  const P = S.players[p];
+  P.stats.walkerClaims = (P.stats.walkerClaims || 0) + 1;
+  walkerTurn(w, p);
+  const i = Math.floor(w.x), j = Math.floor(w.y);
+  postMsg(p, `The Walking Factory is yours: it walks toward your side and builds you a Warbot every ${WALKER.every} seconds while you hold it. Keep guards on its deck.`, i, j, 'good');
+  for (const Q of S.players) if (Q.id !== p && !Q.absent && !Q.out && !isWild(Q.id)) postMsg(Q.id, foes(p, Q.id) ? `${playerName(p)} has taken the Walking Factory! Send armed robots aboard to take it back.` : `Your ally ${playerName(p)} has taken the Walking Factory.`, i, j, foes(p, Q.id) ? 'bad' : 'good');
+  if (isMe(p)) sfx('win');
+}
+
+/** Its holder's claim is gone: colony `by` boarded it and took it down. */
+function walkerLost(w, by) {
+  const was = w.owner;
+  w.owner = -1; w.prog = 0; w.cap = by; w.hot = 0;
+  postMsg(was, 'The Walking Factory is lost: enemy robots aboard took down your claim. Its line has stopped.', Math.floor(w.x), Math.floor(w.y), 'bad');
+  if (isMe(was)) sfx('alert');
+}
+
+/** A Warbot off its line for its holder, onto the holder's flag on the deck (made if there is none). */
+function walkerBuild(w) {
+  const p = w.owner, P = S.players[p];
+  w.kids = w.kids.filter((id) => { const u = getE(id); return u && !u.dead; });
+  if (w.kids.filter((id) => getE(id).owner === p).length >= WALKER.kids || botCount(p) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) return;
+  const i = Math.floor(w.x), j = Math.floor(w.y);
+  if (!inMap(i, j) || !walkable(tIdx(i, j))) return;
+  const u = addBot(p, 'warbot', i, j);
+  u.x = w.x; u.y = w.y;
+  let r = S.rallies.find((q) => q.owner === p && q.walker && !q.follow && !q.target);
+  if (!r) { r = { id: S.nextId++, owner: p, x: w.x, y: w.y, walker: 1 }; S.rallies.push(r); }
+  u.task = { type: 'hold', rally: r.id, slot: rallyMembers(r.id).length };
+  w.kids.push(u.id);
+  P.stats.walkerBots = (P.stats.walkerBots || 0) + 1;
+  P.madeBots.warbot = (P.madeBots.warbot || 0) + 1;
+  addFx('spark', w.x, w.y, { color: PLAYER_COLORS[p] });
+  if (P.stats.walkerBots === 1) postMsg(p, 'The Walking Factory\'s first Warbot is off its line. It stands guard on the deck with your robots there.', i, j, 'good');
 }

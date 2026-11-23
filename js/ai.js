@@ -398,6 +398,7 @@ function aiThink(p) {
   aiAllyCmds(p); // (a teammate's commands: see allyCommand)
   aiArmorTrains(p);
   if (S.town) aiTown(p, lander); // (Passenger Town: buildings to strip)
+  if (S.walker) aiWalker(p, lvl); // (the Walking Factory: board it, hold it)
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
   // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
@@ -4963,4 +4964,39 @@ function aiTown(p, lander) {
     if (sc < bs || (sc === bs && r.id < best.id)) { bs = sc; best = r; }
   }
   if (best) townStrip(p, best.id, true);
+}
+
+/* ------------------------------------------------------------------ The Walking Factory */
+
+/**
+ * A rival on the Walking Factory's map (S.walker) plays for it. Held by it (or an ally): guards on its deck, on a flag
+ * that rides it (from WALKER.ai.guards, by difficulty), with two more for every enemy robot aboard, topped up. Held by
+ * an enemy, or no one's: a band to board it (WALKER.ai.band at least, and two more for every enemy robot aboard), once
+ * every WALKER.ai.every seconds at most (WALKER.ai.hot with enemies aboard), and against an enemy crew only once it can
+ * outnumber them half again (its rear garrisons too). The flag is planted on its deck, so the band walks with it
+ * (walkerFlag), and fights whoever is aboard.
+ */
+function aiWalker(p, lvl) {
+  const P = S.players[p], w = S.walker, A = WALKER.ai;
+  if (S.time < walkerWakeAt() - 40) return; // (it can't be claimed yet: be there as it can)
+  let r = P.wkRally ? rallyById(P.wkRally) : null;
+  if (r && !r.walker) { r = null; P.wkRally = 0; }
+  if (!r) { r = S.rallies.find((q) => q.owner === p && q.walker && !q.follow && !q.target) || null; if (r) P.wkRally = r.id; }
+  const have = r ? rallyMembers(r.id).length : 0;
+  let foesOn = 0;
+  for (const u of S.bots) if (!u.dead && u.owner >= 0 && foes(u.owner, p) && walkerAboard(u)) foesOn++;
+  const ours = w.owner >= 0 && !foes(w.owner, p);
+  const guards = clamp(8 - lvl.threshold, A.guards[0], A.guards[1]);
+  const want = ours ? guards + foesOn * 2 : Math.max(A.band, guards + foesOn * 2);
+  if (have >= want || S.time - (P.wkAt ?? -999) < (foesOn ? A.hot : A.every)) return;
+  P.wkAt = S.time;
+  const i = Math.floor(w.x), j = Math.floor(w.y);
+  if (!inMap(i, j) || !walkable(tIdx(i, j))) return;
+  // (To take it from an enemy crew: from the rear garrisons too, and only once it can outnumber them half again, so it
+  // doesn't feed them a few at a time.)
+  const rear = !ours && foesOn > 0, need = ours ? 1 : rear ? Math.ceil(foesOn * 1.5) + 1 : Math.min(want, 3);
+  const n = Math.min(want - have, rallyAvailable(p, i, j, rear));
+  if (n <= 0 || have + n < need) return; // (too few to board it: wait for more)
+  const res = sendToRally(p, i, j, n, rear);
+  if (res.sent && res.rally.walker) P.wkRally = res.rally.id;
 }

@@ -1676,6 +1676,38 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-select' },
     ],
   },
+  // The Walking Factory (SHAPE_PRESETS walker): boarding the old Accord machine, claiming it, holding it while it walks
+  // its loop and builds Warbots, and taking it back from a rival.
+  {
+    id: 'walker', name: 'The Walking Factory', chapter: 'First Contact',
+    brief: 'An old Accord mobile factory lies dormant between you and a rival. Board it, claim it, and hold it while it walks and builds for you.',
+    intro: [
+      'The machine in the middle of the map is an Accord mobile works, dormant since the truce fell void.',
+      'Armed robots on its deck (inside its ring) count as aboard. Alone aboard, they claim it: one in 15 seconds, more faster.',
+      'Tap it → <b>Send warbots aboard</b> (<kbd>E</kbd>), or select warbots and tap its deck. Robots sent aboard walk with it.',
+      'Claimed, it wakes, walks out to its loop toward you and goes round, and builds you a Warbot every 50 seconds.',
+      'Enemy robots aboard stall it, then take your hold down. Keep guards on its deck.',
+    ],
+    mode: 'versus', seed: 5150, size: 0, rough: 1, rich: 3, biome: 'savanna', players: 2, style: 'balanced', shape: SHAPE_PRESETS.findIndex((p) => p.walker),
+    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 25],
+    setup(S, diff) {
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with an Ammo Plant)
+      const L = getE(S.players[0].lander);
+      for (let k = 0; k < mPick([4, 3, 2], diff); k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      S.players[0].stats.startBots = S.players[0].stats.bots;
+    },
+    goals: [
+      { kind: 'board', text: 'Send warbots aboard the Walking Factory', count: (P, S) => (S.walker && S.bots.some((u) => u.owner === 0 && walkerAboard(u)) ? 1 : 0),
+        hint: 'Tap the Walking Factory in the middle of the map → <b>Send warbots aboard</b> (<kbd>E</kbd>).',
+        ui: '#sh-board' },
+      { kind: 'claim', text: 'Claim the Walking Factory', count: (P) => P.stats.walkerClaims || 0,
+        hint: 'Keep armed robots on its deck, with no enemy aboard, until the ring round it fills in your colour.',
+        ui: '#sh-board' },
+      { kind: 'walkerbots', n: [2, 3, 4], text: ['Let it build you a Warbot', 'Let it build you {n} Warbots'], count: (P) => P.stats.walkerBots || 0,
+        hint: 'Hold it: keep guards on its deck (tap it → <b>Send warbots aboard</b>, <kbd>E</kbd>). Its line stops while enemies are aboard.',
+        ui: '#sh-board' },
+    ],
+  },
   {
     id: 'border', name: 'Border Dispute', chapter: 'First Contact',
     brief: 'A rival shares this plateau, and the rich fields lie between you. Take their Outposts, carry off loot and hold the land.',

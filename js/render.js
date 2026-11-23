@@ -6724,6 +6724,7 @@ function render(dtReal) {
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, false); // (and a Sapper's fresh ridge, where the colony can see it)
   if (S.landmarks && S.landmarks.length && typeof lmGround === 'function') lmGround(ctx, ox, oy, z, inView); // (Glass Lake's ice, Silent Crater, Passenger Town's lawns, lit with the ground: js/landmarks.js)
   if (S.town && typeof townGround === 'function') townGround(ctx, ox, oy, z); // (the city map's streets and lots: js/city.js)
+  if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
@@ -6921,6 +6922,7 @@ function render(dtReal) {
   if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
   if (S.landmarks && S.landmarks.length && typeof lmItems === 'function') lmItems(items, inView); // (a Contingency battle's landmark: js/landmarks.js)
   if (S.town && typeof townItems === 'function') townItems(items, inView); // (the city map's buildings: js/city.js)
+  if (S.walker && typeof walkerItems === 'function') walkerItems(items, inView); // (the Walking Factory's stacks and crane: js/walker.js)
   if (S.mur && S.mur.husks) harrowDyingItems(items, inView); // (a Harrow dying, still on its feet: drawHarrowDying)
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
@@ -6978,10 +6980,12 @@ function render(dtReal) {
     drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
     if (S.landmarks && S.landmarks.length && typeof lmLights === 'function') lmLights(pool, ox, oy, z, inView); // (the landmarks' own: js/landmarks.js)
     if (S.town && typeof townLights === 'function') townLights(pool, ox, oy, z, inView); // (the city map's: js/city.js)
+    if (S.walker && typeof walkerLights === 'function') walkerLights(pool, ox, oy, z); // (the Walking Factory's lamps: js/walker.js)
     if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items.filter((e) => e.ent === 'u' && !BOTS[e.type].sea)); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
     for (const e of items) if ((e.type === 'turret' || e.type === 'minigun') && buildingNightOn(e) && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
+  if (S.walker && typeof walkerBody === 'function') walkerBody(ctx, ox, oy, z); // (the Walking Factory's legs and deck, under the robots aboard: js/walker.js)
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'gantry') { drawGantry(ctx, e, ox, oy, z); continue; }
@@ -6989,6 +6993,7 @@ function render(dtReal) {
     if (e.ent === 'harrowdie') { drawHarrowDying(ctx, e.h, ox, oy, z); continue; }
     if (e.ent === 'lm') { lmDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'town') { townDraw(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'walker') { walkerDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'ruin') { drawRadRuin(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
@@ -7167,6 +7172,7 @@ function render(dtReal) {
   if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
   if (typeof natureView === 'function') natureView(ctx, ox, oy, z); // (zoomed far out: the camera's tilt and the depth haze: js/nature.js)
   if (S.town && typeof townHaze === 'function') { townHaze(ctx, ox, oy, z); townLabel(ctx, ox, oy, z); } // (the city map's haze and name: js/city.js)
+  if (S.walker && typeof walkerMarks === 'function') walkerMarks(ctx, ox, oy, z); // (the Walking Factory's ring, claim and name: js/walker.js)
   if (S.landmarks && S.landmarks.length && typeof lmLabels === 'function') lmLabels(ctx, ox, oy, z, inView); // (the landmarks' names: js/landmarks.js)
   if (R.box) {
     // The selection box being dragged (desktop).

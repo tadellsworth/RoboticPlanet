@@ -19,7 +19,7 @@ const check = new Function('assert', 'sfx', source + `
     const half = (x, y) => [width - 1 - x, height - 1 - y];
     if (shape.haul4) return [(x, y) => [width - 1 - x, y], half, (x, y) => [x, height - 1 - y]];
     if (players === 2 || shape.twin || (shape.isles4 && teams)) return [half];
-    if (shape.cross || shape.quad4 || (shape.city && players === 4)) return [(x, y) => [width - 1 - y, x], half, (x, y) => [y, height - 1 - x]];
+    if (shape.cross || shape.quad4 || ((shape.city || shape.walker) && players === 4)) return [(x, y) => [width - 1 - y, x], half, (x, y) => [y, height - 1 - x]];
     return [];
   }
 

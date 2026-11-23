@@ -1588,6 +1588,17 @@ function drawShapeThumb(cv, P) {
     }
     crags = 0;
   }
+  if (P.walker) {
+    // The Walking Factory: its yard and loop round the middle, and the machine on its legs in the cradle.
+    const cx = X(0.5), cy = Y(0.5), R = U * 0.22;
+    ctx.fillStyle = 'rgba(236,210,154,0.28)'; ctx.beginPath(); ctx.arc(cx, cy, R * 1.35, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(70,52,36,0.8)'; ctx.lineWidth = Math.max(1, U * 0.035); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+    ctx.strokeStyle = '#d8b04a'; ctx.lineWidth = Math.max(1, U * 0.03);
+    for (const k of [-1, 0, 1]) for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx + k * U * 0.06, cy); ctx.lineTo(cx + k * U * 0.075, cy + sd * U * 0.08); ctx.stroke(); }
+    ctx.fillStyle = '#5b6066'; ctx.fillRect(cx - U * 0.1, cy - U * 0.055, U * 0.2, U * 0.11);
+    ctx.fillStyle = '#d8b04a'; ctx.fillRect(cx - U * 0.1, cy - U * 0.055, U * 0.2, U * 0.02);
+    crags = 0;
+  }
   if (P.maze) {
     // A labyrinth carved from a grid (the same every time for this map type).
     const cw = 5, ch = Math.max(5, Math.round(cw / a)), seen = new Uint8Array(cw * ch), walls = [];
@@ -2340,6 +2351,7 @@ const SHEET_KEYS = {
   'sh-gup-stop': ['c', 'Stand down the Uplink'],
   'sh-strip': ['s', 'Passenger Town: Strip for salvage'],
   'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
+  'sh-board': ['e', 'The Walking Factory: Send warbots aboard'],
 };
 const ARMY_SIZE_KEYS = Object.fromEntries(Object.entries(SHEET_KEYS)
   .filter(([id]) => id.startsWith('ar-n')).map(([id, [key]]) => [key, id]));
@@ -6183,6 +6195,7 @@ function onMapTap(i, j, wx, wy) {
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
   if (inMap(i, j) && S.town && typeof townSheet === 'function' && townRuinAt(tIdx(i, j))) { sfx('click'); townSheet(townRuinAt(tIdx(i, j))); return; } // (a building of Passenger Town: js/city.js)
+  if (inMap(i, j) && S.walker && typeof walkerSheet === 'function' && walkerAtTap(i, j)) { sfx('click'); walkerSheet(); return; } // (the Walking Factory: js/walker.js)
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && burntSoil(tIdx(i, j)) && S.terrain[tIdx(i, j)] === T_GROUND && !S.road[tIdx(i, j)]) { sfx('click'); openBurntSheet(tIdx(i, j)); return; }
@@ -9839,6 +9852,7 @@ function uiTick(dt) {
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
   if (typeof contBarTick === 'function') contBarTick();
   if (typeof townUiTick === 'function') townUiTick(); // (a Passenger Town building's panel: js/city.js)
+  if (typeof walkerUiTick === 'function') walkerUiTick(); // (the Walking Factory's panel: js/walker.js)
   if (typeof lmUiTick === 'function') lmUiTick(); // (a wreck's log recovered: js/landmarks.js) // (a Contingency battle's clock and cards: js/contingency-battle.js)
   polish3Tick(); // (the colours a multiplayer game was started with, the chat box: js/polish3.js)
   AUDIO.suppress = !UI.inGame;
