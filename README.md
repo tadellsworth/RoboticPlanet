@@ -1021,7 +1021,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`ferryLines`), and a line with no Ferry or no far Port puts its waiting passengers off again (`unloadFerry`). Warbots
   aboard stay aboard when the Port or Airfield they left from is lost (`releaseBotsFrom`, `aboardHold`).
   Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
-  `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
+  `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each, asked for like a factory's inputs and
+  as urgently as a Bot Foundry's, and held there for it: `yardHeld`, which `supplyOf` keeps every other request off;
+  until Nov 23 2026 a supply order, which a colony feeding its Foundry by conveyor never filled, and the Foundry's
+  Haulers took the parts back out, so a rival's bomber was almost never finished) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
   Port's Fuel when they tie up below `SHIP_REFUEL` (each Port with ships keeps `PORT_FUEL`, 4, which haulers bring;
   running low, an idle ship sails to a Port with Fuel, `findFuel`; empty, it crawls at half speed); they're mended
@@ -1882,7 +1885,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   rare raids, a square ring of Walls and Gates six tiles round its Command Base (`aiTurtleWalls`: once it has
   `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS` (12) pieces standing,
-  Chokepoint mouths included), up to three Keeps from seven minutes (its first waits for 3 turrets and 3 Outposts),
+  Chokepoint mouths included; with the Murmur Active not before `AI_TURTLE_ACTIVE`, 20 minutes, and its `army` 1.15
+  there, `AI_ACTIVE_STYLE` over its doctrine in `aiStyle`: the parity pass of Nov 2026, when it won 3 of 16 on Active
+  against 7 on Quiet, their Sappers breaking the ring its Cement went into; with it, 7 of 16), up to three Keeps from seven minutes (its first waits for 3 turrets and 3 Outposts),
   four Pulse Turrets (one every six minutes) and three front guns, no bombers, and its big push (`aiPush`, `push`): before
   16 minutes (`AI_PUSH_AT`) with twice its attack threshold and a fifth as many again as its rival's army and two more
   (`AI_PUSH_EARLY`); from then on with its threshold and two more than its rival's (after a push, as many as that push
@@ -2251,7 +2256,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     least `exitFromBase` (12) from a Command Base and `exitFromBld` (4) from any colony building, about six from the
     nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later): one
     through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
-    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night
+    then roads; with two colonies or more a building's charge counts times `murmurFair(owner)`, the colonies' mean charge
+    over its colony's own clamped to `MURMUR.fair`, 0.5 to 1, so the richest draws them less and their attacks spread
+    more evenly: the owner's call of Nov 23 2026; on where tunnels head too, or up to twice for a lean colony, or with
+    the pressure by the colonies' mean power, three Standard Large games on Active ran past 90 minutes), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night
     raiders (`task.night`) move on to the next thing near them when there's nothing left where they went
     (`murmurOnward`). At dawn (`murmurDawn`) they go back down: into the nearest exit of their nest within
     `MURMUR.retreat` (16) tiles (task `down`), or dig down where they stand (task `dig`). Each [base, per night after

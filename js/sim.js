@@ -259,9 +259,12 @@ function needsOf(b) {
   // A Port where a Ferry is loading a kit to found a Port asks for it.
   if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
   // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
+  // (Not a supply order since Nov 23 2026: a supply order is filled only from what storage holds beyond every other
+  // need, and a colony whose Alloy and Chips go straight from its Smelter and Chip Fab into its Bot Foundry never has
+  // any. Its parts are asked for like a factory's inputs, as urgently as a Bot Foundry's: see dispatch, step 3.)
   if (def.yard && b.built && hasYardOrders(b)) for (const g of ['alloy', 'chip']) {
     const n = YARD.hopper - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
-    if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]);
+    if (e) { e[1] = Math.max(e[1], n); e[2] = false; } else out.push([g, n, false]);
   }
   // A Port keeps a little Fuel for its owner's ships to fill up from (once there are ships).
   if (def.port && b.built && S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].sea)) {
@@ -295,16 +298,26 @@ function supplyOf(b, g) {
   const def = BDEFS[b.type];
   if (def.terminal) return 0; // its goods leave only by train (terminalSpare), never for spending or by Hauler
   if (def.mdriver && b.mdSend && b.mdSend[g] !== undefined) return 0; // (what a Mass Driver sends is for its canisters)
-  if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0);
+  if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0) - yardHeld(b, g);
   if (b.loot && b.loot[g]) return Math.max(0, Math.min(b.loot[g], b.stock[g] || 0) - (b.res[g] || 0)); // loot warbots left here
   return 0;
 }
 
-/** What b can spare of g to fill another Depot's supply order: never dipping into its own order (or its warbots' Ammo). */
+/**
+ * The parts a yard with orders (a hangar, shipyard, rail yard) holds for its next round, out of its own stock: up to
+ * YARD.hopper Alloy and Chips. Nothing else draws on them (supplyOf). (Before Nov 23 2026 only a supply order kept off
+ * them: a Bot Foundry's Haulers took a hangar's parts back out as they came, and a rival's bomber was almost never
+ * finished, 3 in 120 AI games.)
+ */
+function yardHeld(b, g) {
+  if ((g !== 'alloy' && g !== 'chip') || !BDEFS[b.type].yard || !hasYardOrders(b)) return 0;
+  return Math.max(0, Math.min(YARD.hopper, (b.stock[g] || 0) - (b.res[g] || 0)));
+}
+
+/** What b can spare of g to fill another Depot's supply order: never dipping into its own order (or its warbots' Ammo, or a yard's parts: supplyOf). */
 function keepSupply(b, g) {
-  const yard = BDEFS[b.type].yard && (g === 'alloy' || g === 'chip') && hasYardOrders(b) ? YARD.hopper : 0;
   const k = keepOf(b);
-  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, g === 'fuel' && BDEFS[b.type].mast ? mastFuelKeep(b) : 0, yard, ammoHeld(b, g)));
+  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, g === 'fuel' && BDEFS[b.type].mast ? mastFuelKeep(b) : 0, ammoHeld(b, g)));
 }
 
 /**
@@ -2209,7 +2222,7 @@ function dispatch(p) {
   //    and production inputs share turns, whichever has the fewest goods on the way first.
   const reqs = [], load = botCarry({ type: 'hauler', owner: p }); // (what a Hauler of ours carries: 2, or 3 with the cargo research)
   for (const b of blds) {
-    const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
+    const pri = prioRank(b) * 3 + (b.built && (BDEFS[b.type].bots || (BDEFS[b.type].yard && hasYardOrders(b))) ? 0 : 1); // (a yard with orders: its parts as urgent as a Foundry's)
     // Fuel for an empty Fuel Station comes before anything else: nothing moves without charge.
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
@@ -12877,6 +12890,34 @@ function murmurPowerMul(p) {
   return P && !isWild(p) ? clamp(murmurColonyPower(p) / B.powerRef, B.powerMin, B.powerMost) : 1;
 }
 
+/** The colonies still in the game (not the Murmur's, not out or absent): their ids. */
+function murmurColonies() { return S.players.filter((P) => !P.absent && !P.out && !isWild(P.id)).map((P) => P.id); }
+
+/**
+ * How much less colony q's charge draws a pack than its own worth says, so their attacks spread across the colonies
+ * more evenly (the owner's call of Nov 23 2026): the colonies' mean charge over q's own (chargeWorth, summed over its
+ * buildings), from MURMUR.fair[0] to [1] (0.5 to 1: the richest draws them less, a lean colony no more than its
+ * worth); 1 with a single colony. Used for what packs go for (murmurPrey). (Measured in AI-against-AI games: on where
+ * tunnels head too (murmurGoals), or drawing a lean colony up to twice its worth, or with the pressure by the colonies'
+ * mean power, three Standard Large games on Active ran past 90 minutes with both sides worn down; this way none more.)
+ */
+function murmurFair(q) {
+  if (q < 0 || isWild(q)) return 1;
+  if (MUR_FAIR.s !== S || MUR_FAIR.tick !== S.tick) {
+    MUR_FAIR.s = S; MUR_FAIR.tick = S.tick; MUR_FAIR.by = {};
+    const all = murmurColonies();
+    if (all.length >= 2) {
+      const c = {};
+      for (const q2 of all) c[q2] = 1;
+      for (const b of S.buildings) if (!b.dead && c[b.owner] !== undefined && !BDEFS[b.type].wild) c[b.owner] += chargeWorth(b);
+      const mean = all.reduce((n, q2) => n + c[q2], 0) / all.length;
+      for (const q2 of all) MUR_FAIR.by[q2] = clamp(mean / c[q2], MURMUR.fair[0], MURMUR.fair[1]);
+    }
+  }
+  return MUR_FAIR.by[q] ?? 1;
+}
+const MUR_FAIR = { s: null, tick: -1, by: {} };
+
 /**
  * How hard they press colony p on night n: 1 on the first nights; from nightFrom more each night, times its power
  * (murmurPowerMul), never under 1 (MURMUR.bold).
@@ -13644,7 +13685,7 @@ function murmurPrey(x, y, r) {
     // (A Harvester cutting Bloom veins draws them most, from VEIN.reach further out: veinLure.)
     const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e), ae = atmosLure(e);
     if (d2 > (ae ? sq(r + ATMOS.lure) : lure ? sq(r + VEIN.reach) : r2)) continue;
-    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) + (ae ? 40 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
+    const s = chargeWorth(e) * 3 * murmurFair(e.owner) + (lure ? 6 : 0) + (ae ? 40 : 0) - Math.sqrt(d2) * 0.4 - (smart ? murmurGunAt(e.x + 0.5, e.y + 0.5, 1) * 6 + murmurMem('kill', e.x, e.y) * 1.5 : 0);
     if (s > bs) { bs = s; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   for (const v of S.bots) {

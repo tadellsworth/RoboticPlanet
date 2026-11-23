@@ -1741,7 +1741,7 @@ const PERSONALITIES = {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in, builds Keeps and turrets, then grinds forward in big pushes',
     tag: 'walls in, then pushes in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Digs in as it grows: a Pulse Turret every six minutes, up to four, and once it holds three Outposts it walls in its Command Base, the side facing you first (Gates on its roads, 12 pieces at most); with three turrets as well it starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. It marches on your forts like a Steward once it has the warbots, and when its army outgrows yours it makes a big push with nearly everything it has: from about 16 minutes in (on Normal) two more warbots than you are enough.',
+    play: 'Digs in as it grows: a Pulse Turret every six minutes, up to four, and once it holds three Outposts it walls in its Command Base, the side facing you first (Gates on its roads, 12 pieces at most; with the Murmur Active, not before 20 minutes, and its army grows faster there); with three turrets as well it starts the first of up to three Keeps. It fields Railgunners behind its walls, rarely raids and never builds bombers. It marches on your forts like a Steward once it has the warbots, and when its army outgrows yours it makes a big push with nearly everything it has: from about 16 minutes in (on Normal) two more warbots than you are enough.',
     weak: 'Its Walls and Keeps cost it warbots early on. Out-grow it while it digs in and keep your army bigger than its own, or it pushes; then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles. Skirmishers get round to its Railgunners.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
@@ -2016,6 +2016,9 @@ const MURMUR = {
   // more (times the pressure) every `hordeEvery` s from the exit nearest its target. From `nightFrom`, one done at its
   // strike's objective (nothing left to catch there for `idle` s, or battered down) goes on through the colony, a
   // Scuttler after the nearest unarmed robot within `quarryR` tiles that no gun covers.
+  // How evenly their packs' attacks spread across the colonies (murmurFair: the colonies' mean charge over one's own,
+  // clamped to this; the owner's call of Nov 23 2026).
+  fair: [0.5, 1],
   bold: {
     threatR: 5, hitFor: 2, packR: 4, engage: 1.5, robotW: 4, gunW: 3, avoidFor: 3, avoidMost: 2,
     w: { scuttler: 1, brute: 4, leech: 0.5, spitter: 1.5, sapper: 3, harrow: 30 },

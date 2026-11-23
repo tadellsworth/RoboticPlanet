@@ -1814,7 +1814,28 @@ with everything tried:
   15, raids half as often 15, all three 13 of 13, rivals keeping their home guard against it 14, no rival nest strikes
   before 20 minutes 12 of 13, and the AI's Murmur handling off for both sides 12.
 
-**For the owner:**
+**The owner's answers, Nov 23 2026, built:** (1) the Murmur spread their attacks more evenly: what a pack goes for
+(`murmurPrey`) weighs a building's charge by `murmurFair`, the colonies' mean charge over its own colony's, clamped to 0.5
+to 1 (the richest draws them less). Also tried and dropped, each running 3 Standard Large games on Active past 90
+minutes (both sides worn down): the same factor on where tunnels head, up to 2 for a lean colony, and Active's pressure
+by the colonies' mean power. (2) The hangar fix, for every colony: a yard's parts are asked for like a factory's inputs,
+as urgently as a Bot Foundry's, and held there (`yardHeld`): a rival's one bomber now gets built (0 or 1 a batch to 1
+to 3; the rivals' earlier, two-bomber Airfield on top of it built 16 a batch but added a stall in Quiet, so it stays out).
+(3) The Warden tweak on Active (army 1.15, its ring from 20 minutes) is in.
+
+Core batch, wins of 16 (Salvager, Herald, Steward, Architect, Warden):
+- Off: 10, 8, 7, 8, 7 (unchanged: the Murmur and Warden changes don't apply, the hangar fix changed no game).
+- Quiet: 14, 11, 5, 3, 7 (every game the same as before).
+- Active: 15, 9, 7, 6, 3 (2 undecided) to 14.5, 8.5, 6, 4, 7 (3; the third, Standard Large Herald against Salvager,
+  ends at 77 minutes; it was won at 45.7, the cap is 50). Without the Warden tweak: 14.5, 9.5, 7, 6, 3 (3).
+
+**Still open:** the Salvager with the Murmur on (14 to 15 of 16). The Murmur aren't why: in the Quiet games measured
+(to 22 minutes) they destroyed no building of either side and one robot or none, and evening out their targets
+changed no Quiet game. What differs is the map: nests hold ground (no rival builds within 6 tiles of one, roads and
+Haulers keep off their guards), and the lean, raiding Salvager loses least by it. Next, if wanted: measure how much
+Ore and land each doctrine gives up to the nests, or a Salvager rule for Murmur maps.
+
+**For the owner (asked Nov 22, answered above):**
 - **Murmur targeting and the Salvager.** The Murmur go for what holds the most charge, so they hit the bigger
   economies and leave the lean Salvager alone (its Alloy at 10 minutes is 64 on Quiet, 55 Off; its rivals' the same):
   it wins 14 to 15 of 16 with them on, and no AI lever moved it. The answer looks like a Murmur rule, not a doctrine
