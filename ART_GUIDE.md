@@ -2045,6 +2045,15 @@ Fallout zones and breached Reactors (README, Nuclear race, "Radiation"; `js/radf
 code-made one by day; keep the broken stack's mouth near (160, 140) and the dome's hole near (302, 176) of the 512, where
 the glows and the light column are drawn (`RADFX.stack`, `RADFX.dome`).
 
+### The Campaigns hub pictures (`art/menu/`)
+
+Each card on the main menu's Campaigns page has a 320×320 WebP shown at 160 px. **Contingency** (`contingency.webp`) is
+Ithaca I from orbit, made from the Contingency globe's own picture (`art/globe/ithaca-2048.webp` and the clouds) with
+the same top-left light, sea glint, blue limb and Argos beside it. **Missions** (`missions.webp`) is the tutorial's first
+order: the Command Base on the red ground, a Worker and a dashed route to a glowing objective ring, from the game's own
+sprites. Both are made by `python3 tools/menu_icons.py . art/menu` (the owner asked for them, Nov 23 2026); the Main
+Campaign's picture is unchanged.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
