@@ -1547,7 +1547,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. An Attack on a building no garrison is in reach of
   plants a flag beside it that targets it (`assault` sets `rally.target`): the warbots there shoot it first
-  (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`), so they carry off the crates
+  (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`; a flag following an enemy robot, a person's right-click hunt, moves on to the next enemy robot within `HUNT_CHAIN` (7) tiles of the kill when its quarry falls, `huntNext`, nearest first, and with none left it stays as a hold flag where the kill was; a rival's hunters come home as before), so they carry off the crates
   that spilled out and come home, as after any attack. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once, and call in
   warbots out picking up crates (`FIELD_TASKS`: attack, defend, hold, loot; `warbotsOut` counts the same). Each is

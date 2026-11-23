@@ -8353,7 +8353,20 @@ function sendHunt(owner, e, count) {
   return res;
 }
 
-/** Flags that follow an enemy robot: each moves with its quarry; when it's gone, the hunters come back. */
+/** The enemy robot nearest flag r's spot within HUNT_CHAIN tiles that its hunters can go after (null: none). */
+function huntNext(r) {
+  let best = null, bd = HUNT_CHAIN * HUNT_CHAIN;
+  for (const v of S.bots) {
+    if (v.dead || v.inside || !foes(v.owner, r.owner) || BOTS[v.type].air) continue;
+    const i = Math.floor(v.x), j = Math.floor(v.y);
+    if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
+    const d = dist2(r.x, r.y, v.x, v.y);
+    if (d < bd || (d === bd && best && v.id < best.id)) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/** Flags that follow an enemy robot: each moves with its quarry; when it's gone, a person's hunters take the next one near (huntNext) or hold there, a rival's come back. */
 function followRallies() {
   for (const r of S.rallies.slice()) {
     // A flag planted beside a building attacked from too far for a garrison (the assault order): once it's down or
@@ -8362,6 +8375,16 @@ function followRallies() {
     if (!r.follow) continue;
     const e = getE(r.follow);
     if (!e || e.dead || !foes(e.owner, r.owner)) {
+      // A person's hunt goes on to the next enemy robot near the kill (HUNT_CHAIN tiles), nearest first; with none
+      // left there, its warbots hold the ground where it ended instead of walking home. (A rival's comes back.)
+      if (!S.players[r.owner] || !S.players[r.owner].ai) {
+        const nx = huntNext(r);
+        if (nx) { r.follow = nx.id; r.x = Math.floor(nx.x) + 0.5; r.y = Math.floor(nx.y) + 0.5; for (const u of rallyMembers(r.id)) u.march = 0; continue; }
+        if (!rallyMembers(r.id).length) { S.rallies = S.rallies.filter((q) => q.id !== r.id); continue; }
+        r.follow = 0;
+        postMsg(r.owner, 'Target destroyed: your warbots hold the ground there.', Math.floor(r.x), Math.floor(r.y), 'good');
+        continue;
+      }
       const n = recallRally(r.id);
       if (n) postMsg(r.owner, `Target destroyed: ${n} warbot${n > 1 ? 's are' : ' is'} coming back.`, Math.floor(r.x), Math.floor(r.y), 'good');
       continue;

@@ -848,6 +848,7 @@ const TREMOR = { first: 210, gap: [100, 150], dust: 10, rockEvery: 2, warn: 8, r
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
 const MARCH_MAX = 90;
+const HUNT_CHAIN = 7; // (tiles round a hunted robot's death in which a person's hunters take the next enemy robot: huntNext)
 const RECALL_NO_LOOT = 60; // a warbot called home (Recall all, or its rally flag taken down) leaves crates be this long (see lootNear)
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
