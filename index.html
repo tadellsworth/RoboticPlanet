@@ -799,6 +799,7 @@
           <a href="#hs-hollow" data-jump="hs-hollow">The Hollow</a>
           <a href="#hs-town" data-jump="hs-town">Passenger Town: the city map</a>
           <a href="#hs-walker" data-jump="hs-walker">The Walking Factory</a>
+          <a href="#hs-dam" data-jump="hs-dam">The Dam</a>
           <a href="#hs-story" data-jump="hs-story">The story</a>
           <a href="#hs-missions" data-jump="hs-missions">Missions</a>
           <a href="#hs-contingency" data-jump="hs-contingency">Contingency: the globe campaign</a>
@@ -1508,6 +1509,7 @@
           <li><b>Chokepoint</b>: a belt of crags across the middle with one to three narrow channels, different every game. <b>Rift</b>: a chasm crossed only by a few rock arches (a Sky bridge opens another way). <b>Ring valley</b>: a massif too steep to climb, with a valley round each side; a long tunnel is the only shortcut. <b>Canyon maze</b>: narrow canyons with riches in the dead ends.</li>
           <li><b>Passenger Town</b> (two to four players): the Pathfinder's empty town fills the middle, its old avenues still roads, its buildings blocking the way and its streets a maze. Strip a building for salvage and its lot opens a new way through (see <a href="#hs-town" data-jump="hs-town">Passenger Town</a>).</li>
           <li><b>The Walking Factory</b> (under <i>Open ground</i>, two to four players): an old Accord mobile factory lies dormant in the middle. Board it with armed robots to claim it: it walks a loop round the middle and builds Warbots for whoever holds it (see <a href="#hs-walker" data-jump="hs-walker">The Walking Factory</a>).</li>
+          <li><b>The Dam</b> (two to four players, under <i>Heights and depths</i>): a high shelf in the middle holds a reservoir over each colony's valley, behind an old dam. Wreck a rival's dam and its lake floods their valley (see <a href="#hs-dam" data-jump="hs-dam">The Dam</a>).</li>
           <li><b>Fault line</b>: a scar across the middle that an earthquake splits into a chasm about 15 minutes in (with tremors first), swallowing what stands on it and leaving two rock arches.</li>
           <li><b>Islands</b>: each base on its own island, with medium islands and islets between, a wide sea apart. <b>Lakes</b>: many small lakes, roads weaving between them. <b>Tidal flats</b>: low islands joined by sandbars, dry at low tide and under the sea at high tide (low for the first 5 minutes, then they take turns, with a warning); bots walk across at low tide, anything caught out there is washed ashore, and nothing can be built on the flats. <b>River delta</b>: a braided river across the planet whose shallow fords Workers and warbots wade at under half speed; Haulers, trucks and trains need a bridge.</li>
           <li><b>Crater</b>: the richest fields (and Uranium) on a sunken crater floor, one ramp down on each side. <b>Plateaus</b>: each base on a high plateau with only two slopes down. <b>Crossroads</b>: a mesa in each corner, two levels above an open lowland whose four arms meet at a rich plaza in the middle; three slopes lead down off every mesa, one toward each neighbouring corner and one toward the plaza, so attacks can come from more than one side. With two players the two other mesas are free and rich, and it takes up to four. <b>Grand Canyon</b> (two players): each base on a high rim above rocky shelves and fertile river basins. The Ore- and Crystal-rich floor alternates between wide bends and narrows, and the river splits around two islands. Each rim has two single-lane natural descents, a switchback and a side-canyon trail. Robots wade at the fords, and ships can sail the river. <b>Sky islands</b>: mesas over a canyon floor far below, with no slopes down: cross with Viaducts (a Ropeway reaches the floor); deposits on the mesas hold almost twice as much. <b>Volcano</b>: lava rivers and the richest deposits on its slopes; from about 7 minutes in it erupts every five to seven minutes, rumbling first, and its lava bombs dent buildings and hurt bots. <b>The Hollow</b>: the Murmur's cavern lair, always night, with its own look whatever the Biome (see The Hollow).</li>
@@ -1583,6 +1585,20 @@
           <li><b>Its care.</b> Your robots aboard recharge their batteries and get a round of Ammo every 3 seconds while you hold it.</li>
           <li><b>Its look.</b> Its flanks, lamps and pennant are its holder's colour (old Accord yellow while no one holds it); its legs step and its stacks smoke as it walks; its name and state (DORMANT, CLAIMING, its holder, CONTESTED) are written over it.</li>
           <li><b>The rivals</b> play for it: they send a band aboard to claim it or take it back (more for every enemy robot aboard), and keep two to four guards on its deck while they hold it.</li>
+        </ul>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
+      <section id="hs-dam">
+        <h3>The Dam</h3>
+        <p><b>The Dam</b> (a map type under <i>Heights and depths</i>, for two to four) is built round the reservoirs the Pathfinder left for the colonists. A high shelf, a level up, runs from the middle of the map toward every colony; on it, in front of each colony, a lake held back by a concrete dam across a notch in the shelf's edge, and below the dam a short gorge opening onto that colony's valley, where its Command Base stands. Two ramps up, one at each front corner of the shelf, beside the dam. The shelves meet in the middle as one high ground, with rich Crystal beside each lake. With two colonies the shelf runs down the middle of the map; with three or four it is a star, a colony on each side. Every side is the same (turned round).</p>
+        <ul class="chain">
+          <li><b>Tap a dam</b> to see its strength (400) and whose valley it holds the lake over. Its panel has <b>Wreck the dam</b> (<kbd>W</kbd>; <b>Stop wrecking</b>, <kbd>W</kbd> again) and <b>Shore it up</b> (<kbd>U</kbd>). Your orders show as a dashed outline round it: red to wreck, green to shore up.</li>
+          <li><b>Wrecking it.</b> Order it wrecked, then send warbots: select them and tap the dam, and they stand within reach of it. Every armed robot of yours within 3 tiles of its face takes 1 a second off it (a Howitzer within 6 tiles, 3 a second): ten warbots break a whole dam in 40 seconds. They can stand on the shelf beside the lake or in the gorge below it. Cracks spread across it as it weakens, and below half it seeps. Its colony is warned when it's first hit, and everyone at half and a quarter.</li>
+          <li><b>Shoring it up.</b> Your free Workers go to it (up to 3) and mend 2.5 a second each, but only once nothing has hit it for 6 seconds and no enemy is about: drive the attackers off first. Anyone can shore up any dam.</li>
+          <li><b>The flood.</b> At 0 the middle of the dam bursts and the lake pours through. The flood runs down the valley below at about 3½ tiles a second, fanning out, and stops about 4 tiles short of the Command Base. Where it gets to: every robot is swept off its feet (4 damage; those in the river's path are carried to its bank), buildings lose half their full armour (on the river's path they're wrecked; a Command Base keeps 1), crops and Stalk groves wash away, roads, track and pipes on the river's path wash out, and open ground goes under, shallows robots wade at under half speed. After a minute the water goes down over 20 seconds, leaving much of the ground fertile silt for Bio Farms.</li>
+          <li><b>What stays.</b> A shallow river runs down the middle of the valley from the gorge, ending in a pool: robots wade it, Haulers and trucks need a bridge. The lake drains in half a minute to a muddy bed with a stream down its middle and rich Ore and Crystal in the mud, and the breach is a ramp up from the gorge to the lakebed: a new way onto the high ground.</li>
+          <li><b>Guard your own.</b> Your dam is your weakness: the rival can wreck it from the high ground or from the gorge in your own valley. The rival computer guards its dam when your warbots come near it, shores it up after, and wrecks yours when it has the army to spare and enough of yours stands in the flood's way.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
@@ -2254,6 +2270,7 @@
 <script src="js/landmarks.js"></script>
 <script src="js/city.js"></script>
 <script src="js/walker.js"></script>
+<script src="js/dam.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

@@ -746,12 +746,19 @@ const SHAPE_PRESETS = [
   // square one (turned 90°). Its avenues are old Accord roads (townSetup).
   { name: 'Passenger Town', group: 'divided', blurb: 'The empty Accord town between the bases: its streets are a maze, its buildings block the way, and its old avenues are still roads. Strip a building for Cement, Alloy and Chips, and its lot opens a new way through.', w: 1, h: 1.1, city: true, flat: true, players: 4,
     tip: 'Passenger Town: the empty town between the bases. Its buildings block the way and its streets are a maze, but its old avenue is still a road (worn: plain road speed) that Haulers can use once your roads join it. Tap a building and Strip for salvage (S): your Workers take it apart for Cement, Alloy and Chips, carried home as crates, and its lot opens a new street. Robots beside a building are in cover. Some still have an old Accord sentry on duty: it shoots robots and Murmur alike, so clear it with warbots first.',
-    quadTip: 'Passenger Town: a colony on each edge of the empty town, the town square in the middle with its civic tower. An old avenue runs into the town in front of you and right across it, crossing your neighbours\' avenues: they are worn roads Haulers can use once your roads join them. The streets between are a maze: tap a building and Strip for salvage (S) to open a way. Old Accord sentries shoot robots and Murmur alike: clear one with warbots first.' },  // The Walking Factory: an old Accord mobile factory, dormant in the middle of the map, that walks a loop round it once
+    quadTip: 'Passenger Town: a colony on each edge of the empty town, the town square in the middle with its civic tower. An old avenue runs into the town in front of you and right across it, crossing your neighbours\' avenues: they are worn roads Haulers can use once your roads join them. The streets between are a maze: tap a building and Strip for salvage (S) to open a way. Old Accord sentries shoot robots and Murmur alike: clear one with warbots first.' },
+  // The Walking Factory: an old Accord mobile factory, dormant in the middle of the map, that walks a loop round it once
   // it's claimed (walkerSetup in world.js, the rules in sim.js, the look in js/walker.js). Two colonies face each other
   // across it; three ring a round planet; four take a corner each of a square one (turned 90°).
   { name: 'The Walking Factory', group: 'open', blurb: 'An old Accord mobile factory lies dormant in the middle of the map. Park warbots aboard to claim it: it wakes, walks a slow loop round the middle, and builds warbots for whoever holds it.', w: 1, h: 1, walker: true, flat: true, players: 4,
     tip: 'The Walking Factory: the old Accord machine in the middle of the map builds a Warbot for whoever holds it, every 50 seconds. From 4 minutes in, send armed robots aboard (select them and tap its deck, or tap it and Send warbots aboard): alone aboard, they claim it in about 15 seconds. It wakes, walks out to its loop toward you, and goes round. Robots on board walk with it and its warbots join them, so your front line moves with it. Enemy robots aboard stall it, then take it back: keep guards on its deck. Nothing can be built on its yard.',
     quadTip: 'The Walking Factory: a colony in each corner, and the old Accord factory dormant in the middle. From 4 minutes in, send armed robots aboard to claim it (select them and tap its deck): it walks a loop round the middle, past every colony, and builds a Warbot for its holder every 50 seconds. Enemy robots aboard stall it, then take it back. Nothing can be built on its yard.' },
+  // The Dam (the owner's idea, approved Nov 2026): a raised shelf runs from the middle toward each colony, holding a
+  // reservoir behind a dam over that colony's valley (damShape in world.js, the rules in sim.js, the look in js/dam.js).
+  // Two colonies face each other across the high ground; three or four sit round it, each with its own lake and dam.
+  { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Wreck a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
+    tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Wreck it (W) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
+    quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Wreck it (W) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
 ];
 /**
  * The Walking Factory (SHAPE_PRESETS walker: walkerSetup in world.js, the rules in sim.js, the look in js/walker.js).
@@ -829,6 +836,44 @@ const TOWN_KINDS = {
 };
 /** The sentry's voice: its log line, with {day} the days on duty (LORE.md: the Warden's register). */
 const TOWN_SENTRY_LINE = 'Accord Civil Security. Position held. Day {day}.';
+/**
+ * The Dam (SHAPE_PRESETS dam: damShape in world.js lays it out, the rules in sim.js, the look in js/dam.js). A raised
+ * shelf runs from the middle of the map toward each colony; on it a reservoir, held back by a dam across a notch in the
+ * shelf's front edge, over that colony's valley. Two ramps beside each dam lead up. Any colony can order any dam wrecked
+ * (S.dam.d[k].by, bit p) and its armed robots within reach chip at it; any colony can order one shored up (`mend`) and
+ * its free Workers mend it while nothing has hit it for a while. At 0 it breaks: its middle goes, the flood runs down
+ * the valley below, and the lake drains to a muddy bed with a stream through it.
+ *   hp            the dam's strength
+ *   reach, hit    an armed army robot within `reach` tiles of the dam's face takes `hit` a second off it; a Howitzer
+ *                 (siege) within `siegeReach`, `siege` a second
+ *   mend, crew, calm   a Worker mends `mend` a second; at most `crew` of a colony's on one dam; none while it was hit in
+ *                 the last `calm` seconds, nor with enemy robots about
+ *   rim, room, shelf   the dam's distance from the middle, a share of the way to the Command Base, but at least `room`
+ *                 tiles short of it; the shelf's half-width, a share of that way (6 to 11 tiles)
+ *   gap           half the dam's width (tiles); the breach is the middle `breach` either side of its middle
+ *   spread, keep  the flood fans out `spread` tiles across for each tile down the valley, and stops `keep` tiles short of
+ *                 the Command Base; the river it leaves runs `chan` of the way down, ending in a pool
+ *   speed         the flood's front, tiles a second; `stay`: how long the flood plain stays under before it goes down,
+ *                 over `recede` seconds (the river and the pool stay); the lake drains between drain[0] and drain[1]
+ *   botHit, hurt, wreck   a robot the flood reaches takes `botHit`; a building it reaches loses `hurt` of its full armour
+ *                 (`wreck`: everything in the river's path, but a Command Base, which keeps 1)
+ *   silt          the share of the flood plain left fertile when the water goes down; `bed`, the share of the lakebed
+ *                 left with Ore or Crystal (rich)
+ *   ai            a rival: thinks about its dams every `every` s; breaches a foe's from `from` s with at least `army`
+ *                 armed robots spare and `worth` of the foe's buildings in the flood; defends its own when foes come
+ *                 within `watch` tiles
+ */
+const DAM = {
+  hp: 400, reach: 3, hit: 1, siegeReach: 6, siege: 3,
+  mend: 2.5, crew: 3, calm: 6,
+  rim: 0.55, room: 9, shelf: 0.3, gap: 2.5, breach: 1,
+  spread: 0.8, keep: 4.5, chan: 0.6,
+  speed: 3.5, stay: 60, recede: 20, drain: [3, 30],
+  botHit: 4, hurt: 0.5, silt: 0.55, bed: 0.12,
+  ai: { every: 6, from: 420, army: 8, worth: 3, watch: 7 },
+};
+/** The dam's plate (LORE.md: the Pathfinder built for the colonists who never came). */
+const DAM_LINE = 'Reservoir 4. Capacity for the first colony: 200 years. Gauge read daily. Reading: full.';
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
 // `closing`: bots keep off the flats this long before they flood.

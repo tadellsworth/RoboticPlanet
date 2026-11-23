@@ -2028,6 +2028,18 @@ across; with no art at all (still loading) a building is a plain block. To regen
 | Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on its look's `roof` mark; its armour bar once hit. |
 | The rest | The civic tower's beacon pulsing from dusk to dawn and a tower's red light blinking (on their marks), street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
 
+### The Dam (drawn in code; no images)
+
+The Dam map's walls, floods and lakebeds are drawn in code in `js/dam.js` (no art files yet): each dam a concrete wall a
+little over half a tile high (`DAM_H`), its crest light grey with parapets, its valley face darker with shuttering
+seams and a spillway gate with a trickle over it; up to 12 cracks (the same for a dam every time) spreading as it
+weakens, water seeping from them below half, chips flying while it's hit, a strength bar while it's hurt, and your
+order as a dashed outline (red: wreck; green: shore up). Burst: the broken ends stand, rubble in the breach and the
+lake pouring through it (white water and spray, fading as the lake drains). The flood is drawn on the ground: silty
+blue water spreading from the dam's foot with a foaming front and streaks running down the valley, then wet silt as it
+goes down; the drained lakebed is dark mud with puddles, fading to a faint stain. A rendered wall sprite (intact,
+cracked, burst; by day and night) would be the art to ask for.
+
 ### Wind, water, sky and the planet view (drawn in code; no images)
 
 The owner's theme for these: the immense beauty of the planet, being torn apart by war. All of it is drawn in code

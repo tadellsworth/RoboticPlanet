@@ -6725,6 +6725,7 @@ function render(dtReal) {
   if (S.landmarks && S.landmarks.length && typeof lmGround === 'function') lmGround(ctx, ox, oy, z, inView); // (Glass Lake's ice, Silent Crater, Passenger Town's lawns, lit with the ground: js/landmarks.js)
   if (S.town && typeof townGround === 'function') townGround(ctx, ox, oy, z); // (the city map's streets and lots: js/city.js)
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
+  if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
@@ -6923,6 +6924,7 @@ function render(dtReal) {
   if (S.landmarks && S.landmarks.length && typeof lmItems === 'function') lmItems(items, inView); // (a Contingency battle's landmark: js/landmarks.js)
   if (S.town && typeof townItems === 'function') townItems(items, inView); // (the city map's buildings: js/city.js)
   if (S.walker && typeof walkerItems === 'function') walkerItems(items, inView); // (the Walking Factory's stacks and crane: js/walker.js)
+  if (S.dam && typeof damItems === 'function') damItems(items, inView); // (The Dam's walls: js/dam.js)
   if (S.mur && S.mur.husks) harrowDyingItems(items, inView); // (a Harrow dying, still on its feet: drawHarrowDying)
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
@@ -6994,6 +6996,7 @@ function render(dtReal) {
     if (e.ent === 'lm') { lmDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'town') { townDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'walker') { walkerDraw(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'dam') { damDraw(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'ruin') { drawRadRuin(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
@@ -7193,6 +7196,7 @@ function render(dtReal) {
 function pillarAt(t) {
   if (S && S.landmarks && S.landmarks.length && typeof lmSolidAt === 'function' && lmSolidAt(t)) return true; // (a landmark's solid ground, under its art: js/landmarks.js)
   if (S && S.town && typeof townRuinAt === 'function' && townRuinAt(t)) return true; // (Passenger Town's buildings stand on the street: js/city.js)
+  if (S && S.dam && typeof damAt === 'function' && damAt(t)) return true; // (a dam's wall, drawn by js/dam.js)
   if (!S || !S.hollow) return false;
   if (R.pillarOf !== S.hollow) { R.pillarOf = S.hollow; R.pillarSet = new Set(S.hollow.pillars); }
   return R.pillarSet.has(t);

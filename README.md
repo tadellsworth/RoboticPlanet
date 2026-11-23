@@ -35,7 +35,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony** (ending with *Rain*, an Atmosphere Engine), **Roads and
   Traffic** (including **Arterial**, an Express pair with on-ramps and Freight Truck deliveries), **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, stripping Passenger Town for salvage past its old sentries (*Passenger Town*), a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, their craft, other forms and hunt on Active (*What Comes Up*), terraforming under an endless dust storm and in the Bloom (*Seed Vault*, *Under the Bloom*), a passive rival, stripping Passenger Town for salvage past its old sentries (*Passenger Town*), a dam to shore up and a rival's to burst (*The Dam*), a border war, a chokepoint against a Herald, and the Sundering Ray striking the deep under a colony the tunnels have reached and holding the night the Murmur answer (*Something Keeps Time*), and the Harrow brought down by an army before it reaches the Generators (*The Harrow*)) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, the megastructures (*Aimed the Other Way*: a Shield Dome, Arrival City and its bonus, the Orbital Lift (a drop called down, a load sent up), the Lance of Corvane, one shot down a row of depots), a greened valley held against a Herald's Torches (*Landing Zone*), a Steward's Storm Front over your base broken and one sent back (*Overcast*), the Uplinks, and the final assault with Keeps and bombers). **King of the Hill**, just before **Final Descent**,
   is an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -218,7 +218,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -327,6 +327,50 @@ legs in a tripod gait by `od` (tiles walked), its hull and deck (under the robot
 with the items), its holder's colour on flanks, lamps and pennant; on top, the deck's ring, the claim's arc, the next
 Warbot's countdown, CONTESTED, its name and state. Tapped: its panel (`walkerSheet`) with **Send warbots aboard** (`E`:
 the rally order, four warbots, to its deck). The mission **The Walking Factory** (First Contact) teaches it.
+
+**The Dam** (`SHAPE_PRESETS` `dam`, under Heights and depths, two to four players; the owner's idea from IDEAS.md) is a
+flat map (`flat`) with a raised shelf and the Pathfinder's reservoirs laid over it by `damShape` (js/world.js, at the
+end of `generateMap`, so the new-game preview shows it). Each colony has a frame (`damFrames`: u from the middle toward
+its base, v across), the map's own turn (the half turn for two, a quarter turn for four, a third for three), so
+whatever is laid out by (u, v) in every frame is the same on every side, to the bit for two and four (four colonies:
+`quadMap`, each base at the middle of an edge, generateMap's `edge4`). In each frame: a shelf one level up from behind
+the middle to `rim` (`DAM.rim` of the way to the base, at least `DAM.room` short of it), `DAM.shelf` of that way wide
+each side (6 to 11 tiles), wobbling; a lake (water at level 1) on it whose throat reaches the front edge, where the dam
+(`DAM.gap` each side of the middle: 5 or 6 tiles of rock under its art, `pillarAt`) closes a notch between two crags,
+two more crags making a short gorge below; a two-tile ramp at each front corner; a rich Crystal field each side of the
+lake. Ground the cliffs cut off becomes crag. Then each dam's flood: open low ground from the gorge down the valley by
+4-way steps, within a fan (`DAM.spread` a tile), at most the dam-to-base distance less a tile, never within `DAM.keep`
+of the Command Base; each tile with its distance from the dam's foot (`fd`, hundredths), and the river (`chan`: the
+middle two tiles to `DAM.chan` of the way, ending in a pool). `S.dam` = `{ v, ver, d: [{ k (whose valley), hp, by, mend
+(bit p: colony p's orders), hitT, hitBy, broke (-1 or when), brokeBy, fi, ri, li (flood, recede and drain progress), x0
+y0 x1 y1, tiles, gap, lake (far shore first), stream, flood, fd, chan, wet }] }`: saved, checked by checkSave, hashed.
+The `ford` layer is always made on this map. **Rules** (sim.js, three times a second, `damTick`): the `damOrder` order
+(panel: Wreck the dam W, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
+the wreck bit within `DAM.reach` (3) of the dam's face takes `DAM.hit` (1) a second off its `DAM.hp` (400); a Howitzer
+within `DAM.siegeReach` (6), `DAM.siege` (3) (rivals' times their difficulty's mult). Its colony is told when it is
+first hit, everyone at half and a quarter. **Shoring up**: dispatch's step 5b (`damRun`) sends up to `DAM.crew` (3)
+free Workers of a colony with the mend bit to stand within 2 tiles of it; each mends `DAM.mend` (2.5) a second, only
+once nothing has hit it for `DAM.calm` (6) s and no foe is within `CRATE_SAFE`; full, the order ends. Tiles of a dam:
+no road, tunnel or building (`damAt` in canRoad and canPlace). Selected robots tapped on a dam stand within reach of it
+(`ORDERS.command`). **The breach** (`damBreak`, at 0): the gap tiles become a rubble ramp at the shelf's level (a way up
+from the gorge to the lakebed), the rest of the wall stands. **The flood** (`damFlood`): the front runs at `DAM.speed`
+(3.5) tiles a second over `flood` (`damFloodReach`): a robot it reaches takes `DAM.botHit` (4), on the river it is
+carried to the nearest dry bank the flood won't reach; a building loses `DAM.hurt` (half) of its full armour, on the
+river all of it (wrecked; a Command Base kept at 1); crops and Stalks wash away; road, track, pipes and plans on the
+river wash out; open ground goes under as shallows (`ford`: robots wade at FORD_SLOW; bridgeable). After `DAM.stay`
+(60) s the plain goes down over `DAM.recede` (20), the far end first, `DAM.silt` of it left fertile; the river stays
+as shallows. The lake drains between `DAM.drain` (3 and 30 s), the far shore first, to a muddy bed (level 1) with a
+stream of shallows down its middle and `DAM.bed` of it rich Ore or Crystal. Every change goes through `damChanged`
+(`terrainChanged`, routes over changed tiles dropped). **The rival** (`aiDam` in js/ai.js, every `DAM.ai.every` s):
+guards its own dam (or an ally's) when foes' army robots come within `DAM.ai.watch` or a foe hit it in the last 10 s,
+a band on a flag within reach of the face (`aiDamSpot`), called back after a quiet minute; shores it up when hurt and
+quiet; from `DAM.ai.from` (7 min; twice that on Easy), with `DAM.ai.army` armed robots to spare and at least
+`DAM.ai.worth` foe buildings in the flood's way (none of its own), orders a foe's dam wrecked and sends up to 16 to
+stand at it, again after two minutes if the band is gone. The look (js/dam.js): the concrete wall drawn in code (crest,
+valley face with a spillway gate and a trickle, cracks spreading as it weakens, seeping below half, chips while hit, a
+strength bar while hurt, your order as a dashed outline; burst, rubble and the lake pouring through), the flood under
+the robots (water spreading with a foaming front and streaks running down the valley, then wet silt), the lakebed's mud.
+The mission **The Dam** (First Contact) teaches it.
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and

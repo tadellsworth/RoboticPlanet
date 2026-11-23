@@ -399,6 +399,7 @@ function aiThink(p) {
   aiArmorTrains(p);
   if (S.town) aiTown(p, lander); // (Passenger Town: buildings to strip)
   if (S.walker) aiWalker(p, lvl); // (the Walking Factory: board it, hold it)
+  if (S.dam) aiDam(p, lander); // (The Dam: guard its own, break a foe's)
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
   // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
@@ -4999,4 +5000,75 @@ function aiWalker(p, lvl) {
   if (n <= 0 || have + n < need) return; // (too few to board it: wait for more)
   const res = sendToRally(p, i, j, n, rear);
   if (res.sent && res.rally.walker) P.wkRally = res.rally.id;
+}
+
+/*
+ * A rival on The Dam (S.dam), every DAM.ai.every seconds:
+ *  - Its own dam (over its valley, or an ally's): foes' armed robots within DAM.ai.watch tiles of it, or a foe hit it in
+ *    the last 10 seconds, and it sends warbots to stand by it (a flag within reach of its face, on the side its robots
+ *    can get to), more the more foes there are; called back once nothing has come near or hit it for a minute. Hurt and
+ *    quiet, it orders it shored up (its Workers mend it).
+ *  - A foe's dam: from DAM.ai.from seconds in (twice that on Easy), with at least DAM.ai.army armed robots to spare and
+ *    DAM.ai.worth or more of that foe's buildings where the flood would go, it orders the dam wrecked and sends a band
+ *    to stand at it (again every two minutes while it stands and none of its band is left). Once it bursts, the band
+ *    comes home.
+ */
+function aiDamSpot(p, d, lander) {
+  const z = S.zone[tIdx(lander.x, lander.y)];
+  let best = -1, bd = Infinity;
+  for (let j = d.y0 - 4; j <= d.y1 + 4; j++) for (let i = d.x0 - 4; i <= d.x1 + 4; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!walkable(t) || S.bAt[t] || damAt(t) || S.zone[t] !== z || damDist(d, i + 0.5, j + 0.5) > DAM.reach - 0.6) continue;
+    const dd = dist2(i, j, lander.x, lander.y);
+    if (dd < bd) { bd = dd; best = t; }
+  }
+  return best;
+}
+function aiDam(p, lander) {
+  const P = S.players[p], A = DAM.ai;
+  if (S.time < (P.damT || 0)) return;
+  P.damT = S.time + A.every;
+  const R = P.damRally || (P.damRally = {});
+  S.dam.d.forEach((d, k) => {
+    const rid = R[k] && rallyById(R[k]) ? R[k] : 0;
+    if (!rid) delete R[k];
+    if (d.broke >= 0) { if (rid) { recallRally(rid); delete R[k]; } if ((d.by >> p) & 1) damOrder(p, k, 'wreck', false); return; }
+    const c = damMid(d);
+    if (!foes(d.k, p)) {
+      // Guard it.
+      let near = 0;
+      for (const u of S.bots) if (!u.dead && !u.inside && u.owner >= 0 && foes(u.owner, p) && !isWild(u.owner) && (isArmy(u) || BOTS[u.type].siege) && dist2(u.x, u.y, c.x, c.y) <= A.watch * A.watch) near++;
+      const hit = S.time - d.hitT < 10 && d.hitBy >= 0 && foes(d.hitBy, p);
+      if (near || hit) {
+        P.damCalm = P.damCalm || {}; P.damCalm[k] = S.time;
+        if (!rid || rallyMembers(rid).length < near) {
+          const t = aiDamSpot(p, d, lander);
+          if (t >= 0) {
+            const want = clamp(Math.ceil(near * 1.5) + 2, 4, 16) - (rid ? rallyMembers(rid).length : 0);
+            const r = want > 0 ? sendToRally(p, t % S.W, (t / S.W) | 0, want, true, true) : null;
+            if (r && r.sent && r.rally) R[k] = r.rally.id;
+          }
+        }
+      } else if (rid && S.time - ((P.damCalm && P.damCalm[k]) || 0) > 60) { recallRally(rid); delete R[k]; }
+      if (!near && !hit && d.hp < DAM.hp * 0.95 && S.time - d.hitT > DAM.calm && !((d.mend >> p) & 1)) damOrder(p, k, 'mend', true);
+      return;
+    }
+    // Break a foe's.
+    if (S.time < A.from * (S.difficulty === 'easy' ? 2 : 1) || S.players[d.k].out) return;
+    if (rid && rallyMembers(rid).length) return;
+    if (S.time - ((P.damGo && P.damGo[k]) || -1e9) < 120) return;
+    const fl = new Set(d.flood);
+    let worth = 0;
+    for (const b of S.buildings) if (!b.dead && b.owner >= 0 && foes(b.owner, p) && fl.has(tIdx(b.x, b.y))) worth++;
+    if (worth < A.worth) return;
+    if (S.buildings.some((b) => !b.dead && b.owner === p && fl.has(tIdx(b.x, b.y)))) return; // (never on its own)
+    const t = aiDamSpot(p, d, lander);
+    if (t < 0) return;
+    const avail = aiSpare(p, { x: t % S.W, y: (t / S.W) | 0 }, 'flag').n;
+    if (avail < A.army) return;
+    damOrder(p, k, 'wreck', true);
+    const r = sendToRally(p, t % S.W, (t / S.W) | 0, Math.min(avail, 16), true, false, true);
+    if (r && r.sent && r.rally) { R[k] = r.rally.id; (P.damGo = P.damGo || {})[k] = S.time; }
+  });
 }

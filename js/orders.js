@@ -309,6 +309,20 @@ const ORDERS = {
     const out = { kind: '', n: 0, nr: 0 };
     // (Passenger Town: a building tapped, they go and stand beside it: at its sentry, they shoot it down)
     const ruin = !s.b && !s.foe && !s.ferry && S.town && inMap(s.i, s.j) ? townRuinAt(tIdx(s.i, s.j)) : null;
+    // (The Dam: a dam tapped, they go and stand by it, the nearest spot within their reach of its face)
+    const dam = !ruin && !s.b && !s.foe && !s.ferry && S.dam && inMap(s.i, s.j) ? damAt(tIdx(s.i, s.j)) : null;
+    if (dam) {
+      const u0 = getE(ids[0]);
+      let bt = -1, bd = Infinity;
+      if (u0) for (let j = dam.y0 - 4; j <= dam.y1 + 4; j++) for (let i = dam.x0 - 4; i <= dam.x1 + 4; i++) {
+        if (!inMap(i, j)) continue;
+        const t = tIdx(i, j);
+        if (!walkable(t) || S.bAt[t] || damAt(t) || S.zone[t] !== botZone(u0) || damDist(dam, i + 0.5, j + 0.5) > DAM.reach - 0.6) continue;
+        const d = dist2(i + 0.5, j + 0.5, u0.x, u0.y);
+        if (d < bd) { bd = d; bt = t; }
+      }
+      if (bt >= 0) s = { ...s, i: bt % S.W, j: (bt / S.W) | 0 };
+    }
     if (ruin) {
       const u0 = getE(ids[0]), st = townStands(ruin);
       if (u0 && st.length) { const t = st.reduce((a, c) => (dist2((c % S.W) + 0.5, ((c / S.W) | 0) + 0.5, u0.x, u0.y) < dist2((a % S.W) + 0.5, ((a / S.W) | 0) + 0.5, u0.x, u0.y) ? c : a)); s = { ...s, i: t % S.W, j: (t / S.W) | 0 }; }
@@ -493,6 +507,8 @@ const ORDERS = {
    */
   /** Passenger Town: order building `id` stripped for salvage (on), or call it off. '' or why not. */
   townStrip(p, id, on) { return S.town && !isWild(p) ? townStrip(p, id | 0, !!on) : 'No town here.'; },
+  /** The Dam: order dam k (its index) wrecked or shored up (what: 'wreck' or 'mend'), or call it off. '' or why not. */
+  damOrder(p, k, what, on) { return S.dam && !isWild(p) ? damOrder(p, k | 0, String(what), !!on) : 'No dam here.'; },
   undoSite(p, id) {
     const b = ownB(p, id);
     if (!b) return { why: 'That site is gone.' };
