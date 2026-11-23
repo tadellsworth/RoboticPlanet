@@ -77,6 +77,12 @@ calls made in building it, each a default for the owner to keep or change:
   nothing in LORE.md was changed.
 - **Balance watch:** holding it early snowballs (free Warbots plus a recharging, reloading crew); the cap of 5 and the
   50 s line are the knobs.
+- **Art: done** (Nov 23 2026). The owner picked look A, the "Foundry Crawler", of three concepts (B the Accord Strider,
+  C the Factory Block), and it's installed: rendered with `renderer/b/walker.js` (ART_GUIDE, The Walking Factory), six
+  walk frames and a rest frame at every time of day, its holder's parts a tinted light layer, loaded only on its map.
+  The deck (about 2.7 × 3.2 tiles) sits inside the 2.8-tile ring that counts as aboard; the ring was kept (a rule), so
+  robots among its legs still count. Open: B's lit deck ring and knee lights carried over for more of a "still running"
+  feel at night; a Warbot seen rolling down the chute as one is built.
 
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 

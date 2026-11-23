@@ -119,6 +119,19 @@ let townBytes = 0;
   townBytes = js.length;
 }
 
+// The Walking Factory's art (art/walker: the list, walker-art.js, and its pictures, every time of day) goes in a bundle of
+// its own beside the page (dist/walker-art.js, loaded for a Walking Factory map: see ensureWalkerArt in js/walker.js).
+let walkerBytes = 0;
+{
+  const sb = { window: {} }, dir = path.join(root, 'art/walker'), data = {};
+  vm.runInNewContext(read('art/walker/walker-art.js'), sb);
+  const walk = (d, pre) => { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) walk(p, pre + f + '/'); else if (f.endsWith('.webp')) data[pre + f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(p).toString('base64')}`; } };
+  walk(dir, '');
+  const js = `window.WALKER_ART = ${JSON.stringify({ ...sb.window.WALKER_ART, data })};\n`;
+  fs.writeFileSync(path.join(root, 'dist', 'walker-art.js'), js);
+  walkerBytes = js.length;
+}
+
 // The Contingency globe's surface (art/globe/: js/contingency-draw.js) goes in two bundles beside the page too: globe.js
 // (the 2048 picture and the clouds, fetched when Contingency first opens) and globe-hd.js (the 4096 one, only on a big or
 // sharp screen).
@@ -152,9 +165,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.GLOBE_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.ITHACA_CLOUDS = ${JSON.stringify(ithacaClouds)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.WALKER_BUNDLE = true;\nwindow.GLOBE_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.ITHACA_CLOUDS = ${JSON.stringify(ithacaClouds)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB) and dist/town.js (${Math.round(townBytes / 1024)} KB) and dist/globe{,-hd}.js (${Math.round(globeBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB) and dist/town.js (${Math.round(townBytes / 1024)} KB) and dist/walker-art.js (${Math.round(walkerBytes / 1024)} KB) and dist/globe{,-hd}.js (${Math.round(globeBytes / 1024)} KB)`);

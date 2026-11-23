@@ -322,9 +322,14 @@ A rally flag planted on its deck (an order to move there, a rally, its Warbots':
 recharge (`WALKER.charge`) and get a round of Ammo every `WALKER.ammo` s. It can't be harmed. State: `S.walker` (see
 `walkerSetup`), hashed and checked in saves (`checkSave`). The rival AI (`aiWalker`, js/ai.js) keeps guards on deck while
 it holds it (`WALKER.ai.guards` by difficulty, two more per enemy aboard) and sends a band (`WALKER.ai.band` at least) to
-claim or retake it. The look (js/walker.js): the yard, its worn ruts and footprints and the cradle with the ground; six
-legs in a tripod gait by `od` (tiles walked), its hull and deck (under the robots aboard) and its stacks and crane (sorted
-with the items), its holder's colour on flanks, lamps and pennant; on top, the deck's ring, the claim's arc, the next
+claim or retake it. The look (js/walker.js): the yard, its worn ruts and footprints (at `WALKER_LOOK.reach`, 3.35 tiles
+either side of the loop, where the art's feet come down) and the cradle with the ground; the rendered sprite (ART_GUIDE,
+The Walking Factory: `art/walker`, loaded only on this map by `ensureWalkerArt`), straight down, centred on its deck
+(under the robots aboard) and turned to its heading (eased round for the eye, `walkerFace`; the sim's `h` is untouched),
+one of six walk frames by `od` (tiles walked; a leg cycle a 1.3 tiles) or its rest frame while dormant, for the time of
+day, with its holder's parts (a white layer) tinted to the holder's colour, or dim Accord amber; the chute's foot glowing
+as the next Warbot nears, its stacks' smoke sorted with the items (while the art loads, or if it fails, the old drawing
+in code: legs, hull, deck, stacks, crane and a pennant); on top, the deck's ring, the claim's arc, the next
 Warbot's countdown, CONTESTED, its name and state. Tapped: its panel (`walkerSheet`) with **Send warbots aboard** (`E`:
 the rally order, four warbots, to its deck). The mission **The Walking Factory** (First Contact) teaches it.
 

@@ -4,14 +4,20 @@
  * runs in sim.js (walkerTick, walkerClaim, walkerBuild); this file only draws it and opens its panel.
  *
  * An old Accord mobile works, huge (its deck WALKER.deck tiles round its middle), on six legs that step in a tripod
- * gait as it walks (by S.walker.od, the tiles it has walked). Weathered grey plate and old Accord yellow; its holder's
- * colour on its flanks, its lamps and its pennant. Drawn in the game's projection: straight down, its stacks and crane
- * standing up toward the camera.
+ * gait as it walks (by S.walker.od, the tiles it has walked). The look is rendered art, the owner's look A "Foundry
+ * Crawler" (renderer/b/walker.js; ART_GUIDE.md, The Walking Factory): a gunmetal chassis on six hydraulic legs, the
+ * foundry block with its stacks, crucible and crane at the back, the open tread-plate deck in the middle (the robots
+ * aboard stand on it: the sprite is centred on it), the fabrication bay and its chute at the front. Straight down,
+ * facing right, turned to its heading; six walk frames by S.walker.od and a rest frame while it lies dormant, re-lit for
+ * each time of day, and a white layer of its holder's parts tinted to the holder's colour (dim Accord amber while no
+ * one holds it). It loads only for a Walking Factory map (ensureWalkerArt). Until it's in (or if it fails) the old
+ * drawing in code stands in: grey plate and old Accord yellow, its holder's colour on its flanks, lamps and pennant.
+ * None of this touches the game's state: its turning is eased here, for the eye only (walkerFace).
  *
  *   walkerGround   its yard (the ground it has trampled flat), the worn track of its loop, the cradle in the middle;
  *                  drawn with the ground
- *   walkerBody     its legs, hull and deck, under the robots (the ones aboard stand on it), before the items
- *   walkerItems    its stacks and crane among the buildings and robots, sorted with them by its middle
+ *   walkerBody     the sprite (or legs, hull and deck), under the robots (the ones aboard stand on it), before the items
+ *   walkerItems    its stacks' smoke (or the stacks and crane) among the buildings and robots, sorted by its middle
  *   walkerLights   its lamps at night (render.js's pool)
  *   walkerMarks    on top: the deck's ring, the claim (an arc in the claimant's colour), CONTESTED, its name and state
  */
@@ -20,17 +26,165 @@ const WALKER_LOOK = {
   len: 5.4, wid: 3.4,            // the hull, tiles (along its heading, across)
   stride: 1.3,                   // tiles walked per step of a leg
   hips: [-1.75, 0, 1.75],        // the legs' hips along the hull
-  reach: 2.75,                   // a foot's distance from the middle line
+  reach: 3.35,                   // a foot's distance from the middle line (the art's feet, and the ruts they wear)
   plate: '#5b6066', plateHi: '#7d838a', plateLo: '#33373c', rust: '#7a5236', accord: '#d8b04a', grate: '#464b51',
 };
 
 /** Its holder's colour, or the old Accord yellow while no one holds it. */
 function walkerColor(w) { return w.owner >= 0 ? PLAYER_COLORS[w.owner] : WALKER_LOOK.accord; }
 
-/** Local (u along its heading, v to its right) to the screen. */
+/** Local (u along its heading, v to its right) to the screen (its heading as drawn: walkerFace). */
 function walkerPt(w, ox, oy, z, u, v) {
-  const c = Math.cos(w.h), s = Math.sin(w.h);
+  const h = walkerFace(w), c = Math.cos(h), s = Math.sin(h);
   return [ox + (w.x + u * c - v * s) * z, oy + (w.y + u * s + v * c) * z];
+}
+
+/* ------------------------------------------------------------------ the art */
+
+/*
+ * art/walker (renderer/tools/install_walker.py): walker-f0…f5 (walking), walker-rest (dormant), each re-lit in
+ * tod/<morning|evening|night>/, walker-team (its holder's parts in white), and walker-art.js (window.WALKER_ART: the
+ * list and marks, in tiles from the sprite's middle). In the one-file build it's a bundle beside the page
+ * (walker-art.js, with the pictures in it).
+ */
+const _wa = { state: '', img: new Map(), tint: new Map() };
+/** Its heading as drawn: eased toward S.walker.h (which turns at once when a new holder reverses it). Display only. */
+const _wf = { w: null, h: 0, t: 0 };
+
+function ensureWalkerArt() {
+  if (_wa.state || typeof document === 'undefined') return;
+  _wa.state = 'loading';
+  const go = () => {
+    const A = window.WALKER_ART;
+    if (!A) { _wa.state = 'failed'; return; }
+    _wa.state = 'in';
+    const names = [];
+    for (let k = 0; k < A.frames; k++) names.push('walker-f' + k);
+    names.push('walker-rest');
+    walkerImg('walker-team');
+    for (const n of names) walkerImg(n);
+    for (const t of A.tods) for (const n of names) walkerImg('tod/' + t + '/' + n);
+  };
+  if (window.WALKER_ART) { go(); return; }
+  const s = document.createElement('script');
+  s.src = window.WALKER_BUNDLE ? 'walker-art.js' : 'art/walker/walker-art.js';
+  s.onload = go;
+  s.onerror = () => { _wa.state = 'failed'; }; // (no art: the drawing in code)
+  document.head.appendChild(s);
+}
+
+/** Picture `name` (art/walker/<name>.webp) as art ({ img }), loading it the first time; null till it's in. */
+function walkerImg(name) {
+  let e = _wa.img.get(name);
+  if (!e) {
+    e = { art: null };
+    _wa.img.set(name, e);
+    const d = window.WALKER_ART && window.WALKER_ART.data;
+    loadImg(d && d[name] ? d[name] : `art/walker/${name}.webp`, (img) => { e.art = { img, key: 'walker:' + name }; });
+  }
+  return e.art;
+}
+
+/** The frame to draw: walking, by the tiles it has walked (WALKER_ART.stride a leg cycle); dormant, at rest. */
+function walkerFrame(w) {
+  const A = window.WALKER_ART;
+  return w.ph === 0 ? 'walker-rest' : 'walker-f' + (Math.floor((w.od / A.stride) * A.frames) % A.frames);
+}
+
+/** The art is ready to draw (every day frame in; a time of day's frame stands in with the day's till it's in). */
+function walkerArtReady() {
+  const A = _wa.state === 'in' && window.WALKER_ART;
+  if (!A) return false;
+  if (_wa.ready) return true;
+  for (let k = 0; k < A.frames; k++) if (!walkerImg('walker-f' + k)) return false;
+  return (_wa.ready = !!walkerImg('walker-rest'));
+}
+
+/** Its heading as drawn, a turn of at most WALKER_TURN radians a second toward S.walker.h. */
+const WALKER_TURN = 1.4;
+function walkerFace(w) {
+  const t = typeof R !== 'undefined' ? R.time : 0;
+  if (_wf.w !== w) { _wf.w = w; _wf.h = w.h; _wf.t = t; return w.h; }
+  const dt = clamp(t - _wf.t, 0, 0.25);
+  if (dt > 0) {
+    _wf.t = t;
+    let d = (w.h - _wf.h) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2;
+    const step = WALKER_TURN * dt;
+    _wf.h = Math.abs(d) <= step ? w.h : _wf.h + Math.sign(d) * step;
+  } else if (t < _wf.t) _wf.t = t;
+  return _wf.h;
+}
+
+/** Frame `name` for the time of day, faded into the next time's as it changes (as drawArt does for the shared art). */
+function walkerDrawFrame(ctx, name, x, y, size, ang) {
+  const day = walkerImg(name);
+  const pick = (tn) => (tn && tn !== 'day' && walkerImg('tod/' + tn + '/' + name)) || day;
+  if (typeof TOD === 'undefined' || !TOD.active || !TOD.state) { drawArtRaw(ctx, day, x, y, size, ang); return; }
+  const st = TOD.state, A = pick(st.a), B = st.f > 0.002 && st.b !== st.a ? pick(st.b) : A;
+  if (B === A) { drawArtRaw(ctx, A, x, y, size, ang); return; }
+  const late = st.f >= 0.5, over = late ? 1 - st.f : st.f, ga = ctx.globalAlpha;
+  drawArtRaw(ctx, late ? B : A, x, y, size, ang);
+  if (over > 0.002) { ctx.globalAlpha = ga * over; drawArtRaw(ctx, late ? A : B, x, y, size, ang); ctx.globalAlpha = ga; }
+}
+
+/** Its holder's parts (the white layer) tinted `col`, made once a colour (a few kept). */
+function walkerTint(col) {
+  let a = _wa.tint.get(col);
+  if (a) return a;
+  const src = walkerImg('walker-team');
+  if (!src) return null;
+  const c = document.createElement('canvas');
+  c.width = src.img.width; c.height = src.img.height;
+  const g = c.getContext('2d');
+  g.drawImage(src.img, 0, 0);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
+  // (the hot middle of each light kept pale over its colour)
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.35; g.drawImage(src.img, 0, 0);
+  if (_wa.tint.size >= 6) _wa.tint.delete(_wa.tint.keys().next().value);
+  a = { img: c, key: 'walker-team:' + col };
+  _wa.tint.set(col, a);
+  return a;
+}
+
+/** The sprite: the frame for its walk and the time of day, its holder's lights over it, the bay's glow as a Warbot nears. */
+function walkerArtBody(ctx, w, ox, oy, z) {
+  const A = window.WALKER_ART, ang = walkerFace(w), x = ox + w.x * z, y = oy + w.y * z, size = A.tiles * z;
+  const t = typeof R !== 'undefined' ? R.time : 0;
+  walkerDrawFrame(ctx, walkerFrame(w), x, y, size, ang);
+  // Its holder's lights: their colour, pulsing a little; no one's: dim Accord amber, dimmer still while it's dormant.
+  const held = w.owner >= 0, tint = walkerTint(held ? PLAYER_COLORS[w.owner] : '#c9a24e');
+  if (tint) {
+    const ga = ctx.globalAlpha;
+    ctx.globalAlpha = ga * (held ? 0.85 + 0.15 * Math.sin(t * 3) : w.ph === 0 ? 0.3 : 0.55);
+    drawArtRaw(ctx, tint, x, y, size, ang);
+    ctx.globalAlpha = ga;
+  }
+  // Its line's mouth: the chute's foot glowing in its holder's colour as the next Warbot nears.
+  const due = held && !w.hot ? clamp(1 - w.t / WALKER.every, 0, 1) : 0;
+  if (due > 0.05) {
+    const [ex, ey] = walkerPt(w, ox, oy, z, A.marks.exit[0] - 0.35, A.marks.exit[1]), r = z * (0.5 + 0.5 * due);
+    const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, r);
+    g.addColorStop(0, PLAYER_COLORS[w.owner]); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.15 + 0.55 * due * due; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+}
+
+/** Its stacks' smoke while it walks (the art's stack marks), rising toward the camera and drifting off. */
+function walkerArtSmoke(ctx, w, ox, oy, z) {
+  if (w.ph === 0 || (typeof LESS_MOTION !== 'undefined' && LESS_MOTION && LESS_MOTION.matches)) return;
+  const A = window.WALKER_ART, t = typeof R !== 'undefined' ? R.time : 0;
+  ctx.save();
+  A.marks.stacks.forEach(([u, v], i) => {
+    const [sx, sy] = walkerPt(w, ox, oy, z, u, v);
+    for (let k = 0; k < 5; k++) {
+      const a = (t * 0.4 + k / 5 + i * 0.37) % 1, px = sx + a * z * 0.8 + Math.sin(t + k) * z * 0.12, py = sy - a * z * 1.4;
+      ctx.fillStyle = `rgba(150,146,140,${0.32 * (1 - a)})`;
+      ctx.beginPath(); ctx.arc(px, py, z * (0.22 + a * 0.55), 0, Math.PI * 2); ctx.fill();
+    }
+  });
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ the yard */
@@ -38,6 +192,7 @@ function walkerPt(w, ox, oy, z, u, v) {
 function walkerGround(ctx, ox, oy, z) {
   const w = S.walker;
   if (!w) return;
+  ensureWalkerArt();
   const cx = ox + w.cx * z, cy = oy + w.cy * z;
   ctx.save();
   // The yard: the ground it has trampled flat for sixty years, a shade paler and bare.
@@ -45,12 +200,12 @@ function walkerGround(ctx, ox, oy, z) {
   ctx.fillStyle = 'rgba(214,196,160,0.10)'; ctx.fill();
   // The track of its loop: two worn ruts where its feet come down, and the old marker posts' bases.
   ctx.strokeStyle = 'rgba(70,52,36,0.13)'; ctx.lineWidth = Math.max(1, z * 0.55);
-  for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(cx, cy, (w.R + k * WALKER_LOOK.reach * 0.85) * z, 0, Math.PI * 2); ctx.stroke(); }
+  for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(cx, cy, (w.R + k * WALKER_LOOK.reach) * z, 0, Math.PI * 2); ctx.stroke(); }
   // Its footprints along the ruts, pressed in over the years.
   ctx.fillStyle = 'rgba(60,44,30,0.16)';
   const n = Math.round((w.R * Math.PI * 2) / WALKER_LOOK.stride);
   for (let k = 0; k < n; k++) for (const sd of [-1, 1]) {
-    const a = ((k + (sd > 0 ? 0.5 : 0)) / n) * Math.PI * 2, r = (w.R + sd * WALKER_LOOK.reach * 0.85) * z;
+    const a = ((k + (sd > 0 ? 0.5 : 0)) / n) * Math.PI * 2, r = (w.R + sd * WALKER_LOOK.reach) * z;
     ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, z * 0.3, z * 0.2, a, 0, Math.PI * 2); ctx.fill();
   }
   ctx.strokeStyle = 'rgba(240,226,190,0.12)'; ctx.lineWidth = Math.max(1, z * 0.18); ctx.setLineDash([z * 0.5, z * 0.7]);
@@ -85,11 +240,12 @@ function walkerLeg(w, k) {
 function walkerBody(ctx, ox, oy, z) {
   const w = S.walker;
   if (!w) return;
+  if (walkerArtReady()) { walkerArtBody(ctx, w, ox, oy, z); return; }
   const L = WALKER_LOOK, col = walkerColor(w), P = (u, v) => walkerPt(w, ox, oy, z, u, v);
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   // Its shadow.
-  { const [sx, sy] = P(0, 0); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(sx + z * 0.35, sy + z * 0.45, L.len * 0.62 * z, L.wid * 0.85 * z, w.h, 0, Math.PI * 2); ctx.fill(); }
+  { const [sx, sy] = P(0, 0); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(sx + z * 0.35, sy + z * 0.45, L.len * 0.62 * z, L.wid * 0.85 * z, walkerFace(w), 0, Math.PI * 2); ctx.fill(); }
   // The legs: hip, knee up off the ground (toward the camera), foot.
   for (let k = 0; k < 6; k++) {
     const g = walkerLeg(w, k), [hx, hy0] = P(g.hu, g.hv), [fx, fy] = P(g.u, g.v), up = z * (1.0 + g.lift * 0.4), hy = hy0 - z * 0.5;
@@ -101,10 +257,10 @@ function walkerBody(ctx, ox, oy, z) {
     ctx.strokeStyle = L.plateHi; ctx.lineWidth = Math.max(1, z * 0.14);
     ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy - g.lift * z * 0.4); ctx.stroke();
     ctx.fillStyle = L.accord; ctx.beginPath(); ctx.arc(kx, ky, Math.max(1.5, z * 0.2), 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = L.plateLo; ctx.beginPath(); ctx.ellipse(fx, fy - g.lift * z * 0.4, z * 0.34, z * 0.24, w.h, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = L.plateLo; ctx.beginPath(); ctx.ellipse(fx, fy - g.lift * z * 0.4, z * 0.34, z * 0.24, walkerFace(w), 0, Math.PI * 2); ctx.fill();
   }
   // The hull: a long plated body, its corners cut, standing a little off the ground.
-  ctx.translate(ox + w.x * z, oy + w.y * z - z * 0.5); ctx.rotate(w.h);
+  ctx.translate(ox + w.x * z, oy + w.y * z - z * 0.5); ctx.rotate(walkerFace(w));
   const hl = (L.len / 2) * z, hw = (L.wid / 2) * z, cut = z * 0.7;
   const hull = () => { ctx.beginPath(); ctx.moveTo(-hl + cut, -hw); ctx.lineTo(hl - cut, -hw); ctx.lineTo(hl, -hw + cut); ctx.lineTo(hl, hw - cut); ctx.lineTo(hl - cut, hw); ctx.lineTo(-hl + cut, hw); ctx.lineTo(-hl, hw - cut); ctx.lineTo(-hl, -hw + cut); ctx.closePath(); };
   ctx.fillStyle = L.plateLo; ctx.save(); ctx.translate(0, z * 0.18); hull(); ctx.fill(); ctx.restore();
@@ -151,6 +307,7 @@ function walkerItems(items, inView) {
 }
 
 function walkerDraw(ctx, e, ox, oy, z) {
+  if (walkerArtReady()) { walkerArtSmoke(ctx, S.walker, ox, oy, z); return; }
   const w = S.walker, L = WALKER_LOOK, col = walkerColor(w), P = (u, v) => walkerPt(w, ox, oy, z, u, v), lift = z * 0.5;
   const t = typeof R !== 'undefined' ? R.time : 0;
   ctx.save();

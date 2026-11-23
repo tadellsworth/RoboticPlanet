@@ -2072,6 +2072,40 @@ across; with no art at all (still loading) a building is a plain block. To regen
 | Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on its look's `roof` mark; its armour bar once hit. |
 | The rest | The civic tower's beacon pulsing from dusk to dawn and a tower's red light blinking (on their marks), street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
 
+### The Walking Factory (installed)
+
+The owner picked look A, the **Foundry Crawler** (Nov 23 2026), of three concepts (B the Accord Strider, a pale ceramic
+hull on long insect legs; C the Factory Block, a works shed and control tower on braced columns). It belongs with the
+Foundry, Refinery and Smelter: a heavy gunmetal box-girder chassis on six box-section legs with hydraulic rams,
+Accord-yellow knee drums and wide pad feet; at the back a foundry block with twin sooted stacks, a refinery column, a
+crucible of molten alloy and a slewing yellow crane over the deck; in the middle a big open square of tread plate
+(about 2.7 × 3.2 tiles) with a painted muster ring and yellow rails, where the robots aboard stand; at the front an
+open-roofed fabrication bay with a lit floor and a hazard-striped chute down to the ground ahead (its exit). The
+holder's colour is on the flank bands, the bay's door lights and the corner lamps. At night the furnace glows, the deck's
+floodlights and the works' windows are lit. Hull 5.4 × 3.4 tiles; a tripod gait, one leg cycle per 1.3 tiles walked,
+three feet always down, the feet 3.35 tiles out from its middle line (`WALKER_LOOK.reach`, where the yard's ruts are).
+
+**How it was made:** `renderer/b/walker.js` (the concept kit and scene A merged), with the renderer's own `lib.js`
+materials, sun, time of day and glow pass. `renderer/tools/render_walker.sh` renders the game's set, `view=top`:
+orthographic straight down, facing right, `W=20` world units (10 tiles) across at 2560 px, centred on the deck (the
+riders stand round its middle), the sun nearly overhead so the baked shadow sits under it whichever way the game turns
+it; composed with `compose_any.py --b1 7.5 --b2 20` to 1280 px (128 px a tile). Then `renderer/tools/install_walker.py`
+writes `art/walker/` as WebP (q82; the team layer q85 at half size): 29 pictures, about 1.4 MB.
+
+| File | What | How the game uses it |
+|---|---|---|
+| `walker-f0` … `walker-f5` (+ `tod/<morning\|evening\|night>/`) | Walking: the six frames of the gait, the holder's parts dark plate (`part=base`), the bay and furnace lit | `walkerArtBody` (js/walker.js): 10 tiles across at its middle, turned to its heading (eased round for the eye: `walkerFace`), frame `floor(od / 1.3 × 6) mod 6`; the time of day's frame, faded into the next as drawArt does |
+| `walker-rest` (+ the same) | Dormant in its cradle: every foot down, the hull lowered, the work lights, furnace and bay out (`rest=1&dim=1`) | While it hasn't woken (`ph` 0) |
+| `walker-team` | The holder's parts alone in white with their glow (`part=team`), every other surface depth only; one layer for every frame (the hull is the same in all of them), 640 px | Tinted to the holder's colour (`walkerTint`, a little white kept in the hot middles) and laid over the frame, pulsing a little; no one's: dim Accord amber, 55% walking, 30% dormant |
+| `walker-art.js` | `window.WALKER_ART`: the frames, the stride, and the marks in tiles from its middle (u ahead, v right): `exit` (the chute's foot), `stacks`, `crucible`, `deck` | The chute's foot glows in the holder's colour as the next Warbot nears; smoke rises from the stacks while it walks (`walkerArtSmoke`) |
+
+It loads only for a Walking Factory map (`ensureWalkerArt`, from `walkerGround`): the list, then every picture. In the
+one-file build it's a bundle beside the page (`dist/walker-art.js`, `window.WALKER_BUNDLE`). Until the day frames are in
+(or if they fail), the old drawing in code stands in. The ring, claim arc, countdown, CONTESTED and its name are drawn
+in code over it (`walkerMarks`). To regenerate: change `b/walker.js`, run `tools/render_walker.sh` (about two minutes on
+four cores), then `python3 tools/install_walker.py`; the concept renders were `view=hero` (the buildings' 57° camera,
+with a crew and a Warbot on the line).
+
 ### The Dam (drawn in code; no images)
 
 The Dam map's walls, floods and lakebeds are drawn in code in `js/dam.js` (no art files yet): each dam a concrete wall a
