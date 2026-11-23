@@ -501,6 +501,25 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 | Viaduct | Placed in Paths: a level bridge straight across a valley between two clifftops; every bot crosses it |
 
+**Aiming a defence** (focus fire: the `focus` order, `ORDERS.focus` in `js/orders.js`; `focusWhy`, `setFocus`,
+`updateFocus`, `focusTarget` in `js/sim.js`). A Pulse Turret, Minigun Nest, Mortar Pit, Flak Gun, Bunker or Keep
+(`canFocus`) can be locked onto one enemy in its reach (`focusReach`: a Keep's the further of its cannon's and its gun
+slots'; a Mortar's 3-tile blind zone counts): its panel's **Aim** (`T`, then tap the enemy), or with a mouse a
+right-click on the enemy while its panel is open (Shift+right-click: every defence of yours that reaches it, in one
+order: the order takes a list of up to 64 ids). `b.focus` is the enemy's id; while it's in reach the defence fires at
+it and nothing else (the Keep's cannon and its slots alike, a Bunker's warbots). Out of reach (walked off, indoors, a
+plane landed) the defence picks its own targets and `b.focusOut` holds when it lost it: back within `FOCUS_GRACE` (4 s)
+the lock picks up again, otherwise it's dropped; dead, captured or no longer a foe, it's dropped at once (and a captured
+defence loses its old owner's aim). Turrets, Nests, Bunkers and Keeps aim at robots and vehicles on the ground, a Flak
+Gun only at aircraft in the air, a Mortar Pit at a robot or an enemy building (each shell does `mortar.bld`, 3, to it,
+through `rocketHit`, on top of its usual splash on robots). A Disruptor Tower pulses at everything: it has no aim. A
+pick out of reach or of the wrong kind is refused with a reason (the order gives back `{ n, why }`). Both fields are in
+`hashState`, saves and `checkSave`. Drawn by `drawFocusAim`: a red reticle on each enemy one of yours is locked onto
+(faint while it's out of reach), a dashed line from the defence whose panel is open, and while aiming its reach and a
+ring round every enemy it can take. The rivals don't use it: their defences pick their own targets as before.
+Selecting several buildings at once isn't a thing in the game; Shift+right-click stands in for it. The armored
+Freight Train's guns pick their own targets (a train isn't a building and passes by too fast to aim).
+
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone goes into
   Cement (2 per Stone) and new Cement Works. You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 10 Fuel.
@@ -3298,7 +3317,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   it. The sheet pauses single-player games while open, and multiplayer play continues. **?** still opens **How to play**.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
-  ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
+  ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,
+  right-click an enemy to aim it there; Shift+right-click, every defence that reaches it). Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
   **B** build, then **1–6** a tab (Gather, Make, Move, Defend, All, Mega; **Tab** steps; a new game opens on Gather, then on the last one used) and the

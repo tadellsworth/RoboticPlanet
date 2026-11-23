@@ -90,6 +90,7 @@ const controls = [
   ['airlift', 4, ['Supply by air', 'On', 'Supply orders', 'Cement +5'], ["#sh-airsup [data-v='1']", "#sh-keep .keep-cell[data-g='cement'] [data-d='5']"]],
   ['hotmetal', 2, ['Plan while paused', 'Shift+Space', 'Resume'], ['#p-plan']],
   ['holdline', 2, ['Walls (X)', 'Build'], ["#banner-seg [data-v='wall']", '#build-walls', '#banner-ok']],
+  ['holdline', 4, ['Pulse Turret', 'Aim (T)', 'right-click'], ['#sh-focus']],
   ['siege', 5, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],
   ['hill', 3, ['Army (Q)', 'Hold ground (G)'], ['#btn-attack', '#ar-hold', '#win-card']],

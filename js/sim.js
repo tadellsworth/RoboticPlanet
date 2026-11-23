@@ -4260,6 +4260,7 @@ function updateBuilding(b, dt) {
   else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';
   else if (def.viaduct) b.status = 'Open to traffic';
   if (b.crack && b.armor >= def.armor - 0.01) b.crack = 0; // (a Quake's cracked foundations: mended once repaired to full)
+  if (b.focus) updateFocus(b); // (a defence you aimed: see focusTarget)
   if (def.lance) updateLance(b, dt);
   else if (def.sunder) updateSunder(b, dt);
   else if (def.dome) updateDome(b, dt);
@@ -4893,7 +4894,7 @@ function updateTurret(b, def, dt) {
   if (shorted(b)) { b.chg = 0; b.status = 'Shorted out by a Spitter: back in a moment'; return; } // (see murmurSpitHit)
   b.scanT = (b.scanT || 0) - dt;
   const cx = b.x + 0.5, cy = b.y + 0.5, range = turretRange(b), r2 = range * range;
-  let target = b.tgt ? getE(b.tgt) : null;
+  let target = focusTarget(b, range) || (b.tgt ? getE(b.tgt) : null); // (the enemy you aimed it at, while it's in reach: see focusTarget)
   // (A Keep taken, or a turret handed over with its colony, drops the target it was tracking: it's on its side now.)
   if (target && (target.dead || target.inside || target.under || !foes(target.owner, b.owner) || dist2(target.x, target.y, cx, cy) > r2 || calmAt(target.x, target.y))) target = null;
   if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
@@ -4935,6 +4936,85 @@ function updateTurret(b, def, dt) {
   b.shotAt = S.time; // (the charge-up art's discharge frame)
 }
 
+/* ------------------------------------------------------------------ aiming a defence (focus fire) */
+
+/*
+ * A player can lock one of their defences onto an enemy in its reach (ORDERS.focus, from its panel's Aim button or a
+ * right-click): b.focus is the enemy's id. While that enemy is in reach the defence fires at it and nothing else; once it
+ * isn't (it walked off, went indoors, a plane landed), the defence picks its own targets again and b.focusOut holds when
+ * it lost it. Back in reach within FOCUS_GRACE seconds, the lock picks up again; after that, or the moment the enemy is
+ * dead (or no longer an enemy), it's gone. Pulse Turrets, Minigun Nests, Bunkers and Keeps aim at robots and vehicles
+ * on the ground, Flak Guns at aircraft in the air, and a Mortar Pit at either a robot or an enemy building (its shells
+ * do BDEFS.mortar.mortar.bld to it). A Disruptor Tower pulses at everything in reach, so it has no aim.
+ */
+/** Can a building of this kind be aimed (ORDERS.focus)? */
+function canFocus(def) { return !!(def && (def.gun || def.minigun || def.mortar || def.flak || def.bunker)); }
+/** How far aimed defence b reaches: { max, min } tiles from its middle (a Keep: its roof cannon or its gun slots, the further). */
+function focusReach(b) {
+  const def = BDEFS[b.type];
+  if (def.keep) return { max: Math.max(turretRange(b), KEEP.fire), min: 0 };
+  if (def.gun) return { max: turretRange(b), min: 0 };
+  return { max: (def.range || 0) + auraRange(b), min: def.minRange || 0 };
+}
+/** How far enemy t is from defence b's middle (a building's middle; a Harrow's body, not its middle, as nearestEnemyBot). */
+function focusDist(b, t) {
+  const cx = b.x + 0.5, cy = b.y + 0.5;
+  if (BDEFS[t.type]) { const c = bCentre(t); return Math.sqrt(dist2(c.x, c.y, cx, cy)); }
+  const d = Math.sqrt(dist2(t.x, t.y, cx, cy));
+  return BOTS[t.type].behemoth ? Math.max(0, d - HARROW.r) : d;
+}
+/** Why defence b can't aim at t now (a short sentence for the player), or '' if it can. */
+function focusWhy(b, t) {
+  const def = BDEFS[b.type], nm = def.name;
+  if (!canFocus(def)) return def.disrupt ? `A ${nm} pulses at everything in reach: it has no aim.` : `A ${nm} can't aim at anything.`;
+  if (!b.built) return `The ${nm} isn't built yet.`;
+  if (!t || t.dead || (BDEFS[t.type] ? !S.buildings.includes(t) : !BOTS[t.type] || !S.bots.includes(t))) return 'That target is gone.';
+  if (!foes(t.owner, b.owner) || t.owner < 0) return 'That isn\'t an enemy.';
+  if (BDEFS[t.type]) {
+    if (!def.mortar) return `Only a Mortar Pit can shell a building: pick an enemy robot.`;
+    if (BDEFS[t.type].burrow || BDEFS[t.type].wild) return 'A Mortar Pit\'s shells can\'t reach down there.';
+    if (calmB(t)) return 'Nothing fires on a Trade Post\'s ground.';
+  } else {
+    const bt = BOTS[t.type], flying = !!(bt.air && t.flight && planeAlt(t) >= 0.15);
+    if (def.flak && !bt.air) return 'A Flak Gun only hits aircraft: pick a plane or an Airship.';
+    if (def.flak && !flying) return 'A Flak Gun only hits aircraft in the air.';
+    if (!def.flak && bt.air) return `A ${nm} can't hit aircraft: that's what a Flak Gun is for.`;
+    if (def.mortar && bt.rail) return 'A Mortar Pit can\'t hit a train.';
+    if (t.inside || t.under || t.dropping) return 'It\'s out of reach (indoors or underground).';
+    if (calmAt(t.x, t.y)) return 'Nothing fires on a Trade Post\'s ground.';
+  }
+  const R = focusReach(b), d = focusDist(b, t);
+  if (d > R.max) return `Out of range: the ${nm} reaches ${Math.round(R.max * 10) / 10} tiles.`;
+  if (R.min && d < R.min) return `Too close: a ${nm} can't hit anything within ${R.min} tiles.`;
+  return '';
+}
+/** Lock defence b onto enemy t (focusWhy says it can). */
+function setFocus(b, t) {
+  b.focus = t.id;
+  delete b.focusOut;
+  if (BDEFS[b.type].gun || BDEFS[b.type].minigun) { b.tgt = t.id; b.scanT = 0; }
+  const st = S.players[b.owner].stats;
+  if (st) st.aimed = (st.aimed || 0) + 1; // (a mission goal counts it: Hold the Line)
+}
+/** Back to picking its own targets. */
+function clearFocus(b) { delete b.focus; delete b.focusOut; }
+/** Once a tick, before it fires: keep, pause or drop defence b's lock (see above). */
+function updateFocus(b) {
+  const t = getE(b.focus);
+  if (!t || t.dead || !foes(t.owner, b.owner) || !canFocus(BDEFS[b.type])) { clearFocus(b); return; }
+  if (!focusWhy(b, t)) { delete b.focusOut; return; }
+  if (b.focusOut === undefined) b.focusOut = S.time;
+  else if (S.time - b.focusOut > FOCUS_GRACE) clearFocus(b);
+}
+/** The enemy defence b is locked onto, if it's in reach now (and within `range` tiles, if given), else null. */
+function focusTarget(b, range) {
+  if (!b.focus || b.focusOut !== undefined) return null;
+  const t = getE(b.focus);
+  if (!t || t.dead) return null;
+  if (range !== undefined && focusDist(b, t) > range) return null;
+  return t;
+}
+
 /**
  * A Bunker: each armed warbot inside shoots the nearest enemy robot within range (warbots first)
  * every BUNKER_FIRE seconds, with its own Ammo, from cover. (They reload from the Bunker's Ammo and
@@ -4946,7 +5026,8 @@ function bunkerFire(b, def, dt) {
   if (b.gcd > 0) return;
   b.gcd = BUNKER_FIRE * (keep ? 1 : auraRate(b));
   const cx = b.x + 0.5, cy = b.y + 0.5;
-  const target = nearestEnemyBot(b.owner, cx, cy, keep ? KEEP.fire : def.range + auraRange(b), true);
+  const reach = keep ? KEEP.fire : def.range + auraRange(b);
+  const target = focusTarget(b, reach) || nearestEnemyBot(b.owner, cx, cy, reach, true);
   if (!target) return;
   let fired = 0;
   for (const id of b.garrison) {
@@ -5009,8 +5090,8 @@ function updateMortar(b, def, dt) {
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr, min2 = def.minRange * def.minRange, s2 = m.splash * m.splash;
   const near = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].rail && !aloft(u) && !calmAt(u.x, u.y)); // (no shells for what's up in the air: see damageBot; nor on a Trade Post's ground)
-  let best = null, bs = 0;
-  for (const u of near) {
+  let best = focusTarget(b), bs = 0; // (the enemy you aimed it at, robot or building, while it's in reach)
+  for (const u of best ? [] : near) {
     const d = dist2(u.x, u.y, cx, cy);
     if (d > r2 || d < min2) continue;
     let s = 0;
@@ -5026,11 +5107,12 @@ function updateMortar(b, def, dt) {
   }
   b.shells--;
   b.cd = m.reload * auraRate(b);
-  b.aim = datan2(best.y - cy, best.x - cx);
+  const at = BDEFS[best.type] ? bCentre(best) : best, bld = BDEFS[best.type] ? best.id : 0;
+  b.aim = datan2(at.y - cy, at.x - cx);
   b.flash = S.time;
   b.working = true;
-  b.status = 'Firing';
-  S.missiles.push({ owner: b.owner, from: b.id, shell: true, t: 0, dur: m.flight, x0: cx, y0: cy, x1: best.x, y1: best.y });
+  b.status = bld ? `Shelling the ${BDEFS[best.type].name}` : 'Firing';
+  S.missiles.push({ owner: b.owner, from: b.id, shell: true, t: 0, dur: m.flight, x0: cx, y0: cy, x1: at.x, y1: at.y, ...(bld ? { bld } : {}) });
   addFx('muzzle', cx + dcos(b.aim) * 0.2, cy + dsin(b.aim) * 0.2 - 0.35, { a: -Math.PI / 2, color: '#ffd27a', life: 0.12, big: true });
   addFx('smoke', cx + dcos(b.aim) * 0.3, cy + dsin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.9 });
   sfx('thump');
@@ -5054,6 +5136,9 @@ function shellImpact(m) {
   }
   hit.sort((a, b) => a[0] - b[0]);
   for (const [d2, u] of hit.slice(0, md.most || hit.length)) damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
+  // Aimed at a building (ORDERS.focus): the shell lands on it.
+  const t = m.bld ? getE(m.bld) : null;
+  if (t && !t.dead && BDEFS[t.type] && S.buildings.includes(t) && foes(t.owner, m.owner) && t.owner >= 0) rocketHit(t, md.bld, m.owner);
 }
 
 /**
@@ -5947,7 +6032,7 @@ function captureBuilding(b, by) {
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
   if (def.mil) {
     noteLost(b, by); // (the game's story: see S.log)
-    b.owner = by; b.tgt = 0; // (a Keep's cannon was tracking its new owner's warbots)
+    b.owner = by; b.tgt = 0; clearFocus(b); // (a Keep's cannon was tracking its new owner's warbots; nor does it keep its old owner's aim)
     if (b.type === 'outpost' || b.type === 'keep') S.roadVer = (S.roadVer || 0) + 1; // (the road through it changes hands: see roadNet)
   }
   b.armor = Math.max(4, def.armor * 0.4);
@@ -6790,7 +6875,7 @@ function eliminate(old, by, how) {
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
     if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
-    e.owner = by; e.tgt = 0;
+    e.owner = by; e.tgt = 0; clearFocus(e);
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
     e.mode = S.players[by].ai ? 'alt' : 'off';
     markDirty(e.x, e.y);
@@ -18453,7 +18538,7 @@ function updateMinigun(b, def, dt) {
   if (shorted(b)) { b.status = 'Shorted out by a Spitter: back in a moment'; return; }
   const g = def.minigun, cx = b.x + 0.5, cy = b.y + 0.5, range = def.range + auraRange(b), r2 = range * range;
   b.scanT = (b.scanT || 0) - dt;
-  let target = b.tgt ? getE(b.tgt) : null;
+  let target = focusTarget(b, range) || (b.tgt ? getE(b.tgt) : null); // (the enemy you aimed it at, while it's in reach)
   if (target && (target.dead || target.inside || target.under || dist2(target.x, target.y, cx, cy) > r2 || calmAt(target.x, target.y))) target = null;
   if (!target && b.scanT <= 0) { b.scanT = 0.25; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
   b.tgt = target ? target.id : 0;
@@ -18518,7 +18603,7 @@ function minigunMuzzle(b, aim) {
 function updateFlak(b, def, dt) {
   const f = def.flak, cx = b.x + 0.5, cy = b.y + 0.5;
   b.cd = (b.cd || 0) - dt;
-  const tgt = aircraftNear(b.owner, cx, cy, def.range + auraRange(b))[0] || canNear(b.owner, cx, cy, def.range + auraRange(b)); // (a Mass Driver's canister when no aircraft is in reach)
+  const tgt = focusTarget(b) || aircraftNear(b.owner, cx, cy, def.range + auraRange(b))[0] || canNear(b.owner, cx, cy, def.range + auraRange(b)); // (a Mass Driver's canister when no aircraft is in reach)
   b.skyTgt = tgt ? tgt.id : 0; // (its searchlights swing onto it at night: see drawFlakSearchlights)
   if (!tgt) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching the sky (7 tiles out)' : 'No Ammo: haulers bring it from storage'; return; }
   // The barrels follow it round.
@@ -18691,6 +18776,7 @@ function hashState() {
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
     obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+    if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }

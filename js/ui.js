@@ -2402,6 +2402,8 @@ const SHEET_KEYS = {
   'sh-damwreck': ['w', 'The Dam: Wreck the dam'],
   'sh-damstop': ['w', 'The Dam: Stop wrecking'],
   'sh-dammend': ['u', 'The Dam: Shore it up'],
+  'sh-focus': ['t', 'Aim a defence at an enemy'],
+  'sh-focus-clear': ['x', 'Clear a defence\'s aim'],
   'sh-damunmend': ['u', 'The Dam: Stop shoring up'],
 };
 const ARMY_SIZE_KEYS = Object.fromEntries(Object.entries(SHEET_KEYS)
@@ -3109,6 +3111,10 @@ function onMapCommand(i, j, wx, wy, done) {
     });
     return;
   }
+  // One of your defences, its panel open (nothing else picked): right-click an enemy to aim it there (Shift: every
+  // defence of yours that reaches it).
+  const dpick = !UI.sel.length && UI.sheetKind === 'bld' ? getE(UI.sheetFor) : null;
+  if (dpick && !dpick.dead && dpick.owner === ME && dpick.built && canFocus(BDEFS[dpick.type])) { focusAt(dpick, i, j, wx, wy, !!INPUT.shift, null, done); return; }
   if (!UI.sel.length) return;
   const b = buildingAtTap(i, j, wx, wy);
   // Your Ferry, off a shore: the selected warbots walk to the shore beside it and board.
@@ -4414,7 +4420,8 @@ function setMode(mode, keepPlan) {
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
-  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch' && mode !== 'mastlink' && mode !== 'mdaim' && mode !== 'allyaim') R.aimHover = null;
+  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch' && mode !== 'mastlink' && mode !== 'mdaim' && mode !== 'allyaim' && mode !== 'focusaim') R.aimHover = null;
+  if (mode !== 'focusaim') UI.focusB = 0;
   if (mode !== 'allyaim') UI.allyAim = null;
   if (mode !== 'mastlink') UI.linkMast = 0;
   if (mode !== 'mdaim') UI.mdAim = 0;
@@ -5325,6 +5332,69 @@ function mdAimTap(i, j, wx, wy) {
   });
 }
 
+/* Aiming a defence (ORDERS.focus): its panel's Aim, then a tap on an enemy; or, its panel open, a right-click on one. */
+
+/** What enemy t is called on a defence's panel and in its toasts. */
+function focusName(t) { return BDEFS[t.type] ? BDEFS[t.type].name : BOTS[t.type].name; }
+/** What defence b can aim at, in a few words. */
+function focusKinds(b) { const d = BDEFS[b.type]; return d.flak ? 'aircraft' : d.mortar ? 'robot or building' : 'robot'; }
+
+/** The enemy under a tap at (wx, wy) for defence b: a robot (in the air first for a Flak Gun, on the ground first otherwise), else a building. */
+function focusFoeAt(b, i, j, wx, wy) {
+  const air = !!BDEFS[b.type].flak, x = wx ?? i + 0.5, y = wy ?? j + 0.5;
+  let best = null, bd = 1.3 * 1.3, any = null, ad = 1.3 * 1.3;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner < 0 || !foes(u.owner, ME) || u.dropping || u.under) continue;
+    const d = dist2(u.x, u.y, x, y), flying = !!(BOTS[u.type].air && u.flight);
+    if (flying === air && d < bd) { bd = d; best = u; }
+    if (d < ad) { ad = d; any = u; }
+  }
+  if (best || any) return best || any;
+  const t = inMap(i, j) ? buildingAtTap(i, j, wx, wy) : null;
+  return t && t.owner >= 0 && foes(t.owner, ME) ? t : null;
+}
+
+/** Aim: pick the enemy on the map (a tap on one aims defence b at it). */
+function startFocusAim(b) {
+  closeSheet();
+  setMode('focusaim');
+  UI.focusB = b.id;
+  showFocusBanner(b);
+}
+
+function showFocusBanner(b, problem) {
+  const R2 = focusReach(b);
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap an enemy <b>${focusKinds(b)}</b> ${R2.min ? `${R2.min} to ${Math.round(R2.max * 10) / 10}` : `within ${Math.round(R2.max * 10) / 10}`} tiles (ringed) to aim this ${BDEFS[b.type].name} at it.`, null, 'Cancel');
+}
+
+/**
+ * Aim defence b at the enemy under (i, j): with `group`, every one of your defences that can reach it. Shows why not
+ * (fail(why), or a toast); done() once the order has gone through.
+ */
+function focusAt(b, i, j, wx, wy, group, fail, done) {
+  const no = fail || ((why) => { sfx('error'); toast(why, 'warn'); });
+  const t = focusFoeAt(b, i, j, wx, wy);
+  if (!t) { no(`${onTouch() || R.mode === 'focusaim' ? 'Tap' : 'Right-click'} an enemy ${focusKinds(b)} to aim the ${BDEFS[b.type].name} at it.`); return; }
+  const why = focusWhy(b, t);
+  const ids = group ? S.buildings.filter((o) => !o.dead && o.owner === ME && o.built && canFocus(BDEFS[o.type]) && (o === b || !focusWhy(o, t))).map((o) => o.id) : [b.id];
+  if (why && ids.length < 2) { no(why); return; }
+  act('focus', [ids, t.id], (r) => {
+    if (!r || !r.n) { no((r && r.why) || 'That target is gone.'); return; }
+    sfx('order');
+    const c = BDEFS[t.type] ? bCentre(t) : t;
+    addFx('ring', c.x, c.y, { color: '#ff5a6e' });
+    toast(r.n > 1 ? `${r.n} defences aiming at the ${focusName(t)}.` : `Aiming at the ${focusName(t)}: it fires at nothing else while it's in reach.`, 'good');
+    if (done) done();
+    refreshSheet();
+  });
+}
+
+function focusAimTap(i, j, wx, wy) {
+  const b = getE(UI.focusB);
+  if (!b || b.dead || b.owner !== ME) { setMode('normal'); return; }
+  focusAt(b, i, j, wx, wy, false, (why) => { sfx('error'); showFocusBanner(b, why); }, () => { setMode('normal'); openBuildingSheet(b); });
+}
+
 /** The Mooring Mast panel's section (filled in by renderMastSection), with the Auto supply switch. */
 function mastSection() {
   return `<div class="section-label">Airship line</div><div id="sh-mast"></div>
@@ -6201,6 +6271,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   if (R.mode === 'mastlink') { mastLinkTap(i, j, wx, wy); return; }
   if (R.mode === 'mdaim') { mdAimTap(i, j, wx, wy); return; }
+  if (R.mode === 'focusaim') { focusAimTap(i, j, wx, wy); return; }
   if (R.mode === 'allyaim') { allyAimTap(i, j, wx, wy); return; } // (Attack here, Defend this area: js/ally.js)
   const rally = rallyAtTap(wx, wy);
   const b = buildingAtTap(i, j, wx, wy);
@@ -6268,7 +6339,7 @@ function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
   if (R.mode === 'bpplace') { bpHover(i, j); return; }
-  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink' || R.mode === 'mdaim' || R.mode === 'allyaim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink' || R.mode === 'mdaim' || R.mode === 'allyaim' || R.mode === 'focusaim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode === 'place' && UI.placeType === 'maglev') { if (UI.ropeA && !(R.ropeEnd && R.ropeEnd.tapped) && inMap(i, j)) maglevPreview(i, j, false); return; } // (the line to the pointer, its pylon spots ringed)
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
@@ -7700,6 +7771,9 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-hold-hint"></p>
         <button class="btn" id="sh-sortie">Send them out to fight</button>`);
     }
+    // A defence's aim (ORDERS.focus): lock it onto one enemy in reach, or leave it to pick its own.
+    if (canFocus(def) && b.built) html += `<div class="section-label">Aim</div><div class="kv"><span>Aiming at</span><span id="sh-focus-txt"></span></div>
+      <div class="btn-row"><button class="btn" id="sh-focus">Aim</button><button class="btn ghost" id="sh-focus-clear">Clear aim</button></div><p class="hint" id="sh-focus-hint"></p>`;
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
       html += `<div class="section-label">Order bots</div>
@@ -7851,6 +7925,8 @@ function openBuildingSheet(b) {
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => set('gprio', btn.dataset.v);
     if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => set('keepW', btn.dataset.v === 'auto' ? null : +btn.dataset.v);
     if ($('sh-hold')) for (const btn of $('sh-hold').children) btn.onclick = () => set('hold', btn.dataset.v === '1');
+    if ($('sh-focus')) $('sh-focus').onclick = () => startFocusAim(b);
+    if ($('sh-focus-clear')) $('sh-focus-clear').onclick = () => act('focus', [[b.id], 0], () => { sfx('click'); toast(`The ${def.name} picks its own targets again.`, 'info'); refreshSheet(); });
     if ($('sh-sortie')) $('sh-sortie').onclick = () => {
       sfx('click');
       act('sortie', [b.id], (n) => {
@@ -8323,6 +8399,15 @@ function refreshBuildingSheet(b) {
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
   if ($('sh-rallypost')) { const on = S.players[ME].rallyPost === b.id; $('sh-rallypost').textContent = on ? '⚑ Rally point for new warbots (tap to clear)' : 'Make this the rally point for new warbots'; $('sh-rallypost').classList.toggle('primary', on); }
   if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.classList.toggle('on', btn.dataset.v === (b.keepW === undefined ? 'auto' : String(b.keepW)));
+  if ($('sh-focus-txt')) {
+    const t = b.focus ? getE(b.focus) : null, R2 = focusReach(b);
+    $('sh-focus-txt').innerHTML = t && !t.dead ? `<b>${focusName(t)}</b>${b.focusOut !== undefined ? ' (out of reach)' : ''}` : 'Auto: its own pick';
+    $('sh-focus-clear').disabled = !b.focus;
+    const reach = `${R2.min ? `${R2.min} to ${Math.round(R2.max * 10) / 10}` : `within ${Math.round(R2.max * 10) / 10}`} tiles`;
+    $('sh-focus-hint').textContent = (onTouch() ? `Tap Aim, then an enemy ${focusKinds(b)} ${reach}: it fires at that one alone while it's in reach.`
+      : `Right-click an enemy ${focusKinds(b)} ${reach} (or Aim, then click it): it fires at that one alone while it's in reach. Shift+right-click aims every defence that reaches it.`) +
+      ` It goes back to its own pick when the enemy falls, or ${FOCUS_GRACE} s after it slips out of reach.`;
+  }
   if ($('sh-hold')) {
     for (const btn of $('sh-hold').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.hold);
     $('sh-hold-hint').textContent = b.hold

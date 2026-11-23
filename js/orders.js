@@ -148,6 +148,19 @@ const ORDERS = {
     S.players[p].keepW = clamp(v | 0, 0, 99);
     for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].mil && b.type !== 'lander') delete b.keepW;
   },
+  /**
+   * Aim defences `ids` (p's Pulse Turrets, Minigun Nests, Mortar Pits, Flak Guns, Bunkers, Keeps) at enemy `tid`, or (tid 0)
+   * back to picking their own targets: see focusWhy. Gives back { n: how many took it, why: the first refusal }.
+   */
+  focus(p, ids, tid) {
+    const all = [...new Set(Array.isArray(ids) ? ids.slice(0, 64) : [ids])].map((id) => ownB(p, id)).filter((b) => b), bs = all.filter((b) => canFocus(BDEFS[b.type]));
+    if (!bs.length) return { n: 0, why: all.length ? focusWhy(all[0], null) : 'That defence is gone.' };
+    if (!tid) { for (const b of bs) clearFocus(b); return { n: bs.length, why: '' }; }
+    const t = liveE(tid);
+    let n = 0, why = '';
+    for (const b of bs) { const w = focusWhy(b, t); if (w) why = why || w; else { setFocus(b, t); n++; } }
+    return { n, why: n ? '' : why };
+  },
   hold(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].mil) setHold(b, !!on); },
   sortie(p, id) { const b = ownB(p, id); return b && b.garrison ? sortieNow(b) : 0; },
   callWorker(p, id) {

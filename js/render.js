@@ -10983,6 +10983,66 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
   drawFlakSearchlights(ctx, ox, oy, z, inView, 'lit');
   drawFlakTracers(ctx, ox, oy, z, inView);
   for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) { drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z); if (f.t < 0.4) fxGround(ctx, ox + f.x * z, oy + f.y * z + z, z * 1.6, '#ff9a3c', 0.6 * (1 - f.t / 0.4)); }
+  drawFocusAim(ctx, ox, oy, z, inView); // (your defences' aims: a reticle on each enemy they're locked onto)
+}
+
+/**
+ * Aimed defences (ORDERS.focus): a reticle on every enemy one of yours is locked onto (faint while it's out of reach),
+ * and from the defence selected (or being aimed) a dashed line to it. While one is being aimed (the Aim button): its
+ * reach, and a ring round every enemy it can take, the one under the pointer brighter.
+ */
+function drawFocusAim(ctx, ox, oy, z, inView) {
+  if (typeof UI === 'undefined' || typeof ME === 'undefined' || !UI.inGame) return;
+  const aiming = R.mode === 'focusaim' ? getE(UI.focusB) : null, selB = aiming || getE(R.selected);
+  const sel = selB && !selB.dead && selB.owner === ME && BDEFS[selB.type] && canFocus(BDEFS[selB.type]) ? selB : null;
+  const at = (t) => (BDEFS[t.type] ? bCentre(t) : t), RED = '#ff5a6e';
+  ctx.save();
+  if (aiming && sel) {
+    const c = bCentre(sel), R2 = focusReach(sel), cx = ox + c.x * z, cy = oy + c.y * z;
+    ctx.fillStyle = 'rgba(255,90,110,0.06)';
+    ctx.beginPath(); ctx.arc(cx, cy, R2.max * z, 0, Math.PI * 2); if (R2.min) ctx.arc(cx, cy, R2.min * z, 0, Math.PI * 2, true); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,90,110,0.6)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.4, z * 0.3]);
+    for (const r of R2.min ? [R2.min, R2.max] : [R2.max]) { ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.setLineDash([]);
+    const h = R.aimHover, pick = h ? focusFoeAt(sel, h.i, h.j) : null;
+    const cand = S.bots.filter((u) => !u.dead && !u.inside && u.owner >= 0 && foes(u.owner, ME));
+    if (BDEFS[sel.type].mortar) cand.push(...S.buildings.filter((e) => !e.dead && e.owner >= 0 && foes(e.owner, ME)));
+    for (const t of cand) {
+      const p = at(t);
+      if (!inView(p.x, p.y, 1) || focusWhy(sel, t)) continue;
+      ctx.strokeStyle = t === pick ? '#ffffff' : RED; ctx.lineWidth = Math.max(1.5, z * (t === pick ? 0.06 : 0.035));
+      ctx.beginPath(); ctx.arc(ox + p.x * z, oy + p.y * z, z * (BDEFS[t.type] ? 0.75 : 0.42), 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  const seen = new Set();
+  for (const b of S.buildings) {
+    if (b.dead || !b.focus || b.owner !== ME) continue;
+    const t = getE(b.focus);
+    if (!t || t.dead) continue;
+    const p = at(t), lost = b.focusOut !== undefined, tx = ox + p.x * z, ty = oy + p.y * z;
+    if (b === sel) {
+      const c = bCentre(b);
+      ctx.strokeStyle = lost ? 'rgba(255,90,110,0.35)' : 'rgba(255,90,110,0.8)'; ctx.lineWidth = Math.max(1.5, z * 0.045);
+      ctx.setLineDash([z * 0.25, z * 0.18]); ctx.lineDashOffset = -R.time * z * 0.8;
+      ctx.beginPath(); ctx.moveTo(ox + c.x * z, oy + (c.y - 0.35) * z); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    }
+    if (seen.has(t.id) || !inView(p.x, p.y, 2)) continue;
+    seen.add(t.id);
+    // the reticle: a ring, four ticks turning slowly, a dot in the middle
+    const r = z * (BDEFS[t.type] ? 0.8 : 0.5), a0 = R.time * 1.2;
+    ctx.globalAlpha = lost ? 0.4 : 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = Math.max(3, z * 0.09);
+    ctx.beginPath(); ctx.arc(tx, ty, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = RED; ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.beginPath(); ctx.arc(tx, ty, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) { const a = a0 + (k * Math.PI) / 2, c = Math.cos(a), s = Math.sin(a); ctx.moveTo(tx + c * r * 0.55, ty + s * r * 0.55); ctx.lineTo(tx + c * r * 1.3, ty + s * r * 1.3); }
+    ctx.stroke();
+    ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(tx, ty, Math.max(1.5, z * 0.05), 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ the Mass Driver */

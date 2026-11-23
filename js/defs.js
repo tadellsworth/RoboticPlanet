@@ -1417,7 +1417,7 @@ const BDEFS = {
   mortar: {
     name: 'Mortar Pit', desc: 'Lobs shells at enemy robots 3 to 10 tiles away, aiming where they bunch up: each shell hurts the robots within a tile and a half of where it lands (up to 6 of them). Slow to reload, and it can\'t hit anything closer than 3 tiles. Fires Ammo (3 shells each).',
     cost: { cement: 5, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 10, minRange: 3, armor: 14, buildTime: 12, war: true,
-    mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, most: 6, flight: 1.6 },
+    mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, most: 6, flight: 1.6, bld: 3 }, // (bld: what a shell does to a building it's aimed at: see ORDERS.focus)
   },
   flak: {
     name: 'Flak Gun', desc: 'A twin anti-aircraft gun. It fills the sky round enemy aircraft out to 7 tiles with bursting shells, leading them as they fly: each burst hurts any aircraft within about a tile of it. A plane can get through one quick pass, but not circling over a few of these. It bursts an enemy Mass Driver\'s canisters flying over too, when no aircraft is in reach. It can\'t hit anything on the ground. Fires Ammo (8 shells each).',
@@ -1761,6 +1761,10 @@ function botTank(k) {
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
 const AMMO_CAP = 3;    // crystals a turret stockpiles
 const TURRET_TURN = 2.4;   // radians per second a turret's head turns (about 140°)
+// Aiming a defence (ORDERS.focus): a player locks a Pulse Turret, Minigun Nest, Mortar Pit, Flak Gun, Bunker or Keep onto
+// one enemy in its reach. If the enemy slips out of reach, the defence picks its own targets again, and takes the lock
+// back up if the enemy comes back within FOCUS_GRACE seconds; after that (or once the enemy is dead) the lock is gone.
+const FOCUS_GRACE = 4;
 const TURRET_SWEEP = 0.35; // radians per second it sweeps while watching for targets
 const SHOTS_PER_AMMO = 4;
 

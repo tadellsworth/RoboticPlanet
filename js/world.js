@@ -5713,6 +5713,9 @@ function checkSave(o) {
     if (b.magNext != null && !(b.type === 'magterm' && Array.isArray(b.magNext) && b.magNext.length === 2 && Number.isInteger(b.magNext[0]) && Number.isInteger(b.magNext[1]) && b.magNext[0] >= 0 && b.magNext[0] < o.W && b.magNext[1] >= 0 && b.magNext[1] < o.H)) bad();
     if (b.magLayout != null && !layoutOk(b.magLayout)) bad();
     if (b.magBends != null && !(BDEFS[b.type] && (BDEFS[b.type].magterm || BDEFS[b.type].pylon) && bendsOk(b.magBends))) bad(); // (a line's bends: on its key Terminal, or its site)
+    // a defence aimed at an enemy (ORDERS.focus): the enemy's id, and when it slipped out of reach
+    if (b.focus != null && !(canFocus(BDEFS[b.type]) && Number.isSafeInteger(b.focus) && b.focus > 0)) bad();
+    if (b.focusOut != null && !(b.focus != null && Number.isFinite(b.focusOut))) bad();
     // a Mass Driver's aim and goods list (see setMdAim, setMdSend): an id, and up to MASSDRIVER.goods goods with their reserves
     if (b.mdTo != null && !(Number.isSafeInteger(b.mdTo) && b.mdTo >= 0)) bad();
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();

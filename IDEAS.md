@@ -3,6 +3,21 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Aiming defences (built Nov 23 2026: calls made, open questions for the owner)
+
+A defence's panel has **Aim** (`T`, then tap an enemy) and **Clear aim** (`X`); with a mouse, a right-click on an enemy
+while the panel is open aims it, Shift+right-click every defence that reaches it. Calls made: the lock survives the
+enemy slipping out of reach for 4 seconds (`FOCUS_GRACE`), so a robot dodging round the edge of the ring is picked
+up again; a Mortar Pit can shell a chosen enemy building at 3 a shell (half a shell's 6 on a robot, so Mortars don't
+out-shell Howitzers on plain buildings); a Disruptor Tower has no aim. Open:
+- **Selecting several buildings.** There's no box- or Shift-select for buildings, so Shift+right-click stands in
+  (every defence of yours in reach). A real multi-select (a box round defences, Shift+tap on a phone) would also help
+  turning a row of guns off or on together. On a phone, aiming is one defence at a time for now.
+- **Armored trains** keep picking their own targets: worth an Aim on the train's panel?
+- **The rivals** don't aim (their defences pick as before). A Warden that focuses its guns on a Bulwark would be a
+  sharper opponent.
+- Should an aimed defence also hold fire at everything else while its target is out of reach (a "hold for it" mode)?
+
 ## Built in November: city layout and a siege gun
 
 Feed links (a factory beside its supplier is fed straight across), the Keep (a fortified base whose aura
