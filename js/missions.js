@@ -1968,6 +1968,40 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-nall, #ar-hold' },
     ],
   },
+  // Army Groups (sim.js): a standing army with its own order, kept up to strength by the Bot Foundry.
+  {
+    id: 'standing', name: 'Standing Orders', chapter: 'War',
+    brief: 'An army that needs you for every step is half an army. Give your warbots standing orders, and let the Foundry keep them whole.',
+    intro: [
+      'An <b>Army Group</b> is a standing army: a badge, a home, a target size and one order it keeps to.',
+      'Select warbots, then <b>Army group</b> on the selection bar → <b>New group from these</b>. Up to 6.',
+      'Its card (right side) selects it; tap again to go to it. Right-click or hold the card for its panel.',
+      'Orders: <b>Hold</b>, <b>Defend area</b>, <b>Patrol</b>, <b>Attack</b>, <b>Follow</b>. Your own order pauses it: <b>Back to order</b>.',
+      'New warbots fill groups under their target size, in batches; the rest stay in the <b>Reserve</b>.',
+    ],
+    mode: 'versus', seed: 7713, size: 1, rough: 1, rich: 3, biome: 'savanna', shape: 0, style: 'balanced',
+    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 0],
+    setup(S) {
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant)
+      const L = getE(S.players[0].lander);
+      L.stock.alloy += 12; L.stock.chip += 12; // (for a few more warbots)
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'agroup', n: 1, text: 'Make an Army Group',
+        count: (P, S) => (S.agroups || []).filter((g) => g.owner === 0).length,
+        hint: 'Select warbots, then <b>Army group</b> on the selection bar → <b>New group from these</b>.',
+        ui: '#sel-agroup, #ag-new-sel, #ar-agnew' },
+      { kind: 'agpatrol', n: 1, text: 'Put a group on Patrol',
+        count: (P, S) => ((S.agroups || []).some((g) => g.owner === 0 && g.ord.k === 'patrol') ? 1 : 0),
+        hint: 'Right-click or hold its card → <b>Patrol</b> (<kbd>P</kbd>), tap 2 or 3 points, then <b>Done</b>.',
+        ui: '#agcards .agcard, #ag-order-patrol, #banner-ok' },
+      { kind: 'agjoin', n: [2, 2, 3], text: ['A new warbot joins a group', '{n} new warbots join a group'], at: 'foundry',
+        count: (P) => P.stats.agJoined || 0,
+        hint: 'Raise its <b>Target size</b> (<b>+</b>), then Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>.',
+        ui: "#ag-size-up, #sh-orders .order-row[data-k='warbot'] [data-d='1']" },
+    ],
+  },
   {
     id: 'convoy', name: 'Convoy', chapter: 'War',
     brief: 'A Salvager raids every road it can reach. Keep your trade route running through it, and raid its convoys in turn.',

@@ -840,15 +840,68 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .gchip.on { border-color: rgba(125, 255, 160, 0.7); color: #7dffa0; }
 .gchip.on kbd { background: rgba(125, 255, 160, 0.25); }
 .gchip:hover { border-color: rgba(255, 255, 255, 0.3); }
+/* Army Groups: a card a group down the right edge, under the minimap (ui.js, refreshAgCards); its panel; the drag ghost. */
+.agcards { position: fixed; z-index: 15; display: flex; flex-direction: column; gap: 6px; width: 188px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 2px; }
+.agcards::-webkit-scrollbar { display: none; }
+.agcards[hidden] { display: none; }
+.agcard { all: unset; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 6px 8px 6px 6px; border-radius: 10px;
+  background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.12); border-left: 3px solid var(--agc, #fff); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  color: var(--text); font-size: 12px; line-height: 1.25; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.agcard:hover { border-color: rgba(255, 255, 255, 0.3); border-left-color: var(--agc, #fff); }
+.agcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.agcard.on { background: rgba(28, 44, 36, 0.96); border-color: rgba(125, 255, 160, 0.7); border-left-color: var(--agc, #fff); }
+.agcard.paused .ag-doing { color: var(--warn); }
+.agcard.reserve { --agc: #9ba4b4; min-height: 44px; }
+.ag-badge { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--agc, #fff); color: #14161d; font: 800 13px/1 inherit; }
+.ag-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ag-top { display: flex; align-items: baseline; gap: 6px; }
+.ag-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.ag-count { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ag-doing { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-meta { display: flex; align-items: center; gap: 6px; }
+.ag-hp { flex: 1 1 auto; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.ag-hp i { display: block; height: 100%; background: var(--good); }
+.ag-hp.mid i { background: var(--warn); }
+.ag-hp.bad i { background: var(--danger); }
+.ag-ammo { flex: none; font-size: 11px; color: var(--muted); }
+.ag-ammo.low { color: var(--warn); }
+.ag-ammo.out { color: var(--danger); }
+.ag-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%, -130%); padding: 6px 10px; border-radius: 9px; background: var(--panel);
+  border: 2px solid var(--agc, #fff); color: var(--text); font: 600 12px/1.2 inherit; white-space: nowrap; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); }
+.ag-h { display: flex; align-items: center; gap: 8px; }
+.ag-rename { display: flex; gap: 6px; margin: 8px 0 4px; }
+.ag-rename input { flex: 1 1 auto; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font: inherit; }
+.ag-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.ag-row .btn, .ag-orders .btn, #agsel-body .btn, .ag-list .btn, #sheet .army-cmds #ag-resume { min-height: 44px; }
+.ag-n { min-width: 34px; text-align: center; font-size: 16px; }
+.ag-sep { flex: 1 1 8px; }
+.ag-prio { color: var(--muted); }
+.ag-orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.ag-orders .btn.on, .ag-row .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.ag-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.ag-list .btn { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
+/* A phone (or anything narrow or short): the cards shrink to the badge, the count, a health bar and an Ammo dot. */
+@media (max-width: 699px), (max-height: 519px) {
+  .agcards { width: 66px; gap: 5px; }
+  .agcard { flex-direction: column; align-items: stretch; gap: 3px; min-height: 52px; padding: 5px 5px 5px 4px; }
+  .agcard .ag-badge { width: 100%; height: 20px; font-size: 12px; }
+  .agcard .ag-name, .agcard .ag-doing { display: none; }
+  .agcard .ag-top { justify-content: center; }
+  .agcard .ag-ammo { width: 8px; height: 8px; border-radius: 50%; font-size: 0; background: var(--good); }
+  .agcard .ag-ammo.low { background: var(--warn); }
+  .agcard .ag-ammo.out { background: var(--danger); }
+  .agcard.reserve { min-height: 44px; }
+}
 .selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
 /* What's selected, a line of what they're doing, then the tools: under a finger All in view, Whole army, Box,
    Info, Recycle (and Undo just after an order), with a mouse Recycle and Save as group only and the right-click hint
    above them; with Torches selected, Scorch the earth either way. Under a finger the bar runs the width of the screen,
    with the close button beside the title. */
-.selbar .sel-tools { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
+.selbar .sel-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
 .selbar .sel-tools::-webkit-scrollbar { display: none; }
 .selbar .sel-tools .btn { flex: none; white-space: nowrap; }
-.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-recycle):not(#sel-undo):not(#sel-scorch) { display: none; }
+.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-recycle):not(#sel-undo):not(#sel-scorch):not(#sel-agroup) { display: none; }
 .selbar .sel-tools #selbar-group { margin-top: 0; }
 .selbar .ok { color: var(--good); }
 .selbar.touch { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + 8px); max-width: 520px; padding: 8px 10px 9px 12px; }

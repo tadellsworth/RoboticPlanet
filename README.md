@@ -1697,6 +1697,33 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
   in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
+- **Army Groups** (`S.agroups`, the Army Groups section of `js/sim.js`; orders `agNew`, `agAdd`, `agLeave`, `agName`,
+  `agSize`, `agPrio`, `agHome`, `agOrder`, `agResume`, `agDisband`; cards and panel at the end of `js/ui.js`): up to
+  `AGROUP.max` (6) standing armies a person, each `{ id, owner, n (badge 1-6, colour AGROUP.colors), name, home ({ b } an
+  Outpost, Keep or Command Base, or { x, y }), size (target, 1 to AGROUP.maxSize 40), ord { k, pts, r, g, at, t, done },
+  paused, flag }`, a player's in priority order. A unit belongs to one (`u.grp`; army units only, `isArmy`). Each group
+  holds its own rally flag (`r.grp`; never reused by an order looking for a flag at a place, `!q.grp`; kept by
+  `cleanRallies` while the group lives) and its units hold it like any flag (`holdRally`). `agTick` (every 10 ticks)
+  moves the flag by the order (`AG_ORDERS[k].aim`, the list the panel reads, so a new order slots in there): **hold** at
+  home (`agHomeXY`; beside a building, the badge's own spot, `agBeside`), **defend** at the circle's middle with
+  `r.rad` (one of `AGROUP.radii`; `warbotAct` scans and leashes by it instead of `SORTIE_REACH`), **patrol** 2-3 points
+  and **attack** 1-5 waypoints (`agRoute`: on to the next once 60% of those on the flag are within 3.5 tiles and none is
+  fighting for `AGROUP.dwell` 3 s; an attack also needs no enemy building within `RALLY_REACH2` nor armed robot within 5,
+  and holds at its last, `ord.done`), **follow** 2.5 tiles behind the other group's units (`agFollowXY`; no cycles). Free
+  units of the group (`agFree`: not being mended, refilled, recycled, aboard or reloading in a garrison) are put back on
+  its flag (`agJoin`: `marchTogether`, `paceSquad`). A direct order (`command`, `undoCommand`, `scorch`) to a unit of a
+  group pauses it (`agManual`, `g.paused`) until **Back to order** (`agResume`); **Recall all** and a flag's Call them
+  back pause it too (`agRecall`), its flag staying. Garrisons never hand a group's unit out (`takeArmed`,
+  `stationWarbots`); Ferries don't board them unless selected. **Reinforcements** (`agPickFor` in `spawnFromFoundry`):
+  the Reserve (the old way: the rally point, else the Command Base) while the garrisons' keeps aren't covered by the
+  Command Base's free warbots (with no rally point set); else the first group by priority under its size that the
+  Foundry's zone reaches, as a recruit (`u.grpNew`) that waits at the Reserve until `AGROUP.batch` (3) are ready or as many
+  as the group lacks, or `AGROUP.batchWait` (30) s (`agBatch`), then marches out (`u.grpGo` until within 4 tiles:
+  `P.stats.agJoined`). In `hashState` (only when there are groups, or a unit has `u.grp`), saves and `checkSave`.
+  Keys: Alt/⌥ + 1-6 selects a group (twice: the camera to it), with Shift its panel; Ctrl/⌘/Shift + 1-9 (and Alt + 7-9)
+  still save control groups. Cards (`#agcards`, `refreshAgCards`): tap selects, again jumps, right-click or a 550 ms hold
+  opens the panel (`openAgSheet`), a drag onto the map or minimap gives an Attack order to that tile (`agSendTo`); map
+  picks for points and home (`R.mode` `agpick`, `agPickTap`, `agPickDone`); plans drawn by `drawAgPlans` in `js/render.js`.
 - **Saving:** solo games keep up to five restore points about a game minute apart in localStorage
   (`terrafall.restorePoints.v1`: the newest first, each `{ time, json, at }`, `at` the real time it was kept; a full
   storage drops the oldest until the rest fit). The pause menu's **Restore points** item (`#p-checkpoint-group`,
@@ -3196,7 +3223,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
   you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
 - **Buildings on number keys** (`bldGroups`, `S.bgroups` { key: building id }, beside the robots' `S.groups`): with no
-  robots selected and a building of yours open, Ctrl/⌘/Alt/Shift + 1–9 (`saveGroup`) puts it on that key; the key
+  robots selected and a building of yours open, Ctrl/⌘/Shift + 1–9 (Alt only for 7–9: Alt + 1–6 is the Army Groups') (`saveGroup`) puts it on that key; the key
   (`recallGroup`) opens its panel, twice to jump to it, and the group bar shows it as a chip. A key holds a group of
   robots or one building, and a building one key; both are kept through a multiplayer catch-up (`snap` in js/lockstep.js).
 - **Vibration** (`haptic` in js/input.js): under a finger, on a device that can vibrate (`navigator.vibrate`), a short

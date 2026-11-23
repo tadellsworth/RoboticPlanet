@@ -53,6 +53,7 @@ function simStep(dt) {
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 10 === 4 && S.rallies.length) followRallies();
+  if (S.tick % 10 === 7 && S.agroups && S.agroups.length) agTick(); // (Army Groups: their standing orders)
   if (S.tick % 30 === 20) updateLoot();
   if (S.tick % 10 === 6 && S.wrecks && S.wrecks.length) clearWrecks(); // (aircraft wrecks built over: see crashLand)
   // War scars: light scorches grow back over; scrap and bones built over go (see scarFade, scrapTidy).
@@ -4536,7 +4537,11 @@ function spawnFromFoundry(b) {
   if (BOTS[kind].army) {
     // Your rally point (an Outpost or Keep you've picked): every new warbot is stationed there.
     const rp = usesPosts(b.owner) && rallyPostOf(b.owner);
-    if (rp && S.zone[tIdx(rp.x, rp.y)] === S.zone[tIdx(b.x, b.y)]) u.post = rp.id;
+    // (Army Groups: garrisons first, then the first group by priority under its target size, then the Reserve: agPickFor.
+    // A recruit waits at the Reserve for its batch.)
+    const ag = agPickFor(b.owner, b);
+    if (ag) { u.grp = ag.id; u.grpNew = 1; }
+    else if (rp && S.zone[tIdx(rp.x, rp.y)] === S.zone[tIdx(b.x, b.y)]) u.post = rp.id;
     goGarrison(u);
   }
   // A Howitzer rolls off onto open ground beside the Foundry and waits there for orders (its post).
@@ -7250,10 +7255,10 @@ function warbotAct(u, dt) {
   // A squad on a flag that isn't in a rival's land guards the ground round it, as a garrison does round its fort.
   const flagO = rally ? S.owner[tIdx(Math.floor(rally.x), Math.floor(rally.y))] : -1;
   const guardFlag = !!rally && !(flagO >= 0 && flagO !== u.owner);
-  const leash = defending || guardFlag ? 9 : rally || escort ? 6 : 4;
+  const leash = defending || guardFlag ? Math.max(9, rally?.rad ? rally.rad + 2 : 0) : rally || escort ? 6 : 4;
   if (foe && (foe.dead || !foes(foe.owner, u.owner) || foe.inside || foe.dropping || foe.under || BOTS[foe.type].air || BOTS[foe.type].sea ||
       dist2(foe.x, foe.y, u.x, u.y) > leash * leash || calmAt(foe.x, foe.y) ||
-      (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
+      (rally && dist2(foe.x, foe.y, rally.x, rally.y) > (rally.rad ? sq(rally.rad + 2) : 49)))) foe = null;
   // A guard's leash is measured from its fort as well: a foe that walks away is let go (and left alone a while)
   // once it's SORTIE_LEASH from there, unless it's still close enough to shoot. It used to lead the guards off for good.
   // (Sent out to a building under attack, t.ax: from there instead, and that spot moves with the raid.)
@@ -7282,7 +7287,7 @@ function warbotAct(u, dt) {
         if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true, accepts);
         if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true, accepts);
       }
-      if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true, accepts);
+      if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, rally.rad || SORTIE_REACH, true, true, true, accepts); // (an Army Group's Defend area: its circle)
       // (On a flag: an enemy trade convoy passing within TERMINAL.hunt tiles of it, wherever it is: what raids are for.)
       if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
@@ -7727,7 +7732,7 @@ function takeArmed(b, posted, lead) {
     for (const kind of lead ? ['shield', 'flame', ''] : ['']) {
       for (let k = b.garrison.length - 1; k >= 0; k--) {
         const u = getE(b.garrison[k]);
-        if (u && botArmed(u) && (freeToGo(u, b) || pass) && (!kind || BOTS[u.type][kind])) { b.garrison.splice(k, 1); return u; }
+        if (u && botArmed(u) && !u.grp && (freeToGo(u, b) || pass) && (!kind || BOTS[u.type][kind])) { b.garrison.splice(k, 1); return u; }
       }
     }
   }
@@ -8125,7 +8130,7 @@ function cleanRallies() {
     if (u.task && u.task.type === 'hold') used.add(u.task.rally);
     if (u.resume && u.resume.type === 'hold') used.add(u.resume.rally); // away for repairs: the flag waits for it
   }
-  S.rallies = S.rallies.filter((r) => used.has(r.id));
+  S.rallies = S.rallies.filter((r) => used.has(r.id) || (r.grp && agById(r.grp))); // (an Army Group's flag stays while the group does)
 }
 
 /** Nearest own building where a warbot can top up its battery (garrisons and chargers), or reload. */
@@ -8475,7 +8480,7 @@ function attackBreach(owner, target, count, all) {
  * `lead`: Bulwarks and Torches go first (see takeArmed).
  */
 function sendToRally(owner, i, j, count, rear, hurry, lead) {
-  let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  let r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   if (S.walker) walkerFlag(r); // (planted on the Walking Factory's deck: it rides with it)
   let slot = rallyMembers(r.id).length, sent = 0;
@@ -8589,7 +8594,7 @@ function readyForOrder(u) {
 function orderMove(owner, ids, i, j, result) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
   const armed = orderable(owner, ids).filter((u) => botArmed(u));
-  let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  let r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   const goalX = r ? Math.floor(r.x) : i, goalY = r ? Math.floor(r.y) : j;
   const bots = result ? armed.filter((u) => {
     if (u.ferryWait?.ferry) return false;
@@ -8613,7 +8618,7 @@ function orderHunt(owner, ids, e) {
   const i = Math.floor(e.x), j = Math.floor(e.y), r0 = S.rallies.length;
   const n = orderMove(owner, ids, i, j);
   if (!n) return 0;
-  const r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  const r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; for (const u of rallyMembers(r.id)) u.march = 0; }
   return n;
 }
@@ -8724,7 +8729,7 @@ function stationWarbots(owner, to, count) {
   for (const b of stationSources(owner, to)) {
     for (let k = b.garrison.length - 1; k >= 0 && sent < count && stationSpare(b) > 0; k--) {
       const u = getE(b.garrison[k]);
-      if (!u || !freeToGo(u, b)) continue;
+      if (!u || !freeToGo(u, b) || u.grp) continue; // (an Army Group's units stay its own)
       b.garrison.splice(k, 1);
       u.inside = 0;
       u.post = to.id;
@@ -8788,7 +8793,8 @@ function callBack(u) {
  */
 function recallAll(owner) {
   let n = 0;
-  for (const r of S.rallies.slice()) if (r.owner === owner) n += recallRally(r.id);
+  for (const g of agList(owner)) n += agRecall(g); // (Army Groups come home too, their orders paused: Back to order)
+  for (const r of S.rallies.slice()) if (r.owner === owner && !r.grp) n += recallRally(r.id);
   for (const u of S.bots) {
     if (u.dead || u.owner !== owner || !isArmy(u)) continue;
     u.resume = null; // away for repairs: home afterwards, not back to the fight
@@ -8807,11 +8813,381 @@ function recallAll(owner) {
 }
 
 function recallRally(id) {
+  const r0 = rallyById(id), g0 = r0 && r0.grp ? agById(r0.grp) : null;
+  if (g0) return agRecall(g0); // (an Army Group's flag stays: the group waits for Back to order)
   let n = 0;
   for (const u of rallyMembers(id)) { callBack(u); n++; } // called back: home without stopping to fight
   for (const u of S.bots) if (u.resume && u.resume.type === 'hold' && u.resume.rally === id) u.resume = null; // away for repairs: not going back
   S.rallies = S.rallies.filter((r) => r.id !== id);
   return n;
+}
+
+/* ------------------------------------------------------------------ Army Groups */
+/*
+ * Army Groups (the owner's design: IDEAS.md, Army Groups): up to AGROUP.max standing armies a player. S.agroups (made
+ * with the first one) holds every player's, each { id, owner, n (its badge: 1 to 6, and its colour), name, home ({ b }:
+ * an Outpost, Keep or Command Base of its owner's; or { x, y }: a spot), size (its target), ord (its standing order:
+ * { k, pts: [[i, j]...], r, g, at, t, done }, k an AG_ORDERS key), paused (1: some of its units were given a direct
+ * order: the standing order waits for Back to order, agResume), flag (its rally flag's id), pendT }, a player's in
+ * priority order (the first under strength gets the next new unit: agPickFor).
+ *
+ * A unit belongs to one group at most (u.grp, the group's id). Its units hold the group's own rally flag (r.grp, never
+ * shared with an ordinary flag: see the `!q.grp` where flags are looked up by place), as any squad holds a flag
+ * (holdRally: they fight what comes, reload and recharge and come back, are mended and come back), and the standing
+ * order only moves that flag (agTick): Hold at home, Defend area at the circle's middle (r.rad: they take on any enemy
+ * robot inside the circle, then come back to it), Patrol from point to point and round again, Attack from waypoint to
+ * waypoint once each is cleared, holding at the last, Follow wherever the other group is.
+ *
+ * Reinforcements (agPickFor, in spawnFromFoundry): a new army unit of a person's goes to the Reserve (the rally point
+ * if one is set, else the Command Base), as before, while an Outpost or Keep is short of its "keep N" and the Reserve
+ * hasn't the spare warbots to refill it: garrisons first. Then to the first group, by priority, under its target size,
+ * as a recruit (u.grpNew) that waits at the Reserve for its batch (agBatch), then marches out with it (u.grpGo till it
+ * gets there: P.stats.agJoined counts them in). With every group full, it stays in the Reserve.
+ */
+
+/** The orders a group can stand on: what the panel calls each, what the card says it's doing, and the points it takes
+ * from the map (pts [fewest, most]; area: a circle; group: another group). aim(g, r, us) is where its flag goes
+ * (tile centre), moving it on when it's done at one. New ones slot in here (and in the panel's list, which reads this). */
+const AG_ORDERS = {
+  hold: { name: 'Hold', doing: 'Holding', pts: [0, 0], aim: (g) => agHomeXY(g) },
+  defend: { name: 'Defend area', doing: 'Defending', pts: [0, 1], area: true, aim: (g) => (g.ord.pts.length ? agPt(g.ord.pts[0]) : agHomeXY(g)) },
+  patrol: { name: 'Patrol', doing: 'Patrolling', pts: [2, 3], loop: true, aim: (g, r, us) => agRoute(g, r, us, false) },
+  attack: { name: 'Attack', doing: 'Attacking', pts: [1, 5], aim: (g, r, us) => agRoute(g, r, us, true) },
+  follow: { name: 'Follow', doing: 'Following', pts: [0, 0], group: true, aim: (g, r) => agFollowXY(g, r) },
+};
+
+function agList(owner) { return (S.agroups || []).filter((g) => g.owner === owner); }
+function agById(id) { for (const g of S.agroups || []) if (g.id === id) return g; return null; }
+/** Group g's units (its recruits waiting at the Reserve too). */
+function agMembers(g) { return S.bots.filter((u) => !u.dead && u.grp === g.id && u.owner === g.owner); }
+/** "1st", "2nd"... the default name of the group with badge n. */
+function agOrdinal(n) { return n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'); }
+/** A name as a group may have one: letters, digits, spaces and a little punctuation, AGROUP.nameMax at most ('' if none left). */
+function agCleanName(s) { return String(s || '').replace(/[^\p{L}\p{N} '.\-#&+!?]/gu, '').replace(/\s+/g, ' ').trim().slice(0, AGROUP.nameMax); }
+function agPt(p) { return [p[0] + 0.5, p[1] + 0.5]; }
+
+/** The walkable, open tile nearest (i, j) within 4 (its ring order fixed, so every device picks the same), or null. */
+function agSpot(i, j, from) {
+  for (let rr = from || 0; rr <= 4; rr++) {
+    for (let dj = -rr; dj <= rr; dj++) for (let di = -rr; di <= rr; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== rr) continue;
+      const x = i + di, y = j + dj;
+      if (inMap(x, y) && walkable(tIdx(x, y)) && !S.bAt[tIdx(x, y)]) return [x, y];
+    }
+  }
+  return null;
+}
+
+/** The open tile beside building b for the group with badge n: the n-th of those round it (so groups sharing a home don't share a spot). */
+function agBeside(b, n) {
+  const c = [];
+  for (let rr = 2; rr <= 3 && c.length < AGROUP.max; rr++) for (const [di, dj] of [[0, rr], [rr, 0], [0, -rr], [-rr, 0], [rr, rr], [-rr, rr], [rr, -rr], [-rr, -rr]]) {
+    const x = b.x + di, y = b.y + dj;
+    if (inMap(x, y) && walkable(tIdx(x, y)) && !S.bAt[tIdx(x, y)] && S.zone[tIdx(x, y)] === S.zone[tIdx(b.x, b.y)]) c.push([x, y]);
+  }
+  return c.length ? c[(n - 1) % c.length] : agSpot(b.x, b.y, 1);
+}
+
+/** Group g's home building, if it's still its owner's (else null). */
+function agHomeB(g) {
+  const b = g.home && g.home.b ? getE(g.home.b) : null;
+  return b && !b.dead && b.owner === g.owner && BDEFS[b.type].mil ? b : null;
+}
+/** Where group g's home is on the ground: beside its building, or its spot (tile centre). */
+function agHomeXY(g) {
+  const b = agHomeB(g), s = b ? agBeside(b, g.n) : g.home && g.home.x !== undefined ? agSpot(g.home.x, g.home.y) : null;
+  if (s) return agPt(s);
+  const r = rallyById(g.flag);
+  return r ? [r.x, r.y] : null;
+}
+
+/** Group g's flag: made where its order wants it if it has none. */
+function agFlag(g) {
+  let r = rallyById(g.flag);
+  if (r) return r;
+  const at = agHomeXY(g) || (() => { const L = getE(S.players[g.owner].lander); return L ? agPt(agSpot(L.x, L.y, 1) || [L.x, L.y]) : [0.5, 0.5]; })();
+  r = { id: S.nextId++, owner: g.owner, x: at[0], y: at[1], grp: g.id };
+  S.rallies.push(r);
+  g.flag = r.id;
+  return r;
+}
+
+/** Group g's units on its flag (not off reloading or recharging, nor waiting to set off). */
+function agOnFlag(us, r) { return us.filter((u) => u.task && u.task.type === 'hold' && u.task.rally === r.id && u.task.phase !== 'recharge' && !u.task.wait); }
+
+/**
+ * Patrol and Attack: the flag stands at point g.ord.at; once most of the group is there and nothing is fighting (with
+ * `clear`, an Attack: no enemy building within the flag's reach nor armed enemy robot near it either) for
+ * AGROUP.dwell seconds, it moves on to the next point (round again on a Patrol; an Attack holds at its last).
+ */
+function agRoute(g, r, us, clear) {
+  const o = g.ord, pts = o.pts;
+  if (!pts.length) return agHomeXY(g);
+  o.at = clamp(o.at | 0, 0, pts.length - 1);
+  const at = agPt(pts[o.at]);
+  if (o.done) return at;
+  const on = agOnFlag(us, r);
+  const near = on.filter((u) => dist2(u.x, u.y, at[0], at[1]) <= 12.25).length;
+  let ready = on.length > 0 && Math.abs(r.x - at[0]) < 0.01 && Math.abs(r.y - at[1]) < 0.01 && near >= Math.ceil(on.length * 0.6) && !on.some((u) => u.fight || u.task.target);
+  if (ready && clear) {
+    ready = !S.buildings.some((e) => !e.dead && foes(e.owner, g.owner) && e.owner >= 0 && !calmShield(e) && dist2(e.x + 0.5, e.y + 0.5, at[0], at[1]) <= RALLY_REACH2) &&
+      !nearestEnemyBot(g.owner, at[0], at[1], 5, false, false, true, armedThreat);
+  }
+  if (!ready) { o.t = 0; return at; }
+  if (!o.t) { o.t = S.time; return at; }
+  if (S.time - o.t < AGROUP.dwell) return at;
+  o.t = 0;
+  if (!clear) o.at = (o.at + 1) % pts.length;
+  else if (o.at < pts.length - 1) o.at++;
+  else { o.done = 1; return at; }
+  for (const u of on) u.path = null;
+  marchTogether(on);
+  return agPt(pts[o.at]);
+}
+
+/** Follow: two and a half tiles behind the other group (the middle of its units out in the open, else its flag). */
+function agFollowXY(g, r) {
+  const G = agById(g.ord.g);
+  if (!G || G.owner !== g.owner || G === g) {
+    g.ord = { k: 'hold', pts: [], at: 0 };
+    postMsg(g.owner, `The ${g.name} had no group left to follow: it holds at home.`, Math.floor(r.x), Math.floor(r.y), 'warn');
+    return agHomeXY(g);
+  }
+  let x = 0, y = 0, n = 0;
+  for (const u of agMembers(G)) if (!u.inside && !u.grpNew) { x += u.x; y += u.y; n++; }
+  const R = agFlag(G);
+  if (n) { x /= n; y /= n; } else { x = R.x; y = R.y; }
+  const d = Math.sqrt(dist2(r.x, r.y, x, y));
+  if (d > 2.5) { x += ((r.x - x) / d) * 2.5; y += ((r.y - y) / d) * 2.5; }
+  else return [r.x, r.y];
+  const s = agSpot(Math.floor(x), Math.floor(y)) || agSpot(Math.floor(R.x), Math.floor(R.y));
+  return s ? agPt(s) : [r.x, r.y];
+}
+
+/** Is unit u free to be put (back) on its group's flag: not being mended, refilled, recycled, aboard or reloading in a garrison. */
+function agFree(u) {
+  if (u.dropping || u.ferryWait || u.retreat || recycling(u)) return false;
+  const t = u.task && u.task.type;
+  if (t && ['repair', 'refill', 'topup', 'recycle', 'board', 'flee', 'scorch', 'loot', 'escort'].includes(t)) return false;
+  const h = u.inside ? getE(u.inside) : null;
+  if (h && (BDEFS[h.type].repair || (!botArmed(u) && (h.stock.ammo || 0) > 0))) return false; // (being mended, or reloading: out when done)
+  return true;
+}
+
+/** Units `us` of group g onto its flag r, setting off together (marchTogether; from different places, paceSquad). */
+function agJoin(g, r, us) {
+  if (!us.length) return;
+  let slot = rallyMembers(r.id).length;
+  for (const u of us) { readyForOrder(u); u.post = 0; u.task = { type: 'hold', rally: r.id, slot: slot++ }; }
+  marchTogether(us);
+  paceSquad(us, Math.floor(r.x), Math.floor(r.y));
+}
+
+/**
+ * Recruits for group g waiting at the Reserve (u.grpNew): once AGROUP.batch are ready (or as many as the group lacks),
+ * or the first has waited AGROUP.batchWait seconds, the ready ones set off together for the flag.
+ */
+function agBatch(g, r, us) {
+  const pend = us.filter((u) => u.grpNew);
+  if (!pend.length) { g.pendT = 0; return; }
+  if (!g.pendT) g.pendT = S.time;
+  const ready = pend.filter(agFree), want = Math.max(1, Math.min(AGROUP.batch, g.size - (us.length - pend.length)));
+  if (!ready.length || (ready.length < want && S.time - g.pendT < AGROUP.batchWait)) return;
+  for (const u of ready) { delete u.grpNew; u.grpGo = 1; }
+  agJoin(g, r, ready);
+  g.pendT = ready.length < pend.length ? S.time : 0;
+  if (isMe(g.owner)) postMsg(g.owner, `${ready.length} reinforcement${ready.length > 1 ? 's are' : ' is'} on the way to the ${g.name}.`, Math.floor(r.x), Math.floor(r.y), 'info');
+}
+
+/** Three times a second: each group's home kept, its flag moved by its order, its units kept on it, its recruits sent on. */
+function agTick() {
+  const all = S.agroups;
+  // Units of a group that's gone (disbanded, its colony out) or isn't their owner's any more (captured) are free again.
+  for (const u of S.bots) if (u.grp && !u.dead) { const g = agById(u.grp); if (!g || g.owner !== u.owner || !isArmy(u)) { delete u.grp; delete u.grpNew; delete u.grpGo; } }
+  for (const g of all.slice()) {
+    if (!S.players[g.owner] || S.players[g.owner].out) { agDisband(g, true); continue; }
+    // Home lost (wrecked, taken): it's the spot where it stood now.
+    if (g.home.b && !agHomeB(g)) {
+      const b = getE(g.home.b);
+      g.home = b ? { x: b.x, y: b.y } : { x: Math.floor(rallyById(g.flag)?.x ?? 0), y: Math.floor(rallyById(g.flag)?.y ?? 0) };
+      postMsg(g.owner, `The ${g.name} lost its home: it keeps the spot where it stood.`, g.home.x, g.home.y, 'warn');
+    }
+    const r = agFlag(g), us = agMembers(g);
+    if (!g.paused) {
+      const O = AG_ORDERS[g.ord.k] || AG_ORDERS.hold;
+      const at = O.aim(g, r, us);
+      if (at && (Math.abs(r.x - at[0]) > 0.01 || Math.abs(r.y - at[1]) > 0.01)) { r.x = at[0]; r.y = at[1]; }
+      if (O.area) r.rad = g.ord.r || AGROUP.rad; else delete r.rad;
+      const join = [];
+      for (const u of us) {
+        if (u.grpNew) continue;
+        if (u.task && u.task.type === 'hold' && u.task.rally === r.id) continue;
+        if (u.resume && u.resume.type === 'hold' && u.resume.rally === r.id) continue; // (away being mended: it comes back)
+        if (agFree(u)) join.push(u);
+      }
+      agJoin(g, r, join);
+      agBatch(g, r, us);
+    }
+    // Reinforcements arriving.
+    for (const u of us) if (u.grpGo && (!u.task || u.task.rally !== r.id || dist2(u.x, u.y, r.x, r.y) <= 16)) {
+      delete u.grpGo;
+      if (u.task && u.task.rally === r.id) { const P = S.players[g.owner]; P.stats.agJoined = (P.stats.agJoined || 0) + 1; }
+    }
+  }
+}
+
+/**
+ * Where a new army unit of `owner`'s from Foundry f goes: the first group (by priority) under its target size that it
+ * can walk to, or null (the Reserve). Garrisons first: while an Outpost or Keep is short of its "keep N" (keepAt) and
+ * the Command Base hasn't the warbots to send it, null too (the Reserve refills garrisons; with a rally point set new
+ * warbots are stationed there, which refills none, so then groups come first).
+ */
+function agPickFor(owner, f) {
+  if (!S.agroups || !S.agroups.length || !usesPosts(owner)) return null;
+  const zone = S.zone[tIdx(f.x, f.y)];
+  if (!rallyPostOf(owner)) {
+    const L = getE(S.players[owner].lander);
+    if (L && !L.dead && L.built && L.owner === owner) {
+      let need = keepAt(L), have = 0;
+      for (const b of S.buildings) {
+        if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || b === L || BDEFS[b.type].bunker || secluded(b) || S.zone[tIdx(b.x, b.y)] !== zone) continue;
+        need += Math.max(0, Math.min(keepAt(b), BDEFS[b.type].garrison) - postedAt(b));
+      }
+      for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && !u.grp && !postOf(u) && (u.inside === L.id || (u.task && u.task.type === 'garrison' && u.task.bld === L.id))) have++;
+      if (have < need) return null;
+    }
+  }
+  const counts = new Map();
+  for (const u of S.bots) if (!u.dead && u.grp && u.owner === owner) counts.set(u.grp, (counts.get(u.grp) || 0) + 1);
+  for (const g of agList(owner)) {
+    if ((counts.get(g.id) || 0) >= g.size) continue;
+    const r = agFlag(g), t = tIdx(Math.floor(r.x), Math.floor(r.y));
+    if (S.zone[t] !== zone) continue; // (it couldn't walk there)
+    return g;
+  }
+  return null;
+}
+
+/** Take units `us` into group g (out of any other), their post given up: on its flag unless it waits for orders. */
+function agTake(g, us) {
+  for (const u of us) { u.grp = g.id; delete u.grpNew; delete u.grpGo; u.post = 0; }
+  if (!g.paused) agJoin(g, agFlag(g), us.filter(agFree));
+}
+
+/** A new group for `owner`: units `ids` (any army units of theirs, out of any other group) in it, or none. Its id, or why not. */
+function agNew(owner, ids) {
+  if (!S.agroups) S.agroups = [];
+  const mine = agList(owner);
+  if (mine.length >= AGROUP.max) return `You have ${AGROUP.max} groups already: disband one first.`;
+  let n = 1;
+  while (mine.some((g) => g.n === n)) n++;
+  const us = orderable(owner, ids || []);
+  const g = { id: S.nextId++, owner, n, name: agOrdinal(n), home: null, size: Math.max(1, Math.min(AGROUP.maxSize, us.length || 6)), ord: { k: 'hold', pts: [], at: 0 }, paused: 0, flag: 0 };
+  // Home: the Outpost or Keep (or Command Base) they're in or beside, else where they stand, else the Command Base.
+  let home = null;
+  if (us.length) {
+    let x = 0, y = 0;
+    for (const u of us) { const h = u.inside ? getE(u.inside) : null; x += h ? h.x + 0.5 : u.x; y += h ? h.y + 0.5 : u.y; }
+    x /= us.length; y /= us.length;
+    let bd = 36;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== owner || !b.built || !(b.type === 'outpost' || b.type === 'keep' || b.type === 'lander')) continue;
+      const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
+      if (d < bd) { bd = d; home = { b: b.id }; }
+    }
+    if (!home) { const s = agSpot(Math.floor(x), Math.floor(y)); if (s) home = { x: s[0], y: s[1] }; }
+  }
+  if (!home) { const L = getE(S.players[owner].lander); if (!L || L.dead) return 'You have no Command Base.'; home = { b: L.id }; }
+  g.home = home;
+  S.agroups.push(g);
+  agFlag(g);
+  agTake(g, us);
+  return g.id;
+}
+
+/** Group g broken up: its units go back to the Reserve (home without stopping to fight), its flag comes down. */
+function agDisband(g, quiet) {
+  for (const u of S.bots) {
+    if (u.dead || u.grp !== g.id) continue;
+    delete u.grp; delete u.grpNew; delete u.grpGo;
+    if (u.task && u.task.type === 'hold' && u.task.rally === g.flag) callBack(u);
+    if (u.resume && u.resume.type === 'hold' && u.resume.rally === g.flag) u.resume = null;
+  }
+  S.rallies = S.rallies.filter((r) => r.id !== g.flag);
+  S.agroups = S.agroups.filter((q) => q !== g);
+  for (const q of S.agroups) if (q.owner === g.owner && q.ord.k === 'follow' && q.ord.g === g.id && !quiet) { q.ord = { k: 'hold', pts: [], at: 0 }; }
+}
+
+/** A direct order to units `us` (the selection's): their groups' standing orders wait (Back to order: agResume). */
+function agManual(owner, us) {
+  for (const u of us) {
+    if (!u || !u.grp || u.owner !== owner) continue;
+    const g = agById(u.grp);
+    if (g) g.paused = 1;
+    delete u.grpNew; delete u.grpGo;
+  }
+}
+
+/** Back to order: group g's standing order goes on, and every unit of it that's free comes back to its flag. */
+function agResume(g) {
+  g.paused = 0;
+  g.ord.t = 0;
+  const r = agFlag(g);
+  agJoin(g, r, agMembers(g).filter((u) => !u.grpNew && !(u.task && u.task.type === 'hold' && u.task.rally === r.id) && agFree(u)));
+}
+
+/** Call group g's units home (Recall all, or its flag's Call them back): they march back, and the group waits (paused). */
+function agRecall(g) {
+  g.paused = 1;
+  let n = 0;
+  for (const u of agMembers(g)) {
+    if (u.resume && u.resume.type === 'hold' && u.resume.rally === g.flag) u.resume = null;
+    if (u.task && u.task.type === 'hold' && u.task.rally === g.flag) { callBack(u); n++; }
+  }
+  return n;
+}
+
+/**
+ * Set group g's standing order: k (an AG_ORDERS key), pts (tiles [i, j], as many as the order takes), r (Defend area's
+ * circle, one of AGROUP.radii), fg (Follow: the group to follow). '' or why not. Paused groups go back to their order.
+ */
+function agSetOrder(g, k, pts, r, fg) {
+  const O = AG_ORDERS[k];
+  if (!O) return 'Unknown order.';
+  pts = Array.isArray(pts) ? pts.filter((p) => Array.isArray(p) && p.length === 2 && inMap(p[0] | 0, p[1] | 0)).map((p) => [p[0] | 0, p[1] | 0]) : [];
+  if (pts.length < O.pts[0]) return `${O.name} needs ${O.pts[0]} point${O.pts[0] > 1 ? 's' : ''} at least.`;
+  pts = pts.slice(0, O.pts[1]);
+  for (const p of pts) if (!walkable(tIdx(p[0], p[1]))) return 'Pick ground your units can walk to.';
+  const ord = { k, pts, at: 0 };
+  if (O.area) ord.r = AGROUP.radii.includes(r) ? r : AGROUP.rad;
+  if (O.group) {
+    const G = agById(fg);
+    if (!G || G.owner !== g.owner || G === g) return 'Pick another of your groups to follow.';
+    for (let q = G, k2 = 0; q && k2 < AGROUP.max; k2++) { if (q.ord.k !== 'follow') break; if (q.ord.g === g.id) return `The ${G.name} follows the ${g.name}: one of them has to lead.`; q = agById(q.ord.g); }
+    ord.g = G.id;
+  }
+  g.ord = ord;
+  agResume(g);
+  return '';
+}
+
+/** Group g a place up (d -1) or down (d 1) in its owner's priority order. */
+function agMove(g, d) {
+  const mine = agList(g.owner), i = mine.indexOf(g), j = i + (d < 0 ? -1 : 1);
+  if (i < 0 || j < 0 || j >= mine.length) return false;
+  const a = S.agroups.indexOf(g), b = S.agroups.indexOf(mine[j]);
+  S.agroups[a] = mine[j]; S.agroups[b] = g;
+  return true;
+}
+
+/** What group g is doing, in a few words ("Patrolling", "Paused: under your orders"). */
+function agDoing(g) {
+  if (g.paused) return 'Paused: under your orders';
+  const O = AG_ORDERS[g.ord.k] || AG_ORDERS.hold;
+  if (g.ord.k === 'attack' && g.ord.done) return 'Holding where the attack ended';
+  if (g.ord.k === 'follow') { const G = agById(g.ord.g); return G ? `Following the ${G.name}` : O.doing; }
+  if (O.pts[1] > 1 && g.ord.pts.length > 1) return `${O.doing} (point ${(g.ord.at | 0) + 1} of ${g.ord.pts.length})`;
+  return O.doing;
 }
 
 /* ------------------------------------------------------------------ missiles */
@@ -15875,7 +16251,7 @@ function embarkWarbots(owner, f, ids) {
   if (!hold) return 'The Ferry needs a Port of yours.';
   const at = f.inside ? getE(f.inside) : null, fx = at ? at.x + 0.5 : f.x, fy = at ? at.y + 0.5 : f.y;
   let seats = ferrySeats(f), n = 0;
-  const cands = S.bots.filter((v) => !v.dead && v.owner === owner && isArmy(v) && !v.inside && !v.ferryWait && !v.dropping && (!ids || ids.includes(v.id)) && dist2(v.x, v.y, fx, fy) <= FERRY_REACH * FERRY_REACH);
+  const cands = S.bots.filter((v) => !v.dead && v.owner === owner && isArmy(v) && !v.inside && !v.ferryWait && !v.dropping && (ids ? ids.includes(v.id) : !v.grp) && dist2(v.x, v.y, fx, fy) <= FERRY_REACH * FERRY_REACH);
   cands.sort((a, b) => dist2(a.x, a.y, fx, fy) - dist2(b.x, b.y, fx, fy));
   for (const v of cands) {
     if (seats < 1) break;
@@ -15908,7 +16284,7 @@ function disembark(owner, f) {
   }
   if (best < 0) return 'Sail the Ferry right up to the shore first.';
   const ox = (best % S.W) + 0.5, oy = ((best / S.W) | 0) + 0.5;
-  let rl = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
+  let rl = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
   if (!rl) { rl = { id: S.nextId++, owner, x: ox, y: oy }; S.rallies.push(rl); }
   let slot = rallyMembers(rl.id).length;
   for (const v of pass) {
@@ -16160,7 +16536,7 @@ function doLanding(u, dt) {
   }
   // Ashore: the warbots hold the beach under a rally flag.
   const ox = L.x + 0.5, oy = L.y + 0.5;
-  let r = S.rallies.find((q) => q.owner === u.owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
+  let r = S.rallies.find((q) => q.owner === u.owner && !q.grp && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
   if (!r) { r = { id: S.nextId++, owner: u.owner, x: ox, y: oy }; S.rallies.push(r); }
   r.landing = S.time;
   let slot = rallyMembers(r.id).length, n = 0;
@@ -17093,7 +17469,7 @@ function landDrop(d) {
       if (near && usesPosts(v.owner)) v.post = near.id;
       if (into) { const s = deploySpot(v.owner, d.i, d.j); if (s >= 0) { v.x = (s % S.W) + 0.5; v.y = ((s / S.W) | 0) + 0.5; } }
       if (!r) {
-        r = S.rallies.find((q) => q.owner === v.owner && Math.abs(q.x - v.x) < 1.5 && Math.abs(q.y - v.y) < 1.5);
+        r = S.rallies.find((q) => q.owner === v.owner && !q.grp && Math.abs(q.x - v.x) < 1.5 && Math.abs(q.y - v.y) < 1.5);
         if (!r) { r = { id: S.nextId++, owner: v.owner, x: v.x, y: v.y }; S.rallies.push(r); }
         slot = rallyMembers(r.id).length;
       }
@@ -18949,6 +19325,7 @@ function hashState() {
     if (u.task?.waitT !== undefined) { num(u.task.waitT); int(u.task.via || 0); } // (a Worker waiting at a site for goods: doBuild)
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
     if (u.task?.type === 'avenge') { int(u.task.n); int(u.task.g || 0); int(u.task.wall || 0); } // (out after what shot at its nest: murmurAvenge)
+    if (u.grp) { int(u.grp); int(u.grpNew || 0); int(u.grpGo || 0); int(u.task?.slot ?? -1); } // (an Army Group's)
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
@@ -18956,6 +19333,13 @@ function hashState() {
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
+  }
+  // Army Groups: each, its order and its flag.
+  for (const g of S.agroups || []) {
+    int(g.id); int(g.owner); int(g.n); str(g.name); int(g.size); int(g.paused); str(g.ord.k); int(g.ord.at || 0); int(g.ord.done || 0); num(g.ord.t || 0); int(g.ord.r || 0); int(g.ord.g || 0); num(g.pendT || 0);
+    for (const p of g.ord.pts) { int(p[0]); int(p[1]); }
+    int(g.home.b || 0); int(g.home.x ?? -1); int(g.home.y ?? -1);
+    const r = rallyById(g.flag); if (r) { int(r.id); num(r.x); num(r.y); int(r.rad || 0); }
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.

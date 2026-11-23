@@ -7386,6 +7386,8 @@ function render(dtReal) {
         drawWorkUnder(ctx, e, pose, ox, oy, z);
       }
       if (e.owner === ME && !R.clean && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
+      // (its Army Group's badge, on the other side: its number in the group's colour)
+      if (e.owner === ME && !R.clean && e.grp && z >= 18) { const ag = agById(e.grp); if (ag) drawGroupTag(ctx, ox + (e.x + jx) * z - z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, ag.n, AGROUP.colors[ag.n - 1]); }
       // Your Howitzers, zoomed out: a marker over each, so they don't get lost among the trucks.
       if (e.owner === ME && !R.clean && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[ME]);
       if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
@@ -7502,6 +7504,7 @@ function render(dtReal) {
   if (S.mission && S.mission.hullX != null) drawPathfinderHull(ctx, ox, oy, z); // (Seed Vault: the Pathfinder's hull, half-buried)
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
+  drawAgPlans(ctx, ox, oy, z); // (Army Groups' routes and areas)
   drawMissiles(ctx, ox, oy, z);
   drawLavaBombs(ctx, ox, oy, z);
   if (R.workerView) drawWorkerView(ctx, ox, oy, z);
@@ -8580,12 +8583,12 @@ function drawWorkerView(ctx, ox, oy, z) {
 }
 
 /** A control group's number, by each robot in it. */
-function drawGroupTag(ctx, x, y, z, g) {
+function drawGroupTag(ctx, x, y, z, g, color) {
   const r = Math.max(6, z * 0.13);
   ctx.save();
-  ctx.fillStyle = 'rgba(14,15,20,0.85)'; ctx.strokeStyle = 'rgba(125,255,160,0.8)'; ctx.lineWidth = 1.2;
+  ctx.fillStyle = color || 'rgba(14,15,20,0.85)'; ctx.strokeStyle = color ? 'rgba(14,15,20,0.85)' : 'rgba(125,255,160,0.8)'; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - r, y - r, r * 2, r * 2, r * 0.4) : ctx.rect(x - r, y - r, r * 2, r * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#e8eef6'; ctx.font = `700 ${Math.round(r * 1.4)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = color ? '#14161d' : '#e8eef6'; ctx.font = `700 ${Math.round(r * 1.4)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(String(g), x, y + 0.5);
   ctx.restore();
 }
@@ -8940,6 +8943,8 @@ function drawRallies(ctx, ox, oy, z) {
     if (r.owner !== ME || R.clean) continue;
     const x = ox + r.x * z, y = oy + r.y * z;
     const n = rallyMembers(r.id).length;
+    const ag = r.grp ? agById(r.grp) : null;
+    if (ag) { drawAgFlag(ctx, x, y, z, ag, n); continue; } // (an Army Group's flag: see drawAgFlag)
     const art = ART.rally;
     if (art) drawArt(ctx, art, x, y - z * 0.3, z * 0.9);
     else {
@@ -8958,6 +8963,78 @@ function drawRallies(ctx, ox, oy, z) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.fillStyle = '#ffffff';
     ctx.strokeText(String(n), x + z * 0.12, y - z * 0.05);
     ctx.fillText(String(n), x + z * 0.12, y - z * 0.05);
+  }
+}
+
+/** An Army Group's flag: a pennant in its colour with its badge number, and how many hold it. */
+function drawAgFlag(ctx, x, y, z, g, n) {
+  const c = AGROUP.colors[g.n - 1], h = z * 0.8, wave = Math.sin(R.time * 5 + g.n) * z * 0.04;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(x + 2, y + 2, z * 0.2, z * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = Math.max(2.5, z * 0.08);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+  ctx.strokeStyle = '#eef2f6'; ctx.lineWidth = Math.max(1.5, z * 0.05);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+  ctx.fillStyle = c; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + z * 0.52, y - h + z * 0.05 + wave); ctx.lineTo(x + z * 0.5, y - h + z * 0.33 + wave); ctx.lineTo(x, y - h + z * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#14161d'; ctx.font = `800 ${Math.max(9, z * 0.24)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(g.n), x + z * 0.24, y - h + z * 0.17 + wave * 0.5);
+  if (n) {
+    ctx.font = `800 ${Math.max(10, z * 0.28)}px system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.fillStyle = '#ffffff';
+    ctx.strokeText(String(n), x + z * 0.12, y - z * 0.05); ctx.fillText(String(n), x + z * 0.12, y - z * 0.05);
+  }
+  ctx.restore();
+}
+
+/**
+ * Army Groups' plans on the map: the group whose panel is open, the one being given points (with those picked so far)
+ * and any whose units are all selected: a Patrol's loop, an Attack's waypoints from the flag on, a Defend area's circle,
+ * a Follow's line to the group it follows. Dashed, in the group's colour, the points numbered.
+ */
+function drawAgPlans(ctx, ox, oy, z) {
+  if (typeof UI === 'undefined' || R.clean || !S.agroups || !S.agroups.length) return;
+  const show = new Map();
+  if (UI.sheetKind === 'agroup') show.set(UI.sheetFor, null);
+  if (UI.agPick && UI.agPick.k !== 'home') show.set(UI.agPick.g, UI.agPick);
+  if (UI.sel && UI.sel.length) for (const g of agList(ME)) { const ids = agMembers(g).map((u) => u.id); if (ids.length && ids.every((id) => UI.selSet && UI.selSet.has(id))) show.set(g.id, show.get(g.id) || null); }
+  for (const [id, pick] of show) {
+    const g = agById(id); if (!g || g.owner !== ME) continue;
+    const r = rallyById(g.flag), c = AGROUP.colors[g.n - 1];
+    const k = pick ? pick.k : g.ord.k, pts = pick ? pick.pts : g.ord.pts;
+    const P = (p) => [ox + (p[0] + 0.5) * z, oy + (p[1] + 0.5) * z];
+    ctx.save();
+    ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.3, z * 0.2]); ctx.strokeStyle = c; ctx.fillStyle = c;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 3;
+    if (k === 'defend') {
+      const at = pick ? null : g.ord.pts.length ? P(g.ord.pts[0]) : r ? [ox + r.x * z, oy + r.y * z] : null;
+      const rad = pick ? pick.r : g.ord.r || AGROUP.rad;
+      if (at) { ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(at[0], at[1], rad * z, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(at[0], at[1], rad * z, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (k === 'patrol' || k === 'attack') {
+      const ps = pts.map(P);
+      const from = !pick && k === 'attack' && r ? (g.ord.done ? [] : [[ox + r.x * z, oy + r.y * z]]) : [];
+      const line = k === 'attack' && !pick ? from.concat(ps.slice(g.ord.at | 0)) : ps;
+      if (line.length > 1) {
+        ctx.beginPath(); ctx.moveTo(line[0][0], line[0][1]);
+        for (const q of line.slice(1)) ctx.lineTo(q[0], q[1]);
+        if (k === 'patrol' && line.length > 2) ctx.closePath();
+        else if (k === 'patrol' && line.length === 2) ctx.lineTo(line[0][0], line[0][1]);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ps.forEach((q, i) => {
+        const cur = !pick && i === (g.ord.at | 0);
+        ctx.fillStyle = 'rgba(14,15,20,0.85)'; ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(7, z * 0.2), 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = cur ? 3 : 1.5; ctx.strokeStyle = c; ctx.stroke();
+        ctx.shadowBlur = 0; ctx.fillStyle = c; ctx.font = `800 ${Math.max(9, z * 0.22)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(k === 'attack' && i === ps.length - 1 ? '⚑' : String(i + 1), q[0], q[1] + 0.5);
+      });
+    } else if (k === 'follow' && r) {
+      const G = agById(g.ord.g), R2 = G && rallyById(G.flag);
+      if (R2) { ctx.beginPath(); ctx.moveTo(ox + r.x * z, oy + r.y * z); ctx.lineTo(ox + R2.x * z, oy + R2.y * z); ctx.stroke(); }
+    }
+    ctx.restore();
   }
 }
 
@@ -9886,7 +9963,8 @@ function renderMinimap() {
     if (r.owner !== ME) continue;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(r.x * sx - 0.5, r.y * sy - 5, 1.5, 5);
-    ctx.fillStyle = PLAYER_COLORS[ME];
+    const ag = r.grp ? agById(r.grp) : null; // (an Army Group's flag: in its colour)
+    ctx.fillStyle = ag ? AGROUP.colors[ag.n - 1] : PLAYER_COLORS[ME];
     ctx.fillRect(r.x * sx + 1, r.y * sy - 5, 3, 2.5);
   }
   for (const m of S.missiles) {

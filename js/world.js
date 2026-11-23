@@ -5869,6 +5869,23 @@ function checkSave(o) {
     if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
     for (const p in E.offers || {}) deal(E.offers[p]);
   }
+  // Army Groups (sim.js): each its badge, name, home, size, standing order and flag; a unit's group, a flag's group.
+  if (o.agroups != null) {
+    const id = (v) => Number.isSafeInteger(v) && v >= 0, int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    const pt = (q) => Array.isArray(q) && q.length === 2 && int(q[0], 0, o.W - 1) && int(q[1], 0, o.H - 1);
+    if (!Array.isArray(o.agroups) || o.agroups.length > AGROUP.max * o.players.length) bad();
+    for (const g of o.agroups) {
+      if (!obj(g) || !id(g.id) || !owner(g.owner) || g.owner < 0 || !int(g.n, 1, AGROUP.max) || typeof g.name !== 'string' || g.name.length > AGROUP.nameMax || g.name !== agCleanName(g.name)) bad();
+      if (!int(g.size, 1, AGROUP.maxSize) || ![0, 1].includes(g.paused) || !id(g.flag) || (g.pendT != null && !Number.isFinite(g.pendT))) bad();
+      const h = g.home;
+      if (!obj(h) || (h.b != null ? !id(h.b) : !(int(h.x, 0, o.W - 1) && int(h.y, 0, o.H - 1)))) bad();
+      const d = g.ord;
+      if (!obj(d) || !ownKey(AG_ORDERS, d.k) || !Array.isArray(d.pts) || d.pts.length > AG_ORDERS[d.k].pts[1] || !d.pts.every(pt) || !int(d.at || 0, 0, 4) ||
+        (d.t != null && !Number.isFinite(d.t)) || (d.done != null && ![0, 1].includes(d.done)) || (d.r != null && !AGROUP.radii.includes(d.r)) || (d.g != null && !id(d.g))) bad();
+    }
+  }
+  for (const u of o.bots) if ((u.grp != null && !Number.isSafeInteger(u.grp)) || (u.grpNew != null && u.grpNew !== 1) || (u.grpGo != null && u.grpGo !== 1)) bad();
+  if (o.rallies != null && !(Array.isArray(o.rallies) && o.rallies.every((r) => obj(r) && (r.grp == null || Number.isSafeInteger(r.grp)) && (r.rad == null || AGROUP.radii.includes(r.rad))))) bad();
   // No markup anywhere (the map layers are numbers, whatever they hold). A name with markup in it is refused (the game's
   // own names never have any); in text (a message, a status, a player's name) <, > and " are swapped for look-alikes
   // that can't make markup, so a crafted file can't run script while a line of the game's own with a stray " in it

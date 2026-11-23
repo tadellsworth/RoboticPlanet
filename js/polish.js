@@ -158,7 +158,7 @@ function drawGoodsPops(ctx, ox, oy, z) {
 /* ------------------------------------------------------------------ the ? on a panel */
 
 /** Panels that aren't about one building or robot, and the section each opens. */
-const PANEL_TOPICS = { ally: 'hs-ally', army: 'hs-army', rally: 'hs-army', post: 'hs-trade', road: 'hs-roads', dam: 'hs-dam', goods: 'hs-supply', pop: 'hs-bots', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony' };
+const PANEL_TOPICS = { ally: 'hs-ally', army: 'hs-army', rally: 'hs-army', agroup: 'hs-agroups', agsel: 'hs-agroups', post: 'hs-trade', road: 'hs-roads', dam: 'hs-dam', goods: 'hs-supply', pop: 'hs-bots', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony' };
 /** Where a name's own section isn't the one that names it most. */
 const TOPIC_FIX = {
   lander: 'hs-start', outpost: 'hs-land', foundry: 'hs-bots', worker: 'hs-bots', hauler: 'hs-bots', repair: 'hs-defence', wall: 'hs-defence', gate: 'hs-defence',
@@ -217,6 +217,7 @@ function idleArmy() {
     if (u.dead || u.owner !== ME || u.inside || u.dropping || !(isArmy(u) || BOTS[u.type].siege)) continue;
     const t = u.task && u.task.type;
     if (t && t !== 'hold' && t !== 'park') continue;
+    if (t === 'hold' && u.grp && u.task.rally === (agById(u.grp) || {}).flag) continue; // (an Army Group on its standing order isn't idle)
     if (u.fight || (u.vel || 0) > 0.05 || u.salvo) continue;
     out.push(u);
   }
