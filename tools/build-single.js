@@ -119,6 +119,18 @@ let townBytes = 0;
   townBytes = js.length;
 }
 
+// The Contingency globe's surface (art/globe/: js/contingency-draw.js) goes in two bundles beside the page too: globe.js
+// (the 2048 picture and the clouds, fetched when Contingency first opens) and globe-hd.js (the 4096 one, only on a big or
+// sharp screen).
+let globeBytes = 0;
+for (const [file, names] of [['globe.js', ['ithaca-2048.webp', 'ithaca-clouds.webp']], ['globe-hd.js', ['ithaca-4096.webp']]]) {
+  const data = {};
+  for (const n of names) data['art/globe/' + n] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/globe', n)).toString('base64')}`;
+  const js = `window.GLOBE_DATA = Object.assign(window.GLOBE_DATA || {}, ${JSON.stringify(data)});\n`;
+  globeBytes += js.length;
+  fs.writeFileSync(path.join(root, 'dist', file), js);
+}
+
 // The build number (index.html's terrafall-build tag, "dev" in the repository): this commit's short hash and the date,
 // as the publishing workflow writes it, marked as the one-file build (Send feedback names it).
 let build = '';
@@ -138,9 +150,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.GLOBE_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB) and dist/town.js (${Math.round(townBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB) and dist/town.js (${Math.round(townBytes / 1024)} KB) and dist/globe{,-hd}.js (${Math.round(globeBytes / 1024)} KB)`);

@@ -652,6 +652,7 @@ const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
 const FOOT_CARRY = 12;     // off the road network (a foothold dropped by air), Workers carry goods by hand between buildings this close
 const BUILD_FAR = 16;      // a site doesn't call a Worker from further off than this while one close by (FOOT_CARRY) will soon be free
+const SITE_WAIT = { eta: 35, max: 45, foes: 8 }; // a Worker out of goods at a site waits there for goods a carrier will bring within `eta` s (at most `max` s; not with enemies within `foes` tiles)
 const TOPUP_NEAR = 10;     // seconds' walk: how far an idle Worker goes to top up its battery (a flat one goes as far as it must)
 const AIR_KEEP = 12;       // an Airfield keeps up to this many of each good the places it supplies by air are short of
 const SHIP_MEND = 0.5; // hit points a second a ship tied up in Port gets back
@@ -852,6 +853,7 @@ const TREMOR = { first: 210, gap: [100, 150], dust: 10, rockEvery: 2, warn: 8, r
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
 const MARCH_MAX = 90;
+const HUNT_CHAIN = 7; // (tiles round a hunted robot's death in which a person's hunters take the next enemy robot: huntNext)
 const RECALL_NO_LOOT = 60; // a warbot called home (Recall all, or its rally flag taken down) leaves crates be this long (see lootNear)
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
@@ -1144,10 +1146,10 @@ const SUNDER = { at: 1080, charge: 60, reactorCharge: 40, reload: 300, reactorRe
  * `hollow` times as big. With the Murmur off a stage costs nothing. Destroyed, its stock and depth are lost; with the
  * Murmur on the open shaft becomes their exit (a burrow, e.shaft its colony's id) until a Worker of that colony caps it
  * (`capT` s of work, `capCement` Cement from storage), or warbots cave it in. It never counts against a rival's two
- * megastructures: any rival builds one once it is `aiAt` s in and its last Ore Mine has run dry. One per colony.
+ * megastructures: any rival builds one once it is `aiAt` s in. One per colony.
  */
 const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ ore: 6 }, { ore: 8, crystal: 3 }, { ore: 10, crystal: 4, uranium: 0.25 }],
-  cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1800 };
+  cap: 30, weak: 0.5, call: 1.5, breakers: 2, exitR: 8, hollow: 2, capT: 20, capCement: 4, aiAt: 1200 };
 /*
  * The Atmosphere Engine (BDEFS.atmos; the owner's look A, the Rain Tower, Nov 21 2026): a 4 x 4 cooling-tower shell that
  * slowly changes the weather and the land round it, finishing the Pathfinder's work. It opens `at` s into a free-play game
@@ -1165,8 +1167,8 @@ const DEEP = { at: 1200, reach: 4, genFuel: 60, stages: [0, 360, 960], out: [{ o
  * a foe's Torches can't burn the ground or leave fires in it (the rain puts them out: atmosRainAt).
  * The Murmur: they go for it first every night; each new stage, the next night `sappers[stage - 1]` Sappers dig in under it.
  * Destroyed: what is green stays green; its calm and its hold on the Bloom shrink back to nothing over `fade` s (S.aeFade).
- * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's on a barren home (The Rust,
- * Cinderlands) or with Planetary events on, from `aiAt` s; the Herald sends Torches to burn a foe's greening.
+ * Not on Argos (no air) nor in the Hollow (no sky). A rival's main project: the Steward's with Planetary events on, from
+ * `aiAt` s; the Herald sends Torches to burn a foe's greening.
  */
 const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12, 16, 20], stages: [0, 360, 960, 1680], spread: 0.25,
   crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2, mud: 0.5 };

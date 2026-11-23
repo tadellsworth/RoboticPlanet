@@ -19,8 +19,9 @@ it all, one piece at a time. Each piece starts as concepts on a Claude Design ca
 the owner picks or marks them up there, and the chosen look is then built into the game (rendered with `renderer/`
 where it can be an image; where it has to move or follow the map, such as roads or rain, the code keeps drawing it but
 to the approved design, with new textures and sprites). In order:
-1. **The Contingency globe** (in progress): a realistic planet, natural coastlines, relief, smooth borders. Canvas:
-   https://claude.ai/artifact/Erzr8o7X7ZxnmTbbeNZ9Wb
+1. **The Contingency globe** (built Nov 23 2026: concept A, "Satellite"; ART_GUIDE.md, The Contingency globe): a
+   realistic planet, natural coastlines, relief, smooth borders, drawn in WebGL. The menu planet shares its colours
+   (its face is recoloured from the same picture). Canvas: https://claude.ai/artifact/Erzr8o7X7ZxnmTbbeNZ9Wb
 2. **Passenger Town's buildings** (BUILT Nov 23 2026; ART_GUIDE Batch 33): rendered 3D buildings in place of the
    code-drawn boxes. The owner's decisions on the concepts ("looks great"): day and night renders shipped (morning and
    evening made in code from them), in a bundle of their own loaded only for the map; the town's night lifted a little
@@ -35,7 +36,7 @@ to the approved design, with new textures and sprites). In order:
 7. **Roads, Express lanes and their sign gantries,** rails and pipes where code-drawn.
 8. **The Murmur's tunnel ridges, oil puddles, night light pools.**
 9. **The robots' work animations** (welding, paving, drilling, scything): small tool sprites.
-10. **The menu planet** (shares the globe's new look), **the minimap** and **the interface** (panels, buttons, icons).
+10. **The menu planet** (shares the globe's new look: its face already has the globe's colours; its shading, lights and clouds still to do), **the minimap** and **the interface** (panels, buttons, icons).
 
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
@@ -1781,6 +1782,46 @@ Harrow, the arena and defence trials, and every mission at all five levels.
 - Colony on Active and Quiet: the same as when the bolder Murmur were built.
 - The known Hollow stalls end (Hollow 12 at 42.6, Hollow Large 11 at 28.1 and 21 at 33.3).
 - Sky islands and Islands still have their known long wars (4 of 40 in the map batch).
+
+### The parity pass, Nov 22 to 23 2026 (the owner approved the proposals above)
+
+The owner's goal: every rival doctrine wins 6 to 10 of 16 in the core batch (10 doctrine pairs x 4 games: Standard 11
+and 23 seats swapped, Chokepoint 5, Standard Large 31; Colonist, Nuclear race on, The Rust), for Murmur Off, Quiet and
+Active, megastructures on.
+
+**Shipped:** the Atmosphere Engine is the Steward's main project only with Planetary events on (the player's Engine
+unchanged); the Lance and the Sundering Ray are chosen only with half their cost in hand (short of it the Nuclear Silo
+plan goes on); rivals start the Deep Core from 20 minutes without waiting for their last Ore Mine to run dry; Border
+Dispute on Warlord keeps Commander's Normal rival (won at all three scripted work speeds: 13:11, 7:09, 7:29).
+
+**Wins of 16** (Salvager, Herald, Steward, Architect, Warden; undecided count half), before, with what shipped, and
+with everything tried:
+- Off: 10, 8, 11, 6, 5; shipped 10, 8, 7, 8, 7; all 9, 8, 9, 5, 9.
+- Quiet: 13, 10, 7, 3, 7; shipped 14, 11, 5, 3, 7; all 15.5, 9.5, 5, 5, 5 (1 undecided).
+- Active: 15, 8, 8, 6, 3 (3 undecided); shipped 15, 9, 7, 6, 3 (2); all 15, 9, 4.5, 4, 7.5 (4).
+- The 12 map types, with all: 9, 8.5, 8.5, 7.5, 6.5 (8 undecided, 6 before).
+
+**Tried and held back** (not clearly better; kept on branch parity-nov22 for later):
+- The Architect's Alloy reserve (its Foundry takes no parts for up to 90 s while a missile site waits): Silos finished
+  13 to 21 in 120 games, but its wins summed over the three batches went 17 to 14.
+- The Warden on Active (army 1.15, its ring of Walls from 20 minutes): 3 to 7.5 there, at the Steward's and the
+  Architect's cost (8 to 4.5, 6 to 4).
+- Bombers against a dug-in enemy (an Airfield from 14 minutes, two bombers): 40 Airfields placed, 3 bombers built.
+- A computer-run colony arming 12 robots for the Harrow, and the dusk warning naming it: on the 5 two-hour games the
+  roll hits, the colony ended with 1 to 6 buildings (1 to 16 unarmed); on night 6 the warning leaves a minute, and on
+  night 7 the twelve took the Harrow to 176 and 196 of its 240.
+- Trims of the Salvager with the Murmur on (on its 16 Quiet games it won 14): no raids at or near night 15, army 1.0
+  15, raids half as often 15, all three 13 of 13, rivals keeping their home guard against it 14, no rival nest strikes
+  before 20 minutes 12 of 13, and the AI's Murmur handling off for both sides 12.
+
+**For the owner:**
+- **Murmur targeting and the Salvager.** The Murmur go for what holds the most charge, so they hit the bigger
+  economies and leave the lean Salvager alone (its Alloy at 10 minutes is 64 on Quiet, 55 Off; its rivals' the same):
+  it wins 14 to 15 of 16 with them on, and no AI lever moved it. The answer looks like a Murmur rule, not a doctrine
+  number.
+- **The hangar supply fix for bombers.** A hangar's parts are a standing order drawn only from storage beyond every
+  other need, and an AI colony's Alloy and Chips never sit in storage (the Foundry's conveyors take them as made), so a
+  rival's bomber is almost never finished. Fix: let a hangar's round come first (or from the Foundry's own parts).
 
 ## Balance decisions
 

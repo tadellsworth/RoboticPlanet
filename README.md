@@ -95,10 +95,23 @@ how goods move.
   rank, Heavier Kit, fortification ×(1 + 0.15 a level), home, cold or island or lunar ground, an ally next door,
   refits, supply lines, a battle card, the difficulty for rivals and `CONT.playedEdge` 0.92 for yours) to the power
   2.2. Saving: `contSave` / `contLoad` (JSON with an FNV checksum and a shape check: a corrupt save is refused), one
-  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw the
-  menu planet's face (`mplMakeMap`) on a sphere shaded per pixel only when something changes (turned by drag, swipe,
-  wheel or the arrow keys), tinted by owner with the atlas's borders, markers for Uplinks, homes, groups, forts and the
-  Murmur, Argos as a disc beside it, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
+  slot in this device's storage (`contStore`, `contRestore`, key `terrafall.contingency`). **The screens** draw
+  Ithaca I as a planet seen from orbit (`js/contingency-draw.js`, only when something changes; turned by drag, swipe,
+  wheel or the arrow keys): over the stars (`#cg-stars`), a WebGL canvas just round the globe (`#cg-gl`, `cglRender`:
+  one fragment shader samples `art/globe/ithaca-2048.webp`, or `ithaca-4096.webp` once the globe is over `CGL.hdAt`
+  device px across, for a soft terminator from the upper-left light, the sea's glint off the picture's land mask, the
+  clouds, the haze at the limb and the halo; at `CGL.moveDpr` while it turns, sharp again when it stops); without
+  WebGL, on a software renderer (`WEBGL_debug_renderer_info`: SwiftShader, llvmpipe...), when the first
+  `CGL.slowChecks` full draws average over `CGL.slowMs` (50 ms), or from a page opened as a file, the globe is shaded
+  per pixel instead for the rest of the session (`cgDraw2d`: the same 2048 picture and clouds read as pixels, up to
+  `CGL.flatMax` px across, `CGL.flatMove` while it turns, made again only when the view or tints change). Each
+  owner's territories are tinted (a soft fill, stronger at the edge, painted onto a 1024 × 512 picture of the globe by
+  `cglTint` when owners, the pick or the targets change) and outlined in their colour with a dark casing, the picked
+  territory in white and the move or weapon targets in yellow (dashed for a weapon), and the borders on land are thin
+  pale lines, a little stronger between regions (`cglLines`): all smooth lines from `js/contingency-globe.js`
+  (`CONT_RINGS`, `CONT_BORDERS`, written by `tools/atlas/globe_borders.py`), and a tap picks the territory whose
+  outline holds it (`cglPick`). Markers for Uplinks, homes, groups, forts and the Murmur, Argos as a little cratered
+  moon beside it (`cglMoon`) with its two halves, and the orders as arcs; a group is moved by Move and a tap, or by dragging its
   pill (or its territory's marker) onto a neighbour (`cgDown` picks it up, `cgUp` gives the order); a territory card (`cgCard`), the Spend panel, the battle
   card (its odds, a battle card to play, Play or Auto-resolve), the year report, offers, the end, and the new-run
   screen (callsign, difficulty, Advanced: doctrines, Murmur, events, turn cap, Ironman, seed). The campaign theme plays
@@ -421,6 +434,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
+- **Construction sites** are built only as far as the goods delivered so far (`siteFrac`); a free Worker comes once
+  some are in (`dispatch` step 1, `roadToSites`). A builder that runs out **waits at the site** if a carrier is bringing
+  goods it still needs and is due within `SITE_WAIT.eta` (35 s: `siteInbound`, the rest of a Hauler's, truck's, train's,
+  ship's, crate-carrying Worker's or supply plane's route at its road speed), and builds on when they're in (task
+  phase `wait`, `t.waitT`, `t.via`; the site reads *Waiting for goods (a Hauler on its way)*). It gives up after
+  `SITE_WAIT.max` (45 s), when nothing it needs is due soon any more (the carrier lost or sent elsewhere), or with
+  enemies within `SITE_WAIT.foes` (8) tiles or on the danger map; any order of yours takes it off too. Otherwise it goes
+  to other jobs and a builder is sent when more arrive, as before. (Before, a builder always walked off and came back:
+  in `worker-wait-test.js`, a Bunker 18 road tiles from home with one Hauler went up in 51 s instead of 60.)
 - **Interrupted deliveries.** Dispatch considers alternate suppliers and checks the carrier's network against both
   endpoints. Trains and ships pick up on a platform or dock that reaches the delivery point. The dispatcher reserves
   stock once the pickup route is found, and the carrier checks the delivery route before loading. A blocked route
@@ -1552,7 +1574,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. An Attack on a building no garrison is in reach of
   plants a flag beside it that targets it (`assault` sets `rally.target`): the warbots there shoot it first
-  (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`), so they carry off the crates
+  (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`; a flag following an enemy robot, a person's right-click hunt, moves on to the next enemy robot within `HUNT_CHAIN` (7) tiles of the kill when its quarry falls, `huntNext`, nearest first, and with none left it stays as a hold flag where the kill was; a rival's hunters come home as before), so they carry off the crates
   that spilled out and come home, as after any attack. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once, and call in
   warbots out picking up crates (`FIELD_TASKS`: attack, defend, hold, loot; `warbotsOut` counts the same). Each is
@@ -2689,8 +2711,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     3, faint by day (`deepGlow`), the gauge's lamps (the next one blinking while it works toward it), the floodlit wheels at
     night, and its light pools. Sound (`js/audio.js`): `deepHum` (its winding engine and drill on screen, sinking with each
     stage; the wheels' clank) and `deepstage` (a stage reached). Rivals: `aiDeep` (outside `AI_MEGA_KIND`, so never under
-    the cap): any rival, from `DEEP.aiAt` (30 min), once it has dug Ore and none of its Ore Mines has any left in reach,
-    half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
+    the cap): any rival, from `DEEP.aiAt` (20 min; it was 30 and waited for its last Ore Mine to run dry until the
+    owner's call of Nov 22 2026), with half its Cement and Crystal in hand, by a Generator or Reactor within 14 tiles of its Command Base (else by the Base,
     a Generator then going up beside it; `aiMegaSpot`), the goods of both first; `aiDeepGuard` rallies up to 8 warbots by it before dusk on a call
     night (`P.deepRally`, called back at dawn). The Salvager marches on a foe's stage-3 Core (`aiMarch`).
   - **The Atmosphere Engine** (`BDEFS.atmos`, `ATMOS`; key N (A pans); 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20
@@ -2755,7 +2777,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     young trees). Wildlife (`js/wildlife.js`): a cell with a dozen Garden tiles gets deer and songbirds (`hab.garden`),
     whatever its biome. Sound: `atmosHum` (the air through it on screen; rain from stage 2) and `atmosstage`. Rivals
     (`aiAtmos`): the Steward's main project (`aiMegaMain` → 'atmos', `AI_MEGA_KIND` main) in place of Arrival City when
-    `aiAtmosHome` (The Rust or Cinderlands, or Planetary events on), from `ATMOS.aiAt` (21 min), with half its Cement and
+    `aiAtmosHome` (Planetary events on; until Nov 22 2026 also The Rust and Cinderlands, where it made the Steward the
+    strongest doctrine), from `ATMOS.aiAt` (21 min), with half its Cement and
     Crystal and its Fiber in hand, near its Command Base, its 2 Generators going up beside it. The Herald (`aiAtmosBurn`):
     every `burnEvery` (120) s, up to `burnN` (2) of its Torches with full tanks go to scorch the fertile ground nearest a
     foe's Engine at Rain or more, where no gun of the foe's covers it (`P.stats.aeBurnSent`); rained out of a powered
@@ -2889,12 +2912,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     Lance and the nukes: its doctrine's lean (`AI_MEGA_LEAN`: Architect +2, Warden +1, Steward 0, Salvager −1, Herald
     −2), +1 for the Lance when its enemy's buildings lie strung out (the best line through them takes 2 or more more than
     the best blast), −1 when they're bunched, +1 when the enemy has a Shield Dome (it swallows a nuke whole), +1 when
-    Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. Its Lance
+    Uranium is scarce (a nuke takes 12, a shot 2); above 0 the Lance (no Nuclear Silo then), else the nukes. The Lance
+    only with half its cost in hand (`aiHalfway`; the owner's call of Nov 22 2026: chosen without it, 28 rivals in 160
+    games gave up their Silo for a Lance none of them placed): short of that it doesn't choose yet (looked at again every
+    `look`, 20 s) and its Nuclear Silo plan goes on, and once a Nuclear Silo stands or is going up it's the nukes. Its Lance
     goes within reach of its Reactor, on the enemy's side of it so its own buildings stay off its lines (`aiMegaSpot`;
     with no room there, on open ground near its Command Base, a Reactor following beside it), and fires along the line through a foe building worth the most
     (`aiLanceWorth`: its foes' buildings and army in the core, 0.3 of that for those only in the scorched edge, its own side's six times over, 5 for dropping a foe's Dome), if worth
     `worth` (6). The Sundering Ray (`aiSunder`, `AI_SUNDER`, kind 'weapon' in `AI_MEGA_KIND`): a Warden picks it as its
-    one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min) when the Murmur are Active and a
+    one weapon (`P.megaPick` 'sunder', then no Nuclear Silo) from `pickAt` (15 min), with half its cost in hand and no
+    Nuclear Silo of its own standing or going up (as the Lance, since Nov 22 2026), when the Murmur are Active and a
     nest's tunnels reach within `near` (12) tiles of its Command Base (`aiTunnelNear`); it goes up near home
     (`aiMegaSpot`, its goods first) with its 2 Generators going down with the site (again as any is lost), Use Reactor
     off. By day, after a night the Murmur raided it (or with their tunnels that close, or every `every` (2) nights while
@@ -3604,7 +3631,8 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
-js/contingency*.js        Contingency: the atlas table, the campaign's engine, its globe screens and the bridge to battles
+js/contingency*.js        Contingency: the atlas table and outlines, the campaign's engine, the globe's drawing, its
+                          screens and the bridge to battles
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/orders.js              every player action as an order: a name and plain arguments, checked against the player
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
@@ -3634,10 +3662,12 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
                           face (ithaca-map.webp, the atlas made small)
+art/globe/                the Contingency globe's surface (ithaca-2048.webp, ithaca-4096.webp) and clouds
 art/menu/                 the Campaigns cards' pictures: 160 px crops of art/lore/ (inline in the one-file build)
 art/town/                 Passenger Town's buildings (renderer/tools/install_town.py; town-art.js lists them): loaded only
                           for that map
-tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
+tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views;
+                          globe_texture.py the Contingency globe's surface (art/globe/), globe_borders.py its outlines
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/menu-test.js        the main menu: every destination opens (two taps at most) and Esc / Back return (Playwright)

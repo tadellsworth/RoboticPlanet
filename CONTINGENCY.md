@@ -297,7 +297,8 @@ Each stage gets tested and shipped to `main` before the next starts.
    - fully deterministic (seeded RNG only).
    - **Test:** play 50 whole runs headless with every battle auto-resolved. Each run must end by T+31, and every
      doctrine and callsign must win some of them.
-2. **The globe screen** (`js/contingency-ui.js`, reusing js/menuplanet.js's globe): territory cells on the sphere,
+2. **The globe screen** (`js/contingency-ui.js`; since Nov 2026 the globe drawn as a planet from orbit in WebGL,
+   `js/contingency-draw.js`, ART_GUIDE.md: The Contingency globe): territories on the sphere,
    tap and drag orders, panels and reports. Screenshots for the owner before going further.
 3. **The bridge to battles:**
    - a territory becomes a new-game setup (biome, shape, size, rivals and doctrines, difficulty, victory, the 25-minute

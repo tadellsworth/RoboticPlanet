@@ -3157,7 +3157,7 @@ function nearSoon(u, b) {
     if (v === u || v.dead || v.owner !== b.owner || !BOTS[v.type].build || v.failUntil > S.time || dist2(v.x, v.y, cx, cy) > FOOT_CARRY * FOOT_CARRY) continue;
     if (S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== z) continue;
     const t = v.task;
-    if (!t || ['build', 'fix', 'haul', 'charge', 'cover', 'home', 'crate'].indexOf(t.type) >= 0) return true;
+    if (!t || (['build', 'fix', 'haul', 'charge', 'cover', 'home', 'crate'].indexOf(t.type) >= 0 && t.phase !== 'wait')) return true; // (not one waiting at a site for goods: see doBuild)
   }
   return false;
 }
@@ -3598,9 +3598,57 @@ function doBuild(u, t, dt) {
     u.task = null;
     u.idleT = 0;
   } else if (s.progress >= cap) {
-    // Out of materials: go help with hauling; a builder is sent back when more arrive.
-    cancelTask(u);
+    // Out of materials. With more on the way and close (a Hauler, truck, train or plane due within SITE_WAIT.eta
+    // seconds: siteInbound) it waits here for them, for SITE_WAIT.max seconds at most, unless enemies come near or the
+    // delivery is called off. Otherwise it goes to help with hauling, and a builder is sent back when more arrive.
+    if (t.phase !== 'wait') {
+      const inb = !siteWaitFoes(u, s) && siteInbound(s);
+      if (!inb) { cancelTask(u); return; }
+      t.phase = 'wait'; t.waitT = S.time; t.via = inb.u.id;
+    } else if (S.time - t.waitT > SITE_WAIT.max) { cancelTask(u); return; }
+    else if (S.tick % 15 === u.id % 15) {
+      const inb = !siteWaitFoes(u, s) && siteInbound(s);
+      if (!inb) { cancelTask(u); return; }
+      t.via = inb.u.id;
+    }
+  } else if (t.phase === 'wait') { t.phase = 'work'; delete t.waitT; delete t.via; } // (the goods are in: back to building)
+}
+
+/** Enemies about a site whose Worker is waiting for goods (see doBuild): it doesn't wait there. */
+function siteWaitFoes(u, s) {
+  const P = S.players[u.owner];
+  return !!(P.danger && dangerAt(u.owner, s.x, s.y)) || foesNear(u.owner, s.x + 0.5, s.y + 0.5, SITE_WAIT.foes);
+}
+
+/**
+ * The carrier soonest due at construction site s with goods it still needs (a Hauler, Freight Truck, Road Train, train,
+ * ship, a Worker carrying a crate, or a plane on a supply run), if it's due within SITE_WAIT.eta seconds:
+ * { u, eta } or null. The time is a rough one: the rest of its route (to the goods first, if it hasn't them yet) at its
+ * road speed.
+ */
+function siteInbound(s) {
+  const cost = siteCost(s), needs = (g) => (cost[g] || 0) > (s.stock[g] || 0);
+  let best = null;
+  for (const v of S.bots) {
+    if (v.dead || v.owner !== s.owner) continue;
+    const t = v.task, M = v.mission;
+    let tiles;
+    if (t && t.type === 'haul' && t.dst === s.id) {
+      if (!needs(t.good) && !(t.mix && Object.keys(t.mix).some(needs))) continue;
+      const src = t.phase === 'toSrc' ? getE(t.src) : null;
+      const at = src || s;
+      tiles = v.path && v.pi < v.path.length ? v.path.length - v.pi : Math.sqrt(dist2(v.x, v.y, at.x + 0.5, at.y + 0.5));
+      if (src) tiles += 1.3 * Math.sqrt(dist2(src.x, src.y, s.x, s.y));
+    } else if (t && t.type === 'crate' && t.phase === 'toDst' && t.dst === s.id) {
+      if (!needs(t.good)) continue;
+      tiles = v.path && v.pi < v.path.length ? v.path.length - v.pi : Math.sqrt(dist2(v.x, v.y, s.x + 0.5, s.y + 0.5));
+    } else if (M && M.kind === 'supply' && M.to === s.id && v.cargo && Object.keys(v.cargo).some(needs)) {
+      tiles = Math.sqrt(dist2(v.x, v.y, s.x + 0.5, s.y + 0.5));
+    } else continue;
+    const bt = BOTS[v.type], eta = tiles / (bt.speed * (bt.roadOnly || bt.truck ? 2 : 1));
+    if (eta <= SITE_WAIT.eta && (!best || eta < best.eta)) best = { u: v, eta };
   }
+  return best;
 }
 
 function completeBuilding(b) {
@@ -4165,7 +4213,11 @@ function updateBuilding(b, dt) {
     else if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
     else if (!b.builder) b.status = 'Waiting for a builder';
-    else b.status = 'Under construction';
+    else {
+      // Its Worker waiting there for goods on their way (see doBuild): what's bringing them.
+      const w = getE(b.builder), t = w && w.task, v = t && t.type === 'build' && t.phase === 'wait' && getE(t.via);
+      b.status = t && t.type === 'build' && t.phase === 'wait' ? `Waiting for goods (${v && !v.dead ? aOrAn(BOTS[v.type].name) : 'a delivery'} on its way)` : 'Under construction';
+    }
     return;
   }
   repairHint(b);
@@ -8353,7 +8405,20 @@ function sendHunt(owner, e, count) {
   return res;
 }
 
-/** Flags that follow an enemy robot: each moves with its quarry; when it's gone, the hunters come back. */
+/** The enemy robot nearest flag r's spot within HUNT_CHAIN tiles that its hunters can go after (null: none). */
+function huntNext(r) {
+  let best = null, bd = HUNT_CHAIN * HUNT_CHAIN;
+  for (const v of S.bots) {
+    if (v.dead || v.inside || !foes(v.owner, r.owner) || BOTS[v.type].air) continue;
+    const i = Math.floor(v.x), j = Math.floor(v.y);
+    if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
+    const d = dist2(r.x, r.y, v.x, v.y);
+    if (d < bd || (d === bd && best && v.id < best.id)) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/** Flags that follow an enemy robot: each moves with its quarry; when it's gone, a person's hunters take the next one near (huntNext) or hold there, a rival's come back. */
 function followRallies() {
   for (const r of S.rallies.slice()) {
     // A flag planted beside a building attacked from too far for a garrison (the assault order): once it's down or
@@ -8362,6 +8427,16 @@ function followRallies() {
     if (!r.follow) continue;
     const e = getE(r.follow);
     if (!e || e.dead || !foes(e.owner, r.owner)) {
+      // A person's hunt goes on to the next enemy robot near the kill (HUNT_CHAIN tiles), nearest first; with none
+      // left there, its warbots hold the ground where it ended instead of walking home. (A rival's comes back.)
+      if (!S.players[r.owner] || !S.players[r.owner].ai) {
+        const nx = huntNext(r);
+        if (nx) { r.follow = nx.id; r.x = Math.floor(nx.x) + 0.5; r.y = Math.floor(nx.y) + 0.5; for (const u of rallyMembers(r.id)) u.march = 0; continue; }
+        if (!rallyMembers(r.id).length) { S.rallies = S.rallies.filter((q) => q.id !== r.id); continue; }
+        r.follow = 0;
+        postMsg(r.owner, 'Target destroyed: your warbots hold the ground there.', Math.floor(r.x), Math.floor(r.y), 'good');
+        continue;
+      }
       const n = recallRally(r.id);
       if (n) postMsg(r.owner, `Target destroyed: ${n} warbot${n > 1 ? 's are' : ' is'} coming back.`, Math.floor(r.x), Math.floor(r.y), 'good');
       continue;
@@ -18287,6 +18362,7 @@ function hashState() {
     if (u.task?.type === 'recycle' || u.recycleTo || u.idleSince !== undefined) { num(u.task?.type === 'recycle' ? u.task.t : undefined); int(u.recycleTo || 0); num(u.idleSince); }
     if (u.viaFoe) { int(u.viaFoe); num(u.viaT); }
     if (u.task?.arterialTiles) int(u.task.arterialTiles);
+    if (u.task?.waitT !== undefined) { num(u.task.waitT); int(u.task.via || 0); } // (a Worker waiting at a site for goods: doBuild)
     if (u.task?.focus) { int(u.task.focus); str(u.task.role); int(u.task.x); int(u.task.y); num(u.task.wait); }
   }
   for (const b of S.buildings) {

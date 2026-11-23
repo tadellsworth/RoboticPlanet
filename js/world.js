@@ -5585,6 +5585,7 @@ function checkSave(o) {
     if (u.task?.thr != null && !(Number.isSafeInteger(u.task.thr) && u.task.thr >= 0)) bad();
     if (u.task?.av != null && !(Number.isInteger(u.task.av) && u.task.av >= 0 && u.task.av <= 99)) bad();
     for (const k of ['thrT', 'scat', 'sx', 'sy']) if (u.task?.[k] != null && !Number.isFinite(u.task[k])) bad(); // (stunned by a Sundering Ray's Quake)
+    if (u.task?.waitT != null && !(Number.isFinite(u.task.waitT) && (u.task.via == null || Number.isSafeInteger(u.task.via)))) bad(); // (a Worker waiting at a site for goods)
     // The Harrow: its task (its colony, what it's after, its phase, its route as tiles) and the Scuttlers on its back.
     if (u.riders != null && !(Number.isInteger(u.riders) && u.riders >= 0 && u.riders <= HARROW.riders)) bad();
     if (u.task?.type === 'harrow') {

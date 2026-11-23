@@ -8525,7 +8525,7 @@ function botActivity(u) {
   if (t.type === 'salvage') return t.phase === 'cut' ? 'Salvaging scrap: cutting it up for Alloy' : 'Driving out to salvage scrap';
   if (t.type === 'strip') { const r = townById(t.r), nm = r ? TOWN_KINDS[r.k].name.replace(/^The /, 'the ').toLowerCase() : 'a building'; return t.phase === 'go' ? `Walking to strip ${/^the /.test(nm) ? nm : aOrAn(nm)}` : `Stripping ${/^the /.test(nm) ? nm : aOrAn(nm)} for salvage`; }
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
-  if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : `Constructing ${a}`; }
+  if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : t.phase === 'wait' ? `Waiting at ${a} for goods on their way` : `Constructing ${a}`; }
   if (t.type === 'staff') {
     const b = getE(t.bld), def = b ? BDEFS[b.type] : {};
     if (t.phase === 'go') return `Walking to its job at the ${nm(t.bld)}`;
