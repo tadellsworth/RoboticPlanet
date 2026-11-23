@@ -1444,7 +1444,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
-- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack; warbots are dots in a pale shade of
+- **Minimap:** tap or drag it to jump around (its picture, `minimapDetail`: the land with its relief and shores, roads as light lines, borders as lines in each colony's colour, deposits as dots); red pulses mark buildings under attack; warbots are dots in a pale shade of
   their colony's colour (`MM_WARBOT`: every rival its own). The × hides it (on a touch screen it is a 44 px tab hanging
   under the minimap, so a finger-sized button isn't lying over the map).
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked

@@ -71,7 +71,7 @@ function mplFbm(x, y, z, seed, oct) { let s = 0, a = 0.5, f = 1, n = 0; for (let
 
 function mplMakeMap() {
   const W = MPLANET.texW, H = MPLANET.texH, seed = 9241;
-  const tex = new Uint8ClampedArray(W * H * 3), cloud = new Uint8ClampedArray(W * H), lights = new Uint8ClampedArray(W * H);
+  const tex = new Uint8ClampedArray(W * H * 3), cloud = new Uint8ClampedArray(W * H), lights = new Uint8ClampedArray(W * H), land = new Uint8ClampedArray(W * H).fill(255);
   const BIO = [
     [204, 88, 60], [218, 120, 80], [188, 74, 54], [196, 100, 70], // the Rust (red desert, four tones: it's the coral world)
     [210, 96, 66], [84, 124, 66],                 // more of the Rust; Greenreach forest
@@ -92,7 +92,7 @@ function mplMakeMap() {
       const lon = ((i + 0.5) / W) * Math.PI * 2, x = cl * Math.cos(lon), y = sl, z = cl * Math.sin(lon), t = j * W + i;
       // cloud: drifting bands, thicker toward the mid-latitudes
       const cn = mplFbm(x * 3.2 + 7, y * 6, z * 3.2, seed + 21, 3);
-      cloud[t] = clamp((cn - 0.52) * 3.2, 0, 1) * 220;
+      if (M.clouds !== 'ok') cloud[t] = clamp((cn - 0.52) * 3.2, 0, 1) * 220; // (until the globe's own clouds come: mplClouds)
       if (M.atlas === 'ok') continue; // (the face is the atlas's)
       // the nearest centre (and how near the next, for the seams between regions)
       let b1 = null, b2 = null, d1 = 9, d2 = 9;
@@ -128,7 +128,7 @@ function mplMakeMap() {
   // Made a few rows at a time (step: ms of a frame), so the menu answers at once while it's made. The atlas picture is
   // asked for at once; until it comes (or if it can't: mplAtlas) the rows make a face of their own too, and the planet
   // waits for it at most MPLANET.atlasWait seconds.
-  const M = { tex, cloud, lights, W, H, row: 0, done: false, atlas: 'wait', t0: performance.now() };
+  const M = { tex, cloud, lights, land, W, H, row: 0, done: false, atlas: 'wait', clouds: 'wait', t0: performance.now() };
   M.step = (ms) => {
     const t0 = performance.now();
     while (M.row < H && performance.now() - t0 < ms) doRow(M.row++);
@@ -136,7 +136,27 @@ function mplMakeMap() {
     return M.done;
   };
   mplAtlas(M);
+  mplClouds(M);
   return M;
+}
+
+/** The clouds: the Contingency globe's own (art/globe/ithaca-clouds.webp; in the one-file build inline as
+ * window.ITHACA_CLOUDS), so the menu planet wears the same weather; the noise clouds stay if the picture can't be had. */
+function mplClouds(M) {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = M.W; c.height = M.H;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, M.W, M.H);
+      const d = g.getImageData(0, 0, M.W, M.H).data;
+      for (let t = 0; t < M.W * M.H; t++) M.cloud[t] = Math.min(255, d[t * 4] * 1.05);
+      M.clouds = 'ok';
+    } catch (e) { M.clouds = 'no'; }
+  };
+  img.onerror = () => { M.clouds = 'no'; };
+  img.src = (typeof window !== 'undefined' && window.ITHACA_CLOUDS) || 'art/globe/ithaca-clouds.webp';
 }
 
 /** The face from the atlas picture (art/lore/ithaca-map.webp; in the one-file build, inline as window.ITHACA_MAP): its
@@ -156,6 +176,8 @@ function mplAtlas(M) {
         const a = d[t * 4 + 3];
         M.tex[t * 3] = d[t * 4]; M.tex[t * 3 + 1] = d[t * 4 + 1]; M.tex[t * 3 + 2] = d[t * 4 + 2];
         M.lights[t] = a < 255 && a >= 200 ? Math.min(255, 140 + (254 - a) * 4) : 0;
+        const r = d[t * 4], gg = d[t * 4 + 1], b = d[t * 4 + 2];
+        M.land[t] = b > r + 14 && b >= gg - 6 ? 0 : 255; // (the sea, for the sun's glint on it)
       }
       M.atlas = 'ok';
     } catch (e) { M.atlas = 'no'; }
@@ -260,23 +282,36 @@ function mplShade(t, st) {
   const m = st.moon, md = m.x * Lx + m.y * Ly + m.z * Lz;
   if (md > 0) { const q = m.x * m.x + m.y * m.y + m.z * m.z, disc = md * md - (q - 1); if (disc > 0) { const tt = md - Math.sqrt(disc); sh = [m.x - Lx * tt, m.y - Ly * tt, m.z - Lz * tt]; } }
   const shr2 = 0.13 * 0.13;
+  // the half-way vector between the light and the eye, for the glint
+  let Hx = Lx, Hy = Ly, Hz = Lz + 1; const hl = Math.hypot(Hx, Hy, Hz) || 1; Hx /= hl; Hy /= hl; Hz /= hl;
   for (let k = 0; k < n * n; k++) {
     const e = G.edge[k];
     if (e < 0) continue;
     const lat = G.lat[k], v = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0));
     let u = ((G.lon[k] - rot) / TAU) % 1; if (u < 0) u += 1; // (it turns west to east: the land moves to the right)
     let uc = ((G.lon[k] - crot) / TAU) % 1; if (uc < 0) uc += 1;
-    const ti = v * W + ((u * W) | 0), tc = v * W + ((uc * W) | 0);
+    const ti = v * W + ((u * W) | 0), tc = v * W + ((uc * W) | 0), ts = v * W + ((((uc + 0.004) % 1) * W) | 0);
     const nx = G.nx[k], ny = G.ny[k], nz = G.nz[k];
     let s = nx * Lx + ny * Ly + nz * Lz;
     if (sh) { const d2 = (nx - sh[0]) ** 2 + (ny - sh[1]) ** 2 + (nz - sh[2]) ** 2; if (d2 < shr2) s -= (1 - d2 / shr2) * Math.max(0, s) * 0.85; }
-    const day = clamp(s * 1.6 + 0.1, 0, 1), cl = M.cloud[tc] / 255;
+    // as the Contingency globe is lit: a soft terminator, the sea's glint, the clouds (and their shadows), the haze of
+    // air toward the limb; and here the night side's darkness, with the colonies' lights
+    const sm = clamp((s + 0.18) / 0.73, 0, 1), day = sm * sm * (3 - 2 * sm), cl = M.cloud[tc] / 255, csh = M.cloud[ts] / 255;
+    const lit = 0.035 + day * (0.55 + 0.45 * Math.max(s, 0)) * 1.02;
     let r = M.tex[ti * 3], g = M.tex[ti * 3 + 1], b = M.tex[ti * 3 + 2];
-    r += (246 - r) * cl; g += (244 - g) * cl; b += (240 - b) * cl;
-    const warm = clamp(1 - Math.abs(s - 0.04) * 6, 0, 1);
-    r *= 0.05 + day + 0.28 * warm; g *= 0.06 + 0.93 * day + 0.08 * warm; b *= 0.13 + 0.87 * day - 0.05 * warm;
+    const sea = M.land[ti] ? 0 : 1, shade = 1 - 0.28 * csh * (1 - cl) * day; // (a cloud's shadow falls a little east of it)
+    r *= shade * (1 - 0.2 * cl); g *= shade * (1 - 0.2 * cl); b *= shade * (1 - 0.2 * cl);
+    r += (247 - r) * cl * 0.92; g += (247 - g) * cl * 0.92; b += (250 - b) * cl * 0.92;
+    const warm = clamp(1 - Math.abs(s - 0.04) * 5, 0, 1) * (0.6 + 0.4 * (1 - cl));
+    r *= lit + 0.3 * warm; g *= lit + 0.1 * warm; b *= lit - 0.02 * warm;
+    if (sea && day > 0) {
+      const ndh = Math.max(0, nx * Hx + ny * Hy + nz * Hz), p12 = ndh ** 12, sp = (p12 ** 5.8 * 0.38 + p12 * 0.1) * (1 - cl) * day * 255;
+      r += sp; g += sp * 0.95; b += sp * 0.85;
+    }
+    const fres = Math.pow(1 - nz, 2.2), air = 0.55 * fres * clamp(s + 0.35, 0, 1);
+    r = r * (1 - 0.35 * fres) + 77 * air; g = g * (1 - 0.35 * fres) + 140 * air; b = b * (1 - 0.35 * fres) + 255 * air;
     const night = clamp(-s * 3 + 0.1, 0, 1);
-    if (night > 0) { const Lt = M.lights[ti] / 255; if (Lt) { const a = Lt * night * (1 - 0.7 * cl); r += 255 * a; g += 196 * a; b += 120 * a; } }
+    if (night > 0) { const Lt = M.lights[ti] / 255; if (Lt) { const a = Lt * night * (1 - 0.7 * cl); r += 255 * a; g += 190 * a; b += 110 * a; } }
     const o = k * 4;
     px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255 * e;
   }
@@ -538,10 +573,11 @@ function mplDraw(dt, still, saver) {
     if (st.moon.z < 0) mplMoon(g, st);
     mplCarriers(g, st, t, false);
     mplRing(g, st, 'back');
-    const atm = g.createRadialGradient(st.px, st.py, st.r * 0.92, st.px, st.py, st.r * 1.14);
-    const ac = `${Math.round(255)},${170},${130}`;
-    atm.addColorStop(0, `rgba(${ac},0.35)`); atm.addColorStop(1, `rgba(${ac},0)`);
-    g.fillStyle = atm; g.beginPath(); g.arc(st.px, st.py, st.r * 1.14, 0, Math.PI * 2); g.fill();
+    // the halo of air: blue, as the Contingency globe's, thicker on the side toward Corvane
+    const hx = st.px + st.L[0] * st.r * 0.07, hy = st.py + st.L[1] * st.r * 0.07;
+    const atm = g.createRadialGradient(hx, hy, st.r * 0.94, hx, hy, st.r * 1.2);
+    atm.addColorStop(0, 'rgba(110,170,255,0.55)'); atm.addColorStop(0.25, 'rgba(92,150,255,0.22)'); atm.addColorStop(1, 'rgba(92,150,255,0)');
+    g.fillStyle = atm; g.beginPath(); g.arc(hx, hy, st.r * 1.2, 0, Math.PI * 2); g.fill();
     g.imageSmoothingEnabled = true;
     g.drawImage(MPL.sphere.c, st.px - st.r, st.py - st.r, st.r * 2, st.r * 2);
     mplWarDraw(g, st, still);

@@ -248,12 +248,12 @@ function todWarm() {
   }
 }
 
-/** Headlights and the light pool (small; loaded once the light first fades). */
+/** Headlights (small; loaded once the light first fades). (The light pool is made in code: lightPool.) */
 function todLoadShared() {
   if (TOD.sharedLoading) return;
   TOD.sharedLoading = true;
   const inline = typeof window !== 'undefined' && window.TOD_SHARED;
-  for (const k of [...TOD_VEHICLES.map((v) => v + '-headlights'), 'light-pool']) {
+  for (const k of TOD_VEHICLES.map((v) => v + '-headlights')) {
     loadImg(inline && inline[k] ? inline[k] : `art/tod/shared/${k}.webp`, (img) => { TOD.shared[k] = img; });
   }
 }
@@ -432,20 +432,28 @@ function drawStreetLights(ctx, ox, oy, z, v0, v1) {
   ctx.restore();
 }
 
-/** The light-pool image tinted `color` (made once per colour); null until the image has loaded. */
+/**
+ * The light pool in `color` (made once per colour, in code): light thrown down on the ground from a lamp above it, so
+ * bright and nearly white in the middle where it is hottest, falling off softly (as light from a height does: 1 / (1 +
+ * (r/r0)^2)^1.5, eased a little so the pool keeps its reach) through the colour itself to a long faint tail, with a fine dither so its rings never band.
+ */
 function lightPool(color) {
-  const pool = TOD.shared['light-pool'];
-  if (!pool) return null;
   let tinted = TOD.poolTint[color];
   if (!tinted) {
-    tinted = document.createElement('canvas');
-    tinted.width = pool.width; tinted.height = pool.height;
-    const c = tinted.getContext('2d');
-    c.drawImage(pool, 0, 0);
-    c.globalCompositeOperation = 'source-in';
-    c.fillStyle = color;
-    c.fillRect(0, 0, pool.width, pool.height);
-    TOD.poolTint[color] = tinted;
+    const n = 128, h = n / 2, c = document.createElement('canvas');
+    c.width = c.height = n;
+    const g = c.getContext('2d'), img = g.createImageData(n, n), d = img.data;
+    const col = /^#[0-9a-f]{6}$/i.test(color) ? [1, 3, 5].map((k) => parseInt(color.slice(k, k + 2), 16)) : [255, 220, 170];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const r = Math.hypot(i + 0.5 - h, j + 0.5 - h) / h; // 0 at the middle, 1 at the edge
+      if (r >= 1) continue;
+      const fall = Math.pow(1 + (r / 0.45) ** 2, -1.5), edge = 1 - smoothstep01(clamp((r - 0.55) / 0.45, 0, 1));
+      const a = clamp(1.1 * Math.pow(fall, 0.75) * edge + (hash2(i, j, 7731) - 0.5) * 0.012, 0, 1), hot = clamp((fall - 0.4) / 0.6, 0, 1) * 0.65;
+      const o = (j * n + i) * 4;
+      d[o] = col[0] + (255 - col[0]) * hot; d[o + 1] = col[1] + (255 - col[1]) * hot; d[o + 2] = col[2] + (255 - col[2]) * hot; d[o + 3] = 255 * a;
+    }
+    g.putImageData(img, 0, 0);
+    tinted = TOD.poolTint[color] = c;
   }
   return tinted;
 }

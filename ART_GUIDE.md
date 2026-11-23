@@ -1553,7 +1553,10 @@ and ends is one curve through its tiles, each tile's point nudged off its middle
 tapering where it's still digging, the veins glowing at night with pulses running back to the nest. The curves are
 smoothed so they sweep across the tile grid, and zoomed in they're drawn live at the screen's own resolution (filled
 outlines, layer by layer), so they stay crisp at any zoom; zoomed out they come from a baked layer, of which only the
-blocks round the tiles that changed are drawn again. Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
+blocks round the tiles that changed are drawn again. The redraw (Nov 2026; proposal): loose spoil spilled either side,
+paler and drier than the ground with a damp foot; the shaded flank down-right; the back rounded in narrower, paler bands
+toward a pale crest; and here and there a short fissure off the crest where the crust split, with a pale lip (all in
+`paintRidges`, baked as before). Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
 morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the ground while it stays shut).
 
 **Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
@@ -1732,7 +1735,9 @@ and `oil-seep.webp` were removed from `art/resources/` and the manifest. **The H
 with a touch stronger rim light and sheen and a violet gleam (`SEEP_LOOK.hollow`); the Cinderlands' and Blackwater's
 (black on dark ash and mud) get a stronger rim and sheen and a paler stain (`SEEP_LOOK.volcanic`, `.swamp`). Droplets
 lie only on open ground on the seep's own level (never water, rock, a road or track, a building or another resource);
-under a road or track the puddle stops at the kerb and the road keeps its dark stain. Everything is render state (`SEEP`),
+under a road or track the puddle stops at the kerb and the road keeps its dark stain. Since the Nov 2026 redraw (proposal)
+the body also holds the sky: a faint cool sheen across its top half, gone toward the bottom, and a thin film of oil's
+colours just inside its edge (both baked with it, in `drawSeepPuddle`). Everything is render state (`SEEP`),
 read from `S` and never written to it; the simulation never reads it.
 
 ### Batch 21: the Maglev line (installed)
@@ -1778,8 +1783,21 @@ barrier along the shared edge. Ordinary roads join as ramps (a hazard-striped ap
 (the lane narrows onto the road); bends are the lanes' own arms; worn lanes crack and pothole like asphalt. At night
 the cat's-eyes light (`drawRoadGlow` in `js/daynight.js`), the asphalt street lamps (`streetlamp-asphalt`) stand on the
 median, and a strip in the team's colour runs along the barrier. The one-way arrow is the road's (`oneway`, still to
-make). The sign gantries are drawn in code (`drawGantry`: a steel lattice beam, posts on the verges, a blank green board with a
-white rim over each lane, a small lamp under each at night); a sprite could replace them later. A nicer arrow is for later (IDEAS.md).
+make). The sign gantries are drawn in code (`drawGantry`: galvanised square posts on concrete footings on the verges, a
+box-truss beam of two chords and a Warren lattice, and over each lane a catwalk and a blank green board with a white rim
+and two lamp hoods; the beam's shadow falls across the road down-sun, from the time of day's shadow; at night the lamps
+wash the boards); a sprite could replace them later. Until `oneway` exists, the arrow is drawn as a painted road marking
+(`drawRoadArrow`: a slender white arrow with a dark edge and scuffed paint; on an Express lane every other tile).
+
+**Roads, the redraw (Nov 2026; proposal, the owner to approve).** Concrete and asphalt are still drawn in code and baked
+with the ground (`drawRoad`, `roadShape`), so they cost nothing a frame. Each tile keeps to its own square and every
+join comes from its neighbours as before, but now: the verge either side is packed dark by traffic; the kerb has a shadow
+down-right and a lit edge up-left; bends and junctions have a small fillet in each inner corner, so they sweep instead of
+meeting square (the outer corner of a bend and a dead end stay round); the wheel tracks are polished a shade darker and a
+fine aggregate shows. Concrete: slabs of slightly different shades, a joint across at each tile's edge and a faint one down
+the middle, now and then a hairline crack or a stain. Asphalt: one even surface with an oil line down each lane and, on a
+two-way straight or dead end, a broken pale-yellow centre line (none in a junction). The Express lane has the same kerb
+and verge, polished wheel tracks in both lanes, and a finer aggregate.
 
 ### Batch 23: the Mass Driver and Catcher (installed)
 
@@ -2028,6 +2046,22 @@ across; with no art at all (still loading) a building is a plain block. To regen
 | Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on its look's `roof` mark; its armour bar once hit. |
 | The rest | The civic tower's beacon pulsing from dusk to dawn and a tower's red light blinking (on their marks), street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
 
+### Light pools (drawn in code; no image)
+
+The glow buildings, blasts and robots throw on the ground at dusk and night (`lightPool` in `js/daynight.js`, one per
+colour, made once): light from a lamp above, so nearly white and hot in the middle, falling off as light from a height
+does (1 / (1 + (r/r0)²)^1.5) through the colour itself to a long faint tail, finely dithered so it never bands. It
+replaced the tinted `art/tod/shared/light-pool.webp` (kept for `renderer/`'s mock-ups; no longer loaded). The street
+lamps' own pools are still art (`streetlamp-*-pool`).
+
+### The minimap (drawn in code)
+
+`minimapDetail` makes its picture at a few pixels a tile whenever the land, the borders or the roads change: the tile
+colours softened, the relief (higher ground lit along its top-left edges, a little shade down-right), a pale line of surf
+on every shore, the roads as fine light lines, each colony's border as a crisp line in its colour over a lighter tint,
+and the resources as small dots in their colours. Buildings have a dark rim and a lit top; the view is a thin white
+frame with a dark edge and brighter corners.
+
 ### Wind, water, sky and the planet view (drawn in code; no images)
 
 The owner's theme for these: the immense beauty of the planet, being torn apart by war. All of it is drawn in code
@@ -2058,7 +2092,9 @@ redrawn as images:
   Ithaca I goes round it on a slow, flattened orbit (four minutes), bigger on the near side, passing behind the star's
   glare on the far side, its lit side always toward Corvane, turning west to east. Its face is the atlas (LORE.md: The
   atlas; `art/lore/ithaca-map.webp`): the three continents and their seas, the regions' colours blended softly across
-  their seams, the ringfall belt's craters, polar ice, under a layer of cloud, a warm band at the terminator, and on the
+  their seams, the ringfall belt's craters, polar ice, under the Contingency globe's own clouds (`art/globe/ithaca-clouds.webp`,
+  their shadows a little east of them), lit as that globe is (since Nov 2026: a soft terminator with a warm band, the sun's
+  glint on the seas, the blue haze of air toward the limb and a blue halo round it, thicker toward Corvane), and on the
   night side the colonies' lights along the coasts and in the territories' hearts (few in the Bloom, none on the ice). The war is down there, kept distant: small orange-white bursts in a few
   fronts near the lights, a red glow (and by day a smudge of smoke) where they fought, now and then a missile's thin
   line arcing between colonies and a brighter strike with a fading ring; after a few minutes on the menu, rarely, a
@@ -2098,11 +2134,17 @@ Campaign's picture is unchanged.
 
 - Menu background and logo
 - Laser beams, the white blast flash and the Pulse Turret's glow (the other effects are in Batch 15)
-- The work animations: a builder's weld, paving, and the gathering moves (scything Reedcane and Bloom veins, drilling
-  Ore and Uranium, hammering boulders and rock faces, the Crystal cutting beam, an Agribot picking and planting) are
-  drawn in code, with the tool on a drawn arm (`drawToolArm`, `drawHarvest` in `js/render.js`). Small tool sprites
-  (a blade, a drill bit, a hammer head, a gripper; seen from straight above, about 0.1 tile) could replace the drawn
-  heads later; the chips, dust, motes and glints would stay code-drawn
+- The work animations: a builder's weld, mending, paving, loading a crate, and the gathering moves (scything Reedcane
+  and Bloom veins, drilling Ore and Uranium, hammering boulders and rock faces, the Crystal cutting beam, an Agribot
+  picking and planting) are drawn in code, with the tool on a drawn arm (`drawToolArm`: a heavy upper arm with its
+  hydraulic ram, a lighter forearm, bolted joints, its shadow). The tool heads are small sprites made once in code
+  (`workTool`, `WORK_TOOLS`: the scythe blade, the drill head and bit, the hammer head, the gripper's palm, the welding
+  torch, the repair wrench, the screed bar; 64 px, straight down, lit from the top left), so painted ones could replace
+  them one for one (same keys, pointing +x). Sparks are short hot streaks that cool from white to orange (`workSpark`);
+  a weld's sparks fall and skip off the ground. Mending (a Worker repairing a building) works one spot, then moves round;
+  a Worker's load is small steel-framed crates with the good's colour on the lid (`goodsCrate`), and when it picks one up
+  or sets it down its arm lifts the crate on or off (`drawHaulMove`, watched from `carry` alone, nothing kept in S). The
+  chips, dust, motes and glints stay code-drawn
 - App icon: its source is `icons/icon.svg` (the planet, ring and T in flat colours). To change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
   `apple-touch-icon.png` at 180×180 and `favicon-32.png`), all square and opaque
 - 3D buildings: the set from Claude Design is installed (harvester, quarry, mine, tap, smelter, fab, foundry, depot,

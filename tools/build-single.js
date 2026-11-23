@@ -90,7 +90,7 @@ const lmJs = `window.LANDMARK_DATA = ${JSON.stringify(lmData)};\n`;
 fs.writeFileSync(path.join(root, 'dist', 'landmarks.js'), lmJs);
 const todShared = {};
 for (const f of fs.readdirSync(path.join(root, 'art/tod/shared'))) {
-  if (f.endsWith('.webp')) todShared[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/tod/shared', f)).toString('base64')}`;
+  if (f.endsWith('.webp') && f !== 'light-pool.webp') todShared[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/tod/shared', f)).toString('base64')}`;
 }
 
 // The Lore guide's pictures (#screen-lore: data-src, made each img's src when the guide first opens) go in a
@@ -140,6 +140,8 @@ html = html.replace('<meta name="terrafall-build" content="dev">', `<meta name="
 
 // The menu planet's face (art/lore/ithaca-map.webp, the atlas made small: js/menuplanet.js) is small enough to go inline.
 const ithacaMap = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/lore/ithaca-map.webp')).toString('base64')}`;
+// ...and so are its clouds (the Contingency globe's, art/globe/ithaca-clouds.webp, 13 KB).
+const ithacaClouds = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/globe/ithaca-clouds.webp')).toString('base64')}`;
 
 // The main menu's Campaigns pictures (art/menu/: small crops of the Lore guide's art) are small enough to go inline too.
 html = html.replace(/src="(art\/menu\/[a-z0-9-]+\.webp)"/g, (m, src) => `src="data:image/webp;base64,${fs.readFileSync(path.join(root, src)).toString('base64')}"`);
@@ -150,7 +152,7 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.GLOBE_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.GLOBE_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.ITHACA_CLOUDS = ${JSON.stringify(ithacaClouds)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
