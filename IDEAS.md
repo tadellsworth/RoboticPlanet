@@ -21,7 +21,13 @@ where it can be an image; where it has to move or follow the map, such as roads 
 to the approved design, with new textures and sprites). In order:
 1. **The Contingency globe** (in progress): a realistic planet, natural coastlines, relief, smooth borders. Canvas:
    https://claude.ai/artifact/Erzr8o7X7ZxnmTbbeNZ9Wb
-2. **Passenger Town's buildings** (in progress): rendered 3D buildings in place of the code-drawn boxes.
+2. **Passenger Town's buildings** (BUILT Nov 23 2026; ART_GUIDE Batch 33): rendered 3D buildings in place of the
+   code-drawn boxes. The owner's decisions on the concepts ("looks great"): day and night renders shipped (morning and
+   evening made in code from them), in a bundle of their own loaded only for the map; the town's night lifted a little
+   over the shared night (more roof lights, some of the day render in the night one); a building in front of your
+   robots fades; the arcade's ribs thinner and the zebra crossings lighter; heights in `TOWN_KINDS` matched to the art
+   (they only draw: where a sentry's shots come from); stripping in two art steps (scaffold, frame), faltering lights
+   small code overlays.
 3. **Weapon effects:** laser beams, muzzle flashes, the white blast flash, tracers, missile trails, impacts.
 4. **Sunsets, sunrises and the sky light** of each biome.
 5. **Weather:** rain, snow, sandstorms, fog, storms and lightning (the Atmosphere Engine's too).
@@ -61,8 +67,8 @@ The open questions, decided by the owner ("do your recs", Nov 23 2026):
   to the middle is longer than straight down the first colony's (the trip on foot is about the same).
 - **Trade Posts in the town: kept, as the town market:** only on a square or a parking lot, never in a street or by a
   welcome sign (`townPostOk`).
-- **The look** is drawn in code (ART_GUIDE.md, Passenger Town); a renderer sprite set could replace it. Roads on the
-  town's ground (the avenues, and any a colony lays) now show through its paving.
+- **The look:** the buildings are rendered sprites (ART_GUIDE.md, Batch 33); the ground is drawn in code. Roads on the
+  town's ground (the avenues, and any a colony lays) show through its paving.
 
 ## The owner's notes, Nov 21 2026 (for later)
 

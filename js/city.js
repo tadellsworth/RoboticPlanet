@@ -3,26 +3,27 @@
  * Terrafall: Passenger Town's look and its panel (the city map, SHAPE_PRESETS city). The town is laid by townSetup
  * (world.js) and runs in sim.js (townRun, townDoStrip, townTick); this file only draws it and opens its panels.
  *
- * Drawn in code, in the game's projection (straight down for the ground, the fronts of things standing up toward the
- * camera), after the owner's art direction (Nov 22 2026, ART_GUIDE.md: Passenger Town): a dense grid of blocks packed
- * with mid-rise and taller buildings of varied heights and footprints, chunky blocky forms with rooftop clutter (vents,
+ * After the owner's art direction (Nov 22 2026, ART_GUIDE.md: Passenger Town): a dense grid of blocks packed with
+ * mid-rise and taller buildings of varied heights and footprints, chunky blocky forms with rooftop clutter (vents,
  * tanks, fans, pads, antennas), many small warm windows and a few cool accent strips and red or cyan signs, wide
  * streets with lane dashes and kerbs, street lamps, a plaza or two, low haze over it all that thickens at dusk and
  * night. By day muted greys, browns and teal panels with the lights off; at night the lights still run on automatic.
+ * The buildings are rendered 3D sprites (renderer/b/town.js: see the buildings below); the ground is drawn in code, in
+ * the game's projection (straight down; the buildings stand up toward the camera on their lots).
  *
- *   townGround   the streets, kerbs, lane dashes, plazas, parking lots and stripped lots, cached in one picture at
- *                TOWN_GROUND_PX a tile (made again when a building comes down), drawn with the ground (so it's graded
- *                with it at dusk and night)
- *   townItems    the standing pieces among the buildings and robots, sorted with them by their foot: each building (a
- *                cached picture of it, made at the nearest of a few zoom steps and the time of day's colours, and its
- *                lit windows and signs in a second picture added on at night), its sentry, street lamps, the signs
+ *   townGround   the streets, kerbs, lane dashes, plazas, parking lots and stripped lots, and every building's shadow
+ *                (one layer, so where two fall together they don't darken twice), cached in one picture at
+ *                TOWN_GROUND_PX a tile (made again when a building comes down or its look changes), drawn with the
+ *                ground (so it's graded with it at dusk and night)
+ *   townItems    the standing pieces among the buildings and robots, sorted with them by their foot: each building
+ *                (its sprite for the time of day, faded while one of your robots is behind it), its sentry, street
+ *                lamps, the signs
  *   townLights   the light pools at night (render.js's pool)
  *   townHaze     the low haze over the town, on top
  */
 
 const TOWN_GROUND_PX = 16;
-const _tg = { of: null, ver: -1, c: null, rv: -1, rk: 0 };
-const _tb = { key: '', body: new Map() };
+const _tg = { of: null, ver: -1, c: null, rv: -1, rk: 0, sk: 0, at: 0 };
 
 /** A number from building r's seed and k (0..1), so its look is the same every time it's drawn. */
 function townHash(r, k) { return hash2(r.v % 9973, k, 4111 + (r.v % 31)); }
@@ -43,6 +44,8 @@ function townRoadKey(T) {
 function townGroundCanvas() {
   const T = S.town;
   if (_tg.rv !== (S.roadVer || 0)) { _tg.rv = S.roadVer || 0; const k = townRoadKey(T); if (k !== _tg.rk) { _tg.rk = k; _tg.ver = -1; } }
+  const sk = townShadowKey(T), now = typeof performance !== 'undefined' ? performance.now() : 0; // (the shadows: made again as they come in, at most twice a second)
+  if (sk !== _tg.sk && (now - _tg.at > 500 || !_tg.c)) { _tg.sk = sk; _tg.at = now; _tg.ver = -1; }
   if (_tg.of === T && _tg.ver === (T.ver || 0) && _tg.c) return _tg.c;
   const G = TOWN_GROUND_PX, { cx0, cy0, cx1, cy1 } = townGroundBox(T), cols = cx1 - cx0 + 1, rows = cy1 - cy0 + 1, W = S.W;
   const c = _tg.c && _tg.c.width === cols * G && _tg.c.height === rows * G ? _tg.c : document.createElement('canvas');
@@ -113,8 +116,8 @@ function townGroundCanvas() {
   if (T.x0 > 0) for (const [a, b] of rowSt) { const y = Y((a + b) / 2); g.beginPath(); g.moveTo(X(T.x0 - 1) + G * 0.5, y); g.lineTo(X(T.xs[0][0]), y); g.moveTo(X(T.xs[T.xs.length - 1][1]), y); g.lineTo(X(T.x1 + 1) + G * 0.5, y); g.stroke(); }
   g.setLineDash([]);
   // zebra crossings at the crossings' edges, worn
-  g.fillStyle = 'rgba(225,220,200,0.32)';
-  for (const [a, b] of colSt) for (const [ra, rb] of rowSt) for (const yy of [ra - 0.32, rb + 0.06]) for (let k = 0; k < 4; k++) g.fillRect(X(a) + G * (0.12 + k * 0.47), Y(yy), G * 0.24, G * 0.26);
+  g.fillStyle = 'rgba(225,220,200,0.2)'; // (light and thin: the owner, Nov 23 2026)
+  for (const [a, b] of colSt) for (const [ra, rb] of rowSt) for (const yy of [ra - 0.26, rb + 0.06]) for (let k = 0; k < 5; k++) g.fillRect(X(a) + G * (0.16 + k * 0.38), Y(yy), G * 0.12, G * 0.2);
   // the stripped lots: foundations, rubble and rebar where a building stood (an arcade's: the street again, scarred)
   for (const r of T.r) {
     if (!r.gone) continue;
@@ -143,13 +146,33 @@ function townGroundCanvas() {
     if (has(i - 1, j)) g.fillRect(x, y + h - ww / 2, h, ww);
   }
   g.restore();
+  // Every building's shadow (its look's, as stripped as it is): one layer, laid over the ground at its strength.
+  const A = typeof window !== 'undefined' && window.TOWN_ART;
+  if (A) {
+    const sc = document.createElement('canvas'); sc.width = c.width; sc.height = c.height;
+    const sg = sc.getContext('2d'), q = G / A.sh;
+    for (const r of T.r) {
+      const look = !r.gone && townLook(r), D = look && look.L.sh, img = D && townImg(look.key + '-sh');
+      if (img) sg.drawImage(img, X(r.x) - D.fl[0] * q * look.sx, Y(r.y + r.h) - D.fl[1] * q, D.size[0] * q * look.sx, D.size[1] * q);
+    }
+    g.save(); g.globalAlpha = 0.45; g.drawImage(sc, 0, 0); g.restore();
+    sc.width = sc.height = 0;
+  }
   _tg.of = T; _tg.ver = T.ver || 0; _tg.c = c;
   return c;
+}
+
+/** A number that changes when the buildings' shadows do (one coming in, a building gone). */
+function townShadowKey(T) {
+  let h = _ta.shv;
+  for (const r of T.r) if (r.gone) h = (h * 31 + r.id) | 0;
+  return h;
 }
 
 /** The town's ground, with the rest of the ground (before its light: graded with it). */
 function townGround(ctx, ox, oy, z) {
   if (!S.town || typeof document === 'undefined') return;
+  ensureTownArt();
   const c = townGroundCanvas(), { cx0, cy0, cx1, cy1 } = townGroundBox(S.town);
   ctx.save(); ctx.imageSmoothingEnabled = true;
   ctx.drawImage(c, ox + cx0 * z, oy + cy0 * z, (cx1 - cx0 + 1) * z, (cy1 - cy0 + 1) * z);
@@ -158,216 +181,149 @@ function townGround(ctx, ox, oy, z) {
 
 /* ------------------------------------------------------------------ the buildings */
 
-const TOWN_LOOK = {
-  house: { body: ['#8c7a68', '#9a8a74', '#7f6e66', '#a08c74', '#86786a'], roof: '#6b655d', tiers: 1 },
-  shop: { body: ['#7b7f80', '#8a7d6c', '#6e7476', '#94877a'], roof: '#5f6266', tiers: 1 },
-  flats: { body: ['#6b7073', '#5d6b70', '#77736c', '#646a6e', '#6e655f'], roof: '#55595c', tiers: 2 },
-  tower: { body: ['#4f5559', '#585a63', '#5b5350', '#4a5560', '#5d5a55'], roof: '#45484c', tiers: 3 },
-  school: { body: ['#b2aa9a', '#a9a493'], roof: '#7d7a72', tiers: 1 },
-  hall: { body: ['#b4ac9c'], roof: '#5f8a7a', tiers: 2 },
-  spire: { body: ['#5a6066'], roof: '#40464c', tiers: 4 },
-  arcade: { body: ['#6d7377'], roof: '#86aab4', tiers: 1 },
-  car: { body: ['#8a3a30', '#3a5a7a', '#c8b27a', '#5a6a4a', '#d0d0c8'], roof: '#2a2c30', tiers: 1 },
-};
-/** How tall building r stands now (tiles, as drawn): it comes down as it's stripped. */
-function townHeight(r) { const f = r.n0 ? townLeft(r) / r.n0 : 1; return (r.hgt / 10) * (0.3 + 0.7 * f); }
-/** Its stripped share in steps (a new picture each step). */
-function townStep(r) { return r.n0 ? Math.round((1 - townLeft(r) / r.n0) * 8) : 0; }
-/** A colour lightened (k > 0) or darkened (k < 0), as #rrggbb. */
-function townShade(hex, k) {
-  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  return '#' + v.map((x) => Math.round(clamp(k > 0 ? x + (255 - x) * k : x * (1 + k), 0, 255)).toString(16).padStart(2, '0')).join('');
+/*
+ * The buildings are rendered 3D sprites (renderer/b/town.js, installed by renderer/tools/install_town.py; ART_GUIDE.md,
+ * Passenger Town): every lot townSetup lays (kind and size) has one to three looks, each by day and at night (lights on
+ * automatic) and stripped (scaffold, then the bare frame), with its shadow alone. They load only for a Passenger Town
+ * map (ensureTownArt): art/town/town-art.js lists them (window.TOWN_ART), and in the one-file copy of the game they're
+ * a bundle beside the page (town.js). Morning and evening are made here from day and night: the day render graded for
+ * the time (and at evening the night one laid over it, its lights coming on); the stripped looks have no lights (cut
+ * while it's taken apart), so they're graded at night too, a little lighter than the land round the town.
+ */
+const TOWN_STATES = ['d', 's1', 's2'];
+const _ta = { state: '', img: new Map(), shv: 0 };
+const _tv = new Map(); // (graded versions made at a zoom step: key -> { c, used })
+let _tvPx = 0;
+const TOWN_VER_PX = 2.4e7; // (the most pixels of graded versions kept)
+const _tf = new Map(); // (each building's fade, while one of your robots is behind it: id -> 0..1)
+const _tl = new WeakMap(); // (each building's look in the art: townLook)
+/** The town's night is lifted a little over the shared night (the owner, Nov 23 2026): for its stripped looks' grade. */
+const TOWN_NIGHT = { mul: [0.3, 0.34, 0.5], add: [0.01, 0.012, 0.03] };
+
+/** The art for a Passenger Town map: its list, then the pictures of the lots this town has (as they're wanted). */
+function ensureTownArt() {
+  if (_ta.state || typeof document === 'undefined') return;
+  _ta.state = 'loading';
+  if (typeof window !== 'undefined' && window.TOWN_ART) { _ta.state = 'in'; return; }
+  const s = document.createElement('script');
+  s.src = typeof window !== 'undefined' && window.TOWN_BUNDLE ? 'town.js' : 'art/town/town-art.js';
+  s.onload = () => { _ta.state = window.TOWN_ART ? 'in' : 'failed'; _ta.shv++; };
+  s.onerror = () => { _ta.state = 'failed'; }; // (no art: drawn as plain blocks)
+  document.head.appendChild(s);
+}
+
+/** Picture `name` (art/town/<name>.webp), loading it the first time it's asked for; null till it's in. */
+function townImg(name) {
+  let e = _ta.img.get(name);
+  if (!e) {
+    e = { img: null };
+    _ta.img.set(name, e);
+    const d = window.TOWN_ART && window.TOWN_ART.data;
+    loadImg(d && d[name] ? d[name] : `art/town/${name}.webp`, (img) => { e.img = img; if (/-sh$/.test(name)) _ta.shv++; });
+  }
+  return e.img;
 }
 
 /**
- * Paint building r (body, graded for the time of day: `col` maps a colour) and its lights (glow) at zb pixels a tile.
- * The picture's top-left is at tile (r.x - 0.4, r.y - top) where top is its full height plus a tile.
+ * Building r's look in the art: { key (its picture's name), L (the look: d, n, s1, s2 and their shadows), sx (a
+ * stretch across, for a lot the art has no size of) }, or null (no art yet). Of a lot's looks, the one whose height is
+ * nearest the building's (r.hgt), so the sim's idea of its height (where its sentry's shots come from) matches.
  */
-function townPaint(r, zb, col, glow) {
-  const L = TOWN_LOOK[r.k], full = r.hgt / 10, H = townHeight(r), step = townStep(r);
-  const top = full + 1.1, ox = r.x - 0.4, oy = r.y - top;
-  const w = Math.ceil((r.w + 1.6) * zb), h = Math.ceil((r.h + top + 0.2) * zb);
-  const bc = document.createElement('canvas'); bc.width = w; bc.height = h;
-  const gc = document.createElement('canvas'); gc.width = w; gc.height = h;
-  const b = bc.getContext('2d'), g = gc.getContext('2d');
-  const X = (x) => (x - ox) * zb, Y = (y) => (y - oy) * zb;
-  const rnd = (k) => townHash(r, k);
-  const base = L.body[Math.floor(rnd(1) * L.body.length)], ROOFS = ['#6b6e72', '#7a746a', '#56686a', '#857b6f', '#4f5a5e', '#8f8c85', '#6a5f58'], roofC = r.k === 'hall' || r.k === 'arcade' || r.k === 'spire' || r.k === 'car' ? L.roof : ROOFS[Math.floor(rnd(8) * ROOFS.length)];
-  const flick = [];
-  // its shadow on the street to the east
-  b.fillStyle = 'rgba(10,12,16,0.28)';
-  b.beginPath(); b.moveTo(X(r.x + r.w), Y(r.y + 0.1)); b.lineTo(X(r.x + r.w + Math.min(1.1, H * 0.35)), Y(r.y + 0.4)); b.lineTo(X(r.x + r.w + Math.min(1.1, H * 0.35)), Y(r.y + r.h)); b.lineTo(X(r.x + r.w), Y(r.y + r.h)); b.closePath(); b.fill();
-  if (r.k === 'car') { townCar(b, r, X, Y, zb, col, base); return { body: bc, glow: gc, ox, oy, flick }; }
-  // the tiers, each set back from the one under it
-  const nT = r.k === 'flats' ? (r.w * r.h >= 9 && rnd(2) < 0.6 ? 2 : 1) : r.k === 'tower' ? 2 + (rnd(3) < 0.5 ? 1 : 0) : L.tiers;
-  const inset = 0.1;
-  let x0 = r.x + inset, x1 = r.x + r.w - inset, yb = r.y + inset, yf = r.y + r.h - inset, h0 = 0;
-  const strip = rnd(4) < 0.55, sign = rnd(5), lit = 0.35 + rnd(6) * 0.4, warm = rnd(7) < 0.8 ? '#ffcf7a' : '#ffe6b8';
-  for (let k = 0; k < nT; k++) {
-    const share = nT === 1 ? 1 : k === nT - 1 ? 1 : [0.55, 0.7, 0.8][k] || 0.8;
-    let h1 = k === nT - 1 ? H : h0 + (H - h0) * share;
-    if (r.k === 'hall' && k === 0) h1 = H * 0.62;
-    if (h1 - h0 < 0.08) break;
-    const bodyC = r.k === 'hall' && k === 1 ? '#a39b8b' : k % 2 && r.k === 'tower' ? townShade(base, -0.08) : base;
-    // the front face, then its roof
-    const fx = X(x0), fw = X(x1) - fx, fy = Y(yf - h1), fh = (h1 - h0) * zb;
-    b.fillStyle = col(bodyC); b.fillRect(fx, fy, fw, fh);
-    const ao = b.createLinearGradient(0, fy + fh * 0.6, 0, fy + fh);
-    ao.addColorStop(0, 'rgba(0,0,0,0)'); ao.addColorStop(1, 'rgba(0,0,0,0.22)'); b.fillStyle = ao; b.fillRect(fx, fy, fw, fh);
-    b.fillStyle = 'rgba(0,0,0,0.18)'; b.fillRect(fx + fw - Math.max(1, zb * 0.06), fy, Math.max(1, zb * 0.06), fh); // (its east edge in shade)
-    townFacade(b, g, r, k, fx, fy, fw, fh, zb, col, bodyC, { strip, sign, lit, warm, flick, x0, yf, h0, h1, X, Y });
-    const roofTop = Y(yb - h1), roofH = Y(yf - h1) - roofTop;
-    const rc = r.k === 'arcade' ? '#86aab4' : (r.k === 'hall' && k === 1) || k === nT - 1 ? roofC : townShade(roofC, 0.12);
-    b.fillStyle = col(townShade(rc, 0.1)); b.fillRect(fx, roofTop, fw, roofH);
-    b.strokeStyle = col(townShade(rc, -0.35)); b.lineWidth = Math.max(1, zb * 0.05); b.strokeRect(fx + b.lineWidth / 2, roofTop + b.lineWidth / 2, fw - b.lineWidth, roofH - b.lineWidth);
-    if (r.k === 'arcade') { // a glass roof on ribs
-      b.strokeStyle = col('#4a5a60'); b.lineWidth = Math.max(1, zb * 0.04);
-      for (let x = x0 + 0.33; x < x1; x += 0.33) { b.beginPath(); b.moveTo(X(x), roofTop); b.lineTo(X(x), roofTop + roofH); b.stroke(); }
-      b.fillStyle = 'rgba(255,255,255,0.12)'; b.fillRect(fx, roofTop, fw, roofH * 0.35);
+function townLook(r) {
+  const A = typeof window !== 'undefined' && window.TOWN_ART;
+  if (!A) return null;
+  const c0 = _tl.get(r);
+  if (c0 && c0.A === A) return c0.v;
+  let looks = A.lots[r.k + '-' + r.w + 'x' + r.h], w = r.w;
+  if (!looks) { // a size the art doesn't have: the nearest of the kind, stretched across
+    let best = null, bd = Infinity;
+    for (const k in A.lots) {
+      const m = /^([a-z]+)-(\d+)x(\d+)$/.exec(k);
+      if (!m || m[1] !== r.k) continue;
+      const d = Math.abs(+m[3] - r.h) * 3 + Math.abs(+m[2] - r.w);
+      if (d < bd) { bd = d; best = k; w = +m[2]; }
     }
-    if (k === nT - 1) townRoof(b, g, r, X(x0), roofTop, fw, roofH, zb, col, step);
-    else if (step && k === nT - 2) { /* (the upper tiers come down first) */ }
-    // the next tier back from this one's front and sides
-    h0 = h1;
-    const sx = Math.min((x1 - x0) * 0.18, 0.5), sy = Math.min((yf - yb) * 0.3, 0.7);
-    if (r.k === 'hall') { x0 += (x1 - x0) * 0.25; x1 -= (x1 - x0) * 0.33; yb += 0.3; yf -= (yf - yb) * 0.45; }
-    else if (r.k === 'spire') { x0 += 0.12; x1 -= 0.12; yb += 0.1; yf -= 0.12; }
-    else { x0 += sx * (rnd(10 + k) < 0.5 ? 1 : 0.4); x1 -= sx * (rnd(20 + k) < 0.5 ? 1 : 0.4); yf -= sy; yb += 0.05; }
-    if (x1 - x0 < 0.4 || yf - yb < 0.3) break;
+    looks = best && A.lots[best];
   }
-  if (step) { // stripping under way: scaffold over the front, girders showing
-    b.strokeStyle = col('#9a9488'); b.lineWidth = Math.max(1, zb * 0.03);
-    const fy = Y(r.y + r.h - inset - H), fb = Y(r.y + r.h - inset);
-    for (let x = r.x + inset; x <= r.x + r.w - inset + 0.01; x += 0.5) { b.beginPath(); b.moveTo(X(x), fy - zb * 0.15); b.lineTo(X(x), fb); b.stroke(); }
-    for (let y = fy; y < fb; y += zb * 0.3) { b.beginPath(); b.moveTo(X(r.x + inset), y); b.lineTo(X(r.x + r.w - inset), y); b.stroke(); }
-    b.fillStyle = 'rgba(30,25,20,0.35)'; b.fillRect(X(r.x + inset), fy, X(r.x + r.w - inset) - X(r.x + inset), zb * 0.12);
+  let v = null;
+  if (looks) {
+    const hOf = (L) => (L.d.roofG[1] - L.d.roof[1]) / A.ppt, want = r.hgt / 10;
+    let L = looks[r.v % looks.length];
+    for (const q of looks) if (Math.abs(hOf(q) - want) < Math.abs(hOf(L) - want) - 0.05) L = q;
+    v = { key: r.k + '-' + w + 'x' + r.h + '-' + L.v, L, sx: r.w / w };
   }
-  if (r.k === 'hall') { // steps up to its doors, and its columns
-    b.fillStyle = col('#c9c1b0'); b.fillRect(X(r.x + r.w * 0.3), Y(r.y + r.h - 0.1) - zb * 0.08, (r.w * 0.4) * zb, zb * 0.12);
-  }
-  return { body: bc, glow: gc, ox, oy, flick };
+  _tl.set(r, { A, v });
+  return v;
 }
 
-/** A building's front: floors of windows (lit at night in the glow), accents and signs, by its kind. */
-function townFacade(b, g, r, k, fx, fy, fw, fh, zb, col, bodyC, o) {
-  const rnd = (n) => townHash(r, n);
-  const floorH = r.k === 'shop' ? 0.3 : r.k === 'school' || r.k === 'hall' ? 0.3 : 0.22;
-  const floors = Math.max(1, Math.round(fh / (floorH * zb)));
-  const fhh = fh / floors, ww = zb * (r.k === 'school' ? 0.2 : 0.12), sp = zb * (r.k === 'school' ? 0.3 : 0.22);
-  const cols = Math.max(1, Math.floor((fw - zb * 0.12) / sp)), pad = (fw - cols * sp) / 2 + (sp - ww) / 2;
-  const glass = col('#262d36'), band = col(townShade(bodyC, 0.16));
-  if (r.k === 'arcade') { // arches over the street's way through
-    for (let x = fx + zb * 0.08; x < fx + fw - zb * 0.3; x += zb * 0.5) { b.fillStyle = glass; b.beginPath(); b.moveTo(x, fy + fh); b.lineTo(x, fy + fh * 0.45); b.arc(x + zb * 0.17, fy + fh * 0.45, zb * 0.17, Math.PI, 0); b.lineTo(x + zb * 0.34, fy + fh); b.fill(); g.fillStyle = 'rgba(255,200,120,0.35)'; g.fillRect(x + zb * 0.05, fy + fh * 0.55, zb * 0.24, fh * 0.4); }
-    return;
-  }
-  for (let f = 0; f < floors; f++) {
-    const y = fy + f * fhh;
-    if (zb >= 10) { b.fillStyle = band; b.fillRect(fx, y, fw, Math.max(1, zb * 0.025)); }
-    const ground = f === floors - 1 && k === 0;
-    if (ground && (r.k === 'shop' || (r.k === 'flats' && rnd(30) < 0.4) || r.k === 'tower')) { // a shopfront: big window, awning
-      b.fillStyle = glass; b.fillRect(fx + zb * 0.08, y + fhh * 0.3, fw - zb * 0.16, fhh * 0.62);
-      g.fillStyle = rnd(31) < 0.5 ? 'rgba(255,214,140,0.85)' : 'rgba(200,236,255,0.7)'; g.fillRect(fx + zb * 0.1, y + fhh * 0.34, fw - zb * 0.2, fhh * 0.52);
-      const aw = ['#3f7f86', '#8a3a30', '#b08a3a', '#4f6a4a'][Math.floor(rnd(32) * 4)];
-      b.fillStyle = col(aw); b.fillRect(fx + zb * 0.04, y + fhh * 0.12, fw - zb * 0.08, fhh * 0.2);
-      continue;
+/** How far stripping has gone, in the art's steps: 0 standing, 1 scaffold (to half), 2 only the frame left. */
+function townState(r) { const s = townStep(r); return s === 0 ? 0 : s <= 4 ? 1 : 2; }
+/** Its stripped share in steps of an eighth (townState maps them onto the art's). */
+function townStep(r) { return r.n0 ? Math.round((1 - townLeft(r) / r.n0) * 8) : 0; }
+
+/**
+ * A picture at least `px` wide for drawing it smaller (halved copies, made the first time: drawing a big picture small
+ * every frame shimmers and costs a phone dearly); the picture itself when it's drawn near its size.
+ */
+function townMip(e, img, px) {
+  if (px >= img.width * 0.7 || img.width < 64) return img;
+  if (!e.mips) {
+    e.mips = [];
+    let src = img, w = img.width, h = img.height;
+    while (w >= 48 && h >= 24) {
+      w = Math.round(w / 2); h = Math.round(h / 2);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, h);
+      e.mips.push(c); src = c;
     }
-    for (let c = 0; c < cols; c++) {
-      const x = fx + pad + c * sp, wy = y + fhh * 0.28, wh = fhh * 0.5;
-      b.fillStyle = glass; b.fillRect(x, wy, ww, wh);
-      const hs = hash2(r.v % 7919 + c * 13, f + k * 31, 4301);
-      if (hs < o.lit) { g.fillStyle = hs < o.lit * 0.12 ? '#9fe8ff' : o.warm; g.globalAlpha = 0.65 + 0.35 * hash2(c, f, r.v % 113); g.fillRect(x, wy, ww, wh); g.globalAlpha = 1; }
-      else if (o.flick.length < 3 && hs > 0.985) o.flick.push([x, wy, ww, wh]);
+  }
+  let best = img;
+  for (const m of e.mips) { if (m.width >= px) best = m; else break; }
+  return best;
+}
+
+/**
+ * Look L's picture for state st ('d', 's1', 's2') at time `tn` (morning, day, evening, night), at least px wide:
+ * { img, w, h } (img's own size can be a smaller copy), or null while it isn't ready. Day and night are the renders;
+ * the others are made (and kept a while) at the zoom step in use, a few a frame (`budget`).
+ */
+function townVersion(look, st, tn, px, budget) {
+  const S0 = look.L[st], base = st === 'd' ? look.key : S0.src;
+  if (tn === 'day' || (tn === 'night' && st === 'd')) {
+    const name = tn === 'night' ? base + '-n' : base, img = townImg(name);
+    if (!img) return null;
+    const e = _ta.img.get(name);
+    return { img: townMip(e, img, px), S: tn === 'night' ? look.L.n : S0 };
+  }
+  const day = townImg(base), night = tn === 'evening' && st === 'd' ? townImg(base + '-n') : null;
+  if (!day || (tn === 'evening' && st === 'd' && !night)) return null;
+  const src = townMip(_ta.img.get(base), day, px), key = base + '|' + tn + '|' + src.width;
+  let v = _tv.get(key);
+  if (!v) {
+    if (budget.n <= 0) return null;
+    budget.n--;
+    const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    const g = c.getContext('2d'), T = tn === 'night' ? TOWN_NIGHT : TOD_TIMES[tn];
+    g.drawImage(src, 0, 0);
+    todGrade(g, 0, 0, c.width, c.height, T.mul, T.add, src);
+    if (night) { // evening: the night render over it at the share the lights are on, lined up on the lot's corner
+      const k = src.width / S0.size[0], N = look.L.n, ns = townMip(_ta.img.get(base + '-n'), night, N.size[0] * k);
+      g.globalAlpha = TOD_TIMES.evening.lights;
+      g.drawImage(ns, (S0.fl[0] - N.fl[0]) * k, (S0.fl[1] - N.fl[1]) * k, N.size[0] * k, N.size[1] * k);
+      g.globalAlpha = 1;
     }
-    if (r.k === 'flats' && f < floors - 1 && zb >= 12) { b.fillStyle = col(townShade(bodyC, -0.3)); b.fillRect(fx + zb * 0.05, y + fhh * 0.82, fw - zb * 0.1, Math.max(1, fhh * 0.1)); } // (balconies)
-  }
-  if (r.k === 'hall' && k === 0) { // columns across its front
-    for (let x = fx + zb * 0.25; x < fx + fw - zb * 0.1; x += zb * 0.45) { b.fillStyle = col('#d4ccbb'); b.fillRect(x, fy + fh * 0.18, zb * 0.12, fh * 0.82); }
-    b.fillStyle = col('#8c8474'); b.fillRect(fx, fy, fw, fh * 0.16);
-    g.fillStyle = 'rgba(255,220,160,0.5)'; g.fillRect(fx + fw * 0.4, fy + fh * 0.5, fw * 0.2, fh * 0.5);
-  }
-  if (r.k === 'school' && k === 0) { // its yellow band and the clock over the door
-    b.fillStyle = col('#c9a23a'); b.fillRect(fx, fy + zb * 0.04, fw, zb * 0.07);
-    b.fillStyle = col('#e9e4d6'); b.beginPath(); b.arc(fx + fw / 2, fy + zb * 0.08, zb * 0.13, 0, 7); b.fill();
-    b.strokeStyle = col('#333'); b.lineWidth = Math.max(1, zb * 0.02); b.beginPath(); b.moveTo(fx + fw / 2, fy + zb * 0.08); b.lineTo(fx + fw / 2, fy - zb * 0.02); b.moveTo(fx + fw / 2, fy + zb * 0.08); b.lineTo(fx + fw / 2 + zb * 0.07, fy + zb * 0.1); b.stroke();
-  }
-  // accents: a cool strip up one edge, a red panel sign or a cyan glyph sign
-  if (o.strip && fh > zb * 0.5 && r.k !== 'school' && r.k !== 'hall') {
-    const sx = rnd(40) < 0.5 ? fx + zb * 0.04 : fx + fw - zb * 0.1;
-    b.fillStyle = col('#3f7f86'); b.fillRect(sx, fy + zb * 0.05, zb * 0.06, fh - zb * 0.1);
-    g.fillStyle = '#5ff0e8'; g.fillRect(sx, fy + zb * 0.05, zb * 0.06, fh - zb * 0.1);
-  }
-  if (k === 0 && fh > zb * 0.45 && r.k !== 'hall' && r.k !== 'school') {
-    const sw = zb * 0.32, sh = zb * 0.42, sx = fx + fw * (0.2 + rnd(41) * 0.5), sy = fy + zb * 0.08;
-    if (o.sign < 0.3) { b.fillStyle = col('#7a2e26'); b.fillRect(sx, sy, sw, sh); g.fillStyle = '#ff5a3a'; for (let n = 0; n < 3; n++) g.fillRect(sx + sw * 0.15, sy + sh * (0.15 + n * 0.28), sw * 0.7, sh * 0.14); }
-    else if (o.sign < 0.55) { b.fillStyle = col('#1d3a40'); b.fillRect(sx, sy, sw, sw); g.fillStyle = '#7ff6ff'; g.fillRect(sx + sw * 0.15, sy + sw * 0.15, sw * 0.3, sw * 0.3); g.fillRect(sx + sw * 0.55, sy + sw * 0.55, sw * 0.3, sw * 0.3); g.fillRect(sx + sw * 0.55, sy + sw * 0.15, sw * 0.12, sw * 0.3); g.strokeStyle = '#7ff6ff'; g.lineWidth = Math.max(1, zb * 0.02); g.strokeRect(sx + 1, sy + 1, sw - 2, sw - 2); }
-    else if (o.sign < 0.68 && r.k === 'shop') { b.fillStyle = col('#3a2a1a'); b.fillRect(fx + zb * 0.1, fy - zb * 0.12, fw - zb * 0.2, zb * 0.14); g.fillStyle = '#ffb24a'; g.fillRect(fx + zb * 0.16, fy - zb * 0.1, fw - zb * 0.32, zb * 0.1); }
-  }
+    v = { c, px: c.width * c.height };
+    _tv.set(key, v); _tvPx += v.px;
+    while (_tvPx > TOWN_VER_PX && _tv.size > 1) { const [k0, o] = _tv.entries().next().value; _tv.delete(k0); _tvPx -= o.px; o.c.width = o.c.height = 0; }
+  } else { _tv.delete(key); _tv.set(key, v); } // (most recently used last)
+  return { img: v.c, S: S0 };
 }
 
-/** The roof's clutter: vents, tanks, fans, a landing pad, antennas; a stripped roof's girders. */
-function townRoof(b, g, r, x, y, w, h, zb, col, step) {
-  const rnd = (n) => townHash(r, n);
-  const box = (bx, by, bw, bd, bh, c) => { b.fillStyle = col(townShade(c, -0.15)); b.fillRect(bx, by + bd - bh, bw, bh); b.fillStyle = col(townShade(c, 0.12)); b.fillRect(bx, by - bh, bw, bd); };
-  if (step >= 3) { // girders where the roof was
-    b.fillStyle = 'rgba(25,22,20,0.55)'; b.fillRect(x + zb * 0.08, y + zb * 0.08, w - zb * 0.16, h - zb * 0.16);
-    b.strokeStyle = col('#7a5a40'); b.lineWidth = Math.max(1, zb * 0.04);
-    for (let gx = x + zb * 0.2; gx < x + w - zb * 0.1; gx += zb * 0.35) { b.beginPath(); b.moveTo(gx, y + zb * 0.1); b.lineTo(gx, y + h - zb * 0.1); b.stroke(); }
-    return;
-  }
-  if (r.k === 'spire') { // the beacon housing and its mast
-    box(x + w * 0.25, y + h * 0.2, w * 0.5, h * 0.5, zb * 0.25, '#6a7077');
-    b.strokeStyle = col('#9aa0a6'); b.lineWidth = Math.max(1, zb * 0.04); b.beginPath(); b.moveTo(x + w / 2, y + h * 0.3); b.lineTo(x + w / 2, y - zb * 0.85); b.stroke();
-    g.fillStyle = '#ffe8b0'; g.beginPath(); g.arc(x + w / 2, y + h * 0.35 - zb * 0.25, zb * 0.12, 0, 7); g.fill();
-    return;
-  }
-  if (r.k === 'hall') { // the flagpole, no flag
-    b.strokeStyle = col('#d8d8d0'); b.lineWidth = Math.max(1, zb * 0.03); b.beginPath(); b.moveTo(x + w * 0.5, y + h * 0.5); b.lineTo(x + w * 0.5, y - zb * 0.6); b.stroke();
-    return;
-  }
-  if (r.k === 'arcade' || w < zb * 0.5 || h < zb * 0.4) return;
-  const n = clamp(Math.round((w * h) / (zb * zb) * 1.6), 1, 7);
-  for (let k = 0; k < n; k++) {
-    const kind = rnd(50 + k), px = x + zb * 0.1 + rnd(60 + k) * Math.max(0, w - zb * 0.6), py = y + zb * 0.12 + rnd(70 + k) * Math.max(0, h - zb * 0.5);
-    if (kind < 0.35) box(px, py, zb * 0.3, zb * 0.22, zb * 0.12, '#7d8084'); // a vent
-    else if (kind < 0.55) { b.fillStyle = col('#8f9396'); b.beginPath(); b.ellipse(px + zb * 0.15, py + zb * 0.1, zb * 0.15, zb * 0.12, 0, 0, 7); b.fill(); b.fillStyle = col('#6a6e72'); b.fillRect(px, py + zb * 0.1, zb * 0.3, zb * 0.12); } // a tank
-    else if (kind < 0.75) { b.fillStyle = col('#3d4145'); b.beginPath(); b.arc(px + zb * 0.15, py + zb * 0.12, zb * 0.14, 0, 7); b.fill(); b.strokeStyle = col('#8a8e92'); b.lineWidth = Math.max(1, zb * 0.025); b.beginPath(); b.moveTo(px + zb * 0.05, py + zb * 0.05); b.lineTo(px + zb * 0.25, py + zb * 0.19); b.moveTo(px + zb * 0.25, py + zb * 0.05); b.lineTo(px + zb * 0.05, py + zb * 0.19); b.stroke(); } // a fan
-    else if (kind < 0.88) box(px, py, zb * 0.45, zb * 0.14, zb * 0.08, '#6c7075'); // a row of units
-    else { b.strokeStyle = col('#a6aaae'); b.lineWidth = Math.max(1, zb * 0.025); b.beginPath(); b.moveTo(px + zb * 0.1, py + zb * 0.15); b.lineTo(px + zb * 0.1, py - zb * 0.5); b.stroke(); g.fillStyle = '#ff4a3a'; g.fillRect(px + zb * 0.07, py - zb * 0.53, zb * 0.06, zb * 0.06); } // an antenna
-  }
-  if (r.k === 'tower' && w > zb * 0.9 && h > zb * 0.8 && rnd(80) < 0.6) { // a landing pad
-    const cx = x + w / 2, cy = y + h / 2, rr = Math.min(w, h) * 0.32;
-    b.fillStyle = col('#3a3d41'); b.beginPath(); b.arc(cx, cy, rr, 0, 7); b.fill();
-    b.strokeStyle = col('#c9b25a'); b.lineWidth = Math.max(1, zb * 0.035); b.beginPath(); b.arc(cx, cy, rr * 0.75, 0, 7); b.stroke();
-    g.strokeStyle = 'rgba(120,240,255,0.8)'; g.lineWidth = Math.max(1, zb * 0.03); g.beginPath(); g.arc(cx, cy, rr * 0.92, 0, 7); g.stroke();
-  }
-}
-
-/** A parked car: a small box, its glass dark. */
-function townCar(b, r, X, Y, zb, col, base) {
-  const x = X(r.x + 0.18), w = zb * 0.64, y = Y(r.y + 0.25), d = zb * 0.5, h = zb * 0.2;
-  b.fillStyle = 'rgba(0,0,0,0.3)'; b.fillRect(x + zb * 0.05, y + d - zb * 0.02, w, zb * 0.08);
-  b.fillStyle = col(townShade(base, -0.2)); b.fillRect(x, y + d - h, w, h);
-  b.fillStyle = col(base); b.fillRect(x, y - h, w, d);
-  b.fillStyle = col('#2a3038'); b.fillRect(x + w * 0.2, y - h + d * 0.2, w * 0.6, d * 0.55);
-  b.fillStyle = col('#6a4a30'); b.fillRect(x + w * 0.1, y - h + d * 0.1, w * 0.08, d * 0.08); // (rust)
-}
-
-/** The pictures of building r now, from the cache (made at the zoom step nearest z). */
-function townSprite(r, z) {
-  const zb = clamp(Math.pow(2, Math.round(Math.log2(Math.max(4, z)) * 2) / 2), 8, 72);
-  const st = typeof TOD !== 'undefined' && TOD.active && TOD.state ? TOD.state : null;
-  const tk = st ? st.mul.map((v) => Math.round(v * 20)).join() + '/' + st.add.map((v) => Math.round(v * 40)).join() : 'day';
-  if (_tb.key !== tk) { _tb.key = tk; _tb.body.clear(); }
-  const key = r.id + '|' + zb + '|' + townStep(r);
-  let e = _tb.body.get(key);
-  if (!e) {
-    const col = (c) => (typeof todColor === 'function' ? todColor(c) : c);
-    e = townPaint(r, zb, col);
-    e.zb = zb;
-    _tb.body.set(key, e);
-    if (_tb.body.size > 240) _tb.body.delete(_tb.body.keys().next().value);
-  }
-  return e;
+/** Building r with no art (still loading, or none): a plain block of its height, graded for the time of day. */
+function townBlock(ctx, r, X, Y, z) {
+  const H = r.hgt / 10, c = (h) => (typeof todColor === 'function' ? todColor(h) : h), x = X + z * 0.1, w = (r.w - 0.2) * z;
+  ctx.fillStyle = c('#5d6164'); ctx.fillRect(x, Y - H * z - z * 0.1, w, H * z);
+  ctx.fillStyle = c('#7a7d80'); ctx.fillRect(x, Y - H * z - (r.h - 0.2) * z - z * 0.1, w, (r.h - 0.2) * z);
 }
 
 /** How dark it is (0 day to 1 night), for the lights. */
@@ -376,12 +332,30 @@ function townNight() { return typeof TOD !== 'undefined' && TOD.active && TOD.st
 /** The standing pieces (render.js's items): the buildings, their sentries, the street lamps and the signs. */
 function townItems(items, inView) {
   const T = S.town;
+  ensureTownArt();
+  // (your robots in view: a building in front of one fades, so it's never lost behind it; see townDraw)
+  const mine = _ta.mine || (_ta.mine = []);
+  mine.length = 0;
+  for (const u of S.bots) if (!u.dead && !u.inside && u.owner === ME && !BOTS[u.type].air && inView(u.x, u.y, 2)) mine.push(u);
   for (const r of T.r) if (!r.gone && inView(r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h) / 2 + 5)) items.push({ ent: 'town', r, x: r.x, y: r.y + r.h - 0.02 });
   for (const [x, y] of T.signs) if (inView(x, y, 4)) items.push({ ent: 'town', sign: [x, y], x, y: y + 0.6 });
   for (let a = 0; a + 1 < T.xs.length; a++) for (let b = 0; b + 1 < T.ys.length; b++) {
     const x = T.xs[a][1], y = T.ys[b][1]; // (a lamp on the north-west corner of each crossing)
     if (inView(x, y, 3) && townIn(x, y)) items.push({ ent: 'town', lamp: [x + 0.08, y + 0.12], x: x + 0.08, y: y + 0.12 });
   }
+  _ta.budget = { n: 6 }; // (graded versions made a frame, at most)
+}
+
+/** Is one of your robots behind building r (drawn before it, inside its picture)? `top`: how high it stands, tiles. */
+function townHides(r, top) {
+  const sel = typeof UI !== 'undefined' && UI.sel && UI.sel.length ? UI.sel : null;
+  for (const u of _ta.mine || []) {
+    if (u.y >= r.y + r.h - 0.05 || u.y < r.y + r.h - top - 0.1 || u.x < r.x - 0.15 || u.x > r.x + r.w + 0.15) continue;
+    if (u.y >= r.y - 0.05 && u.x > r.x + 0.2 && u.x < r.x + r.w - 0.2) return true; // (beside it, inside its lot: stripping it)
+    if (u.y < r.y) return true;
+  }
+  if (sel) for (const id of sel) { const u = getE(id); if (u && !u.dead && u.x >= r.x - 0.15 && u.x <= r.x + r.w + 0.15 && u.y < r.y + r.h - 0.05 && u.y > r.y + r.h - top - 0.1) return true; }
+  return false;
 }
 
 /** One of townItems' pieces. */
@@ -400,28 +374,47 @@ function townDraw(ctx, e, ox, oy, z) {
     if (typeof lmSignGlow === 'function') lmSignGlow(ctx, x, y, z);
     return;
   }
-  const r = e.r, sp = townSprite(r, z), k = z / sp.zb;
-  const dx = ox + sp.ox * z, dy = oy + sp.oy * z;
-  ctx.drawImage(sp.body, dx, dy, sp.body.width * k, sp.body.height * k);
-  if (night > 0.03 && live) {
-    const flicker = townHash(r, 90) < 0.12 ? (hash2(Math.floor(R.time * 7), r.id, 4401) < 0.18 ? 0.35 : 1) : 1;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = night * 0.9 * flicker;
-    ctx.drawImage(sp.glow, dx, dy, sp.glow.width * k, sp.glow.height * k);
-    ctx.globalAlpha = night * 0.9;
-    for (const [fx, fy, fw, fh] of sp.flick) if (hash2(Math.floor(R.time * 3 + fx), r.id, 4402) < 0.5) { ctx.fillStyle = '#ffd890'; ctx.fillRect(dx + fx * k, dy + fy * k, fw * k, fh * k); }
-    ctx.restore();
+  const r = e.r, X = ox + r.x * z, Y = oy + (r.y + r.h) * z, look = townLook(r);
+  if (!look) { townBlock(ctx, r, X, Y, z); if (r.sen > 0) townSentryDraw(ctx, r, X + (r.w / 2) * z, Y - (r.h * 0.4 + r.hgt / 10) * z, z, live); return; }
+  const A = window.TOWN_ART, st0 = TOWN_STATES[townState(r)], st = look.L[st0] ? st0 : 'd', S0 = look.L[st], k = z / (S0.p || A.ppt), sx = look.sx, dpr = (typeof R !== 'undefined' && R.dpr) || 1;
+  // the light now: its version, and the next one's faded over it while the light changes (as drawArt)
+  const tod = live && typeof TOD !== 'undefined' && TOD.active ? TOD.state : null;
+  const ta = tod ? tod.a : 'day', tb = tod && tod.f > 0.002 && tod.b !== tod.a ? tod.b : ta, late = tod && tod.f >= 0.5;
+  const px = S0.size[0] * k * sx * dpr, budget = _ta.budget || { n: 6 }; // (device pixels: the copy drawn is at least that wide)
+  let A1 = townVersion(look, st, late ? tb : ta, px, budget), B1 = tb !== ta ? townVersion(look, st, late ? ta : tb, px, budget) : null;
+  if (!A1) { A1 = B1 || townVersion(look, st, 'day', px, budget); B1 = null; } // (its version for now not made yet: another stands in for a frame)
+  // fading while one of your robots is behind it
+  const top = (S0.fl[1] - S0.roof[1]) / (S0.p || A.ppt) + 0.3, f0 = _tf.get(r.id) || 0, hide = live && townHides(r, top) ? 1 : 0;
+  const fade = f0 + (hide - f0) * Math.min(1, (R.dt || 0.016) * 8);
+  if (fade > 0.01) _tf.set(r.id, fade); else _tf.delete(r.id);
+  const ga = ctx.globalAlpha;
+  ctx.globalAlpha = ga * (1 - 0.65 * fade);
+  const put = (v) => { const s = v.S, q = z / (s.p || A.ppt); ctx.drawImage(v.img, X - s.fl[0] * q * sx, Y - s.fl[1] * q, s.size[0] * q * sx, s.size[1] * q); };
+  if (A1) put(A1); else { townBlock(ctx, r, X, Y, z); }
+  const over = tod ? (late ? 1 - tod.f : tod.f) : 0;
+  if (A1 && B1 && over > 0.002) { ctx.globalAlpha = ga * (1 - 0.65 * fade) * over; put(B1); }
+  ctx.globalAlpha = ga;
+  // at night: a few of its lit windows falter now and then (a standing building's)
+  const N = look.L.n;
+  if (live && night > 0.3 && st === 'd' && N && N.flick && townHash(r, 90) < 0.35) {
+    ctx.fillStyle = 'rgba(16,20,30,0.85)';
+    N.flick.forEach(([fx, fy, fw, fh], q) => { if (hash2(Math.floor(R.time * (2 + q)), r.id * 3 + q, 4402) < 0.22) ctx.fillRect(X + (fx - N.fl[0]) * k * sx, Y + (fy - N.fl[1]) * k, fw * k * sx, fh * k); });
   }
-  if (live && (r.k === 'spire' || r.k === 'tower')) { // the civic tower's beacon (dusk to dawn), a tower's red light
-    const H = townHeight(r), bx = ox + (r.x + r.w / 2) * z, by = oy + (r.y + 0.3 - H) * z;
-    if (r.k === 'spire' && night > 0.05) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = night * (0.55 + 0.45 * Math.sin(R.time * 1.3)); const gr = ctx.createRadialGradient(bx, by - z * 0.5, 0, bx, by - z * 0.5, z * 1.4); gr.addColorStop(0, `rgba(255,236,190,${a})`); gr.addColorStop(1, 'rgba(255,236,190,0)'); ctx.fillStyle = gr; ctx.fillRect(bx - z * 1.4, by - z * 1.9, z * 2.8, z * 2.8); ctx.restore(); }
-    if (r.k === 'tower' && Math.sin(R.time * 3.1 + r.id) > 0.6) { ctx.fillStyle = '#ff3a2a'; ctx.fillRect(bx - z * 0.03, by - z * 0.08, z * 0.06, z * 0.06); }
+  const at = (p) => [X + (p[0] - S0.fl[0]) * k * sx, Y + (p[1] - S0.fl[1]) * k];
+  if (live && st === 'd' && look.L.d.beacon && night > 0.05) { // the civic tower's beacon (dusk to dawn), breathing
+    const D = look.L.d, [bx, by] = [X + (D.beacon[0] - D.fl[0]) * k * sx, Y + (D.beacon[1] - D.fl[1]) * k];
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = night * (0.45 + 0.4 * Math.sin(R.time * 1.3)); const gr = ctx.createRadialGradient(bx, by, 0, bx, by, z * 1.4); gr.addColorStop(0, `rgba(255,236,190,${a})`); gr.addColorStop(1, 'rgba(255,236,190,0)'); ctx.fillStyle = gr; ctx.fillRect(bx - z * 1.4, by - z * 1.4, z * 2.8, z * 2.8); ctx.restore();
   }
-  if (r.sen > 0) townSentryDraw(ctx, r, ox, oy, z, live);
+  if (live && st === 'd' && look.L.d.mast && Math.sin(R.time * 3.1 + r.id) > 0.6) { // a tower's red light, blinking
+    const D = look.L.d, mx = X + (D.mast[0] - D.fl[0]) * k * sx, my = Y + (D.mast[1] - D.fl[1]) * k, s = Math.max(2, z * 0.07);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#ff3a2a'; ctx.fillRect(mx - s / 2, my - s / 2, s, s); ctx.restore();
+  }
+  if (r.sen > 0) { const [sx0, sy0] = at(S0.roof); townSentryDraw(ctx, r, sx0, sy0, z, live); }
 }
 
-/** An old Accord sentry at its post on the roof: a squat white robot with a blue band and a lit visor. */
-function townSentryDraw(ctx, r, ox, oy, z, live) {
-  const x = ox + (r.x + r.w / 2) * z, y = oy + (r.y + r.h * 0.6 - townHeight(r)) * z, c = (h) => (typeof todColor === 'function' ? todColor(h) : h);
+/** An old Accord sentry at its post on the roof (x, y: its foot on screen): a squat white robot with a blue band and a lit visor. */
+function townSentryDraw(ctx, r, x, y, z, live) {
+  const c = (h) => (typeof todColor === 'function' ? todColor(h) : h);
   ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(x, y, z * 0.22, z * 0.08, 0, 0, 7); ctx.fill();
   ctx.fillStyle = c('#c9ccd0'); ctx.fillRect(x - z * 0.16, y - z * 0.42, z * 0.32, z * 0.4);
   ctx.fillStyle = c('#2f5d86'); ctx.fillRect(x - z * 0.16, y - z * 0.26, z * 0.32, z * 0.06);

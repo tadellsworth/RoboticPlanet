@@ -106,6 +106,19 @@ for (const m of html.matchAll(/data-src="(art\/[^"]+)"/g)) {
 }
 fs.writeFileSync(path.join(root, 'dist', 'lore.js'), `window.LORE_DATA = ${JSON.stringify(loreData)};\n`);
 
+// Passenger Town's buildings (art/town: the list, town-art.js, and its pictures) go in a bundle of their own beside the
+// page (dist/town.js, loaded for a Passenger Town map: see ensureTownArt in js/city.js).
+let townBytes = 0;
+{
+  const sb = { window: {} };
+  vm.runInNewContext(read('art/town/town-art.js'), sb);
+  const A = sb.window.TOWN_ART, data = {};
+  for (const f of fs.readdirSync(path.join(root, 'art/town'))) if (f.endsWith('.webp')) data[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/town', f)).toString('base64')}`;
+  const js = `window.TOWN_ART = ${JSON.stringify({ ...A, data })};\n`;
+  fs.writeFileSync(path.join(root, 'dist', 'town.js'), js);
+  townBytes = js.length;
+}
+
 // The build number (index.html's terrafall-build tag, "dev" in the repository): this commit's short hash and the date,
 // as the publishing workflow writes it, marked as the one-file build (Send feedback names it).
 let build = '';
@@ -125,9 +138,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.ART_BUNDLE = ${JSON.stringify(ART_GROUPS)};\nwindow.MURMUR_BUNDLE = true;\nwindow.LANDMARK_BUNDLE = true;\nwindow.TOWN_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.ITHACA_MAP = ${JSON.stringify(ithacaMap)};\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/art-{buildings,bots,effects,other}.js (${Math.round(artBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB) and dist/murmur.js (${Math.round(murmurJs.length / 1024)} KB) and dist/landmarks.js (${Math.round(lmJs.length / 1024)} KB) and dist/town.js (${Math.round(townBytes / 1024)} KB)`);

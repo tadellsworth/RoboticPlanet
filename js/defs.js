@@ -778,17 +778,21 @@ const TOWN = {
   ai: { every: 20, max: 2, reach: 6 },
   ring: { four: 0.27, three: 0.7, lobe: 0.45 }, avenue: 1, murmur: 0.5,
 };
-/** The kinds of building in Passenger Town: name, line (flavour), height range (tiles, as drawn), salvage multiplier. */
+/**
+ * The kinds of building in Passenger Town: name, line (flavour), height range (tiles, as drawn: the rendered art's, its
+ * sentry's roof over the ground; js/city.js draws the look nearest it, and it only places what's drawn, a sentry's
+ * shots), salvage multiplier.
+ */
 const TOWN_KINDS = {
-  house: { name: 'Walk-up flats', h: [0.8, 1.15], mult: 0.9, cache: true, line: 'Three floors, six flats, keys in every door. The welcome packs are still on the kitchen tables.' },
-  shop: { name: 'Shopfront', h: [0.55, 0.8], mult: 0.8, cache: true, line: 'The shutters are up and the shelves are stocked to the Accord list. Opening day: Arrival.' },
-  flats: { name: 'Apartment block', h: [1.3, 1.9], mult: 1.2, cache: true, line: 'Two hundred homes, allocated by lottery. The lottery was to be drawn on board.' },
-  tower: { name: 'Residential tower', h: [2.3, 3.4], mult: 1.5, cache: true, line: 'Its lifts run a test cycle every morning at six. Nobody has ever rung for one.' },
-  school: { name: 'The school', h: [0.9, 1.05], mult: 1.1, chips: 2, cache: true, line: 'Desks set out for the first term: names on the coat pegs, blank.' },
-  hall: { name: 'The civic hall', h: [1.5, 1.7], mult: 1.4, chips: 3, cache: true, line: 'The town council\'s chamber. The chairs are numbered; the first meeting is still on the noticeboard.' },
-  spire: { name: 'The civic tower', h: [4.2, 4.6], mult: 1.8, chips: 2, line: 'The tallest thing the Pathfinder built. Its beacon has burned every night for sixty years, for the arks to steer by.' },
-  arcade: { name: 'Covered arcade', h: [0.8, 1.0], mult: 0.7, line: 'A glass roof over the street, so the colonists could shop in the rain. It rains here more than they were told.' },
-  car: { name: 'Parked car', h: [0.22, 0.28], mult: 1, fixed: { cement: 0, alloy: 2, chip: 0 }, line: 'A town runabout from the Pathfinder\'s hold, parked where it was charged. Mileage: zero.' },
+  house: { name: 'Walk-up flats', h: [0.8, 1.35], mult: 0.9, cache: true, line: 'Three floors, six flats, keys in every door. The welcome packs are still on the kitchen tables.' },
+  shop: { name: 'Shopfront', h: [0.65, 1.2], mult: 0.8, cache: true, line: 'The shutters are up and the shelves are stocked to the Accord list. Opening day: Arrival.' },
+  flats: { name: 'Apartment block', h: [1.8, 2.15], mult: 1.2, cache: true, line: 'Two hundred homes, allocated by lottery. The lottery was to be drawn on board.' },
+  tower: { name: 'Residential tower', h: [2.8, 3.6], mult: 1.5, cache: true, line: 'Its lifts run a test cycle every morning at six. Nobody has ever rung for one.' },
+  school: { name: 'The school', h: [0.75, 0.8], mult: 1.1, chips: 2, cache: true, line: 'Desks set out for the first term: names on the coat pegs, blank.' },
+  hall: { name: 'The civic hall', h: [1, 1.1], mult: 1.4, chips: 3, cache: true, line: 'The town council\'s chamber. The chairs are numbered; the first meeting is still on the noticeboard.' },
+  spire: { name: 'The civic tower', h: [4.3, 4.4], mult: 1.8, chips: 2, line: 'The tallest thing the Pathfinder built. Its beacon has burned every night for sixty years, for the arks to steer by.' },
+  arcade: { name: 'Covered arcade', h: [0.55, 0.6], mult: 0.7, line: 'A glass roof over the street, so the colonists could shop in the rain. It rains here more than they were told.' },
+  car: { name: 'Parked car', h: [0.12, 0.16], mult: 1, fixed: { cement: 0, alloy: 2, chip: 0 }, line: 'A town runabout from the Pathfinder\'s hold, parked where it was charged. Mileage: zero.' },
 };
 /** The sentry's voice: its log line, with {day} the days on duty (LORE.md: the Warden's register). */
 const TOWN_SENTRY_LINE = 'Accord Civil Security. Position held. Day {day}.';

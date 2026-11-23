@@ -1937,7 +1937,7 @@ left like the art (a lit lip on each crater, its far wall in shade), team colour
 A sprite set could replace the scrap and bones later (renderer, `art/` like the wrecks: `wreck-<type>`); keep them flat
 on the ground and small, since they are baked at 32 px a tile and redrawn at 64 or 128 close up.
 
-### Passenger Town, the city map (drawn in code; no images)
+### Batch 33: Passenger Town's buildings (installed; the ground drawn in code)
 
 The owner's art direction (Nov 22 2026): the mood of the dense sci-fi cities of *Industries of Titan*, not their
 content: our own buildings, in our camera view. A dense grid of blocks packed with mid-rise and taller buildings of
@@ -1948,19 +1948,59 @@ plaza or two; low haze over it, thickest at dusk and night, deeper toward the ma
 lights still running on automatic (LORE: empty, waiting). By day the same forms in muted greys, browns and teal panels,
 lights off. A stripped building leaves a cleared lot: a foundation slab, rubble and rebar.
 
-All of it is drawn in code (`js/city.js`), so there's nothing to bundle:
+**The buildings** are rendered with `renderer/b/town.js` (concepts approved by the owner Nov 23 2026: "looks great";
+`renderer/preview/town_concept.py` and `town_sheet.py` make the concept pictures). One building on its lot, at true
+scale (10 world units a tile), in the buildings' 57-degree view but orthographic, 128 px a tile, so neighbouring lots
+join exactly; the lot's front-left corner (`lotFL`) is put on the lot's front-left corner on the game's ground.
+`?k=` the kind (`TOWN_KINDS`), `w`/`h` the lot, `v` the look, `strip=1|2` being stripped, `tod=night` lights on.
+
+| Kind | What |
+| --- | --- |
+| `house` (walk-up flats) | A row of two or three narrow walk-ups of four to six floors, each its own colour (brick reds, cream, browns), balconies with pale rails, a stair tower and antenna; a deep lot gets a taller block behind |
+| `shop` (shopfront) | A tall glazed ground floor under an awning and a sign band in Accord script, shutters half down on some; two or three floors over it set back, condenser units on the ledge |
+| `flats` (apartment block) | A front slab with balconies, a taller back slab, a lift core taller still in teal panels with a cyan strip; a billboard or big tank on the roof |
+| `tower` (residential tower) | A podium of shops, a shaft of 12 to 16 storeys with a cyan strip and a red bar sign, a lower annex, a crown with a landing pad or a lift house, an antenna with a red light |
+| `school` | An L of three storeys round a yard with a painted court, a yellow band, the clock over the door, solar panels and an observatory dome |
+| `hall` (civic hall) | A podium and steps, a colonnade, a high chamber with a stepped copper-green roof and the clock, a bare flagpole, skylights |
+| `spire` (civic tower) | The tallest thing in town: stepped, cyan light fins up its corners, the beacon's lens toward the sky road, a red-tipped mast |
+| `arcade` | A glass barrel roof on thin steel ribs over the street (the owner: thin ribs), kiosks lit by night |
+| `car` | A dusty town runabout, flat tyres, a rust patch |
+
+Being stripped (`strip=1`): the top floors gone, panels out, scaffold and a green net over the front, girders over a
+dark hole where the roof was, crates of salvage at its foot; `strip=2`: only the frame left (columns and slabs), rubble.
+
+`renderer/tools/render_town.sh` renders every lot in `renderer/tools/town_footprints.json` (each kind and size
+townSetup lays, with how often: `node tools/town_footprints.js` writes it again when the layout changes), in three
+looks for the commonest lots (a 2 x 2 walk-up, a car), two for any lot at least 0.3% of the town and one for the rare
+ones; each by day and at night, and the first look stripped twice by day (`tools/install_town.py jobs` lists the jobs).
+Then `python3 tools/install_town.py` blooms them, takes them down 2x, crops them and writes `art/town/` at 96 px a tile
+(72 for a rare lot: under 0.1% of the town, the civic halls, schools and long arcades), the stripped looks at 64: about
+3.7 MB in all (day and night 2.55 MB, stripped 1 MB, shadows and the list 0.17 MB; the web game loads only the lots in
+play, the stripped ones once stripping starts):
+
+| File | What |
+| --- | --- |
+| `<kind>-<w>x<h>-<v>.webp`, `-n.webp` | By day; at night, lights on automatic, lifted with 13% of the day render (`NIGHT_LIFT`) so the roofs read, brighter than the shared very dark night (the owner) |
+| `<kind>-<w>x<h>-1-s1.webp`, `-s2.webp` | Stripped, scaffold and frame, by day only, the lot's first look whichever look it was (the scaffold covers the change): their lights are cut, so the game grades them at night (`TOWN_NIGHT`, a little lighter than the land) |
+| `-sh.webp` | The shadow alone (black, its alpha the shadow) at 16 px a tile, as the town's ground |
+| `town-art.js` | `window.TOWN_ART`: each lot's looks and their marks in the sprite's pixels: `fl` (the lot's corner), `roof`/`roofG` (the sentry's post and the ground under it: the drawn height), `mast` (a tower's red light), `beacon` (the civic tower's), and at night `flick` (a few lit windows the game lets falter) |
+
+All of it loads only for a Passenger Town map (`ensureTownArt` in js/city.js: the list first, then the pictures of the
+lots that town has, the stripped ones once stripping starts); in the one-file copy it's a bundle beside the page
+(`dist/town.js`). Morning and evening are made in the game: the day render graded for the time, and at evening the night
+render laid over it at the share the lights are on. A lot size the art doesn't have uses its kind's nearest, stretched
+across; with no art at all (still loading) a building is a plain block. To regenerate: change `b/town.js`, run
+`tools/render_town.sh` (about an hour on four cores; delete `out/town` after), `tools/install_town.py`, and look over
+`tools/install_town.py --sheet <png>`.
+
+**The rest is drawn in code** (`js/city.js`):
 
 | What | How it's drawn |
 |---|---|
-| Streets and lots (`townGroundCanvas`) | One picture of the whole town at 16 px a tile, made again only when a building comes down or the roads on it change, drawn with the ground (graded with it at dusk and night): asphalt with grit, concrete block slabs with a pale kerb and its shadow, dashed lane lines down every street, worn zebra crossings, parking bays, plazas (paving grid, planters, a dry fountain), stripped lots. Roads on it (the avenues, old Accord roads, and any a colony lays) are cut out in the shape the map draws roads, so they show through. A square town (four colonies) fades out on all four sides; a round one (three) is clipped to its outline (`townEdge`) and fades out round it. |
-| Buildings (`townPaint`) | Boxes in the game's projection (the front face standing up toward the camera, the roof a footprint lifted by the height), one to four tiers stepping back, a shadow cast east. Fronts: floors of windows, floor bands, balconies, shopfronts with awnings, the hall's columns and steps, the school's yellow band and clock, a cyan strip up an edge, a red or glyph sign. Roofs (seven greys, browns and teals): vents, tanks, fans, rows of units, antennas with red tips, a tower's landing pad. Being stripped: lower as it goes, scaffold over the front, girders where the roof was. Each building is cached as two pictures at the nearest of a few zoom steps (its body, coloured for the time of day with `todColor`; its lit windows and signs, added on at night, some buildings' lights faltering now and then). |
-| Kinds (`TOWN_LOOK`) | Walk-up flats (warm brick and cream), shopfronts, apartment blocks (greys and teal panels), residential towers (dark, two or three tiers, red light blinking), the school, the civic hall (pale stone, a copper-green upper block, a bare flagpole), the civic tower (slim, four tiers, a beacon that pulses from dusk to dawn), covered arcades over the streets (a glass roof on ribs, arches underneath) and parked cars. |
-| Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on the roof; its armour bar once hit. |
-| The rest | Street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
-
-A sprite set from the renderer could replace the buildings later (`renderer/b/landmark.js` has Passenger Town's
-house and sign): the kinds and their footprints are in `TOWN_KINDS` (js/defs.js); keep a body and a lights picture
-for each, and a stripped-down look.
+| Streets and lots (`townGroundCanvas`) | One picture of the whole town at 16 px a tile, made again only when a building comes down, its look changes or the roads on it change, drawn with the ground (graded with it at dusk and night): asphalt with grit, concrete block slabs with a pale kerb and its shadow, dashed lane lines down every street, light thin zebra crossings, parking bays, plazas (paving grid, planters, a dry fountain), stripped lots. Roads on it (the avenues, old Accord roads, and any a colony lays) are cut out in the shape the map draws roads, so they show through. A square town (four colonies) fades out on all four sides; a round one (three) is clipped to its outline (`townEdge`) and fades out round it. Every building's shadow goes on it as one layer (where two fall together they don't darken twice), at 45%. |
+| Buildings (`townDraw`) | The sprite for the time of day (halved copies for drawing it small; a few graded versions made a frame, kept while in use), sorted with the robots by their foot. A building in front of one of your robots (or one you've selected) fades to 35% while it's behind it. At night a few lit windows falter now and then. |
+| Sentries (`townSentryDraw`) | A squat white Accord security robot with a blue band and a lit cyan visor, on its look's `roof` mark; its armour bar once hit. |
+| The rest | The civic tower's beacon pulsing from dusk to dawn and a tower's red light blinking (on their marks), street lamps at the crossings (lit at night, with light pools), the WELCOME TO ITHACA sign (the landmarks' `lm-sign` art and glow) at each end, the haze (`townHaze`: a band over the town, thicker at the map's edges, banks of it drifting east) and the name in atlas lettering zoomed out. |
 
 ### Wind, water, sky and the planet view (drawn in code; no images)
 

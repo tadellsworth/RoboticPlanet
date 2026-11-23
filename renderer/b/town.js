@@ -1,4 +1,4 @@
-// Passenger Town (the city map, js/city.js): its buildings as 3D sprites, a CONCEPT set (Nov 2026; not installed).
+// Passenger Town (the city map, js/city.js): its buildings as 3D sprites (installed Nov 23 2026: tools/render_town.sh, tools/install_town.py).
 // The owner's art direction (ART_GUIDE.md, Passenger Town): the mood of the dense sci-fi cities of Industries of Titan,
 // our own buildings: chunky blocky forms of varied heights, rooftop clutter (vents, tanks, fans, pads, antennas), many
 // small warm windows, cool cyan strips, a few red or orange sign panels and glyph signs; weathered, dust at the foot,
@@ -149,9 +149,10 @@ export default function (L) {
     const fp = new THREE.PlaneGeometry(w, h, 1, Math.min(24, Math.max(1, Math.ceil(h / 0.5))));
     m.userData.front = mesh(fp, front, (x0 + x1) / 2, y0 + h / 2, z1 + 0.015, { dirt: y0 < 0.1 ? 0.45 : 0.15, dirtH: 2.2, cast: false });
     if (o.parapet !== false) parapet(x0, x1, z0, z1, y1, o.parapetC || shade(o.wall || wallC, 0.12));
-    if (o.parapet !== false && h > FH * 2 && R() < 0.6) { // a work light on the parapet (on automatic at night: it shows the roof)
+    if (o.parapet !== false && h > FH * 1.5 && R() < 0.85) { // work lights on the parapet (on automatic at night: they show the roof)
       const lx = R() < 0.5 ? x0 + 0.5 : x1 - 0.5, lz = R() < 0.5 ? z0 + 0.5 : z1 - 0.5;
-      box(0.35, 0.3, 0.35, light(pick(['#ffd9a0', '#ffc477', '#bfe8ff']), 3), lx, y1 + 0.55, lz, nc);
+      box(0.35, 0.3, 0.35, light(pick(['#ffd9a0', '#ffc477', '#bfe8ff']), 3.4), lx, y1 + 0.55, lz, nc);
+      if (w * d > 60) box(0.35, 0.3, 0.35, light(pick(['#ffd9a0', '#bfe8ff']), 3.4), x0 + x1 - lx, y1 + 0.55, z0 + z1 - lz, nc); // (a big roof: one on the far corner too)
     }
     // floor ledges across the front (chunky slabs that catch the light)
     if (o.ledges) for (let f = Math.ceil(y0 / FH + 0.01); f * FH < y1 - 0.5; f++) box(w + 0.2, 0.22, 0.3, std({ color: shade(o.wall || wallC, 0.18) }), (x0 + x1) / 2, f * FH - 0.11, z1 + 0.1, { dirt: 0 });
@@ -266,7 +267,7 @@ export default function (L) {
         const w = RR(2.6, 4), d = RR(2, 3), h = RR(1.2, 2.2), c = pick(['#3d7c84', '#356a8a', '#4a8a8c', '#2f5f78', '#8a8d90']);
         box(w, h, d, M.paint(c, { rivets: false, rough: 0.55, panelW: 128, panelH: 512 }), x, y, z, { dirt: 0.25, dirtH: 0.8 });
         box(w * 0.7, h * 0.5, 0.06, grille, x, y + h * 0.25, z + d / 2 + 0.03, nc);
-        if (R() < 0.5) box(0.25, 0.15, 0.25, light('#7ff6ff', 3), x + w / 2 - 0.3, y + h, z + d / 2 - 0.3, nc);
+        if (R() < 0.8) box(0.25, 0.15, 0.25, light(pick(['#7ff6ff', '#ffd9a0']), 3.4), x + w / 2 - 0.3, y + h, z + d / 2 - 0.3, nc);
       } else if (k === 'solar') solar(x - 2.2, x + 2.2, z - 2, z + 2, y);
       else if (k === 'glass') { // a little roof greenhouse (dead plants), its glass lit warm at night
         const w = RR(2.4, 3.4), d = 2.2;
@@ -288,6 +289,7 @@ export default function (L) {
   const X0 = -LX + m, X1 = LX - m, Z0 = -LZ + m, Z1 = LZ - m;
   const floorsTo = (n) => n * FH;
   let topY = 0;
+  const pts = {}; // (marks the game needs: `mast` a tower's red light, `beacon` the civic tower's beacon)
   const roofN = (b) => Math.round((b.x1 - b.x0) * (b.z1 - b.z0) / 40);
   const HB = 1 - STRIP * 0.25; // (stripping takes the top floors first)
   const fl = (n) => Math.max(1, Math.round(n * HB));
@@ -354,7 +356,7 @@ export default function (L) {
     if (!STRIP) {
       const big = Math.min(top.x1 - top.x0, top.z1 - top.z0) > 9;
       clutter(top, 2, big && R() < 0.75 ? [['pad', 3.8]] : [['hut', 1.8], ['bigtank', 2]]);
-      antenna(top.x1 - 1, top.y1, top.z0 + 1, 8);
+      antenna(top.x1 - 1, top.y1, top.z0 + 1, 8); pts.mast = [top.x1 - 1, top.y1 + 8, top.z0 + 1];
     }
     topY = top.y1 + 10;
   } else if (KIND === 'spire') { // the civic tower: the tallest thing in town, stepped, light fins up its corners, the beacon
@@ -373,6 +375,7 @@ export default function (L) {
       for (const [dx, dz] of [[0, 1.62]]) box(2.2, 1.3, 0.1, light('#ffe6b0', 4, '#8a8470'), cx + dx, y + 0.8, cz + dz, nc); // (the beacon's lens, facing the sky road the arks would come in by)
       cyl(0.6, 1.0, light('#ffe8b0', 5, '#9a937e'), cx, y + 2.85, cz, { seg: 20, dirt: 0, cast: false });
       cyl(0.09, 9, metal, cx, y + 3.85, cz, { seg: 8, dirt: 0 }); box(0.3, 0.3, 0.3, red, cx, y + 12.8, cz, nc);
+      pts.beacon = [cx, y + 3.35, cz]; pts.mast = [cx, y + 12.95, cz];
       sign((X0 + X1) / 2, base.y1 + FH * 2, Z1 - 1.6 * 1 + 0.02, 2.2, 2.2 + FH * 3, 'glyph', '#7ff6ff');
     }
     topY = y + 13;
@@ -440,13 +443,13 @@ export default function (L) {
     const g = L.group(0, 0, 0, along === 'x' ? 0 : PI / 2);
     const steel = M.plain('#4a5258', 0.45, 0.6), glass = new THREE.MeshPhysicalMaterial({ color: '#86aab4', roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.55, clearcoat: 0.8, envMapIntensity: 1.3 });
     for (let x = -len / 2 + 0.3; x <= len / 2 - 0.2; x += 2.4) {
-      for (const s of [-1, 1]) box(0.35, hgt, 0.35, steel, x, 0, s * (span / 2 - 0.3), { parent: g, dirt: 0.4 });
-      const rib = new THREE.TorusGeometry(span / 2 - 0.3, 0.14, 6, 24, PI); rib.rotateY(PI / 2); rib.scale(1, 0.55, 1);
+      for (const s of [-1, 1]) box(0.24, hgt, 0.24, steel, x, 0, s * (span / 2 - 0.3), { parent: g, dirt: 0.4 });
+      const rib = new THREE.TorusGeometry(span / 2 - 0.3, 0.06, 6, 24, PI); // (thin: the owner, Nov 23 2026) rib.rotateY(PI / 2); rib.scale(1, 0.55, 1);
       mesh(rib, steel, x, hgt, 0, { parent: g, dirt: 0 });
     }
     const roof = new THREE.CylinderGeometry(span / 2 - 0.3, span / 2 - 0.3, len, 24, 1, true, 0, PI); roof.rotateZ(PI / 2); // (theta 0..PI: the upper half once its axis lies along x) roof.scale(1, 0.55, 1);
     mesh(roof, glass, 0, hgt, 0, { parent: g, dirt: 0, cast: false });
-    box(len, 0.35, 0.5, steel, 0, hgt - 0.35, span / 2 - 0.3, { parent: g, dirt: 0 }); box(len, 0.35, 0.5, steel, 0, hgt - 0.35, -span / 2 + 0.3, { parent: g, dirt: 0 });
+    box(len, 0.25, 0.35, steel, 0, hgt - 0.25, span / 2 - 0.3, { parent: g, dirt: 0 }); box(len, 0.25, 0.35, steel, 0, hgt - 0.25, -span / 2 + 0.3, { parent: g, dirt: 0 });
     // kiosks down the middle, lit by night
     for (let x = -len / 2 + 2.5; x < len / 2 - 2; x += RR(4, 6)) { box(2.2, 2.4, 1.6, std({ color: pick(['#8a7d6c', '#6e7476', '#7b6a5e']) }), x, 0, RR(-1, 1), { parent: g, dirt: 0.4 }); box(1.8, 0.6, 0.05, light(pick(['#ffc477', '#7ff6ff', '#ff7a3a']), 2.4), x, 1.5, 0.83, { parent: g, dirt: 0, cast: false }); }
     for (let x = -len / 2 + 1.2; x < len / 2; x += 4.8) box(0.4, 0.2, 0.4, light('#ffe2a8', 3, '#8a8a80'), x, hgt + 1.4, 0, { parent: g, dirt: 0, cast: false });
@@ -482,6 +485,13 @@ export default function (L) {
   }
 
   // ------------------------------------------------------------------ frame, shadows, marks
+  // the sentry's post (the game draws it there): the middle of the highest roof big enough to stand on, and the ground
+  // under it (roofG: the drawn height is the two apart)
+  const seen = blocks.filter((b) => b.m.visible && (b.x1 - b.x0) * (b.z1 - b.z0) >= 14);
+  const post = seen.length ? seen.reduce((a, b) => (b.y1 > a.y1 ? b : a)) : null;
+  const pp = post ? [(post.x0 + post.x1) / 2, post.y1, (post.z0 + post.z1) / 2] : KIND === 'arcade' ? [0, 10.5, 0] : [0, 2.6, 0];
+  L.mark('roof', pp[0], pp[1], pp[2]); L.mark('roofG', pp[0], 0, pp[2]);
+  for (const k in pts) L.mark(k, ...pts[k]);
   L.mark('lotFL', -LX, 0, LZ); L.mark('lotFR', LX, 0, LZ); L.mark('lotBL', -LX, 0, -LZ); L.mark('lotBR', LX, 0, -LZ); L.mark('foot', 0, 0, LZ);
   const scene = L.getScene();
   let sunDir = new THREE.Vector3(-7, 15, -6.5);

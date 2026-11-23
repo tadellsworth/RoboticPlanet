@@ -281,7 +281,12 @@ claws at it, `TOWN.murmur` (0.5) of its bite a second (`townTick`, three times a
 (bit 2), so robots that don't fight keep out of it; a guarded building can't be ordered stripped. A rival (`aiTown` in
 js/ai.js) orders one building at a time stripped, up to `TOWN.ai.max` (2), every `TOWN.ai.every` (20) s: the unguarded
 one nearest the line from its base to its enemy's within `TOWN.ai.reach` of its land, the richer the better.
-The look is drawn in code (js/city.js; ART_GUIDE.md, Passenger Town). The mission **Passenger Town** (First Contact)
+The look (js/city.js; ART_GUIDE.md, Batch 33): the buildings are rendered sprites (`renderer/b/town.js`, a look for
+each kind and lot size, by day, at night and stripped twice: `townState` maps the eighths of `townStep` onto them), loaded
+only for this map (`ensureTownArt`: `art/town/town-art.js` and the pictures of the lots in play; one-file:
+`dist/town.js`), morning and evening made from day and night; of a lot's looks the one nearest the building's `hgt`
+(so `TOWN_KINDS` heights are the art's); a building in front of one of your robots fades. The ground, shadows (one
+layer), lamps, sentries, haze and the name are drawn in code. The mission **Passenger Town** (First Contact)
 teaches it (and joining a road to the avenue). `node tools/city-test.js [--games n minutes] [--only k]` checks the
 layouts for two, three and four (symmetry and fairness, joined, the avenues, the Trade Posts), stripping, sentries (and
 the Murmur), the save (and an older one) and AI games with two, three and four colonies.
@@ -3630,6 +3635,8 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the atlas, the regions, the Murmur), and the menu planet's
                           face (ithaca-map.webp, the atlas made small)
 art/menu/                 the Campaigns cards' pictures: 160 px crops of art/lore/ (inline in the one-file build)
+art/town/                 Passenger Town's buildings (renderer/tools/install_town.py; town-art.js lists them): loaded only
+                          for that map
 tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the menu planet's face; globe.py its globe views
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
@@ -3637,7 +3644,7 @@ tools/menu-test.js        the main menu: every destination opens (two taps at mo
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when
-                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), tod-<time>.js (each time of
+                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), tod-<time>.js (each time of
                           day's re-lit set) and lore.js (the Lore guide's pictures). Copied without its folder, the page
                           still runs, drawn in code.
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
