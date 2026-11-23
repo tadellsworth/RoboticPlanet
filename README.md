@@ -101,7 +101,10 @@ how goods move.
   one fragment shader samples `art/globe/ithaca-2048.webp`, or `ithaca-4096.webp` once the globe is over `CGL.hdAt`
   device px across, for a soft terminator from the upper-left light, the sea's glint off the picture's land mask, the
   clouds, the haze at the limb and the halo; at `CGL.moveDpr` while it turns, sharp again when it stops); without
-  WebGL, or from a page opened as a file, the old per-pixel sphere from the menu planet's face (`cgDraw2d`). Each
+  WebGL, on a software renderer (`WEBGL_debug_renderer_info`: SwiftShader, llvmpipe...), when the first
+  `CGL.slowChecks` full draws average over `CGL.slowMs` (50 ms), or from a page opened as a file, the globe is shaded
+  per pixel instead for the rest of the session (`cgDraw2d`: the same 2048 picture and clouds read as pixels, up to
+  `CGL.flatMax` px across, `CGL.flatMove` while it turns, made again only when the view or tints change). Each
   owner's territories are tinted (a soft fill, stronger at the edge, painted onto a 1024 × 512 picture of the globe by
   `cglTint` when owners, the pick or the targets change) and outlined in their colour with a dark casing, the picked
   territory in white and the move or weapon targets in yellow (dashed for a weapon), and the borders on land are thin

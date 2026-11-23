@@ -15,8 +15,9 @@
  * owners' tints are painted onto a small equirectangular picture of their own (cglTint) whenever the owners, the pick
  * or the move targets change, shared by both ways of drawing.
  *
- * Without WebGL (or when the picture can't be used, as on a page opened from a file) the globe is shaded per pixel into a
- * small image, as before (cgDraw2d), from the menu planet's face (art/lore/ithaca-map.webp, the same picture made small).
+ * Without WebGL, on a software renderer, when the first full draws prove too slow (CGL.slowMs), or when the picture can't
+ * go to the GPU (a page opened from a file), the globe is shaded per pixel into an image instead (cgDraw2d), from the
+ * same 2048 picture and clouds (or, until they come or if they can't be read, the menu planet's face).
  * The planet is only drawn again when the view, its size or the tints change.
  */
 
@@ -26,6 +27,10 @@ const CGL = {
   maxDpr: 2,         // the planet's canvas at most this many pixels a css px
   maxPx: 3072,       // ...and at most this many across
   moveDpr: 1,        // ...and at most this many while it turns (drawn sharp again once it stops)
+  slowMs: 50,        // if the first full draws (timed, slowChecks of them) take longer than this on average, draw per pixel
+  slowChecks: 3,     //   instead for the rest of the session
+  allowSoftware: false, // (true: keep WebGL even on a software renderer; for tests and screenshots)
+  flatMax: 900, flatMove: 480, // the per-pixel globe's image: at most this many pixels across, and while it turns
   light: [-0.44, 0.48, 0.76], // towards the light (x right, y up, z out of the screen)
   cloudShift: 0.45,  // the clouds turned this much of the way round from the picture's own place
   stars: 1 / 500,    // stars a square css px
@@ -279,6 +284,12 @@ function cglInit() {
     if (!gl && c) gl = c.getContext('webgl', opt) || c.getContext('experimental-webgl', opt);
   } catch (e) { gl = null; }
   if (!gl) return cglFail();
+  // a software renderer (SwiftShader, llvmpipe...) would be slower than drawing it per pixel: that, then
+  if (!CGL.allowSoftware) {
+    let who = '';
+    try { const d = gl.getExtension('WEBGL_debug_renderer_info'); who = String(gl.getParameter(d ? d.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ''); } catch (e) { who = ''; }
+    if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(who)) { CGS.why = 'software: ' + who; return cglFail(); }
+  }
   const fs = (v2 ? '#version 300 es\n#define OUT_DECL out vec4 fragColor;\n#define OUT fragColor\n#define GRADS vec2 dx = dFdx(st), dy = dFdy(st); bool seam = abs(dx.x) > 0.5 || abs(dy.x) > 0.5; dx.x -= floor(dx.x + 0.5); dy.x -= floor(dy.x + 0.5);\n#define TEX(s, q) (seam ? textureGrad(s, q, dx, dy) : texture(s, q))\n'
     : '#define OUT_DECL\n#define OUT gl_FragColor\n#define GRADS\n#define TEX(s, q) texture2D(s, q)\n') + CGL_FS;
   const vs = v2 ? '#version 300 es\nin vec2 aP; void main() { gl_Position = vec4(aP, 0.0, 1.0); }' : CGL_VS;
@@ -316,35 +327,16 @@ function cglFail() {
   return false;
 }
 
-/** Fetch picture `which` (sd, hd, clouds) and give it to the GPU when it comes. */
-function cglArt(which) {
+/** Fetch picture `which` (sd, hd, clouds): done(img), or done(null) if it can't be had. In the one-file build the
+ * pictures come in a bundle beside the page (globe.js, globe-hd.js), fetched once. */
+function cglFetch(which, done) {
   const src = CGL.art[which], bundle = which === 'hd' ? 'globe-hd.js' : 'globe.js';
   const go = () => {
     const img = new Image();
-    img.onload = () => {
-      const G = CGS.gl;
-      if (!G) return;
-      const gl = G.gl, unit = which === 'clouds' ? 1 : 0, t = which === 'clouds' ? CGS.tex.clouds : gl.createTexture();
-      try {
-        gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
-        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      } catch (e) { cglFail(); CG.dirty = true; return; } // (a page opened from a file: the picture can't go to the GPU)
-      gl.generateMipmap(gl.TEXTURE_2D);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      if (G.aniso && unit === 0) gl.texParameterf(gl.TEXTURE_2D, G.aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(G.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
-      if (unit === 0) {
-        if (CGS.loaded === 'hd' && which === 'sd') { gl.deleteTexture(t); return; } // (the sharp one came first)
-        if (CGS.tex.surf) gl.deleteTexture(CGS.tex.surf);
-        CGS.tex.surf = t; CGS.loaded = which;
-      } else CGS.cloudsReady = true;
-      CGS.key = ''; CG.dirty = true;
-    };
-    img.onerror = () => { if (which !== 'hd') { cglFail(); CG.dirty = true; } };
+    img.onload = () => done(img);
+    img.onerror = () => done(null);
     img.src = (window.GLOBE_DATA && window.GLOBE_DATA[src]) || src;
   };
-  // (in the one-file build the pictures come in a bundle beside the page, fetched once)
   if (window.GLOBE_BUNDLE && !(window.GLOBE_DATA && window.GLOBE_DATA[src])) {
     if (!CGS.bundles[bundle]) {
       CGS.bundles[bundle] = [];
@@ -355,6 +347,31 @@ function cglArt(which) {
     }
     if (CGS.bundles[bundle] === 'done') go(); else CGS.bundles[bundle].push(go);
   } else go();
+}
+
+/** Fetch picture `which` and give it to the GPU when it comes. */
+function cglArt(which) {
+  cglFetch(which, (img) => {
+    const G = CGS.gl;
+    if (!G) return;
+    if (!img) { if (which !== 'hd') { cglFail(); CG.dirty = true; } return; }
+    const gl = G.gl, unit = which === 'clouds' ? 1 : 0, t = which === 'clouds' ? CGS.tex.clouds : gl.createTexture();
+    try {
+      gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    } catch (e) { cglFail(); CG.dirty = true; return; } // (a page opened from a file: the picture can't go to the GPU)
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (G.aniso && unit === 0) gl.texParameterf(gl.TEXTURE_2D, G.aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(G.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+    if (unit === 0) {
+      if (CGS.loaded === 'hd' && which === 'sd') { gl.deleteTexture(t); return; } // (the sharp one came first)
+      if (CGS.tex.surf) gl.deleteTexture(CGS.tex.surf);
+      CGS.tex.surf = t; CGS.loaded = which;
+    } else CGS.cloudsReady = true;
+    CGS.key = ''; CG.dirty = true;
+  });
 }
 
 /** Place #cg-gl round the globe (with room for the halo) at the screen's size now. */
@@ -402,26 +419,66 @@ function cglRender(tintChanged) {
   gl.uniform3f(G.U.uRot, yaw, Math.cos(CG.pitch), Math.sin(CG.pitch));
   gl.uniform1f(G.U.uReady, CGS.loaded ? 1 : 0);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  // the first few full draws (with the picture in) are timed, waiting for the GPU: too slow, and it's per pixel from now on
+  const timed = !CGL.allowSoftware && CGS.loaded && n === P.full && (CGS.timed || []).length < CGL.slowChecks, t0 = timed ? performance.now() : 0;
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (timed) {
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    (CGS.timed = CGS.timed || []).push(performance.now() - t0);
+    const T = CGS.timed, avg = T.reduce((a, b) => a + b, 0) / T.length;
+    if (T.length >= CGL.slowChecks && avg > CGL.slowMs) { CGS.why = 'slow: ' + avg.toFixed(0) + ' ms'; cglFail(); return false; }
+  }
   return true;
 }
 
 /** Each frame (cgLoop): once the globe has stopped turning, draw it sharp again. */
 function cglTick() {
-  if (CGS.gl && CGS.place && CGS.turning && performance.now() - CGS.viewAt > 160) { CGS.turning = false; CG.dirty = true; }
+  if (CGS.turning && performance.now() - CGS.viewAt > 160) { CGS.turning = false; CG.dirty = true; }
 }
 
 /* ------------------------------------------------------------------ the planet, per pixel (no WebGL) */
 
-/** The globe shaded per pixel into a small image and drawn smoothly at its size (from the menu planet's face). */
+/** The per-pixel globe's own picture: the 2048 surface and the clouds as pixels (CGS.flat), fetched the first time it's
+ * needed. Until then, or if it can't be read (a page opened from a file), the menu planet's face (CG.map). */
+function cglFlatArt() {
+  if (CGS.flat) return;
+  CGS.flat = { surf: null, clouds: null };
+  const read = (img) => {
+    try {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+      return { W: img.width, H: img.height, d: g.getImageData(0, 0, img.width, img.height).data };
+    } catch (e) { return null; }
+  };
+  cglFetch('sd', (img) => { if (img) { CGS.flat.surf = read(img); CGS.flatKey = ''; CG.dirty = true; } });
+  cglFetch('clouds', (img) => { if (img) { CGS.flat.clouds = read(img); CGS.flatKey = ''; CG.dirty = true; } });
+}
+
+/** The globe shaded per pixel into an image and drawn smoothly at its size (smaller while it turns), made again only when
+ * the view, its size or the tints change. */
 function cgDraw2d(g) {
-  const V = CG.v, dpr = V.dpr;
-  if (!CG.map) CG.map = mplMakeMap();
-  if (!CG.map.done) CG.map.step(6);
-  const n = Math.max(64, Math.min(CGV.maxRes, Math.round(V.r * 2 * Math.min(dpr, 1.5))));
-  if (!CG.off || CG.off.width !== n) { CG.off = document.createElement('canvas'); CG.off.width = CG.off.height = n; CG.img = CG.off.getContext('2d').createImageData(n, n); }
+  const V = CG.v, dpr = V.dpr, now = performance.now();
+  cglFlatArt();
+  const S = CGS.flat.surf, C = CGS.flat.clouds;
+  if (!S) { if (!CG.map) CG.map = mplMakeMap(); if (!CG.map.done) CG.map.step(6); }
+  const view = CG.yaw + ',' + CG.pitch;
+  if (view !== CGS.view) { CGS.view = view; CGS.turning = now - (CGS.viewAt || 0) < 200; CGS.viewAt = now; }
+  const turning = CGS.turning && now - CGS.viewAt < 150;
+  const n = Math.max(64, Math.min(turning ? CGL.flatMove : CGL.flatMax, Math.round(V.r * 2 * Math.min(dpr, turning ? 1 : 1.5))));
+  const key = [view, n, CGS.tintKey, S ? 1 : 0, C ? 1 : 0, CG.map && CG.map.done].join();
+  if (!CG.off || CG.off.width !== n) { CG.off = document.createElement('canvas'); CG.off.width = CG.off.height = n; CG.img = CG.off.getContext('2d').createImageData(n, n); CGS.flatKey = ''; }
+  if (key !== CGS.flatKey) { CGS.flatKey = key; cglShade2d(n, S, C); }
+  const PI = Math.PI;
+  const glow = g.createRadialGradient(V.cx, V.cy, V.r * 0.98, V.cx, V.cy, V.r * 1.16);
+  glow.addColorStop(0, 'rgba(92,158,255,0.5)'); glow.addColorStop(0.3, 'rgba(92,158,255,0.14)'); glow.addColorStop(1, 'rgba(92,158,255,0)');
+  g.fillStyle = glow; g.beginPath(); g.arc(V.cx, V.cy, V.r * 1.16, 0, PI * 2); g.fill();
+  g.imageSmoothingEnabled = true;
+  g.drawImage(CG.off, V.cx - V.r, V.cy - V.r, V.r * 2, V.r * 2);
+}
+function cglShade2d(n, S, C) {
   if (!CGS.tintData && CGS.tint) CGS.tintData = CGS.tint.getContext('2d').getImageData(0, 0, CGS.tint.width, CGS.tint.height).data;
-  const px = CG.img.data, M = CG.map, TW = M.W, TH = M.H, ti = CGS.tintData, KW = CGS.tint ? CGS.tint.width : 1, KH = CGS.tint ? CGS.tint.height : 1;
+  const px = CG.img.data, M = CG.map, ti = CGS.tintData, KW = CGS.tint ? CGS.tint.width : 1, KH = CGS.tint ? CGS.tint.height : 1;
+  const TW = S ? S.W : M.W, TH = S ? S.H : M.H, tex = S ? S.d : M.tex, st = S ? 4 : 3, CW = C ? C.W : 1, CH = C ? C.H : 1, cs = CGL.cloudShift;
   const cp = Math.cos(CG.pitch), sp = Math.sin(CG.pitch), yaw = CG.yaw, PI = Math.PI, L = cglLight();
   for (let j = 0; j < n; j++) {
     const v = -(((j + 0.5) / n) * 2 - 1);
@@ -432,10 +489,17 @@ function cgDraw2d(g) {
       let lon = (Math.atan2(u, Z) + yaw) / (2 * PI) + 0.5;
       lon %= 1; if (lon < 0) lon += 1;
       const fy = 0.5 - lat / PI, tt = Math.min(TH - 1, Math.max(0, (fy * TH) | 0)) * TW + ((lon * TW) | 0);
-      let r = M.tex[tt * 3], gg = M.tex[tt * 3 + 1], b = M.tex[tt * 3 + 2];
+      let r = tex[tt * st], gg = tex[tt * st + 1], b = tex[tt * st + 2];
+      const land = S ? clamp((tex[tt * 4 + 3] - 224) / 31, 0, 1) : 1;
       if (ti) {
         const k = (Math.min(KH - 1, Math.max(0, (fy * KH) | 0)) * KW + ((lon * KW) | 0)) * 4, a = ti[k + 3] / 255;
-        if (a) { r += (ti[k] - r) * a; gg += (ti[k + 1] - gg) * a; b += (ti[k + 2] - b) * a; }
+        const am = a * Math.max(land, 0.3);
+        if (am) { r += (ti[k] - r) * am; gg += (ti[k + 1] - gg) * am; b += (ti[k + 2] - b) * am; }
+      }
+      if (C) {
+        let uc = lon + cs; uc -= Math.floor(uc);
+        const cl = C.d[(Math.min(CH - 1, Math.max(0, (fy * CH) | 0)) * CW + ((uc * CW) | 0)) * 4] / 255, k = 1 - 0.2 * cl, m = cl * 0.92;
+        r = r * k + (247 - r * k) * m; gg = gg * k + (247 - gg * k) * m; b = b * k + (250 - b * k) * m;
       }
       // light from the upper left with a soft terminator, the haze of air towards the limb
       const ndl = u * L[0] + v * L[1] + z * L[2], day = ndl < -0.18 ? 0 : ndl > 0.55 ? 1 : smoothstep01((ndl + 0.18) / 0.73);
@@ -445,9 +509,4 @@ function cgDraw2d(g) {
     }
   }
   CG.off.getContext('2d').putImageData(CG.img, 0, 0);
-  const glow = g.createRadialGradient(V.cx, V.cy, V.r * 0.98, V.cx, V.cy, V.r * 1.16);
-  glow.addColorStop(0, 'rgba(92,158,255,0.5)'); glow.addColorStop(0.3, 'rgba(92,158,255,0.14)'); glow.addColorStop(1, 'rgba(92,158,255,0)');
-  g.fillStyle = glow; g.beginPath(); g.arc(V.cx, V.cy, V.r * 1.16, 0, PI * 2); g.fill();
-  g.imageSmoothingEnabled = true;
-  g.drawImage(CG.off, V.cx - V.r, V.cy - V.r, V.r * 2, V.r * 2);
 }
