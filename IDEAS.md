@@ -12,6 +12,25 @@ README. The Terminal ended up a building each colony puts up itself, 16+ tiles o
 the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
 Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
+## Redraw the code-drawn art through Claude Design (the owner, Nov 23 2026: the plan)
+
+Everything the game draws live in code, with no images, looks plainer than the rendered 3D art. The owner's call: redo
+it all, one piece at a time. Each piece starts as concepts on a Claude Design canvas (the Terrafall Art design system),
+the owner picks or marks them up there, and the chosen look is then built into the game (rendered with `renderer/`
+where it can be an image; where it has to move or follow the map, such as roads or rain, the code keeps drawing it but
+to the approved design, with new textures and sprites). In order:
+1. **The Contingency globe** (in progress): a realistic planet, natural coastlines, relief, smooth borders. Canvas:
+   https://claude.ai/artifact/Erzr8o7X7ZxnmTbbeNZ9Wb
+2. **Passenger Town's buildings** (in progress): rendered 3D buildings in place of the code-drawn boxes.
+3. **Weapon effects:** laser beams, muzzle flashes, the white blast flash, tracers, missile trails, impacts.
+4. **Sunsets, sunrises and the sky light** of each biome.
+5. **Weather:** rain, snow, sandstorms, fog, storms and lightning (the Atmosphere Engine's too).
+6. **War scars:** craters, scorch, burnt ground, wreck debris.
+7. **Roads, Express lanes and their sign gantries,** rails and pipes where code-drawn.
+8. **The Murmur's tunnel ridges, oil puddles, night light pools.**
+9. **The robots' work animations** (welding, paving, drilling, scything): small tool sprites.
+10. **The menu planet** (shares the globe's new look), **the minimap** and **the interface** (panels, buttons, icons).
+
 ## Passenger Town, the city map (built Nov 22 2026; open questions for the owner)
 
 The owner's design (approved): the empty Accord town between the bases, its streets a maze, its buildings stripped
