@@ -633,6 +633,7 @@ function mpSyncPauseMenu() {
   $('p-title').textContent = on ? 'Menu' : 'Paused';
   $('p-resume').textContent = on ? 'Back to the game' : 'Resume';
   $('p-mppause').hidden = !on;
+  $('p-plan').hidden = on || !!UI.watch; // (Plan while paused: single player; nothing to order while observing)
   if (on) $('p-mppause').textContent = MP.paused ? 'Resume the game for everyone' : 'Pause the game for everyone';
   const kept = on && S && S.crew && coopMates().some((q) => !mpAINow(q)); // (co-op: the partner keeps the colony)
   $('p-quit').textContent = on ? (UI.mpQuitArm ? (kept ? 'Tap again to leave: your partner keeps the colony' : 'Tap again to leave: the computer takes over your colony') : 'Leave the game') : 'Save & quit';

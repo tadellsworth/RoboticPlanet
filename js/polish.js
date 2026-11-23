@@ -39,7 +39,7 @@ function armedBuilding(b) { const d = b && BDEFS[b.type]; return !!d && !!(d.ran
 
 /** What's under the mouse, looked for every tenth of a second: a building that shoots, or a robot that does. */
 function reachHover() {
-  if (!R.mouse || R.mode !== 'normal' || typeof UI === 'undefined' || !UI.inGame || UI.paused) return 0;
+  if (!R.mouse || R.mode !== 'normal' || typeof UI === 'undefined' || !UI.inGame || uiFrozen()) return 0;
   if (R.time - POL.hoverT < 0.1) return POL.hover;
   POL.hoverT = R.time;
   const w = screenToWorld(R.mouse.x, R.mouse.y);

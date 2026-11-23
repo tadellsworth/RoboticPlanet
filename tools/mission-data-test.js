@@ -88,6 +88,7 @@ const controls = [
   ['harbour', 4, ['Shipyard', 'Container Ships +1', 'Supply orders', 'Alloy +5', '8 Alloy'], [shipOrder, alloyOrder]],
   ['airlift', 1, ['Order bots', 'Crawlers +1', 'Drive somewhere (G)', 'Deploy here (E)'], ["#sh-orders .order-row[data-k='crawler'] [data-d='1']", '#sh-crawl', '#sh-deploy']],
   ['airlift', 4, ['Supply by air', 'On', 'Supply orders', 'Cement +5'], ["#sh-airsup [data-v='1']", "#sh-keep .keep-cell[data-g='cement'] [data-d='5']"]],
+  ['hotmetal', 2, ['Plan while paused', 'Shift+Space', 'Resume'], ['#p-plan']],
   ['holdline', 2, ['Walls (X)', 'Build'], ["#banner-seg [data-v='wall']", '#build-walls', '#banner-ok']],
   ['siege', 5, ['Army (Q)', 'Attack (Q)'], ['#btn-attack', '#ar-attack']],
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],

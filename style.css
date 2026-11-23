@@ -755,6 +755,7 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .tool:hover { border-color: rgba(255, 255, 255, 0.25); }
   /* With a panel open on the right, the dock and messages centre on the map that's left. */
   body.sheet-open #bottombar, body.sheet-open #toasts { left: calc((100% - 444px) / 2); }
+  body.sheet-open .plan-banner { left: calc((100% - 444px) / 2); max-width: calc(100% - 476px); }
 
   /* Panels dock on the right instead of covering the middle of the map. */
   #sheet, #sheet.full, #sheet.peek { left: auto; right: calc(var(--safe-r) + 12px); top: var(--hud-top, 70px); bottom: calc(var(--safe-b) + 14px);
@@ -1529,6 +1530,13 @@ div.mh-card.is-soon, .mh-card.is-later { cursor: default; }
 .mp-banner .btn { flex: none; }
 .mp-banner.wait #mp-banner-text::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 2px solid var(--warn); border-right-color: transparent; vertical-align: -1px; animation: mpspin 0.9s linear infinite; }
 @keyframes mpspin { to { transform: rotate(360deg); } }
+/* Plan while paused: the banner over the map says the game is still (an amber edge and tag), and the pause button glows. */
+.plan-banner { top: calc(var(--safe-t) + 120px); bottom: auto; border-color: var(--warn); gap: 8px; padding: 6px 8px 6px 12px; }
+.plan-banner[hidden] { display: none; }
+.plan-tag { flex: none; color: var(--warn); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+#plan-banner-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--muted); font-size: 13px; }
+body.plan-paused #toasts { margin-top: 52px; }
+body.plan-paused #btn-pause { color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
 @media (prefers-reduced-motion: reduce) { .mp-banner.wait #mp-banner-text::before { animation: none; } }
 #screen-mp { z-index: 25; background: rgba(10, 11, 15, 0.72); }
 .mp-players li.mp-team { background: none; min-height: 0; padding: 6px 2px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; justify-content: space-between; }

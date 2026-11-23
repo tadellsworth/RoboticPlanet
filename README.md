@@ -3165,8 +3165,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Vibration** in the pause menu (shown only on a touch screen that can vibrate) switches it off; it is kept on this
   device (`botfall.haptics`), on by default.
 - **The pause menu** (`#screen-pause`; Space, Esc or the button top right): two views in one card (`pauseView` in
-  js/ui.js), and it opens on the first each time. The main view: **Resume** (in multiplayer **Back to the game**, and
-  **Pause the game for everyone** beside it), a grid of **Settings**, **Statistics**, **Photo mode** and **How to play**,
+  js/ui.js), and it opens on the first each time. The main view: **Resume** and **Plan while paused** (in multiplayer
+  **Back to the game**, and **Pause the game for everyone** beside it, with no Plan while paused), a grid of **Settings**, **Statistics**, **Photo mode** and **How to play**,
   the saves under a **Save** label (**This planet**, **File** and **Cloud**: Save this planet, Download save file and
   Save to the cloud, their full names in `aria-label` and `title`), the line on when the game last saved, then
   **Feedback** and **Save & quit**. **Settings** (`#p-setview`; **Back** or Esc returns, and the focus goes to Back on
@@ -3180,6 +3180,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Settings** button (`#m-settings`, a gear, in the bottom row with How to play, Lore, Feedback and More) opens the same view on its own
   over the menu (`openMenuSettings`: `#screen-pause.from-menu`, in the menu's colours); every setting there is a device
   setting, so all apply. **Back** or Esc closes it (`closeMenuSettings`) and the focus returns to the button.
+- **Plan while paused** (single player, missions and Contingency battles included; `planPause` in js/ui.js): the pause
+  menu's **Plan while paused** (`#p-plan`, hidden in multiplayer and Observer by `mpSyncPauseMenu`), or **Shift+Space**
+  (or the **Pause** key) on the map, shuts the menu and leaves `UI.paused` on with `UI.plan` set, so the simulation,
+  the clock and time of day stand still while the map takes input: `uiFrozen()` (paused and not planning) is what
+  `onMapTap`, `onMapCommand`, `fieldUnits`, the cursor and the reach rings check now. A banner across the top
+  (`#plan-banner`: **Paused**, **Menu**, **Resume**; `syncPlanBanner` every frame) and an amber pause button
+  (`body.plan-paused`) show it. Orders are applied at once as always in single player (`act`), so a placed site, a
+  planned road or a warbot order is in `S` straight away: the next placement's preview and blocked tiles see it, saves
+  and restore points keep it, and Haulers and Workers set off when the game resumes (nothing is queued, so lockstep,
+  `hashState` and saves are untouched). **Space**, **Resume** on the banner or in the menu resume (clearing `UI.plan`);
+  **Esc** steps back and, with nothing open, opens the pause menu. While planning in a mission, a site placed or a road
+  laid sets `S.mission.planned`, which the Hot Metal goal *Place a building while paused* counts.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -3297,7 +3309,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
-  recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
+  recycles it), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider

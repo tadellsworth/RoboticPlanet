@@ -175,7 +175,7 @@ function cursorTick(canvas) {
   let kind = '';
   if (g && g.type === 'single' && g.moved && !g.box && !g.painting && !g.grab) kind = 'pan';
   else if (now - CURSOR.t < 0.1) return;
-  else if (R.mouse && S && typeof UI !== 'undefined' && UI.inGame && !UI.paused && R.mode === 'normal' && R.hover >= 0) {
+  else if (R.mouse && S && typeof UI !== 'undefined' && UI.inGame && !(typeof uiFrozen === 'function' ? uiFrozen() : UI.paused) && R.mode === 'normal' && R.hover >= 0) {
     CURSOR.t = now;
     const w = screenToWorld(R.mouse.x, R.mouse.y), i = Math.floor(w.x), j = Math.floor(w.y);
     const b = buildingAtTap(i, j, w.x, w.y);

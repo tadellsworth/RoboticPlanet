@@ -7,7 +7,7 @@
 const SETTINGS_V = 3;
 
 const UI = {
-  inGame: false, paused: false, speed: 1, overShown: false,
+  inGame: false, paused: false, plan: false, speed: 1, overShown: false,
   menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, mega: 1, upwin: 0, events: 0, murmur: 'active', unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
@@ -26,7 +26,38 @@ const $ = (id) => document.getElementById(id);
 function act(name, args, cb) {
   if (typeof MP !== 'undefined' && MP.on) { MP.order(name, args || [], cb); return; }
   const r = applyOrder(ME, name, args || []);
+  // (a site or a road planned while paused to plan: a mission's goal counts it, see Hot Metal in js/missions.js)
+  if (planning() && S.mission && ((name === 'place' && r && r.ok) || (name === 'paths' && r && r.laid > 0))) S.mission.planned = (S.mission.planned || 0) + 1;
   if (cb) cb(r);
+}
+
+/*
+ * Plan while paused (single player only): the game stands still, time of day and all, but the pause menu is shut, so
+ * the map, the minimap, panels, the build menu, Paths and orders all work. Orders are done at once as always (a
+ * single-player game runs no turns), so a site placed now is in the game straight away: the next placement sees it,
+ * a save keeps it, and Haulers and Workers set off for it the moment the game resumes. The banner over the map (and
+ * the dimmed pause button) says so, with Resume and the full menu. Space (or Shift+Space, or Pause) resumes.
+ */
+function planning() { return !!(UI.plan && UI.paused && UI.inGame && !(typeof MP !== 'undefined' && MP.on)); }
+/** Does the game stand still in a way that keeps the map from taking orders? (Not while planning.) */
+function uiFrozen() { return UI.paused && !planning(); }
+function planPause() {
+  if (!UI.inGame || !S || (typeof MP !== 'undefined' && MP.on) || UI.watch || S.winner >= 0 || UI.briefing) return false;
+  if (UI.menuSettings) closeMenuSettings();
+  $('screen-pause').hidden = true;
+  UI.paused = true; UI.plan = true;
+  syncPlanBanner();
+  sfx('click');
+  return true;
+}
+function syncPlanBanner() {
+  if (!UI.paused) UI.plan = false;
+  const on = planning() && $('screen-pause').hidden && !UI.photo;
+  const el = $('plan-banner');
+  if (el && el.hidden === on) el.hidden = !on;
+  document.body.classList.toggle('plan-paused', on);
+  // (just under the top bar and the goal card, the messages moved down below it: body.plan-paused #toasts)
+  if (on && el) el.style.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px';
 }
 
 function randomSeed() { return 1 + Math.floor(Math.random() * 999998); }
@@ -87,7 +118,7 @@ function initUI() {
   $('m-import-file').onchange = () => { const f = $('m-import-file').files && $('m-import-file').files[0]; if (f) importSaveFile(f); };
   $('p-export').onclick = () => { sfx('click'); downloadSave(); };
   $('m-help').onclick = () => showHelp();
-  $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
+  $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden || planning(); };
   // The illustrated manual is a page beside this one: the single-file build has none, so there the link is left out.
   if ($('h-manual')) $('h-manual').hidden = !!window.TOD_BUNDLE;
   // The How to play shows one section at a time: the contents first, then a section with a bar above it that stays
@@ -128,7 +159,11 @@ function initUI() {
   $('p-keys').onclick = openKeys;
   $('keys-close').onclick = closeKeys;
   $('screen-keys').onclick = (e) => { if (e.target === $('screen-keys')) closeKeys(); };
-  $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
+  $('p-resume').onclick = () => { UI.paused = false; UI.plan = false; $('screen-pause').hidden = true; syncPlanBanner(); };
+  // Plan while paused (Shift+Space): the menu shuts, the game stays still, and the map takes orders (planPause).
+  $('p-plan').onclick = () => planPause();
+  $('plan-resume').onclick = () => { sfx('click'); $('p-resume').click(); };
+  $('plan-menu').onclick = () => $('btn-pause').click();
   $('p-withdraw').onclick = () => { sfx('click'); contWithdraw(); }; // (js/contingency-battle.js)
   // Settings: the pause menu's second view (Back, or Esc, returns to the first).
   $('p-settings').onclick = () => { sfx('click'); pauseView('settings', true); };
@@ -2563,6 +2598,7 @@ function renderKeys() {
     ]),
     section('Game', [
       [['Space'], 'Pause or resume. Save from the pause menu.'],
+      [['Shift+Space', 'Pause'], 'Plan while paused: build and give orders, the game still (Space resumes)'],
       [['Esc'], 'Step back or open Pause'],
       ...map('game'),
       [['Alt+Enter'], 'Toggle full screen'],
@@ -2669,9 +2705,14 @@ function initKeyboard() {
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
     if (k === '`' && $('screen-over').hidden) { e.preventDefault(); if ($('screen-boost').hidden) openBoost(); else closeBoost(); return; }
     const overlay = !$('screen-pause').hidden || !$('screen-help').hidden || !$('screen-stats').hidden || !$('screen-over').hidden || !$('screen-boost').hidden;
-    if (k === ' ' || k === 'spacebar') {
+    // Space: the pause menu, or Resume. Shift+Space (or the Pause key): plan while paused, menu shut (planPause); while
+    // planning, Space resumes.
+    if (k === ' ' || k === 'spacebar' || k === 'pause') {
       e.preventDefault();
-      if (!$('screen-pause').hidden) $('p-resume').click(); else if (!overlay) $('btn-pause').click();
+      if (e.repeat) return;
+      const plan = e.shiftKey || k === 'pause';
+      if (!$('screen-pause').hidden) { if (plan && !MP.on) planPause(); else $('p-resume').click(); }
+      else if (!overlay) { if (planning()) $('p-resume').click(); else if (plan && !MP.on) planPause(); else $('btn-pause').click(); }
       return;
     }
     if (overlay) return;
@@ -2788,7 +2829,7 @@ function recycleSelection() {
 
 /** Has the player warbots or Howitzers out in the open? (Then a finger held on the map draws a selection box: see input.js.) */
 function fieldUnits() {
-  return UI.inGame && !UI.paused && S.bots.some((u) => !u.dead && u.owner === ME && !u.inside && (isArmy(u) || BOTS[u.type].siege));
+  return UI.inGame && !uiFrozen() && S.bots.some((u) => !u.dead && u.owner === ME && !u.inside && (isArmy(u) || BOTS[u.type].siege));
 }
 
 /** Your warbots and Howitzers out in the open on the screen now (optionally only warbots, or only Howitzers). */
@@ -3057,7 +3098,7 @@ function onSelectBox(box, add, armed) {
  * under the pointer. done() runs once an order has gone to them.
  */
 function onMapCommand(i, j, wx, wy, done) {
-  if (!UI.inGame || UI.paused || R.mode !== 'normal') return;
+  if (!UI.inGame || uiFrozen() || R.mode !== 'normal') return;
   // Your Ferry, its panel open (nothing else picked): right-click open water, a spot on the shore or one of your Ports to sail it there.
   const fpick = !UI.sel.length && UI.sheetKind === 'bot' ? getE(UI.sheetFor) : null;
   if (fpick && !fpick.dead && fpick.owner === ME && BOTS[fpick.type].ferry) {
@@ -3664,7 +3705,7 @@ function continueGame() {
 /** Into the game in S: the HUD comes up and (unless `unsaved`: a save still being tried out) it's saved. */
 function enterGame(unsaved) {
   bakeMap();
-  UI.inGame = true; UI.paused = false; UI.overShown = false;
+  UI.inGame = true; UI.paused = false; UI.plan = false; UI.overShown = false;
   UI.sel = []; UI.groups = {}; UI.lastAlert = null;
   UI.msgLog = []; $('btn-msgs').hidden = true;
   UI.objAuto = false; UI.objManual = false; UI.objStep = undefined;
@@ -3709,7 +3750,7 @@ function toMenu() {
   ME = 0;
   hideGoodTip();
   UI.inGame = false;
-  UI.paused = false;
+  UI.paused = false; UI.plan = false;
   disarmBack();
   syncWakeLock();
   closeSheet();
@@ -4123,7 +4164,9 @@ function coachScroll(sel) {
 /** Where a goal's `ui` selector looks for the button that opens it (when the button itself isn't on screen). */
 const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack'], [/#pop-/, '#pop'],
   // (A pause-menu button: the pause button while the menu is shut; in it, Settings or Back, whichever view has it.)
-  [/#p-/, () => ($('screen-pause').hidden ? '#btn-pause' : UI.pauseView === 'settings' ? '#p-back' : '#p-settings')]];
+  [/#p-(?!plan)/, () => ($('screen-pause').hidden ? '#btn-pause' : UI.pauseView === 'settings' ? '#p-back' : '#p-settings')],
+  // (Plan while paused: the pause button to reach it; once planning, Build, where the site to place is.)
+  [/#p-plan/, () => (planning() ? '#btn-build' : $('screen-pause').hidden ? '#btn-pause' : '#p-back')]];
 
 /**
  * What to light up for goal g: its `ui` buttons if any is on screen; else the buttons that open the way to them (Build
@@ -5908,7 +5951,7 @@ function crossingAtTap(i, j, wx, wy) {
 }
 
 function onMapTap(i, j, wx, wy) {
-  if (!UI.inGame || UI.paused) return;
+  if (!UI.inGame || uiFrozen()) return;
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'scorch') { scorchTap(i, j); return; }
@@ -7926,7 +7969,10 @@ function refreshRoadLink(b) {
   const el = $('sh-road');
   R.routePreview = null;
   if (!needsRoad(b)) { el.innerHTML = ''; return; }
-  if (!b.unlinked) {
+  // (A site placed while the game is paused to plan hasn't been looked at by the game yet, b.unlinked unset: the
+  // shortest road to storage says, so its Lay road is there at once.)
+  const unlinked = b.unlinked ?? (planning() && ((r) => !r || r.length > 0 || r.pending > 0)(roadRouteTo(ME, b)));
+  if (!unlinked) {
     el.innerHTML = '<div class="kv"><span>Road</span><span class="ok">Linked to storage</span></div>';
     return;
   }
@@ -9866,6 +9912,7 @@ function uiTick(dt) {
   briefingTick();
   netTick();
   mpBannerTick();
+  syncPlanBanner(); // (plan while paused: its banner over the map)
   if (typeof coopTick === 'function') coopTick(); // (co-op: my cursor to my partner, js/coop.js)
   allyTick(); // (the bar's Ally button, the Ally panel: js/ally.js)
   if (typeof contBarTick === 'function') contBarTick();

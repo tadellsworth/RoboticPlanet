@@ -448,6 +448,11 @@ const MISSIONS = [
         count: (P, S) => ((P.stats.moved || 0) > 0 && S.buildings.some((b) => !b.dead && b.owner === 0 && b.built && b.type === 'kiln' && touching(b).some((c) => c.type === 'quarry')) ? 1 : 0),
         hint: 'Tap the Cement Works → <b>Move</b> (<kbd>M</kbd>), then a free spot touching the Quarry → <b>Build here</b>. It\'s free.',
         ui: '#sh-move' },
+      // (Plan while paused: S.mission.planned is counted by act() in js/ui.js, a site or road placed while planning.)
+      { kind: 'planned', n: 1, text: 'Place a building while paused',
+        count: (P, S) => (S.mission.planned ? 1 : 0),
+        hint: 'Pause menu → <b>Plan while paused</b> (<kbd>Shift</kbd>+<kbd>Space</kbd>), place the Smelter, then <b>Resume</b>.',
+        ui: '#p-plan' },
       { kind: 'beside', n: 1, text: 'Build a Smelter beside the Ore Mine',
         count: (P, S) => {
           const fed = new Set();
