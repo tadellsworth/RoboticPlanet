@@ -2011,6 +2011,9 @@ const MURMUR = {
   // more (times the pressure) every `hordeEvery` s from the exit nearest its target. From `nightFrom`, one done at its
   // strike's objective (nothing left to catch there for `idle` s, or battered down) goes on through the colony, a
   // Scuttler after the nearest unarmed robot within `quarryR` tiles that no gun covers.
+  // How evenly their attacks spread across the colonies (murmurFair: the colonies' mean charge over one's own, clamped
+  // to this; the owner's call of Nov 23 2026), and the pressure by the colonies' mean power, not each one's own.
+  fair: [0.5, 2],
   bold: {
     threatR: 5, hitFor: 2, packR: 4, engage: 1.5, robotW: 4, gunW: 3, avoidFor: 3, avoidMost: 2,
     w: { scuttler: 1, brute: 4, leech: 0.5, spitter: 1.5, sapper: 3, harrow: 30 },

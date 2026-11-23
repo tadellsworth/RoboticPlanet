@@ -1007,7 +1007,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`ferryLines`), and a line with no Ferry or no far Port puts its waiting passengers off again (`unloadFerry`). Warbots
   aboard stay aboard when the Port or Airfield they left from is lost (`releaseBotsFrom`, `aboardHold`).
   Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
-  `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
+  `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each, asked for like a factory's inputs and
+  as urgently as a Bot Foundry's, and held there for it: `yardHeld`, which `supplyOf` keeps every other request off;
+  until Nov 23 2026 a supply order, which a colony feeding its Foundry by conveyor never filled, and the Foundry's
+  Haulers took the parts back out, so a rival's bomber was almost never finished) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
   Port's Fuel when they tie up below `SHIP_REFUEL` (each Port with ships keeps `PORT_FUEL`, 4, which haulers bring;
   running low, an idle ship sails to a Port with Fuel, `findFuel`; empty, it crawls at half speed); they're mended
@@ -2228,7 +2231,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     nightfall the dusk warning ("The Murmur are stirring", or "The ground has gone silent"); at nightfall
     (`murmurNightfall`, night `n`) each live nest's network sets out along `branches` branches (`murmurGoals`: power
     within `MURMUR.reach` first, by `chargeWorth`: Generators, Fuel Stations and chargers, Refineries 3, storage holding
-    10 Crystal and Fuel 2, any other colony building 1), digging `tiles` that night (up to `cap` in all) over its first
+    10 Crystal and Fuel 2, any other colony building 1; times `murmurFair(owner)`: with two colonies or more, the
+    colonies' mean charge over that colony's own, clamped to `MURMUR.fair` (0.5 to 2), so the tunnels, and what packs go
+    for (`murmurPrey`, the same factor), spread across the colonies about evenly; the owner's call of Nov 23 2026, when
+    every tunnel went for the most charge and the leanest colony was let be), digging `tiles` that night (up to `cap` in all) over its first
     two minutes (`murmurGrow`, `murmurDig`: a tile at a time toward the goal, wandering a little, stopping 6 tiles short
     of it, under any ground, roads, buildings and Walls, not water, chasms, rock, lava or the tide); `exits` new exits
     open along it (`murmurOpenExit`: on open ground over a tunnel, not a road, building, resource, ramp or a Trade
@@ -2382,7 +2388,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on a robot that just hit them, and never fall back. Not the watcher, a feeding Leech, a Sapper digging in or under, or one going home. **Pressure**
     (`murmurBold`: Active, and not in a mission unless it sets `bold`): `murmurPressure(p, n)` is 1 for the first nights,
     then from `nightFrom` (3) 1 and `perNight` (0.25) for that night and each after (1.25 on the 3rd, at most `nightMost`, 2.2) times colony p's power
-    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick) over `powerRef` (40), clamped
+    (`murmurColonyPower`: its finished buildings and twice its armed robots, once a tick; with two colonies or more the
+    mean of the colonies' powers since Nov 23 2026, so every colony feels the same pressure) over `powerRef` (40), clamped
     to `powerMin` (0.6) to `powerMost` (1.6) (`murmurPowerMul`), and never under 1: a small or beaten colony draws them
     less, and gets fewer hunting teams. It scales a craft wave's packs (`murmurPack`, Brutes a quarter), how many may be up at
     once (`murmurRoom`: `room` × the mean pressure on the colonies still in), a nest's open exits (`murmurMaxExits`: one
