@@ -3577,3 +3577,47 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 #screen-menu .planet-row .use, #screen-menu .planet-row .del { min-height: 44px; border-radius: 0; }
 #screen-menu .planet-row .del { width: 44px; }
 #screen-menu .planets .planets-title { font: 600 11px/1.2 var(--mdisp); letter-spacing: 0.16em; color: var(--mq); }
+
+/* ---------- desktop: long panels and screens need less scrolling (Nov 2026). A long panel takes two columns (three on a very
+   wide screen: sheetCols in js/ui.js), wider, ending above the tool dock; the long screens lay out across the width. A
+   phone keeps its one column. ---------- */
+.sheet-flow { display: contents; }
+@media (min-width: 1000px) and (min-height: 520px) {
+  #sheet.cols2, #sheet.cols2.full, #sheet.cols2.peek { width: min(820px, calc(100vw - var(--safe-r) - 440px)); bottom: calc(var(--safe-b) + 78px); }
+  #sheet.cols3, #sheet.cols3.full, #sheet.cols3.peek { width: min(1200px, calc(100vw - var(--safe-r) - 560px)); bottom: calc(var(--safe-b) + 78px); }
+  body:is(.sheet-wide, .sheet-wide3) #bottombar { left: 50%; }
+  body.sheet-wide #toasts { left: calc((100% - 840px) / 2); }
+  body.sheet-wide3 #toasts { left: calc((100% - 1220px) / 2); }
+  #sheet:is(.cols2, .cols3) .sheet-flow { display: block; column-count: 2; column-gap: 26px; column-fill: balance; }
+  #sheet.cols3 .sheet-flow { column-count: 3; }
+  /* (a line, a button row or a paragraph stays whole; a list breaks between its rows, a long list inside a list too) */
+  #sheet:is(.cols2, .cols3) .sheet-flow > *, #sheet:is(.cols2, .cols3) .sheet-flow > div > *, #sheet:is(.cols2, .cols3) .sheet-flow > div > div:has(> :nth-child(6)) > * { break-inside: avoid; }
+  #sheet:is(.cols2, .cols3) .sheet-flow > div, #sheet:is(.cols2, .cols3) .sheet-flow > div > div:has(> :nth-child(6)) { break-inside: auto; }
+  #sheet:is(.cols2, .cols3) .sheet-flow > :is(.kv, .btn-row, .seg, .bar, .stepper, .sheet-title) { break-inside: avoid; }
+  #sheet:is(.cols2, .cols3) .sheet-flow > :is(.sheet-title, .sh-eye) { column-span: all; }
+  #sheet:is(.cols2, .cols3) .sheet-flow .section-label { break-after: avoid; }
+  #sheet:is(.cols2, .cols3) .sheet-flow :is(.order-row, .keep-cell, .tech, li, .kv, .btn-row, .seg, .gtag, .bar) { break-inside: avoid; }
+  #sheet:is(.cols2, .cols3) .sheet-flow > :first-child { margin-top: 0; }
+
+  /* Missions: the list in three or four columns, a chapter's name across them */
+  .card.missions-card { width: min(100%, 1180px); }
+  #screen-missions .ms-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; }
+  #screen-missions .ms-list .ms-chapter { grid-column: 1 / -1; margin: 8px 2px 0; }
+  #screen-missions .ms-item { padding: 7px 10px; }
+  /* Statistics: the charts two across, the tiles above them */
+  .card.stats-card { width: min(100%, 1240px); }
+  #st-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 22px; align-items: start; }
+  #st-body > :not(.chart-block) { grid-column: 1 / -1; }
+  /* Keys: tighter rows */
+  .ks-group { padding: 8px 10px; margin-bottom: 8px; font-size: 13px; line-height: 1.3; }
+  .ks-row { padding: 2px 0; }
+  /* The end of a game: a dashboard, the result and its buttons on the left, the report on the right */
+  #screen-over .card:has(#o-report:not([hidden])) { width: min(100%, 1120px); display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); column-gap: 26px; align-items: start; }
+  #screen-over .card:has(#o-report:not([hidden])) > * { grid-column: 1; }
+  #screen-over .card:has(#o-report:not([hidden])) > #o-report { grid-column: 2; grid-row: 1 / span 20; margin: 0; max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px); overflow-y: auto; }
+  #screen-over .card > .btn.big { padding: 10px 14px; margin-top: 6px; }
+}
+@media (min-width: 1400px) and (min-height: 520px) {
+  #screen-missions .ms-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .card.missions-card { width: min(100%, 1500px); }
+}

@@ -186,6 +186,16 @@ command deck seen in the dark: glass readouts over the planet.
   first in the top bar, wears your colour. Brackets 14 × 2 px on a computer, 9 × 1 px on a phone. Labels over panel names have a status light
   (coral, amber for standby, magenta-red over a rival's building). The Missions' light is cyan (`#38d4ff`), an outline
   and a soft glow, so it never reads as a selected (coral) button. Army Group badges are diamonds, health a segmented bar.
+- **The top bar holds still.** On a computer it is one row 40 px high that never wraps and never changes size as the
+  numbers move: each goods counter is three digits wide whatever it holds, in tabular figures; the rate a minute sits
+  small under the number, out of the flow; a shortage is a small magenta-red dot inside the counter's top right corner
+  (and its ring), never a dot over the bar's edge. Short of room it gives up, in order, the rates (still in the counter's
+  tip), the callsign block and the gaps (below 1600 px), then takes two fixed rows of seven (below 1270 px). Panels dock
+  under the bar, never over its buttons. Coral in a list is for what needs you or is under way (the bot being built);
+  a plain status ("none queued") is quiet grey.
+- **Panels and screens fit the screen.** On a computer a long panel goes wider and lays out in two columns (three on a
+  very wide screen); Missions, Statistics and the end of a game spread across the width rather than down it. Lists are
+  compact: one line a row, small controls side by side (still 44 px tall to click or tap). Phones keep one column.
 - **Where it lives.** The Contingency block of `style.css` (`#screen-contingency`, `.cg-*`), and the markup in
   `index.html` (`#screen-contingency`) and `js/contingency-ui.js`; in game, the "Command Deck in game" block at the end of
   `style.css` (all under `body.deck`, which `index.html` sets) and the few lines of markup README.md lists.

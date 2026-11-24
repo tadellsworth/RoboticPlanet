@@ -7671,7 +7671,8 @@ function openSheet(kind, id, html) {
   UI.sheetKind = kind;
   UI.sheetFor = id;
   UI.demolishArm = 0;
-  $('sheet-body').innerHTML = html;
+  // (In a .sheet-flow, which lays out as nothing, except where a long panel on a desktop takes two or three columns: sheetCols.)
+  $('sheet-body').innerHTML = `<div class="sheet-flow">${html}</div>`;
   $('sheet').hidden = false;
   document.body.classList.add('sheet-open');
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
@@ -7680,7 +7681,23 @@ function openSheet(kind, id, html) {
   markSheetKeys();
   sheetEyebrow(kind, id);
   panelHelp(kind, id); // (its ? for How to play: js/polish.js)
-  if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); }
+  if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); sheetColsOff(); requestAnimationFrame(sheetCols); setTimeout(sheetCols, 300); }
+}
+
+/**
+ * A long panel on a desktop: wider, its sections in two columns (three on a very wide screen when it's very long), so
+ * it needs a lot less scrolling. Decided once a panel opens (and its lists have filled in), and kept while it's open so
+ * nothing jumps sideways; phones, and Build (its own grid of cards), keep one column.
+ */
+function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
+function sheetCols() {
+  const s = $('sheet'), body = $('sheet-body');
+  if (s.hidden || !isWide() || UI.sheetKind === 'build' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
+  const long = body.scrollHeight / Math.max(1, body.clientHeight);
+  if (body.scrollHeight - body.clientHeight <= 8) return;
+  const three = long > 2 && innerWidth >= 1800;
+  s.classList.add(three ? 'cols3' : 'cols2');
+  document.body.classList.add(three ? 'sheet-wide3' : 'sheet-wide');
 }
 
 /**
@@ -7808,6 +7825,7 @@ function closeSheet() {
   R.routePreview = null;
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
+  sheetColsOff();
   document.body.classList.remove('sheet-open', 'sheet-build');
   delete document.body.dataset.sheet;
   UI.sheetKind = null;

@@ -3467,7 +3467,16 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   "Army group · priority 1 of 3"), and `body[data-sheet]` to light the tool whose panel is open. On an upright phone a
   panel docks above the bottom bar instead of over it (`sheetMoved` measures from the panel's top), and the Army Group
   cards are a row of small cards across the top left (`.agcards.row`, placed in `refreshAgCards`). Without the class the
-  old look comes back.
+  old look comes back. On a wide screen the top bar is locked to one 40 px row (two fixed rows of seven goods below
+  1270 px): the goods counters are each three digits wide in tabular figures, the rate a minute sits under the number
+  out of the flow, and the shortage dot sits inside the counter, so nothing moves as the numbers change; short of room
+  the rates go first (their tip keeps them), then the callsign block (below 1600 px). Panels dock below the bar
+  (`--hud-top`, `placeMinimap`), and the minimap hides under a docked panel. A long panel (`sheetCols`: its content
+  taller than the panel) goes wider, its sections in two columns (`#sheet.cols2`, three, `.cols3`, from 1800 px wide when
+  it's very long), the panel's content wrapped in `.sheet-flow` (which lays out as nothing otherwise); Missions take four
+  columns, Statistics' charts two across, and the end of a game a two-column dashboard (result and buttons, the report).
+  The Foundry's and the yards' orders are one compact line a type (▲ ▼ side by side, the count in grey). The good
+  Chips is `chip`, also the top bar buttons' class: `body i.gi.chip` undoes `.chip` for its icon.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,
@@ -3756,7 +3765,7 @@ clouds' drift (`natureCloudTime`).
 - **Custom Game's list and pickers** (`syncSetupRows`, `openSetPop`, `closeSetPop`, `setPopKey`, `syncAdvanced` in
   js/ui.js). A large preview on the left (seed, Save, New planet, saved planets), **Match** and **Planet** as a list of
   rows (`.m-prow`, `data-pop` the id of the setting's control) and **Advanced** (`#m-adv`: Rules and Challenge, folded
-  or open by `#m-adv-toggle`, `UI.advOpen`, open at first on a screen at least 900 × 600; folded, `#m-adv-sum` sums it
+  or open by `#m-adv-toggle`, `UI.advOpen`, open at first only on a screen at least 1700 × 1000; folded, `#m-adv-sum` sums it
   up), with Start in a docked bar. Each row shows its value (`setRowValue`: the lit choice, the doctrine or *Each its
   own*) and hides with its control. A row opens `#m-pop`: the row's own control (the radio row, the doctrine chips and
   each rival's dropdown, kept hidden in the row's `.m-ctl`) is moved into it while it's open and moved back on close,
