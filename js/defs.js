@@ -2265,6 +2265,13 @@ function gameMods() { return S && S.settings ? modList(S.settings.mods) : []; }
 function modOn(k) { const m = S && S.settings && S.settings.mods; return Array.isArray(m) && m.includes(k); }
 
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
+// A building's worker that can't work (out of what it works with, its store full) with nothing on the way to change
+// that, for STALL_FREE seconds, is sent off to a job that is waiting for a worker (see benchStalled).
+const STALL_FREE = 25;
+// Staffing follows the economy (see goodsWanted): a good the colony has under WANT_LOW of, that a factory or a site is
+// held up for, makes the buildings that produce it first in line for a worker; one it has RICH_STOCK or more of (and
+// nobody is waiting for) puts its producers last, and their workers may leave for a producer of a wanted good.
+const WANT_LOW = 12, RICH_STOCK = 150;
 /*
  * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
  * spare Workers) walks or drives there and is taken apart, RECYCLE_TIME seconds for each round of parts that went into

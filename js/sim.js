@@ -2005,13 +2005,60 @@ function dispatch(p) {
   P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
   if (free < minFree) {
     const cands = blds.filter((b) => b.built && b.staff && !BDEFS[b.type].crew && !lastLink(b) && (b.type !== 'foundry' || (P.triage && P.noHaulers)));
-    cands.sort((a, c) => releaseScore(c) - releaseScore(a));
+    const idles = new Map(cands.map((b) => [b, stallWhy(b) ? 1 : 0])); // (one whose worker can't work anyway first)
+    cands.sort((a, c) => idles.get(c) - idles.get(a) || releaseScore(c) - releaseScore(a));
     if (cands.length) {
       unstaff(cands[0]);
       free++;
       if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
         S.players[p].lastShortMsg = S.time;
         postMsg(p, `Short on workers — the ${BDEFS[cands[0].type].name} worker was moved to building. Make more workers at a Bot Foundry.`, cands[0].x, cands[0].y, 'warn');
+      }
+    }
+  }
+  // A finished building that wants a worker now (see 2, below). One sent off to help elsewhere waits until it can work.
+  const staffable = (b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research) && !benchHolds(b);
+  // A worker that has sat for STALL_FREE seconds in a building that can't work, with nothing on the way to change that
+  // (a Bot Foundry waiting for Chips nobody makes, a store full that nobody fetches from), goes where a worker is wanted
+  // and nobody is free to go: a site or a repair waiting for a builder, or a building that could work with nobody to run
+  // it (the few kept free for building don't run buildings). The longest stuck first. Its building takes a worker again
+  // once it can work (benchHolds), and says meanwhile where its worker went.
+  // Then, while a producer of a good the colony is short of (goodsWanted) still has nobody, a worker leaves a building
+  // that only makes what the colony has plenty of (RICH_STOCK), one for each: a Harvester with hundreds of Fiber gives
+  // its worker to the Crystal Tap the Chip Fab is waiting on. (Not one you set to High priority.)
+  const want = goodsWanted(p, blds);
+  const ranks = new Map();
+  const rankOf = (b) => { let r = ranks.get(b); if (r === undefined) ranks.set(b, (r = needRank(p, b, want))); return r; };
+  {
+    let builds = 0, runs = 0, urgent = 0, idleW = 0;
+    for (const b of blds) {
+      if (!b.built ? !b.builder && siteReady(b) : b.fixLeft > 0 && !b.fixer) { if (!(P.danger && dangerAt(p, b.x, b.y))) builds++; }
+      else if (staffable(b) && !stallWhy(b)) { runs++; if (rankOf(b) < 0) urgent++; }
+    }
+    if (builds || runs) {
+      for (const u of S.bots) if (u.owner === p && BOTS[u.type].build && isIdleWorker(u)) idleW++;
+      const slots = () => Math.max(0, Math.min(idleW - builds, free - minFree)); // (workers left to run buildings)
+      const short = () => Math.max(0, builds - idleW) + Math.max(0, runs - slots());
+      if (short() > 0) {
+        const stuck = blds.filter((b) => b.staff && b.stallSince != null && S.time - b.stallSince >= STALL_FREE && !BDEFS[b.type].crew && !lastLink(b) && getE(b.staff)?.inside === b.id && stallWhy(b));
+        stuck.sort((a, c) => a.stallSince - c.stallSince || a.id - c.id);
+        for (const b of stuck) {
+          if (short() <= 0) break;
+          unstaff(b);
+          b.benched = 1;
+          idleW++;
+          free++;
+        }
+      }
+      if (urgent > slots()) {
+        const rich = blds.filter((b) => b.built && b.staff && !b.paused && prioRank(b) > 0 && !BDEFS[b.type].crew && !lastLink(b) && rankOf(b) > 0);
+        rich.sort((a, c) => a.born - c.born || a.id - c.id);
+        for (const b of rich) {
+          if (urgent <= slots()) break;
+          unstaff(b);
+          idleW++;
+          free++;
+        }
       }
     }
   }
@@ -2169,7 +2216,7 @@ function dispatch(p) {
   let stands = null;
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+    if (!b.built && !b.builder && siteReady(b) && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
       // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
       if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
@@ -2214,8 +2261,11 @@ function dispatch(p) {
     if (u) assignCap(u, e);
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
-    .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
+  //    Within the same priority: one that could work before one that would only sit waiting (stallWhy), then by what the
+  //    economy needs (needRank: a producer of a good factories or sites are held up for first, one of a good in plenty last).
+  const staffQueue = blds.filter(staffable);
+  const stalls = new Map(staffQueue.map((b) => [b, stallWhy(b) ? 1 : 0]));
+  staffQueue.sort((a, c) => prioRank(a) - prioRank(c) || stalls.get(a) - stalls.get(c) || rankOf(a) - rankOf(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
     if (free <= minFree && !lastLink(b)) {
@@ -3278,7 +3328,7 @@ function roadToSites(p, blds) {
   const P = S.players[p];
   let crew = null, stands = null;
   for (const b of blds) {
-    if (b.built || b.builder || !(siteFrac(b) > b.progress + 0.01) || (P.danger && dangerAt(p, b.x, b.y))) continue;
+    if (b.built || b.builder || !(siteReady(b)) || (P.danger && dangerAt(p, b.x, b.y))) continue;
     if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
     if (!crew) {
       crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build && !u.carry);
@@ -3298,11 +3348,42 @@ function roadToSites(p, blds) {
   }
 }
 
+/**
+ * Call a builder to construction site b now (its panel's Call a builder): the nearest Worker that can get there, a free
+ * one first, else one off paving, carrying or running a building, even past the few the colony keeps free. Its goods
+ * must be in (or enough of them to build on with). Returns { u } (the worker), or { why } it can't.
+ */
+function callBuilder(owner, b) {
+  if (b.builder) { const v = getE(b.builder); if (v && !v.dead && v.task && v.task.type === 'build' && v.task.site === b.id) return { u: v, already: true }; b.builder = 0; }
+  if (!siteReady(b)) return { why: 'Its goods aren\'t in yet: a builder can only build with what has been delivered.' };
+  if (S.players[owner].danger && dangerAt(owner, b.x, b.y)) return { why: 'Enemies are about: workers keep away until they\'ve gone.' };
+  const at = siteWorkAt(b), zone = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
+  const cands = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping || u.ferryWait || recycling(u)) continue;
+    const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
+    if (!inMap(ux, uy) || (!ramp && S.zone[tIdx(ux, uy)] !== zone)) continue;
+    const t = u.task, tt = t && t.type;
+    if (tt === 'build' && !(getE(t.site) || {}).built && t.site !== b.id) continue; // (not off another site)
+    const cost = !tt ? 0 : tt === 'staff' ? 30 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 60 : 8;
+    cands.push({ u, ux, uy, s: dist(ux, uy, at.x, at.y) + cost });
+  }
+  cands.sort((a, c) => a.s - c.s || a.u.id - c.u.id);
+  for (const { u, ux, uy } of cands) {
+    if (!ramp && !findPath(ux, uy, at.x, at.y, owner, routeOpts(u))) continue;
+    if (u.failGoal === tIdx(at.x, at.y)) u.failGoal = -1;
+    assignBuild(u, b);
+    if (b.builder === u.id && u.task && u.task.type === 'build') return { u };
+  }
+  return { why: 'None of your workers can walk there: it needs a way in from the rest of your colony (a road, a ramp or a bridge).' };
+}
+
 function assignStaff(u, b) {
   if (!u) return false;
   cancelTask(u);
   u.task = { type: 'staff', bld: b.id, phase: 'go', node: -1, wait: 0, timer: 0 };
   b.staffInc = u.id;
+  b.benched = 0; // (one called to it, say by its Call a worker, runs it whatever it's waiting for)
   if (goTo(u, b.x, b.y)) return true;
   cancelTask(u);
   return false;
@@ -3315,6 +3396,7 @@ function assignStaff(u, b) {
  */
 function callWorker(owner, b) {
   const def = BDEFS[b.type];
+  if (!b.built) return callBuilder(owner, b);
   if (!b.built || !def.staff || def.crew) return { why: 'This building doesn\'t take a worker.' };
   const cur = b.staff ? getE(b.staff) : null;
   if (cur && !cur.dead) return { why: 'It already has its worker.' };
@@ -3598,6 +3680,12 @@ function doHaul(u, t, dt) {
 }
 
 /** How much of a site's materials have arrived (0..1); a site that costs nothing (a building being moved) has all of them. */
+/**
+ * Has construction site b goods in it a builder could work with now? More than a sliver beyond what's built, or all
+ * its goods in and not finished (a site at 99% with everything delivered once never drew a builder: the last sliver
+ * was under the margin).
+ */
+function siteReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
 function siteFrac(site) { const total = sumValues(siteCost(site)); return total > 0 ? deliveredCount(site) / total : 1; }
 
 function deliveredCount(site) {
@@ -4036,13 +4124,15 @@ function doStaff(u, t, dt) {
           node = findNode(b, ty, def.radius);
           if (node >= 0) { t.gtype = ty; break; }
         }
-        if (node < 0 && full) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
+        b.gFull = node < 0 && full ? 1 : 0; // (see stallWhy)
+        if (b.gFull) { b.status = 'Storage full, waiting for pickup'; noteStall(b, true); t.wait = 1; return; }
         t.face = false;
         if (node < 0 && def.bedrock) {
           // A Quarry out of boulders keeps going: Stone cut from a rock face in reach, or dug out of the ground,
           // while the colony is short of it (it rests once there's plenty in storage).
           const have = goodTotal(b.owner, 'stone');
-          if (have >= def.bedrock.rest) { b.status = `Resting: you have ${have} Stone (it cuts more below ${def.bedrock.rest})`; t.wait = 3; return; }
+          b.rest = have >= def.bedrock.rest ? 1 : 0;
+          if (b.rest) { b.status = `Resting: you have ${have} Stone (it cuts more below ${def.bedrock.rest})`; noteStall(b, true); t.wait = 3; return; }
           node = findFace(b, def.radius);
           t.gtype = def.gather;
           if (node < 0) { b.status = 'Digging Stone out of the ground (slow; it never runs out)'; t.phase = 'dig'; t.timer = def.bedrock.dig; return; }
@@ -4092,6 +4182,8 @@ function doStaff(u, t, dt) {
         if (node < 0) { b.status = 'No room left to plant'; t.wait = 4; return; }
         b.status = 'Planting stalk groves';
       }
+      noteStall(b, false);
+      if (def.bedrock) b.rest = 0;
       t.trip = true; // out gathering: no off-road slowdown
       if (!goTo(u, node % S.W, (node / S.W) | 0)) { t.trip = false; t.wait = 2; return; }
       S.resRes[node] = 1;
@@ -4239,10 +4331,10 @@ function updateBuilding(b, dt) {
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
-    if (owed && Object.keys(owed).length && !(b.builder && siteFrac(b) > b.progress + 0.01)) b.status = `Waiting for ${costText(owed)} from storage`;
+    if (owed && Object.keys(owed).length && !(b.builder && siteReady(b))) b.status = `Waiting for ${costText(owed)} from storage`;
     else if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
-    else if (!b.builder) b.status = 'Waiting for a builder';
+    else if (!b.builder) b.status = siteReady(b) ? 'Waiting for a builder' : 'Waiting for materials'; // (built as far as what's in it goes)
     else {
       // Its Worker waiting there for goods on their way (see doBuild): what's bringing them.
       const w = getE(b.builder), t = w && w.task, v = t && t.type === 'build' && t.phase === 'wait' && getE(t.via);
@@ -4328,7 +4420,9 @@ function updateBuilding(b, dt) {
     const op = getE(b.staff);
     const who = def.crew ? BOTS[def.crew].name : 'Worker';
     if (!op) {
-      b.status = b.staffInc || (def.crews > 1 && crewCount(b)) ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
+      const why = !b.staffInc && benchHolds(b) ? stallWhy(b) : '';
+      b.status = why ? `${why} (its worker went to help elsewhere; one comes back once it can work)`
+        : b.staffInc || (def.crews > 1 && crewCount(b)) ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
       if (!b.staffInc && def.crew && !S.bots.some((v) => !v.dead && v.owner === b.owner && v.type === def.crew)) b.status += ': order one at the Bot Foundry';
     }
   }
@@ -4412,12 +4506,16 @@ function produce(b, def, dt) {
     return;
   }
   if (!op || op.inside !== b.id) {
+    noteStall(b, false);
     const charging = op && op.task && (op.task.phase === 'toCharge' || op.task.phase === 'charging');
-    b.status = charging ? 'Worker is recharging' : b.staffInc || op ? 'Worker on the way' : 'Needs a worker';
+    const why = !op && !b.staffInc && benchHolds(b) ? stallWhy(b) : '';
+    b.status = why ? `${why} (its worker went to help elsewhere; one comes back once it can work)` : charging ? 'Worker is recharging' : b.staffInc || op ? 'Worker on the way' : 'Needs a worker';
     return;
   }
+  noteStall(b, true); // (until it's found working, below)
   if (def.bots && nextBotKind(b) === 'off') { b.status = 'Idle: tap it to order bots'; return; }
   if (!b.timer && atLimit(b)) {
+    noteStall(b, false); // (its own way off: see below)
     const g = limitGood(b);
     b.status = `Stopped: you have ${tickTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
     // After a little while its worker goes off to other jobs; one comes back when it's needed.
@@ -4436,6 +4534,7 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
+  noteStall(b, false);
   const city = cityBoost(b.owner, b.x + 0.5, b.y + 0.5);
   b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '') + (city > 1 ? `, ${Math.round((city - 1) * 100)}% faster by Arrival City` : '') + (lanceDim(b.owner) ? ', slowed: the Lance is charging' : '') + (radWork(b) < 1 ? ', slowed by radiation' : '') + (b.crack ? ', at half speed: its foundations are cracked (repair it to full)' : '');
   b.working = true;
@@ -10494,6 +10593,95 @@ function unstaff(b) {
   }
   b.staff = 0;
   b.staffInc = 0;
+  b.stallSince = null;
+}
+
+/**
+ * What keeps staffed building b from working even once the goods on their way are in: a factory short of something it
+ * works with (counting what's coming), its output full with no pickup booked, a Foundry stopped or at the bot limit; a
+ * gatherer whose store is full with no pickup booked. '' when it could work, or isn't a kind that stalls like this (a
+ * Grove Planter, a Bio Farm, a Lab). The words are its panel's status.
+ */
+function stallWhy(b) {
+  const def = BDEFS[b.type];
+  if (def.crew) return '';
+  if (def.gather) {
+    // (b.rest, b.gFull: what its worker last found, inside; see doStaff. Full of one good, with none of the other in reach.)
+    if (def.bedrock && b.rest && tickTotal(b.owner, 'stone') >= def.bedrock.rest) return `Resting: you have plenty of Stone (it cuts more below ${def.bedrock.rest})`;
+    if (!b.gFull) return '';
+    return gatherTypes(b.type).some((ty) => { const g = RES[ty].good; return (b.stock[g] || 0) - (b.res[g] || 0) >= def.out[g]; }) ? 'Storage full, waiting for pickup' : '';
+  }
+  if (!def.inp) return '';
+  if (def.bots) {
+    if (nextBotKind(b) === 'off') return 'Idle: tap it to order bots';
+    if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) return 'Bot limit reached';
+  }
+  for (const g in def.inp) if ((b.stock[g] || 0) - (def.bots ? b.res[g] || 0 : 0) + (b.inc[g] || 0) < def.inp[g]) return 'Waiting for ' + GOOD[g].name;
+  if (def.make) for (const g in def.make) if ((b.stock[g] || 0) - (b.res[g] || 0) + def.make[g] > def.out[g]) return 'Output full, waiting for pickup';
+  return '';
+}
+
+/** The goods building b produces: what a factory or pump makes, what a gatherer gathers. */
+function madeGoods(b) {
+  const def = BDEFS[b.type];
+  if (def.make) return Object.keys(def.make);
+  if (def.gather) return gatherTypes(b.type).map((ty) => RES[ty].good);
+  return [];
+}
+
+/**
+ * What player p's colony is short of, from what's held up for it (blds: p's buildings and sites): for each good under
+ * WANT_LOW in hand, how many factories are waiting for it with too little on the way (whether or not anyone runs them)
+ * and how many sites are still owed it with none coming. Walked back along the chain by itself: a Bot Foundry waiting
+ * for Chips makes Chips wanted, and a Chip Fab that then waits for Crystal makes Crystal wanted, so the Crystal Tap
+ * gets a worker before the Foundry does (see dispatch).
+ */
+function goodsWanted(p, blds) {
+  const want = {};
+  const add = (g) => { want[g] = (want[g] || 0) + 1; };
+  for (const b of blds) {
+    if (b.paused || b.cut) continue;
+    const def = BDEFS[b.type];
+    if (!b.built) {
+      if (storeFunded(b)) { for (const g in stillOwed(b)) add(g); continue; }
+      const cost = siteCost(b);
+      for (const g in cost) if (cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0) > 0) add(g);
+    } else if (def.inp && !(def.bots && nextBotKind(b) === 'off') && !atLimit(b)) {
+      for (const g in def.inp) if ((b.stock[g] || 0) + (b.inc[g] || 0) < def.inp[g]) add(g);
+    }
+  }
+  for (const g in want) if (tickTotal(p, g) >= WANT_LOW) delete want[g];
+  return want;
+}
+
+/**
+ * Where a building that wants a worker comes in the line, by what the economy needs (lower first): a producer of a
+ * wanted good (goodsWanted) by how many wait for it, then the rest, then a producer only of goods the colony has
+ * RICH_STOCK of.
+ */
+function needRank(p, b, want) {
+  const gs = madeGoods(b);
+  let w = 0;
+  for (const g of gs) w = Math.max(w, want[g] || 0);
+  if (w) return -w;
+  return gs.length && gs.every((g) => tickTotal(p, g) >= RICH_STOCK) ? 1 : 0;
+}
+
+/** Note that b's worker can't work right now (b.stallSince: since when), or that it can (stall false). */
+function noteStall(b, stall) {
+  if (!stall) b.stallSince = null;
+  else if (b.stallSince == null) b.stallSince = S.time;
+}
+
+/**
+ * Is b a building whose worker was sent to help elsewhere (benchStalled) that still can't work? Then nobody goes back
+ * to it yet: they'd only sit there again. Once what it works with is in or on its way, it takes a worker as usual.
+ */
+function benchHolds(b) {
+  if (!b.benched) return false;
+  if (stallWhy(b)) return true;
+  b.benched = 0;
+  return false;
 }
 
 /** Can factory b do a round of its work now: everything the round takes in its hopper, and room for what it makes (see standingBy)? */

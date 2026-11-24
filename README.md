@@ -571,6 +571,27 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
+- **Who gets a worker** (`dispatch` step 2, the same for rivals): player priority (`prioRank`) first; then a building
+  that can work now before one that would only sit waiting (`stallWhy`: short of an input counting what's on its way,
+  output or store full with no pickup booked, a Quarry resting on plenty of Stone, a Foundry stopped or at the bot
+  limit); then by what the economy needs (`goodsWanted`, `needRank`): a good under `WANT_LOW` (12) in hand that a
+  factory (staffed or not) or a site is held up for makes its producers (`madeGoods`: what a factory makes, what a
+  gatherer gathers) first, by how many wait for it, ahead of the Foundry, so the chain is walked back by itself (Foundry
+  waits for Chips → Chips wanted → the Chip Fab waits for Crystal → Crystal wanted → the Crystal Tap is staffed first);
+  a producer only of goods held at `RICH_STOCK` (150) or more goes last; then `staffPriority` (Foundry first) and age.
+  While wanted-good producers outnumber the workers left to run buildings, a worker leaves a building that only makes
+  rich goods (not one set to High) for them. **Stalled operators:** a worker that has sat `STALL_FREE` (25) s inside a
+  building that can't work (`b.stallSince`, `noteStall`), with nothing on the way to change that, is sent off (the
+  longest stuck first) while a site or repair waits for a builder with nobody idle, or a building that could work has
+  nobody to run it within the `MIN_FREE_WORKERS` kept free. Its building is `benched`: nobody is sent back while
+  `stallWhy` still holds (`benchHolds`); its panel reads e.g. *Waiting for Chip (its worker went to help elsewhere; one
+  comes back once it can work)*. Call a worker clears it. A site with its goods in and no builder has **Call a builder**
+  (`callBuilder`, through the same `callWorker` order). `siteReady` decides whether a site draws a builder: more than 1%
+  beyond what's built, or all its goods in and not finished (a Maglev Terminal at 99% with everything delivered once
+  never did). Measured on a player's save (27 min, 12 Workers for ~60
+  staffed buildings, 7 of them parked in stalled buildings for up to 11 minutes; no Crystal Tap staffed, so the Chip
+  Fab waited on Crystal for 7 minutes), the next 10 minutes made 41 Crystal (was 0), 33 Chips (was 7), 81 Alloy (78)
+  and 22 Cement (28), and 28 Fiber instead of 93 more on top of 318 in store; the same sites finished.
 - **Construction sites** are built only as far as the goods delivered so far (`siteFrac`); a free Worker comes once
   some are in (`dispatch` step 1, `roadToSites`). A builder that runs out **waits at the site** if a carrier is bringing
   goods it still needs and is due within `SITE_WAIT.eta` (35 s: `siteInbound`, the rest of a Hauler's, truck's, train's,
@@ -3506,7 +3527,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   panel spans the screen above the dock and the cards flow down columns as compact two-line cards; elsewhere the
   grid's CSS `order` keeps the next step, Roads, Blueprints and Walls first. Missions and Keys flow down columns (four
   or five), Statistics' tiles take one row and its charts three across. Under a mouse (`pointer: fine`) a panel's rows
-  of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px.
+  of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px. Third pass (a 1280×720 desktop): a
+  panel two columns don't hold takes three from 1200 px wide (decided in the same frame, so nothing jumps); under
+  1400 px those span the screen above the dock (solid, the selection bar stepping aside), and on a short screen
+  (≤ 820 px tall) a panel three don't hold takes four (`.cols4`). A short screen also packs a panel's name line, rows,
+  paragraphs and upgrade cards, Keys (smaller type), Statistics (118 px charts), Missions, Build's All, Settings (two
+  columns) and the end of a game (its numbers two pairs a line) tighter; a mouse gets 30 px buttons there, touch
+  keeps 44 px.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,

@@ -3637,6 +3637,32 @@ function setMinimap(on) {
   placeMinimap();
 }
 
+/**
+ * Messages: near the top of the screen. On a wide screen they sit in the top row's gap, beside the goal card and short
+ * of the minimap (and of a panel docked on the right), just under the goods; where that gap is too narrow, and on a
+ * phone, just under the whole top bar. (Under the top bar they could land in the middle of the map when the goal, an
+ * event's card and the Domination card stacked up there.)
+ */
+function placeToasts() {
+  const box = $('toasts'), st = box.style;
+  const under = () => { st.left = st.width = st.transform = ''; st.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px'; };
+  if (!isWide()) return under();
+  const goods = Math.max($('goods').getBoundingClientRect().bottom, document.querySelector('.toprow').getBoundingClientRect().bottom);
+  let left = 12;
+  for (const el of document.querySelectorAll('#topbar .objrow, #topbar > .event-card')) {
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height && r.top < goods + 80) left = Math.max(left, r.right + 12);
+  }
+  let right = window.innerWidth - 12;
+  const mm = $('minimap'), sh = $('sheet');
+  if (mm && !mm.hidden) { const r = mm.getBoundingClientRect(); if (r.width) right = Math.min(right, r.left - 12); }
+  if (sh && !sh.hidden) { const r = sh.getBoundingClientRect(); if (r.width && r.top < goods + 200 && r.left > left) right = Math.min(right, r.left - 12); }
+  const w = Math.min(460, right - left);
+  if (w < 320) return under();
+  st.top = Math.round(goods + (document.body.classList.contains('deck') ? 12 : 6)) + 'px';
+  st.left = Math.round(left + (right - left - w) / 2) + 'px'; st.width = Math.round(w) + 'px'; st.transform = 'none';
+}
+
 /** Keep the minimap just under the top bar, and make room for it beside the goal and messages. */
 function placeMinimap() {
   const inGame = UI.inGame;
@@ -3645,7 +3671,7 @@ function placeMinimap() {
   document.body.classList.toggle('mm-on', inGame && MM.on);
   document.body.classList.toggle('mm-off', inGame && !MM.on);
   if (!inGame) return;
-  $('toasts').style.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px';
+  placeToasts();
   // (Under the lower of the goods and the robot counts: on a wide screen they share a row, and the Command Deck's glass bar
   // reaches 6 px past it, so a panel docked on the right starts below the bar, not over its speed and pause buttons.)
   const rowB = Math.max($('goods').getBoundingClientRect().bottom, document.querySelector('.toprow').getBoundingClientRect().bottom);
@@ -7726,15 +7752,22 @@ function foldLong(root) {
  * it needs a lot less scrolling. Decided once a panel opens (and its lists have filled in), and kept while it's open so
  * nothing jumps sideways; phones, and Build (its own grid of cards), keep one column.
  */
-function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
+function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3', 'cols4'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
 function sheetCols() {
   const s = $('sheet'), body = $('sheet-body');
   if (s.hidden || !isWide() || UI.sheetKind === 'build' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
   const long = body.scrollHeight / Math.max(1, body.clientHeight);
-  if (body.scrollHeight - body.clientHeight <= 8) return;
-  const three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
+  if (body.scrollHeight - body.clientHeight <= 1) return; // (it fits: one column)
+  let three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
   s.classList.add(three ? 'cols3' : 'cols2');
   document.body.classList.add(three ? 'sheet-wide3' : 'sheet-wide');
+  // (two columns still don't hold it, on a screen from 1200 px wide: three, decided before it's drawn, so nothing jumps;
+  // under 1400 px the three take the whole width, as Build's All does)
+  if (!three && innerWidth >= 1200 && body.scrollHeight - body.clientHeight > 1) {
+    sheetColsOff(); s.classList.add('cols3'); document.body.classList.add('sheet-wide3');
+    // (and still too long, on a short screen under 1400 px: four)
+    if (innerWidth < 1400 && innerHeight <= 820 && body.scrollHeight - body.clientHeight > 1) s.classList.add('cols4');
+  }
 }
 
 /**
@@ -8185,6 +8218,10 @@ function openBuildingSheet(b) {
     if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
       html += `<button class="btn" id="sh-callw">Call a worker</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now, even one busy elsewhere, so this keeps working.</p>`;
     }
+    // Call a builder: a construction site of yours with its goods in and nobody building it.
+    if (b.owner === ME && !b.built && !b.builder && siteReady(b)) {
+      html += `<button class="btn" id="sh-callw">Call a builder</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now to build, even one busy elsewhere.</p>`;
+    }
     // Priority for everything but the Command Base and finished Walls/Gates (storage too: an Airfield's or a
     // Depot's deliveries come first or last by it).
     if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
@@ -8220,7 +8257,7 @@ function openBuildingSheet(b) {
       <div class="btn-row"><button class="btn" id="sh-focus">Aim</button><button class="btn ghost" id="sh-focus-clear">Clear aim</button></div><p class="hint" id="sh-focus-hint"></p>`;
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
-      html += `<div class="section-label">Order bots</div>
+      html += `<div class="section-label orders-label">Order bots</div>
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
         <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
@@ -8380,7 +8417,7 @@ function openBuildingSheet(b) {
     };
     if ($('sh-callw')) $('sh-callw').onclick = () => act('callWorker', [b.id], (r) => {
       const u = r.uid ? getE(r.uid) : null;
-      if (u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', u.x, u.y, { color: '#ffe45a' }); }
+      if (u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : b.built ? 'A worker is on the way.' : 'A builder is on the way.', 'info'); addFx('ring', u.x, u.y, { color: '#ffe45a' }); }
       else { sfx('error'); toast(r.why, 'warn'); }
       refreshSheet();
     });
@@ -8796,7 +8833,11 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
       if (def.charger.fuel) {
         const pct = Math.round(Math.min(100, ((b.energy || 0) / FUEL_ENERGY) * 100));
-        parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
+        // (A Fuel Station holds up to its fuelCap; storage with chargers, a Drop Outpost or a Crawler, burns the Fuel in its
+        // store, kept there by its supply order: no cap of its own.)
+        const have = b.stock.fuel || 0, order = (b.keep && b.keep.fuel) || 0;
+        const amt = def.store ? (order ? `${have}/${order}` : `${have} · no supply order`) : `${have}/${def.fuelCap}`;
+        parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', amt, !(have > 0))}</span></div>`);
         parts.push(`<div class="kv"><span>Fuel burning</span><span>${pct}% left</span></div><div class="bar battery"><div style="width:${pct}%;background:var(--g-fuel)"></div></div>`);
       }
     }
