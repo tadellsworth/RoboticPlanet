@@ -1021,7 +1021,7 @@ const MISSIONS = [
       'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
       'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
       'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it without stopping.',
-      'A line can bend at a pylon: tap a spot on the way, then <b>Bend here</b>. Pods slow round sharp bends.',
+      'A line can bend at a pylon: tap a spot on the way, then <b>Bend here</b>. Pods slow round sharp bends. <b>Edit bends</b> on a Terminal\'s panel moves them later (with a mouse, drag a bend\'s diamond).',
     ],
     mode: 'colony', seed: 7302, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     layout(m, W) {

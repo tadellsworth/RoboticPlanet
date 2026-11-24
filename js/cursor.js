@@ -4,7 +4,8 @@
  * its tail; the arrow lit coral over anything that takes a click (a button, or a building or robot on the map); a cream
  * frame for placing buildings and painting roads; a coral reticle over a rival when your army is picked (a right-click
  * attacks it) and while an attack or a missile is being aimed; a cream one for landings and air drops; four cream
- * arrows while the map is dragged. Text fields keep the system's I-beam. Settings → Custom cursor turns it off (kept on
+ * arrows while the map is dragged; a cream hand over a Maglev bend's diamond while editing a line's bends (open over
+ * it, closed while it's dragged). Text fields keep the system's I-beam. Settings → Custom cursor turns it off (kept on
  * this device: botfall.cursor).
  *
  * How: every cursor the page's stylesheets ask for is asked again under html.tf-cur with ours in its place
@@ -21,6 +22,8 @@ const CURSOR_KINDS = {
   attack: { hx: 16, hy: 16, fb: 'crosshair' },
   drop: { hx: 16, hy: 16, fb: 'crosshair' },
   pan: { hx: 16, hy: 16, fb: 'move' },
+  grab: { hx: 16, hy: 16, fb: 'grab' },
+  grabbing: { hx: 16, hy: 16, fb: 'grabbing' },
 };
 
 // The app icon's colours (icons/icon.svg): midnight navy, the planet's coral and its shadow side, the ring's cream.
@@ -79,6 +82,20 @@ function drawCursorImage(kind, s) {
       }
     }, CUR_CREAM, 1.2);
     dot(1.5, CUR_CORAL);
+  } else if (kind === 'grab' || kind === 'grabbing') {
+    // A hand seen from the back: four fingers over a palm (curled in, closed, while dragging), the thumb to the left.
+    const shut = kind === 'grabbing', fy = shut ? 13 : 7.5;
+    const hand = () => {
+      ctx.beginPath();
+      ctx.moveTo(10.5, 15); ctx.lineTo(10.5, 22.5); ctx.quadraticCurveTo(11, 27, 16, 27); ctx.lineTo(18.5, 27); ctx.quadraticCurveTo(23.5, 27, 23.5, 21.5); ctx.lineTo(23.5, 15);
+      for (const x of [12, 15, 18, 21]) { ctx.moveTo(x + 0.6, 17); ctx.lineTo(x + 0.6, fy + (x === 12 || x === 21 ? 1.5 : 0)); }
+      ctx.moveTo(10.5, 19); ctx.lineTo(shut ? 9 : 7, shut ? 16 : 14.5);
+    };
+    ctx.fillStyle = CUR_NAVY; ctx.beginPath(); ctx.moveTo(10.5, 15); ctx.lineTo(10.5, 22.5); ctx.quadraticCurveTo(11, 27, 16, 27); ctx.lineTo(18.5, 27); ctx.quadraticCurveTo(23.5, 27, 23.5, 21.5); ctx.lineTo(23.5, 15); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = CUR_INK; ctx.lineWidth = 4.4; hand(); ctx.stroke();
+    ctx.strokeStyle = CUR_CREAM; ctx.lineWidth = 2.6; hand(); ctx.stroke();
+    ctx.fillStyle = CUR_NAVY; ctx.beginPath(); ctx.moveTo(11.8, 17.5); ctx.lineTo(11.8, 22.3); ctx.quadraticCurveTo(12.2, 25.7, 16, 25.7); ctx.lineTo(18.5, 25.7); ctx.quadraticCurveTo(22.2, 25.7, 22.2, 21.5); ctx.lineTo(22.2, 17.5); ctx.closePath(); ctx.fill();
+    dot(1.3, CUR_CORAL);
   }
   return c.toDataURL('image/png');
 }
@@ -137,6 +154,8 @@ html.tf-cur body.mode-land canvas#game, html.tf-cur body.mode-airdrop canvas#gam
 html.tf-cur canvas#game[data-cur=point] { cursor: var(--tfc-point) !important; }
 html.tf-cur canvas#game[data-cur=attack] { cursor: var(--tfc-attack) !important; }
 html.tf-cur canvas#game[data-cur=pan] { cursor: var(--tfc-pan) !important; }
+html.tf-cur canvas#game[data-cur=grab] { cursor: var(--tfc-grab) !important; }
+html.tf-cur canvas#game[data-cur=grabbing] { cursor: var(--tfc-grabbing) !important; }
 `;
 }
 
@@ -170,10 +189,14 @@ function setCursorOn(on) {
  * your army picked, else the lit arrow over any building or one of your robots.
  */
 function cursorTick(canvas) {
-  if (!CURSOR.ok || !CURSOR.on || !canvas) return;
+  if (!canvas) return;
   const g = INPUT.gesture, now = R.time;
   let kind = '';
-  if (g && g.type === 'single' && g.moved && !g.box && !g.painting && !g.grab) kind = 'pan';
+  // (a Maglev bend: a hand over its diamond, closed while it's dragged; the system's own hand with Custom cursor off)
+  if (typeof UI !== 'undefined' && UI.bendDrag) kind = 'grabbing';
+  else if (R.mouse && !g && typeof magBendAt === 'function' && UI.magEdit && magBendAt(R.mouse.x, R.mouse.y) >= 0) kind = 'grab';
+  else if (!CURSOR.ok || !CURSOR.on) kind = '';
+  else if (g && g.type === 'single' && g.moved && !g.box && !g.painting && !g.grab) kind = 'pan';
   else if (now - CURSOR.t < 0.1) return;
   else if (R.mouse && S && typeof UI !== 'undefined' && UI.inGame && !(typeof uiFrozen === 'function' ? uiFrozen() : UI.paused) && R.mode === 'normal' && R.hover >= 0) {
     CURSOR.t = now;

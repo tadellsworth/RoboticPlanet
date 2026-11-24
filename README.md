@@ -928,7 +928,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   bends. **Edit bends** on a built line (a Terminal's panel, by each line: `openMagEdit`, `UI.magEdit`, `maglevEditTap`,
   `maglevEditShow`; the `magRebend` order, `placeMagRebend`): pick a bend and put it elsewhere, Remove bend, add one by
   tapping near the line (it goes on the stretch passing nearest), Straighten; checked as a new line is (`magEditCheck`,
-  the same messages). It's a construction job: a pylon site on the first new pylon spot (`s.magEdit`, `s.magFrom` the
+  the same messages). With a mouse a bend's diamond can also be dragged (`magBendGrab` via `mapGrab`/input.js `onGrab`,
+  `UI.bendDrag`; the hand cursor over a diamond, `cursorTick`): the preview follows tile by tile, `magEditCheck` run only
+  when the pointer reaches a new tile (about 0.02 ms, 1.3 ms with the banner); letting go on a good tile puts the bend
+  there as a second tap would, on a bad one or with Esc (`maglevDragCancel`) it goes back, and a drag that never leaves
+  the tile is a tap. A finger keeps tap-to-pick and tap-to-place (its drags pan). UI only: Build sends the same order. It's a construction job: a pylon site on the first new pylon spot (`s.magEdit`, `s.magFrom` the
   key end, `s.magFar`, the new `s.magBends`/`s.magLayout`; the key end's `b.magEditSite`), built by a Worker at the key
   Terminal, costing only the length added and each new pylon's footing (`MAGLEV.cost` a tile, and once a pylon); the
   old guideway runs meanwhile (the new path drawn dashed with its progress). From 90% no pod sets out on the line or

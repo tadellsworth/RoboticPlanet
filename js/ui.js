@@ -3575,6 +3575,7 @@ function toggleSpeedMenu(refresh) {
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
   if (!$('screen-keys').hidden) { closeKeys(); return; }
+  if (maglevDragCancel()) return; // (a bend being dragged goes back; the edit stays open)
   if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('screen-cloud').hidden) { closeCloud(); return; } // (cloud saves: over the pause menu, or a link's question)
@@ -4656,6 +4657,7 @@ function setMode(mode, keepPlan) {
   R.overlay = null;
   R.ropeEnd = null;
   UI.ropeA = null;
+  UI.bendDrag = null; // (a bend being dragged, editing a Maglev line's bends)
   if (UI.pick) { UI.pick = 0; UI.pickDeck = null; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
   UI.placeType = null;
   UI.moveFrom = 0;
@@ -5301,7 +5303,8 @@ function maglevEditShow(note) {
   R.ropeEnd = { i: O.x, j: O.y, ok: !chk.why, why: chk.why, spots: chk.spots, far: O.id, tapped: true, bends, L: chk.L, edit: chk };
   const n = bends.length;
   let h = note ? `${note} ` : '';
-  h += sel >= 0 ? `<b>Bend ${sel + 1}</b> picked: tap where it goes, or remove it.` : `<b>Editing this line's bends</b> (${n} now): tap a bend to move it, or a spot near the line to add one (up to ${MAGLEV.bends}).`;
+  const drag = UI.bendDrag && UI.bendDrag.k === sel && (UI.bendDrag.i !== UI.bendDrag.from[0] || UI.bendDrag.j !== UI.bendDrag.from[1]); // (a bend being dragged, off its tile)
+  h += drag ? `<b>Bend ${sel + 1}</b>${chk.why ? ' can\'t go here: let go and it goes back.' : ': let go to put it here (Esc puts it back).'}` : sel >= 0 ? `<b>Bend ${sel + 1}</b> picked: tap where it goes, or remove it.` : `<b>Editing this line's bends</b> (${n} now): tap a bend to move it, or a spot near the line to add one (up to ${MAGLEV.bends}).`;
   if (chk.why) h += ` <span class="err">${chk.why}</span>`;
   else {
     const back = Object.keys(chk.refund).filter((g) => chk.refund[g] >= 1);
@@ -5332,6 +5335,65 @@ function maglevEditTap(A, i, j) {
   sfx('click');
   bends.splice(best, 0, [i, j]);
   maglevEditShow();
+}
+
+/*
+ * With a mouse, a bend's diamond can be dragged (input.js onGrab, from mapGrab): the preview and the banner follow the
+ * pointer tile by tile, checked as a tap is (magEditCheck, run only when the tile changes); let go on a tile where the
+ * line can go and the bend is put down there as a second tap would; let go where it can't, or press Esc
+ * (maglevDragCancel), and it goes back. A drag that ends on the tile it started on is a tap (it picks the bend). A
+ * finger keeps tap-to-pick and tap-to-place: its drags move the map. UI.bendDrag { k, from: the bend's tile,
+ * sel: what was picked before, i, j: the tile it's over }.
+ */
+const BEND_GRAB = 14; // px round a bend's diamond that take hold of it (at least the diamond itself)
+/** The bend whose diamond is under screen point (x, y) while editing a line's bends, or -1. */
+function magBendAt(x, y) {
+  if (!(R.mode === 'place' && UI.placeType === 'maglev' && UI.magEdit && UI.ropeA && UI.ropeBends)) return -1;
+  const z = R.cam.z, H = MAGLEV.head * z, reach = Math.max(BEND_GRAB, z * 0.36);
+  let best = -1, bd = Infinity;
+  UI.ropeBends.forEach(([i, j], k) => {
+    const p = worldToScreen(i + 0.5, j + 0.5), d = Math.hypot(p.x - x, p.y - H - y);
+    if (d <= reach && d < bd) { bd = d; best = k; }
+  });
+  return best;
+}
+function magBendGrab(x, y) {
+  const k = magBendAt(x, y);
+  if (k < 0) return null;
+  const [i0, j0] = UI.ropeBends[k], p = worldToScreen(i0 + 0.5, j0 + 0.5), dx = p.x - x, dy = p.y - y; // (keeps the pointer's offset from the bend's tile: the diamond floats at deck height)
+  const D = UI.bendDrag = { k, from: [i0, j0], sel: UI.magEdit.sel, i: i0, j: j0 };
+  const live = () => UI.bendDrag === D && UI.magEdit && UI.ropeBends && UI.ropeBends.length > k;
+  const tileAt = (mx, my) => { const w = screenToWorld(mx + dx, my + dy); return [Math.floor(w.x), Math.floor(w.y)]; };
+  const f = (mx, my) => {
+    if (!live()) return;
+    const [i, j] = tileAt(mx, my);
+    if ((i === D.i && j === D.j) || !inMap(i, j)) return; // (the check runs only as the pointer reaches a new tile)
+    D.i = i; D.j = j;
+    UI.ropeBends[k] = [i, j]; UI.magEdit.sel = k;
+    maglevEditShow();
+  };
+  f.tap = () => { if (!live()) return; UI.bendDrag = null; maglevEditTap(getE(UI.ropeA.id), i0, j0); };
+  f.end = (mx, my) => {
+    if (!live()) return;
+    UI.bendDrag = null;
+    const [i, j] = tileAt(mx, my);
+    UI.ropeBends[k] = [i0, j0]; UI.magEdit.sel = D.sel;
+    if (i === i0 && j === j0) { maglevEditTap(getE(UI.ropeA.id), i0, j0); return; } // (a drag that never left the tile: a tap)
+    const A = getE(UI.ropeA.id), O = getE(UI.magEdit.to), b2 = UI.ropeBends.map((q, n) => (n === k ? [i, j] : q));
+    const why = !inMap(i, j) ? 'Outside the map.' : A && O ? magEditCheck(ME, A, O, b2).why : 'That line is gone.';
+    if (why) { sfx('error'); maglevEditShow(`<span class="err">${why}</span> The bend went back.`); return; }
+    sfx('click'); UI.ropeBends[k] = [i, j]; UI.magEdit.sel = -1; maglevEditShow();
+  };
+  f.cancel = () => maglevDragCancel();
+  return f;
+}
+/** A bend drag called off (Esc, a second finger, the pointer lost): the bend back where it was. True if one was. */
+function maglevDragCancel() {
+  const D = UI.bendDrag;
+  if (!D) return false;
+  UI.bendDrag = null;
+  if (UI.magEdit && UI.ropeBends && UI.ropeBends.length > D.k) { UI.ropeBends[D.k] = D.from; UI.magEdit.sel = D.sel; maglevEditShow('The bend went back.'); }
+  return true;
 }
 
 /* ------------------------------------------------------------------ Mooring Masts and Airships */
@@ -5786,6 +5848,7 @@ const AIM_GRAB = 56; // px round the crosshair that take hold of it
 function mapGrab(x, y, mouse) {
   const cmd = cmdGrab(x, y);
   if (cmd) return cmd;
+  if (mouse) return magBendGrab(x, y); // (a bend's diamond, editing a Maglev line's bends)
   if (mouse || R.mode !== 'aim' || !R.aim) return null;
   const p = worldToScreen(R.aim.i + 0.5, R.aim.j + 0.5), dx = p.x - x, dy = p.y - y;
   if (Math.hypot(dx, dy) > AIM_GRAB) return null;
