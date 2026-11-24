@@ -1467,6 +1467,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   road within `AI_SCORCH_NEAR` (6) tiles of an enemy Bio Farm instead and sends a Torch along (`aiRaidTorch`); a Torch on
   a raid with a full tank burns the nearest patch of an enemy farm's soil within `AI_SCORCH_REACH` (8) tiles that no gun
   covers (`aiRaidScorch`), refills and comes back to the flag (`u.resume`). Missiles crater the roads where they land.
+  **Maglev lines** (`aiMagCut`, `AI_MAGCUT`; Medium and up): in place of every other raid, at most once every five
+  minutes, a band of the raid's size (one more if it can spare it) goes for a building of a foe's line that carries
+  goods (pods on it), out of every gun's reach and the garrisons a raid keeps clear of, with fewer armed warbots than
+  the band within 8 tiles of it, forts or out (each counting against it): a Terminal (its lines stand broken until one
+  is built on its tile again) before a pylon (a Worker rebuilds that in 20 s), the nearer first. Its flag goes beside
+  it and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
+  `P.magCuts`).
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
@@ -2196,7 +2203,18 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Terminals run different routes; Escort is on in a war. A route with no run for `AI_TRADE_STALL` (5 minutes) is changed
   for another, and every `AI_TRADE_REVIEW` (5 minutes) for one clearly better. Before, in long 2 v 2 games the colony
   left on the losing side took Alloy for Stone while its Foundry stood idle for want of Chips, Alloy piling up, and the
-  game ran to an hour. Its Missile Factory and Silos come
+  game ran to an hour. **Ore running dry** (`P.oreLow`, `AI_ORE_FIELD`, `AI_ORE_REACH`): from `AI_ORE_AT` (15 minutes), with a Bot Foundry up, under 4
+  Ore in stock and no Mine of its own working 3 deposits or more (one on the last node or two of a field counts as dry),
+  a Mine on fresh Ore is starved for (`starved`: first in the plan, past the usual limit on sites, with no spare worker,
+  high priority, on a lone deposit too); with no spot for one on its land (`P.noSpot.mine`), Ore counts as short
+  (`P.short`) and its Outposts head for the Ore no-one holds, out of the guns' reach, within `AI_ORE_REACH` (30) tiles
+  of the spot (a chain of them); its Trade Terminal buys Ore, or else Alloy, first. A megastructure's site doesn't
+  count against its usual limit on sites (`megaSites`, `aiSiteCount`; it still does when placing the next
+  megastructure): Arrival City and the Deep Core, saved up for as long as they take, held both of a rival's usual two
+  sites from 20 minutes on and nothing else was built again, no Mine on the Ore lying in its own land, so Standard
+  Large for four on Flat, Scarce ground (seed 2) ended with two colonies at 0 Ore and the game ran past an hour (now about
+  24 minutes). A link of the chain that makes robots lost once the opening is done (its Smelter, Chip Fab or Bot
+  Foundry wrecked, none going up) is put back the same way, first and past the limit. Its Missile Factory and Silos come
   only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
   site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
   gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot

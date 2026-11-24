@@ -78,6 +78,18 @@ const AI_SCRAPPABLE = Object.fromEntries(AI_SCRAP_KINDS.map((k) => [k, true])); 
  * sooner), so its route runs from about ten minutes in.
  */
 const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL_REACH = 20;
+/**
+ * Ore running dry (P.oreLow), from AI_ORE_AT (15 minutes; the opening and the early war go as they did, the doctrines'
+ * balance with them): a Bot Foundry stands, under 4 Ore in stock, and no Mine of its own works AI_ORE_FIELD
+ * deposits or more (one on the last node or two of a field counts as dry). Then a Mine on fresh Ore goes first, past
+ * the usual limit on sites and with no spare worker (as for a colony with none at work, `starved`), on a lone deposit
+ * too; with none to be had on its land, Ore counts as short (P.short) and its Outposts head for the Ore no-one holds,
+ * out of enemy guns' reach, on the same ground and within AI_ORE_REACH tiles of the spot (a chain of them if need be).
+ * Its Trade Terminal buys Ore, or else Alloy, first then (aiTrade). A megastructure's site no longer takes one of its
+ * usual sites (megaSites in aiThink). (Standard Large for four, seed 2: the last two colonies sat at 0 Ore from 40 minutes on with
+ * fresh fields in their own land and more out on open ground, and the game ran past an hour.)
+ */
+const AI_ORE_FIELD = 3, AI_ORE_REACH = 30, AI_ORE_AT = 900;
 const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
 /**
  * Fuel with no source: low (P.fuelLow) for AI_FUEL_DRY s with no Bio Farm that has soil and no Refinery with oil
@@ -413,10 +425,13 @@ function aiThink(p) {
 
   // 1) Construction
   const counts = {};
-  let sites = 0;
+  // (A megastructure's site is not one of the usual sites (megaSites): saved up for as long as it takes, Arrival City
+  // and the Deep Core held both of a rival's usual two from 20 minutes on, and nothing else was built again: no Mine on
+  // the Ore in its own land, so Standard Large for four, Scarce, seed 2, ended in two colonies at 0 Ore by 40 minutes.)
+  let sites = 0, megaSites = 0;
   for (const b of me) {
     if (!aiShut(b)) counts[b.type] = (counts[b.type] || 0) + 1;
-    if (!b.built && !BDEFS[b.type].prepaid) sites++;
+    if (!b.built && !BDEFS[b.type].prepaid) { if (BDEFS[b.type].mega) megaSites++; else sites++; }
   }
   const maxSites = p === 0 && P.ai && !S.teams ? 2 : lvl.maxSites;
   if (!few) {
@@ -476,8 +491,12 @@ function aiThink(p) {
       if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
     }
   }
+  // Ore running dry (see AI_ORE_FIELD): and when the last look for a Mine's spot found none, short of Ore too.
+  const oreLow = P.oreLow = S.mode !== 'colony' && S.time >= AI_ORE_AT && (playerGoods(p).ore || 0) < 4 && me.some((b) => b.type === 'foundry' && b.built) &&
+    !me.some((b) => b.type === 'mine' && aiGathers(b, AI_ORE_FIELD));
+  const noMine = !!(P.noSpot && P.noSpot.mine && P.noSpot.mine.ver === S.territoryVer && S.time < P.noSpot.mine.until);
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
-  P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear));
+  P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear) || (r === R_ORE && oreLow && noMine));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
   const quarrying = me.some((b) => b.type === 'quarry'); // a Quarry always has Stone to cut or dig (see BDEFS.quarry.bedrock)
   // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
@@ -674,8 +693,14 @@ function aiThink(p) {
   // rivals sat at 0 Chips with a few warbots each until the clock ran out. (On the way: a site placed in the last
   // 150 s, or one a road reaches. The opening, before the Foundry, goes as it always has.)
   const haveG = playerGoods(p);
+  // (Ore running dry, oreLow: a Mine on fresh Ore is starved for too, with one still at work on the last of a field.)
   const starved = !me.some((b) => b.type === 'foundry' && b.built) ? [] : ['mine', 'tap'].filter((t) => (haveG[RES[BDEFS[t].gather].good] || 0) < 4 &&
-    !me.some((b) => b.type === t && (b.built ? aiGathers(b) : S.time - b.born < 150 || !b.unlinked)));
+    !me.some((b) => b.type === t && (b.built ? (t !== 'mine' || !oreLow) && aiGathers(b) : S.time - b.born < 150 || !b.unlinked)));
+  // A link of the chain that makes robots lost once it had stood (its Smelter, Chip Fab or Bot Foundry, wrecked by a raid
+  // or the Murmur, with no site going up for it): put back first, past the usual limit on sites, and given a worker
+  // first, as a starved Mine is. (The Hollow, Scarce, seed 25: the Murmur wrecked a colony's Foundry, Fab and Smelters
+  // at 25 minutes, an Outpost and a Refinery waiting for goods held both its sites, and it never made a robot again.)
+  if ((P.opened || (!smart && S.time > AI_EASY_OPENING * 2)) && !few) for (const t of ['smelter', 'fab', 'foundry']) if (!me.some((b) => b.type === t)) starved.push(t);
   for (const t of starved) plan = [[t, (counts[t] || 0) + 1]].concat(plan);
   if (starved.length) siteCap = Math.max(siteCap, sites + 1);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
@@ -855,12 +880,12 @@ function aiThink(p) {
       }
       // (And a Tap on a single Crystal cluster, on any map, for a colony short of Crystal with no Tap at all: on Standard
       // seed 11 a Turtle's last clusters were single ones, its Chips ran dry at minute 30 and its army never grew again.)
-      const spot = aiFindSpot(p, type, lander, ((islandWar || hollowOn()) && type === 'mine' && starved.includes(type)) || (type === 'tap' && crLow && !counts.tap));
+      const spot = aiFindSpot(p, type, lander, ((islandWar || hollowOn() || oreLow) && type === 'mine' && starved.includes(type)) || (type === 'tap' && crLow && !counts.tap));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
-        if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && !counts[type]) placed.building.prio = 'high';
+        if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && (!counts[type] || (type === 'mine' && oreLow))) placed.building.prio = 'high';
         if (type === 'armory') placed.building.prio = 'low';
         if (defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
         break;
@@ -1234,15 +1259,15 @@ function aiThink(p) {
   if (nukeOn() && !heldBack) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
   // 4b) Megastructures: the Lance of Corvane (or the nukes), and a Shield Dome when threatened (late in the game).
-  aiUranium(p, me, lander, !few && sites < maxSites + 1);
-  aiMega(p, me, lander, !few && sites < maxSites + 1);
+  aiUranium(p, me, lander, !few && sites + megaSites < maxSites + 1);
+  aiMega(p, me, lander, !few && sites + megaSites < maxSites + 1);
   // Held back: it only answers raids on its land and its allies' (aiCounterRaid).
   if (heldBack) { if (S.mode !== 'colony') aiCounterRaid(p); return; }
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   // A colony short on home-island Ore can use an extra site for its first Port.
   if (S.mode !== 'colony' && navalMap()) {
-    const portRoom = firstFerry && !counts.port && siteCount(p) <= maxSites;
+    const portRoom = firstFerry && !counts.port && aiSiteCount(p) <= maxSites;
     aiNaval(p, me, kinds, lvl, lander, !few && (sites < maxSites || portRoom), firstFerry);
   }
 
@@ -1389,7 +1414,7 @@ function aiThink(p) {
   }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
-  if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
+  if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && aiSiteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
     let spot = null, bd = Infinity;
     // (Uplinks: toward the nearest one that isn't ours)
     const goal = S.victory === 'uplinks' ? (S.uplinks || []).filter((u) => u.owner !== p).sort((a, c) => dist2(a.x, a.y, lander.x, lander.y) - dist2(c.x, c.y, lander.x, lander.y))[0] || enemyL : enemyL;
@@ -1896,7 +1921,7 @@ function aiBridge(p, maxSites) {
   // on the ground the Viaduct's end claimed, on the side toward the enemy.
   const landed = S.buildings.find((v) => !v.dead && v.owner === p && v.type === 'viaduct' && v.far && v.built &&
     !S.buildings.some((o) => !o.dead && o.owner === p && BDEFS[o.type].mil && dist2(o.x, o.y, v.x, v.y) <= 49));
-  if (landed && siteCount(p) < maxSites) {
+  if (landed && aiSiteCount(p) < maxSites) {
     if (!aiAffordable(p, 'outpost') || S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'outpost' && !b.built)) return;
     let best = null, bs = Infinity;
     for (let j = landed.y - VIA_CLAIM; j <= landed.y + VIA_CLAIM; j++) for (let i = landed.x - VIA_CLAIM; i <= landed.x + VIA_CLAIM; i++) {
@@ -1917,7 +1942,7 @@ function aiBridge(p, maxSites) {
     return;
   }
   // No crossing from inside our border yet: an Outpost on the shore facing the nearest land toward the enemy.
-  if (siteCount(p) >= maxSites || !aiAffordable(p, 'outpost')) return;
+  if (aiSiteCount(p) >= maxSites || !aiAffordable(p, 'outpost')) return;
   if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'outpost' && !b.built)) return;
   let tx = -1, ty = -1, td = Infinity;
   const lowest = S.elev[tIdx(L.x, L.y)] - VIA_RISE;
@@ -1947,7 +1972,7 @@ function aiRopeway(p, maxSites) {
   if (!S.hollow || !L || S.time < 300 || S.time - (P.lastRope || -999) < 30) return;
   P.lastRope = S.time;
   // (It goes up past the usual limit on sites: the Crystal out there is what keeps the Chip Fabs going.)
-  if (siteCount(p) > maxSites || !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'foundry' && b.built)) return;
+  if (aiSiteCount(p) > maxSites || !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'foundry' && b.built)) return;
   if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'ropeway' && (!b.built || S.time - b.born < 120))) return;
   const home = homeZone(p), W = S.W, reach = roadReach(p);
   let best = null, bs = Infinity;
@@ -3129,9 +3154,11 @@ function aiRaid(p, lvl) {
     if (lane) sc = (Math.max(sc, 1) + 4) * 3;
     spots.push({ t, s: sc, lane });
   }
+  const size = st.raidSize || 3;
+  // Now and then (Medium and up), a foe's Maglev line instead: a pylon or a Terminal no gun covers (aiMagCut).
+  if (aiMagCut(p, guards, size, st)) return;
   if (!spots.length) return;
   spots.sort((a, c) => c.s - a.s || a.t - c.t);
-  const size = st.raidSize || 3;
   // Every other raid, with a Torch of ours ready to burn (a full tank, in a garrison), on an enemy that farms: the
   // busiest road near its farmland instead, and the Torch goes along to scorch it (aiRaidTorch, aiRaidScorch).
   let pick = spots, farmRaid = false;
@@ -3164,6 +3191,56 @@ function aiRaid(p, lvl) {
     }
     return;
   }
+}
+
+/**
+ * Cutting a foe's Maglev line (Medium and up): in place of a road raid, at most once every AI_MAGCUT.every seconds and
+ * never two raids running, a band of a raid's size (one more when it can spare it) goes for a building of a running line (pods on it)
+ * that no gun covers, clear of every garrison the raid keeps clear of (`guards`, see aiRaid) and of as many armed
+ * warbots as the band within AI_MAGCUT.fort tiles (in forts or out; fewer count against it), with a free tile beside
+ * it on the band's ground: a Terminal (it suspends every line it ends until one is built on its tile again) before a
+ * pylon (a Worker rides out and rebuilds that), the nearer first. Its flag is planted beside the target and the band
+ * shoots it first (rally.target); once it's down the flag comes in (followRallies) and the raid is over. True if sent.
+ */
+const AI_MAGCUT = { every: 300, term: 12, pylon: 7, far: 0.08, fort: 8 };
+function aiMagCut(p, guards, size, st) {
+  const P = S.players[p], L = getE(P.lander);
+  if (S.difficulty === 'easy' || !L || S.time - (P.magCutT ?? -999) < AI_MAGCUT.every || (P.raidN || 0) % 2 !== 1) return false;
+  const z = homeZone(p), forts = S.buildings.filter((f) => !f.dead && f.built && f.owner >= 0 && foes(f.owner, p) && BDEFS[f.type].mil);
+  let best = null, bs = -Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner < 0 || isWild(b.owner) || !foes(b.owner, p)) continue;
+    const d = BDEFS[b.type];
+    if (!d.pylon && !d.magterm) continue;
+    const ends = magLineOf(b);
+    if (!ends || !linePods(ends[0]).length) continue; // (a line that carries something)
+    if (gunCovers(p, tIdx(b.x, b.y)) || guards.some((g) => dist2(g.x, g.y, b.x, b.y) < g.r2) || calmAt(b.x + 0.5, b.y + 0.5)) continue;
+    // (Less where a fort near it would sortie, or the foe's warbots stand: a band sent at a Terminal by an Outpost was
+    // met there and called home before it fired a shot.)
+    let near = 0;
+    for (const f of forts) if (f.owner === b.owner && dist2(f.x, f.y, b.x, b.y) <= AI_MAGCUT.fort * AI_MAGCUT.fort) near += armedIn(f);
+    near += agFoesNear(p, b.x + 0.5, b.y + 0.5, AI_MAGCUT.fort);
+    if (near >= size) continue;
+    const sc = (d.magterm ? AI_MAGCUT.term : AI_MAGCUT.pylon) - dist(b.x, b.y, L.x, L.y) * AI_MAGCUT.far - near * 4;
+    if (sc <= bs) continue;
+    let spot = null;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const i = b.x + di, j = b.y + dj;
+      if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z && !gunCovers(p, tIdx(i, j))) { spot = { i, j }; break; }
+    }
+    if (!spot) continue;
+    bs = sc; best = { b, spot };
+  }
+  if (!best) return false;
+  const { i, j } = best.spot, n = Math.min(size + 1, rallyAvailable(p, i, j, !!st.harass) - (st.raidKeep ?? 2));
+  if (n < size || aiRouteHot(p, i, j)) return false;
+  const { sent, rally } = sendToRally(p, i, j, n, !!st.harass);
+  if (!sent) return false;
+  rally.target = best.b.id;
+  P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * dist(i, j, L.x, L.y) };
+  P.raidN = (P.raidN || 0) + 1; P.magCutT = S.time;
+  P.magCuts = (P.magCuts || 0) + 1;
+  return true;
 }
 
 /**
@@ -3340,14 +3417,15 @@ function aiTrade(p, me) {
   const terms = me.filter((b) => BDEFS[b.type].terminal && b.built);
   if (!terms.length) return;
   const P = S.players[p];
-  const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0) + (P.fuelDry && g === 'fuel' ? 1.5 : 0);
+  const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0) + (P.fuelDry && g === 'fuel' ? 1.5 : 0) +
+    (P.oreLow ? (g === 'ore' ? 1.2 : g === 'alloy' ? 1 : 0) : 0); // (Ore running dry: see AI_ORE_FIELD)
   let have = null, short = null;
   for (const b of terms) {
     if (S.mode !== 'colony' && !b.escort) b.escort = true;
     const cur = b.route;
     if (cur && (b.runs || 0) !== b.aiRuns) { b.aiRuns = b.runs || 0; b.aiAt = S.time; } // (a run made: it's moving)
     const stalled = !!cur && S.time - (b.aiAt ?? S.time) > AI_TRADE_STALL;
-    const urgent = !!cur && (((P.crLow || P.fuelDry) && !want(cur.get)) || (P.crLow && cur.give === 'crystal'));
+    const urgent = !!cur && (((P.crLow || P.fuelDry || P.oreLow) && !want(cur.get)) || (P.crLow && cur.give === 'crystal'));
     if (cur && !stalled && !urgent && S.time - (b.aiPick ?? -999) < AI_TRADE_REVIEW) continue;
     if (!have) { have = spendable(p); short = tradeShortest(p); }
     const taken = new Set(terms.filter((t) => t !== b && t.route).map((t) => t.route.give + '>' + t.route.get));
@@ -4197,6 +4275,9 @@ function aiAffordable(p, type, except) {
   return true;
 }
 
+/** Construction sites of p's that count against its limit: not a megastructure's (see megaSites in aiThink). */
+function aiSiteCount(p) { let n = 0; for (const b of S.buildings) if (!b.dead && b.owner === p && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp && !BDEFS[b.type].mega) n++; return n; }
+
 /** Square-window resource counts for every tile (summed-area table), for cheap Outpost scoring. */
 function resourceSums(type) {
   const W = S.W, H = S.H, sum = new Int32Array((W + 1) * (H + 1));
@@ -4310,6 +4391,9 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
   const freeCr = type === 'outpost' && (P.short || []).includes(R_CRYSTAL) ? [] : null;
   if (freeCr) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) freeCr.push(t);
+  // ...and the Ore no-one holds, out of enemy guns' reach, while its Ore runs dry with none on its land to mine (AI_ORE_REACH).
+  const freeOre = type === 'outpost' && P.oreLow && (P.short || []).includes(R_ORE) ? [] : null;
+  if (freeOre) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_ORE && S.amt[t] && S.owner[t] < 0 && !hotFor(p, t)) freeOre.push(t);
   const enemyL = getE(S.players[rivalOf(p)].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
@@ -4424,6 +4508,11 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
           let dc = Infinity;
           for (const t of freeCr) if (S.zone[t] === S.zone[j * S.W + i]) dc = Math.min(dc, dist2(i, j, t % S.W, (t / S.W) | 0));
           s += Math.max(0, AI_CRYSTAL_REACH - Math.sqrt(dc)) * 0.6;
+        }
+        if (freeOre && freeOre.length) {
+          let dc = Infinity;
+          for (const t of freeOre) if (S.zone[t] === S.zone[j * S.W + i]) dc = Math.min(dc, dist2(i, j, t % S.W, (t / S.W) | 0));
+          s += Math.max(0, AI_ORE_REACH - Math.sqrt(dc)) * 0.8;
         }
       } else if (def.farm) {
         // The best patch none of our farms works: up to what one farm keeps up with (a little more for a spare tile
