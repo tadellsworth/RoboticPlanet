@@ -2032,7 +2032,7 @@ function dispatch(p) {
   {
     let builds = 0, runs = 0, urgent = 0, idleW = 0;
     for (const b of blds) {
-      if (!b.built ? !b.builder && siteFrac(b) > b.progress + 0.01 : b.fixLeft > 0 && !b.fixer) { if (!(P.danger && dangerAt(p, b.x, b.y))) builds++; }
+      if (!b.built ? !b.builder && siteReady(b) : b.fixLeft > 0 && !b.fixer) { if (!(P.danger && dangerAt(p, b.x, b.y))) builds++; }
       else if (staffable(b) && !stallWhy(b)) { runs++; if (rankOf(b) < 0) urgent++; }
     }
     if (builds || runs) {
@@ -2216,7 +2216,7 @@ function dispatch(p) {
   let stands = null;
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+    if (!b.built && !b.builder && siteReady(b) && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
       // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
       if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
@@ -3328,7 +3328,7 @@ function roadToSites(p, blds) {
   const P = S.players[p];
   let crew = null, stands = null;
   for (const b of blds) {
-    if (b.built || b.builder || !(siteFrac(b) > b.progress + 0.01) || (P.danger && dangerAt(p, b.x, b.y))) continue;
+    if (b.built || b.builder || !(siteReady(b)) || (P.danger && dangerAt(p, b.x, b.y))) continue;
     if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
     if (!crew) {
       crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build && !u.carry);
@@ -3346,6 +3346,36 @@ function roadToSites(p, blds) {
     crew.splice(crew.indexOf(best), 1);
     assignBuild(best, b, stands);
   }
+}
+
+/**
+ * Call a builder to construction site b now (its panel's Call a builder): the nearest Worker that can get there, a free
+ * one first, else one off paving, carrying or running a building, even past the few the colony keeps free. Its goods
+ * must be in (or enough of them to build on with). Returns { u } (the worker), or { why } it can't.
+ */
+function callBuilder(owner, b) {
+  if (b.builder) { const v = getE(b.builder); if (v && !v.dead && v.task && v.task.type === 'build' && v.task.site === b.id) return { u: v, already: true }; b.builder = 0; }
+  if (!siteReady(b)) return { why: 'Its goods aren\'t in yet: a builder can only build with what has been delivered.' };
+  if (S.players[owner].danger && dangerAt(owner, b.x, b.y)) return { why: 'Enemies are about: workers keep away until they\'ve gone.' };
+  const at = siteWorkAt(b), zone = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
+  const cands = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping || u.ferryWait || recycling(u)) continue;
+    const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
+    if (!inMap(ux, uy) || (!ramp && S.zone[tIdx(ux, uy)] !== zone)) continue;
+    const t = u.task, tt = t && t.type;
+    if (tt === 'build' && !(getE(t.site) || {}).built && t.site !== b.id) continue; // (not off another site)
+    const cost = !tt ? 0 : tt === 'staff' ? 30 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 60 : 8;
+    cands.push({ u, ux, uy, s: dist(ux, uy, at.x, at.y) + cost });
+  }
+  cands.sort((a, c) => a.s - c.s || a.u.id - c.u.id);
+  for (const { u, ux, uy } of cands) {
+    if (!ramp && !findPath(ux, uy, at.x, at.y, owner, routeOpts(u))) continue;
+    if (u.failGoal === tIdx(at.x, at.y)) u.failGoal = -1;
+    assignBuild(u, b);
+    if (b.builder === u.id && u.task && u.task.type === 'build') return { u };
+  }
+  return { why: 'None of your workers can walk there: it needs a way in from the rest of your colony (a road, a ramp or a bridge).' };
 }
 
 function assignStaff(u, b) {
@@ -3366,6 +3396,7 @@ function assignStaff(u, b) {
  */
 function callWorker(owner, b) {
   const def = BDEFS[b.type];
+  if (!b.built) return callBuilder(owner, b);
   if (!b.built || !def.staff || def.crew) return { why: 'This building doesn\'t take a worker.' };
   const cur = b.staff ? getE(b.staff) : null;
   if (cur && !cur.dead) return { why: 'It already has its worker.' };
@@ -3649,6 +3680,12 @@ function doHaul(u, t, dt) {
 }
 
 /** How much of a site's materials have arrived (0..1); a site that costs nothing (a building being moved) has all of them. */
+/**
+ * Has construction site b goods in it a builder could work with now? More than a sliver beyond what's built, or all
+ * its goods in and not finished (a site at 99% with everything delivered once never drew a builder: the last sliver
+ * was under the margin).
+ */
+function siteReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
 function siteFrac(site) { const total = sumValues(siteCost(site)); return total > 0 ? deliveredCount(site) / total : 1; }
 
 function deliveredCount(site) {
@@ -4294,10 +4331,10 @@ function updateBuilding(b, dt) {
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
-    if (owed && Object.keys(owed).length && !(b.builder && siteFrac(b) > b.progress + 0.01)) b.status = `Waiting for ${costText(owed)} from storage`;
+    if (owed && Object.keys(owed).length && !(b.builder && siteReady(b))) b.status = `Waiting for ${costText(owed)} from storage`;
     else if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
-    else if (!b.builder) b.status = siteFrac(b) > b.progress + 0.01 ? 'Waiting for a builder' : 'Waiting for materials'; // (built as far as what's in it goes)
+    else if (!b.builder) b.status = siteReady(b) ? 'Waiting for a builder' : 'Waiting for materials'; // (built as far as what's in it goes)
     else {
       // Its Worker waiting there for goods on their way (see doBuild): what's bringing them.
       const w = getE(b.builder), t = w && w.task, v = t && t.type === 'build' && t.phase === 'wait' && getE(t.via);

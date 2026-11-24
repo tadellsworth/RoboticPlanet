@@ -8218,6 +8218,10 @@ function openBuildingSheet(b) {
     if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
       html += `<button class="btn" id="sh-callw">Call a worker</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now, even one busy elsewhere, so this keeps working.</p>`;
     }
+    // Call a builder: a construction site of yours with its goods in and nobody building it.
+    if (b.owner === ME && !b.built && !b.builder && siteReady(b)) {
+      html += `<button class="btn" id="sh-callw">Call a builder</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now to build, even one busy elsewhere.</p>`;
+    }
     // Priority for everything but the Command Base and finished Walls/Gates (storage too: an Airfield's or a
     // Depot's deliveries come first or last by it).
     if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
@@ -8413,7 +8417,7 @@ function openBuildingSheet(b) {
     };
     if ($('sh-callw')) $('sh-callw').onclick = () => act('callWorker', [b.id], (r) => {
       const u = r.uid ? getE(r.uid) : null;
-      if (u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', u.x, u.y, { color: '#ffe45a' }); }
+      if (u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : b.built ? 'A worker is on the way.' : 'A builder is on the way.', 'info'); addFx('ring', u.x, u.y, { color: '#ffe45a' }); }
       else { sfx('error'); toast(r.why, 'warn'); }
       refreshSheet();
     });

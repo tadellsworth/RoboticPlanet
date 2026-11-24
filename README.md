@@ -585,7 +585,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   longest stuck first) while a site or repair waits for a builder with nobody idle, or a building that could work has
   nobody to run it within the `MIN_FREE_WORKERS` kept free. Its building is `benched`: nobody is sent back while
   `stallWhy` still holds (`benchHolds`); its panel reads e.g. *Waiting for Chip (its worker went to help elsewhere; one
-  comes back once it can work)*. Call a worker clears it. Measured on a player's save (27 min, 12 Workers for ~60
+  comes back once it can work)*. Call a worker clears it. A site with its goods in and no builder has **Call a builder**
+  (`callBuilder`, through the same `callWorker` order). `siteReady` decides whether a site draws a builder: more than 1%
+  beyond what's built, or all its goods in and not finished (a Maglev Terminal at 99% with everything delivered once
+  never did). Measured on a player's save (27 min, 12 Workers for ~60
   staffed buildings, 7 of them parked in stalled buildings for up to 11 minutes; no Crystal Tap staffed, so the Chip
   Fab waited on Crystal for 7 minutes), the next 10 minutes made 41 Crystal (was 0), 33 Chips (was 7), 81 Alloy (78)
   and 22 Cement (28), and 28 Fiber instead of 93 more on top of 318 in store; the same sites finished.
