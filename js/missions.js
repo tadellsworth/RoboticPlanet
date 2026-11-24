@@ -475,6 +475,7 @@ const MISSIONS = [
       'The <b>Bot Foundry</b> builds robots from Alloy and Chips, one round of parts at a time.',
       'A <b>Chip Fab</b> etches Crystal onto Alloy to make the Chips.',
       'The Foundry builds only what you order. Two Workers are always kept free for building.',
+      'Workers go first where the colony is short: if the Fab waits for Crystal, the Crystal Tap gets a worker before the Foundry. One stuck in a building that can\'t work goes to help elsewhere.',
       'On a computer, <kbd>Shift</kbd>+<kbd>F</kbd> opens its <b>Order bots</b> list from anywhere.',
       'At most 6 building sites at once; a colony holds up to 150 robots.',
     ],
