@@ -83,7 +83,16 @@ body::before {
 .gi.uranium { background: var(--g-uranium); clip-path: polygon(50% 0, 80% 35%, 70% 100%, 30% 100%, 20% 35%); border-radius: 0; box-shadow: 0 0 6px var(--g-uranium); }
 .gi.fissile { background: radial-gradient(circle, #ffffff 0 22%, var(--g-fissile) 24% 60%, #7fa21a 62%); border-radius: 50%; box-shadow: 0 0 6px var(--g-fissile); }
 .gi.warhead { background: #ffcf4a; clip-path: polygon(50% 0, 85% 30%, 85% 100%, 15% 100%, 15% 30%); border-radius: 0; }
-.gi.chip { background: var(--g-chip); border-radius: 2px; outline: 2px dotted var(--g-chip); outline-offset: 1px; width: 9px; height: 9px; }
+/* Chips: a square die with pins on all four sides, drawn in gradients. (Its good is called `chip`, which is also the class of
+   the top bar's buttons, .chip: these rules undo what .chip, and the Command Deck's `body.deck .chip`, give a button (padding,
+   a border, a see-through plate), which drew the icon as a wide dotted box or not at all. `body i.gi` to outrank them.) */
+body i.gi.chip, body i.g.chip { padding: 0; border: 0; gap: 0; min-width: 0; min-height: 0; font-size: 0; white-space: normal; }
+body i.gi.chip { width: 13px; height: 13px; border-radius: 0; box-shadow: none; outline: 0;
+  background: linear-gradient(var(--g-chip), var(--g-chip)) center / 8px 8px no-repeat,
+    linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)) center / 10px 10px no-repeat,
+    repeating-linear-gradient(90deg, var(--g-chip) 0 1.5px, transparent 1.5px 3px) 50% 50% / 7.5px 13px no-repeat,
+    repeating-linear-gradient(0deg, var(--g-chip) 0 1.5px, transparent 1.5px 3px) 50% 50% / 13px 7.5px no-repeat; }
+body i.g.chip { box-shadow: none; outline: 0; border-radius: 2px; background: var(--g-chip); }
 .toprow { display: flex; gap: 6px; }
 .chip {
   display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line);
@@ -2796,8 +2805,44 @@ body.deck .event-card { border-radius: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.
   body.deck .toprow .chip { min-height: 40px; }
   body.deck .objective { max-width: 600px; }
 }
+/* The bar holds still (ART_GUIDE.md, "Command Deck interface"): one row 40 px high that never wraps, each good's counter as wide
+   as three digits whatever it holds (tabular figures), the rate a minute set under the number out of the flow, and the
+   shortage dot inside the counter's corner. Where the row is short of room the rates go first (they stay in the counter's
+   tip), then (below 1600 px) the callsign block and the gaps; below 1270 px the goods take two fixed rows of seven. */
+@media (min-width: 1000px) and (min-height: 520px) {
+  body.deck #topbar { grid-template-rows: 40px; grid-auto-rows: auto; }
+  body.deck #topbar > .goods { display: flex; flex-wrap: nowrap; height: 40px; min-width: 0; gap: 2px; }
+  body.deck .res-chip, body.deck .goods.two-rows .res-chip { position: relative; flex: none; min-width: 0; height: 40px; padding: 0 6px 0 7px; gap: 5px; font-size: 15px; }
+  body.deck .res-chip > span { min-width: 3.05ch; font-variant-numeric: tabular-nums; } /* (3ch, and a hair: three digits measure a fraction over 3ch) */
+  body.deck .res-chip .rate { position: absolute; left: 24px; bottom: 3px; margin: 0; font-size: 9.5px; line-height: 1; white-space: nowrap; pointer-events: none; }
+  body.deck .res-chip:has(.rate:not(:empty)) > span { transform: translateY(-4px); }
+  body.deck #topbar > .toprow { flex-wrap: nowrap; height: 40px; }
+  body.deck #pop { white-space: nowrap; }
+  body.deck #pop .pn:first-child { min-width: 6.4em; }
+  body.deck #pop .pn + .pn { min-width: 4.2em; }
+  body.deck #clock { min-width: 5.2em; }
+}
+@media (min-width: 1000px) and (max-width: 1599px) and (min-height: 520px) {
+  body.deck .res-chip .rate { display: none; }
+  body.deck .res-chip:has(.rate:not(:empty)) > span { transform: none; }
+}
+@media (min-width: 1000px) and (max-width: 1599px) and (min-height: 520px) {
+  body.deck #topbar > .callsign { display: none; }
+  body.deck #topbar { grid-template-areas: "goods goods row" "obj obj obj"; }
+  body.deck .res-chip, body.deck .goods.two-rows .res-chip { padding: 0 3px 0 4px; gap: 3px; font-size: 14px; }
+  body.deck #pop { gap: 8px; padding: 2px 8px; }
+  body.deck #clock { padding: 2px 8px; }
+  body.deck #topbar > .toprow { gap: 4px; padding-left: 6px; }
+}
+@media (min-width: 1000px) and (max-width: 1269px) and (min-height: 520px) {
+  body.deck #topbar { grid-template-rows: 64px; }
+  body.deck #topbar > .goods { display: grid; grid-template-columns: repeat(var(--goods-cols, 7), max-content); grid-auto-rows: 31px; height: 64px; row-gap: 2px; align-content: center; }
+  body.deck .res-chip, body.deck .goods.two-rows .res-chip { height: 31px; min-height: 0; }
+}
 
 /* ---- the minimap ("Survey") ---- */
+/* (A panel docked on the right covers it on a wide screen: hidden then, so its label doesn't show through the glass.) */
+@media (min-width: 1000px) and (min-height: 520px) { body.deck.sheet-open .minimap, body.deck.sheet-open .mm-show { visibility: hidden; } }
 body.deck .minimap { overflow: visible; padding: 20px 6px 6px; }
 body.deck .minimap::before { content: 'Survey'; position: absolute; left: 9px; top: 6px; font: 600 9.5px/1 var(--dk-disp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-mut); pointer-events: none; }
 body.deck .minimap canvas { border: 1px solid rgba(255, 107, 74, 0.25); border-radius: 0; }
@@ -2961,6 +3006,24 @@ body.deck .order-row { border-radius: 0; border-top: var(--dk-dash); padding-top
 body.deck .order-row small { font: 500 11px/1.4 var(--dk-mono); letter-spacing: 0; }
 body.deck .order-row.next { background: linear-gradient(90deg, rgba(255, 107, 74, 0.1), transparent 70%); box-shadow: none; }
 body.deck .order-row .btn { font-family: var(--dk-mono); letter-spacing: 0; }
+/* compact: one line a type, ▲ ▼ side by side, +1 +5 Clear in a tight run; the count in grey (coral only for the type being built) */
+body.deck .order-row, body.deck .order-row.yard-row { grid-template-columns: 62px minmax(0, 1fr) 44px 44px 56px; gap: 6px; min-height: 0; padding: 4px 0; }
+body.deck .order-row.yard-row { grid-template-columns: minmax(0, 1fr) 44px 44px 56px; }
+body.deck .order-move { flex-direction: row; gap: 2px; }
+body.deck .order-row .order-move .btn { flex: 1; width: auto; min-height: 44px; padding: 0; font-size: 10px; letter-spacing: 0; }
+body.deck .order-row .btn { min-height: 44px; padding: 0; font-size: 13px; }
+body.deck .order-row .btn.ghost[data-d='0'] { font-size: 11px; letter-spacing: 0.04em; }
+body.deck .order-row > span:not(.order-move) { line-height: 1.15; overflow-wrap: anywhere; }
+body.deck .order-row small { margin-top: 2px; color: var(--dk-mut); font-weight: 500; }
+body.deck .order-row.next small { color: #ffb08f; }
+body.deck .order-row.next > span:not(.order-move)::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--dk-c); box-shadow: 0 0 6px var(--dk-c); }
+@media (pointer: coarse) {
+  body.deck .order-row { grid-template-columns: 84px minmax(0, 1fr) 44px 44px 54px; gap: 5px; }
+  body.deck .order-row.yard-row { grid-template-columns: minmax(0, 1fr) 44px 44px 54px; }
+  body.deck .order-row .order-move .btn { width: auto; font-size: 12px; }
+}
+/* a shortage dot inside the counter's corner, so it moves nothing and doesn't float over the bar's edge */
+body.deck .res-chip.starved::after { top: 3px; right: 3px; width: 6px; height: 6px; box-shadow: none; }
 body.deck .stepper .n, body.deck .ag-n { font: 700 18px/1 var(--dk-mono); }
 body.deck .ag-rename input, body.deck .bp-name, body.deck #p-difficulty, body.deck #p-checkpoint, body.deck #hud select, body.deck .chat-form input {
   border-radius: 3px; border: 1px solid var(--dk-cd); background: rgba(0, 0, 0, 0.35); color: #fff; font-family: var(--dk-mono); }
@@ -3402,6 +3465,26 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   #screen-menu #m-sec-planet { grid-column: 2; grid-row: 2; }
   #screen-menu .m-adv { grid-column: 2; grid-row: 3; }
   #screen-menu .m-planet { grid-row: 1 / span 3; }
+}
+/* A desktop: everything in Match and Planet, and Start, in view without scrolling (1280x720 up). The preview and its
+   scan on the left, Match in the middle, Planet on the right with Advanced under it (folded at first, unless the screen
+   is big enough to hold it open, its Rules and Challenge side by side). */
+@media (min-width: 1240px) and (min-height: 600px) {
+  #screen-menu .m-body { grid-template-columns: minmax(260px, 400px) minmax(320px, 400px) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 12px 20px; }
+  #screen-menu .m-planet { grid-column: 1; grid-row: 1 / span 2; gap: 10px; }
+  #screen-menu .m-planet .pv { height: clamp(180px, 36vh, 400px); }
+  #screen-menu #m-sec-match { grid-column: 2; grid-row: 1 / span 2; }
+  #screen-menu #m-sec-planet { grid-column: 3; grid-row: 1; }
+  #screen-menu .m-adv { grid-column: 3; grid-row: 2; }
+}
+@media (min-width: 1240px) and (max-width: 1599px) and (min-height: 600px) {
+  #screen-menu .m-body { grid-template-columns: minmax(240px, 340px) minmax(320px, 380px) minmax(0, 1fr); }
+  #screen-menu #m-sec-planet :is(.m-prow, .m-pick) { grid-template-columns: 92px minmax(0, 1fr) 16px; }
+  #screen-menu #m-sec-planet .m-pickrow .m-pick { grid-template-columns: 92px 30px minmax(0, 1fr) 16px; }
+}
+@media (min-width: 1700px) and (min-height: 600px) {
+  #screen-menu .m-adv-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 20px; align-items: start; }
+  #screen-menu .m-adv .m-sec + .m-sec { margin-top: 0; }
 }
 /* a phone (or anything narrow): one column that scrolls, the preview a strip on top, Advanced folded, Start docked */
 @media (max-width: 699px), (max-height: 499px) {

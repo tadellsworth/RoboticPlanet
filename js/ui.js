@@ -1270,9 +1270,10 @@ function syncSetupRows() {
   syncAdvanced();
 }
 
-/** Advanced (Rules and Challenge): open or folded (UI.advOpen; open on a big screen at first). Folded, its line says what's set. */
+/** Advanced (Rules and Challenge): open or folded (UI.advOpen; open at first only on a screen big enough to show it beside Match and
+ * Planet with no scrolling, 1700x1000 up). Folded, its line says what's set. */
 function syncAdvanced() {
-  if (UI.advOpen == null) UI.advOpen = innerWidth >= 900 && innerHeight >= 600;
+  if (UI.advOpen == null) UI.advOpen = innerWidth >= 1700 && innerHeight >= 1000;
   const t = $('m-adv-toggle'), m = UI.menu;
   t.setAttribute('aria-expanded', UI.advOpen ? 'true' : 'false');
   $('m-adv-body').hidden = !UI.advOpen;
@@ -3645,7 +3646,10 @@ function placeMinimap() {
   document.body.classList.toggle('mm-off', inGame && !MM.on);
   if (!inGame) return;
   $('toasts').style.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px';
-  const top = Math.round(document.querySelector('.toprow').getBoundingClientRect().bottom + 6) + 'px';
+  // (Under the lower of the goods and the robot counts: on a wide screen they share a row, and the Command Deck's glass bar
+  // reaches 6 px past it, so a panel docked on the right starts below the bar, not over its speed and pause buttons.)
+  const rowB = Math.max($('goods').getBoundingClientRect().bottom, document.querySelector('.toprow').getBoundingClientRect().bottom);
+  const top = Math.round(rowB + (document.body.classList.contains('deck') && isWide() ? 12 : 6)) + 'px';
   $('minimap').style.top = top;
   $('mm-show').style.top = top;
   document.documentElement.style.setProperty('--hud-top', top);
