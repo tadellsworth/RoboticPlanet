@@ -151,8 +151,22 @@ Then ask for each asset with the prompts below.
 
 The look of the whole game's interface: Contingency's screens (the globe, its panels and sheets, the Campaigns screen and
 the new run) and, since the Command Deck in game, everything over a game too (the top bar, goal card, minimap, Army Group
-cards, tools, messages, panels, selection bar, the pause menu and the screens over a game). The main menu keeps its own
-look for now. A ship's command deck seen in the dark: glass readouts over the planet.
+cards, tools, messages, panels, selection bar, the pause menu and the screens over a game), and the main menu. A ship's
+command deck seen in the dark: glass readouts over the planet.
+
+- **Two accents.** The game is the **coral Command Deck**: the main menu, its Custom Game setup, and everything in and
+  over a game wear the app icon's coral (`#ff6b4a`, peach `#ffb08f`, warm white `#fff1ec` text, quiet text `#b4b9c9`,
+  deep navy panels `rgba(12, 17, 30, 0.94)`, dark ink `#2a0d06` on coral). **Contingency is blue**: its globe and screens
+  (`#screen-contingency`, `.cg-*`) keep the cyan Command Deck below, tinted by the player's callsign. Alarm red in the
+  coral game is a magenta-red, `#ff4d8a` (a crimson `#d1205a` under white text), so a danger never reads as the accent;
+  the Missions' light there is cyan `#38d4ff`, the one cool colour, so it stands out from everything coral. Amber stays
+  the Daily Planet's and warnings', violet the Murmur's. Player and team colours on the map are untouched.
+- **The main menu** (M2, the cinematic Command Deck): Ithaca I large in the middle, lit from the front by Corvane behind
+  its left limb; the TERRA/FALL title top left in the icon's gradient (`#fff6ec` → `#ffb08f` → `#ff6b4a`, clipped to the
+  text, a soft coral glow, never dimmed); one console docked along the bottom with Play as its coral cell; a bracketed
+  rail on the right; a ticked ring and the planet's name on a leader line. Custom Game: a large preview, the settings
+  as rows that open pickers (popovers, or sheets on a phone), Advanced folding out, Start docked. The same brackets,
+  scanlines, Chakra Petch labels and monospace readouts as below, in coral.
 
 - **Palette.** Panels `rgba(5, 12, 20, 0.9)` (near opaque: no backdrop blur, for speed), text `#e3f4fb`, quiet text
   `#93b4c4`. Accents in the player's callsign colour, `--c` (COBALT `#38d4ff`, VERMILION `#ff5a6e`, VIRIDIAN `#5be06c`,
@@ -168,10 +182,10 @@ look for now. A ship's command deck seen in the dark: glass readouts over the pl
 - **Marks.** Status lights (8 px glowing dots), diamonds for Uplinks and stars, short bars for levels, segments for
   meters. Buttons are square, uppercase, at least 44 px tall, with a 2 px white focus ring.
 - **In game.** Over the bright, busy map the panels are a touch more solid (`rgba(6, 12, 19, 0.94)`, with a 1 px dark
-  outer line to lift them off it) and the accent stays cyan whatever your colour; your callsign, first in the top bar,
-  wears your colour. Brackets 14 × 2 px on a computer, 9 × 1 px on a phone. Labels over panel names have a status light
-  (cyan, amber for standby, red over a rival's building). The Missions' light is amber (`#ffc457`), an outline and a soft
-  glow, so it never reads as a selected (cyan) button. Army Group badges are diamonds, health a segmented bar.
+  outer line to lift them off it) and the accent is coral whatever your colour (cyan before Nov 24 2026); your callsign,
+  first in the top bar, wears your colour. Brackets 14 × 2 px on a computer, 9 × 1 px on a phone. Labels over panel names have a status light
+  (coral, amber for standby, magenta-red over a rival's building). The Missions' light is cyan (`#38d4ff`), an outline
+  and a soft glow, so it never reads as a selected (coral) button. Army Group badges are diamonds, health a segmented bar.
 - **Where it lives.** The Contingency block of `style.css` (`#screen-contingency`, `.cg-*`), and the markup in
   `index.html` (`#screen-contingency`) and `js/contingency-ui.js`; in game, the "Command Deck in game" block at the end of
   `style.css` (all under `body.deck`, which `index.html` sets) and the few lines of markup README.md lists.

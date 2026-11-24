@@ -1873,7 +1873,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   - **Rematch** (end screen): `UI.lastGame` holds the options `startNewGame` used (or the mission and difficulty) for the
     game being played; Rematch calls `startNewGame(opts)` again (no new random pick), or `startMission`. Hidden in
     multiplayer, Observer mode, after a loaded game and after a lost or final mission (Try again / Play it again).
-- **The Daily Planet** (`js/polish3.js`): the main menu's gold tile (`m-daily`, its date short by `dailyShort`) starts the day's game: `dailySetup(date)`
+- **The Daily Planet** (`js/polish3.js`): the main menu's amber card at the top of the rail (`m-daily`, its date short by `dailyShort`) starts the day's game: `dailySetup(date)`
   turns the UTC date (`dailyDate`, YYYY-MM-DD) into ordinary `startNewGame` options by a hash of it (map type of the
   ones taking two or three colonies, players, biome, ground, resources, three different doctrines, seed, planetary
   events; Versus on Normal, no challenge modifiers), so the game itself stays a plain one. A win's time is kept per day
@@ -3448,11 +3448,14 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **Keyboard shortcut sheet:** press **/** during a game, or tap **Keys** in the pause menu. **/** or **Esc** closes
   it. The sheet pauses single-player games while open, and multiplayer play continues. **?** still opens **How to play**.
 - **Command Deck look (the game's interface):** `body.deck` (on by default in `index.html`) dresses the whole in-game
-  interface in Contingency's Command Deck look (ART_GUIDE.md, "Command Deck interface"; the "Command Deck in game" block
-  at the end of `style.css`): near-opaque glass panels with corner brackets and scanlines, labels and buttons in Chakra
-  Petch, numbers in the system monospace, the Missions' light in amber. It reskins the top bar, goal card, minimap
+  interface in the Command Deck look in the app icon's coral (ART_GUIDE.md, "Command Deck interface"; the "Command Deck
+  in game" block of `style.css`, its `--dk-*` colours; the root `--accent` and `--danger` are coral and magenta-red too,
+  and `#screen-contingency` puts back the blue ones for Contingency): near-opaque navy glass panels with coral corner
+  brackets and scanlines, labels and buttons in Chakra Petch, numbers in the system monospace, alarm red as a
+  magenta-red (`#ff4d8a`) apart from the coral, the Missions' light in cyan. It reskins the top bar, goal card, minimap
   ("Survey"), Army Group cards, tools, messages, panels, selection bar, banners and the screens over a game (pause and
-  Settings, Statistics, How to play, Missions, Keys, the end, Boosts, multiplayer, saves); the main menu keeps its look.
+  Settings, Statistics, How to play, Missions, Keys, the end, Boosts, multiplayer, saves); the main menu has its own
+  block in the same look (below).
   Markup it adds: the callsign block first in the top bar on a wide screen (`#callsign`: `CALLSIGNS[ME]` in
   `PLAYER_COLORS[ME]`, set in `updateHUD`; in multiplayer each player's own), the robot counter's names under the counts
   (`#pop .pn`), the clock's time of day (`.ck-l`), each message's game time (`.toast[data-t]`, drawn by CSS), a label
@@ -3719,15 +3722,23 @@ clouds' drift (`natureCloudTime`).
   `worldToScreen` map through the same tilt (`natureUnwarp`, `natureWarpPt`), so taps, clicks, the box select and the
   minimap are as before; the drawing code culls by the flat frame (`viewToWorld`). No tilt on Saver.
 - **The main menu's layout** (`#screen-menu` in index.html; `showMenuView`, `renderCampaignHub`, `menuArrowKey` in
-  js/ui.js). One card (404 px wide at most, so the menu planet beside it stays clear) with four views. **Home**: the
-  title, **Continue** / **Saved games** / restore points / **Rejoin** when they apply, **Play** (`#m-new`, the last
-  settings at once) with its summary, then four tiles two by two (`.m-tiles`: **Campaigns** `#m-campaigns`, **Custom
-  Game** `#m-customise`, **Multiplayer** `#m-multi`, the **Daily Planet** `#m-daily`) and a bottom row of five small
-  buttons (`.m-pills`: **How to play** `#m-help`, **Lore** `#m-lore`, **Settings** `#m-settings`, **Feedback**
-  `#m-feedback`, **More** `#m-extras`). **Custom Game** (`#m-more`, `'setup'`) is as below. **Campaigns** (`#m-camps`,
+  js/ui.js; the "cinematic Command Deck (M2)" block at the end of style.css). One card (`#menu-card`) with four views, in
+  the Command Deck look in the app icon's coral (ART_GUIDE.md). **Home** fills the screen over the planet: the
+  **TERRA/FALL** title top left (`.logo`, the coral gradient clipped to the text, a soft glow; a status line over it and
+  the tagline under it), **Continue** / **Saved games** / restore points / **Rejoin** under the title when they apply;
+  one console docked along the bottom (`#m-dock`: **Play** `#m-new` in the coral cell with the setup summed up on it, the
+  whole cell its button, then **Campaigns** `#m-campaigns` with the Missions progress (`syncCampaignTile`), **Custom**
+  `#m-customise` and **Multiplayer** `#m-multi`); and a bracketed rail on the right (`#m-rail`: the **Daily Planet**
+  `#m-daily` in amber, then **How to play** `#m-help`, **Lore** `#m-lore`, **Settings** `#m-settings`, **Feedback**
+  `#m-feedback` and **More** `#m-extras`). Below 900 px wide the rail is a column of icons; on an upright screen
+  (`max-aspect-ratio: 23/20`, as `mplLayout`) the planet sits across the top, the title under it and Play at the foot
+  with the other three under it, the rail of icons beside the planet. `#m-go` (Play / Start with its summary,
+  `#m-more-sum`) moves between the dock and Custom Game's bar (`showMenuView`). The planet's marks (`#m-marks`: a ticked
+  ring and its name on a leader line, placed by `mplMarks`) show on Home with the Planet background only.
+  **Custom Game** (`#m-more`, `'setup'`) is as below. **Campaigns** (`#m-camps`,
   `'camps'`): a card a campaign, a picture from `art/menu/` beside a line in the setting's voice: the **Missions**
   (`#m-missions`, opens `#screen-missions`; `missionsProgress` gives finished / total and Next up, also the Campaigns
-  tile's line, `syncCampaignTile`), the **Main Campaign** (`#m-campaign`, CAMPAIGN.md, *In preparation*: not a button,
+  tile's line), the **Main Campaign** (`#m-campaign`, CAMPAIGN.md, *In preparation*: not a button,
   its three acts as a teaser), **Contingency** (`#m-contingency`: calls `openContingency()` once that exists, its status
   line from `contingencyMenuLine()` if that exists too; until then *Coming soon*, which a tap nudges) and a dashed
   **Co-op scenarios** card (*Later*). **More** (`#m-extra`, `'extra'`): **Observer** `#m-watch`, **Records**
@@ -3736,22 +3747,37 @@ clouds' drift (`natureCloudTime`).
   with the focus on the tile or button that opened the view; Esc also closes How to play and the Missions (a mission's
   brief, then the list) over the menu, and Multiplayer's first screen. The arrow keys move the focus between the
   buttons of Home, Campaigns and More by where they sit (`menuArrowKey`; Custom Game keeps its arrows for its choices),
-  and Tab goes through them in reading order. Load messages (`menuMsg`, `#m-import-msg`) show under Home or More. On an
-  upright screen with the Planet background the card starts below the planet's orbit and the app icon is left out
-  (CSS, `max-aspect-ratio: 23/20`, as `mplLayout`), so the planet is never covered. `tools/menu-test.js` checks that every destination opens and Esc / Back
-  return, on a computer and a phone.
-- **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu card on its own canvas (`#menu-planet`),
-  beside the card (across the top on a phone) under a soft shade behind it (`mplLayout`). Ithaca I goes round Corvane in
-  `MPLANET.orbit` seconds (`mplState`: its place, size and the light's way, so the lit side always faces the star),
-  turning west to east as it goes (the land moves to the right); its face is the atlas (LORE.md: The atlas):
+  and Tab goes through them in reading order. Load messages (`menuMsg`, `#m-import-msg`) show above the dock or under
+  More. `tools/menu-test.js` checks that every destination opens and Esc / Back return, on a computer and a phone.
+- **Custom Game's list and pickers** (`syncSetupRows`, `openSetPop`, `closeSetPop`, `setPopKey`, `syncAdvanced` in
+  js/ui.js). A large preview on the left (seed, Save, New planet, saved planets), **Match** and **Planet** as a list of
+  rows (`.m-prow`, `data-pop` the id of the setting's control) and **Advanced** (`#m-adv`: Rules and Challenge, folded
+  or open by `#m-adv-toggle`, `UI.advOpen`, open at first on a screen at least 900 × 600; folded, `#m-adv-sum` sums it
+  up), with Start in a docked bar. Each row shows its value (`setRowValue`: the lit choice, the doctrine or *Each its
+  own*) and hides with its control. A row opens `#m-pop`: the row's own control (the radio row, the doctrine chips and
+  each rival's dropdown, kept hidden in the row's `.m-ctl`) is moved into it while it's open and moved back on close,
+  so every option keeps its handlers, data-info lines and greying out; the Second biome dropdown is shown as a list of
+  choices kept in step with it. A popover beside its row on a big screen (`placeSetPop`), a sheet from the bottom under
+  a scrim below 700 px wide or 500 tall. A pick closes it (not the doctrine's: each rival can get its own); ← → ↑ ↓
+  move the pick through the enabled choices, Enter picks and closes, Esc or a tap outside closes, Tab stays inside, and
+  the focus goes back to the row. Map type and Biome keep their card pickers (`openPicker`).
+- **The main menu** (`js/menuplanet.js`): Corvane's system behind the menu on its own canvas (`#menu-planet`), the
+  menu's edges shaded over it (`#screen-menu::after`). Ithaca I sits large and still in the middle of Home (`mplLayout`:
+  left of the rail, between the title and the dock; across the top on an upright screen), its lit side toward you:
+  Corvane is behind its left limb, the light fixed from the front, a little left and above (`mplState`), so the thin
+  night side on the right shows the colonies' lights. It turns west to east (the land moves to the right), opening with
+  the Rust toward you; its face is the atlas (LORE.md: The atlas):
   `art/lore/ithaca-map.webp`, the atlas made small by `tools/atlas/atlas.py` (`menu_map`: 512×256, no labels or borders,
   the regions' colours blended at their seams, the ringfall belt's craters), its alpha the colonies' night lights (towns
   along the coasts and in the territories' hearts; `mplAtlas` reads it; inline as `window.ITHACA_MAP` in the one-file
-  build). The clouds are made from a fixed seed (`mplMakeMap`, a few rows a frame at launch), and so is a face of its own
+  build), drawn up smoothly into a 1024 × 512 map, its colour then sharpened from the Contingency globe's
+  `art/globe/ithaca-2048.webp` when that comes (`mplHd`; not in the one-file build). The clouds are the globe's
+  (`mplClouds`), else made from a fixed seed (`mplMakeMap`, a few rows a frame at launch, at half the map's resolution), and so is a face of its own
   (the old coral patchwork) until the picture comes, at most `MPLANET.atlasWait` seconds, or if it can't be had (a page
   opened from a file, whose canvas can't be read). It is shaded per
-  pixel in a small image from its normals (`mplShade`, with Argos's shadow where the line from Argos away from the star
-  meets the planet). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
+  pixel in an image up to `MPLANET.res` (520) across, 300 on Graphics Saver, from its normals (`mplShade`; the light's
+  part, which holds still, is worked out once per size in `mplLightPrep`, so a frame only looks up the map and clouds;
+  Argos's shadow, where the line from Argos away from the star meets the planet, works it out again there). Corvane's corona, bloom and flares (`mplStar`), the Ring (`mplRing`), Argos (`mplMoon`), the four
   vanguard Carriers (`mplCarriers`), ringfall (`mplRingfall`) and the Wren coming in on its loop (`mplWren`). The war on
   the surface (`mplWarTick`, `mplWarDraw`): fronts near the colonies' lights flicker with bursts and the odd bigger
   boom, leave fires (smoke by day), missiles' lines arc between colonies, a big strike about every half minute (busier since Nov 21 2026: up to 4 fronts, more bursts and missiles), all placed on
@@ -3761,9 +3787,9 @@ clouds' drift (`natureCloudTime`).
   every other one, fewer flashes, no ringfall, Wren, drifting stars or lens rings; with reduced motion near-still
   (`MPLANET` time at 3%) with no flashes, just steady fires. Stops while the menu is hidden or the tab is in the
   background. While it shows, the demo game behind the menu plays on but isn't drawn (`menuPlanetCovers` in
-  `drawNeeded`). Only with **Menu background** on **Planet** (`menuBg` / `setMenuBg`, kept on the device as
-  `terrafall.menubg`): on **Classic**, the default, the menu shows the demo game through its dimmed gradient as before
-  Nov 21 2026, and the canvas and map aren't even made (`mplMake` runs the first time Planet is wanted); switching to
+  `drawNeeded`). Only with **Menu background** on **Planet**, the default since the cinematic menu (`menuBg` /
+  `setMenuBg`, kept on the device as `terrafall.menubg`): on **Classic** the menu shows the demo game through its dimmed
+  gradient, the planet's marks hidden and the panels as solid as ever, and the canvas and map aren't even made (`mplMake` runs the first time Planet is wanted); switching to
   Classic stops the frames (`cancelAnimationFrame`) and hides the canvas at once.
 
 ### Cloud shadows, remains and beacons

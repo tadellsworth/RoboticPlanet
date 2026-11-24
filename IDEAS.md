@@ -3,6 +3,20 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## The cinematic main menu and the coral game (built Nov 24 2026: calls made, open questions for the owner)
+
+The owner picked M2, the cinematic Command Deck main menu, in the icon's coral, and then coral for the whole game
+(Contingency stays blue). Calls made:
+- **Planet is now the default Menu background** (it was Classic): the design is built round the big planet. Classic
+  still works (the planet's marks hide, the panels stay solid). Keep Planet as the default?
+- **Alarm red is a magenta-red** (`#ff4d8a`) in the coral game, and the Missions' light is cyan, so neither is
+  mistaken for the coral accent. The map's player colours are untouched, so VERMILION's red still sits close to coral
+  in the callsign block: worth a look in play.
+- **The planet's face** is sharpened from the Contingency globe's 2048 picture on the web build; the one-file build
+  keeps the small atlas (drawn up smoothly) rather than carry 1 MB more. Its light is fixed (no orbit on Home now).
+- **Custom Game on a short screen** (a phone on its side) scrolls as one column under a slim header: a two-column
+  version could fit more at once.
+
 ## Aiming defences (built Nov 23 2026: calls made, open questions for the owner)
 
 A defence's panel has **Aim** (`T`, then tap an enemy) and **Clear aim** (`X`); with a mouse, a right-click on an enemy

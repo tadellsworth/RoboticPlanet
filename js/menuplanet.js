@@ -2,9 +2,10 @@
 /*
  * Terrafall — the main menu's backdrop: Corvane's system, seen from far out (LORE.md: the sky). Looks only.
  *
- * Corvane, the restless orange star, glows off to one side with its corona and bloom (and now and then a flare). Ithaca I
- * goes round it on a slow orbit (MPLANET.orbit seconds), turning as it goes, its lit side always toward the star and its
- * night side showing the colonies' lights, where the war goes on: fronts flickering with gunfire near the lights, fires
+ * Ithaca I fills the middle of the menu's Home, large and still, its lit side toward you: Corvane, the restless orange
+ * star, sits behind its left limb with its corona and bloom (and now and then a flare), putting a rim of light round it
+ * (mplLayout). It turns, its clouds drift, and the thin night side on its right shows the colonies' lights, where the war
+ * goes on: fronts flickering with gunfire near the lights, fires
  * lingering where they fought, a missile's line arcing between two colonies, a rare bright strike, and after the menu has
  * been open a while, once in a long while, a nuclear blast. The Ring circles the planet, catching the light; Argos goes
  * round it and its shadow crosses the planet; the four vanguard Carriers are tiny lit specks in orbit; ringfall streaks
@@ -20,14 +21,15 @@
  * demo game behind the menu isn't drawn (menuPlanetCovers: main.js).
  *
  * Only with the Menu background setting on Planet (menuBg / setMenuBg, kept on this device; Settings, from the main menu
- * or the pause menu). On Classic (the default) the menu shows the AI-vs-AI demo game through its dimmed gradient, as it
+ * or the pause menu; Planet is the default). On Classic the menu shows the AI-vs-AI demo game through its dimmed gradient, as it
  * always did, and none of this is made or run: no canvas, no map, no frames.
  */
 
 const MPLANET = {
-  texW: 512, texH: 256,   // the planet's map (longitude × latitude), as the atlas picture (art/lore/ithaca-map.webp)
+  texW: 1024, texH: 512,  // the planet's map (longitude × latitude): the atlas picture (art/lore/ithaca-map.webp) drawn up smoothly,
+                          // then the Contingency globe's sharper colour (art/globe/ithaca-2048.webp) when it comes (mplHd)
   atlasWait: 3,           // seconds the planet waits for that picture at launch before it shows its own face
-  res: 300,               // the most pixels across the shaded sphere is made at (it's drawn larger, smoothly)
+  res: 520, resSaver: 300, // the most pixels across the shaded sphere is made at (it's drawn larger, smoothly), and on Graphics Saver
   fps: 12, fpsSaver: 5,   // frames a second
   orbit: 240,             // seconds for Ithaca I to go once round Corvane
   turn: 150,              // ...to turn once
@@ -44,10 +46,10 @@ const MPL = { c: null, g: null, raf: 0, last: 0, t: 0, open: 0, map: null, sky: 
   war: { fronts: [], fires: [], flashes: [], tracers: [], strikes: [], nextFront: 0, nextStrike: 20, nextTracer: 6, nuke: null, nextNuke: 0 },
   falls: [], nextFall: 4, spr: {} };
 
-/* The Menu background setting: 'classic' (the demo game, the default) or 'planet' (this). */
+/* The Menu background setting: 'planet' (this, the default since the cinematic menu) or 'classic' (the demo game). */
 const MENU_BG_KEY = 'terrafall.menubg';
 const MENU_BG = ['classic', 'planet'];
-let _menuBg = 'classic';
+let _menuBg = 'planet';
 try { const v = localStorage.getItem(MENU_BG_KEY); if (MENU_BG.includes(v)) _menuBg = v; } catch (e) { /* storage unavailable */ }
 function menuBg() { return _menuBg; }
 /** Pick the menu's background; it changes at once (the planet starts, or stops and is put away). */
@@ -86,14 +88,16 @@ function mplMakeMap() {
     const z = hash2(k, 1, seed) * 2 - 1, a = hash2(k, 2, seed) * Math.PI * 2, r = Math.sqrt(1 - z * z);
     cells.push({ x: r * Math.cos(a), y: z, z: r * Math.sin(a), b: BIO[Math.floor(hash2(k, 3, seed) * BIO.length)], city: hash2(k, 4, seed) });
   }
+  // (a face of its own, at half the map's resolution, each texel made once and copied to its neighbours: dup)
+  const dup = (t) => { for (const u of [t + 1, t + W, t + W + 1]) { if (M.clouds !== 'ok') cloud[u] = cloud[t]; lights[u] = lights[t]; tex[u * 3] = tex[t * 3]; tex[u * 3 + 1] = tex[t * 3 + 1]; tex[u * 3 + 2] = tex[t * 3 + 2]; } };
   const doRow = (j) => {
-    const lat = (0.5 - (j + 0.5) / H) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
-    for (let i = 0; i < W; i++) {
+    const lat = (0.5 - (j + 1) / H) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+    for (let i = 0; i < W; i += 2) {
       const lon = ((i + 0.5) / W) * Math.PI * 2, x = cl * Math.cos(lon), y = sl, z = cl * Math.sin(lon), t = j * W + i;
       // cloud: drifting bands, thicker toward the mid-latitudes
       const cn = mplFbm(x * 3.2 + 7, y * 6, z * 3.2, seed + 21, 3);
       if (M.clouds !== 'ok') cloud[t] = clamp((cn - 0.52) * 3.2, 0, 1) * 220; // (until the globe's own clouds come: mplClouds)
-      if (M.atlas === 'ok') continue; // (the face is the atlas's)
+      if (M.atlas === 'ok') { if (M.clouds !== 'ok') cloud[t + 1] = cloud[t + W] = cloud[t + W + 1] = cloud[t]; continue; } // (the face is the atlas's)
       // the nearest centre (and how near the next, for the seams between regions)
       let b1 = null, b2 = null, d1 = 9, d2 = 9;
       const q = 0.42, wx = x + q * (mplFbm(x * 2.5, y * 2.5, z * 2.5, seed + 5, 2) - 0.5), wy = y + q * (mplFbm(x * 2.5 + 9, y * 2.5, z * 2.5, seed + 6, 2) - 0.5), wz = z + q * (mplFbm(x * 2.5, y * 2.5 + 9, z * 2.5, seed + 7, 2) - 0.5);
@@ -123,6 +127,7 @@ function mplMakeMap() {
       const ice = clamp((Math.abs(lat) - 1.08 - 0.12 * (det - 0.5)) / 0.08, 0, 1);
       if (ice > 0) { r += (236 - r) * ice; g += (242 - g) * ice; bl += (248 - bl) * ice; lights[t] = 0; }
       tex[t * 3] = r; tex[t * 3 + 1] = g; tex[t * 3 + 2] = bl;
+      dup(t);
     }
   };
   // Made a few rows at a time (step: ms of a frame), so the menu answers at once while it's made. The atlas picture is
@@ -131,12 +136,14 @@ function mplMakeMap() {
   const M = { tex, cloud, lights, land, W, H, row: 0, done: false, atlas: 'wait', clouds: 'wait', t0: performance.now() };
   M.step = (ms) => {
     const t0 = performance.now();
-    while (M.row < H && performance.now() - t0 < ms) doRow(M.row++);
+    if (M.atlas === 'ok' && M.clouds === 'ok') M.row = H; // (both pictures here: nothing left to make)
+    while (M.row < H && performance.now() - t0 < ms) { doRow(M.row); M.row += 2; }
     M.done = M.row >= H && (M.atlas !== 'wait' || performance.now() - M.t0 > MPLANET.atlasWait * 1000);
     return M.done;
   };
   mplAtlas(M);
   mplClouds(M);
+  mplHd(M);
   return M;
 }
 
@@ -186,6 +193,30 @@ function mplAtlas(M) {
   img.src = (typeof window !== 'undefined' && window.ITHACA_MAP) || 'art/lore/ithaca-map.webp';
 }
 
+/** The sharper colour for the big planet of the menu's Home: the Contingency globe's surface (art/globe/ithaca-2048.webp,
+ * the same map), drawn into the map's colour once both it and the atlas are in (the atlas keeps the lights and the sea).
+ * Not in the one-file build, which carries only the small atlas inline: there the atlas, drawn up smoothly, is the face. */
+function mplHd(M) {
+  if (typeof window !== 'undefined' && window.ITHACA_MAP) return;
+  const img = new Image();
+  img.onload = () => {
+    const put = () => {
+      if (M.atlas === 'wait') { setTimeout(put, 200); return; }
+      if (M.atlas !== 'ok') return;
+      try {
+        const c = document.createElement('canvas');
+        c.width = M.W; c.height = M.H;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0, M.W, M.H);
+        const d = g.getImageData(0, 0, M.W, M.H).data;
+        for (let t = 0; t < M.W * M.H; t++) { M.tex[t * 3] = d[t * 4]; M.tex[t * 3 + 1] = d[t * 4 + 1]; M.tex[t * 3 + 2] = d[t * 4 + 2]; }
+      } catch (e) { /* (a page opened from a file: the atlas stays) */ }
+    };
+    put();
+  };
+  img.src = 'art/globe/ithaca-2048.webp';
+}
+
 /** Sprites, made once: a soft disc in colour rgb with alpha falling to the edge (hard: a brighter core). */
 function mplSprite(name, rgb, hard) {
   if (MPL.spr[name]) return MPL.spr[name];
@@ -222,15 +253,30 @@ function mplMakeSky(w, h) {
   return c;
 }
 
-/** Where everything sits (css px): Corvane and the orbit beside the card on a wide screen, across the top on a tall one. */
+/**
+ * Where everything sits (css px). The main menu's cinematic Home (M2): Ithaca I large and still, its lit side toward
+ * you, Corvane behind its left limb putting a rim of light round it. On a wide screen it sits in the space left of the
+ * menu's right-hand rail, between the title and the dock; on an upright one across the top, above the title. `px, py, r`
+ * the planet, `sx, sy` the star, `L` the light (toward Corvane: from the front, a little left and above).
+ */
 function mplLayout(w, h) {
+  const L = [-0.62, -0.28, 0.73], ll = Math.hypot(L[0], L[1], L[2]), Ln = L.map((v) => v / ll);
   if (w >= h * 1.15) {
-    // (beside the card, a little behind its edge at most; the Ring kept inside the screen at the orbit's far right)
-    const r = clamp(Math.min(h * 0.13, (w / 2 - 150) * 0.155), 24, 150), left = w / 2 + 150, right = w - 16 - r * 2, a = (right - left) / 2;
-    return { sx: (left + right) / 2, sy: h * 0.46, a, b: a * 0.32, r, card: { x: w / 2, y: h / 2, r: 330 } };
+    const right = w - (w >= 900 ? 264 : 84), r = clamp(Math.min(h * 0.27, right * 0.21), 40, 380);
+    const px = right * 0.745, py = h * 0.45;
+    return { px, py, r, sx: px - r * 1.32, sy: py - r * 0.52, L: Ln, a: 0, b: 0 };
   }
-  const a = w * 0.4, r = clamp(w * 0.12, 20, 100);
-  return { sx: w * 0.5, sy: Math.max(r * 1.4, h * 0.07), a, b: a * 0.28, r, card: { x: w / 2, y: h * 0.55, r: Math.max(w, h) * 0.6 } };
+  const r = clamp(Math.min(w * 0.32, h * 0.15), 40, 260), px = w * 0.5, py = Math.max(r * 1.25, h * 0.228);
+  return { px, py, r, sx: px - r * 1.15, sy: py - r * 0.72, L: Ln, a: 0, b: 0 };
+}
+
+/** The planet's marks on the menu's Home (#m-marks: a ticked ring round it, its name on a leader line), placed over it. */
+function mplMarks(Lo) {
+  const el = typeof document !== 'undefined' && document.getElementById('m-marks');
+  if (!el) return;
+  const r = Lo.r;
+  el.style.left = Lo.px - 2 * r + 'px'; el.style.top = Lo.py - 1.3 * r + 'px';
+  el.style.width = 4 * r + 'px'; el.style.height = 2.6 * r + 'px';
 }
 
 /** The per-pixel geometry of the sphere image (n × n): each pixel's normal, latitude and longitude. */
@@ -259,12 +305,9 @@ function mplOnSphere(u, lat, rot) {
 
 /** The state of the system at time t: the planet's place, size and light, Argos, the Carriers. */
 function mplState(t, Lo) {
-  const th = (t / MPLANET.orbit) * Math.PI * 2 - 0.2, // (it opens on the near side, to the right)
-    s = Math.sin(th), c = Math.cos(th), e = Lo.b / Lo.a, ce = Math.sqrt(1 - e * e);
-  const px = Lo.sx + Lo.a * c, py = Lo.sy + Lo.b * s, r = Lo.r * (1 + 0.22 * s);
-  let L = [-c, -s * e, -s * ce];
-  const ll = Math.hypot(L[0], L[1], L[2]); L = L.map((v) => v / ll);
-  const rot = (t / MPLANET.turn) * Math.PI * 2, front = s > 0;
+  // (Home holds it still in front of the star, lit from the front: mplLayout. It turns, its clouds drift, Argos goes round.)
+  const th = 0, px = Lo.px, py = Lo.py, r = Lo.r, L = Lo.L;
+  const rot = (t / MPLANET.turn) * Math.PI * 2, front = true;
   // Argos: round the planet in the Ring's plane, a little inclined
   const ph = (t / MPLANET.moon) * Math.PI * 2 + 0.8, tc = Math.cos(MPLANET.tilt), ts = Math.sin(MPLANET.tilt);
   const mx0 = 3.1 * Math.cos(ph), my0 = 0.5 * Math.sin(ph), mz = 3.1 * Math.sin(ph);
@@ -272,45 +315,66 @@ function mplState(t, Lo) {
   return { th, px, py, r, L, rot, front, moon };
 }
 
+/** The light's part of the shading, per pixel, for a light that holds still (Home's: mplLayout): made once for the
+ * geometry and the light, so a frame only looks up the map and the clouds. Each pixel: s (the light on it), day, lit, the
+ * warm terminator, the haze toward the limb, the night and the sea's glint, as mplLit works them out. */
+function mplLightPrep(G, L) {
+  const key = G.n + ':' + L.join(',');
+  if (G.prep && G.prep.key === key) return G.prep;
+  const N = G.n * G.n, P = { key, s: new Float32Array(N), day: new Float32Array(N), lit: new Float32Array(N), warm: new Float32Array(N), fk: new Float32Array(N), air: new Float32Array(N), night: new Float32Array(N), spec: new Float32Array(N) };
+  for (let k = 0; k < N; k++) if (G.edge[k] >= 0) mplLit(P, k, G.nx[k] * L[0] + G.ny[k] * L[1] + G.nz[k] * L[2], G.nx[k], G.ny[k], G.nz[k], L);
+  return (G.prep = P);
+}
+/** One pixel's light terms (into P at k) for light s on a pixel with normal (nx, ny, nz), as the Contingency globe is lit. */
+function mplLit(P, k, s, nx, ny, nz, L) {
+  const sm = clamp((s + 0.18) / 0.73, 0, 1), day = sm * sm * (3 - 2 * sm);
+  P.s[k] = s; P.day[k] = day;
+  P.lit[k] = 0.035 + day * (0.55 + 0.45 * Math.max(s, 0)) * 1.02;
+  P.warm[k] = clamp(1 - Math.abs(s - 0.04) * 5, 0, 1);
+  const fres = Math.pow(1 - nz, 2.2);
+  P.fk[k] = 1 - 0.35 * fres; P.air[k] = 0.55 * fres * clamp(s + 0.35, 0, 1);
+  P.night[k] = clamp(-s * 3 + 0.1, 0, 1);
+  let Hx = L[0], Hy = L[1], Hz = L[2] + 1; const hl = Math.hypot(Hx, Hy, Hz) || 1; Hx /= hl; Hy /= hl; Hz /= hl;
+  const ndh = Math.max(0, nx * Hx + ny * Hy + nz * Hz), p12 = ndh ** 12;
+  P.spec[k] = day > 0 ? (p12 ** 5.8 * 0.38 + p12 * 0.1) * day * 255 : 0;
+}
+
 /** The sphere's image now, lit from L: the day side, a warm terminator, the night side dark with the colonies' lights,
- * and Argos's shadow if it falls on the planet. */
+ * and Argos's shadow if it falls on the planet. (The light's part is made once: mplLightPrep.) */
 function mplShade(t, st) {
-  const M = MPL.map, G = MPL.geo, n = G.n, img = MPL.sphere.ctx.createImageData(n, n), px = img.data;
+  const M = MPL.map, G = MPL.geo, n = G.n, img = MPL.sphere.img || (MPL.sphere.img = MPL.sphere.ctx.createImageData(n, n)), px = img.data;
   const rot = st.rot, crot = (t / MPLANET.clouds) * Math.PI * 2, W = M.W, H = M.H, TAU = Math.PI * 2, [Lx, Ly, Lz] = st.L;
+  const P = mplLightPrep(G, st.L);
   // Argos's shadow: where the line from it away from Corvane meets the planet (unit sphere), if it does.
   let sh = null;
   const m = st.moon, md = m.x * Lx + m.y * Ly + m.z * Lz;
   if (md > 0) { const q = m.x * m.x + m.y * m.y + m.z * m.z, disc = md * md - (q - 1); if (disc > 0) { const tt = md - Math.sqrt(disc); sh = [m.x - Lx * tt, m.y - Ly * tt, m.z - Lz * tt]; } }
-  const shr2 = 0.13 * 0.13;
-  // the half-way vector between the light and the eye, for the glint
-  let Hx = Lx, Hy = Ly, Hz = Lz + 1; const hl = Math.hypot(Hx, Hy, Hz) || 1; Hx /= hl; Hy /= hl; Hz /= hl;
+  const shr2 = 0.13 * 0.13, Q = MPL.shq || (MPL.shq = { s: [0], day: [0], lit: [0], warm: [0], fk: [0], air: [0], night: [0], spec: [0] });
+  const rotU = rot / TAU, crotU = crot / TAU;
   for (let k = 0; k < n * n; k++) {
     const e = G.edge[k];
     if (e < 0) continue;
-    const lat = G.lat[k], v = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0));
-    let u = ((G.lon[k] - rot) / TAU) % 1; if (u < 0) u += 1; // (it turns west to east: the land moves to the right)
-    let uc = ((G.lon[k] - crot) / TAU) % 1; if (uc < 0) uc += 1;
+    const v = Math.min(H - 1, Math.max(0, ((0.5 - G.lat[k] / Math.PI) * H) | 0)), lo = G.lon[k] / TAU;
+    let u = (lo - rotU) % 1; if (u < 0) u += 1; // (it turns west to east: the land moves to the right)
+    let uc = (lo - crotU) % 1; if (uc < 0) uc += 1;
     const ti = v * W + ((u * W) | 0), tc = v * W + ((uc * W) | 0), ts = v * W + ((((uc + 0.004) % 1) * W) | 0);
-    const nx = G.nx[k], ny = G.ny[k], nz = G.nz[k];
-    let s = nx * Lx + ny * Ly + nz * Lz;
-    if (sh) { const d2 = (nx - sh[0]) ** 2 + (ny - sh[1]) ** 2 + (nz - sh[2]) ** 2; if (d2 < shr2) s -= (1 - d2 / shr2) * Math.max(0, s) * 0.85; }
-    // as the Contingency globe is lit: a soft terminator, the sea's glint, the clouds (and their shadows), the haze of
-    // air toward the limb; and here the night side's darkness, with the colonies' lights
-    const sm = clamp((s + 0.18) / 0.73, 0, 1), day = sm * sm * (3 - 2 * sm), cl = M.cloud[tc] / 255, csh = M.cloud[ts] / 255;
-    const lit = 0.035 + day * (0.55 + 0.45 * Math.max(s, 0)) * 1.02;
-    let r = M.tex[ti * 3], g = M.tex[ti * 3 + 1], b = M.tex[ti * 3 + 2];
-    const sea = M.land[ti] ? 0 : 1, shade = 1 - 0.28 * csh * (1 - cl) * day; // (a cloud's shadow falls a little east of it)
-    r *= shade * (1 - 0.2 * cl); g *= shade * (1 - 0.2 * cl); b *= shade * (1 - 0.2 * cl);
-    r += (247 - r) * cl * 0.92; g += (247 - g) * cl * 0.92; b += (250 - b) * cl * 0.92;
-    const warm = clamp(1 - Math.abs(s - 0.04) * 5, 0, 1) * (0.6 + 0.4 * (1 - cl));
-    r *= lit + 0.3 * warm; g *= lit + 0.1 * warm; b *= lit - 0.02 * warm;
-    if (sea && day > 0) {
-      const ndh = Math.max(0, nx * Hx + ny * Hy + nz * Hz), p12 = ndh ** 12, sp = (p12 ** 5.8 * 0.38 + p12 * 0.1) * (1 - cl) * day * 255;
-      r += sp; g += sp * 0.95; b += sp * 0.85;
+    // (under Argos's shadow the light is worked out again for the darker s)
+    let L0 = P, j = k;
+    if (sh) {
+      const nx = G.nx[k], ny = G.ny[k], nz = G.nz[k], d2 = (nx - sh[0]) ** 2 + (ny - sh[1]) ** 2 + (nz - sh[2]) ** 2;
+      if (d2 < shr2) { const s0 = P.s[k]; mplLit(Q, 0, s0 - (1 - d2 / shr2) * Math.max(0, s0) * 0.85, nx, ny, nz, st.L); L0 = Q; j = 0; }
     }
-    const fres = Math.pow(1 - nz, 2.2), air = 0.55 * fres * clamp(s + 0.35, 0, 1);
-    r = r * (1 - 0.35 * fres) + 77 * air; g = g * (1 - 0.35 * fres) + 140 * air; b = b * (1 - 0.35 * fres) + 255 * air;
-    const night = clamp(-s * 3 + 0.1, 0, 1);
+    const day = L0.day[j], cl = M.cloud[tc] / 255, csh = M.cloud[ts] / 255;
+    let r = M.tex[ti * 3], g = M.tex[ti * 3 + 1], b = M.tex[ti * 3 + 2];
+    const shade = (1 - 0.28 * csh * (1 - cl) * day) * (1 - 0.2 * cl); // (a cloud's shadow falls a little east of it)
+    r *= shade; g *= shade; b *= shade;
+    r += (247 - r) * cl * 0.92; g += (247 - g) * cl * 0.92; b += (250 - b) * cl * 0.92;
+    const lit = L0.lit[j], warm = L0.warm[j] * (0.6 + 0.4 * (1 - cl));
+    r *= lit + 0.3 * warm; g *= lit + 0.1 * warm; b *= lit - 0.02 * warm;
+    if (!M.land[ti] && day > 0) { const sp = L0.spec[j] * (1 - cl); r += sp; g += sp * 0.95; b += sp * 0.85; }
+    const fk = L0.fk[j], air = L0.air[j];
+    r = r * fk + 77 * air; g = g * fk + 140 * air; b = b * fk + 255 * air;
+    const night = L0.night[j];
     if (night > 0) { const Lt = M.lights[ti] / 255; if (Lt) { const a = Lt * night * (1 - 0.7 * cl); r += 255 * a; g += 190 * a; b += 110 * a; } }
     const o = k * 4;
     px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255 * e;
@@ -452,7 +516,7 @@ function mplWarDraw(g, st, still) {
 
 /** Corvane: its corona (breathing, flaring now and then), the disc, and the bloom across the lens. */
 function mplStar(g, Lo, t, saver) {
-  const x = Lo.sx, y = Lo.sy, rs = Lo.r * 0.42;
+  const x = Lo.sx, y = Lo.sy, rs = Lo.r * 0.3; // (smaller than the planet it lights: Home holds it large)
   const flare = saver ? 0 : Math.max(0, Math.sin((t / 37) * Math.PI * 2)) ** 12; // (it flares often: LORE.md)
   const co = mplSprite('corona', '255,150,80'), core = mplSprite('core', '255,214,160', true);
   g.save();
@@ -589,10 +653,7 @@ function mplDraw(dt, still, saver) {
   if (behind) { draw(); mplStar(g, Lo, t, saver); } else { mplStar(g, Lo, t, saver); draw(); }
   if (!saver && !still) mplWren(g, st, t);
   g.globalAlpha = 1;
-  // a soft shade behind the menu card, so it reads clearly over everything
-  const C = Lo.card, vg = g.createRadialGradient(C.x, C.y, 0, C.x, C.y, C.r);
-  vg.addColorStop(0, 'rgba(4,6,14,0.55)'); vg.addColorStop(0.6, 'rgba(4,6,14,0.35)'); vg.addColorStop(1, 'rgba(4,6,14,0)');
-  g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  // (the menu shades the edges itself, over this: #screen-menu::after in style.css)
 }
 
 /** Is the backdrop showing (the main menu up, the tab in front)? */
@@ -601,16 +662,19 @@ function menuPlanetCovers() { return !!MPL.c && MPL.on && !document.hidden; }
 function mplResize() {
   const c = MPL.c, box = c.parentElement.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 1.5);
   const w = Math.max(1, Math.round(box.width)), h = Math.max(1, Math.round(box.height));
-  if (w === MPL.w && h === MPL.h && d === MPL.dpr) return false;
-  MPL.w = w; MPL.h = h; MPL.dpr = d;
+  const sv = typeof gfxStep === 'function' && gfxStep() === 'saver';
+  if (w === MPL.w && h === MPL.h && d === MPL.dpr && sv === MPL.saver) return false;
+  MPL.w = w; MPL.h = h; MPL.dpr = d; MPL.saver = sv;
   c.width = Math.round(w * d); c.height = Math.round(h * d);
   MPL.sky = mplMakeSky(c.width, c.height);
-  const Lo = mplLayout(w, h), n = Math.max(48, Math.min(MPLANET.res, Math.round(Lo.r * 2.5 * d)));
+  const saver = typeof gfxStep === 'function' && gfxStep() === 'saver';
+  const Lo = mplLayout(w, h), n = Math.max(48, Math.min(saver ? MPLANET.resSaver : MPLANET.res, Math.round(Lo.r * 2 * d)));
+  mplMarks(Lo);
   if (!MPL.geo || MPL.geo.n !== n) {
     MPL.geo = mplGeometry(n);
     const sc = document.createElement('canvas');
     sc.width = sc.height = n;
-    MPL.sphere = { c: sc, ctx: sc.getContext('2d') };
+    MPL.sphere = { c: sc, ctx: sc.getContext('2d'), img: null };
   }
   return true;
 }
@@ -645,6 +709,9 @@ function mplWatch() {
   const on = want && !menu.hidden && !document.hidden;
   MPL.on = on;
   if (MPL.c) MPL.c.hidden = !want || menu.hidden;
+  menu.classList.toggle('has-planet', want);
+  const marks = document.getElementById('m-marks');
+  if (marks) { marks.hidden = !want; if (want) mplMarks(mplLayout(window.innerWidth, window.innerHeight)); }
   if (!on && MPL.raf) { cancelAnimationFrame(MPL.raf); MPL.raf = 0; }
   if (on && !MPL.raf) { MPL.last = 0; MPL.raf = requestAnimationFrame(mplFrame); }
 }
@@ -657,7 +724,7 @@ function mplMake(menu) {
   menu.insertBefore(c, menu.firstChild);
   MPL.c = c; MPL.g = c.getContext('2d');
   MPL.map = mplMakeMap();
-  MPL.t = 30;
+  MPL.t = 128; // (it opens with the Rust, the coral world, toward you)
   MPL.nukeNow = mplNuke; // (a debug hook: the rare blast, at once)
 }
 

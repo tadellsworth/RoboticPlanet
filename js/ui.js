@@ -689,11 +689,15 @@ function showMenuView(v, focus) {
   $('m-go').hidden = !home && !setup;
   $('menu-card').classList.toggle('is-setup', setup);
   $('screen-menu').classList.toggle('is-setup', setup);
+  $('screen-menu').classList.toggle('is-home', home);
   $('menu-card').dataset.view = v;
   $('m-new-label').textContent = UI.mpSetup ? 'Done' : setup ? 'Start' : 'Play';
   $('m-setup-title').textContent = UI.mpSetup ? 'Multiplayer game' : 'Custom Game';
-  if (!setup) closePicker(false);
+  if (!setup) { closePicker(false); closeSetPop(false); }
   else { $('m-body').scrollTop = 0; }
+  // Play / Start: the first cell of Home's dock, or Custom Game's bar.
+  if (setup && $('m-go').parentElement !== $('m-more')) $('m-more').appendChild($('m-go'));
+  else if (!setup && $('m-go').parentElement !== $('m-dock')) $('m-dock').prepend($('m-go'));
   $('screen-menu').scrollTop = 0;
   if (v === 'camps') renderCampaignHub();
   if (home) syncCampaignTile();
@@ -718,7 +722,7 @@ function syncCampaignTile() {
   const el = $('m-campaigns-sub');
   if (!el) return;
   const p = missionsProgress();
-  el.textContent = p.done ? `Missions: ${p.done} of ${p.n} done` : 'Start with the Missions';
+  el.textContent = `Missions ${p.done} of ${p.n}`;
 }
 
 /**
@@ -916,6 +920,7 @@ function initMenu() {
     if (!$('screen-feedback').hidden) { e.preventDefault(); closeFeedback(); return; }
     if (!$('screen-lore').hidden) { e.preventDefault(); closeLore(); return; }
     if (UI.picker) { e.preventDefault(); closePicker(); return; }
+    if (UI.setPop) { e.preventDefault(); closeSetPop(); return; }
     if (!$('screen-help').hidden) { e.preventDefault(); $('h-close').click(); return; }
     // (Multiplayer's first screen: Esc is its Back; in a lobby it's left alone, as Back there leaves the lobby)
     if (!$('screen-mp').hidden) { if (NET.state !== 'lobby' && !$('mp-back').hidden) { e.preventDefault(); $('mp-back').click(); } return; }
@@ -924,6 +929,7 @@ function initMenu() {
     const over = !$('screen-help').hidden || !$('screen-missions').hidden || !$('screen-stats').hidden;
     if (!over && topScreen() === $('screen-menu') && UI.menuView !== 'home') { e.preventDefault(); if (UI.menuView === 'setup') $('m-back').click(); else showMenuView('home', true); }
   });
+  initSetPop();
   // One line per section about the option under the mouse, or focused, or else what's chosen.
   for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules', 'm-sec-challenge']) hoverInfo($(sec), (k) => { UI.menuHover[sec] = k; syncInfo(); });
   // The preview follows the size of its box (and the info lines are measured again at the new width).
@@ -1151,7 +1157,9 @@ function syncMenu() {
   $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra"><span class="vh"> · </span>${sum.extra}</span>` : '');
   syncContinue(); // (the Continue card and Saved games: js/qol.js)
   if (UI.menuView === 'home') showCheckpoints('m');
+  syncSetupRows();
   syncInfo();
+  if (UI.setPop) placeSetPop();
   schedulePreview();
 }
 
@@ -1220,6 +1228,189 @@ function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
   }
   row.setAttribute('aria-label', `Biome: ${rnd ? 'Random' : biomeName(biome)}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'biome:' + (rnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, rnd ? null : bk));
+}
+
+/* ------------------------------------------------------------------ Custom Game's list and its pickers */
+
+/**
+ * Custom Game shows Match and Planet as a list: each row (.m-prow, data-pop the id of its control) says what the setting
+ * is, and opens a picker for it (openSetPop). The control itself (the radio row, the doctrine chips, the Second biome
+ * dropdown) lives hidden in the row (.m-ctl) and is moved into the picker while it is open, so every option keeps its
+ * own handlers, info lines and greying out. syncSetupRows (from syncMenu) writes each row's value and hides a row whose
+ * control is hidden.
+ */
+function setRowValue(id) {
+  const el = $(id), m = UI.menu;
+  if (!el) return ['', ''];
+  if (el.tagName === 'SELECT') return [el.selectedOptions[0] ? el.selectedOptions[0].textContent : '', ''];
+  if (id === 'm-style') {
+    const all = menuDocAll();
+    if (all === -1) return ['Each its own', menuCpuSlots().map((p) => docNameOf(menuSlotStyle(p))).join(' · ')];
+    if (all === 0) return ['Random', menuCpuSlots().length > 1 ? 'a different one each' : 'picked when you land'];
+    const k = docKeyOf(all), P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
+    return [P.name, P.plain];
+  }
+  const on = [...el.children].find((b) => b.classList.contains('on'));
+  const name = on ? (on.getAttribute('aria-label') || on.textContent).trim() : '';
+  if (id === 'm-size') return [name, ''];
+  if (id === 'm-mode') return [name, m.mode === 'colony' ? 'no rival' : ''];
+  if (id === 'm-victory') return [name, menuUpWin() ? '+ Great Uplink win' : ''];
+  if (id === 'm-diff') return [name, menuThree() ? `${menuPlayers() - 1} rivals` : ''];
+  return [name, ''];
+}
+function syncSetupRows() {
+  for (const row of document.querySelectorAll('#m-more .m-prow[data-pop]')) {
+    const ctl = $(row.dataset.pop);
+    row.hidden = !ctl || ctl.hidden;
+    const [v, sub] = setRowValue(row.dataset.pop), vEl = row.querySelector('.m-pv-v'), sEl = row.querySelector('small.m-pv-s');
+    if (vEl.textContent !== v) vEl.textContent = v;
+    if (sEl && sEl.textContent !== sub) sEl.textContent = sub;
+    row.setAttribute('aria-label', `${row.querySelector('.m-rl').textContent}: ${v}${sub ? ' (' + sub + ')' : ''}. Change`);
+  }
+  syncAdvanced();
+}
+
+/** Advanced (Rules and Challenge): open or folded (UI.advOpen; open on a big screen at first). Folded, its line says what's set. */
+function syncAdvanced() {
+  if (UI.advOpen == null) UI.advOpen = innerWidth >= 900 && innerHeight >= 600;
+  const t = $('m-adv-toggle'), m = UI.menu;
+  t.setAttribute('aria-expanded', UI.advOpen ? 'true' : 'false');
+  $('m-adv-body').hidden = !UI.advOpen;
+  $('m-adv').classList.toggle('open', !!UI.advOpen);
+  const rules = [['nuke', 'Nuclear race'], ['mega', 'Megastructures'], ['events', 'Planetary events'], ['unlimited', 'Unlimited resources']].filter(([k]) => m[k] && !(k === 'unlimited' && UI.mpSetup)).length + (weatherOn() ? 1 : 0);
+  const mods = menuMods().length, mur = menuMurmurLevel();
+  $('m-adv-sum').textContent = UI.advOpen ? '' : `Murmur ${MURMUR_NAMES[mur]} · ${rules} rule${rules === 1 ? '' : 's'} on · ${mods ? mods + ' challenge' + (mods > 1 ? 's' : '') : 'no challenge'}`;
+}
+function toggleAdvanced() {
+  UI.advOpen = !UI.advOpen; sfx('click'); syncAdvanced(); sizeInfoLines();
+  if (UI.advOpen) $('m-adv').scrollIntoView({ block: 'nearest' });
+}
+
+/** Is the picker a sheet from the bottom (a phone), or a popover beside its row? */
+const setPopSheet = () => innerWidth < 700 || innerHeight < 500;
+/** Open the picker for a row (its .m-prow button). */
+function openSetPop(row) {
+  if (UI.setPop) { const same = UI.setPop.row === row; closeSetPop(false); if (same) { row.focus(); return; } }
+  const ctlWrap = row.parentElement.querySelector('.m-ctl'), kids = [...ctlWrap.children];
+  const id = row.dataset.pop, ctl = $(id), pop = $('m-pop'), body = $('m-pop-body');
+  UI.setPop = { row, ctlWrap, kids, id, sel: ctl && ctl.tagName === 'SELECT' ? ctl : null };
+  $('m-pop-title').textContent = row.querySelector('.m-rl').textContent;
+  body.replaceChildren(...kids);
+  // (a dropdown becomes a list of choices, as the rest: the select stays behind, kept in step)
+  if (UI.setPop.sel) {
+    const sel = UI.setPop.sel, list = document.createElement('div');
+    list.className = 'seg m-optlist'; list.setAttribute('role', 'radiogroup'); list.setAttribute('aria-labelledby', 'm-pop-title');
+    for (const o of sel.options) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.v = o.value; b.textContent = o.textContent;
+      const on = o.value === sel.value; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.onclick = () => { sel.value = o.value; sel.dispatchEvent(new Event('change')); sfx('click'); for (const x of list.children) { const y = x === b; x.classList.toggle('on', y); x.setAttribute('aria-checked', y ? 'true' : 'false'); } };
+      list.appendChild(b);
+    }
+    sel.hidden = true;
+    body.prepend(list);
+  }
+  pop.dataset.for = id;
+  pop.classList.toggle('sheet', setPopSheet());
+  $('m-pop-scrim').hidden = !setPopSheet();
+  pop.hidden = false;
+  row.setAttribute('aria-expanded', 'true');
+  row.classList.add('open');
+  setPopInfo(null);
+  sizeInfoLines();
+  placeSetPop();
+  const first = popChoices().find((b) => b.classList.contains('on')) || popChoices()[0] || $('m-pop-close');
+  first.focus({ preventScroll: true });
+}
+/** The choices in the open picker (enabled radios, then the rest of its buttons and fields). */
+function popChoices() {
+  return [...$('m-pop-body').querySelectorAll('button, select, input')].filter((b) => !b.disabled && b.getClientRects().length);
+}
+function placeSetPop() {
+  const P = UI.setPop, pop = $('m-pop');
+  if (!P) return;
+  if (pop.classList.contains('sheet')) { pop.style.left = pop.style.top = pop.style.width = ''; return; }
+  const r = P.row.getBoundingClientRect(), w = Math.min(380, innerWidth - 32);
+  pop.style.width = w + 'px';
+  let x = r.right + 12, y = r.top - 8;
+  if (x + w > innerWidth - 16) { x = Math.max(16, Math.min(r.left, innerWidth - 16 - w)); y = r.bottom + 6; }
+  pop.style.left = x + 'px'; pop.style.top = '0px';
+  const h = pop.offsetHeight;
+  if (y + h > innerHeight - 16) y = Math.max(16, (y > r.bottom ? r.top - 6 - h : innerHeight - 16 - h));
+  pop.style.top = Math.max(16, y) + 'px';
+}
+function closeSetPop(restore = true) {
+  const P = UI.setPop;
+  if (!P) return;
+  UI.setPop = null;
+  if (P.sel) { P.sel.hidden = false; $('m-pop-body').querySelector('.m-optlist').remove(); }
+  P.ctlWrap.replaceChildren(...P.kids);
+  $('m-pop').hidden = true; $('m-pop-scrim').hidden = true;
+  P.row.setAttribute('aria-expanded', 'false');
+  P.row.classList.remove('open');
+  syncSetupRows();
+  if (restore && P.row.isConnected) P.row.focus({ preventScroll: true });
+}
+/** The picker's line: the option under the pointer or focused, or else the one chosen (the doctrine has its own line). */
+function setPopInfo(el) {
+  const P = UI.setPop, info = $('m-pop-info');
+  if (!P) return;
+  const own = P.id === 'm-style' || P.id === 'm-victory';
+  const k = el && el.closest && el.closest('#m-pop-body [data-info]');
+  const on = $('m-pop-body').querySelector('.on[data-info]');
+  const t = own ? '' : (k || on) ? (k || on).dataset.info : '';
+  info.textContent = t || '';
+  info.hidden = !t;
+}
+/** Keys in a picker: ← → ↑ ↓ pick the next choice (as a radio group does), Enter (or Space) picks and closes, Esc closes,
+ * Tab stays inside. */
+function setPopKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSetPop(); return; }
+  const all = [$('m-pop-close'), ...popChoices()];
+  if (e.key === 'Tab') {
+    const i = all.indexOf(document.activeElement);
+    if (e.shiftKey ? i <= 0 : i === all.length - 1) { e.preventDefault(); all[e.shiftKey ? all.length - 1 : 0].focus(); }
+    return;
+  }
+  const a = document.activeElement, grp = a && a.getAttribute('role') === 'radio' && a.parentElement;
+  const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (d && grp) {
+    e.preventDefault();
+    const opts = [...grp.children].filter((b) => !b.disabled && b.getAttribute('aria-disabled') !== 'true' && !b.hidden);
+    const b = opts[(opts.indexOf(a) + d + opts.length) % opts.length];
+    if (b && b !== a) { UI.popArrow = true; b.click(); UI.popArrow = false; b.focus(); setPopInfo(b); }
+    return;
+  }
+  if (e.key === 'Enter' && grp && UI.setPop.id !== 'm-style') {
+    e.preventDefault(); a.click(); closeSetPop();
+  }
+}
+function initSetPop() {
+  const scrim = document.createElement('div');
+  scrim.className = 'm-pop-scrim'; scrim.id = 'm-pop-scrim'; scrim.hidden = true;
+  $('m-pop').before(scrim);
+  for (const row of document.querySelectorAll('#m-more .m-prow[data-pop]')) row.onclick = () => { sfx('click'); openSetPop(row); };
+  $('m-adv-toggle').onclick = toggleAdvanced;
+  $('m-pop-close').onclick = () => closeSetPop();
+  $('m-pop').addEventListener('keydown', setPopKey);
+  $('m-pop').addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') setPopInfo(e.target); });
+  $('m-pop').addEventListener('focusin', (e) => setPopInfo(e.target));
+  // A pick in a single-choice picker closes it (after a moment, so the choice is seen lighting up); the doctrines stay open.
+  $('m-pop-body').addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[role="radio"]');
+    if (!b || UI.popArrow || !UI.setPop || UI.setPop.id === 'm-style' || b.disabled || b.getAttribute('aria-disabled') === 'true' || !b.classList.contains('on')) return;
+    const P = UI.setPop; setTimeout(() => { if (UI.setPop === P) closeSetPop(); }, 140);
+  });
+  // The doctrine's line follows the pointer in the picker as it did in the list (UI.menuHover: syncInfo).
+  hoverInfo($('m-pop'), (k) => { if (UI.setPop) { UI.menuHover['m-sec-match'] = k; syncInfo(); } });
+  // A tap or click outside closes it (the row it came from toggles it itself).
+  document.addEventListener('pointerdown', (e) => {
+    if (!UI.setPop || $('m-pop').contains(e.target) || UI.setPop.row.contains(e.target)) return;
+    closeSetPop(false);
+  }, true);
+  if (window.ResizeObserver) new ResizeObserver(() => { if (UI.setPop) placeSetPop(); }).observe($('m-pop'));
+  window.addEventListener('resize', () => { if (UI.setPop) { $('m-pop').classList.toggle('sheet', setPopSheet()); $('m-pop-scrim').hidden = !setPopSheet(); placeSetPop(); } });
+  $('m-body').addEventListener('scroll', () => { if (UI.setPop && !setPopSheet()) placeSetPop(); }, { passive: true });
 }
 
 /* ------------------------------------------------------------------ map type and biome pickers */
@@ -2086,7 +2277,7 @@ function initDialogs() {
     const scr = e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey ? topScreen() : null;
     if (!scr) return;
     const f = stops(scr), a = document.activeElement, first = f[0], last = f[f.length - 1];
-    if (a && a.closest && a.closest('[aria-modal="true"]:not(.screen)')) return; // (a dialog of its own, such as the menu's pickers, keeps its Tab)
+    if (a && a.closest && a.closest('[aria-modal="true"]:not(.screen), .m-pop')) return; // (a dialog of its own, such as the menu's pickers, keeps its Tab)
     if (!f.length) { e.preventDefault(); return; }
     if (!scr.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     else if (e.shiftKey ? a === first || !f.includes(a) : a === last) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }

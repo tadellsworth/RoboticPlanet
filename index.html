@@ -202,15 +202,27 @@
 </div>
 
 <div id="screen-menu" class="screen" role="dialog" aria-modal="true" aria-label="Terrafall: main menu" tabindex="-1">
+  <!-- The planet's marks on Home (Planet background only): a ticked ring round it and its name, placed by mplMarks in
+       js/menuplanet.js from where the planet is drawn. -->
+  <div class="m-marks" id="m-marks" aria-hidden="true" hidden>
+    <svg class="m-orbit" viewBox="-2 -1.3 4 2.6" preserveAspectRatio="none" focusable="false"><circle r="1.19" fill="none" vector-effect="non-scaling-stroke" stroke-dasharray="2 7"/><path class="m-tick" d="M0 -1.24v-.05M0 1.24v.05M-1.24 0h-.05M1.24 0h.05" vector-effect="non-scaling-stroke"/><path class="m-lead" d="M-.83 .63 L-1.08 .82 H-1.88" fill="none" vector-effect="non-scaling-stroke"/></svg>
+    <i class="m-pin"></i>
+    <span class="m-callout"><b>Ithaca I</b><span>Corvane IV · Argos · The Ring</span></span>
+  </div>
   <div class="card menu-card" id="menu-card">
     <!-- The main menu has four views in this card (showMenuView in js/ui.js): Home (what shows on load), Custom Game (#m-more),
-         Campaigns (#m-camps) and More (#m-extra). Home: the title, Continue when there's a save, Play, four big tiles
-         (Campaigns, Custom Game, Multiplayer, the Daily Planet) and a row of small buttons (How to play, Lore, Settings,
-         Feedback, More). Esc or Back returns to Home from the others. -->
+         Campaigns (#m-camps) and More (#m-extra). Home is the cinematic Command Deck (M2): the planet large behind it
+         (js/menuplanet.js), the TERRA/FALL title top left with Continue under it when there's a save, one console docked
+         along the bottom (#m-dock: Play with the setup in a line, Campaigns, Custom, Multiplayer) and a bracketed rail on
+         the right (#m-rail: the Daily Planet, How to play, Lore, Settings, Feedback, More). Esc or Back returns to Home from
+         the others. #m-go (Play / Start) moves between the dock and Custom Game's bar (showMenuView). -->
     <div class="m-home" id="m-home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" class="m-icon" aria-hidden="true" focusable="false"><defs><clipPath id="mi-pclip"><circle cx="512" cy="540" r="300"/></clipPath><mask id="mi-gap"><rect width="1024" height="1024" fill="#fff"/><path d="M330 330 H694 L674 416 H570 V728 L512 780 L454 728 V416 H350 Z" fill="#000" stroke="#000" stroke-width="44" stroke-linejoin="round" transform="translate(0 30)"/></mask><mask id="mi-behind"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="540" r="322" fill="#000"/></mask></defs><rect width="1024" height="1024" fill="#14213d"/><circle class="ai-tw" style="animation-delay:0.00s" cx="150" cy="170" r="5" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:0.83s" cx="260" cy="110" r="3" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:1.66s" cx="820" cy="150" r="4" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:2.49s" cx="900" cy="300" r="3" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:0.22s" cx="870" cy="860" r="5" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:1.05s" cx="190" cy="880" r="3" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:1.88s" cx="700" cy="90" r="3" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:2.71s" cx="80" cy="420" r="3" fill="#f1e4d3" opacity="0.8"/><circle class="ai-tw" style="animation-delay:0.44s" cx="950" cy="620" r="3" fill="#f1e4d3" opacity="0.8"/><path class="ai-tw ai-tw-big" style="animation-delay:0.4s" d="M210 232 Q210 250 228 250 Q210 250 210 268 Q210 250 192 250 Q210 250 210 232 Z" fill="#f1e4d3"/><path class="ai-tw ai-tw-big" style="animation-delay:1.7s" d="M830 206 Q830 220 844 220 Q830 220 830 234 Q830 220 816 220 Q830 220 830 206 Z" fill="#f1e4d3"/><path class="ai-tw ai-tw-big" style="animation-delay:2.6s" d="M860 750 Q860 760 870 760 Q860 760 860 770 Q860 760 850 760 Q860 760 860 750 Z" fill="#f1e4d3"/><g mask="url(#mi-behind)"><g transform="rotate(-14 512 560)"><path d="M72 560 A440 104 0 0 1 952 560" fill="none" stroke="#f1e4d3" stroke-width="18" mask="url(#mi-gap)"/><circle r="26" fill="#f1e4d3"><animateMotion dur="18s" repeatCount="indefinite" path="M72 560 A440 104 0 0 1 952 560 A440 104 0 0 1 72 560"/><animate attributeName="opacity" dur="18s" repeatCount="indefinite" calcMode="discrete" keyTimes="0;0.5" values="1;0"/></circle></g></g><circle cx="512" cy="540" r="300" fill="#ff6b4a"/><g clip-path="url(#mi-pclip)"><g class="ai-spin"><g transform="translate(212 0)"><ellipse cx="60" cy="400" rx="70" ry="34" fill="#e04a2c" opacity="0.55"/><ellipse cx="230" cy="470" rx="90" ry="40" fill="#d84426" opacity="0.5"/><ellipse cx="420" cy="380" rx="60" ry="26" fill="#e04a2c" opacity="0.5"/><ellipse cx="520" cy="560" rx="110" ry="46" fill="#d84426" opacity="0.45"/><ellipse cx="130" cy="620" rx="80" ry="36" fill="#e04a2c" opacity="0.5"/><ellipse cx="330" cy="690" rx="70" ry="28" fill="#e04a2c" opacity="0.45"/><ellipse cx="470" cy="300" rx="50" ry="18" fill="#ff8f6e" opacity="0.6"/><ellipse cx="290" cy="560" rx="40" ry="16" fill="#ff8f6e" opacity="0.55"/><ellipse cx="40" cy="520" rx="36" ry="14" fill="#ff8f6e" opacity="0.5"/><ellipse cx="560" cy="760" rx="60" ry="22" fill="#e04a2c" opacity="0.4"/><g transform="translate(600 0)"><ellipse cx="60" cy="400" rx="70" ry="34" fill="#e04a2c" opacity="0.55"/><ellipse cx="230" cy="470" rx="90" ry="40" fill="#d84426" opacity="0.5"/><ellipse cx="420" cy="380" rx="60" ry="26" fill="#e04a2c" opacity="0.5"/><ellipse cx="520" cy="560" rx="110" ry="46" fill="#d84426" opacity="0.45"/><ellipse cx="130" cy="620" rx="80" ry="36" fill="#e04a2c" opacity="0.5"/><ellipse cx="330" cy="690" rx="70" ry="28" fill="#e04a2c" opacity="0.45"/><ellipse cx="470" cy="300" rx="50" ry="18" fill="#ff8f6e" opacity="0.6"/><ellipse cx="290" cy="560" rx="40" ry="16" fill="#ff8f6e" opacity="0.55"/><ellipse cx="40" cy="520" rx="36" ry="14" fill="#ff8f6e" opacity="0.5"/><ellipse cx="560" cy="760" rx="60" ry="22" fill="#e04a2c" opacity="0.4"/></g><g transform="translate(-600 0)"><ellipse cx="60" cy="400" rx="70" ry="34" fill="#e04a2c" opacity="0.55"/><ellipse cx="230" cy="470" rx="90" ry="40" fill="#d84426" opacity="0.5"/><ellipse cx="420" cy="380" rx="60" ry="26" fill="#e04a2c" opacity="0.5"/><ellipse cx="520" cy="560" rx="110" ry="46" fill="#d84426" opacity="0.45"/><ellipse cx="130" cy="620" rx="80" ry="36" fill="#e04a2c" opacity="0.5"/><ellipse cx="330" cy="690" rx="70" ry="28" fill="#e04a2c" opacity="0.45"/><ellipse cx="470" cy="300" rx="50" ry="18" fill="#ff8f6e" opacity="0.6"/><ellipse cx="290" cy="560" rx="40" ry="16" fill="#ff8f6e" opacity="0.55"/><ellipse cx="40" cy="520" rx="36" ry="14" fill="#ff8f6e" opacity="0.5"/><ellipse cx="560" cy="760" rx="60" ry="22" fill="#e04a2c" opacity="0.4"/></g></g></g><path d="M0 0 H1024 V1024 H0 Z M402 430 m-330 0 a330 330 0 1 0 660 0 a330 330 0 1 0 -660 0 Z" fill="#e04a2c" fill-rule="evenodd" opacity="0.92"/></g><g transform="rotate(-14 512 560)"><path d="M72 560 A440 104 0 0 0 952 560" fill="none" stroke="#f1e4d3" stroke-width="18" mask="url(#mi-gap)"/><circle r="26" fill="#f1e4d3"><animateMotion dur="18s" repeatCount="indefinite" path="M72 560 A440 104 0 0 1 952 560 A440 104 0 0 1 72 560"/><animate attributeName="opacity" dur="18s" repeatCount="indefinite" calcMode="discrete" keyTimes="0;0.5" values="0;1"/></circle></g><path d="M330 330 H694 L674 416 H570 V728 L512 780 L454 728 V416 H350 Z" fill="#14213d" transform="translate(0 30)"/><path d="M478 434 V710 L512 742 L546 710 V434 Z" fill="#f1e4d3" transform="translate(0 30)"/></svg>
-      <h1 class="logo">TERRAFALL</h1>
+      <p class="m-status"><i class="m-led" aria-hidden="true"></i><span>Terrafall ready<span class="m-status-x"> · Arrival clock T+31</span></span></p>
+      <h1 class="logo" aria-label="Terrafall"><span>TERRA</span><span>FALL</span></h1>
+      <div class="m-rule" aria-hidden="true"></div>
       <p class="tagline">Build. Expand. Annihilate.</p>
+      <p class="m-uplink" aria-hidden="true"><span aria-hidden="true">&gt;</span> Uplink secured. Listening on all channels. No response.</p>
       <button id="m-continue" class="btn big m-cont" hidden>Continue</button>
       <button type="button" id="m-saves" class="m-saves" title="Your saved games on this device: the autosave and five save slots" hidden>Saved games</button>
       <div id="m-checkpoint-row" hidden>
@@ -246,117 +258,163 @@
             <div id="m-planets" class="planets" hidden></div>
           </div>
         </section>
+        <!-- The settings as a compact list: each row names a setting and what it is set to, and opens a picker for it
+             (#m-pop: a popover beside the row on a big screen, a sheet from the bottom on a phone; openSetPop in js/ui.js
+             moves the row's own control, .m-ctl, into it while it is open). Map type and Biome open their card pickers
+             (#m-picker). Rules and Challenge fold away under Advanced. -->
         <div class="m-sets">
-          <section class="m-sec" id="m-sec-match" aria-labelledby="m-h-match">
-            <h3 id="m-h-match">Match</h3>
-            <div class="m-row"><span class="m-rl" id="m-l-mode">Mode</span>
-              <div class="seg" id="m-mode" role="radiogroup" aria-labelledby="m-l-mode">
+          <section class="m-sec m-list" id="m-sec-match" aria-labelledby="m-h-match">
+            <h3 id="m-h-match"><i class="m-led" aria-hidden="true"></i>Match</h3>
+            <div class="m-row" id="m-mode-row">
+              <button type="button" class="m-prow" data-pop="m-mode" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-mode">Mode</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-mode" role="radiogroup" aria-labelledby="m-l-mode">
                 <button type="button" role="radio" data-v="versus" class="on">Versus</button>
                 <button type="button" role="radio" data-v="colony">Colony</button>
+              </div>
               </div>
             </div>
             <!-- Shared colony co-op (js/coop.js): from Custom Game, host a multiplayer game whose people share your colony;
                  in the multiplayer settings, whether people who join share it. -->
-            <div class="m-row" id="m-coop-row"><span class="m-rl" id="m-l-coop">Co-op</span>
-              <button type="button" class="btn small" id="m-coophost" data-info="Two of you run this one colony together, each on their own device: you host a multiplayer game with these settings, and whoever joins shares your colony.">Host a co-op game</button>
-              <div class="seg" id="m-coop" role="radiogroup" aria-labelledby="m-l-coop" hidden>
+            <div class="m-row" id="m-coop-row">
+              <button type="button" class="m-prow m-prow-go" id="m-coophost" data-info="Two of you run this one colony together, each on their own device: you host a multiplayer game with these settings, and whoever joins shares your colony."><span class="m-rl" id="m-l-coop">Co-op</span><span class="m-pv"><b class="m-pv-v">Host a co-op game</b></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="m-prow" data-pop="m-coop" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl">Co-op</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-coop" role="radiogroup" aria-labelledby="m-l-coop" hidden>
                 <button type="button" role="radio" data-v="0" data-info="Everyone who joins plays a colony of their own (tap one in the lobby to share yours).">Own colonies</button>
                 <button type="button" role="radio" data-v="1" data-info="Everyone who joins shares your colony: one economy, one army, one win or loss, against the computer rivals.">Share my colony</button>
               </div>
+              </div>
             </div>
-            <div class="m-row" id="m-players-field"><span class="m-rl" id="m-l-players">Players</span>
-              <div class="seg" id="m-players" role="radiogroup" aria-labelledby="m-l-players">
+            <div class="m-row" id="m-players-field">
+              <button type="button" class="m-prow" data-pop="m-players" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-players">Players</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-players" role="radiogroup" aria-labelledby="m-l-players">
                 <button type="button" role="radio" data-v="2" class="on">You vs 1</button>
                 <button type="button" role="radio" data-v="3">You vs 2</button>
                 <button type="button" role="radio" data-v="4">You vs 3</button>
               </div>
+              </div>
             </div>
-            <div class="m-row" id="m-teams-field" hidden><span class="m-rl" id="m-l-teams">Teams</span>
-              <div class="seg" id="m-teams" role="radiogroup" aria-labelledby="m-l-teams">
+            <div class="m-row" id="m-teams-field" hidden>
+              <button type="button" class="m-prow" data-pop="m-teams" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-teams">Teams</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-teams" role="radiogroup" aria-labelledby="m-l-teams">
                 <button type="button" role="radio" data-v="0" class="on">Free-for-all</button>
                 <button type="button" role="radio" data-v="1">2 vs 2</button>
               </div>
+              </div>
             </div>
-            <div class="m-row" id="m-victory-field"><span class="m-rl" id="m-l-victory">Victory</span>
-              <div class="seg" id="m-victory" role="radiogroup" aria-labelledby="m-l-victory">
+            <div class="m-row" id="m-victory-field">
+              <button type="button" class="m-prow" data-pop="m-victory" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-victory">Victory</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-victory" role="radiogroup" aria-labelledby="m-l-victory">
                 <button type="button" role="radio" data-v="capture" class="on">Capture</button>
                 <button type="button" role="radio" data-v="domination">Domination</button>
                 <button type="button" role="radio" data-v="uplinks">Uplinks</button>
               </div>
+                <p class="m-vnote" id="m-victory-note" aria-live="polite"></p>
+              </div>
             </div>
-            <p class="m-vnote" id="m-victory-note" aria-live="polite"></p>
-            <div class="m-row" id="m-upwin-field"><span class="m-rl" id="m-l-upwin">And</span>
+            <div class="m-row m-swrow" id="m-upwin-field"><span class="m-rl" id="m-l-upwin">Also win by</span>
               <div class="tchips" role="group" aria-labelledby="m-l-upwin"><label class="tchip" id="m-upwin-row" data-info="Great Uplink win: also win by holding a Great Uplink's transmission for 8 minutes (from 25 minutes in). Needs Megastructures; not in the Hollow."><input type="checkbox" id="m-upwin" role="switch"><span>Great Uplink win</span></label></div>
             </div>
-            <div class="m-row" id="m-diff-field"><span class="m-rl" id="m-l-diff">Rival</span>
-              <div class="seg" id="m-diff" role="radiogroup" aria-labelledby="m-l-diff">
+            <div class="m-row" id="m-diff-field">
+              <button type="button" class="m-prow" data-pop="m-diff" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-diff">Rival</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-diff" role="radiogroup" aria-labelledby="m-l-diff">
                 <button type="button" role="radio" data-v="easy">Settler</button>
                 <button type="button" role="radio" data-v="medium">Pioneer</button>
                 <button type="button" role="radio" data-v="normal" class="on">Colonist</button>
                 <button type="button" role="radio" data-v="hard">Commander</button>
                 <button type="button" role="radio" data-v="warlord">Warlord</button>
               </div>
+              </div>
             </div>
-            <div class="m-row" id="m-style-row"><span class="m-rl" id="m-l-style">Rival doctrine</span>
-              <div class="chips m-chips" id="m-style" role="radiogroup" aria-labelledby="m-l-style"></div>
+            <div class="m-row" id="m-style-row">
+              <button type="button" class="m-prow" data-pop="m-style" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-style">Rival doctrine</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="chips m-chips" id="m-style" role="radiogroup" aria-labelledby="m-l-style"></div>
+                <div class="m-row" id="m-seats-row" hidden><span class="m-rl" id="m-l-seats">Each rival</span>
+                  <div class="m-seats" id="m-seats" role="group" aria-labelledby="m-l-seats"></div>
+                </div>
+                <p class="m-vnote m-docnote" id="m-style-note" aria-live="polite"></p>
+              </div>
             </div>
-            <div class="m-row" id="m-seats-row" hidden><span class="m-rl" id="m-l-seats">Each rival</span>
-              <div class="m-seats" id="m-seats" role="group" aria-labelledby="m-l-seats"></div>
-            </div>
-            <p class="m-vnote m-docnote" id="m-style-note" aria-live="polite"></p>
-            <p class="m-info" id="m-mode-desc" aria-live="polite"></p>
             <p class="m-note" id="m-players-note" hidden></p>
+            <p class="m-info" id="m-mode-desc" aria-live="polite"></p>
           </section>
-          <section class="m-sec" id="m-sec-planet" aria-labelledby="m-h-planet">
-            <h3 id="m-h-planet">Planet</h3>
-            <div class="m-row"><span class="m-rl">Map type</span>
-              <button type="button" class="m-pick" id="m-shape" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <section class="m-sec m-list" id="m-sec-planet" aria-labelledby="m-h-planet">
+            <h3 id="m-h-planet"><i class="m-led" aria-hidden="true"></i>Planet</h3>
+            <div class="m-row m-pickrow"><button type="button" class="m-pick" id="m-shape" aria-haspopup="dialog"><span class="m-rl">Map type</span><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+            <div class="m-row m-pickrow"><button type="button" class="m-pick" id="m-biome" aria-haspopup="dialog"><span class="m-rl">Biome</span><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+            <div class="m-row" id="m-biome2-row" hidden>
+              <button type="button" class="m-prow" data-pop="m-biome2" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-biome2">Second biome</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <select class="biome-choice" id="m-biome2" aria-labelledby="m-l-biome2"></select>
+              </div>
             </div>
-            <div class="m-row"><span class="m-rl">Biome</span>
-              <button type="button" class="m-pick" id="m-biome" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div class="m-row" id="m-size-row">
+              <button type="button" class="m-prow" data-pop="m-size" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-size">Size</span><span class="m-pv"><b class="m-pv-v"></b><output id="m-size-v" class="m-pv-s"></output></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-size" role="radiogroup" aria-labelledby="m-l-size"></div>
+              </div>
             </div>
-            <div class="m-row" id="m-biome2-row" hidden><label class="m-rl" for="m-biome2">Second biome</label><select class="biome-choice" id="m-biome2"></select></div>
-            <div class="m-row"><span class="m-rl" id="m-l-size">Size <output id="m-size-v" class="m-val"></output></span>
-              <div class="seg" id="m-size" role="radiogroup" aria-labelledby="m-l-size"></div>
+            <div class="m-row" id="m-rough-row">
+              <button type="button" class="m-prow" data-pop="m-rough" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-rough">Terrain</span><span class="m-pv"><b class="m-pv-v"></b><output id="m-rough-v" class="m-pv-s" hidden></output></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg lv" id="m-rough" role="radiogroup" aria-labelledby="m-l-rough"></div>
+              </div>
             </div>
-            <div class="m-row"><span class="m-rl" id="m-l-rough">Terrain <output id="m-rough-v" class="m-val"></output></span>
-              <div class="seg lv" id="m-rough" role="radiogroup" aria-labelledby="m-l-rough"></div>
-            </div>
-            <div class="m-row"><span class="m-rl" id="m-l-rich">Resources <output id="m-rich-v" class="m-val"></output></span>
-              <div class="seg lv" id="m-rich" role="radiogroup" aria-labelledby="m-l-rich"></div>
+            <div class="m-row" id="m-rich-row">
+              <button type="button" class="m-prow" data-pop="m-rich" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-rich">Resources</span><span class="m-pv"><b class="m-pv-v"></b><output id="m-rich-v" class="m-pv-s" hidden></output></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg lv" id="m-rich" role="radiogroup" aria-labelledby="m-l-rich"></div>
+              </div>
             </div>
             <p class="m-info" id="m-planet-info" aria-live="polite"></p>
           </section>
-          <section class="m-sec m-rules" id="m-sec-rules" aria-labelledby="m-h-rules">
-            <h3 id="m-h-rules">Rules</h3>
-            <div class="m-rules-row">
-            <div class="tchips" role="group" aria-labelledby="m-h-rules">
+          <!-- Advanced: Rules and Challenge, folded away (open on a big screen; the fold is remembered for the session). -->
+          <section class="m-adv" id="m-adv" aria-labelledby="m-adv-toggle">
+            <h3 class="m-adv-h"><button type="button" id="m-adv-toggle" aria-expanded="true" aria-controls="m-adv-body"><i class="m-led" aria-hidden="true"></i><span class="m-adv-name">Advanced</span><span class="m-adv-sum" id="m-adv-sum"></span><svg class="m-adv-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path class="m-adv-plus" d="M12 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></h3>
+            <div class="m-adv-body" id="m-adv-body">
+              <section class="m-sec m-rules" id="m-sec-rules" aria-labelledby="m-h-rules">
+                <h4 id="m-h-rules">Rules</h4>
+                <div class="tchips" role="group" aria-labelledby="m-h-rules">
               <label class="tchip" id="m-nuke-row" data-info="Nuclear race: a few uranium deposits glow on the planet. Race for them and build the bomb."><input type="checkbox" id="m-nuke" role="switch"><span>Nuclear race</span></label>
               <label class="tchip" id="m-mega-row" data-info="Megastructures: the Lance of Corvane (a laser cannon that fires across the whole map), the Sundering Ray (a shockwave through the ground, on the Murmur or a colony), the Shield Dome (it stops what falls on a base), Arrival City (its robots work faster; it can only be captured), the Orbital Lift (robots and goods called down from your Carrier in orbit) the Deep Core (Ore, Crystal and Uranium that never run dry) and the Atmosphere Engine (it turns the land round it green). Late-game, one per colony."><input type="checkbox" id="m-mega" role="switch"><span>Megastructures</span></label>
               <label class="tchip" id="m-events-row" data-info="Planetary events: dust storms, Ringfall (meteor showers), solar flares and the Wren, a trader ship, every few minutes."><input type="checkbox" id="m-events" role="switch"><span>Planetary events</span></label>
               <label class="tchip" id="m-weather-row" data-info="Weather: now and then a storm to suit the biome (looks only; kept on this device)."><input type="checkbox" id="m-weather" role="switch"><span>Weather</span></label>
               <label class="tchip" id="m-unlimited-row" data-info="Unlimited resources: for trying things out, 500 of everything and nothing waits on hauling. Rivals play as usual."><input type="checkbox" id="m-unlimited" role="switch"><span>Unlimited resources</span></label>
             </div>
-            <div class="m-tod" id="m-murmur-row"><span class="m-rl" id="m-l-murmur">The Murmur</span>
-              <div class="seg tod-seg" id="m-murmur" role="radiogroup" aria-labelledby="m-l-murmur"><button type="button" role="radio" data-v="off">Off</button><button type="button" role="radio" data-v="quiet">Quiet</button><button type="button" role="radio" data-v="active">Active</button></div>
+                <div class="m-tod" id="m-murmur-row"><span class="m-rl" id="m-l-murmur">The Murmur</span>
+                  <div class="seg tod-seg" id="m-murmur" role="radiogroup" aria-labelledby="m-l-murmur"><button type="button" role="radio" data-v="off">Off</button><button type="button" role="radio" data-v="quiet">Quiet</button><button type="button" role="radio" data-v="active">Active</button></div>
+                </div>
+                <div class="m-tod" id="m-daynight-row"><span class="m-rl" id="m-l-tod">Time of day</span>
+                  <div class="seg tod-seg" id="m-daynight" role="radiogroup" aria-labelledby="m-l-tod"><button type="button" role="radio" data-v="cycle">Cycle</button><button type="button" role="radio" data-v="day">Day</button><button type="button" role="radio" data-v="night">Night</button></div>
+                </div>
+                <div class="m-tod" id="m-gfx-row"><span class="m-rl" id="m-l-gfx">Graphics</span>
+                  <div class="seg tod-seg" id="m-gfx" role="radiogroup" aria-labelledby="m-l-gfx"><button type="button" role="radio" data-v="saver">Saver</button><button type="button" role="radio" data-v="auto">Auto</button><button type="button" role="radio" data-v="high">High</button><button type="button" role="radio" data-v="ultra">Ultra</button></div>
+                </div>
+                <p class="m-info" id="m-rules-info" aria-live="polite"></p>
+              </section>
+              <!-- Challenge modifiers (MODS in js/defs.js): a switch each, built by initMenu. -->
+              <section class="m-sec m-rules m-challenge" id="m-sec-challenge" aria-labelledby="m-h-challenge">
+                <h4 id="m-h-challenge">Challenge</h4>
+                <div class="tchips" id="m-mods" role="group" aria-labelledby="m-h-challenge"></div>
+                <p class="m-info" id="m-challenge-info" aria-live="polite"></p>
+              </section>
             </div>
-            <div class="m-tod" id="m-daynight-row"><span class="m-rl" id="m-l-tod">Time of day</span>
-              <div class="seg tod-seg" id="m-daynight" role="radiogroup" aria-labelledby="m-l-tod"><button type="button" role="radio" data-v="cycle">Cycle</button><button type="button" role="radio" data-v="day">Day</button><button type="button" role="radio" data-v="night">Night</button></div>
-            </div>
-            <div class="m-tod" id="m-gfx-row"><span class="m-rl" id="m-l-gfx">Graphics</span>
-              <div class="seg tod-seg" id="m-gfx" role="radiogroup" aria-labelledby="m-l-gfx"><button type="button" role="radio" data-v="saver">Saver</button><button type="button" role="radio" data-v="auto">Auto</button><button type="button" role="radio" data-v="high">High</button><button type="button" role="radio" data-v="ultra">Ultra</button></div>
-            </div>
-            </div>
-            <p class="m-info" id="m-rules-info" aria-live="polite"></p>
-          </section>
-          <!-- Challenge modifiers (MODS in js/defs.js): a switch each, built by initMenu. -->
-          <section class="m-sec m-rules m-challenge" id="m-sec-challenge" aria-labelledby="m-h-challenge">
-            <h3 id="m-h-challenge">Challenge</h3>
-            <div class="tchips" id="m-mods" role="group" aria-labelledby="m-h-challenge"></div>
-            <p class="m-info" id="m-challenge-info" aria-live="polite"></p>
           </section>
         </div>
       </div>
+    </div>
+    <!-- A setting's picker (openSetPop in js/ui.js): the row's control, moved in while it's open, and a line about the
+         option under the pointer or focused. Esc or a tap outside closes it, the focus going back to its row. -->
+    <div class="m-pop" id="m-pop" role="dialog" aria-modal="false" aria-labelledby="m-pop-title" hidden>
+      <div class="m-pop-head"><h3 id="m-pop-title"></h3><button type="button" class="m-pop-x" id="m-pop-close" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button></div>
+      <div class="m-pop-body" id="m-pop-body"></div>
+      <p class="m-pop-info" id="m-pop-info" aria-live="polite"></p>
     </div>
     <!-- Campaigns: a card per campaign (renderCampaignHub in js/ui.js fills in the progress and what's ready). -->
     <div class="m-view" id="m-camps" role="region" aria-labelledby="m-camps-title" hidden>
@@ -423,36 +481,43 @@
         <button type="button" id="m-cloud" class="mx-row" title="Open a game put in the cloud (pause menu, Save: Cloud) on another device: type its code"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.3 3.3 0 0 0 7 18.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 14.5h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span><b>Load from a code</b><small>A game put in the cloud on another device</small></span></button>
       </div>
     </div>
-    <!-- Play / Start: one button for both views (big under the logo on Home; the sticky bar of Custom Game). -->
-    <div class="m-go" id="m-go">
-      <button id="m-new" class="btn primary big"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg><span id="m-new-label">Play</span></button>
-      <p class="m-sum" id="m-more-sum"></p>
-    </div>
+    <!-- Home's console: Play (#m-go, with the setup in a line) and the three big choices, docked along the bottom. -->
     <div class="m-home-foot" id="m-home-foot">
-      <!-- The big choices, two by two. -->
-      <div class="m-tiles">
-        <button type="button" id="m-campaigns" class="m-tile" aria-haspopup="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 21V4M5 4.5h11.5l-2.2 3.7 2.2 3.8H5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mt-name">Campaigns</span><span class="mt-sub" id="m-campaigns-sub">Missions and more</span></button>
-        <button type="button" id="m-customise" class="m-tile"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg><span class="mt-name">Custom Game</span><span class="mt-sub">Your planet, your rules</span></button>
+      <nav class="m-dock" id="m-dock" aria-label="Main menu">
+        <!-- Play / Start: one button for both views (the first cell of the dock on Home; the bar of Custom Game). -->
+        <div class="m-go" id="m-go">
+          <button id="m-new" class="btn primary big" aria-describedby="m-more-sum"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg><span id="m-new-label">Play</span></button>
+          <p class="m-sum" id="m-more-sum"></p>
+        </div>
+        <div class="m-tiles">
+        <button type="button" id="m-campaigns" class="m-tile" aria-haspopup="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 21V4M5 4.5h11.5l-2.2 3.7 2.2 3.8H5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mt-name">Campaigns</span><span class="mt-sub">Missions · Contingency</span><span class="mt-ro" id="m-campaigns-sub">Missions</span></button>
+        <button type="button" id="m-customise" class="m-tile"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg><span class="mt-name">Custom<span class="vh"> Game</span></span><span class="mt-sub">Your planet, your rules</span></button>
         <button type="button" id="m-multi" class="m-tile"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M2.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5M13.5 15.2c.9-.8 2-1.2 3-1.2 2.1 0 3.9 1.5 4.6 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span class="mt-name">Multiplayer</span><span class="mt-sub">2 to 4 players, any device</span></button>
-        <!-- The Daily Planet (js/polish3.js): one planet a day (UTC), the same for everyone; its best time kept on this device. -->
-        <button type="button" id="m-daily" class="m-tile m-daily" title="Today's planet: the same map, biome and rivals for everyone until midnight UTC"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span class="md-k mt-name">Daily Planet<span class="md-dash"> — </span><span id="m-daily-date" class="mt-sub"></span></span>
+        </div>
+      </nav>
+      <!-- The rail: the Daily Planet (js/polish3.js: one planet a day, UTC, the same for everyone; its best time kept on this
+           device), then How to play (#screen-help), Lore (#screen-lore, openLore), Settings (the pause menu's Settings over the
+           menu: openMenuSettings), Feedback (#screen-feedback, openFeedback in js/feedback.js) and More (#m-extra). On a phone
+           a column of icons beside the planet. -->
+      <aside class="m-rail" id="m-rail" aria-label="More choices">
+        <h2 class="m-rail-h" aria-hidden="true"><i class="m-led"></i>Command</h2>
+        <button type="button" id="m-daily" class="m-tile m-daily" title="Today's planet: the same map, biome and rivals for everyone until midnight UTC">
+          <span class="md-when">Today · <span id="m-daily-date"></span></span>
+          <span class="md-k mt-name"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Daily Planet</span></span>
           <span class="md-line" id="m-daily-line"></span>
           <span class="md-best" id="m-daily-best"></span>
         </button>
-      </div>
-      <!-- Small buttons, kept together on a line: How to play (#screen-help), the Lore guide, the colony's archive of the story
-           (#screen-lore, openLore in js/ui.js), Settings (the pause menu's Settings view, opened over the menu: openMenuSettings
-           in js/ui.js), Send feedback (#screen-feedback, openFeedback in js/feedback.js) and More (#m-extra). -->
-      <nav class="m-links" aria-label="Help and settings">
-        <span class="m-pills">
-          <button type="button" id="m-help" class="m-pill m-helpb" title="How to play: every building, robot and rule"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1.2" fill="currentColor"/></svg><span>How to play</span></button>
-          <button type="button" id="m-lore" class="m-pill m-lore" title="The Lore guide: the story of Ithaca I"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
-          <button type="button" id="m-settings" class="m-pill m-settings" aria-haspopup="dialog" title="Settings: sound, graphics, menu background, health bars and the rest, kept on this device"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.85 1.85M16.65 16.65l1.85 1.85M5.5 18.5l1.85-1.85M16.65 7.35l1.85-1.85" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Settings</span></button>
-          <button type="button" id="m-feedback" class="m-pill m-feedback" title="Report a bug, suggest an idea or say what you think of the balance"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5.5h16v10h-9l-4.5 3.8v-3.8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Feedback</span></button>
-          <button type="button" id="m-extras" class="m-pill m-extras" aria-haspopup="true" title="More: Observer, Records, Load a save file, Load from a code"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5.5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="18.5" cy="12" r="1.9" fill="currentColor"/></svg><span>More</span></button>
-        </span>
-      </nav>
+        <nav class="m-links" aria-label="Help and settings">
+          <span class="m-pills">
+          <button type="button" id="m-help" class="m-pill m-rit m-helpb" title="How to play: every building, robot and rule"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1.2" fill="currentColor"/></svg><span>How to play</span></button>
+          <button type="button" id="m-lore" class="m-pill m-rit m-lore" title="The Lore guide: the story of Ithaca I"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
+          <button type="button" id="m-settings" class="m-pill m-rit m-settings" aria-haspopup="dialog" title="Settings: sound, graphics, menu background, health bars and the rest, kept on this device"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.85 1.85M16.65 16.65l1.85 1.85M5.5 18.5l1.85-1.85M16.65 7.35l1.85-1.85" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Settings</span></button>
+          <button type="button" id="m-feedback" class="m-pill m-rit m-feedback" title="Report a bug, suggest an idea or say what you think of the balance"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5.5h16v10h-9l-4.5 3.8v-3.8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Feedback</span></button>
+          <button type="button" id="m-extras" class="m-pill m-rit m-extras" aria-haspopup="true" title="More: Observer, Records, Load a save file, Load from a code"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5.5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="18.5" cy="12" r="1.9" fill="currentColor"/></svg><span>More</span></button>
+          </span>
+        </nav>
+        <p class="m-rail-foot" aria-hidden="true"><span>&gt;</span> Uplink secured. Listening on all channels. No response.</p>
+      </aside>
       <input type="file" id="m-import-file" accept=".json,application/json" hidden>
     </div>
     <!-- What went wrong loading a game (menuMsg): under Home or More. -->
@@ -609,7 +674,7 @@
         <div class="p-tod"><div class="p-sw-row p-tod-row" title="How much a long war scars the land: craters, ash, charred stumps, scrap and bones that stay"><span id="p-l-scars">War scars</span>
           <div class="seg p-tod-seg" id="p-scars" role="radiogroup" aria-labelledby="p-l-scars"><button type="button" role="radio" data-v="off">Off</button><button type="button" role="radio" data-v="light">Light</button><button type="button" role="radio" data-v="full">Full</button></div></div>
           <p class="hint p-tod-note" id="p-scars-note"></p></div>
-        <!-- Menu background (menuBg / setMenuBg in js/menuplanet.js; kept on this device): Classic (the demo game) or Planet. -->
+        <!-- Menu background (menuBg / setMenuBg in js/menuplanet.js; kept on this device): Planet (the default) or Classic (the demo game). -->
         <div class="p-tod"><div class="p-sw-row p-tod-row" title="What shows behind the main menu"><span id="p-l-menubg">Menu background</span>
           <div class="seg p-tod-seg" id="p-menubg" role="radiogroup" aria-labelledby="p-l-menubg"><button type="button" role="radio" data-v="classic" title="A computer game playing itself behind the menu">Classic</button><button type="button" role="radio" data-v="planet" title="Ithaca I turning round Corvane, the Ring and Argos, the war on its night side">Planet</button></div></div></div>
       </div>
@@ -1536,7 +1601,7 @@
 
       <section id="hs-maps">
         <h3>Maps, biomes and terrain</h3>
-        <p><b>Custom Game</b> on the main menu opens the new-game screen, with a live preview of the exact planet your settings make.</p>
+        <p><b>Custom</b> on the main menu opens the new-game screen: a large live preview of the exact planet your settings make on the left, the <b>Match</b> and <b>Planet</b> settings as a list in the middle, <b>Advanced</b> beside them and <b>Start</b> in the bar along the bottom, with your setup summed up beside it. Each row in the list names a setting and what it's set to: tap or click it (or press <kbd>Enter</kbd> on it) and a <b>picker</b> opens beside it (on a phone, a sheet from the bottom) with every choice and a line on the one you point at. Pick one and it closes; with a keyboard <kbd>←</kbd> <kbd>→</kbd> (or <kbd>↑</kbd> <kbd>↓</kbd>) move through the choices, <kbd>Enter</kbd> picks and closes and <kbd>Esc</kbd> closes it, back on its row. The rival doctrine's picker stays open, so you can give each rival its own. <b>Advanced</b> folds out to the <b>Rules</b> (Nuclear race, Megastructures, Planetary events, Weather, Unlimited resources, the Murmur, Time of day and Graphics) and the <b>Challenge</b> modifiers; folded, it sums them up in a line. It starts open on a big screen and folded on a phone.</p>
         <ul class="chain">
           <li><b>Map type</b> opens a picker: cards grouped <i>Open ground</i>, <i>Divided</i>, <i>Water</i> and <i>Heights and depths</i>, each with a sketch and badges for how many players it takes and <b>Naval</b> (Ports and ships). <b>Random</b> picks one with room for your players when you land.</li>
           <li><b>Size</b>: Small, Medium, Large, Huge, Immense or Planetary. Standard is 84×118 at Immense and 120×168 at Planetary. Planetary supports up to two colonies and fits every available map shape within 20,160 tiles. Rivals allow more time for distant marches at both sizes.</li>
@@ -1730,7 +1795,7 @@
 
       <section id="hs-records">
         <h3>Records and achievements</h3>
-        <p><b>The Daily Planet</b> (the gold tile on the main menu, with today's date) is one planet a day, the same for everyone: a Versus game against one or two Colonist computer rivals, its map type, biome, ground, resources and the rivals' doctrines all picked from the date. It changes at midnight UTC. Your best time to win it today (and how many tries) is kept on this device and shown on the tile; <b>Rematch</b> plays it again. A game with Boosts doesn't count.</p>
+        <p><b>The Daily Planet</b> (the amber card at the top of the main menu's rail, with today's date) is one planet a day, the same for everyone: a Versus game against one or two Colonist computer rivals, its map type, biome, ground, resources and the rivals' doctrines all picked from the date. It changes at midnight UTC. Your best time to win it today (and how many tries) is kept on this device and shown on the tile; <b>Rematch</b> plays it again. A game with Boosts doesn't count.</p>
         <p><b>Records</b> (main menu, <b>More</b>) keeps your best on this device: the <b>fastest win</b> on each map type at each rival level, the <b>longest game</b>, the <b>most land</b> you've held and your <b>biggest colony</b> (robots and buildings). When a game beats one, its end screen says so.</p>
         <ul class="chain">
           <li>Records and wins count single-player Versus and Colony games. Missions and multiplayer don't, and nor does a game where you used <b>Boosts</b>, stopped the rivals building something, or played with <b>Unlimited resources</b>.</li>
@@ -1805,7 +1870,7 @@
         <p><b>Saving.</b> A solo game keeps up to five restore points, one per in-game minute. In the pause menu, under <b>Restore points</b>, each is listed by its game time and how long ago it was kept (say <i>14:00 in game · 3 min ago</i>); the game-over screen has the same list. Pick one, select <b>Restore</b> and confirm: the game goes back to that moment. The main menu also offers the latest solo history after a reload. Your browser may keep fewer points if storage is tight. <b>Continue</b> uses the latest resume save, which also updates when you leave the tab. To move your game to another device, use <b>Save → File</b> in the pause menu, then <b>Load a save file</b> (main menu, <b>More</b>) on the other device. If the browser cannot update <b>Continue</b> when you load a save, the game warns you and offers the same way to keep a copy. Damaged or incompatible files leave your save intact. Multiplayer has no restore points or Continue save.</p>
         <p><b>Save slots.</b> Besides the autosave, five slots on this device keep games you want to come back to. <b>Save</b>: <b>Slots</b> in the pause menu opens <b>Saved games</b>: the <b>Autosave</b> (Continue's own save) and <b>Slot 1</b>–<b>5</b>, each with its map (or mission), mode, game time played and when it was saved. Give a slot a name if you like, then <b>Save here</b> (<b>Save over</b> on a used one asks first). <b>Load</b> opens one (from a game, it asks first: the game you're playing closes) and <b>Delete</b> clears one. On the main menu, <b>Saved games</b> lists them to load or delete, and the <b>Continue</b> card says what it will resume: the newest of the autosave and the slots. A game loaded from a slot becomes the autosave as it plays; the slot stays as it was until you save over it. The save from before this version is the Autosave. Multiplayer and Observer games can't be kept in a slot.</p>
         <p><b>Cloud saves.</b> No file to move? <b>Save</b>: <b>Cloud</b> in the pause menu puts the game in the cloud and shows a <b>code</b> (like K7PQ4-XMR2B), a <b>link</b> and a <b>QR code</b> of the link, with <b>Copy link</b> (and <b>Share</b> where the device can). On the other device scan the QR code with its camera, open the link, or tap <b>More</b>, then <b>Load from a code</b>, on the main menu and type the code (capitals or not, the dash or not). It loads as a save file does, and the save that was on that device is kept as a backup. Saving the same game to the cloud again updates its code, so one code follows your game; <b>New code</b> gives it another and the old one stops working. A code lasts 30 days after the last save to it, and it's the only key: anyone with it can load the game, nothing else is sent, and there's no account. Multiplayer games and Observer mode aren't saved to the cloud. On an iPhone or iPad, a game added to the Home Screen keeps its own saves apart from Safari: open it there and use Load from a code.</p>
-        <p><b>The main menu.</b> <b>Continue</b> (when there's a game to resume, with the game it resumes under it, and <b>Saved games</b> beneath: see Save slots) heads it, then <b>Play</b>, which starts a game with your last settings at once (summed up beneath it). Under that are four tiles: <b>Campaigns</b>, <b>Custom Game</b> (change the settings), <b>Multiplayer</b> and the <b>Daily Planet</b>; and along the foot a row of small buttons: <b>How to play</b>, <b>Lore</b> (the story: see The story), <b>Settings</b>, <b>Feedback</b> and <b>More</b>. <b>Campaigns</b> has a card for each campaign: the <b>Missions</b>, the tutorial, with how many you've finished and the next one up; the <b>Main Campaign</b>, fifteen story missions in three acts, still in preparation; <b>Contingency</b>, the conquest of Ithaca I a territory at a time (see Contingency); and co-op scenarios later. <b>More</b> holds <b>Observer</b> (see below), <b>Records</b>, <b>Load a save file</b> and <b>Load from a code</b> (see Cloud saves). <b>Back</b> or <kbd>Esc</kbd> returns from Campaigns, More or Custom Game, and with a keyboard the arrow keys move between the buttons. Your settings are remembered on this device. <b>Settings</b> opens the same Settings as the pause menu over the main menu: the volumes, Graphics, the switches, Time of day, War scars and <b>Menu background</b>; <b>Back</b> or <kbd>Esc</kbd> returns to the menu. <b>Menu background</b> picks what's behind the main menu: <b>Classic</b> (the default), a computer game playing itself under a dark veil, or <b>Planet</b>, Ithaca I turning round Corvane with the war on its night side (on an upright screen the menu sits below it). It's kept on this device and changes at once.</p>
+        <p><b>The main menu.</b> Ithaca I fills the screen, lit by Corvane behind it, with <b>TERRAFALL</b> top left. <b>Continue</b> (when there's a game to resume, with the game it resumes under it, and <b>Saved games</b> beneath: see Save slots) sits under the title. Along the bottom is the console: <b>Play</b>, which starts a game with your last settings at once (summed up on it), then <b>Campaigns</b> (with your Missions progress), <b>Custom</b> (change the settings) and <b>Multiplayer</b>. Down the right-hand rail: the <b>Daily Planet</b>, <b>How to play</b>, <b>Lore</b> (the story: see The story), <b>Settings</b>, <b>Feedback</b> and <b>More</b>; on a phone the rail is a column of icons beside the planet, and Play is docked at the foot with the other three under it. <b>Campaigns</b> has a card for each campaign: the <b>Missions</b>, the tutorial, with how many you've finished and the next one up; the <b>Main Campaign</b>, fifteen story missions in three acts, still in preparation; <b>Contingency</b>, the conquest of Ithaca I a territory at a time (see Contingency); and co-op scenarios later. <b>More</b> holds <b>Observer</b> (see below), <b>Records</b>, <b>Load a save file</b> and <b>Load from a code</b> (see Cloud saves). <b>Back</b> or <kbd>Esc</kbd> returns from Campaigns, More or Custom Game, and with a keyboard the arrow keys move between the buttons. Your settings are remembered on this device. <b>Settings</b> opens the same Settings as the pause menu over the main menu: the volumes, Graphics, the switches, Time of day, War scars and <b>Menu background</b>; <b>Back</b> or <kbd>Esc</kbd> returns to the menu. <b>Menu background</b> picks what's behind the main menu: <b>Planet</b> (the default), Ithaca I turning slowly with the war on its night side, or <b>Classic</b>, a computer game playing itself under a dark veil. It's kept on this device and changes at once; on Graphics Saver the planet is drawn smaller and less often.</p>
         <p><b>Observer mode.</b> <b>Observer</b> (main menu, <b>More</b>) lets the computer play every colony while you look on: its setup has Custom Game's options, in the same sections: under <b>Match</b> how many colonies (three or four where the map has room; with four, <b>Teams</b> can make it 2 vs 2), the <b>Victory</b> (Capture, Domination or Uplinks), the <b>Computer</b> level (Easy to Hard, the same for every colony) and each colony's doctrine (or Random); under <b>Planet</b> the map type and biome (either can be Random), size, terrain, resources and, once you've saved one, a saved planet to land on every time; under <b>Rules</b> the Nuclear race, Megastructures, planetary events and <b>The Murmur</b> (Off, Quiet or Active, Active to start with: they raid every colony alike by night); and the <b>Challenge</b> modifiers (all but No turrets), which apply to every colony. Your setup is remembered on this device. Then <b>Start observing</b>. Speed it up to 2×, 4× or 8× with the speed chip (or <kbd>[</kbd> <kbd>]</kbd>). The <b>Scout report</b> under the top bar names each colony by its doctrine with its warbots, and says what they're up to: massing for a push, raiding a road, storming a Command Base, and with the Murmur on, when they come up at nightfall, go back down at dawn and who wrecks a nest (tap its title to fold it away). The camera follows the fighting; move the map yourself and it stays where you put it until you tap <b>Follow</b> (or press <kbd>F</kbd>). Tap a robot or building to see its panel (whose it is and its doctrine, its health, what it's doing or holds), to look at only: nothing can be ordered, and the camera stops following so it stays in view. The minimap, Statistics and Photo mode work as usual. Nothing is saved, and your own game stays as it was: <b>Back to the menu</b> in the pause menu leaves, and at the end <b>Observe another</b> plays the same setup again, on a new planet (or the saved planet you picked). With Domination or the Uplinks the scout report says who leads and whose clock runs.</p>
         <p><b>Send feedback.</b> Found a bug, have an idea, or think something is too strong or too weak? <b>Feedback</b> on the main menu, or <b>Send feedback</b> in the pause menu, opens a short form: pick <b>Bug</b>, <b>Idea</b>, <b>Balance</b> or <b>Other</b>, write what happened (up to 5,000 characters) and, if you'd like a reply, an email or name. It goes to the game's maker with the game's version and your device and screen size and, from a game, its map, seed, time and last few messages; nothing else. In a game, <b>Attach my current game</b> (ticked for a Bug) sends its save file too, so the bug can be played back exactly, and <b>Attach a picture of the map</b> (ticked for a Bug too) sends a picture of the map as it is on screen, without the menus. If it can't be sent (no connection, or too many reports at once) the form says why and keeps what you wrote. Opening it changes nothing in the game: a paused game stays paused, and a multiplayer game runs on as usual. <kbd>Esc</kbd> or <b>Back</b> closes it.</p>
         <p><b>Sound.</b> The music is a synthwave score made live as you play: a calm groove while you build (three take turns, a new one every ten minutes), a driving track when you're under attack or at war (two take turns, a new fight bringing the other: <i>Overdrive</i>, and <i>Redline</i>, darker, a low distorted bass grinding on under a slow-opening filter), an alarm while a nuclear missile is in the air, and an air raid siren while enemy bombers come for you. The <b>Lore</b> guide has music of its own: the campaign theme, <i>The Long Silence</i>. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, truck air brakes and horns in jams. Traffic is loudest where it bunches up: round a busy factory you hear engines go by, warning beeps, toots and robots chirping, more the busier the streets. Beneath it all runs <b>ambient sound</b> that grows with your colony: a city murmur, factory hum, trains, aircraft and the sea. Away from your streets the land takes over: each biome's own sounds (leaves and grass rustling in the wind, sand or snow hissing, insects and frogs, birds by day, the Bloom's shimmer, cracking ice, the ash plains' rumbling ground), fading as you look over a built-up town. At night a cricket chorus comes in at dusk out in the wilds, with owls, a far-off night bird and the leaves stirring in the forests, peepers, frogs and the odd splash in the swamp, and a few insects and a dry wind on the savanna and in the desert; rain hushes the insects, and a fight nearby silences them for a while. You hear surf on the shores of a sea map and water lapping at lakes and rivers, the ground rumbling near a volcano (louder when it's about to erupt), and the weather: rain with thunder after the lightning, gales, sandstorms, blizzards and falling embers. Near a Murmur nest or tunnel exit you may hear a low sound in the ground, and at night over their tunnels too. Argos is near-silent: there's no air. Explosions are heard from where they are: close up they crack and thump, off screen they rumble in the distance, bombs whistle as they fall and missiles roar in. Set <b>Music</b>, <b>Effects</b> and <b>Ambience</b> (the land's own sounds) in the pause menu's <b>Settings</b>.</p>
@@ -1815,7 +1880,7 @@
         <p><b>Weather.</b> Now and then a spell of weather to suit the biome: a sandstorm, a rainstorm, a blizzard, falling leaves, fog with fireflies, drifting ash, ring dust streaking over the moon, an aurora. It's only for looks; switch it off in the pause menu or the Rules.</p>
         <p><b>Wildlife.</b> Animals live on the land, Earth's in the green regions and small native creatures where the land is strange (none on Argos): they are scenery. Roads, track and buildings push animals out of feeding grounds. Gunfire drives them away until the area is quiet. On Active in free play, working industry can feed larger Murmur packs after the first night. Look for broad-snouted alligators and turtles in Blackwater. Red foxes have white-tipped tails in the woods, while Arctic foxes have thick pale coats. Geese show white cheeks on the water and in flight. Blackwater herons stretch their necks to fish, and the two owls turn their heads as they scan. Rock lizards dart with splayed feet and a long tail. Hares crouch, then stretch into a bound, with white coats on the Polar Caps. Dusk bats bank on scalloped wings near rocky ground in the Rust. Overhead, hawks fan broad tails and vultures rock on fingered wings. Crows have fan-shaped tails and ravens have wedge-shaped tails. Look for ash beetles with bright shell seams by day and banded ember moths after dark in Cinderlands. In the Bloom, hinge-backs walk under overlapping plates, switchtails run on two feet, and sailwings glide on ribbed wings. All three have amber eyes. In the Hollow, blind crawlers feel their way across the cave floor, and cave sailwings glide on ragged membranes. Listen at dusk: before a Murmur night the birds fall silent. (None on the Saver Graphics step.)</p>
         <p><b>Night lighting.</b> Night lights follow each structure’s footprint and switch off when it is lost. Express gantries light their two lanes independently.</p>
-        <p><b>Wind, water and sky.</b> One wind blows across the planet, the same way the clouds drift: up close the trees and plants lean and sway with it (explosions shove the plants outward for a moment). By day the sun sparkles on rivers and the sea, and small waves lap the shores; at night the Ring casts a faint silver light (a little different on every planet), the Ring and Argos shine back from the water, and on clear nights there are stars in it, with a slow aurora on the Polar Caps, Argos and the Bloom. After a rainstorm the ground and roads stay wet for a few minutes, mirroring the lights at night; on the cold maps (the Polar Caps and Argos, and lightly on Emberwood) a frost creeps in at dawn and melts by midday (wet ground and frost need Weather on). Zoomed right out, the camera tilts a little and the land carries on past the map's edge, faded into the haze: only the map itself can be used. Behind the main menu, with <b>Menu background</b> on <b>Planet</b> in Settings, Ithaca I (its face the atlas in the Lore guide) goes slowly round Corvane, the Ring and Argos with it, its night side lit by the colonies and flickering with their war (on <b>Classic</b>, the default, a computer game plays itself behind the menu instead). Swaying plants, frost, the aurora and the tilt are left out on Graphics Saver; with your device set to reduce motion, nothing sways or drifts. All of it is only for looks.</p>
+        <p><b>Wind, water and sky.</b> One wind blows across the planet, the same way the clouds drift: up close the trees and plants lean and sway with it (explosions shove the plants outward for a moment). By day the sun sparkles on rivers and the sea, and small waves lap the shores; at night the Ring casts a faint silver light (a little different on every planet), the Ring and Argos shine back from the water, and on clear nights there are stars in it, with a slow aurora on the Polar Caps, Argos and the Bloom. After a rainstorm the ground and roads stay wet for a few minutes, mirroring the lights at night; on the cold maps (the Polar Caps and Argos, and lightly on Emberwood) a frost creeps in at dawn and melts by midday (wet ground and frost need Weather on). Zoomed right out, the camera tilts a little and the land carries on past the map's edge, faded into the haze: only the map itself can be used. Behind the main menu, with <b>Menu background</b> on <b>Planet</b> (the default) in Settings, Ithaca I (its face the atlas in the Lore guide) turns slowly in front of Corvane, the Ring and Argos with it, its thin night side lit by the colonies and flickering with their war (on <b>Classic</b> a computer game plays itself behind the menu instead). Swaying plants, frost, the aurora and the tilt are left out on Graphics Saver; with your device set to reduce motion, nothing sways or drifts. All of it is only for looks.</p>
         <p><b>Clouds, remains and beacons.</b> The Command Base casts a short beam from evening to dawn. By day (with Weather on) cloud shadows drift over the land with the wind, darker in a spell of weather; there are none on Argos or in the Hollow, or on Graphics Saver. What a fight leaves behind (the rubble of a building wrecked by force, the wrecks of robots and planes) stays, and over the next few minutes grows over (with War scars Off; on Light or Full a robot's scrap and a building's rubble stay bare for good, see War scars, and only a plane's wreck grows over): grass, moss and vines in the green biomes, drifting snow in the Polar Caps, sand in the Rust, ash in the Cinderlands, violet Bloom in the Bloom and the Hollow, only dust on Argos. It never gets in the way: build, pave or lay track there and it's gone. From evening until dawn every Command Base shines a beam of light straight up into the sky (in the Hollow, up its breach). All of it is only for looks.</p>
         <p><b>Screen.</b> Full screen from the button beside pause (or <kbd>Alt</kbd>+<kbd>Enter</kbd>). The installed app on a computer goes full screen when you first click; hold <kbd>Esc</kbd> to leave, and it remembers. On a big screen <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>+</kbd> and <kbd>−</kbd> resize the buttons and text.</p>
         <p><b>Mouse cursor.</b> With a mouse, Terrafall has its own pointer in the colours of its icon: a midnight-blue arrow edged in cream, with coral stripes on its tail, that turns coral over anything you can click (a button, a building, one of your robots). With warbots picked it turns into a coral target over a rival building or robot, where a right-click attacks. Placing a building or painting a road shows a cream frame, aiming an attack or a missile the coral target, a landing or an air drop a cream one, and dragging the map four arrows. <b>Custom cursor</b> in the pause menu's Settings switches back to your computer's own.</p>

@@ -68,15 +68,14 @@ const check = (n, ok, x) => { console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '
     await click('#m-extra-back');
     check(tag + ': Back from More returns Home', await onHome());
 
-    // Keyboard: arrows move between Home's buttons.
+    // Keyboard: arrows move between Home's buttons (the dock along the bottom, the rail on the right).
     if (tag === 'desktop') {
+      const k = async (key) => { await p.keyboard.press(key); return focus(); };
       await p.focus('#m-campaigns');
-      await p.keyboard.press('ArrowRight'); const r = await focus();
-      await p.keyboard.press('ArrowDown'); const d = await focus();
-      await p.keyboard.press('ArrowLeft'); const l = await focus();
-      await p.keyboard.press('ArrowDown'); const d2 = await focus();
-      await p.keyboard.press('ArrowUp'); await p.keyboard.press('ArrowUp'); await p.keyboard.press('ArrowUp'); const u = await focus();
-      check('desktop: the arrows walk the tiles, the bottom row and back to Play', r === 'm-customise' && d === 'm-daily' && l === 'm-multi' && /^m-(help|lore)$/.test(d2) && u === 'm-new', { r, d, l, d2, u });
+      const r = await k('ArrowRight'), r2 = await k('ArrowRight'), r3 = await k('ArrowRight');
+      await p.focus('#m-campaigns'); const l = await k('ArrowLeft');
+      await p.focus('#m-daily'); const d = await k('ArrowDown'), d2 = await k('ArrowDown'), u = await k('ArrowUp');
+      check('desktop: the arrows walk the dock, out to the rail, down the rail and back to Play', r === 'm-customise' && r2 === 'm-multi' && /^m-(help|lore|settings|feedback|extras)$/.test(r3) && l === 'm-new' && d === 'm-help' && d2 === 'm-lore' && u === 'm-help', { r, r2, r3, l, d, d2, u });
     }
 
     // The Daily Planet and Play start games; back to the menu Home.
