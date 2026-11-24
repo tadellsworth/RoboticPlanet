@@ -3621,3 +3621,123 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   #screen-missions .ms-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .card.missions-card { width: min(100%, 1500px); }
 }
+
+/* ---------- desktop, second pass (Nov 2026): as little scrolling as possible. A panel's name line and its main buttons
+   stay in view while the rest scrolls (pinSheet in js/ui.js); long paragraphs show two lines and More (foldLong); Build's
+   All is a wide grid of compact cards in columns under each tab's name; Missions and Keys flow in columns; rows of small
+   controls are compact under a mouse (a finger keeps 44 px). A phone is as before. ---------- */
+.b-grp, .more-btn { display: none; }
+@media (min-width: 1000px) and (min-height: 520px) {
+  /* the name line, pinned at the top of the panel (over the rest as it scrolls; the close button over it) */
+  body.deck .sheet-close { z-index: 4; }
+  body.deck #sheet-body > .sheet-title { position: sticky; top: -14px; z-index: 3; margin: -14px -14px 10px; padding: 14px 64px 10px 14px;
+    background: rgb(12, 17, 30); }
+  /* a building's Pause, Move and Dismantle, an Army group's commands: pinned at the bottom */
+  body.deck #sheet-body > .sheet-foot { position: sticky; bottom: -16px; z-index: 3; margin: 10px -14px -16px; padding: 8px 14px 14px;
+    background: rgb(12, 17, 30); border-top: 1px solid var(--dk-cl); }
+  body.deck #sheet-body > .sheet-foot .hint { flex: 1 1 100%; order: 9; margin: 0; font-size: 12px; }
+  /* Army: the orders (group size, Attack, Hold ground, Station, Recall, Select) stay under the name line */
+  body.deck #sheet-body .ar-orders { position: sticky; top: calc(var(--pin-h, 64px) - 14px); z-index: 2; margin: 0 -14px; padding: 0 14px 8px;
+    background: rgb(12, 17, 30); }
+  body.deck #sheet-body .ar-orders .section-label { margin-top: 6px; }
+  /* More: a long description or hint folded to its first two lines */
+  #sheet p.folded { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin-bottom: 0; }
+  #sheet .more-btn { display: block; width: fit-content; break-before: avoid; margin: 0 0 8px; padding: 2px 0; border: 0; background: none; color: #ff8a6e; cursor: pointer;
+    font: 600 11px/1.4 var(--dk-disp, inherit); letter-spacing: 0.12em; text-transform: uppercase; }
+  #sheet .more-btn:hover { text-decoration: underline; }
+  #sheet .more-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* Build, All: wide, the cards in columns under each tab's name (Gather, Make, Move, Defend, Mega), each a compact line
+     pair: name, then cost and how many you have; the panel ends above the tool dock. */
+  body.sheet-build-all #sheet, body.sheet-build-all #sheet.full, body.sheet-build-all #sheet.peek {
+    width: min(1300px, calc(100vw - var(--safe-r) - var(--safe-l) - 24px)); bottom: calc(var(--safe-b) + 78px); }
+  body.deck.sheet-build-all #sheet { background-color: rgb(12, 17, 30); } /* (solid, so the map's cards don't show through) */
+  body.sheet-build-all #bottombar { left: 50%; } /* (messages wait under it until it closes) */
+  /* (A wide panel covers where the Army Group cards and the selection bar sit: they step aside until it closes.) */
+  body:is(.sheet-build-all, .sheet-wide, .sheet-wide3) .agcards, body.sheet-build-all :is(.selbar, .groupbar) { visibility: hidden; }
+  /* a very long panel takes three columns from 1400 px wide (leaving the selection bar's corner clear) */
+  #sheet.cols3, #sheet.cols3.full, #sheet.cols3.peek { width: min(1200px, calc(100vw - var(--safe-r) - 400px)); }
+  body.sheet-wide3 #toasts { left: calc((100% - min(1220px, 100vw - 380px)) / 2); }
+  body.sheet-build-all #sheet .desc { margin-bottom: 4px; }
+  .build-grid.all { display: block; column-width: 190px; column-gap: 8px; margin-top: 6px; }
+  .build-grid.all > * { break-inside: avoid; }
+  .build-grid.all .b-grp { display: flex; align-items: center; gap: 6px; break-after: avoid; margin: 2px 0 4px; padding-top: 2px;
+    font: 600 11px/1.2 var(--dk-disp, inherit); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dk-c, var(--accent)); }
+  .build-grid.all .b-grp:first-of-type { margin-top: 0; }
+  .build-grid.all .b-grp::after { content: ''; flex: 1; height: 1px; background: var(--dk-cl, var(--line)); }
+  .build-grid.all .b-grp kbd { display: inline-block; height: 14px; min-width: 14px; padding: 0 3px; font-size: 9.5px; line-height: 12px; letter-spacing: 0; }
+  .build-grid.all .bcard { display: grid; width: 100%; margin: 0 0 5px; padding: 4px 6px 4px 5px; gap: 0 6px; grid-template-columns: 28px auto minmax(0, 1fr);
+    grid-template-rows: auto auto; min-height: 0; }
+  .build-grid.all .bcard img, .build-grid.all .bcard.roads svg { width: 28px; height: 28px; grid-row: 1 / span 2; grid-column: 1; padding: 0; }
+  .build-grid.all .bcard.roads svg { padding: 3px; }
+  .build-grid.all .bcard .bname { grid-column: 2 / span 2; padding-right: 26px; font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .build-grid.all .bcard .bcost { grid-column: 2; font-size: 11.5px; gap: 1px 6px; flex-wrap: nowrap; white-space: nowrap; }
+  .build-grid.all .bcard .bhave { grid-column: 3; grid-row: 2; min-height: 0; text-align: right; font-size: 10.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .build-grid.all .bcard.roads .bhave { grid-column: 2 / span 2; text-align: left; }
+  .build-grid.all .bcard kbd { top: 4px; right: 4px; font-size: 9.5px; line-height: 12px; padding: 0 3px; }
+  .build-grid.all .bcard.next { column-span: all; display: grid; width: auto; margin-bottom: 6px; }
+  .build-grid.all .bcard.next .bhave { grid-column: 3; }
+
+  /* Missions: compact cards flowing down four columns (three on a narrow desktop), each chapter's name a line over its first */
+  #screen-missions .ms-list { display: block; column-count: 3; column-gap: 10px; }
+  @media (min-width: 1200px) { #screen-missions .ms-list { column-count: 4; } }
+  #screen-missions .ms-list > * { break-inside: avoid; }
+  #screen-missions .ms-list .ms-chapter { break-after: avoid; margin: 8px 2px 4px; }
+  #screen-missions .ms-list .ms-chapter:first-child { margin-top: 0; }
+  #screen-missions .ms-item { display: grid; width: 100%; margin: 0 0 5px; padding: 5px 10px 5px 7px; grid-template-columns: 26px 1fr; gap: 0 9px; }
+  #screen-missions .ms-num { width: 26px; height: 26px; font-size: 12px; }
+  #screen-missions .ms-name { font-size: 14px; line-height: 1.2; }
+  #screen-missions .ms-meta { font-size: 11px; line-height: 1.25; }
+  #screen-missions #ms-body > .desc { margin-bottom: 8px; }
+
+  /* Keys: the groups flow down the columns, breaking between rows, tight */
+  #keys-body { display: block; column-count: 3; column-gap: 12px; padding: 10px 12px; }
+  @media (min-width: 1200px) { #keys-body { column-count: 5; } }
+  #keys-body .ks-column { display: contents; }
+  #keys-body .ks-group { break-inside: auto; padding: 5px 8px; margin: 0 0 6px; font-size: 12.5px; line-height: 1.22; }
+  #keys-body .ks-group h3 { margin: 0 0 3px; font-size: 13.5px; break-after: avoid; }
+  #keys-body .ks-group h4 { margin: 2px 0; font-size: 12.5px; break-after: avoid; }
+  #keys-body .ks-group p { margin: 0 0 3px; }
+  #keys-body .ks-row { padding: 1px 0; break-inside: avoid; }
+  #keys-body .ks-row kbd { margin-bottom: 0; padding: 0 4px; font-size: 11px; line-height: 15px; }
+  #keys-body .ks-build h4:not(:first-child) { margin-top: 5px; padding-top: 4px; }
+  .ks-head { padding: 10px 16px; }
+  .keys-card .ks-head h2 { font-size: 20px; margin-bottom: 2px; }
+
+  /* Statistics: the six tiles in one row */
+  #st-body .stat-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  @media (min-width: 1200px) { .card.stats-card { width: min(100%, 1500px); } #st-body { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+}
+@media (min-width: 1800px) and (min-height: 520px) {
+  body.sheet-build-all #sheet, body.sheet-build-all #sheet.full, body.sheet-build-all #sheet.peek { width: min(1560px, calc(100vw - var(--safe-r) - var(--safe-l) - 24px)); }
+  #screen-missions .ms-list { column-count: 5; }
+}
+/* Under a mouse on a desktop: rows of small controls in a panel are compact (a finger keeps its 44 px). */
+@media (min-width: 1000px) and (min-height: 520px) and (pointer: fine) {
+  body.deck #hud #sheet .btn { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
+  body.deck #hud #sheet .btn.big { min-height: 38px; padding-top: 8px; padding-bottom: 8px; margin-top: 6px; font-size: 13px; }
+  body.deck #sheet .seg button { padding-top: 7px; padding-bottom: 7px; }
+  body.deck #sheet .kv { min-height: 28px; padding: 3px 0; }
+  body.deck #sheet .section-label { margin: 12px 0 6px; }
+  body.deck #sheet .order-row, body.deck #sheet .order-row.yard-row { grid-template-columns: 56px minmax(0, 1fr) 38px 38px 50px; padding: 2px 0; }
+  body.deck #sheet .order-row.yard-row { grid-template-columns: minmax(0, 1fr) 38px 38px 50px; }
+  body.deck #hud #sheet .order-row .btn, body.deck #hud #sheet .order-row .order-move .btn { min-height: 30px; padding: 0; }
+  body.deck #sheet .order-row > span:not(.order-move) { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+  body.deck #sheet .order-row small { margin-top: 0; }
+  body.deck #sheet .keep-cell { padding-top: 1px; padding-bottom: 1px; }
+  body.deck #hud #sheet .keep-cell .btn { min-height: 28px; padding: 3px 0; }
+  body.deck #sheet .keep-list { gap: 3px; }
+  body.deck #hud #sheet :is(.ag-row, .ag-orders, .army-cmds) .btn, body.deck #sheet .ag-rename input { min-height: 34px; }
+  body.deck #sheet .stepper .btn { padding-top: 3px; padding-bottom: 3px; }
+  body.deck #sheet .bar { margin: 2px 0 6px; }
+  body.deck #sheet .desc { margin-bottom: 8px; }
+}
+/* (Build's cards are in tab order, each tab's under its name; outside a desktop's All the next step, then Roads, Blueprints
+   and Walls, lead the grid as they always have.) */
+.build-grid .bcard.next { order: -2; }
+.build-grid :is(.bcard.roads, .bcard.walls) { order: -1; }
+/* (A wide touch screen, a tablet, gets the same layouts with its 44 px targets.) */
+@media (min-width: 1000px) and (min-height: 520px) and (pointer: coarse) {
+  .build-grid.all .bcard, #screen-missions .ms-item { min-height: 44px; }
+  #sheet .more-btn { min-height: 44px; padding: 0 12px 0 0; }
+}

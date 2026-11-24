@@ -3478,7 +3478,17 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   it's very long), the panel's content wrapped in `.sheet-flow` (which lays out as nothing otherwise); Missions take four
   columns, Statistics' charts two across, and the end of a game a two-column dashboard (result and buttons, the report).
   The Foundry's and the yards' orders are one compact line a type (▲ ▼ side by side, the count in grey). The good
-  Chips is `chip`, also the top bar buttons' class: `body i.gi.chip` undoes `.chip` for its icon.
+  Chips is `chip`, also the top bar buttons' class: `body i.gi.chip` undoes `.chip` for its icon. Second pass
+  (`pinSheet`, `foldLong`): a panel's `.sheet-title` is lifted out of the `.sheet-flow` and sticks to the top on a wide
+  screen (`--pin-h` is its height), the Army panel's `.ar-orders` sticks under it, and a building's last `.actions` row
+  (Pause, Move, Dismantle) or an Army group's `.army-cmds` is moved after the flow as `.sheet-foot` and sticks to the
+  bottom. A `p.desc` or `p.hint` over three lines folds to two (`.folded`) with a `.more-btn` (More / Less, remembered
+  in `UI.unfolded`). A very long panel takes three columns from 1400 px wide (`long > 1.6`). Build's cards are in tab
+  order, each tab's under a `.b-grp` heading; on All on a wide screen (`.build-grid.all`, `body.sheet-build-all`) the
+  panel spans the screen above the dock and the cards flow down columns as compact two-line cards; elsewhere the
+  grid's CSS `order` keeps the next step, Roads, Blueprints and Walls first. Missions and Keys flow down columns (four
+  or five), Statistics' tiles take one row and its charts three across. Under a mouse (`pointer: fine`) a panel's rows
+  of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,
