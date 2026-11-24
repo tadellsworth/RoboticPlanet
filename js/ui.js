@@ -7726,15 +7726,22 @@ function foldLong(root) {
  * it needs a lot less scrolling. Decided once a panel opens (and its lists have filled in), and kept while it's open so
  * nothing jumps sideways; phones, and Build (its own grid of cards), keep one column.
  */
-function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
+function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3', 'cols4'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
 function sheetCols() {
   const s = $('sheet'), body = $('sheet-body');
   if (s.hidden || !isWide() || UI.sheetKind === 'build' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
   const long = body.scrollHeight / Math.max(1, body.clientHeight);
-  if (body.scrollHeight - body.clientHeight <= 8) return;
-  const three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
+  if (body.scrollHeight - body.clientHeight <= 1) return; // (it fits: one column)
+  let three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
   s.classList.add(three ? 'cols3' : 'cols2');
   document.body.classList.add(three ? 'sheet-wide3' : 'sheet-wide');
+  // (two columns still don't hold it, on a screen from 1200 px wide: three, decided before it's drawn, so nothing jumps;
+  // under 1400 px the three take the whole width, as Build's All does)
+  if (!three && innerWidth >= 1200 && body.scrollHeight - body.clientHeight > 1) {
+    sheetColsOff(); s.classList.add('cols3'); document.body.classList.add('sheet-wide3');
+    // (and still too long, on a short screen under 1400 px: four)
+    if (innerWidth < 1400 && innerHeight <= 820 && body.scrollHeight - body.clientHeight > 1) s.classList.add('cols4');
+  }
 }
 
 /**
@@ -8796,7 +8803,11 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
       if (def.charger.fuel) {
         const pct = Math.round(Math.min(100, ((b.energy || 0) / FUEL_ENERGY) * 100));
-        parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
+        // (A Fuel Station holds up to its fuelCap; storage with chargers, a Drop Outpost or a Crawler, burns the Fuel in its
+        // store, kept there by its supply order: no cap of its own.)
+        const have = b.stock.fuel || 0, order = (b.keep && b.keep.fuel) || 0;
+        const amt = def.store ? (order ? `${have}/${order}` : `${have} · no supply order`) : `${have}/${def.fuelCap}`;
+        parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', amt, !(have > 0))}</span></div>`);
         parts.push(`<div class="kv"><span>Fuel burning</span><span>${pct}% left</span></div><div class="bar battery"><div style="width:${pct}%;background:var(--g-fuel)"></div></div>`);
       }
     }

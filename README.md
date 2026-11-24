@@ -3488,7 +3488,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   panel spans the screen above the dock and the cards flow down columns as compact two-line cards; elsewhere the
   grid's CSS `order` keeps the next step, Roads, Blueprints and Walls first. Missions and Keys flow down columns (four
   or five), Statistics' tiles take one row and its charts three across. Under a mouse (`pointer: fine`) a panel's rows
-  of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px.
+  of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px. Third pass (a 1280×720 desktop): a
+  panel two columns don't hold takes three from 1200 px wide (decided in the same frame, so nothing jumps); under
+  1400 px those span the screen above the dock (solid, the selection bar stepping aside), and on a short screen
+  (≤ 820 px tall) a panel three don't hold takes four (`.cols4`). A short screen also packs a panel's name line, rows,
+  paragraphs and upgrade cards, Keys (smaller type), Statistics (118 px charts), Missions, Build's All, Settings (two
+  columns) and the end of a game (its numbers two pairs a line) tighter; a mouse gets 30 px buttons there, touch
+  keeps 44 px.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them (with a defence's panel open instead,
