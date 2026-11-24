@@ -3600,6 +3600,10 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   #sheet:is(.cols2, .cols3) .sheet-flow .section-label { break-after: avoid; }
   #sheet:is(.cols2, .cols3) .sheet-flow :is(.order-row, .keep-cell, .tech, li, .kv, .btn-row, .seg, .gtag, .bar) { break-inside: avoid; }
   #sheet:is(.cols2, .cols3) .sheet-flow > :first-child { margin-top: 0; }
+  /* The Foundry's bot orders start a column of their own (left at the foot of the column before, the first row or two were
+     split from the rest); a long list runs on into the next column. */
+  #sheet .sheet-flow .orders-label { break-before: column; }
+  #sheet .sheet-flow #sh-omode { break-inside: avoid; break-after: avoid; }
 
   /* Missions: the list in three or four columns, a chapter's name across them */
   .card.missions-card { width: min(100%, 1180px); }

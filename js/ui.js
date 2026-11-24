@@ -8253,7 +8253,7 @@ function openBuildingSheet(b) {
       <div class="btn-row"><button class="btn" id="sh-focus">Aim</button><button class="btn ghost" id="sh-focus-clear">Clear aim</button></div><p class="hint" id="sh-focus-hint"></p>`;
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
-      html += `<div class="section-label">Order bots</div>
+      html += `<div class="section-label orders-label">Order bots</div>
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
         <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
