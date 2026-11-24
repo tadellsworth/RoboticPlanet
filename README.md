@@ -211,7 +211,8 @@ how goods move.
   Lift launches to Argos and back and halves Orbital Drops; the Atmosphere Engine +1 here and in your neighbours,
   −1 in a rival's, and stops the Murmur spreading in; the Deep Core +3, and +1 Murmur next door each year; the Great
   Uplink counts twice. One finished in a played battle is kept (`contBattleOver` → `contSetMega`) and built at the start
-  of the next battle there; taking the territory wrecks it. Headless test: `lh/contingency-mega-test.js`.
+  of the next battle there; taking the territory wrecks it, unless the winner seized it in a played battle
+  (`contBattleOver`'s `keepMega` → `contTake`): then it carries over intact. Headless test: `lh/contingency-mega-test.js`.
   **The atlas's landmarks** (`js/landmarks.js`; LORE.md, The atlas): a battle in a territory with one (`LM_AT`,
   `contLandmark`) gets it from its setup, before the kits land (`lmSetup`): outward from the middle of the line between
   the sides (`lmMiddle`) to the first spot where its tiles are open ground clear of everything (posts, Uplinks, nests,

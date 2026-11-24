@@ -190,7 +190,8 @@ Cards used mid-battle need sim orders (lockstep) and a small card bar in the bat
 ## Megastructures on the globe
 
 This is where all eight megastructures pay off in the campaign. If you finish a megastructure in a battle and win,
-the territory keeps it for the rest of the run, as long as you hold it. Each one gives an effect on the globe, and
+the territory keeps it for the rest of the run, as long as you hold it. Taking a territory wrecks its megastructure in
+the fighting, unless the winner seized it during a battle that was played: then it carries over to the winner intact. Each one gives an effect on the globe, and
 the next battle in that territory starts with it already built.
 
 | Megastructure | On the globe |

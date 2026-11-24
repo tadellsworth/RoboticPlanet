@@ -731,7 +731,7 @@ function contResolve(run, b, played) {
   const was = T.owner;
   if (was !== W) {
     if (!played && T.fort > 0) T.fort--;
-    contTake(run, t, W, b.kind);
+    contTake(run, t, W, b.kind, !!(played && played.keepMega));
   } else contLog(run, `${contNameCap(t)} held${b.sides.length > 2 ? ' against ' + b.sides.filter((s) => s !== W).map((s) => contSideName(run, s)).join(' and ') : b.sides.length === 2 ? ' against ' + contSideName(run, b.sides.find((s) => s !== W)) : ''}.${b.result.scarred ? ' Losses heavy.' : ''}`, W, true, b.sides);
   if (T.murmur > 0) T.murmur--;
   // a megastructure finished in the battle (played), or now and then in an auto-resolved one
@@ -755,13 +755,14 @@ function contRetreat(run, b, g) {
   contLog(run, `${contNameCap(t)}: Command Group ${g.id} withdrew to ${contName(to)}. Rank reduced.`, s, true, b.sides);
 }
 
-/** Side s takes territory t (by a battle won, or walking in). */
-function contTake(run, t, s, how) {
+/** Side s takes territory t (by a battle won, or walking in). Its megastructure is wrecked in the fighting, unless the winner seized it in a battle played (keepMega). */
+function contTake(run, t, s, how, keepMega) {
   const T = run.t[t], was = T.owner;
   if (was === s) return;
   if (was >= 0 && T.home === was) contHomeLost(run, was);
   T.owner = s; T.reseed = 0;
-  if (T.mega && was >= 0) { contLog(run, `${CONT_MEGA[T.mega].name} at ${contName(t)} wrecked in the fighting.`, s, true, [was]); T.mega = null; }
+  if (T.mega && was >= 0 && keepMega) contLog(run, `${CONT_MEGA[T.mega].name} at ${contName(t)} seized intact. It answers to the Sponsor now.`, s, true, [was]);
+  else if (T.mega && was >= 0) { contLog(run, `${CONT_MEGA[T.mega].name} at ${contName(t)} wrecked in the fighting.`, s, true, [was]); T.mega = null; }
   if (was >= 0) contLog(run, `${contNameCap(t)} taken from ${contSideName(run, was)}. Command authority transferred.`, s, true, [was]);
   else contLog(run, `${contNameCap(t)} claimed for the Sponsor${how === 'walk' ? '. Uncontested' : ''}.${T.uplink ? ' Uplink secured. Listening on all channels. No response.' : ''}`, s, how !== 'walk');
 }

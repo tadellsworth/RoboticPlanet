@@ -225,6 +225,8 @@ function contBattleOver(withdrew) {
   // a megastructure the winner finished (one not built for it at the start), and the defences standing
   const megas = wp >= 0 ? S.buildings.filter((x) => !x.dead && x.built && !x.mDown && x.owner === wp && BDEFS[x.type].mega && x.type !== C.mega0) : [];
   const mega = megas.length ? Object.keys(CONT_MEGA_TYPE).find((k) => CONT_MEGA_TYPE[k] === megas[0].type) : null;
+  // the territory's own megastructure (built for its holder at the start): one the winner seized during the battle carries over
+  const keepMega = wp >= 0 && !!C.mega0 && S.buildings.some((x) => !x.dead && x.built && x.owner === wp && x.type === C.mega0);
   const holder = run.t[b.at].owner === winner || winner === CONT_MURMUR ? (C.def >= 0 ? C.def : -1) : wp;
   let forts;
   if (holder >= 0) {
@@ -241,7 +243,7 @@ function contBattleOver(withdrew) {
       if (used.includes(i)) { const j = S0.cards.indexOf(k); if (j >= 0) S0.cards.splice(j, 1); }
     });
   });
-  contBattleResult(run, b, { winner, survivors: { [winner]: survivors }, mega, forts, withdrew: !!withdrew });
+  contBattleResult(run, b, { winner, survivors: { [winner]: survivors }, mega, forts, keepMega, withdrew: !!withdrew });
   run.playing = 0;
   contStore(run);
   toMenu();

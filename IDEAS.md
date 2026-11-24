@@ -457,8 +457,9 @@ teaches it. The calls made in building it, open for the owner:
 - **Seizing megastructures: BUILT (Nov 24 2026)** (the owner's call; README, "Seizing megastructures"; How to play,
   Megastructures; the Overcast mission's new goal). Robots that beat one to 0 knock it out; held 40 s it's seized; seized,
   a quarter of its cost and a Worker bring it online; Wreck it destroys it instead. Open questions:
-  - **Contingency:** taking a territory still wrecks its megastructure on the globe (CONTINGENCY.md, rule 7). Should one
-    seized in the battle carry over to the winner instead (and one only knocked out, stay with the territory)?
+  - **Contingency (done, owner Nov 24: "carry over to you maybe"):** a territory's megastructure the winner seized in a
+    battle played carries over to it on the globe; otherwise (knocked out only, or an auto-resolved battle) taking the
+    territory wrecks it as before. Revisit if it makes megastructure territories too easy a prize.
   - **Numbers to watch:** 40 s to seize, 3 tiles, a quarter of the cost, back online at half armor. Arrival City's clock
     went from 20 s to 40 s with it, and its owner can no longer just repair it back up: is the City now too easy to hold?
   - **Art:** a knocked-out look for the seven that have none (only Arrival City and the Lift have damaged art): the dark
