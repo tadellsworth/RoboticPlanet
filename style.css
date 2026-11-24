@@ -3547,8 +3547,10 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .m-pop #m-seats-row[hidden] { display: none; }
 .m-pop #m-seats-row .m-rl { font: 600 11px/1.2 var(--mdisp); letter-spacing: 0.16em; text-transform: uppercase; color: var(--mq); }
 .m-pop .m-seats { display: flex; flex-direction: column; gap: 6px; }
-.m-pop .m-seat { display: flex; align-items: center; gap: 10px; }
-.m-pop .m-seat select { flex: 1; min-height: 44px; border-radius: 0; background: #0c111e; color: var(--mi); border: 1px solid rgba(180, 185, 201, 0.35); padding: 0 10px; font: inherit; }
+.m-pop .m-seat { display: flex; align-items: center; gap: 10px; flex: none; max-width: none; } /* (stacked: none of the row sizing above, which would make each 88 px tall) */
+.m-pop #m-seats-row, .m-pop .m-seats { flex: none; align-self: stretch; }
+.m-pop .m-seat { width: 100%; }
+.m-pop .m-seat select { flex: 1; min-height: 44px; border-radius: 0; background: #0c111e; color: var(--mi); border: 1px solid rgba(180, 185, 201, 0.35); padding: 0 30px 0 28px; font: inherit; }
 .m-pop .m-vnote, .m-pop-info { margin: 0; padding: 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--mq); }
 .m-pop .m-vnote b { color: var(--mi); }
 .m-pop-info { padding: 0 14px 12px; flex: none; }

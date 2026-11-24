@@ -3637,6 +3637,32 @@ function setMinimap(on) {
   placeMinimap();
 }
 
+/**
+ * Messages: near the top of the screen. On a wide screen they sit in the top row's gap, beside the goal card and short
+ * of the minimap (and of a panel docked on the right), just under the goods; where that gap is too narrow, and on a
+ * phone, just under the whole top bar. (Under the top bar they could land in the middle of the map when the goal, an
+ * event's card and the Domination card stacked up there.)
+ */
+function placeToasts() {
+  const box = $('toasts'), st = box.style;
+  const under = () => { st.left = st.width = st.transform = ''; st.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px'; };
+  if (!isWide()) return under();
+  const goods = Math.max($('goods').getBoundingClientRect().bottom, document.querySelector('.toprow').getBoundingClientRect().bottom);
+  let left = 12;
+  for (const el of document.querySelectorAll('#topbar .objrow, #topbar > .event-card')) {
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height && r.top < goods + 80) left = Math.max(left, r.right + 12);
+  }
+  let right = window.innerWidth - 12;
+  const mm = $('minimap'), sh = $('sheet');
+  if (mm && !mm.hidden) { const r = mm.getBoundingClientRect(); if (r.width) right = Math.min(right, r.left - 12); }
+  if (sh && !sh.hidden) { const r = sh.getBoundingClientRect(); if (r.width && r.top < goods + 200 && r.left > left) right = Math.min(right, r.left - 12); }
+  const w = Math.min(460, right - left);
+  if (w < 320) return under();
+  st.top = Math.round(goods + (document.body.classList.contains('deck') ? 12 : 6)) + 'px';
+  st.left = Math.round(left + (right - left - w) / 2) + 'px'; st.width = Math.round(w) + 'px'; st.transform = 'none';
+}
+
 /** Keep the minimap just under the top bar, and make room for it beside the goal and messages. */
 function placeMinimap() {
   const inGame = UI.inGame;
@@ -3645,7 +3671,7 @@ function placeMinimap() {
   document.body.classList.toggle('mm-on', inGame && MM.on);
   document.body.classList.toggle('mm-off', inGame && !MM.on);
   if (!inGame) return;
-  $('toasts').style.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px';
+  placeToasts();
   // (Under the lower of the goods and the robot counts: on a wide screen they share a row, and the Command Deck's glass bar
   // reaches 6 px past it, so a panel docked on the right starts below the bar, not over its speed and pause buttons.)
   const rowB = Math.max($('goods').getBoundingClientRect().bottom, document.querySelector('.toprow').getBoundingClientRect().bottom);
