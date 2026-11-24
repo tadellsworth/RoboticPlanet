@@ -2190,7 +2190,8 @@ Core batch, wins of 16 (Salvager, Herald, Steward, Architect, Warden):
 - Active: 15, 9, 7, 6, 3 (2 undecided) to 14.5, 8.5, 6, 4, 7 (3; the third, Standard Large Herald against Salvager,
   ends at 77 minutes; it was won at 45.7, the cap is 50). Without the Warden tweak: 14.5, 9.5, 7, 6, 3 (3).
 
-**Still open:** the Salvager with the Murmur on (14 to 15 of 16). The Murmur aren't why: in the Quiet games measured
+**Owner, Nov 24: leave the Salvager as a tough opponent for now** (14 of 16 against the other doctrines in the latest
+batch; the trims tried are listed with the rival AI pass). **Was open:** the Salvager with the Murmur on (14 to 15 of 16). The Murmur aren't why: in the Quiet games measured
 (to 22 minutes) they destroyed no building of either side and one robot or none, and evening out their targets
 changed no Quiet game. What differs is the map: nests hold ground (no rival builds within 6 tiles of one, roads and
 Haulers keep off their guards), and the lean, raiding Salvager loses least by it. Next, if wanted: measure how much
