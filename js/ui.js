@@ -609,7 +609,7 @@ const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
 function modeInfo(mode, n, teams) {
   const m = UI.menu, SH = SHAPE_PRESETS[m.shape || 0], quad = !m.shapeRnd && !!(SH.cross || SH.quad4), onCross = n === 4 || quad;
   const haul = !m.shapeRnd && !!SH.haul4; // (Long Haul 2v2: two colonies side by side at each end)
-  const where = m.shapeRnd ? 'a square planet' : quad || SH.city || SH.dam ? SH.name : 'a square planet';
+  const where = m.shapeRnd ? 'a square planet' : quad || SH.city || SH.dam || SH.std4 ? SH.name : 'a square planet';
   const town = !m.shapeRnd && !!SH.city; // (Passenger Town: four on the edges of a square town, three round a round one)
   const dam = !m.shapeRnd && !!SH.dam; // (The Dam: a colony on each side of the high ground, a reservoir over each valley)
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';

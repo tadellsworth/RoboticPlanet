@@ -1144,7 +1144,7 @@ function generateMap(seed, W, H, cfg) {
   const shapeExtras = () => {
     if (h4) haul4Shape();
     else if (quad) {
-      if (SH.twin || SH.city || SH.walker || SH.dam) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is; the Walking Factory: its yard is; The Dam: damShape)
+      if (SH.twin || SH.city || SH.walker || SH.dam || SH.std4) return; // (Twin Valleys: its spine is laid later, after the turns: see below; Passenger Town: the town is; the Walking Factory: its yard is; The Dam: damShape)
       if (SH.pinwheel) pinwheelShape();
       else if (SH.isles4) isles4Shape();
       else crossShape4();
@@ -2629,9 +2629,9 @@ function mapSizeForPlayers(size, players) {
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
  */
-function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!(sh.city || sh.walker || sh.dam))); }
+function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && ((st.players >= 3 && !!(sh.cross || sh.quad4)) || (st.players === 4 && !!(sh.city || sh.walker || sh.dam || sh.std4))); }
 /** Does map type `sh` turn four ways with `n` colonies (Crossroads and the four-quarter maps; Passenger Town, the Walking Factory and The Dam with four)? */
-function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || ((sh.city || sh.walker || sh.dam) && n === 4))); }
+function quadShape(sh, n) { return !!(sh && (sh.cross || sh.quad4 || ((sh.city || sh.walker || sh.dam || sh.std4) && n === 4))); }
 
 /**
  * Is this Long Haul 2v2: a tall map with two colonies side by side at each end (south-west, south-east, north-east,

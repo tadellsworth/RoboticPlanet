@@ -22,7 +22,9 @@ how goods move.
   standing wins. Standard, Islands, Crater, Plateaus and Sky islands maps (`ffa: true` in `SHAPE_PRESETS`), and The Wheel and
   Three Mesas, which are made for three (`minPlayers: 3`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
-  With four players (Crossroads, Pinwheel, Four Isles or Twin Valleys), **Teams: 2 vs 2** puts the two western colonies
+  Standard also takes four (`players: 4`, `std4`): like Passenger Town, the Walking Factory and The Dam, it turns into a
+  four-quarter map with four (`quadMap`; a colony in each corner, plain Standard terrain, no `crossShape4`), and stays round
+  with three. With four players (Crossroads, Pinwheel, Four Isles, Twin Valleys, Standard and the other maps that take four), **Teams: 2 vs 2** puts the two western colonies
   against the two eastern ones; on **Long Haul 2v2** (made for it: picking it turns Teams on) the two southern colonies
   against the two northern ones (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones and an optional ladder of

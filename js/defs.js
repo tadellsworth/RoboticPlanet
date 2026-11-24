@@ -704,7 +704,8 @@ const MAP_GROUPS = [
   { key: 'heights', name: 'Heights and depths' },
 ];
 const SHAPE_PRESETS = [
-  { name: 'Standard', group: 'open', blurb: 'Open ground with hills, cliffs and resource fields between the bases.', w: 1, h: 1, ffa: true },
+  { name: 'Standard', group: 'open', blurb: 'Open ground with hills, cliffs and resource fields between the bases. Holds up to four: with four, a colony in each corner.', w: 1, h: 1, ffa: true, players: 4, std4: true,
+    quadTip: 'Standard for four: a colony in each corner of open ground, hills, cliffs and resource fields between. Your neighbours are beside you to the north and east; the colony across the middle is the far one.' },
   { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).', w: 0.75, h: 1.7 },
   { name: 'Chokepoint', group: 'divided', blurb: 'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
   { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
