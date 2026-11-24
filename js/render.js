@@ -7380,7 +7380,7 @@ function render(dtReal) {
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
       if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
-      if (e.type === 'city' && e.cCap > 0 && e.cBy >= 0 && R.clean < 2) drawCityTaking(ctx, e, cx, cy, z);
+      if (e.built && (e.mDown || e.mOff) && BDEFS[e.type].mega && R.clean < 2) drawMegaDark(ctx, e, cx, cy, z); // (knocked out: its seize ring; offline: a dark veil)
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built) { const w = z * 0.8 * (def.foot || 1); hpBar(ctx, e.id, e.armor < def.armor - 0.05 ? e.armor / def.armor : 1, cx - w / 2, cy - z * 0.62 * (def.foot || 1), w, Math.max(3, z * 0.08)); }
@@ -11782,16 +11782,38 @@ function cityLedTint(art, col, px) {
   return c;
 }
 
-/** Arrival City being taken (b.cCap of CITY.cap s by b.cBy): a ring round it filling in the taker's colour, and its flag. */
-function drawCityTaking(ctx, b, cx, cy, z) {
-  const k = Math.min(1, b.cCap / CITY.cap), r = z * 2.6, col = PLAYER_COLORS[b.cBy] || '#fff';
+/**
+ * A megastructure knocked out or offline (MEGA): a dark veil over its square (not Arrival City's, whose art goes dark
+ * itself), and while it's knocked out the ring its seizers must stand in (MEGA.reach tiles round its walls, dashed),
+ * filling in the colour of whoever is seizing it (b.mCap of MEGA.cap s by b.mBy), with their flag.
+ */
+function drawMegaDark(ctx, b, cx, cy, z) {
+  const def = BDEFS[b.type], f = def.foot || 1;
   ctx.save();
-  ctx.lineWidth = Math.max(3, z * 0.14); ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = col; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(R.time * 6);
-  ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
-  ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
+  if (!def.city) {
+    ctx.globalAlpha = b.mDown ? 0.42 : 0.26; ctx.fillStyle = '#05070c';
+    ctx.beginPath(); ctx.ellipse(cx, cy, z * f * 0.5, z * f * 0.46, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (b.mDown) {
+    const r = z * (f * 0.5 + MEGA.reach * 0.85);
+    ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.setLineDash([z * 0.3, z * 0.22]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    if (b.mCap > 0 && b.mBy >= 0) {
+      const k = Math.min(1, b.mCap / MEGA.cap), col = PLAYER_COLORS[b.mBy] || '#fff';
+      ctx.lineWidth = Math.max(3, z * 0.14); ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = col; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(R.time * 6);
+      ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
+      ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
+    }
+  } else if (b.mOff) {
+    // (offline: a slow amber blink, its power lamp waiting)
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(R.time * 2.2);
+    ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.arc(cx, cy - z * f * 0.32, Math.max(2, z * 0.09), 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 }
 

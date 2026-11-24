@@ -223,6 +223,11 @@ function atLimit(b) {
 
 function needsOf(b) {
   const def = BDEFS[b.type], out = [];
+  if (b.built && def.mega && (b.mDown || b.mOff)) {
+    // A seized megastructure: what bringing it online still owes (megaCommission); knocked out, nothing.
+    if (b.mOff && b.mNeed) for (const g in b.mNeed) out.push([g, b.mNeed[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
+    return out;
+  }
   if (!b.built) {
     if (storeFunded(b)) return out; // paid straight from storage (settlePlans), never hauled
     const cost = siteCost(b);
@@ -2733,6 +2738,8 @@ function repairCost(b) {
 /** Pay for a building's repair: a free worker comes and restores its armor. '' or why not. */
 function requestRepair(owner, b) {
   if (!b || b.dead || !b.built || b.owner !== owner) return 'Only your finished buildings can be repaired.';
+  if (b.mDown) return `It's knocked out: hold it with armed warbots for ${MEGA.cap} seconds to take it back first.`;
+  if (b.mOff) return b.mNeed ? `Bring it online first: it needs ${costText(b.mNeed)} more.` : 'A Worker is bringing it online.';
   const n = repairCost(b);
   if (!n) return b.fixLeft > 0 ? 'A repair is already on the way.' : 'It isn\'t damaged.';
   if (playerGoods(owner).cement < n) return `Repairing it takes ${n} Cement.`;
@@ -2765,6 +2772,7 @@ function doFix(u, t, dt) {
   if (b.fixLeft <= 0.01 || b.armor >= def.armor - 0.01) {
     b.fixLeft = 0;
     if (b.armor >= def.armor - 0.01) { b.armor = def.armor; if (murmurCutOn(b)) murmurPowerBack(b); } // (repaired: the power the Murmur cut comes back)
+    if (b.mOff && b.mReady) megaOnline(b); // (a seized megastructure, paid for: this Worker brought it online)
     cancelTask(u);
     u.idleT = 0;
     if (isMe(b.owner)) addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7ee08a' });
@@ -4342,6 +4350,7 @@ function updateBuilding(b, dt) {
     }
     return;
   }
+  if (def.mega && (b.mDown || b.mOff)) { megaDarkStep(b, dt); return; } // (knocked out, or seized and not online yet: MEGA)
   repairHint(b);
   if (def.gup) updateGup(b, dt); // (first: cut off or paused, its transmission runs back as without power)
   if (b.cut) { crumble(b, dt); return; }
@@ -6105,8 +6114,19 @@ function hitBuilding(b, dmg, by, src) {
   }
   // A computer rival has its say now and then, after the alert it goes with (see toast: a story line never hides one).
   if (by >= 0 && foes(by, b.owner)) doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240);
-  // Arrival City is never destroyed: knocked to 0 it's down, and taken by warbots at its walls (cityCapture).
-  if (BDEFS[b.type].city && b.built) { if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } return; }
+  // A megastructure beaten to 0 by robots is knocked out, not wrecked (MEGA: megaDown), and seized by those who hold it;
+  // a colony that ordered it wrecked (megaWrecking) shoots it on past 0, MEGA.wreck of its armor more, and it goes.
+  // Arrival City is never destroyed.
+  if (BDEFS[b.type].mega && b.built) {
+    if (b.armor > 0) return;
+    const wreck = megaWrecking(b, by) && !BDEFS[b.type].city;
+    if (!b.mDown && !wreck) { b.armor = 0; megaDown(b, by); return; }
+    b.armor = 0;
+    if (!wreck) return;
+    b.mWr = (b.mWr || 0) + Math.max(0, dmg);
+    if (!b.mDown || b.mWr >= BDEFS[b.type].armor * MEGA.wreck) captureBuilding(b, by);
+    return;
+  }
   // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
   if (b.armor < 1 && S.mission && b.type === 'lander' && typeof captureLocked === 'function' && captureLocked(b, by)) b.armor = 1;
   if (b.armor <= 0) captureBuilding(b, by);
@@ -6174,6 +6194,7 @@ function captureBuilding(b, by) {
     computeTerritory();
   } else {
     if (def.explodes) burnLiquids(b); // a Refinery's Crude and Fuel go up with it
+    if (def.mega) for (const g in def.cost || {}) bump(b.stock, g, Math.floor(def.cost[g] * MEGA.salvage)); // (a wrecked megastructure: part of what it was built of, in crates)
     const n = dropLoot(b);
     postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out in crates: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
     postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' What was inside spilled out in crates: your haulers collect them once the enemy has gone, unless the raiders carry them off first.' : ''), b.x, b.y, 'lost');
@@ -7717,6 +7738,11 @@ function overGap(a, b) {
 /** Walk up to an enemy building and hit it. Returns null if it can't be reached (or can't be hurt: on a Trade Post's ground). */
 function strikeBuilding(u, b, dt, power) {
   if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
+  // A knocked-out megastructure: no shooting it (unless ordered wrecked), it is held: they stand by its walls (megaSeize).
+  if (b.mDown && megaHeldBy(b, u.owner)) {
+    if (footDist(b, u.x, u.y) <= MEGA.reach - 0.6) { u.path = null; u.vel = 0; return true; }
+    return travel(u, b.x, b.y, dt);
+  }
   const bt = BOTS[u.type], reach = armyBldReach(u); // (a Bulwark goes in closest, in front of its group)
   const covered = firingCover(u, b.x + 0.5, b.y + 0.5, reach, dt);
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
@@ -10712,7 +10738,7 @@ function releaseScore(b) {
  * Returns { cost: the materials left, crates: every crate left, inside: those that were inside it }.
  */
 function demolish(b) {
-  if (b.dead || b.type === 'lander' || (BDEFS[b.type].city && b.built)) return null; // (Arrival City can't be taken down: only captured)
+  if (b.dead || b.type === 'lander' || (BDEFS[b.type].city && b.built) || b.mDown) return null; // (Arrival City can't be taken down: only captured; nor a knocked-out megastructure, by its old owner)
   // A building on the move: dismantling either end calls the move off (the old one stays as it was; the new site cost nothing).
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; b.gone = 1; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
   if (b.moving) cancelMove(b);
@@ -12078,7 +12104,7 @@ function naniteRepair() {
     if (!P.tech || !P.tech.nanites) continue;
     for (const u of S.bots) if (!u.dead && u.owner === P.id && u.hp < u.maxHp && S.time - (u.hurtT ?? -99) > 12) u.hp = Math.min(u.maxHp, u.hp + 0.3);
     for (const b of S.buildings) {
-      if (b.dead || b.owner !== P.id || !b.built || b.fixLeft > 0 || b.cut) continue;
+      if (b.dead || b.owner !== P.id || !b.built || b.fixLeft > 0 || b.cut || b.mDown || b.mOff) continue;
       const max = BDEFS[b.type].armor;
       if (b.armor < max && S.time - (b.lastHit ?? -99) > 15) b.armor = Math.min(max, b.armor + 0.25);
     }
@@ -19994,7 +20020,8 @@ function hashState() {
     if (BDEFS[b.type].sunder) { int(b.id); int(b.sOn || 0); num(b.sCharge || 0); num(b.sReload || 0); int(b.sAim ? b.sAim[0] : -1); int(b.sAim ? b.sAim[1] : -1); str(b.sMode); str(b.sSrc); int(b.sReactor || 0); num(b.sTime || 0); int(b.sUseR ? 1 : 0); int(b.sLure || 0); }
     if (b.crack || b.sQuiet) { int(b.id); int(b.crack || 0); int(b.sQuiet || 0); } // (a Quake's cracked foundations; a nest a Strike the Deep shook)
     if (BDEFS[b.type].dome) { int(b.id); num(b.dStr); num(b.dHit); num(b.dDown || 0); num(b.dCry || 0); int(b.dUp || 0); num(b.dWarm || 0); }
-    if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cCap || 0); int(b.cBy ?? -1); num(b.cFuel || 0); int(b.cDry || 0); }
+    if (BDEFS[b.type].city) { int(b.id); int(b.owner); int(b.cDown || 0); num(b.cFuel || 0); int(b.cDry || 0); }
+    if (BDEFS[b.type].mega && (b.mDown || b.mOff || b.mWreck)) { int(b.id); int(b.owner); int(b.mDown || 0); num(b.mCap || 0); int(b.mBy ?? -1); int(b.mOff || 0); obj(b.mNeed); int(b.mReady || 0); int(b.mWreck || 0); num(b.mWr || 0); } // (knocked out, seized: MEGA)
     if (BDEFS[b.type].gup) { int(b.id); num(b.gU || 0); str(b.gSrc); int(b.gOn || 0); num(b.gT || 0); int(b.gBy ?? -1); int(b.gJam || 0); int(b.gWarn || 0); int(b.gPow || 0); num(b.gBest || 0); }
     if (BDEFS[b.type].deepcore) { int(b.id); num(b.dcT || 0); int(b.dcStage || 0); obj(b.dcAcc); str(b.dcSrc); num(b.dcFuel || 0); int(b.dcGen || 0); num(b.dcGenT || 0); int(b.dcCall || 0); int(b.dcCallN || 0); int(b.dcWarn || 0); int(b.dcHeldN || 0); }
     if (BDEFS[b.type].atmos) { int(b.id); num(b.aeT || 0); int(b.aeStage || 0); num(b.aeP || 0); str(b.aeSrc); num(b.aeFuel || 0); for (const g of b.aeGens || []) int(g); num(b.aeGenT || 0); num(b.aeU || 0); int(b.aeUr || 0); num(b.aeWith || 0); num(b.aeSeed || 0); int(b.aeCall || 0); int(b.aeCallN || 0); int(b.aeWarn || 0); int(b.aeStorm ? b.aeStorm[0] : -1); int(b.aeStorm ? b.aeStorm[1] : -1); num(b.aeStormT ?? -1); num(b.aeBolt || 0); int(b.aeBoltN || 0); }
@@ -20330,6 +20357,7 @@ function lanceTime(b) {
 /** Why Lance b can't start a charge now ('' if it can). */
 function lanceBlocked(b) {
   if (!b || b.dead || !b.built) return 'The Lance is not built yet.';
+  if (megaDark(b)) return b.mDown ? 'It is knocked out.' : 'It is offline: bring it online first.';
   if (b.lReload > 0) return `Reloading: it can charge again in ${fmtSecs(b.lReload)}.`;
   if (!lancePower(b)) return `No power: it needs ${LANCE.gens} Generators with Fuel within ${LANCE.reach} tiles, or a Nuclear Reactor there with ${LANCE.uranium} Uranium (or an Enriched Uranium) in it.`;
   return '';
@@ -20674,8 +20702,8 @@ function domeHit(d, kind, x, y, by) {
 }
 
 /*
- * Arrival City (CITY; BDEFS.city). b.cDown: knocked down to 0 (no bonus, dark, capturable) until repaired to CITY.back of
- * its armor; b.cCap: how long foes' armed warbots have stood at its walls unopposed, b.cBy whose (-1 none); b.cFuel: s
+ * Arrival City (CITY; BDEFS.city). b.cDown: dark while knocked out or seized and not yet online (megaDown, MEGA: no
+ * bonus, its windows dark); b.cFuel: s
  * of light left in the Fuel it's burning at night, b.cDry: dark at night for want of Fuel (the bonus halves). It is
  * `working` while lit at night (the Murmur see it, as they see a Generator).
  */
@@ -20716,16 +20744,11 @@ function cityLand() {
   return out;
 }
 
-/** Arrival City b, each tick: its lights and their Fuel at night, coming back once repaired, and being taken. */
+/** Arrival City b, each tick: its lights and their Fuel at night. (Knocked out or seized and offline, see megaDarkStep.) */
 function updateCity(b, dt) {
-  const def = BDEFS[b.type], night = cityNight();
-  if (b.cDown && b.armor >= def.armor * CITY.back) {
-    b.cDown = 0;
-    postMsg(b.owner, 'Arrival City is repaired: its lights are back on, and the robots near it work harder again.', b.x, b.y, 'good');
-    if (isMe(b.owner)) sfx('citychime', b.x + 2, b.y + 2);
-  }
+  const night = cityNight();
   b.working = false;
-  if (!night || b.cDown) { b.cDry = 0; b.cFuel = b.cDown ? 0 : b.cFuel || 0; }
+  if (!night) { b.cDry = 0; }
   else {
     // At night its lights burn a Fuel a minute; out of Fuel it goes dark.
     b.cFuel = (b.cFuel || 0) - dt;
@@ -20740,76 +20763,187 @@ function updateCity(b, dt) {
     }
     b.working = !b.cDry;
   }
-  cityCapture(b, dt);
   const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
-  b.status = b.cDown
-    ? (b.cCap > 0 && b.cBy >= 0 ? `Down, and being taken by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left` : `Down: no bonus and no lights until it's repaired to ${Math.round(CITY.back * 100)}% (send Workers with Cement)`)
-    : b.cDry ? `Dark: no Fuel for its lights, so its robots work only ${pct}% faster tonight`
+  b.status = b.cDry ? `Dark: no Fuel for its lights, so its robots work only ${pct}% faster tonight`
     : `Lit${night ? '' : ' at dusk'}: your work within ${CITY.reach} tiles goes ${pct}% faster`;
 }
 
-/**
- * Is Arrival City b being taken? While it's down, armed warbots of one side (a colony and its team) within
- * CITY.capReach tiles of its walls, with none of its owner's side there, count up to CITY.cap s, and it's theirs. Any of
- * its owner's side there, or two rival sides at once, and the count runs back.
- */
-function cityCapture(b, dt) {
-  if (!b.cDown || b.owner < 0) { b.cCap = 0; b.cBy = -1; return; }
-  let by = -1, held = false, two = false;
-  for (const u of S.bots) {
-    if (u.dead || u.inside || !isArmy(u) || BOTS[u.type].wild || aloft(u) || !botArmed(u) || footDist(b, u.x, u.y) > CITY.capReach) continue;
-    if (!foes(u.owner, b.owner)) { held = true; break; }
-    if (by < 0) by = u.owner; else if (by !== u.owner && foes(by, u.owner)) two = true;
-  }
-  if (held || two || by < 0) {
-    b.cCap = Math.max(0, (b.cCap || 0) - dt);
-    if (!b.cCap) b.cBy = -1;
-    return;
-  }
-  if (b.cBy !== by) {
-    if (!(b.cBy >= 0)) { postMsg(b.owner, `Enemy warbots are at the walls of Arrival City: drive them off within ${CITY.cap} seconds or it's theirs!`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
-    b.cBy = by; b.cCap = 0;
-  }
-  b.cCap += dt;
-  if (b.cCap >= CITY.cap) cityTaken(b, by);
-}
-
-/** Arrival City b falls to `by`: its land, its bonus and its double Domination count change sides. */
-function cityTaken(b, by) {
-  const old = b.owner;
-  noteLost(b, by);
-  releaseBotsFrom(b, false);
-  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
-  b.fixLeft = 0; b.fixer = 0; b.inc = {};
-  b.owner = by; b.cCap = 0; b.cBy = -1; b.lastHit = S.time; b.cut = 0;
-  const P = S.players[by];
-  if (P) P.stats.cities = (P.stats.cities || 0) + 1;
-  logEvent({ t: S.time, k: 'city', p: by, q: old });
-  computeTerritory();
-  S.roadVer = (S.roadVer || 0) + 1;
-  markDirty(b.x, b.y);
-  const c = bCentre(b);
-  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[by], r: 3 });
-  postMsg(by, 'Your warbots took Arrival City! Its land is yours. Repair it (Workers, Cement) and its lights and its bonus come back for you.', b.x, b.y, 'good');
-  postMsg(old, `${playerName(by, true)} took Arrival City: its land and its bonus are theirs now. Knock it down and stand at its walls to take it back.`, b.x, b.y, 'lost');
-  if (isMe(by)) sfx('citychime', c.x, c.y);
-  else if (isMe(old)) sfx('alert');
-}
-
-/** Arrival City b was knocked down to 0 (by `by`, -1 if no one in particular): its bonus stops and it goes dark. */
+/** Arrival City b was knocked down to 0 (by `by`, -1 if no one in particular): it is knocked out (megaDown). */
 function cityDown(b, by) {
   if (!b || b.dead || !BDEFS[b.type].city) return;
   b.armor = Math.max(0, b.armor);
-  if (b.cDown) return;
-  b.cDown = 1; b.cDry = 0; b.cCap = 0; b.cBy = -1; b.working = false;
+  megaDown(b, by);
+}
+
+/* ------------------------------------------------------------------ megastructures: knocked out, seized, brought back online */
+
+/*
+ * See MEGA (defs.js). b.mDown: knocked out (b.owner is its old owner's, on paper only); b.mCap: s on its seize clock,
+ * b.mBy: whose (-1 none); b.mOff: seized and still offline; b.mNeed: the goods still owed to bring it online ({good: n},
+ * null once paid); b.mReady: paid, waiting for a Worker (its fixLeft; doFix brings it online); b.mWreck: the colonies
+ * (a bit each) that ordered it wrecked; b.mWr: damage taken past 0 by them. Arrival City also keeps b.cDown while dark.
+ */
+
+/** Is megastructure b dark (knocked out, or seized and not online yet)? Nothing of it works for anyone. */
+function megaDark(b) { return !!(b && (b.mDown || b.mOff)); }
+/** Has colony p ordered megastructure b wrecked (ORDERS.megaWreck)? */
+function megaWrecking(b, p) { return p >= 0 && !!(((b.mWreck || 0) >> p) & 1); }
+/** Do robots of colony p stand by downed megastructure b to seize it, not shoot it (knocked out, and not ordered wrecked)? */
+function megaHeldBy(b, p) { return !!(b && b.built && b.mDown && BDEFS[b.type].mega && !(megaWrecking(b, p) && !BDEFS[b.type].city)); }
+/** The goods bringing a seized megastructure of `type` online costs: MEGA.fee of its build cost, each rounded up. */
+function megaFee(type) { const c = BDEFS[type].cost || {}, out = {}; for (const g in c) out[g] = Math.ceil(c[g] * MEGA.fee); return out; }
+
+/**
+ * Megastructure b's charge, whatever it was gathering, starts again (knocked out or seized): the Lance's and the Ray's
+ * charge and aim, the Uplink's transmission, the Lift's climber and its restock list, the Dome's warm-up, the Deep
+ * Core's and the Engine's Fuel and part-made goods, the Engine's storm. What it has built up (a Deep Core's depth, an
+ * Engine's stage and circle) stays.
+ */
+function megaReset(b) {
+  const def = BDEFS[b.type];
+  b.working = false;
+  if (def.lance) { lanceStop(b); b.lAim = null; }
+  if (def.sunder) { sunderStop(b); b.sAim = null; }
+  if (def.gup) { if (b.gOn) gupStop(b); b.gOn = 0; b.gT = 0; b.gJam = 0; b.gWarn = 0; b.gU = 0; b.gSrc = ''; b.gPow = 0; }
+  if (def.dome) { b.dUp = 0; b.dCry = 0; delete b.dWarm; }
+  if (def.lift) { b.lfMove = 0; b.lfT = 0; b.lfPaid = 0; b.lfLoad = ''; b.lfMul = 0; b.lfBoost = 0; b.lfSend = null; b.lfFeed = 0; b.lfWarn = 0; }
+  if (def.deepcore) { b.dcAcc = {}; b.dcFuel = 0; b.dcGen = 0; b.dcGenT = 0; b.dcSrc = ''; }
+  if (def.atmos) { atmosStormOff(b); b.aeFuel = 0; b.aeGens = []; b.aeGenT = 0; b.aeU = 0; b.aeUr = 0; b.aeWith = 0; b.aeSeed = 0; b.aeBolt = 0; b.aeSrc = ''; }
+  if (def.city) { b.cFuel = 0; b.cDry = 0; }
+}
+
+/** Megastructure b was beaten to 0 by `by` (-1: no one in particular): it is knocked out (b.mDown), dark and open to seizing. */
+function megaDown(b, by) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].mega || b.mDown) return;
+  const def = BDEFS[b.type];
+  b.armor = 0; b.mDown = 1; b.mOff = 0; b.mNeed = null; b.mReady = 0; b.mCap = 0; b.mBy = -1; b.mWr = 0;
+  b.fixLeft = 0; b.fixer = 0; b.paused = false;
+  if (def.city) b.cDown = 1;
+  megaReset(b);
   b.lastHit = S.time;
   markDirty(b.x, b.y);
-  const c = bCentre(b);
-  addFx('smoke', c.x, c.y, { r: 1.6 });
+  const c = bCentre(b), name = def.name;
+  addFx('smoke', c.x, c.y, { r: (def.foot || 2) * 0.45 });
   sfx('boom', c.x, c.y);
-  postMsg(b.owner, `Arrival City is down: its lights are out and its bonus has stopped. Repair it to ${Math.round(CITY.back * 100)}%, and keep enemy warbots off its walls: standing there ${CITY.cap} seconds, they take it.`, b.x, b.y, 'lost');
-  if (by >= 0 && foes(by, b.owner)) postMsg(by, `Arrival City is down! Hold its walls with armed warbots for ${CITY.cap} seconds to take it.`, b.x, b.y, 'good');
-  logEvent({ t: S.time, k: 'cityDown', p: b.owner, q: by });
+  postMsg(b.owner, `Your ${name} is knocked out: dark, and no use to you. Hold it with armed warbots for ${MEGA.cap} seconds, with none of theirs near, to take it back.`, b.x, b.y, 'lost');
+  if (by >= 0 && foes(by, b.owner)) postMsg(by, `The enemy ${name} is knocked out! Hold it with armed warbots for ${MEGA.cap} seconds to seize it.`, b.x, b.y, 'good');
+  if (isMe(b.owner)) sfx('alert');
+  logEvent({ t: S.time, k: def.city ? 'cityDown' : 'megaDown', p: b.owner, q: by, b: b.type });
+}
+
+/**
+ * Downed megastructure b's seize clock, each tick: armed robots of one side within MEGA.reach of its walls and no foe's
+ * armed robots that close fill it; a foe's there too, it stops; no one, it runs back. Full, b is theirs (megaSeized).
+ */
+function megaSeize(b, dt) {
+  let by = -1, two = false;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !(u.owner >= 0) || isWild(u.owner) || !isArmy(u) || BOTS[u.type].wild || aloft(u) || !botArmed(u) || footDist(b, u.x, u.y) > MEGA.reach) continue;
+    if (by < 0) by = u.owner; else if (by !== u.owner && foes(by, u.owner)) { two = true; break; }
+  }
+  if (two) return; // (contested: the clock stops)
+  if (by < 0) { b.mCap = Math.max(0, (b.mCap || 0) - dt * MEGA.decay); if (!b.mCap) b.mBy = -1; return; }
+  if (!(b.mBy >= 0) || foes(b.mBy, by)) {
+    // (a new side at it: the clock is theirs, from nothing; its owner hears of it)
+    b.mBy = by; b.mCap = 0;
+    if (foes(by, b.owner)) { postMsg(b.owner, `${playerName(by, true)}'s warbots are seizing your ${BDEFS[b.type].name}: drive them off within ${MEGA.cap} seconds or it's theirs!`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
+  }
+  b.mCap = (b.mCap || 0) + dt;
+  if (b.mCap >= MEGA.cap) megaSeized(b, by);
+}
+
+/** Downed megastructure b falls to `by` (its old owner too, retaking it): theirs, offline, at MEGA.armor, owing MEGA.fee of its cost. */
+function megaSeized(b, by) {
+  const def = BDEFS[b.type], old = b.owner, name = def.name;
+  if (by !== old) noteLost(b, by);
+  releaseBotsFrom(b, false);
+  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  b.fixLeft = 0; b.fixer = 0; b.inc = {}; b.cut = 0; b.tgt = 0;
+  b.owner = by; b.mDown = 0; b.mCap = 0; b.mBy = -1; b.mWr = 0; b.mWreck = 0;
+  b.mOff = 1; b.mNeed = megaFee(b.type); b.mReady = 0;
+  if (def.city) b.cDown = 1;
+  megaReset(b);
+  b.armor = Math.max(b.armor, Math.round(def.armor * MEGA.armor));
+  b.lastHit = S.time;
+  const P = S.players[by];
+  if (P && by !== old) { P.stats.captured++; P.stats.megaSeized = (P.stats.megaSeized || 0) + 1; if (def.city) P.stats.cities = (P.stats.cities || 0) + 1; }
+  logEvent({ t: S.time, k: def.city ? 'city' : 'megaTaken', p: by, q: old, b: b.type });
+  computeTerritory();
+  S.roadVer = (S.roadVer || 0) + 1;
+  markDirty(b.x, b.y);
+  const c = bCentre(b), fee = costText(b.mNeed);
+  addFx('ring', c.x, c.y, { color: PLAYER_COLORS[by], r: (def.foot || 2) * 0.8 });
+  sfx('capture');
+  if (by === old) postMsg(by, `Your warbots took the ${name} back. It's offline: bring it online with ${fee} (Haulers carry it there), then a Worker.`, b.x, b.y, 'good');
+  else {
+    postMsg(by, `Your warbots seized ${playerName(old, true)}'s ${name}! It's yours, offline: bring it online with ${fee} (Haulers carry it there), then a Worker.`, b.x, b.y, 'good');
+    postMsg(old, `${playerName(by, true)} seized your ${name}. Knock it out and hold it to take it back.`, b.x, b.y, 'lost');
+    if (isMe(old)) sfx('alert');
+  }
+}
+
+/** Seized megastructure b, offline: what's in it goes toward what it owes; paid, a Worker comes to bring it online. */
+function megaCommission(b) {
+  const def = BDEFS[b.type];
+  if (b.mNeed) {
+    let left = 0;
+    for (const g in b.mNeed) {
+      const n = Math.min(b.mNeed[g], Math.floor(b.stock[g] || 0));
+      if (n > 0) { bump(b.stock, g, -n); usedGood(b.owner, g, n); b.mNeed[g] -= n; }
+      if (b.mNeed[g] > 0) left += b.mNeed[g]; else delete b.mNeed[g];
+    }
+    if (left > 0) { b.status = `Offline: bring it online with ${costText(b.mNeed)} more (Haulers carry it here), then a Worker`; return; }
+    b.mNeed = null;
+  }
+  if (!b.mReady) {
+    b.mReady = 1;
+    // A Worker's job: mending it up to MEGA.online of its armor (at least a few seconds' work), and it's online.
+    b.fixLeft = Math.min(def.armor - b.armor, Math.max(FIX_RATE * 5, def.armor * MEGA.online - b.armor));
+    if (b.fixLeft < 0.5) { megaOnline(b); return; }
+  }
+  if (!(b.fixLeft > 0)) { megaOnline(b); return; } // (its Worker is done: see doFix)
+  b.status = b.fixer ? 'Offline: a Worker is bringing it online' : 'Offline: paid for, waiting for a free Worker to bring it online';
+}
+
+/** Seized megastructure b is online for its owner: it works again (its charge starts from nothing). */
+function megaOnline(b) {
+  const def = BDEFS[b.type];
+  b.mOff = 0; b.mNeed = null; b.mReady = 0; b.fixLeft = 0;
+  if (def.city) b.cDown = 0;
+  if (def.dome) b.dWarm = S.time + DOME.warm;
+  markDirty(b.x, b.y);
+  const c = bCentre(b);
+  addFx('ring', c.x, c.y, { color: '#7ee08a', r: (def.foot || 2) * 0.8 });
+  postMsg(b.owner, `The ${def.name} is back online, and yours.`, b.x, b.y, 'good');
+  if (isMe(b.owner)) sfx(def.city ? 'citychime' : 'capture', c.x, c.y);
+  logEvent({ t: S.time, k: 'megaOn', p: b.owner, b: b.type });
+}
+
+/** A dark megastructure, each tick (instead of its work): its seize clock while knocked out; seized, its way back online. */
+function megaDarkStep(b, dt) {
+  b.working = false;
+  if (BDEFS[b.type].dome) b.dUp = 0;
+  if (b.mDown) {
+    b.armor = 0;
+    megaSeize(b, dt);
+    if (b.dead || !b.mDown) return;
+    b.status = b.mCap > 0 && b.mBy >= 0 ? `Knocked out, being seized by ${playerName(b.mBy)}: ${fmtSecs(MEGA.cap - b.mCap)} left`
+      : `Knocked out: dark, and no use to anyone. Armed warbots holding it ${MEGA.cap} seconds, with none of a foe's near, seize it`;
+    return;
+  }
+  megaCommission(b);
+}
+
+/**
+ * Order (ORDERS.megaWreck): colony p's robots wreck enemy megastructure b (on), shooting it on past 0, or go back to
+ * seizing it (off). Not Arrival City (it is never destroyed). '' or why not.
+ */
+function megaWreckOrder(p, b, on) {
+  if (!b || b.dead || !b.built || !BDEFS[b.type].mega) return 'That megastructure is gone.';
+  if (BDEFS[b.type].city) return 'Arrival City can\'t be wrecked: knock it out and hold it to take it.';
+  if (!foes(p, b.owner)) return 'Only an enemy megastructure can be wrecked.';
+  if (on) b.mWreck = (b.mWreck || 0) | (1 << p); else b.mWreck = (b.mWreck || 0) & ~(1 << p);
+  return '';
 }
 
 /* ------------------------------------------------------------------ the Orbital Lift */
@@ -20846,6 +20980,7 @@ function liftDropOf(load, mul) {
 function liftCallWhy(b, load) {
   if (!b || b.dead || !BDEFS[b.type].lift) return 'That Orbital Lift is gone.';
   if (!b.built) return 'The Orbital Lift is still going up.';
+  if (megaDark(b)) return b.mDown ? 'It is knocked out.' : 'It is offline: bring it online first.';
   if (!ownKey(LIFT.drops, load)) return 'Pick a load: a Security detail, a Work crew, Alloy or Chips.';
   if (b.lfMove === 1) return 'A climber is already on its way down.';
   if (b.lfMove === 2) return 'The climber is on its way up to the Carrier: call it once it is back.';
@@ -21585,6 +21720,7 @@ function gupJammer(b) {
 /** Why Great Uplink b can't begin a transmission now ('' if it can). */
 function gupBlocked(b) {
   if (!b || b.dead || !b.built || !BDEFS[b.type].gup) return 'The Great Uplink is not built yet.';
+  if (megaDark(b)) return b.mDown ? 'It is knocked out.' : 'It is offline: bring it online first.';
   if (b.gOn) return 'It is transmitting already.';
   if (!gupWinOn()) return 'The Great Uplink win is off in this game.';
   if (S.endless || S.winner >= 0) return 'This game is already won: nothing more is won by contact.';
@@ -21725,6 +21861,7 @@ function sunderDeepOn() { return wildOn() && murmurLevel() !== 'off'; }
 /** Why Ray b can't start a wind-up now ('' if it can). */
 function sunderBlocked(b) {
   if (!b || b.dead || !b.built) return 'The Sundering Ray is not built yet.';
+  if (megaDark(b)) return b.mDown ? 'It is knocked out.' : 'It is offline: bring it online first.';
   if (b.sReload > 0) return `Reloading: it can wind up again in ${fmtSecs(b.sReload)}.`;
   if (!sunderPower(b)) return `No power: it needs ${SUNDER.gens} Generators with Fuel within ${SUNDER.reach} tiles, or a Nuclear Reactor there with ${SUNDER.uranium} Uranium (or an Enriched Uranium) in it.`;
   return '';
@@ -22575,7 +22712,7 @@ function atmosHolds() {
   for (const b of S.buildings) {
     if (b.dead || !b.built || !BDEFS[b.type].atmos || !b.aeStage) continue;
     const c = bCentre(b), r = atmosReach(b);
-    if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id, p: b.owner, on: !!b.working });
+    if (r > 0) list.push({ x: c.x, y: c.y, r, st: b.aeStage, id: b.id, p: megaDark(b) ? -1 : b.owner, on: !!b.working }); // (a knocked-out or offline one's circle is no one's)
     if (atmosStormOn(b)) storms.push({ x: b.aeStorm[0] + 0.5, y: b.aeStorm[1] + 0.5, r: STORM.r, p: b.owner, st: b.aeStage, id: b.id });
   }
   for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0, p: f.p ?? -1, on: false }); }
@@ -22657,6 +22794,7 @@ function stormWork(s) { return stormOverB(s) ? STORM.build : 1; }
 function atmosStormBlocked(b, i, j) {
   if (!b || b.dead || !BDEFS[b.type].atmos) return 'That Atmosphere Engine is gone.';
   if (!b.built) return 'The Atmosphere Engine isn\'t finished yet.';
+  if (megaDark(b)) return b.mDown ? 'It is knocked out.' : 'It is offline: bring it online first.';
   if ((b.aeStage || 1) < 2) return `The Storm Front comes with stage 2, Rain: ${fmtSecs(Math.max(1, Math.ceil(ATMOS.stages[1] - (b.aeT || 0))))} more of power.`;
   if (!b.aeSrc) return `It has no power: ${ATMOS.gens} Generators with Fuel within ${ATMOS.reach} tiles, or a Nuclear Reactor.`;
   if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Pick a spot on the map.';
@@ -22754,13 +22892,13 @@ function stormBolt(b) {
 }
 
 /**
- * Is the sky over player p's Command Base its own: no foe's Atmosphere Engine standing (built or going up), or p's own
+ * Is the sky over player p's Command Base its own: no foe's Atmosphere Engine standing (built or going up, and not knocked out or offline: MEGA), or p's own
  * (or an ally's) Engine's circle over it, where no storm can be? (Overcast's goals.)
  */
 function stormBrokenFor(p) {
   const L = S.players[p] ? getE(S.players[p].lander) : null;
   if (!L || L.dead) return false;
-  if (!S.buildings.some((e) => !e.dead && BDEFS[e.type].atmos && e.owner >= 0 && foes(e.owner, p))) return true;
+  if (!S.buildings.some((e) => !e.dead && BDEFS[e.type].atmos && e.owner >= 0 && foes(e.owner, p) && !megaDark(e))) return true; // (knocked out or offline: no storm)
   const c = bCentre(L);
   return S.buildings.some((e) => !e.dead && e.built && BDEFS[e.type].atmos && !foes(e.owner, p)) && atmosOwnAt(c.x, c.y, p);
 }

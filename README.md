@@ -524,7 +524,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Lance of Corvane | 40 Cement, 30 Alloy, 15 Chips, 10 Crystal, 3 × 3 tiles, one per colony (Megastructures): aimed at any spot, it charges 90 s (45 s on a Reactor, `LANCE.reactorCharge`; reload 4 min, 3 on a Reactor, `reactorReload`) and fires a beam across the whole map: a 2-tile core (`LANCE.width`) that destroys everything it touches, and a 1-tile scorched edge either side (`LANCE.edge`) that takes half the armor or health (`edgeDmg`) of what's there and destroys nothing; needs 2 Generators with Fuel or a Reactor within 4 tiles (see Megastructures below); with both, the Generators unless Use Reactor is on (`b.lUseR`, the order `lanceReactor`; a rival switches it on once it has chosen the Lance over the nukes); the charge's source and length are kept (`b.lSrc`, `b.lTime`; an older save's charge takes 90 s) |
 | Sundering Ray | 50 Cement, 30 Alloy, 12 Chips, 8 Crystal, 3 × 3 tiles, armor 90, one per colony (Megastructures), from 18 minutes in, everywhere (on Argos a Quake weapon only): winds up 60 s (40 on a Reactor; reload 5 min, 4) on 2 Generators with Fuel within 4 tiles or a Reactor with 1 Uranium a blow, then a ripple through the ground: Strike the Deep (anywhere, with the Murmur on) caves in every tunnel in a 16-tile circle, seals its exits for 2 nights, takes a third off its nests and stops their next raid; a Quake (within 30 tiles) takes 40% of full armor off every building in a 5-tile circle (never below 10%; a Command Base or Keep 20%), cracks their foundations (half speed until repaired), roads, track and Walls, stuns robots; a Shield Dome doesn't stop it; the Murmur come for it the next night (see Megastructures below) |
 | Shield Dome | 30 Cement, 24 Alloy, 12 Chips, 20 Crystal, 2 × 2 tiles, one per colony (Megastructures): a dome 9 tiles round it that stops Missiles, nukes, bombs, shells, Ringfall, canisters and a Lance shot from outside; 100 strength; a Crystal every 20 s and a Generator within 4 tiles; can be turned off (30 s to come back up) |
-| Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked down to 0, then captured by warbots at its walls for 20 s); a Fuel a minute at night for its lights (see Megastructures below) |
+| Arrival City | 60 Cement, 30 Alloy, 15 Chips, 24 Fiber, 4 × 4 tiles, one per colony (Megastructures), from 12 minutes in, not on Argos: +20% work for factories, gatherers and builders within 8 tiles; holds 6 tiles of land that count twice in Domination; never destroyed (knocked out at 0, then seized by warbots at its walls for 40 s, as any megastructure: see Megastructures below); a Fuel a minute at night for its lights (see Megastructures below) |
 | Great Uplink | 50 Cement, 40 Alloy, 30 Chips, 24 Crystal, 3 × 3 tiles, armor 120, one per colony, only with the Great Uplink win on (and Megastructures), not in Colony or the Hollow: Begin transmission from 25 minutes in, with 3 Generators with Fuel within 4 tiles (a Fuel every 30 s each while it transmits), or a Nuclear Reactor and 1 Generator (a Uranium every 4 minutes); Stand down loses the transmission; 8 minutes of transmission make contact and win the game for its colony and team; an enemy warbot within 3 tiles jams it, and jammed or unpowered its clock runs back at half speed (see Megastructures below) |
 | Deep Core | 60 Cement, 40 Alloy, 20 Chips, 10 Crystal, 3 × 3 tiles, armor 100, one per colony (Megastructures), from 20 minutes in: a winding tower over a shaft that goes deeper while it has power (a Generator within 4 tiles, a Fuel a minute, or a Reactor, no Uranium): 6 Ore a minute; after 6 minutes 8 Ore and 3 Crystal; 10 minutes later 10 Ore, 4 Crystal and a Uranium every 4 minutes; never runs dry; 30 of each in its hoppers for Haulers; the Murmur raid it the night after each stage, and its open shaft is their exit once it's destroyed (see Megastructures below) |
 | Atmosphere Engine | 50 Cement, 40 Alloy, 24 Chips, 30 Crystal, 20 Fiber, 4 × 4 tiles, armor 100, one per colony (Megastructures), from 20 minutes in, not on Argos or in the Hollow: a cooling-tower shell venting a plume that changes the land round it while it has power (2 Generators within 4 tiles, a Fuel a minute from each, or a Reactor, a Uranium every 6 minutes): Calm at once (8 tiles, no dust storm), Rain after 6 minutes (12 tiles, the ground fertile, the Bloom held), Green 10 minutes later (16 tiles, crops a quarter faster, the Bloom withering), Garden 12 minutes after that (20 tiles, groves, no Bloom, no Murmur exit). The land changes for everyone in its circle, but the calm and the faster crops are its owner's (and allies'); from Rain enemy robots in it wade through mud at half speed, and while it has power enemy Torches can't burn there. From Rain its **Storm Front** (panel, F): a 5-tile storm set anywhere clear of its own circle and of other Engines' (moved a minute after), while it has power: enemy robots 60% speed, sites 60%, guns 75% reach under it; from Green their crops stop and wither after 3 minutes; at the Garden lightning on one of their buildings about once a minute (15% armor, never below 30%). No storm in any Engine's circle; it ends when its Engine falls. The Murmur go for it first; Sappers the night after each stage. Destroyed, the land stays changed; its hold fades over 10 minutes |
@@ -2891,12 +2891,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     **Never destroyed**: `captureOnly` takes it in with a `missileFloor` of 0, and every way a building is wrecked holds
     it at 0 instead and calls `cityDown` (`hitBuilding`, `missileImpact` and its splash, `rocketHit`, `bombHit`,
     `nukeImpact`, `lanceFire`; `destroyBuilding` by force as a backstop; `demolish` and the order refuse it; not on a
-    fault line that will open, `footPlace`). **Down** (`b.cDown`): no boost, dark, the damaged art; repaired to `back`
-    (25%) of its armor it's up again. **Taken** (`cityCapture`): while down, armed warbots of one side within `capReach`
-    (2.5) tiles of its walls (`footDist`), none of its owner's side there, count `b.cCap` up to `cap` (20) s for `b.cBy`
-    (contested or empty, it runs back), then `cityTaken`: owner, land, boost and Domination count change sides
-    (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, count, taker,
-    Fuel and dark. Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): four prefab panel blocks
+    fault line that will open, `footPlace`). **Knocked out** (`b.cDown` while dark): seized like any megastructure (see
+    **Seizing megastructures** below), with no Wreck it; taken, its land, boost and Domination count change sides
+    (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, Fuel and dark
+    (the seize state with every megastructure's). Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): four prefab panel blocks
     of raw concrete round a square (lawns, deer, a fountain, the Arrival clock on a stele ringed like Ithaca I, an empty
     tram at its stop, WELCOME HOME on the north roof): `city@T`, `city-down@T` (every time of day: dark broken windows,
     cracked and fallen panels, a corner blown out, the C fallen) and four light layers `city-lit-0..3` that
@@ -3148,6 +3146,38 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `sunderthud` at every stroke of its rams (heard by everyone, in time with them), `sunderfire`, `sunderquake`.
     Flavor: "Piling rig for the arrival district’s foundations. Something under the district keeps time with it."
     Mission: First Contact's *Something Keeps Time*.
+  - **Seizing megastructures** (`MEGA` in `js/defs.js`; the owner's call, Nov 24 2026). Robots that beat one to 0
+    (`hitBuilding`: shots, Torches, Arc Casters, Railgunners) don't wreck it: `megaDown` knocks it out (`b.mDown`, armor
+    held at 0, its owner kept on paper). Dark (`megaDark`: knocked out, or seized and offline), `updateBuilding` runs
+    `megaDarkStep` instead of its work, `ownB` refuses its owner's orders (aim, call, transmit, pause, dismantle, repair),
+    the start checks refuse too (`lanceBlocked`, `sunderBlocked`, `gupBlocked`, `liftCallWhy`, `atmosStormBlocked`, for
+    the rivals' direct calls), `requestRepair`, `demolish` and Nanite Repair skip it, a Dome is down, an Engine's circle is
+    no one's (`atmosHolds`: `p` -1) and Overcast's storm counts as broken (`stormBrokenFor`). `megaReset` loses what it was
+    gathering (the Lance's and Ray's charge and aim, the Uplink's transmission, the Lift's climber, boost and restock list,
+    the Dome's warm-up and Crystal burning, the Deep Core's Fuel and part-made goods, the Engine's Fuel, Uranium, wither and
+    seed clocks and its storm, the City's Fuel) and keeps what it built up (`dcT`/`dcStage`, `aeT`/`aeStage`/`aeP`, the
+    Lift's reserve and reload). **Seize clock** (`megaSeize`): armed army robots of one side (not aloft, not inside) within
+    `reach` (3) tiles of its walls (`footDist`) and none of a foe's fill `b.mCap` toward `cap` (40) s for `b.mBy`; contested,
+    it stops; empty, it runs back `decay` times as fast; a new side starts from 0 (its owner is told). Robots sent to attack
+    it stop shooting and stand within reach (`strikeBuilding`: `megaHeldBy`), so an attack or a flag on it holds it.
+    **Seized** (`megaSeized`; its old owner too, retaking it): owner, `noteLost`, `P.stats.captured` and `megaSeized`
+    (`cities` for a City), `logEvent` `megaTaken` (`city` for a City), territory and roads redone; offline (`b.mOff`) at
+    `armor` (25%) of its armor owing `b.mNeed` = `fee` (a quarter) of its build cost (`megaFee`, rounded up). `needsOf`
+    asks Haulers for it; `megaCommission` takes what reaches its stock off the bill; paid (`b.mReady`) it sets `fixLeft` to
+    mend it to `online` (50%) of its armor (at least 5 s of work), dispatch's repair step sends a Worker, and `doFix`
+    finishing calls `megaOnline` (a Dome warms up again; `logEvent` `megaOn`). **Wreck it** (ORDERS.`megaWreck`,
+    `megaWreckOrder`: `b.mWreck`, a bit per colony; not Arrival City): that colony's robots knock it out and shoot on,
+    `wreck` (half) of its armor more in `b.mWr`, then `captureBuilding` destroys it, adding `salvage` (a quarter) of its
+    build cost to what spills in crates (`dropLoot`). Missiles, nukes, bombs, napalm, Howitzer shells, fuel blasts and the
+    Lance's shot destroy one as before (a City: knocked out). The panel (`megaParts` in `js/ui.js`): Knocked out (who is
+    seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Wreck it** / **Seize it
+    instead** (`sh-mwreck`, key W); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
+    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's offline. The rivals
+    (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
+    armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
+    8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
+    seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. Bringing one online is
+    its Haulers' work, as its goods allow. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or

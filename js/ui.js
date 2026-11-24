@@ -2607,6 +2607,7 @@ const SHEET_KEYS = {
   'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
   'sh-board': ['e', 'The Walking Factory: Send warbots aboard'],
   'sh-damwreck': ['w', 'The Dam: Wreck the dam'],
+  'sh-mwreck': ['w', 'Megastructure: Wreck it, or seize it'],
   'sh-damstop': ['w', 'The Dam: Stop wrecking'],
   'sh-dammend': ['u', 'The Dam: Shore it up'],
   'sh-focus': ['t', 'Aim a defence at an enemy'],
@@ -8151,7 +8152,7 @@ function flavorLine(k) { return FLAVOR[k] && k !== 'lander' ? `<p class="flavor"
 
 function openBuildingSheet(b) {
   const def = BDEFS[b.type];
-  const mine = b.owner === ME;
+  const mine = b.owner === ME && !megaDark(b); // (a megastructure knocked out or offline: nothing to command, see megaParts)
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
   let desc = !mine && b.type === 'lander' ? (nColonies() > 2 ? `${playerName(b.owner)}'s fortified headquarters. Capture it and everything ${playerName(b.owner)} built is yours.` : `${playerName(b.owner)}'s fortified headquarters. Capture it to win.`) : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && isDoctrine(S.players[b.owner].style) && S.players[b.owner].style;
@@ -8322,12 +8323,13 @@ function openBuildingSheet(b) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
       <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
       <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
+      ${def.mega && !def.city && b.built ? '<div class="section-label">Seize or wreck</div><button class="btn" id="sh-mwreck"></button><p class="hint" id="sh-mwreck-hint"></p>' : ''}
       <div class="section-label">Missile strike</div><div id="sh-missile"></div>
       <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><div class="actions"><button class="btn big" id="sh-bomb">Bomb it</button><button class="btn big" id="sh-napalm">Napalm</button></div>' : ''}`;
   }
   html += flavorLine(b.type);
   openSheet('bld', b.id, html);
-  UI.sheetMine = mine;
+  UI.sheetMine = mine; UI.sheetDark = megaDark(b);
   if (mine) {
     // (each setting is an order: refreshSheet once it's done)
     const set = (name, ...args) => { act(name, [b.id, ...args], () => refreshSheet()); sfx('click'); };
@@ -8484,6 +8486,14 @@ function openBuildingSheet(b) {
       else sfx('error');
     });
     if ($('sh-napalm')) $('sh-napalm').onclick = () => napalmFromPanel(b.x, b.y, `the ground round the ${def.name}`);
+    if ($('sh-mwreck')) $('sh-mwreck').onclick = () => {
+      const on = !megaWrecking(b, ME);
+      act('megaWreck', [b.id, on], (why) => {
+        if (why) { sfx('error'); toast(why, 'warn'); return; }
+        sfx('click'); toast(on ? `Your warbots will wreck the ${def.name}: they shoot it on past 0 until it's destroyed.` : `Your warbots will seize the ${def.name}: knocked out, they hold it ${MEGA.cap} s and it's yours.`, 'info');
+        refreshSheet();
+      });
+    };
     if ($('sh-bomb')) $('sh-bomb').onclick = () => {
       const u = readyBomber(b);
       if (!u) { sfx('error'); toast('No Vulcan Bomber is ready that can reach it.', 'warn'); return; }
@@ -8496,11 +8506,27 @@ function openBuildingSheet(b) {
   refreshSheet();
 }
 
+/**
+ * A megastructure's state on its panel (MEGA): knocked out (its seize clock, and who's at it), or seized and offline
+ * (Bring it online: what it still needs, then a Worker).
+ */
+function megaParts(b, parts) {
+  if (b.mDown) {
+    const own = b.owner === ME, bar = b.mCap > 0 && b.mBy >= 0
+      ? `<div class="kv"><span>Being seized</span><span>by ${b.mBy === ME ? 'you' : playerName(b.mBy)}: ${fmtSecs(MEGA.cap - b.mCap)} left</span></div><div class="bar"><div style="width:${Math.round((b.mCap / MEGA.cap) * 100)}%;background:${PLAYER_COLORS[b.mBy]}"></div></div>` : '';
+    parts.push(`<div class="kv"><span>Knocked out</span><span><b class="err">Dark</b>, no use to anyone; ${own ? 'your Workers can\'t repair it' : 'its owner can\'t repair it'}</span></div>`);
+    parts.push(`<div class="kv"><span>Seize it</span><span>Armed warbots within ${MEGA.reach} tiles for ${MEGA.cap} s, none of a foe's near${own ? ' (Army → Hold ground beside it)' : ''}</span></div>${bar}`);
+  } else if (b.mOff) {
+    const need = b.mNeed ? Object.keys(b.mNeed).map((g) => goodTag(g, b.mNeed[g], true)).join(' ') : '';
+    parts.push(`<div class="kv"><span>Bring it online</span><span>${b.mNeed ? 'Needs a quarter of its cost, still to come (below: your Haulers carry it here), then a Worker' : b.fixer ? 'Paid: a Worker is bringing it online' : 'Paid: waiting for a free Worker to bring it online'}</span></div>${need ? `<div class="goodlist">${need}</div>` : ''}`);
+  }
+}
+
 /** The building sheet's repair control: a Repair button (with its Cement cost) when it's damaged. */
 function refreshFix(b) {
   const el = $('sh-fix'), def = BDEFS[b.type];
   let key, html = '';
-  if (!b.built || b.armor >= def.armor - 0.05) { key = 'ok'; }
+  if (!b.built || b.armor >= def.armor - 0.05 || b.mDown || (b.mOff && !b.mReady)) { key = 'ok'; } // (a megastructure knocked out, or seized and not paid for: see megaParts)
   else if (b.fixLeft > 0) {
     const w = getE(b.fixer);
     key = 'fixing' + (w && w.task && w.task.phase === 'work' ? 'w' : 'g') + Math.ceil(b.fixLeft);
@@ -8591,6 +8617,7 @@ function refreshBuildingSheet(b) {
   } else {
     parts.push(`<div class="kv"><span>Armor</span><span>${Math.ceil(Math.max(0, b.armor))} / ${def.armor}</span></div>
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
+    if (def.mega) megaParts(b, parts);
     if (mine && stormOverB(b)) parts.push(`<div class="kv"><span>Storm</span><span><b class="err">Under a rival's storm front</b>: robots slow, sites go up slower, guns reach less. Destroy its Atmosphere Engine, or build your own: its circle is calm</span></div>`);
     if (mine && def.staff) {
       const op = getE(b.staff);
@@ -8806,13 +8833,8 @@ function refreshBuildingSheet(b) {
     if (def.city && b.built) {
       const m = bCentre(b), mineNear = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && e !== b && (BDEFS[e.type].staff || BDEFS[e.type].inp) && dist2(e.x + 0.5, e.y + 0.5, m.x, m.y) <= CITY.reach * CITY.reach).length;
       const pct = Math.round(CITY.boost * 100 * (b.cDry ? CITY.dark : 1));
-      parts.push(`<div class="kv"><span>Arrival drive</span><span>${b.cDown ? '<b>Off</b>: it is down' : `+${pct}% work`} within ${CITY.reach} tiles: ${mineNear} building${mineNear === 1 ? '' : 's'} of ${b.owner === ME ? 'yours' : 'theirs'}, and Workers building there</span></div>`);
+      parts.push(`<div class="kv"><span>Arrival drive</span><span>${b.cDown ? `<b>Off</b>: it is ${b.mDown ? 'knocked out' : 'offline'}` : `+${pct}% work`} within ${CITY.reach} tiles: ${mineNear} building${mineNear === 1 ? '' : 's'} of ${b.owner === ME ? 'yours' : 'theirs'}, and Workers building there</span></div>`);
       parts.push(`<div class="kv"><span>Land</span><span>${CITY.land} tiles round its middle; it counts twice for Domination</span></div>`);
-      if (b.cDown) {
-        parts.push(`<div class="kv"><span>Down</span><span>Repair it to ${Math.round(CITY.back * 100)}% (${Math.ceil(BDEFS.city.armor * CITY.back)} armor) to bring it back</span></div>`);
-        if (b.cCap > 0 && b.cBy >= 0) parts.push(`<div class="kv"><span>Being taken</span><span>by ${playerName(b.cBy)}: ${fmtSecs(CITY.cap - b.cCap)} left</span></div><div class="bar"><div style="width:${Math.round((b.cCap / CITY.cap) * 100)}%;background:${PLAYER_COLORS[b.cBy]}"></div></div>`);
-        else parts.push(`<div class="kv"><span>Capture</span><span>Armed warbots of another colony at its walls for ${CITY.cap} s, with none of its owner's there, take it</span></div>`);
-      }
       if (mine) parts.push(`<div class="kv"><span>Lights</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))} (a Fuel a minute at night)${b.cDry ? ': <b>dark</b>, its bonus halved' : ''}</span></div>`);
     }
     if (def.nukeSilo && mine) {
@@ -9052,6 +9074,13 @@ function refreshBuildingSheet(b) {
     $('sh-attack').innerHTML = avail
       ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps its Keep at home).</p>`
       : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Command Base within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
+  }
+  if ($('sh-mwreck')) {
+    const w = megaWrecking(b, ME);
+    $('sh-mwreck').textContent = w ? 'Seize it instead' : 'Wreck it';
+    $('sh-mwreck').classList.toggle('danger', !w);
+    $('sh-mwreck-hint').textContent = w ? `Ordered wrecked: your warbots shoot it on past 0 until it's destroyed, and part of its goods spill out in crates.`
+      : `Beaten to 0 by your warbots it is knocked out, not wrecked: hold it ${MEGA.cap} s and it's yours, then bring it online for a quarter of its cost. Wreck it to destroy it instead.`;
   }
 }
 
@@ -9969,7 +9998,7 @@ function refreshSheet() {
     const b = getE(UI.sheetFor);
     if (!b || b.dead) { closeSheet(); return; }
     // Captured (or won back) while its panel was open: the panel is built again for its new owner.
-    if ((b.owner === ME) !== UI.sheetMine) { openBuildingSheet(b); return; }
+    if ((b.owner === ME && !megaDark(b)) !== UI.sheetMine || megaDark(b) !== UI.sheetDark) { openBuildingSheet(b); return; } // (or a megastructure knocked out, seized, back online: MEGA)
     refreshBuildingSheet(b);
     if (isWide()) foldLong($('sheet-body'));
   } else if (UI.sheetKind === 'bot') {

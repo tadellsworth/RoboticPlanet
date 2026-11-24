@@ -1156,12 +1156,25 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * Outpost does (a military claim), and in Domination every tile of that ring counts twice (cityLand). Its lights burn a
  * Fuel every `fuel` s at night only (Tankers bring it, `fuelCap` at most); out of Fuel at night it goes dark and its
  * boost falls to `dark` of itself. It can never be destroyed: whatever hits it (warbots, Missiles, bombs, shells, a nuke,
- * a Lance shot) knocks it down to 0 at most, and then it is down (b.cDown): its bonus stops, its windows go dark, and
- * armed warbots of another colony within `capReach` tiles of its walls, with none of its owner's side there, take it
- * after `cap` s (b.cCap; it changes hands, land, bonus and all). Repaired to `back` of its armor it is up again.
- * Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
+ * a Lance shot) knocks it down to 0 at most, and then it is knocked out like any megastructure (MEGA, b.mDown; b.cDown
+ * while it's dark): its bonus stops and its windows go dark, and whoever holds it takes it (land, bonus and all). It
+ * has no Wreck it. Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
  */
-const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5, cap: 20, capReach: 2.5, back: 0.25 };
+const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5 };
+/*
+ * Seizing megastructures (the owner's call, Nov 24 2026). Robots that beat a megastructure to 0 armor don't wreck it:
+ * it is knocked out (b.mDown): dark, its charge lost, no use to anyone, its owner's on paper only (b.owner kept), and its
+ * owner's Workers can't repair it. Armed robots of one side (a colony and its team) within `reach` tiles of its walls,
+ * with no foe's armed robots that close, fill its seize clock (b.mCap of `cap` s, b.mBy whose); contested, the clock
+ * stops; left alone, it runs back `decay` times as fast. Full, it's theirs (its old owner retakes it the same way). Seized
+ * it stands at `armor` of its armor, switched off (b.mOff): its new owner's Haulers bring `fee` of its build cost
+ * (b.mNeed, what's still owed), then a Worker brings it online, mending it up to `online` of its armor. Anything it was
+ * charging starts again; its stage (a Deep Core's depth, an Engine's stage) is kept. A colony that orders an enemy one
+ * wrecked (Wreck it on its panel, ORDERS.megaWreck: b.mWreck, a bit per colony) shoots it on past 0: `wreck` of its
+ * armor more and it is destroyed, `salvage` of its build cost spilling out in crates with what was inside. Missiles,
+ * nukes, bombs, napalm, Howitzer shells and the Lance's shot destroy one as before (Arrival City: never destroyed).
+ */
+const MEGA = { cap: 40, reach: 3, decay: 1, armor: 0.25, fee: 0.25, online: 0.5, wreck: 0.5, salvage: 0.25 };
 /*
  * The Orbital Lift (BDEFS.lift; the owner's look A, the Beacon Cable, Nov 2026): a 3 x 3 anchor pad with a cable up to
  * its colony's Carrier in orbit. As it is placed, R turns its fall line (b.lfDir, one of 8 directions: LIFT_DIRS): a

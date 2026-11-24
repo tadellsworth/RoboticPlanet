@@ -400,6 +400,7 @@ function aiThink(p) {
   if (S.town) aiTown(p, lander); // (Passenger Town: buildings to strip)
   if (S.walker) aiWalker(p, lvl); // (the Walking Factory: board it, hold it)
   if (S.dam) aiDam(p, lander); // (The Dam: guard its own, break a foe's)
+  aiMegaHold(p, lander); // (a knocked-out megastructure: seize a foe's, take its own back)
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
   // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
@@ -1384,7 +1385,7 @@ function aiThink(p) {
   }
   // Recall a march after it has had time to reach the flag and fight. (Storms use aiStorm.)
   const march = P.march && rallyById(P.march);
-  if (march && !(P.stormOn && P.stormOn.id === P.march) && S.time - (P.lastMarch || 0) > aiMarchTime(lander, march, 150)) {
+  if (march && !(P.stormOn && P.stormOn.id === P.march) && S.time - (P.lastMarch || 0) > aiMarchTime(lander, march, 150) + (aiSeizing(p, march) ? AI_SEIZE.stay : 0)) {
     recallRally(march.id); P.march = 0;
   }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
@@ -3643,6 +3644,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
       if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
       else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j) || (BDEFS[tgt.type].city || BDEFS[tgt.type].lift || BDEFS[tgt.type].gup || BDEFS[tgt.type].deepcore ? tgt.id : 0); // (at the gun covering the flag first: see holdRally; at Arrival City, then the City)
+      if (BDEFS[tgt.type].lift) megaWreckOrder(p, tgt, true); // (a Lift it marches on for its fall: wrecked, not seized; any other megastructure it seizes)
       (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
       P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
       return true;
@@ -5090,6 +5092,58 @@ function aiWalker(p, lvl) {
  *    to stand at it (again every two minutes while it stands and none of its band is left), and with a ready Silo in
  *    range it fires a Missile at it (one every DAM.ai.missile seconds at most). Once it bursts, the band comes home.
  */
+/*
+ * Knocked-out megastructures (MEGA): a rival holds a foe's it can reach to seize it, and goes back for its own to take
+ * it back, with a band under a flag by its walls (P.megaHold: { rid, id, t }), called home once it's taken or after
+ * AI_SEIZE.stay s. Bringing one online is its Haulers' work (needsOf), as far as its goods go.
+ */
+const AI_SEIZE = { every: 5, stay: 180, reach: 45, own: 4, foe: 6 };
+/** Is a band of rival p's seizing a knocked-out megastructure near flag r (its clock theirs)? */
+function aiSeizing(p, r) { return S.buildings.some((b) => !b.dead && b.mDown && b.mBy === p && dist2(bCentre(b).x, bCentre(b).y, r.x, r.y) <= 100); }
+/** A free tile by megastructure b's walls (within MEGA.reach) that rival p's robots can walk to, nearest its base; -1 if none. */
+function aiMegaHoldSpot(p, b, lander) {
+  const z = S.zone[tIdx(lander.x, lander.y)], f = BDEFS[b.type].foot || 1, R = Math.floor(MEGA.reach);
+  let best = -1, bd = Infinity;
+  for (let j = b.y - R; j < b.y + f + R; j++) for (let i = b.x - R; i < b.x + f + R; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!walkable(t) || S.bAt[t] || S.zone[t] !== z || footDist(b, i + 0.5, j + 0.5) > MEGA.reach - 0.6) continue;
+    const d = dist2(i, j, lander.x, lander.y);
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+function aiMegaHold(p, lander) {
+  const P = S.players[p];
+  if (S.time < (P.megaHoldT || 0)) return;
+  P.megaHoldT = S.time + AI_SEIZE.every;
+  const H = P.megaHold;
+  if (H) {
+    const b = getE(H.id), r = rallyById(H.rid);
+    if (r && b && !b.dead && b.mDown && S.time - H.t < AI_SEIZE.stay) return; // (holding it)
+    if (r) recallRally(H.rid);
+    P.megaHold = null;
+    return;
+  }
+  let tgt = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || !b.mDown || !BDEFS[b.type].mega || (b.owner !== p && !foes(b.owner, p)) || b.mBy === p) continue;
+    const c = bCentre(b), d = dist2(c.x, c.y, lander.x, lander.y);
+    if (b.owner !== p && (d > AI_SEIZE.reach * AI_SEIZE.reach || megaWrecking(b, p))) continue;
+    if (d < bd) { bd = d; tgt = b; }
+  }
+  if (!tgt) return;
+  const t = aiMegaHoldSpot(p, tgt, lander);
+  if (t < 0) return;
+  const c = bCentre(tgt);
+  let near = 0;
+  for (const u of S.bots) if (!u.dead && !u.inside && u.owner >= 0 && foes(u.owner, p) && !isWild(u.owner) && isArmy(u) && botArmed(u) && dist2(u.x, u.y, c.x, c.y) <= 64) near++;
+  const avail = aiSpare(p, { x: t % S.W, y: (t / S.W) | 0 }, 'flag').n, need = Math.max(tgt.owner === p ? AI_SEIZE.own : AI_SEIZE.foe, near * 2 + 2);
+  if (avail < need) return;
+  const r = sendToRally(p, t % S.W, (t / S.W) | 0, Math.min(avail, need + 4), true, false, true);
+  if (r && r.sent && r.rally) { if (tgt.owner !== p) r.rally.first = tgt.id; P.megaHold = { rid: r.rally.id, id: tgt.id, t: S.time }; }
+}
+
 function aiDamSpot(p, d, lander) {
   const z = S.zone[tIdx(lander.x, lander.y)];
   let best = -1, bd = Infinity;

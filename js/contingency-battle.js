@@ -223,7 +223,7 @@ function contBattleOver(withdrew) {
   const wp = C.sides.indexOf(winner);
   const survivors = wp >= 0 ? S.bots.filter((u) => !u.dead && u.owner === wp && BOTS[u.type] && BOTS[u.type].war).length : 0;
   // a megastructure the winner finished (one not built for it at the start), and the defences standing
-  const megas = wp >= 0 ? S.buildings.filter((x) => !x.dead && x.built && x.owner === wp && BDEFS[x.type].mega && x.type !== C.mega0) : [];
+  const megas = wp >= 0 ? S.buildings.filter((x) => !x.dead && x.built && !x.mDown && x.owner === wp && BDEFS[x.type].mega && x.type !== C.mega0) : [];
   const mega = megas.length ? Object.keys(CONT_MEGA_TYPE).find((k) => CONT_MEGA_TYPE[k] === megas[0].type) : null;
   const holder = run.t[b.at].owner === winner || winner === CONT_MURMUR ? (C.def >= 0 ? C.def : -1) : wp;
   let forts;

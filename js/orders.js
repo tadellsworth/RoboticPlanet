@@ -8,8 +8,8 @@
  * game function behind it gives back (the screens tell the player how it went).
  */
 
-/** Building `id` if it's player p's (and still there), else null. */
-function ownB(p, id) { const e = getE(id); return e && !e.dead && e.owner === p && BDEFS[e.type] && S.buildings.includes(e) ? e : null; }
+/** Building `id` if it's player p's (and still there), else null. A megastructure knocked out or offline (MEGA) is no one's to command. */
+function ownB(p, id) { const e = getE(id); return e && !e.dead && e.owner === p && BDEFS[e.type] && S.buildings.includes(e) && !(e.mDown || e.mOff) ? e : null; }
 /** Robot (or vehicle) `id` if it's player p's (and still there, and of a kind with BOTS[type][flag], if flag), else null. */
 function ownU(p, id, flag) { const e = getE(id); return e && !e.dead && e.owner === p && BOTS[e.type] && S.bots.includes(e) && (!flag || BOTS[e.type][flag]) ? e : null; }
 /** The ids in `ids` that are player p's robots. */
@@ -535,6 +535,8 @@ const ORDERS = {
   townStrip(p, id, on) { return S.town && !isWild(p) ? townStrip(p, id | 0, !!on) : 'No town here.'; },
   /** The Dam: order dam k (its index) wrecked or shored up (what: 'wreck' or 'mend'), or call it off. '' or why not. */
   damOrder(p, k, what, on) { return S.dam && !isWild(p) ? damOrder(p, k | 0, String(what), !!on) : 'No dam here.'; },
+  /** Wreck it: player p's robots shoot enemy megastructure `id` on past 0 until it's destroyed (on), or hold it to seize it (off). '' or why not. */
+  megaWreck(p, id, on) { const b = liveB(id); return b && !isWild(p) ? megaWreckOrder(p, b, !!on) : 'That megastructure is gone.'; },
   undoSite(p, id) {
     const b = ownB(p, id);
     if (!b) return { why: 'That site is gone.' };

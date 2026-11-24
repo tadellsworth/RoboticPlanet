@@ -454,6 +454,17 @@ teaches it. The calls made in building it, open for the owner:
   daily streak) and per-Mission fastest clears, later a Versus ranking; (3) optional accounts (passkey or an email link,
   no passwords) that also carry cloud saves between devices. Plan for a name filter and a way to hide names, a short
   privacy note (only ID, name and scores until accounts), and Cloudflare's free tier covering it.
+- **Seizing megastructures: BUILT (Nov 24 2026)** (the owner's call; README, "Seizing megastructures"; How to play,
+  Megastructures; the Overcast mission's new goal). Robots that beat one to 0 knock it out; held 40 s it's seized; seized,
+  a quarter of its cost and a Worker bring it online; Wreck it destroys it instead. Open questions:
+  - **Contingency:** taking a territory still wrecks its megastructure on the globe (CONTINGENCY.md, rule 7). Should one
+    seized in the battle carry over to the winner instead (and one only knocked out, stay with the territory)?
+  - **Numbers to watch:** 40 s to seize, 3 tiles, a quarter of the cost, back online at half armor. Arrival City's clock
+    went from 20 s to 40 s with it, and its owner can no longer just repair it back up: is the City now too easy to hold?
+  - **Art:** a knocked-out look for the seven that have none (only Arrival City and the Lift have damaged art): the dark
+    veil and the amber offline lamp are drawn in code for now.
+  - **The rivals** seize what they knock out, take their own back and wreck only a Lift they march on for its fall.
+    Should a Raider (Salvager) wreck rather than seize, for the crates?
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
   **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
