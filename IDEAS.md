@@ -2046,6 +2046,44 @@ warbots: those games end at 44 and 37 minutes, won by the same side. The other l
 colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands a well dug-in rival can
 still hold out to the clock against a leader landing band after band (see Island maps, above).
 
+### Late-game Ore, Maglev raids and the Salvager (Nov 24 2026)
+
+Measured headless, Normal, the seats' doctrines as named (P0 a Steward unless said).
+- **Ore starvation, fixed.** Standard Large for four, Flat and Scarce (seed 2): the last two colonies sat at 0 Ore
+  from 40 minutes on and P0 won at 63. Not an empty map: both had untouched Ore in their own land (P0 35 to 37,32,
+  P3 46 to 47,36), and 15 to 20 deposits lay out on open ground. Arrival City and the Deep Core, saved up for as long
+  as they take, held both of a rival's usual two sites from 20 minutes on, so no Mine (nor anything else) was built
+  again. Now a megastructure's site doesn't count against the usual limit (`megaSites`, `aiSiteCount`), and from 15
+  minutes Ore running dry (`P.oreLow`: under 4 in stock, no Mine working 3 deposits) starves for a Mine (first, past the
+  limit, no spare worker needed, a lone deposit too), sends Outposts toward free Ore when its land has none
+  (`AI_ORE_REACH`) and has its Terminal buy Ore or Alloy. A lost Smelter, Chip Fab or Bot Foundry is put back the same
+  way. The repro ends at 24.3 (P3); from the 28-minute save, at 51.7 instead of 63. Two- and three-player Scarce
+  games (Standard Medium 3, Large 2; three on Large 2 and 5) and four on Large 7 never stalled (11 to 19 minutes, the
+  same after). Spread (Standard 2p seeds 1 to 3, 3p 1 and 2, 4p 1 and 3, Crossroads 4p 1 and 2, Long haul 1 and 2, the
+  Hollow 25): 20.3 → 21.6 minutes on average, none undecided; the Hollow 25 (default ground) went 17 → 34.9 (both
+  colonies were down to one or two warbots at 16 minutes and the game turned on the first rebuild), the rest within
+  four minutes either way.
+- **Starving from the start was tried:** the same rule with no 15-minute gate made every game longer (doctrine pairs
+  without the Salvager 18.5 → 22.5 minutes, two past 40) and turned the Salvager from 14 to 7 of 16 (its raids live off
+  rivals that don't put their Mines back). Not shipped: the owner's doctrine balance stands; worth a look as a way to
+  the parity goal.
+- **The Hollow, Small, seed 25 at 75+ minutes** happens on Flat and Scarce ground (the default ground ends at 17 to
+  35): both colonies work out their Ore and oil by 30 to 45 minutes, the Active Murmur wreck their Smelters, Chip Fabs
+  and Foundries, and with no army left their Workers and Haulers stay in cover, so sites never fill. With the rules
+  above it ends at 56.8 (it ran past 90). Still open there: a Deep Core finished with no Fuel left in the Hollow (oil
+  is its only Fuel) gives nothing; a rival might keep one oil seep for its Generator.
+- **Maglev raids** (`aiMagCut`): every other raid at most once in five minutes, Medium and up, a band goes for a running
+  line's Terminal or pylon out of guns' reach and clear of manned forts. Rivals rarely build a line (only the Architect,
+  and in 50 minutes on Standard Large seed 5 it built none), so it was checked with a line handed to the rival (Standard
+  Large 11 and 23, Medium rivals): the band goes for the far Terminal once or twice a game, and so far is met there by
+  the defender's answer to a raid on its land and called home (it outnumbers the band). Room to tune: a pylon in the
+  middle of a long line, not the Terminal by an Outpost.
+- **The Salvager is clearly strong:** Standard Medium 11 and 23, seats swapped, against each of the four others (16
+  games): 14 wins (only the Herald beat it, twice), 16.8 minutes on average. No single knob moves it into 6 to 10:
+  raids 2 a gap (12), one warbot kept home (13), both (12), army 1.0 (13), Skirmishers per 4 up to 3 (14), no bonus for
+  attacking working buildings (14). Left as it is (the owner's call of Nov 21); what does move it is its rivals putting
+  their Mines back early (above).
+
 ## Balance audit, Nov 22 2026 (after the megastructures, the Harrow and the bolder Murmur)
 
 Measured headless (the full report: the audit folder's REPORT.md): 40-game doctrine batches (all 10 pairs × Standard
