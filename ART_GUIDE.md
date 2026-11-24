@@ -195,7 +195,11 @@ command deck seen in the dark: glass readouts over the planet.
   a plain status ("none queued") is quiet grey.
 - **Panels and screens fit the screen.** On a computer a long panel goes wider and lays out in two columns (three on a
   very wide screen); Missions, Statistics and the end of a game spread across the width rather than down it. Lists are
-  compact: one line a row, small controls side by side (still 44 px tall to click or tap). Phones keep one column.
+  compact: one line a row, small controls side by side (44 px tall to tap; under a mouse on a computer, 30 to 34 px).
+  A panel's name line stays pinned at the top while the rest scrolls, its main buttons (Pause, Move, Dismantle) at
+  the bottom, both on the solid panel colour with a hairline; a long description or hint shows two lines and a small
+  coral **More**. Build's All is one wide panel of compact two-line cards (icon 28 px, name, then cost and how many
+  you have) in columns under the tab names; Missions and Keys flow down four or five columns. Phones keep one column.
 - **Where it lives.** The Contingency block of `style.css` (`#screen-contingency`, `.cg-*`), and the markup in
   `index.html` (`#screen-contingency`) and `js/contingency-ui.js`; in game, the "Command Deck in game" block at the end of
   `style.css` (all under `body.deck`, which `index.html` sets) and the few lines of markup README.md lists.

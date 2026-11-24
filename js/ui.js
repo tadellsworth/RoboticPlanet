@@ -7676,12 +7676,49 @@ function openSheet(kind, id, html) {
   $('sheet').hidden = false;
   document.body.classList.add('sheet-open');
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
+  if (kind !== 'build') document.body.classList.remove('sheet-build-all'); // (its All tab: wider still on a desktop)
   document.body.dataset.sheet = kind; // (the Command Deck look lights the tool whose panel is open)
   $('banner').hidden = true;
   markSheetKeys();
   sheetEyebrow(kind, id);
   panelHelp(kind, id); // (its ? for How to play: js/polish.js)
+  pinSheet(kind);
   if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); sheetColsOff(); requestAnimationFrame(sheetCols); setTimeout(sheetCols, 300); }
+}
+
+/**
+ * A panel on a desktop: its name line (label, name, ?) stays at the top while the rest scrolls under it, and its main
+ * buttons stay at the bottom (a building's Pause, Move and Dismantle; an Army group's commands): both sticky (style.css).
+ * The name line is lifted out of the .sheet-flow (so it isn't one of the columns) and the button row put after it; ids,
+ * classes and data attributes stay as they are, and on a phone the order on screen is as before. A long paragraph
+ * (a description or a hint) shows its first lines, with More for the rest.
+ */
+function pinSheet(kind) {
+  const body = $('sheet-body'), flow = body.firstElementChild;
+  if (!flow || !flow.classList.contains('sheet-flow')) return;
+  const head = flow.querySelector(':scope > .sheet-title');
+  if (head) body.insertBefore(head, flow);
+  if (!isWide()) return;
+  const foot = kind === 'bld' ? [...flow.children].reverse().find((el) => el.classList.contains('actions') && el.querySelector('#sh-demolish, #sh-move, #sh-pause, #sh-pack, #sh-gate'))
+    : kind === 'agroup' && $('ag-resume') ? $('ag-resume').parentElement : null;
+  if (foot && foot.parentElement === flow) { foot.classList.add('sheet-foot'); body.appendChild(foot); }
+  body.style.setProperty('--pin-h', (head ? head.offsetHeight : 0) + 'px');
+  foldLong(flow);
+}
+
+/** Long paragraphs in a desktop panel: two lines and More (Less folds it again; remembered while the game runs). */
+function foldLong(root) {
+  UI.unfolded = UI.unfolded || new Set();
+  for (const p of root.querySelectorAll('p.desc, p.hint')) {
+    if (p.closest('.sheet-foot') || p.textContent.length < 160 || (p.nextElementSibling && p.nextElementSibling.classList.contains('more-btn'))) continue;
+    if (p.offsetHeight < 3.6 * (parseFloat(getComputedStyle(p).lineHeight) || 19)) continue; // (three lines or fewer: folding would save nothing)
+    const key = p.textContent.slice(0, 80), btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'more-btn';
+    const set = (open) => { p.classList.toggle('folded', !open); btn.textContent = open ? 'Less' : 'More'; btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    set(UI.unfolded.has(key));
+    btn.onclick = (e) => { e.stopPropagation(); sfx('click'); const open = p.classList.contains('folded'); if (open) UI.unfolded.add(key); else UI.unfolded.delete(key); set(open); };
+    p.after(btn);
+  }
 }
 
 /**
@@ -7695,7 +7732,7 @@ function sheetCols() {
   if (s.hidden || !isWide() || UI.sheetKind === 'build' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
   const long = body.scrollHeight / Math.max(1, body.clientHeight);
   if (body.scrollHeight - body.clientHeight <= 8) return;
-  const three = long > 2 && innerWidth >= 1800;
+  const three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
   s.classList.add(three ? 'cols3' : 'cols2');
   document.body.classList.add(three ? 'sheet-wide3' : 'sheet-wide');
 }
@@ -7826,7 +7863,7 @@ function closeSheet() {
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
   sheetColsOff();
-  document.body.classList.remove('sheet-open', 'sheet-build');
+  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all');
   delete document.body.dataset.sheet;
   UI.sheetKind = null;
   UI.sheetFor = 0;
@@ -7862,17 +7899,24 @@ function openBuildMenu() {
   const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
   const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}</div>`;
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
+  // The cards in tab order, each tab's under its name (shown on All on a desktop, where All is a wide grid of columns):
+  // Roads and Blueprints lead Move, Walls lead Defend. (Elsewhere the grid's CSS order puts the next step, then Roads,
+  // Blueprints and Walls first, as before.)
+  const card = (t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ` title="${BDEFS[t].name}"`}>
+      ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
+      <div class="bhave">${ownedText(t)}</div></button>`; };
+  const roads = `<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Maglev lines, Viaducts and Ropeways</div></button>${bpOn() ? `<button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>` : ''}`;
+  const walls = warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bhave">${wallCountText()}</div></button>` : '';
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
     ${tabs}
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
-      <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Maglev lines, Viaducts and Ropeways</div></button>${bpOn() ? `<button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>` : ''}${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
-      <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ''}>
-      ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
-      <div class="bhave">${ownedText(t)}</div></button>`; }).join('')}</div>`;
+      <div class="bhave">${ownedText(t)}</div></button>`).join('')}${groups.map((g) => `<div class="b-grp" data-grp="${g.key}" aria-hidden="true"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}</div>`
+      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
@@ -7885,6 +7929,8 @@ function openBuildMenu() {
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
     for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
+    $('sheet-body').querySelector('.build-grid').classList.toggle('all', g === 'all'); // (on a desktop: grouped, in columns: style.css)
+    document.body.classList.toggle('sheet-build-all', g === 'all');
     // On All, a card's key reads "2 K": its tab's number, then its letter.
     for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
   };
@@ -9538,6 +9584,7 @@ function refreshArmySheet() {
   $('ar-tabs').hidden = !air; // (just the Army until there's an Airfield)
   for (const btn of $('ar-tabs').children) btn.classList.toggle('on', btn.dataset.t === UI.armyTab);
   if (UI.armyTab === 'air' && air) refreshAirTab(); else refreshArmyTab();
+  if (isWide()) foldLong($('ar-body'));
   markSheetKeys();
 }
 
@@ -9558,7 +9605,8 @@ function refreshArmyTab() {
   const k = S.players[ME].keepW ?? 0;
   let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${spec.length ? ` (${spec.map(([k, n]) => `${n} ${n > 1 ? BOTS[k].plural : BOTS[k].name}`).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ', Fuel or bolts' : ''}</span>` : ''}</span></div>`;
   if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
-  h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
+  // (The orders in a block of their own: on a desktop it stays in view under the panel's name while the rest scrolls.)
+  h += `<div class="ar-orders"><div class="section-label">Orders <span class="label-note">group size</span></div>
     <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
     <div class="army-cmds">
       <button class="btn primary" id="ar-attack" data-act="cmd" data-c="attack">Attack</button>
@@ -9566,7 +9614,7 @@ function refreshArmyTab() {
       <button class="btn" id="ar-station" data-act="cmd" data-c="station">Station</button>
       <button class="btn${field && recallArmed() ? ' danger' : ''}" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>${field && recallArmed() ? `Tap again: ${field} come home` : 'Recall all'}</button>
       <button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>
-    </div>${spec.length ? `<div class="army-cmds" id="ar-kinds"><span class="label-note">Select only</span>${['warbot', ...spec.map(([k]) => k)].filter((k) => wb.some((u) => u.type === k)).map((k) => `<button class="btn small ghost" id="ar-sel-${k}" data-act="selectkind" data-k="${k}">${BOTS[k].plural}</button>`).join('')}</div>` : ''}
+    </div></div>${spec.length ? `<div class="army-cmds" id="ar-kinds"><span class="label-note">Select only</span>${['warbot', ...spec.map(([k]) => k)].filter((k) => wb.some((u) => u.type === k)).map((k) => `<button class="btn small ghost" id="ar-sel-${k}" data-act="selectkind" data-k="${k}">${BOTS[k].plural}</button>`).join('')}</div>` : ''}
     <p class="hint"><b>Attack</b>: tap a rival building and a group of ${armyNText()} goes for it. <b>Hold ground</b>: tap open ground and they plant a rally flag and hold it. <b>Station</b>: tap an Outpost, Keep or Bunker of yours and they move in for good. Each tap sends another group, until you tap Done. Warbots come from your garrisons in reach (each keeps its own).</p>`;
   if (flags.length || atk.size) {
     h += '<div class="section-label">In the field</div>';
@@ -9872,7 +9920,7 @@ function refreshSheet() {
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
-  if (UI.sheetKind === 'agroup') { refreshAgSheet(); return; }
+  if (UI.sheetKind === 'agroup') { refreshAgSheet(); if (isWide()) foldLong($('sheet-body')); return; }
   if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
@@ -9882,6 +9930,7 @@ function refreshSheet() {
     // Captured (or won back) while its panel was open: the panel is built again for its new owner.
     if ((b.owner === ME) !== UI.sheetMine) { openBuildingSheet(b); return; }
     refreshBuildingSheet(b);
+    if (isWide()) foldLong($('sheet-body'));
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
     if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship && !BOTS[u.type].magpod)) { closeSheet(); return; } // (a ship tied up at a Port, a train at a station, an Airship at its Mast or a pod at its Terminal keeps its panel)
