@@ -2509,3 +2509,10 @@ by a lit base, its pad and tower unlit). Give all eight night lighting like the 
 decks, beacons and warning lights, a glow in the owner's colour (see how the other buildings' night art and
 `daynight.js` do it; ART_GUIDE.md for the look). A knocked-out one stays dark (its offline look), and switches on
 again once it's back online.
+
+## To do: a cooler Victory screen (owner, Nov 25)
+
+When you win, a big **VICTORY** flashes and animates in before the victory dashboard: the same look as the TERRAFALL
+title on the main menu (the M2 cinematic menu's font, coral gradient and glow), e.g. sweeping or flaring in over the
+map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
+battle end can reuse it (in its blue Command Deck look).
