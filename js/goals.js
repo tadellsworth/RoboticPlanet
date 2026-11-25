@@ -452,13 +452,15 @@ function metaHordeTick(A, P) {
   if (H.n > META.hwLast) { for (let n = META.hwLast + 1; n <= H.n; n++) hw[n] = { lost: P.stats.lostBld || 0, army: false }; META.hwLast = H.n; }
   let army = false;
   for (const u of S.bots) if (!u.dead && u.owner === ME && isArmy(u)) { army = true; break; }
+  const down = !!(P && P.out); // (my colony down, its base fallen: FALLEN; a wave I sat out in part counts for neither)
   for (const k of Object.keys(hw)) {
     const n = +k, w = hw[k];
     if (army) w.army = true;
+    if (down) w.down = true;
     if (H.open.includes(n)) continue;
     delete hw[k];
     if (c < n || H.lost) continue;
-    if (n % HORDE.boss.every !== 0) continue; // (a boss wave: a Harrow leads it)
+    if (n % HORDE.boss.every !== 0 || w.down) continue; // (a boss wave: a Harrow leads it; not one I was down for)
     if ((P.stats.lostBld || 0) === w.lost) metaEarn('horde-boss');
     if (!w.army) metaEarn('horde-guns');
   }

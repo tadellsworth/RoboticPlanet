@@ -427,6 +427,7 @@ function reportMoments() {
         : e.how === 'surrender' ? `${insWho(e.p)} surrendered to ${insWho(e.q, true)}.` : `${insWho(e.p)}'s Command Base ${how} ${insWho(e.q, true)}.`;
       out.push({ t: e.t, kind: e.p === ME ? 'bad' : e.q === ME ? 'good' : 'info', w: 50, out: true, p: e.p, text });
     }
+    else if (e.k === 'back' && e.p >= 0) out.push({ t: e.t, kind: e.p === ME || allies(e.p, ME) ? 'good' : 'bad', w: 30, text: e.p === ME ? `${insWho(e.q)} took your Command Base back: you were back in the game.` : e.q === ME ? `You took ${insWho(e.p, true)}'s Command Base back: they were back in the game.` : `${insWho(e.p)}'s Command Base was taken back by ${insWho(e.q, true)}.` });
   }
   // Shortages still going at the end.
   for (const g in (P && P.dry) || {}) {

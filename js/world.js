@@ -5614,7 +5614,7 @@ function checkSave(o) {
     if (!Array.isArray(H.q) || H.q.length > HORDE.queueMost || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
     if (!Array.isArray(H.open) || !H.open.every(Number.isInteger)) bad();
     if (!Array.isArray(H.lanes) || !H.lanes.every((l) => Array.isArray(l) && l.every((w) => Array.isArray(w) && w.length === 3 && Number.isInteger(w[0]) && Number.isInteger(w[1]) && w[0] >= 0 && w[1] >= 0 && w[0] < o.W && w[1] < o.H && num(w[2])))) bad();
-    for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost', 'pair', 'lostP']) if (H[k] != null && !num(H[k])) bad();
+    for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost', 'pair', 'lostP', 'falls']) if (H[k] != null && !num(H[k])) bad();
     if (H.mul != null && !(num(H.mul) && H.mul >= 1 && H.mul <= 3)) bad();
     if (H.ps != null && !(Array.isArray(H.ps) && H.ps.length >= 1 && H.ps.length <= 4 && H.ps.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.laneP != null && !(Array.isArray(H.laneP) && H.laneP.length === H.lanes.length && H.laneP.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
@@ -5713,6 +5713,8 @@ function checkSave(o) {
     Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && f.length === 4 && owner(f[0]) && [1, 2, 3].every((k) => Number.isFinite(f[k]))))) bad();
   if (o.mgn != null && !(obj(o.mgn) && Number.isInteger(o.mgn.ep) && Array.isArray(o.mgn.l) && o.mgn.l.length <= 1e5 && o.mgn.l.every((g) => Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)))) bad();
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
+  // A fallen ally (FALLEN): down since t, taken by `by`; the standing teammate it helps command (P.help).
+  for (const P of o.players) if ((P.down != null && !(obj(P.down) && Number.isFinite(P.down.t) && owner(P.down.by))) || (P.help != null && !(owner(P.help) && P.help >= 0))) bad();
   const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
   for (const P of o.players) if (P.trade != null) {
     if (!obj(P.trade) || (P.trade.sat != null && !obj(P.trade.sat)) || (P.trade.offers != null && !Array.isArray(P.trade.offers))) bad();
@@ -5728,6 +5730,7 @@ function checkSave(o) {
   const bendsOk = (l) => Array.isArray(l) && l.length <= MAGLEV.bends && l.every((q) => Array.isArray(q) && q.length === 2 && Number.isInteger(q[0]) && Number.isInteger(q[1]) && q[0] >= 0 && q[0] < o.W && q[1] >= 0 && q[1] < o.H);
   for (const b of o.buildings) {
     if (b.by != null && !(Number.isInteger(b.by) && o.crew && o.crew[b.by])) bad();
+    if ((b.was != null && !(owner(b.was) && b.was >= 0)) || (b.hRet != null && !Number.isFinite(b.hRet)) || (b.hBy != null && !owner(b.hBy))) bad(); // (a fallen colony's: FALLEN)
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route

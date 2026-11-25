@@ -6184,6 +6184,11 @@ function captureBuilding(b, by) {
   S.players[by].stats.captured++;
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[by], r: 2 });
   sfx('capture');
+  // A fallen teammate's Command Base taken back from the captor: they're back in the game (FALLEN).
+  if (b.type === 'lander' && b.was !== undefined && isDown(b.was) && S.players[b.was].lander === b.id && !foes(by, b.was)) {
+    reinstate(b.was, by);
+    return;
+  }
   // Only a colony's own Command Base knocks it out; one it captured earlier just changes hands.
   if (b.type === 'lander' && S.players[old].lander === b.id) {
     eliminate(old, by);
@@ -7077,8 +7082,18 @@ function doLoot(u, t, dt) {
  */
 function eliminate(old, by, how) {
   const P = S.players[old];
+  // (Captured with a teammate still standing: down, not out for good. Its team can take the base back: FALLEN.)
+  const down = !how && canFallDown(old);
   logEvent({ t: S.time, k: 'out', p: old, q: by, how: how || 'capture' }); // (the game's story: see S.log)
   P.out = true;
+  if (down) {
+    P.down = { t: S.time, by };
+    // (its base, `by`'s already: captureBuilding; a computer captor expects the team to come for it)
+    const B = getE(P.lander);
+    if (B) { B.was = old; if (S.players[by].ai) B.keepW = FALLEN.prizeKeep; }
+  }
+  delete P.help;
+  for (const Q of S.players) if (Q.help === old) delete Q.help; // (a fallen teammate helping command it: see ORDERS.lend)
   for (const u of S.bots) if (!u.dead && u.owner === old) killBot(u, true);
   sfx('boom');
   S.rallies = S.rallies.filter((r) => r.owner !== old);
@@ -7089,6 +7104,7 @@ function eliminate(old, by, how) {
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
     if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
+    if (down && e.was === undefined) e.was = old; // (what comes back to it if its base is retaken: reinstate)
     e.owner = by; e.tgt = 0; clearFocus(e);
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
     e.mode = S.players[by].ai ? 'alt' : 'off';
@@ -7096,18 +7112,24 @@ function eliminate(old, by, how) {
   }
   S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1; // (its Outposts and Gates change hands: see roadNet)
   for (const t of planAll(old).slice()) setPlan(t, -1);
-  // Its roads, track and pipes are `by`'s too, with the lights and overpasses on them (so `by` can change
-  // them, and its own raids and Missiles leave them be), not only those inside `by`'s new rings (computeTerritory);
-  // what it had only planned is dropped.
-  for (let t = 0; t < S.W * S.H; t++) {
-    if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
-    if (S.pipePlan[t] === old + 1) S.pipePlan[t] = 0;
-    if (S.wown[t] === old) S.wown[t] = by;
-    if (S.pipe[t] === old + 1) setPipe(t, by + 1);
+  // (Down, its roads, track, pipes, lights and overpasses stay its own for when it's back; only its plans are dropped.)
+  if (down) {
+    for (let t = 0; t < S.W * S.H; t++) { if (S.railPlan[t] === old + 1) setRailPlan(t, 0); if (S.pipePlan[t] === old + 1) S.pipePlan[t] = 0; }
+    for (const k in S.junPlan || {}) if (S.junPlan[k].owner === old) delete S.junPlan[k];
+  } else {
+    // Its roads, track and pipes are `by`'s too, with the lights and overpasses on them (so `by` can change
+    // them, and its own raids and Missiles leave them be), not only those inside `by`'s new rings (computeTerritory);
+    // what it had only planned is dropped.
+    for (let t = 0; t < S.W * S.H; t++) {
+      if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
+      if (S.pipePlan[t] === old + 1) S.pipePlan[t] = 0;
+      if (S.wown[t] === old) S.wown[t] = by;
+      if (S.pipe[t] === old + 1) setPipe(t, by + 1);
   }
   for (const k in S.lights) if (S.lights[k].owner === old) S.lights[k].owner = by;
   for (const k in S.over) if (S.over[k].owner === old) S.over[k].owner = by;
   for (const k in S.junPlan || {}) if (S.junPlan[k].owner === old) delete S.junPlan[k];
+  }
   computeTerritory();
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
@@ -7115,6 +7137,13 @@ function eliminate(old, by, how) {
     postMsg(by, `Your nuclear missile destroyed ${playerName(old, true)}'s Command Base! What's left of the colony is yours.`, x, y, 'good');
     if (isMe(old)) postMsg(ME, `A nuclear missile from ${playerName(by)} destroyed your Command Base!`, x, y, 'lost');
     else if (!isMe(by)) postMsg(ME, `A nuclear missile from ${playerName(by)} destroyed ${playerName(old, true)}'s Command Base.`, x, y, 'warn');
+  } else if (down) {
+    postMsg(by, `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours, unless their team takes that base back.`, x, y, 'good');
+    postMsg(old, `${playerName(by)} captured your Command Base! You're down, not out: you watch until a teammate captures it back, and then you're back in the game.`, x, y, 'lost');
+    for (const Q of S.players) if (Q.id !== old && Q.id !== by && !Q.absent && !Q.out && !isWild(Q.id)) {
+      postMsg(Q.id, allies(Q.id, old) ? `${playerName(by)} captured ${playerName(old, true)}'s Command Base: ${playerName(old, true)} is down and watches until it's retaken. Capture that base back to bring them back in.`
+        : `${playerName(by)} captured ${playerName(old, true)}'s Command Base. ${playerName(old, true)} is down, but back in the game if their team retakes it.`, x, y, allies(Q.id, old) ? 'lost' : 'warn');
+    }
   } else if (how !== 'surrender') {
     postMsg(by, `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.`, x, y, 'good');
     if (isMe(old)) postMsg(ME, `${playerName(by)} captured your Command Base!`, x, y, 'lost');
@@ -7126,16 +7155,104 @@ function eliminate(old, by, how) {
     narrate(by, 'captured', x, y, 1);
     for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', colonyName(old)).replace('{by}', colonyName(by)));
   }
+  if (!down) teamFallen(old); // (the last of its team: those of it down are out for good)
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
+  // (A person whose colony is down, a teammate standing, is still in it: they can be back.)
+  const hope = left.some((Q) => !Q.ai) || S.players.some((Q) => Q.down && !Q.ai && !Q.absent);
   // Played on past a victory (S.endless): no one wins again, but losing your own colony still ends it.
-  if (S.endless) { if (!left.some((Q) => !Q.ai)) { S.winner = by; S.endHow = how || 'capture'; } return; }
+  if (S.endless) { if (!hope) { S.winner = by; S.endHow = how || 'capture'; } return; }
   // (the Murmur's slot, absent, is nobody's colony: it neither wins nor counts as one people play)
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
   if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
   // colony in it, the menu's backdrop, ends when the first colony falls; one being watched, S.watch, plays on to the
   // last colony standing: see js/watch.js.)
-  else if (S.players.some((Q) => !Q.ai && !Q.absent) ? !left.some((Q) => !Q.ai) : old === 0 && !S.watch) { S.winner = by; S.endHow = how || 'capture'; }
+  else if (S.players.some((Q) => !Q.ai && !Q.absent) ? !hope : old === 0 && !S.watch && !down) { S.winner = by; S.endHow = how || 'capture'; }
+}
+
+/* ------------------------------------------------------------------ fallen allies (FALLEN) */
+
+/*
+ * In a game with teams (Teams 2 vs 2, co-op Horde side by side; not a mission or a Contingency battle), a colony whose
+ * Command Base falls while a teammate's still stands is down (P.down: { t, by }), not out for good: P.out as for any
+ * fallen colony (its people watch; no orders of theirs are taken: applyOrder), until a teammate takes the base back
+ * (reinstate). The team is beaten only when the last of it falls; then those of it down are out for good (teamFallen).
+ * Teams (eliminate): the captor takes the base and everything the colony built, as ever, but each is marked (b.was) and
+ * its roads, pipes and lights stay its own. A teammate capturing that Command Base back (captureBuilding) reinstates it:
+ * every building marked its own still standing comes back, whoever holds it, the base at FALLEN.armor, with a fresh
+ * crew (FALLEN.crew) out of it (its robots were lost with the base). A captured base, a nuclear missile or a surrender
+ * with no teammate standing is out for good, as ever.
+ * Horde (hordeTick): the Murmur don't capture. The base lies battered (HORDE.fall); the colony keeps everything (its
+ * robots stand idle: nobody gives them work; its warbots and guns still fight what comes); a partner's armed warbots
+ * holding the ruin (FALLEN.retake: within r tiles, no Murmur that close, secs seconds; b.hRet the clock, b.hBy whose)
+ * retake it for them (hordeRetake).
+ * While a teammate is down, the survivor may let them help command its colony (ORDERS.lend: the fallen colony's
+ * P.help = the survivor's): their orders then go to the survivor's colony (mpOrderCol in js/lockstep.js) until they're
+ * back, the survivor takes it back, or the survivor falls too.
+ */
+/** Is this a game where a colony can be down rather than out (teams, not a mission or a Contingency battle)? */
+function fallTeams() { return !!(S.teams && !S.mission && !S.contingency); }
+/** Does a teammate of colony p (not p) still stand? */
+function teamStands(p) { return S.players.some((Q) => Q.id !== p && !Q.absent && !Q.out && !isWild(Q.id) && teamOf(Q.id) === teamOf(p)); }
+/** Is colony p down (fallen, its team able to bring it back)? */
+function isDown(p) { const P = S && S.players[p]; return !!(P && P.out && P.down); }
+/** Would colony p, falling now, be down rather than out? */
+function canFallDown(p) { return fallTeams() && teamStands(p); }
+/** The teammates of colony p standing (ids). */
+function teamUp(p) { return S.players.filter((Q) => Q.id !== p && !Q.absent && !Q.out && !isWild(Q.id) && teamOf(Q.id) === teamOf(p)).map((Q) => Q.id); }
+
+/** Colony p fell for good: if none of its team stands, those of it down are out for good too. */
+function teamFallen(p) {
+  if (!S.teams || teamStands(p)) return;
+  for (const Q of S.players) if (Q.down && Q.id !== p && teamOf(Q.id) === teamOf(p)) {
+    delete Q.down; delete Q.help;
+    postMsg(Q.id, 'Your last teammate has fallen too: your colony is out of the game.', undefined, undefined, 'lost');
+  }
+}
+
+/** Colony p, down, is back in the game: its base retaken by teammate `by` (Teams: captured back; Horde: held). */
+function reinstate(p, by) {
+  const P = S.players[p], L = P ? getE(P.lander) : null;
+  if (!P || !P.down || !L || L.dead) return;
+  P.out = false; delete P.down; delete P.help;
+  let n = 0;
+  if (!S.horde) {
+    // (Everything it had at its fall that still stands comes back, whoever holds it now.)
+    for (const e of S.buildings) {
+      if (e.dead || e.was !== p) continue;
+      delete e.was;
+      if (e.owner === p) continue;
+      if (!e.built) { destroyBuilding(e, true); continue; }
+      releaseBotsFrom(e, false); // (whoever was inside walks out)
+      delete e.prio; delete e.smode; delete e.reject; delete e.keepW; e.paused = false;
+      if (!BDEFS[e.type].airdrop) delete e.airSupply;
+      e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
+      e.owner = p; e.tgt = 0; clearFocus(e);
+      e.mode = P.ai ? 'alt' : 'off';
+      markDirty(e.x, e.y);
+      n++;
+    }
+    S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
+    computeTerritory();
+    // A fresh crew out of the base (its robots were lost with it).
+    let k = 0;
+    for (const t in FALLEN.crew) for (let q = 0; q < FALLEN.crew[t]; q++, k++) {
+      const a = (k * 2.4) % (Math.PI * 2), at = murmurStand(L.x + 0.5 + dcos(a) * 2, L.y + 0.5 + dsin(a) * 2) || { x: L.x, y: L.y };
+      addBot(p, t, at.x, at.y);
+    }
+  }
+  L.armor = Math.max(L.armor, Math.round(BDEFS.lander.armor * FALLEN.armor));
+  L.lastHit = S.time; L.hRet = 0; L.hBy = -1; delete L.keepW;
+  P.stats.back = (P.stats.back || 0) + 1;
+  if (S.players[by]) S.players[by].stats.retook = (S.players[by].stats.retook || 0) + 1;
+  addFx('ring', L.x + 0.5, L.y + 0.5, { color: PLAYER_COLORS[p], r: 3, life: 1.5 });
+  sfx('capture', L.x + 0.5, L.y + 0.5);
+  logEvent({ t: S.time, k: 'back', p, q: by });
+  const crew = S.horde ? '' : ` ${n} of your buildings came back with it, and a fresh crew stepped out of the base.`;
+  postMsg(p, `${playerName(by)} took your Command Base back: you're back in the game!${crew}`, L.x, L.y, 'good');
+  for (const Q of S.players) if (Q.id !== p && !Q.absent && !isWild(Q.id)) {
+    postMsg(Q.id, Q.id === by ? `You took ${playerName(p, true)}'s Command Base back: ${playerName(p, true)} is back in the game.` : allies(Q.id, p) ? `${playerName(by)} took ${playerName(p, true)}'s Command Base back: ${playerName(p, true)} is back in the game.` : `${playerName(p, true)}'s team took their Command Base back: ${playerName(p, true)} is back in the game.`, L.x, L.y, allies(Q.id, p) ? 'good' : 'warn');
+  }
 }
 
 /* ------------------------------------------------------------------ surrender and Domination */
@@ -19953,6 +20070,7 @@ function hashState() {
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
+    if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   // Army Groups: each, its order and its flag.
@@ -19966,7 +20084,7 @@ function hashState() {
     num(g.hitT ?? -99);
     if (g.ord.k === 'raid') { const o = g.ord; int(o.rep ?? 1); str(o.tk || ''); int(o.tg || 0); int(o.n0 || 0); int(o.n || 0); int(o.hits || 0); str(o.why || ''); int(o.sx ?? -1); int(o.sy ?? -1); num(o.lookT || 0); }
   }
-  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); int(P.down ? 1 : 0); int(P.help ?? -1); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
@@ -20059,7 +20177,7 @@ function hashState() {
     for (const z of D.spots) { int(z.t); int(z.u); int(z.r); num(z.at); }
     if (D.fall) { num(D.fall.at); int(D.fall.r); int(D.fall.amt); for (const [a, b] of D.fall.tiles) { int(a); int(b); } }
   }
-  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); } // (Horde's waves)
+  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); int(H.falls || 0); } // (Horde's waves)
   if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
@@ -23298,7 +23416,9 @@ function walkerBuild(w) {
  * maw (its id), lanes ([[x, y], ...] each, from the Maw to the Command Base), open ([waves sent, not yet cleared]),
  * cleared (the highest wave cleared), kills, sides (side tunnels opened), rr (round robin), won ('maw' or 'waves') }.
  * Co-op (multiplayer): side by side, `pair` (two colonies, allies, H.ps [0, 1]: each its own lanes, H.laneP the colony
- * at the end of each; the game is lost when either Command Base falls) on Long Haul 2v2, or a shared colony (S.crew);
+ * at the end of each; a colony whose Command Base falls is down while its partner's stands, and back once its partner
+ * holds the ruin (hordeFall, hordeRetake: FALLEN); the game is lost when both are down) on Long Haul 2v2, or a shared
+ * colony (S.crew);
  * either way `mul` scales every wave (HORDE.pair, HORDE.crew).
  * Deterministic: everything from the game's clock and the seed (hash2), the same on every device.
  */
@@ -23600,7 +23720,7 @@ function hordeBreach(u, b) {
 }
 
 /** Salvage crates for a cleared wave n, by the colony's front line (its building nearest the Maw, a little behind it). */
-function hordeSalvage(n) { for (const p of hordeCols()) hordeSalvageAt(p, n); }
+function hordeSalvage(n) { for (const p of hordeCols()) if (!S.players[p].out) hordeSalvageAt(p, n); } // (not a colony that's down)
 /** ...for colony p (side by side, each colony gets its own). */
 function hordeSalvageAt(p, n) {
   const H = S.horde, L = getE(S.players[p].lander), maw = getE(H.maw);
@@ -23628,15 +23748,21 @@ function hordeTick() {
   const H = S.horde, P = S.players[H.p];
   if (!H || S.winner >= 0 || !P) return;
   const L = getE(P.lander), maw = getE(H.maw);
-  // Lost: a Command Base battered down (HORDE.fall), or gone (side by side: either one; the line is held together).
+  // Lost: a Command Base battered down (HORDE.fall), or gone. Side by side, one battered down while its partner's stands
+  // is down, not lost (hordeFall); the line is lost when the last of them falls.
+  const stands = (c) => { const Q = S.players[c], B = Q ? getE(Q.lander) : null; return !!(Q && B && !B.dead && !Q.out && B.armor > HORDE.fall); };
   for (const c of hordeCols()) {
     const Q = S.players[c], B = Q ? getE(Q.lander) : null;
-    if (Q && B && !B.dead && !Q.out && B.armor > HORDE.fall) continue;
+    if (stands(c) || (Q && Q.down)) continue;
+    if (H.pair && Q && !Q.out && B && !B.dead && hordeCols().some((o) => o !== c && stands(o))) { hordeFall(c); continue; }
     H.lost = 1; if (H.pair) H.lostP = c;
     S.winner = wildOwner(); S.endHow = 'horde';
-    if (B) { postMsg(c, 'The Murmur have broken your Command Base. The colony is overrun.', B.x, B.y, 'lost'); for (const o of hordeCols()) if (o !== c) postMsg(o, `The Murmur have broken ${playerName(c)}'s Command Base. The line is lost.`, B.x, B.y, 'lost'); }
+    const both = hordeCols().some((o) => o !== c && S.players[o].down);
+    for (const o of hordeCols()) delete S.players[o].down; // (out for good, all of them)
+    if (B) { postMsg(c, both ? 'The Murmur have broken your Command Base too. Both colonies are down: the line is lost.' : 'The Murmur have broken your Command Base. The colony is overrun.', B.x, B.y, 'lost'); for (const o of hordeCols()) if (o !== c) postMsg(o, `The Murmur have broken ${playerName(c)}'s Command Base${both ? ' too: both colonies are down' : ''}. The line is lost.`, B.x, B.y, 'lost'); }
     return;
   }
+  for (const c of hordeCols()) if (S.players[c].down) hordeRetake(c); // (a partner holding the ruin brings it back)
   if (!maw) return; // (the Maw wrecked: see hordeMawDown)
   maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length} waiting below`;
   // Waves cleared: all out of the Maw and none left up.
@@ -23661,6 +23787,52 @@ function hordeTick() {
     hordeLaunch(H.n + 1);
     H.at = S.time + hordeGap(H.n + 1, H.lv);
   }
+}
+
+/**
+ * Side by side, colony c's Command Base is battered down (HORDE.fall) while its partner's stands: it's down (FALLEN), not
+ * lost. Its people watch; its robots stand idle (nobody gives them work), its warbots and guns still fight what comes, its
+ * buildings stay. The base lies a ruin until a partner retakes it (hordeRetake).
+ */
+function hordeFall(c) {
+  const H = S.horde, Q = S.players[c], B = getE(Q.lander), K = FALLEN.retake;
+  Q.out = true; Q.down = { t: S.time, by: wildOwner() }; delete Q.help;
+  for (const R of S.players) if (R.help === c) delete R.help;
+  B.hRet = 0; B.hBy = -1;
+  H.falls = (H.falls || 0) + 1;
+  logEvent({ t: S.time, k: 'out', p: c, q: wildOwner(), how: 'horde' });
+  const mates = hordeCols().filter((o) => o !== c && !S.players[o].out);
+  addFx('ring', B.x + 0.5, B.y + 0.5, { color: '#c77dff', r: 3, life: 1.5 });
+  postMsg(c, `The Murmur have battered your Command Base down: your colony is down, not lost. You watch until ${mates.length ? playerName(mates[0]) : 'your partner'} retakes it: armed warbots holding the ruin ${K.secs} seconds, no Murmur within ${K.r} tiles.`, B.x, B.y, 'lost');
+  for (const o of mates) postMsg(o, `${playerName(c)}'s Command Base has fallen: they watch until it's retaken. Hold the ruin with armed warbots for ${K.secs} seconds, no Murmur within ${K.r} tiles of it, to bring them back. If your base falls too, the line is lost.`, B.x, B.y, 'lost');
+  if (hordeCols().some(isMe)) sfx('alert');
+}
+
+/**
+ * Once a second, colony c down (hordeFall): its ruin's retake clock (FALLEN.retake). A partner's armed warbots within r
+ * tiles of the base and no Murmur that close fill it; Murmur there stop it; nobody there runs it back. Full: c is back.
+ */
+function hordeRetake(c) {
+  const B = getE(S.players[c].lander), K = FALLEN.retake;
+  if (!B || B.dead) return;
+  let by = -1, foe = false;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || aloft(u) || footDist(B, u.x, u.y) > K.r) continue;
+    if (u.owner < 0 || isWild(u.owner) || BOTS[u.type].wild) { if (BOTS[u.type].wild || isWild(u.owner)) { foe = true; break; } continue; }
+    if (by < 0 && u.owner !== c && S.players[u.owner] && !S.players[u.owner].out && allies(u.owner, c) && isArmy(u) && botArmed(u)) by = u.owner;
+  }
+  if (foe) { B.status = `Fallen: the Murmur are at it${B.hRet ? `; the retake is held at ${Math.floor(B.hRet)} of ${K.secs} s` : ''}`; return; }
+  if (by < 0) {
+    B.hRet = Math.max(0, (B.hRet || 0) - K.decay);
+    if (!B.hRet) B.hBy = -1;
+    B.status = `Fallen: a partner's armed warbots holding it ${K.secs} s, with no Murmur within ${K.r} tiles, bring ${playerName(c)} back`;
+    return;
+  }
+  if (!B.hRet) postMsg(by, `Your warbots are retaking ${playerName(c, true)}'s Command Base: hold it ${K.secs} seconds, no Murmur within ${K.r} tiles.`, B.x, B.y, 'info');
+  B.hBy = by;
+  B.hRet = (B.hRet || 0) + 1;
+  B.status = `Fallen: ${playerName(by)} is retaking it, ${K.secs - Math.floor(B.hRet)} s left`;
+  if (B.hRet >= K.secs) reinstate(c, by);
 }
 
 /** The Maw wrecked by `by`: the waves end, and the game is won. */

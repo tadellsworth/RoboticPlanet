@@ -8226,6 +8226,11 @@ function openBuildingSheet(b) {
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && isDoctrine(S.players[b.owner].style) && S.players[b.owner].style;
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${docLabel(style)}:</b> it ${PERSONALITIES[style].desc}.`;
   if (!mine && b.type === 'lander' && S.mission && captureLocked(b, ME)) desc += ' <b>Finish your other goals first:</b> until then it holds at 1 armor.';
+  // A fallen ally's Command Base (FALLEN): whose it is and how it comes back.
+  const fallenP = b.type === 'lander' && typeof fallenBaseOf === 'function' ? fallenBaseOf(b) : -1;
+  if (fallenP >= 0) desc = S.horde
+    ? `<b>Fallen:</b> ${esc(playerName(fallenP, true))} ${fallenP === ME ? 'are' : 'is'} down and watching. A partner's armed warbots holding it ${FALLEN.retake.secs} seconds, with no Murmur within ${FALLEN.retake.r} tiles, retake it${b.hRet > 0 ? ` (<b>${Math.floor(b.hRet)} of ${FALLEN.retake.secs} s</b>)` : ''}.`
+    : `<b>${esc(playerName(fallenP))}'s fallen Command Base</b>, held by ${esc(playerName(b.owner, true))}. ${allies(fallenP, ME) || fallenP === ME ? `Capture it back and ${fallenP === ME ? 'you\'re' : 'they\'re'} back in the game, with everything of theirs still standing.` : 'If their team captures it back, they\'re back in the game.'}`;
   if (def.burrow) {
     // A tunnel exit: what it is (its description), whose network, and how to deal with it.
     const nest = getE(b.nest), up = S.bots.filter((u) => !u.dead && u.exit === b.id && u.task && u.task.night).length;
@@ -10213,7 +10218,7 @@ function objectiveText() {
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
   if (S.contingency && typeof contObjective === 'function') return warn + contObjective(); // (js/contingency-battle.js)
-  if (S.horde) return warn + hordeObjective(); // (Horde: the next wave)
+  if (S.horde) return warn + fallenGoalLine() + hordeObjective(); // (Horde: the next wave; a partner down)
   for (const o of OBJECTIVES) if (!o.done()) return warn + o.text;
   if (warn) return warn;
   if (S.mode === 'colony') {
@@ -10223,6 +10228,7 @@ function objectiveText() {
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
       : `<b>${pct}%</b> of the planet colonized. Every milestone reached!`;
   }
+  if (fallenGoalLine()) return fallenGoalLine() + 'Take the enemy team\'s Command Bases to win.';
   return nColonies() > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take every rival Command Base to win.'
     : 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
 }
@@ -11125,9 +11131,31 @@ function hordeBriefing() {
   return `Your bots have landed at one end of Long haul. At the far end${L && maw ? ' (' + dirText(L, maw).replace(/^\d+ tiles? /, '') + ')' : ''} lies the Maw, the Murmur's great mound, and every few minutes a wave pours out of its tunnel mouths and marches down the map at you, bigger each time. Wave 1 in ${fmtClock(H.at - S.time)}: ${hordeWaveText(1)}. Build guns (Pulse Turrets, Minigun Nests, Mortar Pits), Walls and warbots across the map in front of your Command Base. ${goal} Wreck the Maw and you win; lose your Command Base and it's over.`;
 }
 
-/** The top bar's line in Horde: "Wave 7 in 1:40", with how many are up. */
+/**
+ * The Goal card's line about fallen allies (FALLEN: a teammate's Command Base, or mine, down while one of us stands):
+ * who, how they come back, and the Horde retake clock. '' if none.
+ */
+function fallenGoalLine() {
+  if (!S.teams || S.winner >= 0 || typeof isDown !== 'function') return '';
+  const out = [], K = FALLEN.retake;
+  for (const Q of S.players) {
+    if (!Q.down || !(Q.id === ME || allies(Q.id, ME))) continue;
+    const L = getE(Q.lander), clock = L && L.hRet > 0 ? `: <b>${Math.floor(L.hRet)} of ${K.secs} s</b>` : '';
+    if (Q.id === ME) out.push(S.horde ? `<span class="err">Your Command Base has fallen.</span> You watch until your partner holds the ruin${clock}.`
+      : `<span class="err">Your Command Base has fallen${L && L.owner !== ME ? ` to ${esc(playerName(L.owner))}` : ''}.</span> You watch until a teammate captures it back.`);
+    else out.push(S.horde ? `<span class="err">${esc(playerName(Q.id))}'s Command Base has fallen.</span> Hold its ruin with armed warbots ${K.secs} s, no Murmur within ${K.r} tiles${clock}, to bring them back.`
+      : `<span class="err">${esc(playerName(Q.id))}'s Command Base has fallen${L ? ` to ${esc(playerName(L.owner))}` : ''}.</span> Capture it back to bring them back in.`);
+  }
+  return out.length ? out.join('<br>') + '<br>' : '';
+}
+
+/** The top bar's line in Horde: "Wave 7 in 1:40", with how many are up (and a partner down). */
 function hordeTopLine() {
   const H = S.horde, up = hordeUpCount();
+  if (H.pair && S.winner < 0 && hordeCols().some((c) => S.players[c].down)) {
+    const c = hordeCols().find((q) => S.players[q].down);
+    return `${c === ME ? 'You are' : `${playerName(c)} is`} down · wave ${H.n + 1} in ${fmtClock(H.at - S.time)}`;
+  }
   if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length} left`;
   return `Wave ${H.n + 1} in ${fmtClock(H.at - S.time)}${up ? ` · ${up} up` : ''}`;
 }
