@@ -2516,3 +2516,24 @@ When you win, a big **VICTORY** flashes and animates in before the victory dashb
 title on the main menu (the M2 cinematic menu's font, coral gradient and glow), e.g. sweeping or flaring in over the
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
+
+## Idea: Horde mode (owner, Nov 25; draft, open questions below)
+
+Survive ever bigger Murmur waves sent down a long map at you (it pairs with the "endless late-game horde" idea in the
+Murmur AI rework).
+
+- **Setup:** Long Haul. You land at one end; at the far end, **the Maw**: a ring of 3 to 4 huge Murmur tunnel mouths round
+  a mound (like the Deep in the Hollow). No rival colony: you, the planet and the Murmur. Rich fields and chokepoints in
+  the middle: hold a short line close to home, or push out for the riches.
+- **Waves:** a countdown between them (about 3 minutes, slowly shrinking) on the top bar: "Wave 7 in 1:40", with what's
+  coming ("Spitters, Sappers"). Each wave bigger and with new kinds: 1 to 3 small Murmur, 4 to 6 Brutes, 7 to 9 Leeches
+  and Spitters, 10+ Sappers tunnelling under Walls, every 5th a boss wave led by a Harrow. They march down the map along a
+  few lanes; later, side tunnels open partway down so one wall won't hold forever. Between waves the tunnels go quiet:
+  rebuild and expand.
+- **Win:** survive N waves (say 20), or destroy the Maw (hard: late, with an army or a megastructure). Optional
+  **Endless** (best wave kept as a high score). **Lose:** your Command Base falls.
+- **Play:** each wave cleared drops salvage crates near your lines; every defence counts (Mortar Pits, Minigun Nests,
+  Walls, Keeps, Bulwarks, Torches; the Sundering Ray as a wave-clearer). Settler to Warlord sets how fast the waves grow.
+  Later a great 2-player co-op: two colonies side by side at one end (the Long Haul 2v2 layout).
+- **Open questions for the owner:** (1) a fixed number of waves, Endless, or both as a setting? (2) Long Haul only, or a
+  Horde option on any map with the Maw opposite you? (3) pure survival, or sometimes a rival colony defending too?
