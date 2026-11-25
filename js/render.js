@@ -7570,7 +7570,7 @@ function render(dtReal) {
   drawAgPlans(ctx, ox, oy, z); // (Army Groups' routes and areas)
   drawMissiles(ctx, ox, oy, z);
   drawLavaBombs(ctx, ox, oy, z);
-  if (R.workerView) drawWorkerView(ctx, ox, oy, z);
+  if (R.workerView || (typeof wfMapOn === 'function' && wfMapOn())) drawWorkerView(ctx, ox, oy, z); // (and while the Workforce panel is open: js/workforce.js)
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.mur && S.mur.husks) drawHarrowDeathFx(ctx, ox, oy, z); // (a Harrow's death: its shards, the dust of its fall, its core bursting)
@@ -8615,16 +8615,19 @@ function drawDepletedRes(ctx, x, y, z, res) {
  */
 function drawWorkerView(ctx, ox, oy, z) {
   const inside = new Map(), pulse = 0.5 + 0.5 * Math.sin(R.time * 4);
+  // (The Workforce panel open: its colours, a stuck Worker magenta-red, and a line to every job, a tile's too: wfMapMark.)
+  const wf = typeof wfMapOn === 'function' && wfMapOn();
   ctx.save();
   ctx.lineCap = 'round';
   for (const u of S.bots) {
     if (u.dead || u.owner !== ME || u.type !== 'worker') continue;
     if (u.inside) { inside.set(u.inside, (inside.get(u.inside) || 0) + 1); continue; }
-    const act = workerViewKind(u), col = WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
-    const t = u.task, goal = t && (getE(t.bld) || getE(t.site) || null);
-    if (goal && !goal.dead) {
-      ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1, z * 0.04); ctx.setLineDash([z * 0.15, z * 0.12]);
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ox + (goal.x + 0.5) * z, oy + (goal.y + 0.5) * z); ctx.stroke();
+    const m = wf ? wfMapMark(u) : null, act = wf ? (m.free ? 'free' : '') : workerViewKind(u), col = wf ? m.color : WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
+    const t = u.task, g = !wf && t && (getE(t.bld) || getE(t.site));
+    const goal = wf ? m.to : g && !g.dead ? { x: g.x + 0.5, y: g.y + 0.5 } : null;
+    if (goal) {
+      ctx.strokeStyle = col; ctx.globalAlpha = wf ? 0.6 : 0.45; ctx.lineWidth = Math.max(1, z * (wf ? 0.05 : 0.04)); ctx.setLineDash([z * 0.15, z * 0.12]);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ox + goal.x * z, oy + goal.y * z); ctx.stroke();
       ctx.setLineDash([]);
     }
     const r = z * (act === 'free' ? 0.42 + 0.08 * pulse : 0.36);
@@ -8644,6 +8647,7 @@ function drawWorkerView(ctx, ox, oy, z) {
     ctx.fillStyle = '#e8eef6'; ctx.fillText(String(n), x, y + 0.5);
   }
   ctx.restore();
+  if (wf) wfDrawWants(ctx, ox, oy, z);
 }
 
 /** A control group's number, by each robot in it. */

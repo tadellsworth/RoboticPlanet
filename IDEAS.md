@@ -3,6 +3,29 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## The Workforce panel and priority ladder (built Nov 25 2026: calls made, open questions for the owner)
+
+Built from the owner's late-game complaint (can't tell what Workers are doing; they're not in the factories wanted).
+Calls made:
+- **Shift+W** opens it (W pans the map, every free letter was taken), and so does a tap on the top bar's **Workers**
+  count (the Haulers and Warbots counts still open Your robots, as does U). Your robots has a Workforce button too.
+- **On a desktop it sits to the right** (three columns, about 1100 px wide) so the map's lines to each Worker's job
+  show on the left. It fits without scrolling at 1280x720, 1440x900 and 1920x1080 with 14 rows; the Workers list
+  pages seven at a time and Problems shows its first six. A phone scrolls it as one column like other panels.
+- **The rows** (`WF_ROWS`): Oil Pumps and Refineries share Oil and Fuel; Ammo Plants, Missile Factories and Nuclear
+  Reactors share Ammo and Missiles; each gatherer has its own row. Rows with nothing built are hidden (keep their
+  places). Specialists' buildings (Agribots' farms, Pavers' Roadworks) aren't on it: they never take a Worker.
+- **Manual keeps the two Workers kept free for building** while sites wait, even with sites at the bottom: dropping
+  them made a site-less ladder starve every new site. Should a ladder with Building sites at the bottom give them up?
+- **Minimums move at most one Worker a pass** from another building, and only from a donor that's stalled, makes
+  plenty, or sits in a lower row: never a pinned row or one at its own minimum. Fast enough?
+- **Pin and Keep staffed also stop the stock-limit release** (a building at its limit lets its Worker go after 10 s);
+  the Worker then sits until the limit lifts. Right, or should the limit win?
+- **Presets** are fixed orders (Economy: Foundry and raw materials; War: Repairs, Ammo and Missiles, sites; Build-up:
+  sites, paving, Cement and Stone). Saveable custom presets would be the next step.
+- Open: a ladder per Outpost area (far-off bases), and showing the ladder's effect over time (Workers per row graph in
+  Statistics).
+
 ## The cinematic main menu and the coral game (built Nov 24 2026: calls made, open questions for the owner)
 
 The owner picked M2, the cinematic Command Deck main menu, in the icon's coral, and then coral for the whole game

@@ -5713,6 +5713,13 @@ function checkSave(o) {
     Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && f.length === 4 && owner(f[0]) && [1, 2, 3].every((k) => Number.isFinite(f[k]))))) bad();
   if (o.mgn != null && !(obj(o.mgn) && Number.isInteger(o.mgn.ep) && Array.isArray(o.mgn.l) && o.mgn.l.length <= 1e5 && o.mgn.l.every((g) => Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)))) bad();
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
+  // The Workforce settings (wfOrder): an order of row names, and rows' minimum and cap (whole numbers) and pin. A row this
+  // version doesn't know is let through (wfNormOrder leaves it out) as long as it's a plain name.
+  for (const P of o.players) if (P.wf != null) {
+    const W = P.wf, name = (k) => typeof k === 'string' && /^[a-z]{1,16}$/.test(k), n = (v) => v == null || (Number.isInteger(v) && v >= 0 && v <= WF_MAX);
+    if (!obj(W) || (W.order != null && !(Array.isArray(W.order) && W.order.length <= 64 && W.order.every(name)))) bad();
+    if (W.rows != null && !(obj(W.rows) && Object.keys(W.rows).length <= 64 && Object.keys(W.rows).every((k) => name(k) && obj(W.rows[k]) && n(W.rows[k].min) && n(W.rows[k].cap) && [undefined, 1].includes(W.rows[k].pin)))) bad();
+  }
   const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
   for (const P of o.players) if (P.trade != null) {
     if (!obj(P.trade) || (P.trade.sat != null && !obj(P.trade.sat)) || (P.trade.offers != null && !Array.isArray(P.trade.offers))) bad();
@@ -5731,6 +5738,7 @@ function checkSave(o) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
+    if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
     // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)
     const missOk = (m) => obj(m) && Number.isInteger(m.x) && Number.isInteger(m.y) && m.x >= 0 && m.x < o.W && m.y >= 0 && m.y < o.H && typeof m.near === 'boolean' &&

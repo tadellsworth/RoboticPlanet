@@ -179,6 +179,46 @@ const ORDERS = {
     const r = callWorker(p, b);
     return { uid: r.u ? r.u.id : 0, already: !!r.already, why: r.why };
   },
+  /** Keep staffed (a building's panel): its Worker is never moved off by the automatic shortage and stall moves. */
+  keepStaff(p, id, on) {
+    const b = ownB(p, id); if (!b || !BDEFS[b.type].staff || BDEFS[b.type].crew) return false;
+    if (on) b.keepStaff = 1; else delete b.keepStaff;
+    return !!on;
+  },
+  /* ---------------------------------------------------------------- the Workforce panel (WF_ROWS: see wfOrder) */
+  /** The Workforce ladder's order: a list of rows (Manual), or null (Back to Auto). */
+  wfOrder(p, list) {
+    const P = S.players[p]; if (!P) return false;
+    if (list == null) { if (P.wf) { delete P.wf.order; wfTidy(P); } return true; }
+    if (!Array.isArray(list) || list.length > 64) return false;
+    P.wf = P.wf || {};
+    P.wf.order = wfNormOrder(list);
+    return true;
+  },
+  /** One of a preset's orders (WF_PRESETS: economy, war, build): Manual. */
+  wfPreset(p, name) {
+    const P = S.players[p]; if (!P || !ownKey(WF_PRESETS, name)) return false;
+    P.wf = P.wf || {};
+    P.wf.order = wfNormOrder(WF_PRESETS[name].order);
+    return true;
+  },
+  /** Row k's minimum ('min', at least v Workers: 0 for none), cap ('cap', at most v: -1 for none) or pin ('pin', v true or false). */
+  wfRow(p, k, what, v) {
+    const P = S.players[p]; if (!P || !ownKey(WF_ROW, k) || !['min', 'cap', 'pin'].includes(what)) return false;
+    P.wf = P.wf || {};
+    const rows = P.wf.rows = P.wf.rows || {}, r = rows[k] = rows[k] || {};
+    if (what === 'pin') { if (v) r.pin = 1; else delete r.pin; }
+    else {
+      const n = Math.round(+v);
+      if (what === 'min') { if (n > 0) r.min = Math.min(WF_MAX, n); else delete r.min; }
+      else if (Number.isFinite(n) && n >= 0) r.cap = Math.min(WF_MAX, n); else delete r.cap;
+      if (r.min != null && r.cap != null && r.cap < r.min) { if (what === 'min') r.cap = r.min; else r.min = r.cap || undefined; if (!r.min) delete r.min; }
+    }
+    wfTidy(P);
+    return true;
+  },
+  /** Rebalance now: Workers off buildings that can't work or make what there's plenty of, for the top jobs waiting. How many. */
+  wfRebalance(p) { return S.players[p] ? wfRebalance(p) : 0; },
   rallyPost(p, id) {
     const b = ownB(p, id), P = S.players[p]; if (!b) return false;
     const on = P.rallyPost === b.id;

@@ -626,6 +626,31 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   staffed buildings, 7 of them parked in stalled buildings for up to 11 minutes; no Crystal Tap staffed, so the Chip
   Fab waited on Crystal for 7 minutes), the next 10 minutes made 41 Crystal (was 0), 33 Chips (was 7), 81 Alloy (78)
   and 22 Cement (28), and 28 Fiber instead of 93 more on top of 318 in store; the same sites finished.
+- **The Workforce panel** (`js/workforce.js`; Shift+W, the top bar's Workers count, or Workforce in Your robots): your
+  Workers counted by activity (building, running, stuck/waiting, carrying, paving, charging, free: `wfWhat`, which also
+  words each one, *In the Chip Fab, waiting for Crystal for 3:20*), tap a count to list them a page at a time and a line
+  to jump to that Worker; **Problems** (`wfProblems`): sites with goods in and no builder, buildings that want a Worker
+  and why not, goods short (`goodsWanted`) with their makers; and the **priority ladder** of job types (`WF_ROWS` in
+  defs.js: Building sites, Repairs (mend, magfix, capshaft, dammend too), Bot Foundries, Crystal Taps, Ore Mines,
+  Harvesters, Quarries, Smelters, Chip Fabs, Cement Works, Oil and Fuel, Asphalt Plants, Ammo and Missiles, Research
+  Labs, Other buildings, Paving). While it's open `drawWorkerView` draws each Worker's line to its job in its
+  activity's colour and `wfDrawWants` a slashed worker over each building wanting one. Settings live in
+  `P.wf = { order?, rows?: { row: { min?, cap?, pin? } } }` (saved, checked by `checkSave`, in `hashState` only when set)
+  and change only by orders: `wfOrder` (a list: Manual; null: Back to Auto), `wfPreset` (`WF_PRESETS`: economy, war,
+  build), `wfRow` (min, cap, pin), `wfRebalance`, and `keepStaff` (a building's Keep staffed). With no `P.wf` (every
+  rival, and any player who never touched it) `dispatch` runs exactly as before (seeded AI games hash the same).
+  With it, `wfSetup` gives the pass the row counts (`wfCounts`, by each Worker's job: `wfJob`): **Manual** runs steps 1
+  (sites), 1a–1d (repairs), 2 (staff, one row at a time, the usual `staffQueue` order within) and 6 (paving,
+  `stepPave`) in the player's row order; **caps** stop new jobs and release a staffed row's extra Workers (least useful
+  first, never Keep staffed); **minimums** come first each pass, a free Worker per missing job, or once a pass one moved
+  off a donor building (stalled, then plenty, then a lower row; never a pinned row, a row at its minimum, Keep staffed
+  or a triage last link); **pins** and Keep staffed are left alone by the free-for-building release, the stalled-operator
+  release, the plenty release, a stock limit's release (`wfHolds`) and Rebalance; the plenty release on Manual only
+  takes from rows no higher than the top waiting one. `wfAutoOrder` gives the panel the order Auto uses (sites, repairs,
+  rows by their best building's `prioRank`, `needRank`, `staffPriority`, paving) with why; `wfRebalance(p, dry)` frees
+  Workers (stalled first, `benched`; then plenty; Manual: rows below the top waiting row) until there's one free per
+  waiting job past the kept-free few, the dry run telling the panel how many it would move. Tests:
+  `tools/workforce-test.js` and `tools/workforce-lockstep-test.js`.
 - **Construction sites** are built only as far as the goods delivered so far (`siteFrac`); a free Worker comes once
   some are in (`dispatch` step 1, `roadToSites`). A builder that runs out **waits at the site** if a carrier is bringing
   goods it still needs and is due within `SITE_WAIT.eta` (35 s: `siteInbound`, the rest of a Hauler's, truck's, train's,
@@ -4314,6 +4339,15 @@ node tools/headless-sim.js 99 normal 40 colony
 ```bash
 node tools/horde-test.js normal 40 4242 fixed --fort
 ```
+
+```bash
+node tools/workforce-test.js
+node tools/workforce-lockstep-test.js
+```
+
+The Workforce ladder: a computer colony's game copied into side-by-side games with different settings (Auto untouched,
+Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load), then two devices over the lockstep
+changing the settings all game, one reloading halfway, their fingerprints compared every second.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

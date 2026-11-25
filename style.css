@@ -3830,3 +3830,93 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   body.deck #screen-over .card > .btn.big { min-height: 36px; padding: 6px 14px; margin-top: 4px; }
   body.deck #hud #sheet .goodlist .gtag.toggle { min-height: 0; padding-top: 2px; padding-bottom: 2px; font-size: 12px; }
 }
+
+/* ---------- The Workforce panel (Shift+W, the Workers count: js/workforce.js). On a phone one column (it scrolls, as
+   panels do there); on a desktop three across, wide, ending above the tool dock, and nothing in it scrolls: the Workers
+   list shows a page at a time and the Problems their first six. ---------- */
+.wf-col > .section-label:first-child { margin-top: 4px; }
+.wf-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 2px 0 8px; }
+.wf-act { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 44px; padding: 4px 2px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-top: 3px solid var(--c); background: rgba(255, 255, 255, 0.04); color: var(--text, #e8eef6); font: inherit; border-radius: 3px; }
+.wf-act b { font: 700 17px/1.1 var(--dk-mono, ui-monospace, monospace); }
+.wf-act span { font-size: 11px; letter-spacing: 0.04em; color: var(--muted, #aab); }
+.wf-act.on { background: color-mix(in srgb, var(--c) 18%, transparent); border-color: var(--c); }
+.wf-act.zero { opacity: 0.55; }
+.wf-act:focus-visible, .wf-li:focus-visible, .wf-pr:focus-visible, .wf-mv:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.wf-list { display: flex; flex-direction: column; gap: 3px; }
+.wf-li, .wf-pr { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.03); color: var(--text, #e8eef6); font: 13px/1.3 inherit; border-radius: 3px; }
+.wf-li i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 5px var(--c); }
+.wf-li:hover, .wf-pr:hover { border-color: rgba(255, 107, 74, 0.45); background: rgba(255, 107, 74, 0.07); }
+.wf-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 5px 0 2px; font-size: 12px; color: var(--muted, #aab); }
+.wf-pager .btn { min-width: 44px; }
+.wf-probs { display: flex; flex-direction: column; gap: 3px; }
+.wf-pr { border-left: 3px solid #ff4d8a; }
+.wf-pr.good { border-left-color: #ffb24a; }
+.wf-pr.capped { border-left-color: #8a8f9e; }
+.wf-pr b { color: #fff1ec; }
+.wf-presets { display: flex; gap: 6px; margin: 6px 0; }
+.wf-presets .btn { flex: 1 1 0; }
+#wf-rebal { width: 100%; margin-top: 2px; }
+.wf-ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wf-row { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr) auto 44px 34px 34px; align-items: center; gap: 4px; min-height: 40px; padding: 2px 2px 2px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.03); border-radius: 3px; cursor: pointer; user-select: none; }
+.wf-row.sel { border-color: rgba(255, 107, 74, 0.7); background: rgba(255, 107, 74, 0.08); }
+.wf-row.over { box-shadow: inset 0 3px 0 #ff6b4a; }
+.wf-row.drag { opacity: 0.45; }
+.wf-grip { color: var(--muted, #aab); cursor: grab; font-size: 12px; letter-spacing: -2px; }
+.wf-i { font: 600 11px/1 var(--dk-mono, monospace); color: var(--muted, #aab); text-align: right; }
+.wf-name { display: flex; flex-direction: column; min-width: 0; }
+.wf-name b { font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-name small { font-size: 11px; line-height: 1.25; color: var(--muted, #aab); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-tags { display: flex; gap: 3px; }
+.wf-tags em { font: 600 10.5px/1 var(--dk-mono, monospace); font-style: normal; padding: 3px 4px; border: 1px solid rgba(255, 177, 143, 0.5); color: #ffb08f; border-radius: 2px; }
+.wf-tags em.pin { border-color: #5dd88a; color: #5dd88a; }
+.wf-n { font: 700 14px/1 var(--dk-mono, monospace); text-align: right; }
+.wf-n small { font-size: 11px; font-weight: 500; color: var(--muted, #aab); }
+.wf-mv { min-width: 34px; min-height: 34px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); color: var(--text, #e8eef6); border-radius: 3px; cursor: pointer; font-size: 11px; }
+.wf-mv:disabled { opacity: 0.3; cursor: default; }
+.wf-mv:not(:disabled):hover { border-color: #ff6b4a; }
+.wf-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 8px; padding: 6px 8px; border: 1px dashed rgba(255, 107, 74, 0.35); border-radius: 3px; }
+.wf-ed-name { flex: 1 1 100%; font-weight: 600; font-size: 13px; }
+.wf-ed-name small { margin-left: 8px; font-weight: 400; color: var(--muted, #aab); }
+.wf-ed-row { display: flex; align-items: center; gap: 5px; font-size: 12.5px; }
+.wf-ed-row b { min-width: 26px; text-align: center; font-family: var(--dk-mono, monospace); }
+.wf-ed-row .btn, .wf-edit > .btn { min-width: 40px; }
+.wf-edit .hint { flex: 1 1 100%; margin: 2px 0 0; font-size: 11.5px; }
+@media (pointer: coarse) { .wf-li, .wf-pr { min-height: 44px; } .wf-mv { min-width: 44px; min-height: 44px; } .wf-row { grid-template-columns: 10px 16px minmax(0, 1fr) auto 40px 44px 44px; } }
+@media (max-width: 999px), (max-height: 519px) { .wf-col + .wf-col { margin-top: 6px; } }
+@media (min-width: 1000px) and (min-height: 520px) {
+  /* (to the right, so the map and its lines to each Worker's job show on the left) */
+  body.sheet-wf #sheet, body.sheet-wf #sheet.full, body.sheet-wf #sheet.peek {
+    left: auto; right: calc(var(--safe-r) + 12px); transform: none; width: min(1120px, calc(100vw - var(--safe-r) - var(--safe-l) - 250px));
+    top: auto; height: auto; bottom: calc(var(--safe-b) + 78px); max-height: calc(100dvh - var(--hud-top, 130px) - 78px); }
+  body.deck.sheet-wf #sheet { background-color: rgb(12, 17, 30); }
+  body.sheet-wf #bottombar { left: 50%; }
+  body.sheet-wf :is(.agcards, .selbar, .groupbar) { visibility: hidden; }
+  .wf-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 1.2fr); gap: 0 18px; align-items: start; }
+  .wf-grid .wf-col { min-width: 0; }
+  .wf-acts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .wf-li, .wf-pr { min-height: 30px; padding-top: 2px; padding-bottom: 2px; font-size: 12.5px; }
+  .wf-ladder .wf-row { min-height: 0; padding-top: 1px; padding-bottom: 1px; grid-template-columns: 12px 16px minmax(0, 1fr) auto 38px 28px 28px; }
+  .wf-ladder .wf-mv { min-width: 28px; min-height: 26px; }
+  .wf-name { flex-direction: row; align-items: baseline; gap: 6px; }
+  .wf-name b { flex: none; }
+  .wf-name small { flex: 1 1 auto; }
+  #wf-mode-hint, #wf-rebal-hint { font-size: 11.5px; margin: 3px 0 4px; }
+}
+@media (min-width: 1000px) and (min-height: 520px) and (max-height: 820px) {
+  /* (a short desktop screen: the counts in one line, the longer hints left out, so it still fits without scrolling) */
+  .wf-acts { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .wf-act { min-height: 38px; padding: 2px 1px; }
+  .wf-act b { font-size: 15px; }
+  .wf-act span { font-size: 10px; letter-spacing: 0; }
+  #wf-mode-hint, .wf-edit .hint { display: none; }
+  .wf-li, .wf-pr { min-height: 26px; }
+  body.deck #hud #sheet .wf-grid .btn { min-height: 28px; padding-top: 3px; padding-bottom: 3px; }
+  .wf-ladder .wf-mv { min-height: 21px; height: 22px; }
+  .wf-name small { font-size: 10.5px; }
+  .wf-edit { margin-top: 5px; padding: 4px 8px; }
+  .wf-ed-name { flex: 0 1 auto; }
+  .wf-ed-name small { display: none; }
+}

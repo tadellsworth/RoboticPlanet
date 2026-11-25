@@ -862,6 +862,7 @@
           <a href="#hs-start" data-jump="hs-start">Getting started</a>
           <a href="#hs-supply" data-jump="hs-supply">Economy and supply chain</a>
           <a href="#hs-bots" data-jump="hs-bots">Workers, Haulers and the Foundry</a>
+          <a href="#hs-workforce" data-jump="hs-workforce">Workforce: who gets Workers first</a>
           <a href="#hs-build" data-jump="hs-build">Buildings and sites</a>
           <a href="#hs-land" data-jump="hs-land">Land, influence and Outposts</a>
           <a href="#hs-roads" data-jump="hs-roads">Roads and traffic</a>
@@ -989,7 +990,27 @@
           <li>An empty station gets Fuel before any other delivery, and idle bots top up at one close by. Build more near busy areas, above all far from home.</li>
           <li>Trucks, ships and planes have fuel tanks, not batteries: see Fuel, Crude and pipes.</li>
         </ul>
-        <p><b>Your robots.</b> Tap the robot counter in the top bar (<kbd>U</kbd>) for every robot you have by type, what they're all doing and how near you are to the limit, your spare Workers (with <b>Recycle spare Workers</b>), <b>Show</b> buttons for your warbots, and <b>Show workers on the map</b> (see Views, statistics and settings).</p>
+        <p><b>Your robots.</b> Tap the robot counter in the top bar (<kbd>U</kbd>) for every robot you have by type, what they're all doing and how near you are to the limit, your spare Workers (with <b>Recycle spare Workers</b>), <b>Show</b> buttons for your warbots, and <b>Show workers on the map</b> (see Views, statistics and settings). Tap the <b>Workers</b> count itself for the Workforce panel (next section).</p>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
+      <section id="hs-workforce">
+        <h3>Workforce: who gets Workers first</h3>
+        <p>Tap the <b>Workers</b> count in the top bar (<kbd>Shift</kbd>+<kbd>W</kbd>, or <b>Workforce</b> in Your robots) for the Workforce panel. While it's open, the map draws a line from each Worker to its job in the colour of what it's doing, and a small worker with a red slash over every building that wants one and every site waiting for a builder.</p>
+        <ul class="chain">
+          <li><b>What they're doing:</b> how many are <b>Building</b> (sites and repairs), <b>Running</b> buildings, <b>Stuck</b> (in a building that can't work, at a site waiting for its goods, or with no way to their job), <b>Carrying</b>, <b>Paving</b>, <b>Charging</b> and <b>Free</b>. Tap a count for those Workers, each in plain words (<i>In the Chip Fab, waiting for Crystal for 3:20</i>, <i>Walking to build the Keep</i>), a page at a time; tap one to go to it.</li>
+          <li><b>Problems:</b> sites with their goods in and no builder, buildings that want a Worker and why they don't get one (none free, only the ones kept free for building, held at your cap), and the goods you're short of with what makes them (<i>Crystal short: 2 Crystal Taps unstaffed</i>). Tap one to go there.</li>
+        </ul>
+        <p><b>The priority ladder</b> has a row for each kind of job: Building sites, Repairs (mending cracked roads, a Maglev pylon and capping shafts too), Bot Foundries, Crystal Taps, Ore Mines, Harvesters, Quarries, Smelters, Chip Fabs, Cement Works, Oil and Fuel (Oil Pumps and Refineries), Asphalt Plants, Ammo and Missiles (Ammo Plants, Missile Factories, Nuclear Reactors), Research Labs and Paving. Each shows how many Workers are on it, of how many buildings, and how it stands.</p>
+        <ul class="chain">
+          <li><b>Auto</b> (how every game starts): the ladder shows the order the game uses anyway (see Workers follow the economy), with why: <i>Chip short</i>, <i>plenty of Fiber</i>, <i>High priority</i>. Nothing changes until you touch it.</li>
+          <li><b>Manual:</b> move a row (drag it with a mouse, or its <b>▲▼</b>), pick <b>Manual</b>, or a preset, and your order decides: free Workers fill the rows top first. Within a row the shortages and each building's High or Low priority still decide. Two Workers are still kept free for building while sites wait. <b>Auto</b> gives the order back to the game.</li>
+          <li>Tap a row to set, under the ladder, <b>At least</b> (Workers are moved there, from buildings that can't work, then ones making what you have plenty of, then rows lower down, until it has that many), <b>At most</b> (the extra leave, and no more go) and <b>Pin</b> (the game never moves its Workers off, not for a shortage, a stall or a stock limit). They work in Auto too.</li>
+          <li><b>Presets</b>, one tap each: <b>Economy</b> (the Foundry and raw materials first), <b>War</b> (Repairs and Ammo and Missiles first, then sites) and <b>Build-up</b> (sites and paving first).</li>
+          <li><b>Rebalance now</b> takes Workers off buildings that can't work and ones making what you have plenty of (never a pinned row's, a row at its minimum or a Keep staffed building's) and sends them to the jobs waiting at the top. It says how many it would move; greyed out, there's nothing to move.</li>
+          <li><b>Keep staffed</b> on a building's panel pins that one building: its Worker stays put.</li>
+        </ul>
+        <p>Your settings are saved with the game and work the same in multiplayer. Computer rivals always run on Auto.</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -1882,6 +1903,7 @@
           <li><kbd>Q</kbd> Army panel. Inside it: <kbd>Q</kbd> Attack, <kbd>G</kbd> Hold ground, <kbd>V</kbd> Station, <kbd>1</kbd>–<kbd>4</kbd> group size, <kbd>Z</kbd>/<kbd>X</kbd> Army or Air tab, <kbd>E</kbd> Strike. Picking a bomber's target, <kbd>B</kbd> or <kbd>N</kbd> switches between Bomb and Napalm.</li>
           <li><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>6</kbd> select an Army Group (twice to go to it), <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>6</kbd> its panel.</li>
           <li><kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot (all but one in each garrison); <kbd>,</kbd> pick the idle ones, a group at a time.</li>
+          <li><kbd>Shift</kbd>+<kbd>W</kbd> opens (and closes) the <b>Workforce</b> panel: what every Worker is doing, what waits for one, and the priority ladder.</li>
           <li><kbd>Shift</kbd>+<kbd>F</kbd> opens your Bot Foundry's <b>Order bots</b> list from anywhere, to order more robots without leaving what you're looking at (again for your next Foundry, if you have several).</li>
           <li><kbd>Shift</kbd>+<kbd>P</kbd> Photo mode: the interface hidden for a picture of your colony (see Views, statistics and settings).</li>
           <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert (again for the one before); <kbd>F1</kbd>–<kbd>F4</kbd> a camera spot (<kbd>Shift</kbd>+<kbd>F1</kbd>–<kbd>F4</kbd> keeps one); <kbd>M</kbd> minimap; <kbd>.</kbd> or <kbd>Alt</kbd>+click ping the spot under the mouse for your team (multiplayer); <kbd>Enter</kbd> chat (multiplayer); <kbd>Shift</kbd>+<kbd>A</kbd> the Ally panel (a team game with a computer ally); <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
@@ -2428,6 +2450,7 @@
 <script src="js/city.js"></script>
 <script src="js/walker.js"></script>
 <script src="js/dam.js"></script>
+<script src="js/workforce.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

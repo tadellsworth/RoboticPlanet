@@ -2378,6 +2378,42 @@ const STALL_FREE = 25;
 // nobody is waiting for) puts its producers last, and their workers may leave for a producer of a wanted good.
 const WANT_LOW = 12, RICH_STOCK = 150;
 /*
+ * The Workforce ladder (the Workforce panel, Shift+W; see wfOrder in sim.js): the job types spare Workers fill, one row
+ * each. Building sites and Repairs are the builders' jobs (Repairs takes in mending cracked roads, a downed Maglev pylon
+ * and capping a fallen Deep Core's shafts), Paving the planned roads, the rest the buildings a Worker runs (`types`).
+ * A building a Worker runs that is in no row's types is in Other buildings. In Auto (the default) the ladder is the order
+ * the game uses anyway: sites, then repairs, then the buildings by what the economy needs, paving last. A player's
+ * own order (Manual) decides which rows spare Workers fill first; each row can have a minimum (at least N Workers),
+ * a cap (at most N) and a pin (its Workers are never moved by the automatic shortage and stall moves).
+ */
+const WF_ROWS = [
+  { k: 'sites', name: 'Building sites', one: 'site' },
+  { k: 'repair', name: 'Repairs', one: 'repair' },
+  { k: 'foundry', name: 'Bot Foundries', types: ['foundry'] },
+  { k: 'crystal', name: 'Crystal Taps', types: ['tap'] },
+  { k: 'ore', name: 'Ore Mines', types: ['mine'] },
+  { k: 'fiber', name: 'Harvesters', types: ['harvester'] },
+  { k: 'stone', name: 'Quarries', types: ['quarry'] },
+  { k: 'smelter', name: 'Smelters', types: ['smelter'] },
+  { k: 'chip', name: 'Chip Fabs', types: ['fab'] },
+  { k: 'cement', name: 'Cement Works', types: ['kiln'] },
+  { k: 'oil', name: 'Oil and Fuel', types: ['pump', 'refinery'] },
+  { k: 'asphalt', name: 'Asphalt Plants', types: ['tarworks'] },
+  { k: 'war', name: 'Ammo and Missiles', types: ['armory', 'munitions', 'reactor'] },
+  { k: 'lab', name: 'Research Labs', types: ['lab'] },
+  { k: 'other', name: 'Other buildings' },
+  { k: 'pave', name: 'Paving', one: 'road' },
+];
+const WF_KEYS = WF_ROWS.map((r) => r.k);
+const WF_ROW = Object.fromEntries(WF_ROWS.map((r) => [r.k, r]));
+const WF_MAX = 99; // (the most a row's minimum or cap goes to)
+// One tap each on the panel: a Manual order (rows not named keep their places after these, in WF_ROWS order).
+const WF_PRESETS = {
+  economy: { name: 'Economy', order: ['foundry', 'crystal', 'ore', 'fiber', 'stone', 'smelter', 'chip', 'cement', 'oil', 'sites', 'repair'] },
+  war: { name: 'War', order: ['repair', 'war', 'sites', 'foundry', 'smelter', 'chip', 'cement', 'oil', 'ore', 'crystal'] },
+  build: { name: 'Build-up', order: ['sites', 'pave', 'cement', 'stone', 'fiber', 'repair', 'ore', 'smelter'] },
+};
+/*
  * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
  * spare Workers) walks or drives there and is taken apart, RECYCLE_TIME seconds for each round of parts that went into
  * it (a quarter of the Foundry's time to make it) while it stands at the Foundry. RECYCLE_SHARE of the Alloy and Chips that went into it (a

@@ -301,7 +301,8 @@ function initUI() {
     if (L) { centerOn(L.x + 0.5, L.y + 0.5); openBuildingSheet(L); }
   };
   $('btn-speed').onclick = (e) => { e.stopPropagation(); sfx('click'); toggleSpeedMenu(); };
-  $('pop').onclick = () => { sfx('click'); if (UI.sheetKind === 'pop') closeSheet(); else { setMode('normal'); openPopSheet(); } };
+  // (the Workers count opens the Workforce panel, js/workforce.js; the rest of it Your robots)
+  $('pop').onclick = (e) => { sfx('click'); const wf = !!e.target.closest('.pn-w'); if (UI.sheetKind === (wf ? 'wf' : 'pop')) closeSheet(); else if (wf) openWorkforce(); else { setMode('normal'); openPopSheet(); } };
   window.addEventListener('pointerdown', (e) => {
     if (!$('speed-menu').hidden && !$('speed-menu').contains(e.target) && e.target !== $('btn-speed')) $('speed-menu').hidden = true;
   });
@@ -2793,6 +2794,7 @@ const MAP_KEYS = [
 ];
 const SHIFT_KEYS = {
   f: { group: 'panels', label: 'Order bots (again for the next Foundry)', run: openFoundryOrders },
+  w: { group: 'panels', label: 'Workforce: what your Workers are doing, and who gets them first', run: () => { if (UI.sheetKind === 'wf') closeSheet(); else openWorkforce(); } },
   t: { group: 'paths', label: 'Toggle Goods flow', run: () => togglePathsMap('goods', R.goodsMap) },
   a: { group: 'army', label: 'Ally: command your computer teammate (team games)', run: () => openAllySheet(), when: () => myAiAllies().length > 0 }, // (else Shift+A pans, as A does)
   ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {
@@ -7824,7 +7826,7 @@ function foldLong(root) {
 function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3', 'cols4'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
 function sheetCols() {
   const s = $('sheet'), body = $('sheet-body');
-  if (s.hidden || !isWide() || UI.sheetKind === 'build' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
+  if (s.hidden || !isWide() || UI.sheetKind === 'build' || UI.sheetKind === 'wf' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
   const long = body.scrollHeight / Math.max(1, body.clientHeight);
   if (body.scrollHeight - body.clientHeight <= 1) return; // (it fits: one column)
   let three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
@@ -7844,7 +7846,7 @@ function sheetCols() {
  * over Build, "Make · Yours" over a factory of yours). Plain words for the interface (LORE.md's: Command, survey,
  * construction); none for a panel without a title.
  */
-const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots',
+const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots', wf: 'Command · Workforce',
   goods: 'Command · Stores', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
   move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral' };
 function sheetEyebrow(kind, id) {
@@ -7874,7 +7876,7 @@ function sheetEyebrow(kind, id) {
  * map and what the panel is about stay in view above it; full; or just its title strip. The grab handle at the
  * top is dragged between them (further down closes the panel) or tapped to switch between half and full.
  */
-const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1, goals: 1 }; // lists and charts open at full height: nothing on the map to watch
+const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1, goals: 1, wf: 1 }; // lists and charts open at full height: nothing on the map to watch
 
 function setSheetSize(size) {
   const s = $('sheet');
@@ -7965,7 +7967,7 @@ function closeSheet() {
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
   sheetColsOff();
-  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all');
+  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all', 'sheet-wf');
   delete document.body.dataset.sheet;
   UI.sheetKind = null;
   UI.sheetFor = 0;
@@ -8287,6 +8289,10 @@ function openBuildingSheet(b) {
     if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
       html += `<button class="btn" id="sh-callw">Call a worker</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now, even one busy elsewhere, so this keeps working.</p>`;
     }
+    // Keep staffed (the Workforce panel's pin, for one building): its worker is never moved off by the game.
+    if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew) {
+      html += `<button class="btn${b.keepStaff ? ' primary' : ''}" id="sh-keepstaff" aria-pressed="${!!b.keepStaff}">${b.keepStaff ? 'Keep staffed: on' : 'Keep staffed'}</button><p class="hint">${b.keepStaff ? 'Its worker stays, even when the game would send it where a good is short or when this can\'t work for a while.' : 'Keep its worker here: the game never moves it off for a shortage, or because this can\'t work for a while.'}</p>`;
+    }
     // Call a builder: a construction site of yours with its goods in and nobody building it.
     if (b.owner === ME && !b.built && !b.builder && siteReady(b)) {
       html += `<button class="btn" id="sh-callw">Call a builder</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now to build, even one busy elsewhere.</p>`;
@@ -8402,6 +8408,7 @@ function openBuildingSheet(b) {
     // (each setting is an order: refreshSheet once it's done)
     const set = (name, ...args) => { act(name, [b.id, ...args], () => refreshSheet()); sfx('click'); };
     if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.onclick = () => set('prio', btn.dataset.v);
+    if ($('sh-keepstaff')) $('sh-keepstaff').onclick = () => act('keepStaff', [b.id, !b.keepStaff], () => { sfx('click'); if (!b.dead) openBuildingSheet(b); });
     if ($('sh-smode')) for (const btn of $('sh-smode').children) btn.onclick = () => set('smode', btn.dataset.v);
     if ($('sh-accept')) for (const btn of $('sh-accept').children) btn.onclick = () => set('accept', btn.dataset.g);
     if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.onclick = () => set('pmode', btn.dataset.v);
@@ -9983,7 +9990,7 @@ function refreshPopSheet() {
       '<p class="hint">Show takes you to each in turn. Warbots stationed at an Outpost come back to it after a fight; every other one belongs to the Command Base.</p>';
   }
   const wv = `<div class="section-label">Where your workers are</div>
-    <button class="btn${R.workerView ? ' primary' : ''}" id="sh-wview">${R.workerView ? 'Hide workers on the map' : 'Show workers on the map'}</button>
+    <div class="actions"><button class="btn${R.workerView ? ' primary' : ''}" id="sh-wview">${R.workerView ? 'Hide workers on the map' : 'Show workers on the map'}</button><button class="btn" id="sh-wf">Workforce<kbd>⇧W</kbd></button></div>
     <p class="hint">Rings every Worker on the map (and dots it on the minimap) in the colour of what it's doing, with a line to where it's going: ${Object.values(WORKER_VIEW).map(([c, l]) => `<span style="color:${c}">●</span> ${l}`).join(', ')}. Workers inside a building show as a count on it.</p>`;
   // Spare Workers: those past one for each building that takes a Worker and a few free for building (workersWanted),
   // offered for recycling at a Bot Foundry while there are any.
@@ -10003,6 +10010,7 @@ function refreshPopSheet() {
   el.dataset.html = html;
   el.innerHTML = html;
   $('sh-wview').onclick = () => { R.workerView = !R.workerView; sfx('click'); refreshPopSheet(); };
+  $('sh-wf').onclick = () => { sfx('click'); openWorkforce(); };
   if ($('pop-recycle')) $('pop-recycle').onclick = () => act('recycleSpare', [], (k) => {
     if (!k) { sfx('error'); toast('No spare Workers to recycle.', 'warn'); return; }
     sfx('order');
@@ -10057,6 +10065,7 @@ function refreshSheet() {
   if (UI.sheetKind === 'build') { refreshBuildMenu(); return; }
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
+  if (UI.sheetKind === 'wf') { refreshWorkforce(); return; } // (the Workforce panel: js/workforce.js)
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
   if (UI.sheetKind === 'agroup') { refreshAgSheet(); if (isWide()) foldLong($('sheet-body')); return; }
   if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
@@ -10253,7 +10262,7 @@ function updateHUD() {
   }
   $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers, trucks and Tankers` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
   // (Each count with its name under it in the Command Deck look; .pn-l are the names, the old look shows the dots.)
-  const ph = `<span class="pn"><span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span><b>${workers}<small class="pn-free"> (${idle} free)</small></b><span class="pn-l">Workers</span></span>` +
+  const ph = `<span class="pn pn-w" title="Workforce (Shift+W): what your Workers are doing, and who gets them first"><span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span><b>${workers}<small class="pn-free"> (${idle} free)</small></b><span class="pn-l">Workers</span></span>` +
     ` <span class="pn"><span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span><b>${haulers}</b><span class="pn-l">Haulers</span></span>` +
     (warOn() ? ` <span class="pn"><span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span><b>${war}</b><span class="pn-l">Warbots</span></span>` : '');
   if ($('pop').innerHTML !== ph) $('pop').innerHTML = ph;

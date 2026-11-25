@@ -2010,12 +2010,19 @@ function dispatch(p) {
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b) && !murmurCutOn(b));
   P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
+  // The player's Workforce settings (its panel, Shift+W: see wfOrder), if any: its own order of the rows (Manual), each
+  // row's minimum, cap and pin, and how many Workers each row has now. None (W null) for a player who never touched them
+  // and for the rival AI: everything below then runs as it always has.
+  const W = P.wf ? wfSetup(p) : null;
+  // (A building the automatic moves below leave alone: one set to Keep staffed, in a pinned row, or in a row at its minimum.)
+  const kept = (b) => !!b.keepStaff || (!!W && W.kept(b));
+  const release = (b) => { if (W) W.drop(b); unstaff(b); };
   if (free < minFree) {
-    const cands = blds.filter((b) => b.built && b.staff && !BDEFS[b.type].crew && !lastLink(b) && (b.type !== 'foundry' || (P.triage && P.noHaulers)));
+    const cands = blds.filter((b) => b.built && b.staff && !BDEFS[b.type].crew && !lastLink(b) && !kept(b) && (b.type !== 'foundry' || (P.triage && P.noHaulers)));
     const idles = new Map(cands.map((b) => [b, stallWhy(b) ? 1 : 0])); // (one whose worker can't work anyway first)
     cands.sort((a, c) => idles.get(c) - idles.get(a) || releaseScore(c) - releaseScore(a));
     if (cands.length) {
-      unstaff(cands[0]);
+      release(cands[0]);
       free++;
       if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
         S.players[p].lastShortMsg = S.time;
@@ -2037,37 +2044,47 @@ function dispatch(p) {
   const ranks = new Map();
   const rankOf = (b) => { let r = ranks.get(b); if (r === undefined) ranks.set(b, (r = needRank(p, b, want))); return r; };
   {
-    let builds = 0, runs = 0, urgent = 0, idleW = 0;
+    let builds = 0, runs = 0, urgent = 0, idleW = 0, urgentRow = Infinity;
     for (const b of blds) {
       if (!b.built ? !b.builder && siteReady(b) : b.fixLeft > 0 && !b.fixer) { if (!(P.danger && dangerAt(p, b.x, b.y))) builds++; }
-      else if (staffable(b) && !stallWhy(b)) { runs++; if (rankOf(b) < 0) urgent++; }
+      else if (staffable(b) && !stallWhy(b)) { runs++; if (rankOf(b) < 0) { urgent++; if (W && W.order) urgentRow = Math.min(urgentRow, W.idx(wfRowOf(b.type))); } }
     }
     if (builds || runs) {
       for (const u of S.bots) if (u.owner === p && BOTS[u.type].build && isIdleWorker(u)) idleW++;
       const slots = () => Math.max(0, Math.min(idleW - builds, free - minFree)); // (workers left to run buildings)
       const short = () => Math.max(0, builds - idleW) + Math.max(0, runs - slots());
       if (short() > 0) {
-        const stuck = blds.filter((b) => b.staff && b.stallSince != null && S.time - b.stallSince >= STALL_FREE && !BDEFS[b.type].crew && !lastLink(b) && getE(b.staff)?.inside === b.id && stallWhy(b));
+        const stuck = blds.filter((b) => b.staff && b.stallSince != null && S.time - b.stallSince >= STALL_FREE && !BDEFS[b.type].crew && !lastLink(b) && !kept(b) && getE(b.staff)?.inside === b.id && stallWhy(b));
         stuck.sort((a, c) => a.stallSince - c.stallSince || a.id - c.id);
         for (const b of stuck) {
           if (short() <= 0) break;
-          unstaff(b);
+          release(b);
           b.benched = 1;
           idleW++;
           free++;
         }
       }
       if (urgent > slots()) {
-        const rich = blds.filter((b) => b.built && b.staff && !b.paused && prioRank(b) > 0 && !BDEFS[b.type].crew && !lastLink(b) && rankOf(b) > 0);
+        // (Manual: only from a row no higher than the top one waiting, or its worker would only come straight back.)
+        const rich = blds.filter((b) => b.built && b.staff && !b.paused && prioRank(b) > 0 && !BDEFS[b.type].crew && !lastLink(b) && rankOf(b) > 0 && !kept(b) && !(W && W.order && W.idx(wfRowOf(b.type)) < urgentRow));
         rich.sort((a, c) => a.born - c.born || a.id - c.id);
         for (const b of rich) {
           if (urgent <= slots()) break;
-          unstaff(b);
+          release(b);
           idleW++;
           free++;
         }
       }
     }
+  }
+
+  // Over a row's cap (the Workforce panel's "at most"): the extra Workers leave, the least useful building first (never
+  // one set to Keep staffed).
+  if (W) for (const k of WF_KEYS) {
+    if (W.counts[k] <= W.rows[k].cap || !WF_ROW[k].types && k !== 'other') continue;
+    const on = blds.filter((b) => b.built && (b.staff || b.staffInc) && wfRowOf(b.type) === k && !b.keepStaff && !BDEFS[b.type].crew);
+    on.sort((a, c) => releaseScore(c) - releaseScore(a) || c.id - a.id);
+    for (const b of on) { if (W.counts[k] <= W.rows[k].cap) break; release(b); free++; }
   }
 
   roadToSites(p, blds); // (building beats roads: a Worker laying road near a site waiting for a builder goes to it)
@@ -2218,76 +2235,161 @@ function dispatch(p) {
   }
   if (!idle.length) return;
 
+  // The Workforce rows' minimums ("at least N", the Workforce panel), top row first: a free Worker for each job the row
+  // is short of, or else, once a pass, one moved off a building in another row (one that can't work first, then one
+  // that makes only what there's plenty of, then the lowest row), never a pinned row's, a Keep staffed building's or one
+  // from a row at its own minimum. Paving takes free Workers only.
+  if (W && WF_KEYS.some((k) => W.rows[k].min > W.counts[k])) {
+    const ladder = W.order || wfAutoOrder(p).order, at = (k) => ladder.indexOf(k);
+    const donor = (k, z) => {
+      let best = null, bk = 0;
+      for (const b of blds) {
+        if (!b.built || !b.staff || BDEFS[b.type].crew || kept(b) || lastLink(b) || wfRowOf(b.type) === k || S.zone[tIdx(b.x, b.y)] !== z) continue;
+        const v = getE(b.staff);
+        if (!v || v.dead || !v.task || v.task.type !== 'staff') continue;
+        const kind = stallWhy(b) ? 0 : rankOf(b) > 0 ? 1 : at(wfRowOf(b.type)) > at(k) ? 2 : 3;
+        if (kind > 2) continue;
+        if (!best || kind < bk || (kind === bk && (at(wfRowOf(b.type)) - at(wfRowOf(best.type)) || releaseScore(b) - releaseScore(best) || best.id - b.id) > 0)) { best = b; bk = kind; }
+      }
+      if (!best) return null;
+      const v = getE(best.staff);
+      release(best);
+      if (bk === 0) best.benched = 1; // (it can't work: nobody goes back to it until it can, benchHolds)
+      free++;
+      return isIdleWorker(v) ? v : null;
+    };
+    for (const k of ladder) {
+      const min = W.rows[k].min;
+      if (W.counts[k] >= min) continue;
+      if (k === 'pave') { stepPave(min - W.counts[k]); continue; }
+      const jobs = k === 'sites' ? blds.filter((b) => !b.built && !b.builder && siteReady(b) && b.type !== 'wall' && !(P.danger && dangerAt(p, b.x, b.y)))
+        : k === 'repair' ? blds.filter((b) => b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y)))
+          : blds.filter((b) => wfRowOf(b.type) === k && staffable(b) && !stallWhy(b)).sort((a, c) => prioRank(a) - prioRank(c) || rankOf(a) - rankOf(c) || a.born - c.born);
+      let stole = false;
+      for (const b of jobs) {
+        if (W.counts[k] >= min || W.full(k)) break;
+        const spot = k === 'sites' ? siteWorkAt(b) : b, role = k === 'sites' || k === 'repair' ? 'build' : 'staff';
+        let u = take(spot.x, spot.y, role);
+        if (!u && !stole) { stole = true; const v = donor(k, S.zone[tIdx(spot.x, spot.y)]); if (v) { idle.push(v); u = take(spot.x, spot.y, role); } }
+        if (!u) break;
+        if (k === 'sites') assignBuild(u, b); else if (k === 'repair') assignFix(u, b); else assignStaff(u, b);
+        if (!u.task || u.task.type !== (k === 'sites' ? 'build' : k === 'repair' ? 'fix' : 'staff')) { idle.push(u); break; }
+        W.add(k);
+        if (role === 'staff') free--;
+      }
+    }
+    if (!idle.length) return;
+  }
+
   // 1) A builder for every construction site that has materials waiting to be built with (not from far off
   //    while a worker close by will soon be free: see nearSoon). A Wall from beside it, the outer row first (wallStands).
+  //    (Each step below says true when nobody is left free: then there's nothing more to hand out.)
   let stands = null;
-  for (const b of blds) {
-    if (!idle.length) return;
-    if (!b.built && !b.builder && siteReady(b) && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
-      // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
-      if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
-      const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
-      const u = take(at.x, at.y, 'build');
-      if (u && nearSoon(u, at)) { idle.push(u); continue; }
-      assignBuild(u, b, stands);
+  const stepSites = () => {
+    for (const b of blds) {
+      if (!idle.length) return true;
+      if (W && W.full('sites')) return false; // (the row's cap: the Workforce panel's "at most")
+      if (!b.built && !b.builder && siteReady(b) && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+        // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
+        if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
+        const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
+        const u = take(at.x, at.y, 'build');
+        if (u && nearSoon(u, at)) { idle.push(u); continue; }
+        assignBuild(u, b, stands);
+        if (W && u && u.task && u.task.type === 'build') W.add('sites');
+      }
     }
-  }
+    return false;
+  };
   // 1a) A Worker for every Maglev line with a pylon down: it rides out from the nearer Terminal and rebuilds it,
   //     once the pylon's goods (MAGLEV.spacing tiles' worth) are paid from storage.
-  for (const b of blds) {
-    if (!idle.length) return;
-    const F = b.magFix;
-    if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magKeyPartner(b)) continue;
-    if (!F.paid) { const cost = magLineCost(MAGLEV.spacing); if (!canPay(p, cost)) continue; for (const g in cost) takeGood(p, g, cost[g]); F.paid = 1; }
-    const E = magFixEnd(b), u = take(E.x, E.y, 'build');
-    if (u) assignMagFix(u, b);
-  }
   // 1b) A worker for every building you've paid to repair.
-  for (const b of blds) {
-    if (!idle.length) return;
-    if (b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y))) {
-      const u = take(b.x, b.y, 'build');
-      if (u && nearSoon(u, b)) { idle.push(u); continue; }
-      if (u) assignFix(u, b);
-    }
-  }
   // 1c) Roads and track a Sundering Ray's Quake cracked: a Worker mends each patch (sunderMendSpots).
-  if (S.crkN > 0) for (const t of sunderMendSpots(p)) {
-    if (!idle.length) return;
-    const i = t % S.W, j = (t / S.W) | 0;
-    if (P.danger && dangerAt(p, i, j)) continue;
-    const u = take(i, j, 'build');
-    if (u && nearSoon(u, { x: i, y: j })) { idle.push(u); continue; }
-    if (u) assignMend(u, t);
-  }
   // 1d) A Worker to cap each open shaft of a fallen Deep Core of ours (the Murmur's way up: deepShaft), with the Cement for it.
-  for (const e of deepShaftsFor(p)) {
-    if (!idle.length) return;
-    if ((!e.capPaid && playerGoods(p).cement < DEEP.capCement) || (P.danger && dangerAt(p, e.x, e.y))) continue;
-    const u = take(e.x, e.y, 'build');
-    if (u) assignCap(u, e);
-  }
-  // 2) An operator for every finished building that needs one, while keeping minFree workers free.
+  //     (All four are the Workforce panel's Repairs.)
+  const stepRepairs = () => {
+    for (const b of blds) {
+      if (!idle.length) return true;
+      const F = b.magFix;
+      if (!F || !b.built || !BDEFS[b.type].magterm || F.u || !magKeyPartner(b)) continue;
+      if (W && W.full('repair')) break;
+      if (!F.paid) { const cost = magLineCost(MAGLEV.spacing); if (!canPay(p, cost)) continue; for (const g in cost) takeGood(p, g, cost[g]); F.paid = 1; }
+      const E = magFixEnd(b), u = take(E.x, E.y, 'build');
+      if (u) { assignMagFix(u, b); if (W) W.add('repair'); }
+    }
+    for (const b of blds) {
+      if (!idle.length) return true;
+      if (W && W.full('repair')) break;
+      if (b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y))) {
+        const u = take(b.x, b.y, 'build');
+        if (u && nearSoon(u, b)) { idle.push(u); continue; }
+        if (u) { assignFix(u, b); if (W && u.task && u.task.type === 'fix') W.add('repair'); }
+      }
+    }
+    if (S.crkN > 0) for (const t of sunderMendSpots(p)) {
+      if (!idle.length) return true;
+      if (W && W.full('repair')) break;
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (P.danger && dangerAt(p, i, j)) continue;
+      const u = take(i, j, 'build');
+      if (u && nearSoon(u, { x: i, y: j })) { idle.push(u); continue; }
+      if (u) { assignMend(u, t); if (W) W.add('repair'); }
+    }
+    for (const e of deepShaftsFor(p)) {
+      if (!idle.length) return true;
+      if (W && W.full('repair')) break;
+      if ((!e.capPaid && playerGoods(p).cement < DEEP.capCement) || (P.danger && dangerAt(p, e.x, e.y))) continue;
+      const u = take(e.x, e.y, 'build');
+      if (u) { assignCap(u, e); if (W) W.add('repair'); }
+    }
+    return false;
+  };
+  // 2) An operator for every finished building that needs one (`list`: a row's, or all of them), while keeping minFree
+  //    workers free. True when nobody's left free; 'stop' once only the few kept free for building are.
+  const stepStaff = (list) => {
+    for (const b of list) {
+      if (!idle.length) return true;
+      if (free <= minFree && !lastLink(b)) {
+        if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
+          S.players[p].lastShortMsg = S.time;
+          postMsg(p, 'Not enough workers to run every building. Build a Bot Foundry to make more.', b.x, b.y, 'warn');
+        }
+        if (P.triage && P.noHaulers) continue; // (a link further down the queue may hold its round)
+        return 'stop';
+      }
+      if (W && W.full(wfRowOf(b.type))) continue; // (its row's cap: the Workforce panel's "at most")
+      const u = take(b.x, b.y, 'staff');
+      if (!u) continue; // (nobody for this one, on its ground or with the charge to get there: the next may have someone)
+      if (nearSoon(u, b)) { idle.push(u); continue; } // (a worker close by will soon be free to run it)
+      if (assignStaff(u, b)) { free--; if (W) W.add(wfRowOf(b.type)); }
+      else idle.push(u);
+    }
+    return false;
+  };
   //    Within the same priority: one that could work before one that would only sit waiting (stallWhy), then by what the
   //    economy needs (needRank: a producer of a good factories or sites are held up for first, one of a good in plenty last).
-  const staffQueue = blds.filter(staffable);
-  const stalls = new Map(staffQueue.map((b) => [b, stallWhy(b) ? 1 : 0]));
-  staffQueue.sort((a, c) => prioRank(a) - prioRank(c) || stalls.get(a) - stalls.get(c) || rankOf(a) - rankOf(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
-  for (const b of staffQueue) {
-    if (!idle.length) return;
-    if (free <= minFree && !lastLink(b)) {
-      if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
-        S.players[p].lastShortMsg = S.time;
-        postMsg(p, 'Not enough workers to run every building. Build a Bot Foundry to make more.', b.x, b.y, 'warn');
-      }
-      if (P.triage && P.noHaulers) continue; // (a link further down the queue may hold its round)
-      break;
+  let staffQueue = null;
+  const queue = () => {
+    staffQueue = blds.filter(staffable);
+    const stalls = new Map(staffQueue.map((b) => [b, stallWhy(b) ? 1 : 0]));
+    staffQueue.sort((a, c) => prioRank(a) - prioRank(c) || stalls.get(a) - stalls.get(c) || rankOf(a) - rankOf(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
+  };
+  if (!W || !W.order) {
+    if (stepSites() || stepRepairs()) return;
+    queue();
+    if (stepStaff(staffQueue) === true) return;
+  } else {
+    queue();
+    // Manual (the player's own order on the Workforce panel): the rows in that order, top first. A row of buildings
+    // takes its buildings in the usual order (staffQueue: High first, then what the economy needs). Paving's row lays
+    // road here with whoever is still free; what's left of it is laid last, as usual.
+    let stop = false;
+    for (const k of W.order) {
+      if (k === 'sites') { if (stepSites()) return; }
+      else if (k === 'repair') { if (stepRepairs()) return; }
+      else if (k === 'pave') stepPave(Infinity);
+      else if (!stop) { const r = stepStaff(staffQueue.filter((b) => wfRowOf(b.type) === k)); if (r === true) return; stop = r === 'stop'; }
     }
-    const u = take(b.x, b.y, 'staff');
-    if (!u) continue; // (nobody for this one, on its ground or with the charge to get there: the next may have someone)
-    if (nearSoon(u, b)) { idle.push(u); continue; } // (a worker close by will soon be free to run it)
-    if (assignStaff(u, b)) free--;
-    else idle.push(u);
   }
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
   //    priority the Foundry goes first (new workers unblock everything), then construction sites
@@ -2609,13 +2711,16 @@ function dispatch(p) {
   // 6) Free workers pave planned roads (see nextPaveTile). The tile one picks goes to the free worker on its ground
   //    nearest to it: the one at home takes the tile at the home end, not one standing out at the far end.
   //    No more than the colony's road crew limit of them at once (roadCrew): a Roadworks' Pavers lay road too, and
-  //    don't count (see doStaff).
-  if (planList(p).length) {
+  //    don't count (see doStaff). (stepPave, below: also where Paving's row comes on a Manual Workforce ladder, and for
+  //    its minimum, at most `most` Workers.)
+  stepPave(Infinity);
+  function stepPave(most) {
+    if (!planList(p).length) return;
     const none = []; // areas with nothing (left) to pave
     const crew = idle.filter((u) => BOTS[u.type].build && !(u.failUntil > S.time)); // (one that just found no way somewhere sits this round out)
     const lim = roadCrew(p);
-    let k = crew.length - 1, on = lim && crew.length ? roadCrewOn(p) : 0;
-    while (k >= 0 && (!lim || on < lim)) {
+    let k = crew.length - 1, on = lim && crew.length ? roadCrewOn(p) : 0, laid = 0;
+    while (k >= 0 && (!lim || on < lim) && laid < most && !(W && W.full('pave'))) {
       const u = crew[k], z = botZone(u);
       if (none.indexOf(z) >= 0) { k--; continue; }
       const t = nextPaveTile(u, p, -1);
@@ -2629,7 +2734,7 @@ function dispatch(p) {
       const v = crew.splice(w, 1)[0];
       idle.splice(idle.indexOf(v), 1);
       assignPave(v, t);
-      if (v.task && v.task.type === 'pave') on++;
+      if (v.task && v.task.type === 'pave') { on++; laid++; if (W) W.add('pave'); }
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
   }
@@ -4531,7 +4636,7 @@ function produce(b, def, dt) {
     b.status = `Stopped: you have ${tickTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
     // After a little while its worker goes off to other jobs; one comes back when it's needed.
     b.limitT = (b.limitT || 0) + dt;
-    if (b.limitT > 10) { unstaff(b); b.limitT = 0; }
+    if (b.limitT > 10 && !wfHolds(b)) { unstaff(b); b.limitT = 0; } // (not one the player keeps staffed: Keep staffed, a pinned row)
     return;
   }
   b.limitT = 0;
@@ -10693,6 +10798,179 @@ function needRank(p, b, want) {
   for (const g of gs) w = Math.max(w, want[g] || 0);
   if (w) return -w;
   return gs.length && gs.every((g) => tickTotal(p, g) >= RICH_STOCK) ? 1 : 0;
+}
+
+/* ------------------------------------------------------------------ the Workforce ladder (WF_ROWS) */
+
+/** The Workforce row (WF_ROWS key) of a building of type `type` that a Worker runs, or '' for one no Worker runs. */
+function wfRowOf(type) {
+  const def = BDEFS[type];
+  if (!def || !def.staff || def.crew) return '';
+  for (const r of WF_ROWS) if (r.types && r.types.includes(type)) return r.k;
+  return 'other';
+}
+
+/** Does the player keep building b's Worker in it whatever happens: Keep staffed on its panel, or its Workforce row pinned? */
+function wfHolds(b) { return !!b.keepStaff || (!!S.players[b.owner]?.wf && wfRow(b.owner, wfRowOf(b.type)).pin); }
+
+/**
+ * Does finished building b want a Worker now (dispatch's step 2): running, not paused or cut off, nobody in it or on
+ * the way, room for what it makes, something left to work, not a Lab with nothing to research, not one whose Worker
+ * was sent to help elsewhere while it still can't work (benchHolds, but only looking: the panels ask this too).
+ */
+function wantsStaff(b) {
+  const def = BDEFS[b.type];
+  return !!(b.built && !b.paused && !b.cut && def.staff && !def.crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(def.lab && !S.players[b.owner].research) && !(b.benched && stallWhy(b)));
+}
+
+/**
+ * Player p's Workforce settings for one dispatch pass (see dispatch): its order (null on Auto) and each row's index in it,
+ * the rows' settings, and how many Workers each row has, kept up to date as the pass hands out and takes back jobs.
+ */
+function wfSetup(p) {
+  const order = wfOrder(p), counts = wfCounts(p), rows = {}, at = {};
+  for (const k of WF_KEYS) rows[k] = wfRow(p, k);
+  (order || WF_KEYS).forEach((k, i) => { at[k] = i; });
+  return {
+    order, counts, rows,
+    idx: (k) => at[k],
+    kept: (b) => { const k = wfRowOf(b.type); return !!k && (rows[k].pin || counts[k] <= rows[k].min); },
+    full: (k) => counts[k] >= rows[k].cap,
+    drop: (b) => { const k = wfRowOf(b.type); if (k && (b.staff || b.staffInc)) counts[k]--; },
+    add: (k) => { if (k) counts[k]++; },
+  };
+}
+
+/** Drop player record P's Workforce settings that say nothing (a row with no minimum, cap or pin; no settings at all: back to none). */
+function wfTidy(P) {
+  const W = P.wf;
+  if (!W) return;
+  for (const k in W.rows || {}) if (!Object.keys(W.rows[k]).length) delete W.rows[k];
+  if (W.rows && !Object.keys(W.rows).length) delete W.rows;
+  if (!W.order && !W.rows) delete P.wf;
+}
+
+/** A list of Workforce rows made whole: the known keys in `list`, once each, then the rest in WF_ROWS order. */
+function wfNormOrder(list) {
+  const out = [];
+  if (Array.isArray(list)) for (const k of list) if (ownKey(WF_ROW, k) && !out.includes(k)) out.push(k);
+  for (const k of WF_KEYS) if (!out.includes(k)) out.push(k);
+  return out;
+}
+
+/** Player p's own Workforce order (Manual: the whole list of rows), or null in Auto. */
+function wfOrder(p) {
+  const W = S.players[p] && S.players[p].wf;
+  return W && Array.isArray(W.order) ? wfNormOrder(W.order) : null;
+}
+
+/** Row k's settings for player p: { min, cap, pin } (min 0 and cap Infinity when unset). */
+function wfRow(p, k) {
+  const r = S.players[p] && S.players[p].wf && S.players[p].wf.rows && S.players[p].wf.rows[k];
+  return { min: (r && r.min) || 0, cap: r && r.cap != null ? r.cap : Infinity, pin: !!(r && r.pin) };
+}
+
+/** The Workforce row of the job Worker u is on ('' for none: carrying, charging, free). */
+function wfJob(u) {
+  const t = u.task, tt = t && t.type;
+  if (!tt) return '';
+  if (tt === 'staff') { const b = getE(t.bld); return b ? wfRowOf(b.type) : ''; }
+  if (tt === 'build') return 'sites';
+  if (tt === 'fix' || tt === 'magfix' || tt === 'mend' || tt === 'capshaft' || tt === 'dammend') return 'repair';
+  if (tt === 'pave') return 'pave';
+  return '';
+}
+
+/** How many of player p's Workers are on each row's jobs now ({ row: n }). */
+function wfCounts(p) {
+  const n = {};
+  for (const k of WF_KEYS) n[k] = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !BOTS[u.type].build || !BOTS[u.type].staff) continue;
+    const k = wfJob(u);
+    if (k) n[k]++;
+  }
+  return n;
+}
+
+/**
+ * The order the game fills player p's rows in on Auto, for the Workforce panel to show: building sites, then repairs,
+ * then each row of buildings by its most urgent building the way dispatch's step 2 ranks them (a High one first, a Low
+ * one last; then a maker of a good something waits for, by how many wait; a maker only of goods there's plenty of last;
+ * the Bot Foundry before the rest), then paving. { order, why: { row: why it's where it is ('wanted' | 'plenty' |
+ * 'high' | 'low' | '') }, want } (want: goodsWanted). Reads the game, changes nothing.
+ */
+function wfAutoOrder(p) {
+  const blds = S.buildings.filter((b) => !b.dead && b.owner === p);
+  const want = goodsWanted(p, blds);
+  const best = {}, why = {};
+  for (const b of blds) {
+    if (!b.built) continue;
+    const k = wfRowOf(b.type);
+    if (!k) continue;
+    const r = needRank(p, b, want), key = [prioRank(b), r, staffPriority(b)];
+    const q = best[k];
+    if (!q || (key[0] - q[0] || key[1] - q[1] || key[2] - q[2]) < 0) best[k] = key;
+  }
+  const mid = WF_KEYS.filter((k) => k !== 'sites' && k !== 'repair' && k !== 'pave');
+  const at = (k) => best[k] || [1, 0, 1];
+  mid.sort((a, c) => at(a)[0] - at(c)[0] || at(a)[1] - at(c)[1] || at(a)[2] - at(c)[2] || WF_KEYS.indexOf(a) - WF_KEYS.indexOf(c));
+  for (const k of mid) { const q = best[k]; why[k] = !q ? '' : q[0] === 0 ? 'high' : q[0] === 2 ? 'low' : q[1] < 0 ? 'wanted' : q[1] > 0 ? 'plenty' : ''; }
+  return { order: ['sites', 'repair', ...mid, 'pave'], why, want };
+}
+
+/**
+ * Rebalance now (the Workforce panel): Workers come off buildings that can't work (out of what they work with, their store
+ * full), then off ones that only make what the colony has plenty of, then (Manual) off rows below the top row with a job
+ * waiting, until there's one free for each job waiting for a Worker: a site with its goods in and nobody building it, a
+ * repair, a building that could work with nobody to run it. Never off a pinned row, a building set to Keep staffed, or a
+ * row at its minimum. The next dispatch sends them, top rows first. How many were moved (dry: how many would be,
+ * moving nobody: the panel's button says so).
+ */
+function wfRebalance(p, dry) {
+  // (As an order, between turns: the goods counts are taken afresh, not from a count a panel may have asked for after an
+  // earlier order this turn changed them: tickTotal. Every device does the same.)
+  if (!dry) _totals.tick = -1;
+  const P = S.players[p];
+  const blds = S.buildings.filter((b) => !b.dead && b.owner === p);
+  const order = wfOrder(p) || wfAutoOrder(p).order, idx = (k) => order.indexOf(k);
+  const counts = wfCounts(p);
+  const want = goodsWanted(p, blds);
+  // The jobs waiting, and the top row any is in.
+  let jobs = 0, top = Infinity;
+  const open = {};
+  const add = (k) => { if (counts[k] + (open[k] || 0) >= wfRow(p, k).cap) return; open[k] = (open[k] || 0) + 1; jobs++; top = Math.min(top, idx(k)); };
+  for (const b of blds) {
+    if (P.danger && dangerAt(p, b.x, b.y)) continue;
+    if (!b.built) { if (!b.builder && siteReady(b)) add('sites'); }
+    else if (b.fixLeft > 0 && !b.fixer) add('repair');
+    else if (wantsStaff(b) && !stallWhy(b)) add(wfRowOf(b.type));
+  }
+  let idle = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && BOTS[u.type].build && BOTS[u.type].staff && isIdleWorker(u)) idle++;
+  let need = jobs - Math.max(0, idle - MIN_FREE_WORKERS);
+  if (need <= 0) return 0;
+  const cands = [];
+  for (const b of blds) {
+    const def = BDEFS[b.type], k = wfRowOf(b.type);
+    if (!b.built || !(b.staff || b.staffInc) || def.crew || !k || b.keepStaff || !(getE(b.staff || b.staffInc)?.task?.type === 'staff')) continue;
+    if (wfRow(p, k).pin) continue;
+    const kind = stallWhy(b) ? 0 : needRank(p, b, want) > 0 ? 1 : wfOrder(p) && idx(k) > top ? 2 : -1;
+    if (kind >= 0) cands.push({ b, k, kind });
+  }
+  cands.sort((a, c) => a.kind - c.kind || idx(c.k) - idx(a.k) || releaseScore(c.b) - releaseScore(a.b) || a.b.id - c.b.id);
+  let moved = 0;
+  for (const { b, k, kind } of cands) {
+    if (need <= 0) break;
+    if (counts[k] <= wfRow(p, k).min) continue;
+    if (!dry) {
+      unstaff(b);
+      if (kind === 0) b.benched = 1; // (it can't work: nobody goes back to it until it can: benchHolds)
+    }
+    counts[k]--;
+    need--; moved++;
+  }
+  return moved;
 }
 
 /** Note that b's worker can't work right now (b.stallSince: since when), or that it can (stall false). */
@@ -19950,6 +20228,7 @@ function hashState() {
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
     obj(b.stock); obj(b.inc); if (b.type === 'foundry' && b.loot) obj(b.loot); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+    if (b.keepStaff) int(-77); // (Keep staffed: ORDERS.keepStaff)
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
@@ -19967,6 +20246,8 @@ function hashState() {
     if (g.ord.k === 'raid') { const o = g.ord; int(o.rep ?? 1); str(o.tk || ''); int(o.tg || 0); int(o.n0 || 0); int(o.n || 0); int(o.hits || 0); str(o.why || ''); int(o.sx ?? -1); int(o.sy ?? -1); num(o.lookT || 0); }
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
+  // The Workforce settings (wfOrder): only a player's who set any.
+  for (const P of S.players) if (P.wf) { int(P.id); str((P.wf.order || []).join(',')); for (const k in P.wf.rows || {}) { str(k); obj(P.wf.rows[k]); } }
   // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
