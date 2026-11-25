@@ -1367,7 +1367,7 @@ function colonyName(p) {
 function playerName(p, the) {
   const me = typeof ME !== 'undefined' ? ME : 0, G = typeof S !== 'undefined' && S ? S : null;
   if (p === me && !(G && G.watch)) return the ? 'you' : 'You'; // (whoever is playing on this device; nobody, in a game being watched)
-  if (G && ((G.mode === 'colony' && p === 1) || (G.wildlife && p === (G.wildOwner ?? 1)))) return the ? 'the Murmur' : 'Murmur';
+  if (G && ((G.mode === 'colony' && p === 1 && !(G.horde && G.horde.pair)) || (G.wildlife && p === (G.wildOwner ?? 1)))) return the ? 'the Murmur' : 'Murmur'; // (co-op Horde side by side: colony 1 is a partner's)
   if (G && G.players && G.players[p] && G.players[p].name) return G.players[p].name; // (a person, in multiplayer)
   const ally = G && G.teams && typeof allies === 'function' && allies(p, me);
   return ally ? `${callsign(p)} (ally)` : callsign(p);
@@ -2309,6 +2309,17 @@ const HORDE = {
   pair: { shape: 'Long Haul 2v2', mul: 1.8, room: 160, guards: 2 },
   crew: { per: 0.3, most: 1.6 },
 };
+/*
+ * Fallen allies (the owner, Nov 2026): in a team game (Teams 2 vs 2, co-op Horde side by side) a colony whose Command
+ * Base falls while a teammate still stands is down, not out: its people watch, and a teammate taking the base back
+ * brings it back into the game (js/sim.js: colonyDown, reinstate). `armor`: the base's share of its armor once retaken;
+ * `crew`: the robots a retaken Teams colony starts again with (its own were lost with the base); `prizeKeep`: the warbots
+ * a computer captor keeps in a fallen colony's base it holds; `retake`: Horde's (the Murmur don't capture): armed warbots
+ * of a partner within r tiles of the ruin, no Murmur that close, for secs seconds (running back `decay` a second with
+ * nobody there).
+ */
+const FALLEN = { armor: 0.3, crew: { worker: 6, hauler: 3, warbot: 4, bulwark: 1 }, hordeCrew: { worker: 2, warbot: 4 },
+  goods: { cement: 20, alloy: 12, chip: 6, fuel: 10, ammo: 10 }, prizeKeep: 4, retake: { r: 3, secs: 35, decay: 2 } };
 /** The Horde level's numbers (HORDE.levels) for a difficulty key. */
 function hordeLevel(k) { return HORDE.levels[k] || HORDE.levels.normal; }
 /** The Long haul map type's index (Horde is played on it; co-op side by side on Long Haul 2v2: `pair`). */

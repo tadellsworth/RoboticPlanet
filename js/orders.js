@@ -69,6 +69,28 @@ const ORDERS = {
    */
   /** Contingency: play card i of p's hand in this battle (at tile x, y for those aimed): js/contingency-battle.js. */
   contCard(p, i, x, y) { return typeof contPlayCard === 'function' && !!S.contingency && contPlayCard(p, i, x, y); },
+  /**
+   * Let fallen teammate q help command p's colony (on), or take it back (off): while q is down (FALLEN), its people's
+   * orders go to p's colony (mpOrderCol). Only p's own people can give it (not q helping). It ends by itself when q is
+   * back, or p falls too.
+   */
+  lend(p, q, on) {
+    if (!Number.isInteger(q) || q === p || !S.players[q] || !isDown(q) || !allies(p, q) || isWild(q)) return false;
+    if (typeof MP !== 'undefined' && MP.on && (ORDER_BY < 0 || mpCol(ORDER_BY) !== p)) return false;
+    const Q = S.players[q];
+    if (on) {
+      if (Q.help === p) return true;
+      Q.help = p;
+      postMsg(p, `${playerName(q, true)} is helping command your colony until their base is retaken. Take it back any time.`, undefined, undefined, 'info');
+      postMsg(q, `${playerName(p)} lets you help command their colony: your orders go to it until your base is retaken.`, undefined, undefined, 'good');
+    } else {
+      if (Q.help !== p) return true;
+      delete Q.help;
+      postMsg(p, `You took command of your colony back from ${playerName(q, true)}.`, undefined, undefined, 'info');
+      postMsg(q, `${playerName(p)} has taken command of their colony back: you're watching again.`, undefined, undefined, 'info');
+    }
+    return true;
+  },
   surrender(p) {
     if (S.mission || S.watch || S.mode === 'colony' || S.winner >= 0 || !human(p) || S.players[p].out) return false;
     const by = surrenderTo(p);
@@ -658,6 +680,9 @@ let ORDER_BY = -1;
 function applyOrder(p, name, args, by) {
   const f = Object.prototype.hasOwnProperty.call(ORDERS, name) ? ORDERS[name] : null;
   if (!f || !S || !S.players[p]) return undefined;
+  // A colony out of the game, or down (its base fallen: FALLEN), gives no orders: its people watch. (One a standing
+  // teammate lets help command gives orders to that teammate's colony instead: mpOrderCol in js/lockstep.js.)
+  if (S.players[p].out && name !== 'rivalDifficulty') return undefined;
   ORDER_BY = Number.isInteger(by) && by >= 0 ? by : -1;
   try {
     return f(p, ...(Array.isArray(args) ? args : []));

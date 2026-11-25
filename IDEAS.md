@@ -2540,6 +2540,27 @@ title on the main menu (the M2 cinematic menu's font, coral gradient and glow), 
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
 
+## Built: Fallen allies, down not out (owner, Nov 25 2026)
+
+**Built** (README's Fallen allies entry has the code map; How to play, Fallen allies). The owner's rule for every allied
+game: when one partner's Command Base falls while the other stands, the fallen one watches (observer, no orders) instead
+of being out (Teams) or both losing (co-op Horde); the team loses only when the last base falls; the survivor retaking the
+base brings them back. Choices made: **Teams**, the captor takes everything as ever, but all of it that still stands
+comes back on the retake (whoever holds it), the base at 30% armor, and a fresh crew of 6 Workers, 3 Haulers and 2
+Warbots (its robots die with the base, as before); roads, pipes and lights stay the fallen colony's meanwhile. The retake
+is an ordinary capture of the base by a teammate. **Horde**, the Murmur don't capture: the base lies a ruin at 1 armor,
+the colony keeps everything but its robots idle (nobody gives them work; guns and warbots still fight), and a partner's
+armed warbots holding it 35 s with no Murmur within 3 tiles (a ring that fills, like a megastructure's seize ring)
+retake it. **Help command** (the owner's addition): the survivor can let the fallen player give orders to its colony
+until they're back (off by default; the banner's button, or take it back). Computer rivals: an ally goes for its fallen
+ally's base first (Horde: holds the ruin); a computer captor keeps 4 warbots in a captured base. Nukes and surrenders
+are still out for good.
+
+**Open:** should the retaken Teams colony get back the robots it had (they die with the base now, hence the crew)?
+Should a fallen player be able to ping and chat freely (they can, through the usual team ping/chat)? Should a long-down
+colony's buildings in Horde decay or be the waves' first target? Is 35 s with no Murmur too hard to manage in a late
+wave (the clock holds, it doesn't reset, while Murmur are there)? Three- and four-colony teams (more than one down).
+
 ## Built: Horde mode (owner, Nov 25; built Nov 25 2026)
 
 **Built** (Custom Game, Mode: Horde; README's Horde entry has the code map). The owner's answers: (1) both, as a setting
@@ -2559,12 +2580,12 @@ Murmur's blows). `tools/horde-test.js` plays it headless.
 - ~~Co-op Horde~~ **built Nov 25 2026** (the owner's pick: **side by side on Long Haul 2v2**): in multiplayer the host and
   the first partner each run a colony, allies at the south end, the Maw midway across the north end; waves **×1.8**
   (split over both colonies' lanes, so each meets ~0.9 of a lone colony's wave), a Harrow at each colony in a boss wave,
-  160 up at once, the Maw's guards doubled; **either Command Base falling loses the game for both**. The host can tap
+  160 up at once, the Maw's guards doubled; ~~either Command Base falling loses the game for both~~ (see Fallen allies
+  below: one down, the other fights on and can retake the ruin; both down loses). The host can tap
   the partner across to share one colony instead (shared colony co-op on Long haul, waves ×1.3 for two, +0.3 per extra
   person); more people share the host's colony. `tools/horde-lockstep-test.js` checks two devices stay in step, with a
   mid-wave reload. Open: is ×1.8 right from real play (the headless computer colonies lasted about as long side by side
-  as alone, to wave 5 on Colonist); should a fallen colony be **overrun but not lost** (its partner fights on, the waves
-  all at them) instead of both losing; side by side for three or four (Long Haul 2v2 has four places: two colonies at
+  as alone, to wave 5 on Colonist); ~~should a fallen colony be overrun but not lost~~ (built: Fallen allies); side by side for three or four (Long Haul 2v2 has four places: two colonies at
   each end against a Maw in the middle?); a "Rematch" for co-op Horde from the end screen.
 - ~~Its own Records and achievements~~ **built Nov 25 2026**: nine Horde achievements (32 in all) and a Horde table on the
   Records screen (Endless best and fastest Fixed win per level, co-op apart).

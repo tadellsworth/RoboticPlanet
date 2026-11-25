@@ -140,6 +140,14 @@ function mpIn(msg) {
 
 /** The colony person p runs: their own (p), or in co-op the one they share (S.crew). */
 function mpCol(p) { const c = S && S.crew && S.crew[p]; return c ? c.c : p; }
+/**
+ * The colony person p's orders go to: their own (mpCol), or, while it's down and a standing teammate lets them help
+ * command theirs (ORDERS.lend: P.help, FALLEN), that teammate's. The same on every device (it's all in the game).
+ */
+function mpOrderCol(p) {
+  const c = mpCol(p), P = S && S.players[c], h = P && P.out && P.down ? P.help : undefined;
+  return Number.isInteger(h) && S.players[h] && !S.players[h].out && allies(h, c) ? h : c;
+}
 /** The people running colony c (in co-op, more than one). */
 function mpCrewOf(c) { return MP.humans.filter((q) => mpCol(q) === c); }
 
@@ -354,7 +362,7 @@ function mpBeginTurn() {
       if (mpAI(p, T)) continue;
       for (const o of m.get(p)) {
         if (!Array.isArray(o)) continue;
-        const c = mpCol(p), r = applyOrder(c, o[0], o[1], p);
+        const c = mpOrderCol(p), r = applyOrder(c, o[0], o[1], p); // (a fallen teammate helping: the colony they help)
         if (MP.onOrder) { try { MP.onOrder(p, c, o[0], o[1], r); } catch (e) { /* (the screens' note of it: never the game's) */ } }
         if (p === MP.me && MP.cbs.has(o[2])) {
           const cb = MP.cbs.get(o[2]);
@@ -403,7 +411,7 @@ function mpFrame(dt) {
   if (!MP.on) return;
   MP.clock += dt;
   // Back after being dropped (and caught up): take my colony back from the computer.
-  if (mpAINow(MP.me) && MP.autoRejoin !== false && !(S.players[ME] && S.players[ME].out) && mpBehind() <= 2 && MP.clock - (MP.rejoinT || -99) > 10) {
+  if (mpAINow(MP.me) && MP.autoRejoin !== false && !(S.players[ME] && S.players[ME].out && !S.players[ME].down) && mpBehind() <= 2 && MP.clock - (MP.rejoinT || -99) > 10) {
     MP.rejoinT = MP.clock;
     mpRejoin();
   }

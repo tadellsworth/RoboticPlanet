@@ -56,13 +56,39 @@ how goods move.
   places empty, the Maw midway across the north end; the Murmur take their own slot (`S.wildSlot`, as in Versus, player
   1 being a colony). `S.horde.ps` [0, 1], `HORDE.lanes` lanes per colony across its half (`H.laneP`: whose), the queue
   spread over all of them, a boss wave's Harrows one per colony (`hordeLaunch`), messages to both (`hordeSay`), salvage
-  per colony (`hordeSalvageAt`); lost when **either** Command Base falls (`H.lostP`). Waves × `HORDE.pair.mul` (1.8; the
+  per colony (`hordeSalvageAt`, only to colonies standing); a Command Base battered down while its partner's stands is
+  **down** (`hordeFall`, `FALLEN` below: watching, its robots idle, the waves still at it) and back once the partner's
+  armed warbots hold the ruin (`hordeRetake`); lost when **both** are down (`H.lostP`, `H.falls`). Waves × `HORDE.pair.mul` (1.8; the
   kinds' caps too), `pair.room` (160) up at once, the Maw's guards × `pair.guards`. **One colony together** (the host
   taps the partner across: shared colony co-op, `S.crew`, on Long haul): waves × `1 + HORDE.crew.per` (0.3) per extra
   person, at most `crew.most`. Further people in the lobby share the host's colony. `S.horde.mul` (saved, checked) holds
-  the scale (`hordeWaveNow`); `hashState` covers the waves. `node tools/horde-lockstep-test.js [pair|crew|both] [minutes]`
-  plays co-op Horde on two headless devices through a stand-in relay, both giving orders, with a mid-wave reload and
-  rejoin, and checks their fingerprints every second.
+  the scale (`hordeWaveNow`); `hashState` covers the waves. `node tools/horde-lockstep-test.js [pair|crew|teams|both|all] [minutes]`
+  plays co-op Horde (and `teams`, a 2 vs 2 game of two people) on two headless devices through a stand-in relay, both
+  giving orders, with a reload and rejoin, and checks their fingerprints every second; `pair` and `teams` also play out
+  a fallen ally on a script (fall, refused orders, help command, a reload while down, the retake, own orders again; Teams:
+  both fall and the team loses). `node tools/horde-test.js ... --pair [--fallonly]` checks the same headless first.
+- **Fallen allies** (`FALLEN` in `js/defs.js`; the "fallen allies" section of `js/sim.js` after `eliminate`): in a game
+  with teams (`fallTeams`: `S.teams`, not a mission or a Contingency battle) a colony whose Command Base falls while a
+  teammate stands (`teamStands`, `canFallDown`) is **down**: `P.out` as any fallen colony plus `P.down` `{ t, by }`
+  (`isDown`). `applyOrder` takes no order from an out colony (but `rivalDifficulty`). **Teams**: `eliminate` (a capture,
+  not a nuke or surrender) hands everything to the captor as ever, but marks each building `b.was` (the base too, at the
+  captor's already) and leaves the colony's roads, pipes, lights and overpasses its own (plans dropped); a computer
+  captor keeps `FALLEN.prizeKeep` warbots in the base (`keepW`). A teammate capturing that base back (`captureBuilding`)
+  calls `reinstate`: every building marked its own still standing comes back from whoever holds it, the base at
+  `FALLEN.armor` of its armor, and `FALLEN.crew` robots step out (`FALLEN.hordeCrew` in Horde), with `FALLEN.goods` in its store. **Horde** (side by side): `hordeFall` (the base stays
+  at `HORDE.fall`, the colony keeps everything: dispatch skips an out colony, so its robots idle; guns and warbots still
+  fight), `hordeRetake` once a second: a partner's armed warbots within `FALLEN.retake.r` of the base and no Murmur that
+  close fill `b.hRet` (`b.hBy` whose; `secs` s; Murmur stop it, nobody runs it back `decay` a second), drawn as a ring
+  (`drawFallenBase` in `js/render.js`; in Teams a pulsing ring in the fallen colony's colour round its held base). The
+  team loses only when the last stands no more (`teamFallen` clears the others' `down`; `eliminate`'s end check counts a
+  down person as still in). **Help command** (`ORDERS.lend(p, q, on)`, only from p's own people): the fallen colony's
+  `P.help` = the survivor's; `mpOrderCol` (`js/lockstep.js`) sends a person's orders to the colony they help, and
+  `fallenTick` (`js/mpui.js`) switches that device's `ME` to it (and back when they're back or it's taken back: the
+  banner's button, `fallenBanner`). A down person's device still rejoins after a drop. AI (`js/ai.js`): a fallen
+  ally's base held by the enemy scores first in a rival's attack and march choice; in co-op Horde `aiRetakeRuin` sends
+  armed warbots to hold the ruin. UI: the banner, the Goal card's `fallenGoalLine`, the Horde top bar, the body's
+  `fallen` class (no build bar or panel buttons). `P.down`, `P.help`, `b.was`, `b.hRet`, `b.hBy` are in `hashState` and
+  `checkSave`; the log's `back` event is in the end report.
 - **The Murmur** in every game (the setting **The Murmur**: Off, Quiet or Active, Active by default, never on Lunar):
   native creatures, nobody's side, whose nests sit out in the wilds and whose tunnels spread toward power every night,
   packs coming up through their exits to raid every colony alike (see The Murmur below).
@@ -4207,7 +4233,8 @@ its Command Base, drawn as a crate crossing the map. State: `P.allyCmd` (`atk`, 
 `aiAllyCmds`; both it and `S.allyShips` are in `hashState` and the save. Numbers: `ALLY_CMD` in `js/defs.js`. Teams get mirrored neutral Trade Posts where the terrain
 allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
 Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
-won by **Capture**: take both enemy Command Bases and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+won by **Capture**: take both enemy Command Bases and both colonies of your team win. A colony captured while its
+teammate stands is down, not out, until its team captures the base back (see Fallen allies). Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 

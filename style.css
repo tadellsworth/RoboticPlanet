@@ -2135,6 +2135,10 @@ body.watching .toprow { justify-content: flex-end; }
 body.watching #sheet-body button, body.watching #sheet-body input, body.watching #sheet-body select, body.watching #sheet-body .seg, body.watching #sheet-body .actions { display: none !important; }
 /* (Statistics: the totals and "how busy your buildings were" are one colony's; the graphs, every colony's, stay.) */
 body.watching #st-body .stat-tiles, body.watching #st-body .chart-block:has(#st-bars) { display: none; }
+/* A fallen ally (FALLEN: its Command Base down, a teammate standing): it watches until it's retaken, so the build bar,
+   the selection and the panels' buttons go, as in Observer mode; the goal card stays (it says what's going on). */
+body.fallen #bottombar, body.fallen #selbar, body.fallen #groupbar { display: none !important; }
+body.fallen #sheet-body button, body.fallen #sheet-body input, body.fallen #sheet-body select, body.fallen #sheet-body .seg, body.fallen #sheet-body .actions { display: none !important; }
 .watch-card {
   align-self: flex-start; width: min(100%, 440px); display: flex; flex-direction: column; gap: 5px; padding: 6px 8px 7px 10px;
   background: rgba(18, 20, 27, 0.9); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); font-size: 13px;

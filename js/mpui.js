@@ -118,7 +118,11 @@ function initMulti() {
   $('m-rejoin').onclick = () => { sfx('click'); audioUnlock(); mpRejoinGame(); };
   $('p-mppause').onclick = () => { sfx('click'); mpPause(!MP.paused); };
   $('btn-ping').onclick = () => { if (typeof coopPingHere === 'function') coopPingHere(false); }; // (co-op: the middle of the view)
-  $('mp-banner-btn').onclick = () => { sfx('click'); if (MP.paused) mpPause(false); };
+  $('mp-banner-btn').onclick = () => {
+    sfx('click');
+    if (MP.on && MP.paused) mpPause(false);
+    else if (UI.bannerLend) act('lend', UI.bannerLend.slice()); // (a fallen teammate: let them help command, or take it back: FALLEN)
+  };
 
   NET.onError = (why) => {
     if (why === 'taken' && NET.create) { netConnect(netRandomCode(), { create: true, name: NET.name }); return; } // (that code's in use: another)
@@ -649,14 +653,66 @@ function mpWho(p) { return S && S.crew && S.crew[p] ? S.crew[p].n : playerName(p
 /** Who's connected changed (in a game): nothing to show here (the banner and the drops cover it). */
 function mpPresence() { mpPresence3(); } // (who's reconnecting: js/polish3.js)
 
+/**
+ * Fallen allies (FALLEN), every frame: whose colony this device commands (ME): its own, or, while it's down and a
+ * teammate lets it help (ORDERS.lend), that teammate's, the whole interface with it (as in shared colony co-op); back
+ * to its own once it's back or the teammate takes it back. And the body's `fallen` class: down and only watching, the
+ * build bar and the panels' buttons are hidden (as in Observer mode).
+ */
+function fallenTick() {
+  if (!UI.inGame || !S) { document.body.classList.remove('fallen'); return; }
+  if (MP.on && !MPJ.on && typeof mpOrderCol === 'function') {
+    const want = mpOrderCol(MP.me), was = ME;
+    if (want !== ME && S.players[want]) {
+      ME = want;
+      UI.sel = []; if (typeof refreshSelection === 'function') refreshSelection();
+      const own = mpCol(MP.me);
+      toast(want !== own ? `You're helping command ${playerName(want, true)}'s colony: your orders go to it until your base is retaken.`
+        : S.players[own].out ? `${playerName(was)} has taken command of their colony back: you're watching again.` : 'Your Command Base was retaken: you\'re back in command of your own colony!', want !== own || !S.players[own].out ? 'good' : 'info');
+    }
+  }
+  const P = S.players[ME];
+  document.body.classList.toggle('fallen', !!(P && P.out && P.down && S.winner < 0 && !UI.watch));
+}
+
+/** The banner's line about a fallen ally (FALLEN) for this device, and the survivor's button: [text, button, lend args]. */
+function fallenBanner() {
+  const P = S.players[ME];
+  if (!S.teams || S.winner >= 0) return null;
+  if (MP.on && mpCol(MP.me) !== ME && isDown(mpCol(MP.me))) return [`Your base is down: you're helping command ${playerName(ME, true)}'s colony until it's retaken.`, '', null];
+  if (P && P.out && P.down) {
+    const mates = teamUp(ME), who = mates.length ? mates.map((q) => playerName(q)).join(' or ') : 'your team';
+    return [S.horde ? `Your Command Base has fallen: you watch until ${who} holds the ruin to retake it.` : `Your Command Base has fallen: you watch until ${who} captures it back.`, '', null];
+  }
+  if (P && P.out) return null;
+  const down = S.players.filter((Q) => Q.id !== ME && Q.down && allies(Q.id, ME));
+  if (!down.length) return null;
+  const Q = down[0], helping = Q.help === ME;
+  // (the option to let them help: multiplayer, a person's colony, and this device's own)
+  const can = MP.on && mpCol(MP.me) === ME && MP.humans.some((q) => mpCol(q) === Q.id && !mpAINow(q));
+  const what = S.horde ? 'hold its ruin to retake it' : 'capture it back';
+  return [helping ? `${playerName(Q.id)} is down and helping command your colony.` : `${playerName(Q.id)}'s Command Base has fallen: they watch until you ${what}.`,
+    can ? (helping ? 'Take command back' : `Let ${playerName(Q.id)} help command`) : '', can ? [Q.id, !helping] : null];
+}
+
 /** Every frame in a game: the banner over the map. */
 function mpBannerTick() {
   const el = $('mp-banner');
-  if (!MP.on || !UI.inGame) { el.hidden = true; return; }
+  fallenTick();
+  const fb = UI.inGame && S ? fallenBanner() : null;
+  UI.bannerLend = null;
+  if (!MP.on) {
+    // (single player: only a fallen ally's line, in a team game with a computer ally)
+    el.hidden = !fb;
+    if (fb) { $('mp-banner-text').textContent = fb[0]; el.classList.remove('wait'); $('mp-banner-btn').hidden = true; }
+    return;
+  }
+  if (!UI.inGame) { el.hidden = true; return; }
   let text = '', btn = '', wait = false;
   const P = S.players[ME];
   if (MP.paused) { text = `Paused by ${MP.pausedBy >= 0 ? (MP.pausedBy === MP.me ? 'you' : mpWho(MP.pausedBy)) : 'a player'}`; btn = 'Resume'; }
   else if (MPJ.on) { text = 'Joining the game…'; wait = true; }
+  else if (fb && (fb[1] || (P && P.out))) { text = fb[0]; btn = fb[1]; UI.bannerLend = fb[2]; }
   else if (P && P.out) text = 'Your colony has fallen: you\'re watching the rest of the game.';
   else if (mpAINow(MP.me)) { text = mpBehind() > 2 ? 'Catching up with the others…' : 'Taking your colony back…'; wait = true; }
   else if (!MP.linkOK && NET.state === 'game') { text = NET.tries > 1 ? `Reconnecting… (try ${NET.tries})` : 'Reconnecting…'; wait = true; }

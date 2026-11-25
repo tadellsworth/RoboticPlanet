@@ -413,6 +413,7 @@ function aiThink(p) {
   if (S.walker) aiWalker(p, lvl); // (the Walking Factory: board it, hold it)
   if (S.dam) aiDam(p, lander); // (The Dam: guard its own, break a foe's)
   aiMegaHold(p, lander); // (a knocked-out megastructure: seize a foe's, take its own back)
+  if (S.horde && S.teams) aiRetakeRuin(p, lander); // (co-op Horde: a fallen partner's ruin held, to bring them back)
   // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
   // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
   // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
@@ -1321,6 +1322,8 @@ function aiThink(p) {
     const def = BDEFS[b.type];
     let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? (S.victory === 'uplinks' ? 5 : 25) : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
     if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
+    // A fallen teammate's Command Base, held by the enemy: taken back, they're back in the game (FALLEN). First of all.
+    if (b.type === 'lander' && b.was !== undefined && b.was !== p && isDown(b.was) && allies(p, b.was)) score += 40;
     // Short of Crystal: a fort whose land holds Crystal is worth more (taken, its land and the clusters on it are ours).
     if (crShort && b.built && def.mil && def.terr) score += Math.min(crystalHeld(b, def.terr), 80) * 0.1;
     // A Salvager (raider) goes for what the enemy lives on: a working building, a Fuel Station or a Depot over a fort
@@ -3709,7 +3712,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
     // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
     // enough to finish it.)
     const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
-    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0) - (BDEFS[b.type].deepcore ? 3 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) + (b.was !== undefined && isDown(b.was) && allies(p, b.was) ? 15 : 0) : 0) - (BDEFS[b.type].city ? (S.victory === 'domination' ? 6 : 2) : 0) - (BDEFS[b.type].lift ? 2 : 0) - (BDEFS[b.type].gup ? 30 : 0) - (BDEFS[b.type].deepcore ? 3 : 0); // (Arrival City: the richest prize, more so in Domination; a Lift whose fall pays)
     if (sc >= bs && sc >= hs) continue;
     const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
     if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
@@ -5202,6 +5205,43 @@ function aiMegaHoldSpot(p, b, lander) {
   }
   return best;
 }
+/**
+ * Co-op Horde (FALLEN): a partner's Command Base battered down is held back to life (hordeRetake): every AI_SEIZE.every
+ * seconds, with no march of its own on it and enough armed warbots to spare (twice the Murmur at it, two more, at least
+ * AI_SEIZE.own), it sends them to stand by the ruin until the partner is back.
+ */
+function aiRetakeRuin(p, lander) {
+  const P = S.players[p];
+  if (S.time < (P.ruinT || 0)) return;
+  P.ruinT = S.time + AI_SEIZE.every;
+  const R = P.ruin ? rallyById(P.ruin.rid) : null;
+  if (P.ruin) {
+    if (R && isDown(P.ruin.c)) return; // (holding it)
+    if (R) recallRally(R.id);
+    P.ruin = null;
+    return;
+  }
+  const c = hordeCols().find((q) => q !== p && isDown(q) && allies(p, q));
+  const B = c === undefined ? null : getE(S.players[c].lander);
+  if (!B) return;
+  const z = S.zone[tIdx(lander.x, lander.y)];
+  let t = -1, bd = Infinity;
+  for (let j = B.y - 2; j <= B.y + 2; j++) for (let i = B.x - 2; i <= B.x + 2; i++) {
+    if (!inMap(i, j)) continue;
+    const k = tIdx(i, j);
+    if (!walkable(k) || S.bAt[k] || S.zone[k] !== z) continue;
+    const d = dist2(i, j, lander.x, lander.y);
+    if (d < bd) { bd = d; t = k; }
+  }
+  if (t < 0) return;
+  let near = 0;
+  for (const u of S.bots) if (!u.dead && u.hw && dist2(u.x, u.y, B.x + 0.5, B.y + 0.5) <= 64) near++;
+  const at = { x: t % S.W, y: (t / S.W) | 0 }, avail = aiSpare(p, at, 'flag').n, need = Math.max(AI_SEIZE.own, near * 2 + 2);
+  if (avail < need) return;
+  const r = sendToRally(p, at.x, at.y, Math.min(avail, need + 4), true, false, true);
+  if (r && r.sent && r.rally) P.ruin = { rid: r.rally.id, c };
+}
+
 function aiMegaHold(p, lander) {
   const P = S.players[p];
   if (S.time < (P.megaHoldT || 0)) return;

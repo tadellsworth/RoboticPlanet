@@ -524,6 +524,7 @@ function watchTap(i, j, wx, wy) {
 /** Every frame: what has happened since the last one. */
 function watchEvents(w) {
   for (const P of S.players) {
+    if (!P.out && w.out[P.id] !== undefined) { delete w.out[P.id]; const L = getE(P.lander); watchEvent(w, `${watchThe(P.id, true)} is back in the game: its team took its Command Base back.`, L ? L.x : undefined, L ? L.y : undefined); continue; } // (FALLEN)
     if (P.absent || !P.out || w.out[P.id] !== undefined) continue;
     w.out[P.id] = S.time;
     const L = getE(P.lander), by = L && !L.dead ? L.owner : -1;

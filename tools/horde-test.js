@@ -2,7 +2,10 @@
 // Horde mode, headless: plays a Horde game with the colony on autoplay and reports each wave (its size, how many of the
 // waves' Murmur were up at most, when it was cleared), the sim's cost per tick with 30+ Murmur up, and how it ended.
 // Usage: node tools/horde-test.js [level easy|medium|normal|hard|warlord] [maxMinutes] [seed] [fixed|endless] [--noai] [--fort] [--pair]
-// --pair: co-op side by side (two allied colonies on Long Haul 2v2, the computer playing both).
+// --pair: co-op side by side (two allied colonies on Long Haul 2v2, the computer playing both). First a scripted check of
+// a fallen partner (FALLEN): colony 1's base battered down → it's down (watching, its orders refused), the game goes on;
+// the survivor lets it help command, then holds the ruin (Murmur there stop the clock) → it's back and its orders work
+// again; then both fall → the game is lost. --fallonly: that check alone.
 // --fort: a test fort (not a real game): unlimited goods and a line of finished guns and warbots across the map in front
 // of the base, so the later waves come (their sizes, the side tunnels, the boss waves, the sim's cost with many up).
 'use strict';
@@ -12,12 +15,51 @@ const ctx = { console, Math, JSON, Map, Set, Array, Object, Number, String, Infi
 ctx.sfx = () => {};
 vm.createContext(ctx);
 let src = files.map((f) => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8')).join('\n');
-src += '\n;globalThis.__fort = (p, t, x, y) => addBuilding(p, t, x, y, true); globalThis.__bot = (p, t, x, y) => addBot(p, t, x, y); globalThis.__zones = () => { computeZones(); computeTerritory(); };';
-src += '\n;globalThis.__api = { newGame, simStep, getS: () => S, hordeWaveSize, serializeGame, checkSave: typeof checkSave === "function" ? checkSave : null };';
+src += '\n;globalThis.__fort = (p, t, x, y) => addBuilding(p, t, x, y, true); globalThis.__bot = (p, t, x, y) => addBot(p, t, x, y); globalThis.__zones = () => { computeZones(); computeTerritory(); }; globalThis.__fallen = () => FALLEN;';
+src += '\n;globalThis.__api = { newGame, simStep, getS: () => S, hordeWaveSize, serializeGame, applyOrder, checkSave: typeof checkSave === "function" ? checkSave : null };';
 vm.runInContext(src, ctx);
 const api = ctx.__api;
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--')), noai = process.argv.includes('--noai'), fort = process.argv.includes('--fort'), pair = process.argv.includes('--pair');
 const level = args[0] || 'normal', maxMin = +(args[1] || 40), seed = +(args[2] || 4242), goal = args[3] || 'fixed';
+if (pair) fallCheck();
+if (process.argv.includes('--fallonly')) process.exit(process.exitCode || 0);
+
+/** The scripted check of a fallen partner (see the top). */
+function fallCheck() {
+  api.newGame({ seed, difficulty: 'normal', horde: { level, goal: 'endless', pair: true }, unlimited: true });
+  let S = api.getS();
+  const fails = [], ok = (c, what) => { if (!c) fails.push(what); }, run = (secs) => { for (let k = 0; k < secs * 30; k++) api.simStep(1 / 30); S = api.getS(); };
+  const L0 = S.buildings.find((b) => b.type === 'lander' && b.owner === 0), L1 = S.buildings.find((b) => b.type === 'lander' && b.owner === 1);
+  const wallBy = (L, p) => { for (let dx = -6; dx <= 6; dx++) { const r = api.applyOrder(p, 'place', ['wall', L.x + dx, L.y + 4]); if (r && r.ok !== false) return r; } return null; };
+  run(3);
+  L1.armor = 1; // (battered down by the Murmur, as far as the game can tell)
+  run(1.2);
+  const P1 = S.players[1];
+  ok(P1.out && P1.down && S.winner < 0, 'colony 1 down, game on');
+  ok(!wallBy(L1, 1), 'a down colony\'s orders are refused');
+  ok(api.applyOrder(0, 'lend', [1, true]) && P1.help === 0, 'the survivor lets it help command');
+  // (the survivor's warbots by the ruin, with a Murmur creature among them first: the clock stands still)
+  const wild = ctx.__bot(S.wildOwner, 'scuttler', L1.x + 1, L1.y + 1);
+  const guard = [];
+  for (let k = 0; k < 4; k++) { const u = ctx.__bot(0, 'warbot', L1.x - 1 + (k % 2) * 3, L1.y - 1 + (k >> 1) * 3); u.ammo = 99; guard.push(u.id); }
+  api.applyOrder(0, 'command', [guard, { i: L1.x + 2, j: L1.y }]); // (told to stand there, as a player would)
+  run(5);
+  ok(!(L1.hRet > 0) || wild.dead, 'Murmur at the ruin stop the retake');
+  wild.dead = true;
+  run(10);
+  ok(L1.hRet > 5 && L1.hBy === 0 && P1.down, 'the retake clock runs');
+  run(FALLEN_SECS());
+  ok(!P1.out && !P1.down && P1.help === undefined && L1.armor > 1 && S.winner < 0, 'colony 1 reinstated, help ended');
+  ok(!!wallBy(L1, 1), 'its orders work again');
+  L1.armor = 1; run(1.2);
+  ok(P1.down, 'colony 1 down again');
+  L0.armor = 1; run(1.2);
+  ok(S.winner === S.wildOwner && S.horde.lost && !P1.down && !S.players[0].down, 'both down: the game is lost');
+  try { api.checkSave(JSON.parse(api.serializeGame())); } catch (e) { fails.push('save check: ' + e.message); }
+  console.log(`fallen partner check: ${fails.length ? 'FAILED: ' + fails.join('; ') : 'ok'} (falls ${S.horde.falls}, back ${P1.stats.back || 0})`);
+  if (fails.length) process.exitCode = 1;
+}
+function FALLEN_SECS() { return ctx.__fallen().retake.secs; }
 api.newGame({ seed, difficulty: 'normal', autoplay: !noai, horde: { level, goal, pair }, unlimited: fort });
 let S = api.getS();
 if (pair && !noai) S.players[1].ai = true;

@@ -7413,6 +7413,7 @@ function render(dtReal) {
       if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
       if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
       if (e.built && (e.mDown || e.mOff) && BDEFS[e.type].mega && R.clean < 2) drawMegaDark(ctx, e, cx, cy, z); // (knocked out: its seize ring; offline: a dark veil)
+      if (e.type === 'lander' && R.clean < 2 && fallenBaseOf(e) >= 0) drawFallenBase(ctx, e, cx, cy, z); // (a fallen ally's: its retake ring, FALLEN)
       buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built) { const w = z * 0.8 * (def.foot || 1); hpBar(ctx, e.id, e.armor < def.armor - 0.05 ? e.armor / def.armor : 1, cx - w / 2, cy - z * 0.62 * (def.foot || 1), w, Math.max(3, z * 0.08)); }
@@ -11849,6 +11850,49 @@ function drawMegaDark(ctx, b, cx, cy, z) {
     // (offline: a slow amber blink, its power lamp waiting)
     ctx.globalAlpha = 0.5 + 0.5 * Math.sin(R.time * 2.2);
     ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.arc(cx, cy - z * f * 0.32, Math.max(2, z * 0.09), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Whose fallen Command Base (FALLEN) building b is, the colony down (-1 if it isn't one). */
+function fallenBaseOf(b) {
+  if (!S.teams) return -1;
+  const p = S.horde ? b.owner : b.was;
+  return p !== undefined && p >= 0 && typeof isDown === 'function' && isDown(p) && S.players[p].lander === b.id ? p : -1;
+}
+
+/**
+ * A fallen ally's Command Base (FALLEN): in Horde, a ruin (a dark veil, smoke-grey cracks) with the ring its partner's
+ * warbots must hold (FALLEN.retake.r tiles, dashed), filling in their colour (b.hRet of secs, b.hBy) with their flag; in
+ * Teams, held by the captor, a slow pulsing ring in the fallen colony's colour, so its team sees what to take back.
+ */
+function drawFallenBase(ctx, b, cx, cy, z) {
+  const p = fallenBaseOf(b), col = PLAYER_COLORS[p] || '#fff';
+  ctx.save();
+  if (S.horde) {
+    const K = FALLEN.retake, r = z * (0.5 + K.r * 0.85);
+    ctx.globalAlpha = 0.45; ctx.fillStyle = '#05070c';
+    ctx.beginPath(); ctx.ellipse(cx, cy, z * 0.55, z * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.8; ctx.strokeStyle = '#2a2230'; ctx.lineWidth = Math.max(1, z * 0.04);
+    ctx.beginPath(); ctx.moveTo(cx - z * 0.3, cy - z * 0.1); ctx.lineTo(cx - z * 0.05, cy + z * 0.05); ctx.lineTo(cx + z * 0.25, cy - z * 0.2);
+    ctx.moveTo(cx - z * 0.05, cy + z * 0.05); ctx.lineTo(cx + z * 0.05, cy + z * 0.3); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.setLineDash([z * 0.3, z * 0.22]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    if (b.hRet > 0 && b.hBy >= 0) {
+      const k = Math.min(1, b.hRet / K.secs), hc = PLAYER_COLORS[b.hBy] || '#fff';
+      ctx.lineWidth = Math.max(3, z * 0.14); ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = hc; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = hc; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(R.time * 6);
+      ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
+      ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
+    }
+  } else {
+    const r = z * (1.1 + 0.12 * Math.sin(R.time * 2.5));
+    ctx.globalAlpha = 0.85; ctx.lineWidth = Math.max(2, z * 0.09); ctx.setLineDash([z * 0.25, z * 0.18]);
+    ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.restore();
 }
