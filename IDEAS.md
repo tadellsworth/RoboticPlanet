@@ -2501,3 +2501,11 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   the upstream comparison and every Standard doctrine matchup.
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
+
+## To do: megastructures lit at night (owner, Nov 25)
+
+In game the megastructures stay dark at night while every other building is lit (owner's screenshot: the Orbital Lift
+by a lit base, its pad and tower unlit). Give all eight night lighting like the rest of the base: lit windows and
+decks, beacons and warning lights, a glow in the owner's colour (see how the other buildings' night art and
+`daynight.js` do it; ART_GUIDE.md for the look). A knocked-out one stays dark (its offline look), and switches on
+again once it's back online.
