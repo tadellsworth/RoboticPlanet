@@ -672,7 +672,7 @@ function menuSummary() {
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   if (menuUpWin()) main.push('Great Uplink win');
-  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), ...(otherBiome ? [BIOMES[otherBiome].name] : []), SIZE_PRESETS[menuSize()].name);
+  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[menuShownShape()].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), ...(otherBiome ? [BIOMES[otherBiome].name] : []), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony) {
     // The rivals' doctrines, unless every one is a Steward (the usual).
@@ -975,7 +975,7 @@ function syncInfo() {
   const doc = isDoc && (canHover() || H['m-sec-match'].matches(':focus-visible')) ? H['m-sec-match'].dataset.doc : null;
   if (isDoc) H['m-sec-match'] = null;
   const line = (sec, def) => (live(H[sec]) ? H[sec].dataset.info : def) || def;
-  const P = SHAPE_PRESETS[m.shape || 0];
+  const P = SHAPE_PRESETS[menuShownShape()];
   $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers(), menuTeams()));
   const note = $('m-style-note'), html = doc ? docHTML(doc) : docNoteDefault();
   if (note.innerHTML !== html) note.innerHTML = html;
@@ -1132,7 +1132,7 @@ function syncMenu() {
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) markSeg($(id));
   for (const b of $('m-style').children) b.classList.toggle('peek', UI.docPeek === +b.dataset.v);
   // (Random map type: sizes as on a Standard map; the others differ a little.)
-  const players = menuSizePlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
+  const players = mpHordePair() ? 4 : menuSizePlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : menuShownShape(), dims = mapDims({ size: menuSize(), shape: dShape, players });
   syncSizeChoices($('m-size'), dShape, players, m.shapeRnd);
   $('m-size-v').textContent = `${m.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
@@ -1217,7 +1217,7 @@ function syncPvMods() {
 /** The Map type and Biome rows: the choice, with a thumbnail (redrawn as art arrives). */
 function syncPickRows() {
   const m = UI.menu;
-  shapePickRow($('m-shape'), m.shapeRnd, m.shape || 0, menuPlayers());
+  shapePickRow($('m-shape'), m.shapeRnd, menuShownShape(), mpHordePair() ? 2 : menuPlayers());
   biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
   syncSecondBiome('m', m, menuSize());
 }
@@ -2004,11 +2004,26 @@ function menuArtTick() {
 const PV = { timer: 0, maps: new Map(), drawn: '', failed: false };
 
 /** The settings newGame would make of the menu (Random biome: drawn as the Rust, the red desert). */
+/**
+ * Horde in the multiplayer settings: is the co-op game side by side (Long Haul 2v2, a colony each: true) or one shared
+ * colony (Long haul: false)? Side by side once a partner is in, and before anyone has joined; null outside them.
+ */
+function mpHordePair() {
+  if (UI.menu.mode !== 'horde' || !UI.mpSetup || typeof mpHordeSettings !== 'function') return null;
+  const H = mpHordeSettings(false), alone = !NET.seats || NET.seats.filter((x) => x.on).length < 2;
+  return !!(H.horde.pair || (alone && !mpCoopSeats().length));
+}
+/** The map type the setup screen shows: the one picked, or Horde co-op's (mpHordePair). */
+function menuShownShape() { const pair = mpHordePair(); return pair === null ? UI.menu.shape || 0 : hordeShape(pair); }
 function previewSettings() {
   const m = UI.menu, mode = m.mode !== 'versus' ? 'colony' : 'versus';
   const st = { size: clamp(menuSize(), 0, SIZE_PRESETS.length - 1), rough: clamp(m.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1), rich: clamp(m.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1) };
   st.shape = clamp(m.shape || 0, 0, SHAPE_PRESETS.length - 1);
   st.players = playerCount(mode, st.shape, m.players);
+  // Horde in the multiplayer settings: the map the co-op game will be played on. Side by side (the default once a partner
+  // is in, and before anyone has joined) is Long Haul 2v2 with four places; a partner tapped to share the host's colony
+  // makes it one colony on Long haul (mpHordeSettings).
+  if (mpHordePair() !== null) { const pair = mpHordePair(); st.shape = hordeShape(pair); st.players = pair ? 4 : 2; st.size = clamp(mapSizeForPlayers(st.size, st.players), 0, SIZE_PRESETS.length - 1); }
   st.nuke = !!m.nuke;
   if (mode === 'versus' && m.teams && st.players === 4) st.teams = true; // (Four Isles: the allies' sandbars)
   st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
