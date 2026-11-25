@@ -2005,7 +2005,8 @@ function dispatch(p) {
   // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
   // Hauler a link of its chain that holds a round of what it works with takes even that one (lastLink), giving it back
   // to carry once the round is used: two workers left after a raid otherwise carried for ever and nothing was made.)
-  const minFree = P.triage ? (siteCount(p) > 0 || P.noHaulers ? 1 : 0) : siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  // (A player's Workforce settings can lower it: wfKeepFree.)
+  const minFree = P.triage ? (siteCount(p) > 0 || P.noHaulers ? 1 : 0) : wfKeepFree(p, siteCount(p) > 0 ? MIN_FREE_WORKERS : 1);
   const lastLink = (b) => !!(P.triage && P.noHaulers && BDEFS[b.type].inp && hasRound(b));
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b) && !murmurCutOn(b));
@@ -2090,7 +2091,9 @@ function dispatch(p) {
   roadToSites(p, blds); // (building beats roads: a Worker laying road near a site waiting for a builder goes to it)
   const idle = [];
   for (const u of S.bots) if (u.owner === p && isIdleWorker(u)) idle.push(u);
-  if (!idle.length) return;
+  // (A Workforce row short of its minimum goes on even with nobody free: it takes Workers off other buildings, below.)
+  const wfShort = !!W && WF_KEYS.some((k) => W.rows[k].min > W.counts[k]);
+  if (!idle.length && !wfShort) return;
 
   // role: 'build', 'haul', 'staff' (an ordinary building) or a crew name (a specialist's building).
   // For 'haul', `src` is where the goods are: a hauler must be able to reach it by road.
@@ -2233,30 +2236,42 @@ function dispatch(p) {
       }
     }
   }
-  if (!idle.length) return;
+  // A building the player keeps staffed (Keep staffed, a pinned row) whose Worker went off while its store was full
+  // (atLimit: see doStaff) gets one back first, as soon as it has room again: before the rows' minimums, sites and the
+  // rest of its row (only its row's cap holds it back).
+  for (const b of blds) {
+    if (!b.wfBack) continue;
+    if (b.staff || b.staffInc || !wfHolds(b) || b.dead) { delete b.wfBack; continue; }
+    if (!idle.length) break;
+    if (!staffable(b) || (W && W.full(wfRowOf(b.type)))) continue;
+    const u = take(b.x, b.y, 'staff');
+    if (!u) continue;
+    if (assignStaff(u, b)) { free--; if (W) W.add(wfRowOf(b.type)); delete b.wfBack; } else idle.push(u);
+  }
+  if (!idle.length && !wfShort) return;
 
   // The Workforce rows' minimums ("at least N", the Workforce panel), top row first: a free Worker for each job the row
-  // is short of, or else, once a pass, one moved off a building in another row (one that can't work first, then one
-  // that makes only what there's plenty of, then the lowest row), never a pinned row's, a Keep staffed building's or one
-  // from a row at its own minimum. Paving takes free Workers only.
-  if (W && WF_KEYS.some((k) => W.rows[k].min > W.counts[k])) {
+  // is short of, or else, up to WF_MIN_TAKE a pass, Workers moved off buildings in other rows (one that can't work first,
+  // then one that makes only what there's plenty of, then the lowest row), never a pinned row's, a Keep staffed
+  // building's or one from a row at its own minimum. Paving takes free Workers only.
+  if (wfShort) {
     const ladder = W.order || wfAutoOrder(p).order, at = (k) => ladder.indexOf(k);
     const donor = (k, z) => {
       let best = null, bk = 0;
       for (const b of blds) {
-        if (!b.built || !b.staff || BDEFS[b.type].crew || kept(b) || lastLink(b) || wfRowOf(b.type) === k || S.zone[tIdx(b.x, b.y)] !== z) continue;
-        const v = getE(b.staff);
+        if (!b.built || !(b.staff || b.staffInc) || BDEFS[b.type].crew || kept(b) || lastLink(b) || wfRowOf(b.type) === k || S.zone[tIdx(b.x, b.y)] !== z) continue;
+        const v = getE(b.staff || b.staffInc); // (one in it, or on its way there)
         if (!v || v.dead || !v.task || v.task.type !== 'staff') continue;
         const kind = stallWhy(b) ? 0 : rankOf(b) > 0 ? 1 : at(wfRowOf(b.type)) > at(k) ? 2 : 3;
         if (kind > 2) continue;
         if (!best || kind < bk || (kind === bk && (at(wfRowOf(b.type)) - at(wfRowOf(best.type)) || releaseScore(b) - releaseScore(best) || best.id - b.id) > 0)) { best = b; bk = kind; }
       }
-      if (!best) return null;
-      const v = getE(best.staff);
+      if (!best) return false; // (nobody to take a Worker from)
+      const v = getE(best.staff || best.staffInc);
       release(best);
       if (bk === 0) best.benched = 1; // (it can't work: nobody goes back to it until it can, benchHolds)
       free++;
-      return isIdleWorker(v) ? v : null;
+      return isIdleWorker(v) ? v : null; // (null: on its way out, free for the next pass)
     };
     for (const k of ladder) {
       const min = W.rows[k].min;
@@ -2265,13 +2280,20 @@ function dispatch(p) {
       const jobs = k === 'sites' ? blds.filter((b) => !b.built && !b.builder && siteReady(b) && b.type !== 'wall' && !(P.danger && dangerAt(p, b.x, b.y)))
         : k === 'repair' ? blds.filter((b) => b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y)))
           : blds.filter((b) => wfRowOf(b.type) === k && staffable(b) && !stallWhy(b)).sort((a, c) => prioRank(a) - prioRank(c) || rankOf(a) - rankOf(c) || a.born - c.born);
-      let stole = false;
+      // (stole: Workers taken off other buildings this pass; later: those of them still on their way out, free next pass)
+      let stole = 0, later = 0, none = false;
       for (const b of jobs) {
-        if (W.counts[k] >= min || W.full(k)) break;
+        if (W.counts[k] + later >= min || W.full(k)) break;
         const spot = k === 'sites' ? siteWorkAt(b) : b, role = k === 'sites' || k === 'repair' ? 'build' : 'staff';
         let u = take(spot.x, spot.y, role);
-        if (!u && !stole) { stole = true; const v = donor(k, S.zone[tIdx(spot.x, spot.y)]); if (v) { idle.push(v); u = take(spot.x, spot.y, role); } }
-        if (!u) break;
+        while (!u && !none && stole < WF_MIN_TAKE && W.counts[k] + later < min) {
+          stole++;
+          const v = donor(k, S.zone[tIdx(spot.x, spot.y)]);
+          if (v === false) none = true;
+          else if (v) { idle.push(v); u = take(spot.x, spot.y, role); }
+          else later++;
+        }
+        if (!u) { if (none || stole >= WF_MIN_TAKE) break; continue; }
         if (k === 'sites') assignBuild(u, b); else if (k === 'repair') assignFix(u, b); else assignStaff(u, b);
         if (!u.task || u.task.type !== (k === 'sites' ? 'build' : k === 'repair' ? 'fix' : 'staff')) { idle.push(u); break; }
         W.add(k);
@@ -4618,7 +4640,7 @@ function produce(b, def, dt) {
   const op = getE(b.staff);
   if (!op && !b.staffInc && atLimit(b)) {
     const g = limitGood(b);
-    b.status = `Stopped: you have ${tickTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)}); its worker is free for other jobs`;
+    b.status = `Stopped: you have ${tickTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)}); its worker is free for other jobs${b.wfBack ? ' (one comes back first once there\'s room: you keep it staffed)' : ''}`;
     return;
   }
   if (!op || op.inside !== b.id) {
@@ -4636,7 +4658,9 @@ function produce(b, def, dt) {
     b.status = `Stopped: you have ${tickTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
     // After a little while its worker goes off to other jobs; one comes back when it's needed.
     b.limitT = (b.limitT || 0) + dt;
-    if (b.limitT > 10 && !wfHolds(b)) { unstaff(b); b.limitT = 0; } // (not one the player keeps staffed: Keep staffed, a pinned row)
+    // (One the player keeps staffed, Keep staffed or a pinned row, lets it go too, as it can't work anyway, but gets a
+    // Worker back first once it has room: b.wfBack, see dispatch.)
+    if (b.limitT > 10) { if (wfHolds(b)) b.wfBack = 1; unstaff(b); b.limitT = 0; }
     return;
   }
   b.limitT = 0;
@@ -10961,6 +10985,18 @@ function wfSetup(p) {
   };
 }
 
+/**
+ * How many Workers player p keeps free for building (dispatch's minFree: `n`, the usual, MIN_FREE_WORKERS with a site
+ * waiting, else 1), as its Workforce settings have it: never more than Building sites' "at most" (none at 0), and on a
+ * Manual ladder with Building sites below the top, 1 (so construction never stalls, but the order is honoured).
+ */
+function wfKeepFree(p, n) {
+  if (!S.players[p] || !S.players[p].wf) return n;
+  const o = wfOrder(p);
+  if (o && o[0] !== 'sites') n = Math.min(n, 1);
+  return Math.min(n, wfRow(p, 'sites').cap);
+}
+
 /** Drop player record P's Workforce settings that say nothing (a row with no minimum, cap or pin; no settings at all: back to none). */
 function wfTidy(P) {
   const W = P.wf;
@@ -10988,6 +11024,44 @@ function wfOrder(p) {
 function wfRow(p, k) {
   const r = S.players[p] && S.players[p].wf && S.players[p].wf.rows && S.players[p].wf.rows[k];
   return { min: (r && r.min) || 0, cap: r && r.cap != null ? r.cap : Infinity, pin: !!(r && r.pin) };
+}
+
+/**
+ * Player p's Workforce settings as a preset of the player's own (the panel's Save as preset: kept on the device, never in
+ * the game): { order: its Manual order, or null on Auto; rows: { row: { min, cap, pin } } for the rows set (cap -1: none) }.
+ */
+function wfSettings(p) {
+  const rows = {};
+  for (const k of WF_KEYS) {
+    const r = wfRow(p, k);
+    if (r.min || r.cap !== Infinity || r.pin) rows[k] = { min: r.min, cap: r.cap === Infinity ? -1 : r.cap, pin: r.pin };
+  }
+  return { order: wfOrder(p), rows };
+}
+
+/**
+ * The orders that make player p's Workforce settings those of preset `pre` (wfSettings, from the device: anything odd in
+ * it is read as no setting): [[order name, args], ...], the same orders as setting them by hand (wfOrder, wfRow), so a
+ * game played over the network stays the same everywhere. None for a setting that's already so.
+ */
+function wfPresetOrders(p, pre) {
+  const out = [];
+  const order = pre && Array.isArray(pre.order) ? wfNormOrder(pre.order) : null, now = wfOrder(p);
+  if (String(order) !== String(now)) out.push(['wfOrder', [order]]);
+  const num = (v, lo) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.max(lo, Math.min(WF_MAX, Math.round(+v))) : lo);
+  for (const k of WF_KEYS) {
+    const q = pre && pre.rows && typeof pre.rows === 'object' && ownKey(pre.rows, k) && pre.rows[k] && typeof pre.rows[k] === 'object' ? pre.rows[k] : {};
+    const min = num(q.min, 0), cap = q.cap == null || +q.cap < 0 ? -1 : Math.max(min, num(q.cap, 0)), pin = !!q.pin;
+    const r = wfRow(p, k), rc = r.cap === Infinity ? -1 : r.cap;
+    if (r.min !== min || rc !== cap) {
+      // (the cap off first, so a minimum above the old cap doesn't move it; then the minimum, then the cap)
+      if (rc !== -1) out.push(['wfRow', [k, 'cap', -1]]);
+      if (r.min !== min) out.push(['wfRow', [k, 'min', min]]);
+      if (cap !== -1) out.push(['wfRow', [k, 'cap', cap]]);
+    }
+    if (r.pin !== pin) out.push(['wfRow', [k, 'pin', pin]]);
+  }
+  return out;
 }
 
 /** The Workforce row of the job Worker u is on ('' for none: carrying, charging, free). */
@@ -11068,7 +11142,7 @@ function wfRebalance(p, dry) {
   }
   let idle = 0;
   for (const u of S.bots) if (!u.dead && u.owner === p && BOTS[u.type].build && BOTS[u.type].staff && isIdleWorker(u)) idle++;
-  let need = jobs - Math.max(0, idle - MIN_FREE_WORKERS);
+  let need = jobs - Math.max(0, idle - wfKeepFree(p, MIN_FREE_WORKERS));
   if (need <= 0) return 0;
   const cands = [];
   for (const b of blds) {
@@ -20368,7 +20442,8 @@ function hashState() {
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); int(P.down ? 1 : 0); int(P.help ?? -1); num(P.mult); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); num(P.roadCrew); }
   // The Workforce settings (wfOrder): only a player's who set any.
-  for (const P of S.players) if (P.wf) { int(P.id); str((P.wf.order || []).join(',')); for (const k in P.wf.rows || {}) { str(k); obj(P.wf.rows[k]); } }
+  // (The rows in WF_ROWS order, whatever order they were set in: a player's own preset sets them in its own order.)
+  for (const P of S.players) if (P.wf) { int(P.id); str((P.wf.order || []).join(',')); for (const k of WF_KEYS) { const r = P.wf.rows && P.wf.rows[k]; if (r) { str(k); num(r.min || 0); num(r.cap ?? -1); int(r.pin ? 1 : 0); } } }
   // A computer ally's commands from its teammates (allyCommand) and the goods it has on their way.
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }

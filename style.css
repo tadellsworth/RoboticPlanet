@@ -3861,6 +3861,20 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .wf-pr b { color: #fff1ec; }
 .wf-presets { display: flex; gap: 6px; margin: 6px 0; }
 .wf-presets .btn { flex: 1 1 0; }
+.wf-mine { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 2px 0 6px; }
+.wf-slot { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px; background: rgba(255, 255, 255, 0.03); }
+.wf-slot.on { border-color: #5dd88a; background: rgba(93, 216, 138, 0.08); }
+.wf-slot.empty .wf-sname { color: var(--muted, #aab); }
+.wf-sname { width: 100%; min-width: 0; height: 26px; padding: 2px 5px; font: 600 12px/1 inherit; font-family: inherit; color: var(--text, #e8eef6); background: rgba(0, 0, 0, 0.25); border: 1px solid transparent; border-radius: 2px; text-overflow: ellipsis; }
+.wf-sname:hover { border-color: rgba(255, 255, 255, 0.18); }
+.wf-sname:focus { outline: none; border-color: #ff6b4a; }
+.wf-sbtns { display: flex; gap: 3px; }
+.wf-sbtns .btn { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; }
+@media (min-width: 1000px) and (min-height: 520px) {
+  .wf-slot { gap: 2px; padding: 2px; }
+  .wf-sname { height: 22px; }
+  body.deck #hud #sheet .wf-grid .wf-mine .btn, .wf-mine .btn { min-height: 24px; height: 24px; padding-top: 0; padding-bottom: 0; font-size: 11px; }
+}
 #wf-rebal { width: 100%; margin-top: 2px; }
 .wf-ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .wf-row { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr) auto 44px 34px 34px; align-items: center; gap: 4px; min-height: 40px; padding: 2px 2px 2px 4px;
@@ -3923,4 +3937,7 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   .wf-edit { margin-top: 5px; padding: 4px 8px; }
   .wf-ed-name { flex: 0 1 auto; }
   .wf-ed-name small { display: none; }
+  .wf-presets { margin: 4px 0; }
+  .wf-mine { margin: 0 0 3px; }
+  .wf-col > .section-label { margin-top: 4px; margin-bottom: 2px; }
 }

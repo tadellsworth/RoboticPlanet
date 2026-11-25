@@ -8296,7 +8296,7 @@ function openBuildingSheet(b) {
     }
     // Keep staffed (the Workforce panel's pin, for one building): its worker is never moved off by the game.
     if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew) {
-      html += `<button class="btn${b.keepStaff ? ' primary' : ''}" id="sh-keepstaff" aria-pressed="${!!b.keepStaff}">${b.keepStaff ? 'Keep staffed: on' : 'Keep staffed'}</button><p class="hint">${b.keepStaff ? 'Its worker stays, even when the game would send it where a good is short or when this can\'t work for a while.' : 'Keep its worker here: the game never moves it off for a shortage, or because this can\'t work for a while.'}</p>`;
+      html += `<button class="btn${b.keepStaff ? ' primary' : ''}" id="sh-keepstaff" aria-pressed="${!!b.keepStaff}">${b.keepStaff ? 'Keep staffed: on' : 'Keep staffed'}</button><p class="hint">${b.keepStaff ? 'Its worker stays, even when the game would send it where a good is short or when this can\'t work for a while. At its stock limit it goes, and one comes back first once there\'s room.' : 'Keep its worker here: the game never moves it off for a shortage, or because this can\'t work for a while (at its stock limit it goes, and comes back first).'}</p>`;
     }
     // Call a builder: a construction site of yours with its goods in and nobody building it.
     if (b.owner === ME && !b.built && !b.builder && siteReady(b)) {

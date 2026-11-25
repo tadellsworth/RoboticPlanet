@@ -11,7 +11,8 @@
  *  - The ladder: on Auto it shows the order the game uses anyway (sites, repairs, then the buildings by what the economy
  *    needs, paving), with why; moving a row (drag it, or its arrows) makes it Manual: your order decides. Each row can
  *    have a minimum, a cap and a pin (the editor under the ladder, for the row tapped). Presets, Back to Auto and
- *    Rebalance now.
+ *    Rebalance now; and three presets of your own (Save as preset 1, 2, 3, each with a name you give it), kept on this
+ *    device: loading one sends the same orders as setting it all by hand (wfPresetOrders), so a network game agrees.
  * While it's open the map shows each Worker with a line to its job in its activity's colour, and a small worker with a
  * red slash over each building that wants one (drawWorkerView in render.js calls wfMapOn and wfDrawWants).
  */
@@ -24,9 +25,55 @@ const WF_ACTS = [
 const WF_ACT = Object.fromEntries(WF_ACTS.map(([k, l, c]) => [k, { label: l, color: c }]));
 const WF_PAGE = 7; // (Workers listed at a time: the list never scrolls)
 
+/*
+ * Your own presets: WF_MINE slots kept on this device (localStorage, never in the game or a save), each
+ * { name, set: wfSettings(ME) or none yet }.
+ */
+const WF_MINE = 3, WF_MINE_KEY = 'terrafall.wfPresets', WF_NAME_MAX = 14;
+function wfMineRead() {
+  let l = null;
+  try { l = JSON.parse(localStorage.getItem(WF_MINE_KEY) || 'null'); } catch (e) { l = null; }
+  const out = [];
+  for (let i = 0; i < WF_MINE; i++) {
+    const q = Array.isArray(l) && l[i] && typeof l[i] === 'object' ? l[i] : {};
+    const name = typeof q.name === 'string' && q.name.trim() ? q.name.trim().slice(0, WF_NAME_MAX) : `Custom ${i + 1}`;
+    out.push({ name, set: q.set && typeof q.set === 'object' ? q.set : null });
+  }
+  return out;
+}
+function wfMineWrite(l) { try { localStorage.setItem(WF_MINE_KEY, JSON.stringify(l)); return true; } catch (e) { return false; } }
+/** Save your Workforce settings now as preset i (0-based). */
+function wfMineSave(i) {
+  const l = wfMineRead();
+  l[i].set = wfSettings(ME);
+  if (S.mission) S.mission.wfSaved = 1; // (a mission's goal: Assembly Line, js/missions.js)
+  if (!wfMineWrite(l)) { sfx('error'); toast('Couldn\'t save the preset: this browser keeps nothing for the game.', 'warn'); return; }
+  sfx('click');
+  toast(`Saved as preset ${i + 1}, “${l[i].name}”: ${l[i].set.order ? 'your ladder' : 'Auto'}${Object.keys(l[i].set.rows).length ? ' and your row settings' : ''}. Load it any time, in any game on this device.`, 'info');
+  refreshWorkforce(true);
+}
+/** Load preset i: the orders that make your settings its (wfPresetOrders), as if set by hand. */
+function wfMineLoad(i) {
+  const q = wfMineRead()[i];
+  if (!q.set) { sfx('error'); toast(`Preset ${i + 1} is empty: set the ladder the way you like it, then Save.`, 'info'); return; }
+  const ords = wfPresetOrders(ME, q.set);
+  if (!ords.length) { sfx('click'); toast(`“${q.name}” is what you have now.`, 'info'); return; }
+  let n = 0;
+  for (const [name, args] of ords) act(name, args, () => { if (++n === ords.length) { sfx('click'); toast(`“${q.name}” loaded: ${q.set.order ? `${WF_ROW[wfNormOrder(q.set.order)[0]].name} first` : 'Auto'}${Object.keys(q.set.rows || {}).length ? ', with its row settings' : ''}.`, 'info'); refreshWorkforce(true); } });
+}
+/** Rename preset i (its name box: Enter or leaving it). */
+function wfMineName(i, v) {
+  const l = wfMineRead(), name = String(v || '').trim().slice(0, WF_NAME_MAX) || `Custom ${i + 1}`;
+  if (name === l[i].name) return;
+  l[i].name = name;
+  wfMineWrite(l);
+  refreshWorkforce(true);
+}
+
 /** Is the Workforce panel open (and its map overlay on)? */
 function wfMapOn() { return UI.sheetKind === 'wf'; }
 
+function wfEsc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function wfName(b) { return b ? BDEFS[b.type].name : ''; }
 function wfLower(s) { return s ? s[0].toLowerCase() + s.slice(1) : s; }
 /** Where building or tile `at` is: { x, y } in tiles (the middle), for the camera and the map's lines. */
@@ -91,7 +138,7 @@ function wfWorkers() {
 function wfFree() {
   let idle = 0;
   for (const u of S.bots) if (!u.dead && u.owner === ME && u.type === 'worker' && isIdleWorker(u)) idle++;
-  return { idle, keep: siteCount(ME) > 0 ? MIN_FREE_WORKERS : 1 };
+  return { idle, keep: wfKeepFree(ME, siteCount(ME) > 0 ? MIN_FREE_WORKERS : 1) };
 }
 
 /**
@@ -193,6 +240,9 @@ function openWorkforce() {
         <div class="seg" id="wf-mode"><button type="button" data-v="auto">Auto</button><button type="button" data-v="manual">Manual</button></div>
         <p class="hint" id="wf-mode-hint"></p>
         <div class="wf-presets" id="wf-presets">${Object.keys(WF_PRESETS).map((k) => `<button type="button" class="btn small" data-preset="${k}">${WF_PRESETS[k].name}</button>`).join('')}</div>
+        <div class="section-label">Your presets <span class="label-note">on this device</span></div>
+        <div class="wf-mine" id="wf-mine">${wfMineRead().map((q, i) => `<div class="wf-slot" data-slot="${i}"><input type="text" class="wf-sname" maxlength="${WF_NAME_MAX}" value="${wfEsc(q.name)}" aria-label="Name of preset ${i + 1}" spellcheck="false">` +
+          `<div class="wf-sbtns"><button type="button" class="btn small" data-mine="load" aria-label="Load preset ${i + 1}">Load</button><button type="button" class="btn small ghost" data-mine="save" aria-label="Save as preset ${i + 1}" title="Save as preset ${i + 1}">Save</button></div></div>`).join('')}</div>
         <button type="button" class="btn primary" id="wf-rebal">Rebalance now</button>
         <p class="hint" id="wf-rebal-hint"></p>
       </section>
@@ -231,6 +281,14 @@ function wfWire() {
     const b = e.target.closest('[data-preset]'); if (!b) return;
     act('wfPreset', [b.dataset.preset], () => { sfx('click'); toast(`${WF_PRESETS[b.dataset.preset].name} order: ${WF_PRESETS[b.dataset.preset].order.slice(0, 3).map((k) => WF_ROW[k].name).join(', ')} first.`, 'info'); refreshWorkforce(true); });
   };
+  const mine = $('wf-mine');
+  mine.onclick = (e) => {
+    const b = e.target.closest('[data-mine]'); if (!b) return;
+    const i = +b.closest('[data-slot]').dataset.slot;
+    if (b.dataset.mine === 'save') wfMineSave(i); else wfMineLoad(i);
+  };
+  mine.addEventListener('change', (e) => { const s = e.target.closest('[data-slot]'); if (s && e.target.classList.contains('wf-sname')) wfMineName(+s.dataset.slot, e.target.value); });
+  mine.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('wf-sname')) { e.preventDefault(); e.target.blur(); } });
   $('wf-rebal').onclick = () => act('wfRebalance', [], (n) => {
     if (!n) { sfx('error'); toast('Nothing to move: no job is waiting that a Worker could be taken off a stuck or plenty building for.', 'info'); return; }
     sfx('order');
@@ -327,7 +385,7 @@ function refreshWorkforce(now) {
   set('wf-pager', pages > 1 ? `<button type="button" class="btn small ghost" data-pg="-1"${UI.wfPage ? '' : ' disabled'} aria-label="Earlier">◀</button><span>${UI.wfPage * WF_PAGE + 1}–${Math.min(shown.length, UI.wfPage * WF_PAGE + WF_PAGE)} of ${shown.length}</span><button type="button" class="btn small ghost" data-pg="1"${UI.wfPage < pages - 1 ? '' : ' disabled'} aria-label="Later">▶</button>`
     : `<span>${UI.wfAct === 'all' ? 'All your Workers' : WF_ACT[UI.wfAct].label}: tap one to go to it${UI.wfAct === 'all' ? '' : ' (tap the count again for all)'}</span>`);
   // Problems.
-  const probs = wfProblems(auto), most = 6;
+  const probs = wfProblems(auto), most = innerHeight <= 760 ? 4 : innerHeight <= 820 ? 5 : 6; // (a short screen: fewer, so the panel never scrolls)
   $('wf-pn').textContent = probs.length ? String(probs.length) : '';
   set('wf-probs', probs.length ? probs.slice(0, most).map((q) => `<button type="button" class="wf-pr ${q.kind}"${q.at ? ` data-at="${q.at.id}"` : ''}><span>${q.s}</span></button>`).join('') +
     (probs.length > most ? `<p class="hint">and ${probs.length - most} more.</p>` : '') : '<p class="hint">None: every site with its goods in has a builder, and every building that could work has a Worker.</p>');
@@ -335,6 +393,17 @@ function refreshWorkforce(now) {
   for (const b of $('wf-mode').children) b.classList.toggle('on', b.dataset.v === (manual ? 'manual' : 'auto'));
   $('wf-mode-hint').textContent = manual ? 'Manual: free Workers fill the rows top first, in your order (within a row, the shortages and High or Low priority decide). Auto gives the game the order back.'
     : 'Auto: the order the game uses, by what the economy needs now. Move a row (or pick a preset) to set your own.';
+  // Your presets: an empty one says so, the one you have now is lit (the names are left alone while you type in them).
+  const mineL = wfMineRead();
+  for (const el of $('wf-mine').children) {
+    const i = +el.dataset.slot, q = mineL[i], cur = !!q.set && !wfPresetOrders(ME, q.set).length;
+    const ld = el.querySelector('[data-mine="load"]'), inp = el.querySelector('.wf-sname');
+    el.classList.toggle('empty', !q.set);
+    el.classList.toggle('on', cur);
+    ld.disabled = !q.set;
+    ld.title = q.set ? `Load “${q.name}”: ${q.set.order ? wfNormOrder(q.set.order).slice(0, 3).map((k) => WF_ROW[k].name).join(', ') + ' first' : 'Auto'}${Object.keys(q.set.rows || {}).length ? ', with its row settings' : ''}` : 'Empty: Save puts your ladder and row settings here';
+    if (document.activeElement !== inp && inp.value !== q.name) inp.value = q.name;
+  }
   const would = wfRebalance(ME, true);
   $('wf-rebal').disabled = !would;
   $('wf-rebal-hint').textContent = would ? `Takes ${would} Worker${would === 1 ? '' : 's'} off buildings that can't work or make what you have plenty of, for the jobs waiting at the top.` : 'Nothing to move now: no job waits that a stuck or plenty building\'s Worker could take.';
@@ -354,7 +423,7 @@ function refreshWorkforce(now) {
     <div class="wf-ed-row"><span>At least</span><button type="button" class="btn small" data-ed="min-" aria-label="Fewer"${r.min ? '' : ' disabled'}>−</button><b>${r.min}</b><button type="button" class="btn small" data-ed="min+" aria-label="More">+</button></div>
     <div class="wf-ed-row"><span>At most</span><button type="button" class="btn small" data-ed="cap-" aria-label="Fewer"${r.cap === 0 ? ' disabled' : ''}>−</button><b>${r.cap === Infinity ? 'any' : r.cap}</b><button type="button" class="btn small" data-ed="cap+" aria-label="More"${r.cap === Infinity ? ' disabled' : ''}>+</button></div>
     <button type="button" class="btn small${r.pin ? ' primary' : ''}" data-ed="pin" aria-pressed="${r.pin}">${r.pin ? 'Pinned' : 'Pin'}</button>
-    <p class="hint">${r.pin ? 'Pinned: its Workers stay even when the game would move them for a shortage or because they can\'t work.' : 'At least: Workers are moved here (from rows lower down) until it has that many. At most: the extra leave. Pin: never moved off by the game.'}</p>`);
+    <p class="hint">${r.pin ? 'Pinned: its Workers stay even when the game would move them for a shortage or because they can\'t work (at a stock limit one goes, and comes back first).' : 'At least: Workers are moved here (two at a time, from rows lower down) until it has that many. At most: the extra leave. Pin: never moved off by the game.'}</p>`);
 }
 
 /**

@@ -2418,6 +2418,7 @@ const WF_ROWS = [
 const WF_KEYS = WF_ROWS.map((r) => r.k);
 const WF_ROW = Object.fromEntries(WF_ROWS.map((r) => [r.k, r]));
 const WF_MAX = 99; // (the most a row's minimum or cap goes to)
+const WF_MIN_TAKE = 2; // (Workers a row short of its minimum takes off other buildings in one pass, with nobody free)
 // One tap each on the panel: a Manual order (rows not named keep their places after these, in WF_ROWS order).
 const WF_PRESETS = {
   economy: { name: 'Economy', order: ['foundry', 'crystal', 'ore', 'fiber', 'stone', 'smelter', 'chip', 'cement', 'oil', 'sites', 'repair'] },

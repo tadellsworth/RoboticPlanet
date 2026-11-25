@@ -474,7 +474,7 @@ const MISSIONS = [
     intro: [
       'The <b>Bot Foundry</b> builds robots from Alloy and Chips, one round of parts at a time.',
       'A <b>Chip Fab</b> etches Crystal onto Alloy to make the Chips.',
-      'The Foundry builds only what you order. Two Workers are always kept free for building.',
+      'The Foundry builds only what you order. Two Workers are kept free for building while sites wait (one, if your ladder puts Building sites lower).',
       'Workers go first where the colony is short: if the Fab waits for Crystal, the Crystal Tap gets a worker before the Foundry. One stuck in a building that can\'t work goes to help elsewhere.',
       'The <b>Workforce</b> panel (tap Workers up top) shows what each Worker does and what waits for one; its ladder says who gets Workers first.',
       'On a computer, <kbd>Shift</kbd>+<kbd>F</kbd> opens its <b>Order bots</b> list from anywhere.',
@@ -500,6 +500,11 @@ const MISSIONS = [
         count: (P) => (P.wf && Array.isArray(P.wf.order) && wfNormOrder(P.wf.order)[0] === 'crystal' ? 1 : 0),
         hint: 'Tap <b>Workers</b> up top (<kbd>Shift</kbd>+<kbd>W</kbd>) → ladder: <b>Crystal Taps</b> ▲ to the top, or drag it.',
         ui: "#pop .pn-w, #wf-ladder [data-k='crystal'] [data-mv='-1']" },
+      // (A preset of your own is kept on the device, not in the game: S.mission.wfSaved is set by wfMineSave, js/workforce.js.)
+      { kind: 'wfsave', n: 1, text: 'Save your ladder as a preset of your own',
+        count: (P, S) => (S.mission.wfSaved ? 1 : 0),
+        hint: 'Workforce (<kbd>Shift</kbd>+<kbd>W</kbd>) → Your presets → <b>Save</b> under Custom 1. <b>Load</b> brings it back.',
+        ui: "#pop .pn-w, #wf-mine [data-slot='0'] [data-mine='save']" },
       { kind: 'stocked', n: [15, 15, 20], text: 'Have {n} Chips in store', count: () => goodTotal(0, 'chip'), at: 'fab',
         hint: 'The Fab rests at 10 Chips: its <b>stock limit</b>. Tap the Chip Fab → Stock limit <b>+</b> to raise it.',
         ui: '#sh-lim-plus' },

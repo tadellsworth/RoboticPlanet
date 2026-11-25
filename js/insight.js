@@ -88,7 +88,7 @@ function workerWhy(crew) {
   const sites = siteCount(ME);
   if (!all) return { text: 'you have no Workers left: order some at the Bot Foundry', at };
   if (!free) return { text: `none of your ${all} Workers is free: order more at the Bot Foundry, or pause a building you can spare`, at };
-  if (sites && free <= MIN_FREE_WORKERS) return { text: `your free Worker${free === 1 ? ' is' : 's are'} kept for your ${sites} construction site${sites === 1 ? '' : 's'}: order more Workers at the Bot Foundry`, at };
+  if (sites && free <= wfKeepFree(ME, MIN_FREE_WORKERS)) return { text: `your free Worker${free === 1 ? ' is' : 's are'} kept for your ${sites} construction site${sites === 1 ? '' : 's'}: order more Workers at the Bot Foundry`, at };
   return { text: 'a free Worker should be on its way', ok: true };
 }
 

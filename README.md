@@ -663,15 +663,23 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   activity's colour and `wfDrawWants` a slashed worker over each building wanting one. Settings live in
   `P.wf = { order?, rows?: { row: { min?, cap?, pin? } } }` (saved, checked by `checkSave`, in `hashState` only when set)
   and change only by orders: `wfOrder` (a list: Manual; null: Back to Auto), `wfPreset` (`WF_PRESETS`: economy, war,
-  build), `wfRow` (min, cap, pin), `wfRebalance`, and `keepStaff` (a building's Keep staffed). With no `P.wf` (every
+  build), `wfRow` (min, cap, pin), `wfRebalance`, and `keepStaff` (a building's Keep staffed). The player's own three
+  presets (Save as preset 1/2/3, named, `WF_MINE_KEY` in localStorage: device only, never in the game) hold
+  `wfSettings(p)` (order or null, rows); loading one sends `wfPresetOrders(p, preset)`, the same `wfOrder`/`wfRow`
+  orders as by hand (anything odd in a stored preset reads as no setting), so lockstep games agree; `hashState` hashes
+  the rows in `WF_KEYS` order whatever order they were set in. With no `P.wf` (every
   rival, and any player who never touched it) `dispatch` runs exactly as before (seeded AI games hash the same).
   With it, `wfSetup` gives the pass the row counts (`wfCounts`, by each Worker's job: `wfJob`): **Manual** runs steps 1
   (sites), 1a–1d (repairs), 2 (staff, one row at a time, the usual `staffQueue` order within) and 6 (paving,
-  `stepPave`) in the player's row order; **caps** stop new jobs and release a staffed row's extra Workers (least useful
-  first, never Keep staffed); **minimums** come first each pass, a free Worker per missing job, or once a pass one moved
-  off a donor building (stalled, then plenty, then a lower row; never a pinned row, a row at its minimum, Keep staffed
-  or a triage last link); **pins** and Keep staffed are left alone by the free-for-building release, the stalled-operator
-  release, the plenty release, a stock limit's release (`wfHolds`) and Rebalance; the plenty release on Manual only
+  `stepPave`) in the player's row order; **kept free for building** (`wfKeepFree`): `minFree` is at most Building
+  sites' cap (0: none), and 1 on a Manual ladder without Building sites on top; **caps** stop new jobs and release a
+  staffed row's extra Workers (least useful first, never Keep staffed); **minimums** come first each pass (they run even
+  with nobody idle), a free Worker per missing job, or up to `WF_MIN_TAKE` (2) a pass moved off donor buildings (one in
+  it or on its way; stalled, then plenty, then a lower row; never a pinned row, a row at its minimum, Keep staffed or a
+  triage last link); **pins** and Keep staffed are left alone by the free-for-building release, the stalled-operator
+  release, the plenty release and Rebalance (`wfHolds`); a stock limit's release still lets their Worker go (it can't
+  work) but marks the building `wfBack`, and dispatch gives it a Worker first (before minimums and sites, only its
+  row's cap holding it) once it has room; the plenty release on Manual only
   takes from rows no higher than the top waiting one. `wfAutoOrder` gives the panel the order Auto uses (sites, repairs,
   rows by their best building's `prioRank`, `needRank`, `staffPriority`, paving) with why; `wfRebalance(p, dry)` frees
   Workers (stalled first, `benched`; then plenty; Manual: rows below the top waiting row) until there's one free per
@@ -4373,7 +4381,8 @@ node tools/workforce-lockstep-test.js
 ```
 
 The Workforce ladder: a computer colony's game copied into side-by-side games with different settings (Auto untouched,
-Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load), then two devices over the lockstep
+Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load, builders kept free, minimums with
+nobody free, a pinned factory at its stock limit, the player's own presets), then two devices over the lockstep
 changing the settings all game, one reloading halfway, their fingerprints compared every second.
 
 ```bash

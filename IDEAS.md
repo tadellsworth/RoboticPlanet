@@ -15,14 +15,17 @@ Calls made:
 - **The rows** (`WF_ROWS`): Oil Pumps and Refineries share Oil and Fuel; Ammo Plants, Missile Factories and Nuclear
   Reactors share Ammo and Missiles; each gatherer has its own row. Rows with nothing built are hidden (keep their
   places). Specialists' buildings (Agribots' farms, Pavers' Roadworks) aren't on it: they never take a Worker.
-- **Manual keeps the two Workers kept free for building** while sites wait, even with sites at the bottom: dropping
-  them made a site-less ladder starve every new site. Should a ladder with Building sites at the bottom give them up?
-- **Minimums move at most one Worker a pass** from another building, and only from a donor that's stalled, makes
-  plenty, or sits in a lower row: never a pinned row or one at its own minimum. Fast enough?
-- **Pin and Keep staffed also stop the stock-limit release** (a building at its limit lets its Worker go after 10 s);
-  the Worker then sits until the limit lifts. Right, or should the limit win?
-- **Presets** are fixed orders (Economy: Foundry and raw materials; War: Repairs, Ammo and Missiles, sites; Build-up:
-  sites, paving, Cement and Stone). Saveable custom presets would be the next step.
+- **Builders kept free on Manual** (decided by the owner, Nov 25 2026): with Building sites below the top of a Manual
+  ladder, 1 Worker is kept free for building (not 2), so construction never stalls but the order is honoured;
+  Building sites' At most 0 keeps none (on Auto too). Auto unchanged.
+- **Minimums fill faster** (decided): free Workers fill a shortfall at once, and with none free up to 2 a pass are moved
+  off donors (stalled, plenty, lower rows; one walking there counts), never from a pinned row, a row at its minimum or
+  Keep staffed. (It used to wait for somebody to be idle before even looking.)
+- **Pins vs. full storage** (decided): a pinned row's or Keep staffed building at its stock limit lets its Worker go
+  after the usual 10 s (it can't work), and gets one back first, ahead of its row and everything else, once it has room.
+- **Presets** (decided): the fixed Economy, War and Build-up, plus three of the player's own (Save as preset 1/2/3,
+  renamable, Custom 1/2/3 to start), kept per device in localStorage; loading one sends the usual wfOrder/wfRow orders.
+  Open: share a preset with a friend (a code), or keep them in the cloud save with the rest.
 - Open: a ladder per Outpost area (far-off bases), and showing the ladder's effect over time (Workers per row graph in
   Statistics).
 
