@@ -75,7 +75,7 @@ how goods move.
   captor's already) and leaves the colony's roads, pipes, lights and overpasses its own (plans dropped); a computer
   captor keeps `FALLEN.prizeKeep` warbots in the base (`keepW`). A teammate capturing that base back (`captureBuilding`)
   calls `reinstate`: every building marked its own still standing comes back from whoever holds it, the base at
-  `FALLEN.armor` of its armor, and `FALLEN.crew` robots step out. **Horde** (side by side): `hordeFall` (the base stays
+  `FALLEN.armor` of its armor, and `FALLEN.crew` robots step out (`FALLEN.hordeCrew` in Horde), with `FALLEN.goods` in its store. **Horde** (side by side): `hordeFall` (the base stays
   at `HORDE.fall`, the colony keeps everything: dispatch skips an out colony, so its robots idle; guns and warbots still
   fight), `hordeRetake` once a second: a partner's armed warbots within `FALLEN.retake.r` of the base and no Murmur that
   close fill `b.hRet` (`b.hBy` whose; `secs` s; Murmur stop it, nobody runs it back `decay` a second), drawn as a ring

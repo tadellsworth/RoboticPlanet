@@ -7234,13 +7234,16 @@ function reinstate(p, by) {
     }
     S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
     computeTerritory();
-    // A fresh crew out of the base (its robots were lost with it).
-    let k = 0;
-    for (const t in FALLEN.crew) for (let q = 0; q < FALLEN.crew[t]; q++, k++) {
-      const a = (k * 2.4) % (Math.PI * 2), at = murmurStand(L.x + 0.5 + dcos(a) * 2, L.y + 0.5 + dsin(a) * 2) || { x: L.x, y: L.y };
-      addBot(p, t, at.x, at.y);
-    }
   }
+  // A boost so it doesn't start again from nothing: a crew out of the base (a captured base's robots were lost with it:
+  // FALLEN.crew; in Horde, which keeps them, a smaller one, FALLEN.hordeCrew) and some goods in its store (FALLEN.goods).
+  const crew0 = S.horde ? FALLEN.hordeCrew : FALLEN.crew;
+  let k = 0;
+  for (const t in crew0) for (let q = 0; q < crew0[t]; q++, k++) {
+    const a = (k * 2.4) % (Math.PI * 2), at = murmurStand(L.x + 0.5 + dcos(a) * 2, L.y + 0.5 + dsin(a) * 2) || { x: L.x, y: L.y };
+    addBot(p, t, at.x, at.y);
+  }
+  for (const g in FALLEN.goods) bump(L.stock, g, FALLEN.goods[g]);
   L.armor = Math.max(L.armor, Math.round(BDEFS.lander.armor * FALLEN.armor));
   L.lastHit = S.time; L.hRet = 0; L.hBy = -1; delete L.keepW;
   P.stats.back = (P.stats.back || 0) + 1;
@@ -7248,7 +7251,7 @@ function reinstate(p, by) {
   addFx('ring', L.x + 0.5, L.y + 0.5, { color: PLAYER_COLORS[p], r: 3, life: 1.5 });
   sfx('capture', L.x + 0.5, L.y + 0.5);
   logEvent({ t: S.time, k: 'back', p, q: by });
-  const crew = S.horde ? '' : ` ${n} of your buildings came back with it, and a fresh crew stepped out of the base.`;
+  const crew = S.horde ? ' Reinforcements stepped out of the base, with goods in its store.' : ` ${n} of your buildings came back with it, and a fresh crew stepped out of the base with goods in its store.`;
   postMsg(p, `${playerName(by)} took your Command Base back: you're back in the game!${crew}`, L.x, L.y, 'good');
   for (const Q of S.players) if (Q.id !== p && !Q.absent && !isWild(Q.id)) {
     postMsg(Q.id, Q.id === by ? `You took ${playerName(p, true)}'s Command Base back: ${playerName(p, true)} is back in the game.` : allies(Q.id, p) ? `${playerName(by)} took ${playerName(p, true)}'s Command Base back: ${playerName(p, true)} is back in the game.` : `${playerName(p, true)}'s team took their Command Base back: ${playerName(p, true)} is back in the game.`, L.x, L.y, allies(Q.id, p) ? 'good' : 'warn');

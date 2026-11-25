@@ -2318,7 +2318,8 @@ const HORDE = {
  * of a partner within r tiles of the ruin, no Murmur that close, for secs seconds (running back `decay` a second with
  * nobody there).
  */
-const FALLEN = { armor: 0.3, crew: { worker: 6, hauler: 3, warbot: 2 }, prizeKeep: 4, retake: { r: 3, secs: 35, decay: 2 } };
+const FALLEN = { armor: 0.3, crew: { worker: 6, hauler: 3, warbot: 4, bulwark: 1 }, hordeCrew: { worker: 2, warbot: 4 },
+  goods: { cement: 20, alloy: 12, chip: 6, fuel: 10, ammo: 10 }, prizeKeep: 4, retake: { r: 3, secs: 35, decay: 2 } };
 /** The Horde level's numbers (HORDE.levels) for a difficulty key. */
 function hordeLevel(k) { return HORDE.levels[k] || HORDE.levels.normal; }
 /** The Long haul map type's index (Horde is played on it; co-op side by side on Long Haul 2v2: `pair`). */
