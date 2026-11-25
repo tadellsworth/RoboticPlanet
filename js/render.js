@@ -3529,8 +3529,9 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
-    case 'burrow': { drawBurrow(ctx, cx, cy, s, b); break; }
+    case 'burrow': { if (b && b.maw && typeof fxGround === 'function') fxGround(ctx, cx, cy, s * 1.6, '#b07aff', 0.22 + 0.12 * Math.sin(R.time * 1.3 + b.id)); drawBurrow(ctx, cx, cy, b && b.maw ? s * 2.8 : b && b.side ? s * 1.6 : s, b); break; } // (Horde: the Maw's mouths are huge, its side tunnels big)
     case 'mound': { drawMound(ctx, cx, cy, s, b); break; }
+    case 'maw': { drawMaw(ctx, cx, cy, s, b); break; }
     case 'station': {
       // A platform with a canopy beside the track, crates stacked under it and the team colour on the roof.
       hullBase(ctx, cx, cy, s, color);
@@ -5355,6 +5356,37 @@ function drawMound(ctx, cx, cy, s, b) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/**
+ * Horde's Maw (BDEFS maw): a great Murmur mound at the far end of Long haul. Infested ground far round it, a ring of
+ * crystal spires, the biggest nest art there is, a red danger ring, and a violet pulse that quickens as it cracks
+ * (deepSurgeTier) and while a wave is coming out of it.
+ */
+function drawMaw(ctx, cx, cy, s, b) {
+  const t = R.time, tier = deepSurgeTier(b), out = S && S.horde && S.horde.q && S.horde.q.length ? 1 : 0;
+  const pulse = 0.5 + 0.5 * Math.sin(t * (1.6 + 0.5 * tier + out) + (b ? b.id : 0)), r = s * 3.4;
+  const g = ctx.createRadialGradient(cx, cy + s * 0.2, s * 0.4, cx, cy + s * 0.2, r);
+  g.addColorStop(0, 'rgba(70,14,60,0.6)'); g.addColorStop(0.6, 'rgba(80,20,70,0.28)'); g.addColorStop(1, 'rgba(80,20,70,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.2, r, r * 0.78, 0, 0, Math.PI * 2); ctx.fill();
+  if (typeof fxGround === 'function') fxGround(ctx, cx, cy, s * (2.6 + 0.3 * tier), '#cf75ff', (0.12 + 0.06 * tier + 0.1 * out) * pulse);
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 9; k++) { // the crystal spires round it
+    const a = (k / 9) * Math.PI * 2 + 0.3, x = cx + Math.cos(a) * s * 2.1, y = cy + Math.sin(a) * s * 1.55, hgt = s * (0.55 + 0.25 * ((k * 37) % 5) / 5);
+    ctx.fillStyle = 'rgba(20,8,24,0.35)'; ctx.beginPath(); ctx.ellipse(x + s * 0.08, y + s * 0.05, s * 0.16, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9b0ff'; ctx.beginPath(); ctx.moveTo(x - s * 0.12, y); ctx.lineTo(x, y - hgt); ctx.lineTo(x + s * 0.12, y); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8758f0'; ctx.beginPath(); ctx.moveTo(x, y - hgt); ctx.lineTo(x + s * 0.12, y); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = `rgba(255,70,90,${0.3 + 0.4 * pulse})`; ctx.lineWidth = Math.max(2, s * 0.08);
+  ctx.setLineDash([s * 0.3, s * 0.2]);
+  ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.15, r * 0.82, r * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  const art = ART['nest-3'];
+  if (art) drawArt(ctx, art, cx, cy - s * 0.2, s * 3.1);
+  else drawNest(ctx, cx, cy, s * 2.6, b);
+  if (typeof fxGlow === 'function') fxGlow(ctx, cx, cy - s * 0.4, s * (0.9 + 0.3 * pulse), '#b07aff', 0.25 + 0.3 * pulse + 0.2 * out);
 }
 
 /**

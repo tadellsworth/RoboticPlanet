@@ -64,6 +64,7 @@ function simStep(dt) {
   if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
+  if (S.horde && S.tick % Math.round(HORDE.pace * 30) === 5) hordeSpawn(); // (Horde: the waves out of the Maw, a few at a time)
   if (S.tick % 30 === 19) atmosTick(); // (the Atmosphere Engines' land: ATMOS)
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
@@ -89,7 +90,7 @@ function simStep(dt) {
     S.buildings = S.buildings.filter((b) => !b.dead);
     S.bots = S.bots.filter((u) => !u.dead);
   }
-  if (S.mode === 'colony' && !S.mission && !S.contingency && S.tick % 90 === 0) checkMilestones(); // (not in a Contingency battle against the Murmur)
+  if (S.mode === 'colony' && !S.mission && !S.contingency && !S.horde && S.tick % 90 === 0) checkMilestones(); // (not in a Contingency battle against the Murmur)
   if (S.tick % Math.round(HIST_STEP / SIM_STEP) === 0) recordHistory();
   if (S.mission && S.tick % 30 === 0 && typeof checkMission === 'function') checkMission();
   if (S.contingency && S.tick % 30 === 0 && typeof contBattleCheck === 'function') contBattleCheck(); // (a Contingency battle's cap and hold: js/contingency-battle.js)
@@ -1203,7 +1204,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: isArmy(u) && botArmed(u) && u.task?.type !== 'recycle', noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
+  const o = { who: u.owner, breach: (isArmy(u) && botArmed(u) && u.task?.type !== 'recycle') || !!u.hw, /* (Horde's waves bite through what's in the way: hordeBreach) */ noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)), lane: laneSpeed(bt) }; // (Airships carry Workers and Warbots, no vehicles; lane: Express lanes, see laneSpeed)
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
@@ -1819,6 +1820,7 @@ function moveAlong(u, dt) {
       u.vel = 0;
       u.moved = 0;
       if (breachable(t, u.owner) && isArmy(u) && botArmed(u)) { breachHit(u, getE(S.bAt[t])); spreadOut(u, dt); return false; }
+      if (u.hw && breachable(t, u.owner)) { hordeBreach(u, getE(S.bAt[t])); return false; } // (Horde's waves bite their way through)
       const g = u.path[u.path.length - 1], keep = u.path, pi = u.pi;
       if (goTo(u, g % S.W, (g / S.W) | 0)) { u.blockT = 0; return false; }
       u.path = keep; u.pi = pi;
@@ -12162,7 +12164,8 @@ function murmurStart(level) {
   } else S.wildOwner = WILD_OWNER;
   murmurLayer();
   // (The Hollow, their lair, has its own sites, laid out with its map in twin pairs, the Deep's mound in the middle.)
-  if (S.hollow) placeHollowNests(makeRng((S.seed ^ 0x6e357) >>> 0)); else if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
+  // (Horde: no nests, only the Maw at the far end, with its mouths and the lanes down the map: hordeSetup.)
+  if (S.horde) hordeSetup(); else if (S.hollow) placeHollowNests(makeRng((S.seed ^ 0x6e357) >>> 0)); else if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
   for (const b of S.buildings) if (!b.dead && isNestB(b)) murmurAdopt(b);
 }
 
@@ -12674,7 +12677,7 @@ function despawnCritter(u) {
 }
 
 /** How many Scuttlers nest b keeps on guard: more as it grows, and more again round the Deep's mound. */
-function nestGuards(b) { return WILD.guards + b.level + (b.type === 'mound' ? HOLLOW.deep.guards : 0); }
+function nestGuards(b) { return WILD.guards + b.level + (b.type === 'mound' ? HOLLOW.deep.guards : b.type === 'maw' ? HORDE.mawGuards : 0); }
 
 /**
  * Has building e been cutting Bloom veins lately (in the last VEIN.lure seconds: see the gathering in updateWorker)?
@@ -12691,8 +12694,8 @@ function veinFull() {
 
 /** Local burst tier from the Deep's remaining health (zero until its first cracks). */
 function deepSurgeTier(b) {
-  if (!b || b.dead || b.type !== 'mound') return 0;
-  const health = b.armor / BDEFS.mound.armor;
+  if (!b || b.dead || (b.type !== 'mound' && b.type !== 'maw')) return 0; // (the Maw too: Horde's)
+  const health = b.armor / BDEFS[b.type].armor;
   for (let i = DEEP_SURGES.length - 1; i >= 0; i--) if (health < DEEP_SURGES[i].health) return i + 1;
   return 0;
 }
@@ -12942,7 +12945,7 @@ function critterBite(u, foe) {
       // A Wall or Gate holds them up a while, but a Brute breaks through in the end.
       foe.armor -= bt.bite * WILD.wallBite;
       if (foe.armor <= 0) { postMsg(foe.owner, `The Murmur broke through your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); return; }
-    } else foe.armor = Math.max(1, foe.armor - bt.bite);
+    } else foe.armor = Math.max(1, foe.armor - bt.bite * hordeBaseTakes(foe));
     if (S.time - foe.lastAlert > 12) {
       foe.lastAlert = S.time;
       postMsg(foe.owner, `The Murmur are attacking your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'bad');
@@ -12989,6 +12992,7 @@ function updateCritter(u, dt) {
   const t = u.task || (u.task = { type: 'guard' });
   // The other forms' pose (for the drawing): 'walk' but where their own step says otherwise (see murmurPose).
   if (u.pose !== undefined) { u.poseT = (u.poseT || 0) + dt; if (!u.under && !(t.type === 'raid' && (t.role === 'spit' || t.role === 'sap' || (t.role === 'cut' && t.feeding)))) murmurPose(u, 'walk'); }
+  if (t.horde && t.type === 'raid' && hordeMarch(u, t, dt)) return; // (Horde: down its lane at the colony)
   // Active: an armed robot in reach is never walked past: they fight it or fall back from it (murmurThreat).
   if (t.night && murmurSmart() && murmurThreat(u, t, dt)) return;
   if (t.type === 'raid' && t.wait > S.time) {
@@ -13168,6 +13172,7 @@ function murmurOnward(u, t) {
  * (murmurDieback) and its exits close.
  */
 function clearNest(b, by) {
+  if (b.type === 'maw') { hordeMawDown(b, by); return; } // (Horde: the Maw wrecked wins the game)
   const n = dropLoot(b);
   const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id);
   const back = exits.length ? ` Its tunnels die back and its ${exits.length} exit${exits.length > 1 ? 's close' : ' closes'}.` : '';
@@ -13198,6 +13203,7 @@ function murmurTick() {
   const C = murmurCfg();
   if (!C) return;
   murmurLayer();
+  if (S.horde) { murmurDieback(); harrowMarks(); hordeTick(); return; } // (Horde: no nights for the Murmur, only the waves)
   const M = S.mur, night = murmurNight(S.time), n = murmurNights(S.time), x = dayClock(S.time), surge = alwaysNightMap();
   // The dusk warning (on an always-night map, the lull: the ground goes dead silent before a surge).
   // (No nest left standing, or none ever found ground: nothing comes up, so no warning that something will.)
@@ -14707,7 +14713,7 @@ function murmurLoose(u, t) {
 
 /** A Spitter's strike (role 'spit'): to a few tiles off the nearest gun or Wall round the target, then a volley every few seconds. */
 function murmurSpitStep(u, t, dt) {
-  const F = MURMUR.forms.spitter, pl = murmurPlanBy(u.plan), p = pl ? pl.p : -1;
+  const F = MURMUR.forms.spitter, pl = murmurPlanBy(u.plan), p = pl ? pl.p : t.p ?? -1; // (Horde's: its colony, t.p)
   u.charge = Math.min(1, (u.charge || 0) + F.regen * dt);
   let g = t.gun ? getE(t.gun) : null;
   if (!g || g.dead) {
@@ -14736,7 +14742,7 @@ function murmurSpitHit(b) {
   b.lastHit = S.time; b.wildHit = S.time;
   if (b.owner >= 0 && S.players[b.owner]) { const R = S.players[b.owner].raided || (S.players[b.owner].raided = {}); R.x = b.x + 0.5; R.y = b.y + 0.5; R.t = S.time; }
   if (def.barrier) { b.armor -= F.damage * 2; if (b.armor <= 0) { postMsg(b.owner, `The Murmur broke through your ${def.name}!`, b.x, b.y, 'lost'); destroyBuilding(b, true); return; } }
-  else b.armor = Math.max(1, b.armor - F.damage);
+  else b.armor = Math.max(1, b.armor - F.damage * hordeBaseTakes(b));
   if (def.mortar || def.minigun || def.flak || b.type === 'turret' || def.keep || def.bunker) {
     b.shortT = S.time + F.short;
     const P = S.players[b.owner];
@@ -14767,7 +14773,7 @@ function botBodyR(u) { return u && BOTS[u.type] && BOTS[u.type].behemoth ? HARRO
 /** Buildings it never wrecks (they have to be captured): a Command Base, Keep, megastructure or Arrival City; it knocks them down to HARROW.floor of their armor and walks on. */
 function harrowSpares(b) { const d = BDEFS[b.type]; return b.type === 'lander' || !!d.keep || !!d.mega || !!d.city; }
 /** The least armor it leaves building b with (0: none, it's wrecked). */
-function harrowFloor(b) { return harrowSpares(b) ? Math.max(1, Math.round(BDEFS[b.type].armor * HARROW.floor)) : 0; }
+function harrowFloor(b) { if (S.horde && b.type === 'lander') return HORDE.fall; return harrowSpares(b) ? Math.max(1, Math.round(BDEFS[b.type].armor * HARROW.floor)) : 0; }
 /** Is building b a colony's, for the Harrow to go for (not the Murmur's, not on a Trade Post's ground)? */
 function harrowFoe(b) { return !!b && !b.dead && b.owner >= 0 && !isWild(b.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !calmB(b); }
 /** The Murmur's state for the Harrow (S.mur.hw and its lists), made if missing. */
@@ -14930,7 +14936,7 @@ function harrowBatter(u, b) {
   b.lastHit = S.time; b.wildHit = S.time;
   const P = S.players[b.owner]; if (P) { const R = P.raided || (P.raided = {}); R.x = c.x; R.y = c.y; R.t = S.time; }
   const charged = chargeWorth(b) >= 3;
-  b.armor -= H.smash * (BDEFS[b.type].barrier ? 2 : 1) * (b.built ? 1 : 2);
+  b.armor -= H.smash * (BDEFS[b.type].barrier ? 2 : 1) * (b.built ? 1 : 2) * hordeBaseTakes(b);
   if (b.armor <= harrowFloor(b)) {
     if (harrowSpares(b)) { b.armor = Math.min(BDEFS[b.type].armor, Math.max(b.armor, harrowFloor(b))); u.task.tb = 0; u.task.path = null; }
     else {
@@ -14976,7 +14982,7 @@ function harrowSlam(u) {
     hit.add(b.owner);
     b.lastHit = S.time; b.wildHit = S.time;
     if (BDEFS[b.type].barrier) { destroyBuilding(b, true); continue; }
-    if (harrowSpares(b)) b.armor = Math.max(Math.min(b.armor, harrowFloor(b)), b.armor - H.slamBld); else { b.armor -= H.slamBld; if (b.armor <= 0) destroyBuilding(b, true); }
+    if (harrowSpares(b)) b.armor = Math.max(Math.min(b.armor, harrowFloor(b)), b.armor - H.slamBld * hordeBaseTakes(b)); else { b.armor -= H.slamBld; if (b.armor <= 0) destroyBuilding(b, true); }
   }
   const R0 = Math.ceil(H.slamR), ci = Math.floor(x), cj = Math.floor(y);
   for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
@@ -15287,6 +15293,13 @@ function murmurDieback() {
 
 /** A Murmur tunnel exit collapsed by `by`'s warbots: it's gone, and nothing opens there for MURMUR.shut seconds. */
 function collapseExit(b, by) {
+  if (b.maw || b.side) { // (Horde: a mouth of the Maw, dug open again at the next wave; a side tunnel, shut for good)
+    addFx('dust', b.x + 0.5, b.y + 0.5, { r: 1.2 });
+    if (by >= 0 && S.players[by]) { S.players[by].stats.collapsed = (S.players[by].stats.collapsed || 0) + 1; postMsg(by, b.maw ? 'You caved in one of the Maw\'s mouths: the next wave comes up through the others (it digs it open again when the wave sets out).' : 'Side tunnel collapsed: the waves come only from the Maw again (until another opens).', b.x, b.y, 'good'); }
+    if (isMe(by)) sfx('capture');
+    destroyBuilding(b, false);
+    return;
+  }
   S.mur.shut.push({ x: b.x, y: b.y, until: S.time + MURMUR.shut });
   S.mur.shut = S.mur.shut.filter((s) => s.until > S.time);
   addFx('dust', b.x + 0.5, b.y + 0.5, { r: 1 });
@@ -23272,4 +23285,361 @@ function walkerBuild(w) {
   P.madeBots.warbot = (P.madeBots.warbot || 0) + 1;
   addFx('spark', w.x, w.y, { color: PLAYER_COLORS[p] });
   if (P.stats.walkerBots === 1) postMsg(p, 'The Walking Factory\'s first Warbot is off its line. It stands guard on the deck with your robots there.', i, j, 'good');
+}
+
+/* ------------------------------------------------------------------ Horde mode (HORDE) */
+
+/*
+ * Horde mode: a Colony game on Long haul with no nests and no nightly tunnels, only the Maw at the far end (a 'maw'
+ * building, the waves' nest, its tunnel mouths round it: 'burrow's with b.maw) and the waves it sends down the map at
+ * colony H.p. S.horde: { lv (the level's key), goal ('fixed' or 'endless'), of (waves to survive in a Fixed game), n
+ * (the last wave sent), at (when the next comes), warned, q (the queue: { t type, n wave, s from a side tunnel, l lane }),
+ * maw (its id), lanes ([[x, y], ...] each, from the Maw to the Command Base), open ([waves sent, not yet cleared]),
+ * cleared (the highest wave cleared), kills, sides (side tunnels opened), rr (round robin), won ('maw' or 'waves') }.
+ * Deterministic: everything from the game's clock and the seed (hash2), the same on every device.
+ */
+
+/** Is this a Horde game? */
+function hordeOn() { return !!(S && S.horde); }
+/** What the Murmur's blows do to building b (1; Horde's dug-in Command Base takes HORDE.baseTakes of them). */
+function hordeBaseTakes(b) { return S.horde && b.type === 'lander' ? HORDE.baseTakes : 1; }
+
+/** The nearest tile to (x, y), within r, of open level ground the colony's robots can walk to, nothing on it and its neighbours open (null if none). */
+function hordeSpot(x, y, r, zone, room) {
+  let best = null, bd = Infinity;
+  const ci = Math.round(x), cj = Math.round(y);
+  for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) {
+    if (!inMap(i, j) || i < 1 || j < 1 || i >= S.W - 1 || j >= S.H - 1) continue;
+    const t = tIdx(i, j);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.ramp[t] || S.road[t] || (zone !== undefined && S.zone[t] !== zone)) continue;
+    if (room && !exitRoom(t)) continue;
+    const d = dist2(i, j, x, y) + hash2(i, j, S.seed & 0xffff) * 0.01;
+    if (d < bd) { bd = d; best = { x: i, y: j }; }
+  }
+  return best;
+}
+
+/**
+ * The Maw goes down at the far end (the absent colony's landing spot, H.mx, H.my), with its mouths round it, and the
+ * lanes are laid (from murmurStart, in place of the nests).
+ */
+function hordeSetup() {
+  const H = S.horde, L = getE(S.players[H.p].lander);
+  if (!L) return;
+  const zone = S.zone[tIdx(L.x, L.y)];
+  const at = hordeSpot(H.mx, H.my, 10, zone, true) || hordeSpot(H.mx, H.my, 16, zone, false);
+  if (!at) return;
+  const maw = addBuilding(wildOwner(), 'maw', at.x, at.y, true);
+  maw.level = 3;
+  H.maw = maw.id;
+  murmurAdopt(maw);
+  hordeMouths(maw);
+  hordeLanes();
+}
+
+/** The Maw's mouths: HORDE.mouths round it, HORDE.mouthR tiles out (those caved in dug open again). Returns how many were dug. */
+function hordeMouths(maw) {
+  const H = S.horde, zone = S.zone[tIdx(maw.x, maw.y)], k = S.mur.nests.indexOf(maw.id) + 1;
+  const have = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.maw);
+  let dug = 0;
+  for (let q = 0; q < HORDE.mouths; q++) {
+    if (have.some((e) => e.mawK === q)) continue;
+    const a = (q + 0.5) * (Math.PI * 2 / HORDE.mouths), x = maw.x + dcos(a) * HORDE.mouthR, y = maw.y + dsin(a) * HORDE.mouthR;
+    const at = hordeSpot(x, y, 3, zone, true) || hordeSpot(x, y, 4, zone, false);
+    if (!at) continue;
+    const e = addBuilding(wildOwner(), 'burrow', at.x, at.y, true);
+    e.nest = maw.id; e.maw = 1; e.mawK = q; e.armor = HORDE.mouthArmor;
+    if (k && !S.tun[tIdx(at.x, at.y)]) { S.tun[tIdx(at.x, at.y)] = k; S.mur.ver++; }
+    // (the tunnel from the Maw out to it, for the look of it)
+    const n = Math.ceil(dist(maw.x, maw.y, at.x, at.y));
+    for (let s = 1; s < n && k; s++) { const t = tIdx(Math.round(maw.x + (at.x - maw.x) * s / n), Math.round(maw.y + (at.y - maw.y) * s / n)); if (!S.tun[t]) { S.tun[t] = k; S.mur.ver++; } }
+    addFx('dust', at.x + 0.5, at.y + 0.5, { r: 1.2 });
+    dug++;
+  }
+  return dug;
+}
+
+/** The lanes down the map: HORDE.lanes of them across its width, a waypoint every HORDE.step of the way, ending at the Command Base. */
+function hordeLanes() {
+  const H = S.horde, L = getE(S.players[H.p].lander), maw = getE(H.maw);
+  if (!L || !maw) return;
+  const zone = S.zone[tIdx(L.x, L.y)];
+  H.lanes = [];
+  for (let k = 0; k < HORDE.lanes; k++) {
+    const lx = S.W * (k + 1) / (HORDE.lanes + 1), pts = [];
+    for (let f = HORDE.step; f < 1 - 1e-6; f += HORDE.step) {
+      // (out to its side of the map in the middle stretch, back in toward the base at the end)
+      const side = Math.sin(f * Math.PI), x = maw.x + (L.x - maw.x) * f + (lx - (maw.x + (L.x - maw.x) * f)) * side, y = maw.y + (L.y - maw.y) * f;
+      const at = hordeSpot(x, y, 6, zone, false);
+      if (at) pts.push([at.x, at.y, Math.round(f * 100) / 100]);
+    }
+    pts.push([L.x, L.y, 1]);
+    H.lanes.push(pts);
+  }
+}
+
+/** A wave's Harrow's health, as a share of a full-grown one's: young in the first boss waves, bigger than any later (HORDE.harrow). */
+function hordeHarrowHp(n) { const K = HORDE.harrow; return clamp(K.base + K.per * n, K.base, K.most); }
+
+/** The kinds in wave n as a line: "24 Scuttlers, 3 Brutes and a Harrow". */
+function hordeWaveText(n) {
+  const w = hordeWave(n, S.horde.lv), parts = [];
+  for (const t of ['scuttler', 'brute', 'leech', 'spitter', 'sapper', 'harrow']) if (w[t]) parts.push(w[t] === 1 ? (t === 'harrow' ? 'a Harrow' : `1 ${BOTS[t].name}`) : `${w[t]} ${BOTS[t].plural}`);
+  return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0] || '';
+}
+/** The kinds that join in wave n (none in it before): ['Brutes'] and so on. */
+function hordeNewKinds(n) {
+  if (n <= 1) return [];
+  const w = hordeWave(n, S.horde.lv), b = hordeWave(n - 1, S.horde.lv), out = [];
+  for (const t in w) if (!b[t] && t !== 'harrow') out.push(BOTS[t].plural);
+  return out;
+}
+/** Is this an Endless game (never won by the count: the Endless goal, or Warlord)? */
+function hordeEndless() { const H = S.horde; return !!H && (H.goal === 'endless' || !!hordeLevel(H.lv).endless); }
+
+/** A side tunnel opens partway down (HORDE.side), on a flank away from the colony's buildings. */
+function hordeSide(n) {
+  const H = S.horde, Sd = HORDE.side, L = getE(S.players[H.p].lander), maw = getE(H.maw);
+  if (!L || !maw) return null;
+  const open = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.side);
+  if (open.length >= Sd.most) return null;
+  const zone = S.zone[tIdx(L.x, L.y)], k = S.mur.nests.indexOf(maw.id) + 1;
+  const mine = S.buildings.filter((e) => !e.dead && e.owner === H.p);
+  for (let tries = 0; tries < 6; tries++) {
+    const f = Sd.at[0] + (Sd.at[1] - Sd.at[0]) * hash2(S.seed & 0xffff, n, 11 + tries), left = (H.sides + tries) % 2 === 0;
+    const x = left ? S.W * 0.14 : S.W * 0.86, y = maw.y + (L.y - maw.y) * f;
+    const at = hordeSpot(x, y, 6, zone, true);
+    if (!at || open.some((e) => dist2(e.x, e.y, at.x, at.y) < 36) || mine.some((e) => dist2(e.x, e.y, at.x, at.y) < MURMUR.exitFromBld * MURMUR.exitFromBld)) continue;
+    const e = addBuilding(wildOwner(), 'burrow', at.x, at.y, true);
+    e.nest = maw.id; e.side = 1; e.sideF = Math.round(f * 100) / 100; e.armor = MURMUR.exitArmor;
+    if (k && !S.tun[tIdx(at.x, at.y)]) { S.tun[tIdx(at.x, at.y)] = k; S.mur.ver++; }
+    H.sides = (H.sides || 0) + 1;
+    addFx('dust', at.x + 0.5, at.y + 0.5, { r: 1.1 });
+    postMsg(H.p, `The ground has split open on the ${left ? 'west' : 'east'} flank, partway down the map: a side tunnel. Part of every wave comes up through it now. Send warbots to collapse it.`, at.x, at.y, 'warn');
+    return e;
+  }
+  return null;
+}
+
+/** Wave n sets out: into the queue (the side tunnels' share marked), its Harrows too; the mouths caved in dug open again. */
+function hordeLaunch(n) {
+  const H = S.horde, maw = getE(H.maw);
+  if (!maw) return;
+  H.n = n;
+  if (hordeMouths(maw)) postMsg(H.p, 'The Maw has dug its caved-in mouths open again.', maw.x, maw.y, 'info');
+  if (n >= HORDE.side.from && (n - HORDE.side.from) % HORDE.side.every === 0) hordeSide(n);
+  const w = hordeWave(n, H.lv), sides = S.buildings.some((e) => !e.dead && e.type === 'burrow' && e.side);
+  let k = 0;
+  for (const t of ['brute', 'harrow', 'sapper', 'spitter', 'leech', 'scuttler']) for (let q = 0; q < (w[t] || 0); q++, k++) {
+    if (H.q.length >= HORDE.queueMost) break;
+    H.q.push({ t, n, s: sides && t !== 'harrow' && hash2(n, k, S.seed & 0xffff) < HORDE.side.share ? 1 : 0, l: (k + n) % H.lanes.length });
+  }
+  H.open.push(n);
+  const boss = !!w.harrow;
+  postMsg(H.p, `${boss ? 'Boss wave' : 'Wave'} ${n} is coming out of the Maw: ${hordeWaveText(n)}.${boss ? ' A Harrow leads it.' : ''}`, maw.x, maw.y, boss ? 'lost' : 'bad');
+  sfx(boss ? 'deepsurge' : 'alert', maw.x + 0.5, maw.y + 0.5, boss ? 3 : undefined);
+}
+
+/** The Murmur the waves have up now (by wave), in one pass. */
+function hordeUp() {
+  const by = {};
+  let all = 0;
+  for (const u of S.bots) if (!u.dead && u.hw) { by[u.hw] = (by[u.hw] || 0) + 1; all++; }
+  return { by, all };
+}
+
+/** The queue's next few out of the Maw's mouths and the side tunnels, as room allows (from simStep, every HORDE.pace s). */
+function hordeSpawn() {
+  const H = S.horde;
+  if (!H.q.length || S.winner >= 0) return;
+  const maw = getE(H.maw);
+  if (!maw) return;
+  let up = 0;
+  for (const u of S.bots) if (!u.dead && u.hw) up++;
+  const mouths = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === maw.id && e.maw);
+  const sides = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === maw.id && e.side);
+  let n = Math.max(1, mouths.length) + sides.length;
+  for (let k = 0; k < H.q.length && n > 0 && up < HORDE.room;) {
+    const e = H.q[k], fromSide = e.s && sides.length;
+    const from = fromSide ? sides[(H.rr || 0) % sides.length] : mouths.length ? mouths[(H.rr || 0) % mouths.length] : maw;
+    H.rr = (H.rr || 0) + 1;
+    H.q.splice(k, 1);
+    hordeCritter(e, from, maw);
+    up++; n--;
+  }
+}
+
+/** One of wave e.n out of `from` (a mouth, a side tunnel or the Maw itself), down its lane at the colony. */
+function hordeCritter(e, from, maw) {
+  const H = S.horde, lane = H.lanes[e.l % H.lanes.length] || [];
+  if (e.t === 'harrow') {
+    const u = spawnHarrow(from.x + 0.5, from.y + 0.5, H.p, { nest: maw.id, quiet: true });
+    if (u) { u.hw = e.n; u.hp = u.maxHp = Math.round(BOTS.harrow.hp * hordeHarrowHp(e.n)); postMsg(H.p, 'A Harrow leads this wave down the map: the biggest of the Murmur. Small arms barely scratch it: meet it in the open with Railgunners, Mortars, Torches and Missiles.', u.x, u.y, 'lost'); }
+    return;
+  }
+  // (from a side tunnel: on from the first waypoint past it)
+  let wp = 0;
+  if (from.side) { while (wp < lane.length - 1 && lane[wp][2] <= from.sideF) wp++; }
+  const g = lane[wp] || [getE(S.players[H.p].lander).x, getE(S.players[H.p].lander).y];
+  const u = spawnCritter(from, e.t, { type: 'raid', x: g[0], y: g[1], until: S.time + 3600, night: 1, horde: 1, ln: e.l % Math.max(1, H.lanes.length), wp, p: H.p });
+  u.nest = maw.id; u.hw = e.n;
+  if (lane[wp]) { const w = hordeWaypoint(u, lane, wp); u.task.x = w.x; u.task.y = w.y; }
+  if (from !== maw) u.exit = from.id;
+  if (murmurForm(u)) { u.pose = 'walk'; u.poseT = 0; u.charge = e.t === 'spitter' ? 0.8 : e.t === 'sapper' ? 0.3 : 0; }
+  u.x += (hash2(u.id, 9, 2) - 0.5) * 0.8; u.y += (hash2(u.id, 9, 3) - 0.5) * 0.8;
+}
+
+/**
+ * Waypoint k of a lane for creature u: spread out across the map round the lane's point (HORDE.spread tiles either side,
+ * by the creature), so a wave comes on as a broad front rather than single file; the last (the Command Base) as it is.
+ */
+function hordeWaypoint(u, lane, k) {
+  const w = lane[k];
+  if (k >= lane.length - 1) return { x: w[0], y: w[1] };
+  const zone = S.zone[tIdx(w[0], w[1])], dx = Math.round((hash2(u.id, k, 41) - 0.5) * 2 * HORDE.spread), dy = Math.round((hash2(u.id, k, 43) - 0.5) * 4);
+  const i = clamp(w[0] + dx, 1, S.W - 2), j = clamp(w[1] + dy, 1, S.H - 2), at = murmurStand(i + 0.5, j + 0.5);
+  return at && S.zone[tIdx(at.x, at.y)] === zone ? at : { x: w[0], y: w[1] };
+}
+
+/** A creature of the waves on its way (from updateCritter): on down its lane, and the other forms to their work by the colony. */
+function hordeMarch(u, t, dt) {
+  const H = S.horde, lane = H && H.lanes ? H.lanes[t.ln] : null;
+  if (t.role === 'leech') { hordeLeech(u, t, dt); return true; }
+  if (lane && t.wp < lane.length - 1 && (t.arrived || dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) < 9)) {
+    t.wp++; t.arrived = false; t.smash = null; u.path = null;
+    const w = hordeWaypoint(u, lane, t.wp); t.x = w.x; t.y = w.y;
+  }
+  // The other forms look about them once a second: a Spitter for a gun or Wall in reach, a Sapper for the defences to
+  // dig in under (once), a Leech for power to drink.
+  if (!murmurForm(u) || (t.role && t.role !== 'main' && t.role !== 'loose')) return false;
+  u.hsc = (u.hsc || 0) - dt;
+  if (u.hsc > 0) return false;
+  u.hsc = 1;
+  if (u.type === 'spitter') {
+    const g = murmurDefenceNear(t.p, u.x, u.y, 9);
+    if (g) { t.role = 'spit'; t.gun = g.id; u.path = null; }
+  } else if (u.type === 'sapper' && !t.sapped) {
+    const g = murmurDefenceNear(t.p, u.x, u.y, 9), L = getE(S.players[t.p].lander);
+    if (g && L) {
+      const dx = L.x - g.x, dy = L.y - g.y, d = Math.max(1, Math.sqrt(dx * dx + dy * dy)), k = Math.min(3, d);
+      const at = murmurStand(g.x + 0.5 + (dx / d) * k, g.y + 0.5 + (dy / d) * k);
+      if (at) { t.sapped = 1; t.role = 'sap'; t.ph = 0; t.x = at.x; t.y = at.y; if (lane) t.wp = lane.length - 1; u.path = null; murmurPose(u, 'dig'); }
+    }
+  } else if (u.type === 'leech') {
+    let best = null, bd = 10 * 10;
+    for (const b of S.buildings) {
+      if (b.dead || !b.built || b.owner !== t.p || !(BDEFS[b.type].charger || b.type === 'generator') || calmB(b)) continue;
+      const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (best) { t.role = 'leech'; t.lb = best.id; u.path = null; }
+  }
+  return false;
+}
+
+/** A Leech of the waves at the colony's power (role 'leech'): to it, then it drinks until killed (its lights out, its Fuel and charge gone). */
+function hordeLeech(u, t, dt) {
+  const b = getE(t.lb), F = MURMUR.forms.leech;
+  if (!b || b.dead || b.owner !== t.p) { t.role = 'main'; t.lb = 0; t.arrived = false; u.path = null; murmurPose(u, 'walk'); return; }
+  if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) > 1.7) {
+    murmurPose(u, 'walk');
+    if (travel(u, b.x, b.y, dt) === null) { t.role = 'main'; t.lb = 0; t.arrived = false; u.path = null; }
+    return;
+  }
+  murmurPose(u, 'feed'); u.path = null; u.fought = 1;
+  u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
+  if (!murmurCutOn(b)) {
+    b.armor = Math.max(1, b.armor - 1);
+    if (S.time - (b.leechMsg || -99) > 30) { b.leechMsg = S.time; postMsg(b.owner, `A Leech is drinking the power of your ${BDEFS[b.type].name}: kill it to bring the lights back.`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
+  }
+  b.murCut = S.time + 20;
+  u.charge = Math.min(1, (u.charge || 0) + F.rate * dt);
+  b.leechT = (b.leechT || 0) + dt;
+  if (b.leechT >= F.fuelEvery) { b.leechT = 0; if (b.stock.fuel > 0) bump(b.stock, 'fuel', -1); b.energy = 0; }
+  for (const v of S.bots) if (!v.dead && v.inside === b.id && v.bat !== undefined) v.bat = Math.max(0, v.bat - F.bat * dt);
+}
+
+/** A creature of the waves at a building in its way (a Wall, Gate, Outpost or Keep it routed through): it bites its way through. */
+function hordeBreach(u, b) {
+  u.vel = 0; u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
+  if (u.cd > 0) return;
+  const bt = BOTS[u.type];
+  u.cd = WILD.bite; u.fought = 1;
+  addFx('spark', (u.x + b.x + 0.5) / 2, (u.y + b.y + 0.5) / 2, { color: '#c77dff' });
+  b.lastHit = S.time; b.wildHit = S.time;
+  b.armor -= bt.bite * (BDEFS[b.type].barrier ? WILD.wallBite : 1);
+  if (S.time - b.lastAlert > 12) { b.lastAlert = S.time; postMsg(b.owner, `The Murmur are breaking through your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad'); if (isMe(b.owner)) sfx('alert'); }
+  if (b.armor <= 0) { postMsg(b.owner, `The Murmur broke through your ${BDEFS[b.type].name}!`, b.x, b.y, 'lost'); destroyBuilding(b, true); }
+}
+
+/** Salvage crates for a cleared wave n, by the colony's front line (its building nearest the Maw, a little behind it). */
+function hordeSalvage(n) {
+  const H = S.horde, L = getE(S.players[H.p].lander), maw = getE(H.maw);
+  if (!L) return;
+  let front = L, bd = Infinity;
+  if (maw) for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner !== H.p) continue;
+    const d = dist2(b.x, b.y, maw.x, maw.y);
+    if (d < bd) { bd = d; front = b; }
+  }
+  const dx = L.x - front.x, dy = L.y - front.y, d = Math.max(1, Math.sqrt(dx * dx + dy * dy)), k = Math.min(2, d);
+  const at = murmurStand(front.x + 0.5 + (dx / d) * k, front.y + 0.5 + (dy / d) * k) || murmurStand(L.x + 0.5, L.y + 2.5);
+  if (!at) return;
+  const goods = {};
+  for (const g in HORDE.salvage.base) goods[g] = HORDE.salvage.base[g];
+  for (const g in HORDE.salvage.per) goods[g] = (goods[g] || 0) + Math.floor(HORDE.salvage.per[g] * n);
+  for (const g in goods) if (!goods[g]) delete goods[g];
+  addLoot(at.x, at.y, goods);
+  const total = Object.values(goods).reduce((a, b) => a + b, 0);
+  postMsg(H.p, `Wave ${n} cleared! ${total} goods of salvage lie by your front line: your Haulers bring them in.`, at.x, at.y, 'good');
+}
+
+/** Once a second (from murmurTick): the countdown, the warning, a wave out, the waves cleared, the end. */
+function hordeTick() {
+  const H = S.horde, P = S.players[H.p];
+  if (!H || S.winner >= 0 || !P) return;
+  const L = getE(P.lander), maw = getE(H.maw);
+  // Lost: the Command Base battered down (HORDE.fall), or gone.
+  if (!L || L.dead || P.out || L.armor <= HORDE.fall) {
+    H.lost = 1;
+    S.winner = wildOwner(); S.endHow = 'horde';
+    if (L) postMsg(H.p, 'The Murmur have broken your Command Base. The colony is overrun.', L.x, L.y, 'lost');
+    return;
+  }
+  if (!maw) return; // (the Maw wrecked: see hordeMawDown)
+  maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length} waiting below`;
+  // Waves cleared: all out of the Maw and none left up.
+  const up = hordeUp();
+  for (const n of H.open.slice()) {
+    if (H.q.some((e) => e.n === n) || up.by[n]) continue;
+    H.open.splice(H.open.indexOf(n), 1);
+    H.cleared = Math.max(H.cleared || 0, n);
+    hordeSalvage(n);
+    if (!hordeEndless() && n >= H.of) { H.won = 'waves'; S.winner = H.p; S.endHow = 'horde'; postMsg(H.p, `Wave ${n} cleared: you held the line against all ${H.of} waves!`, L.x, L.y, 'good'); return; }
+  }
+  // (a Fixed game: no more waves after the last one)
+  if (!hordeEndless() && H.n >= H.of) return;
+  const left = H.at - S.time;
+  if (left <= HORDE.warn && H.warned !== H.n + 1) {
+    H.warned = H.n + 1;
+    const nk = hordeNewKinds(H.n + 1);
+    const secs = Math.max(1, Math.round(left));
+    postMsg(H.p, `Wave ${H.n + 1} in ${secs} second${secs === 1 ? '' : 's'}: ${hordeWaveText(H.n + 1)}.${nk.length ? ` New: ${nk.join(' and ')}.` : ''}`, maw.x, maw.y, 'warn');
+    if (isMe(H.p)) sfx('alert');
+  }
+  if (left <= 0) {
+    hordeLaunch(H.n + 1);
+    H.at = S.time + hordeGap(H.n + 1, H.lv);
+  }
+}
+
+/** The Maw wrecked by `by`: the waves end, and the game is won. */
+function hordeMawDown(b, by) {
+  const H = S.horde;
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d797ff', r: 5, life: 2 });
+  for (const e of S.buildings) if (!e.dead && e.type === 'burrow' && e.nest === b.id) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1.2 }); destroyBuilding(e, false); }
+  destroyBuilding(b, true);
+  if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; S.winner = by >= 0 ? by : H.p; S.endHow = 'horde'; }
+  postMsg(H ? H.p : by, 'The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good');
+  if (isMe(by)) sfx('capture');
 }

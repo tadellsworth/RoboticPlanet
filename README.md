@@ -30,6 +30,26 @@ how goods move.
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones and an optional ladder of
   **Colony goals** (see Colony goals, Records and achievements below). Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab**.
+- **Horde** (Custom Game, Mode: Horde; single player; `HORDE` in `js/defs.js`, the Horde section of `js/sim.js`,
+  `hordeTopLine`/`hordeObjective`/`showHordeOver` in `js/ui.js`): pure survival on **Long haul** (locked; Large by default).
+  A Colony game underneath (`opts.horde: { level, goal }` → `S.horde`), with no nests and no nightly tunnels: at the far
+  end (the absent colony's landing spot) **the Maw** (`BDEFS.maw`, armor 600, a nest for `isNestB`: guards, alarm, and
+  `deepSurgeTier`'s bursts as it cracks) with four huge tunnel mouths (`burrow`s with `b.maw`, dug open again each wave).
+  A countdown between waves (`hordeGap`: `levels[k].gap` [first, less each wave, least]) on the top bar ("Wave 7 in 1:40 ·
+  23 up") and the Goal card (what's coming, new kinds marked). Waves are **cumulative** (`hordeWave`): each kind joins at
+  its wave (`kinds`: Scuttlers 1, Brutes 4, Leeches and Spitters 7, Sappers 10) and stays, growing (`base + per × (n −
+  from)`, times the level's `mult` and `1 + ramp × (n − 1)`, capped per kind); every 5th is a boss wave (× 1.25, led by a
+  Harrow whose health grows with the wave, `hordeHarrowHp`; two from wave 15 on Commander and Warlord). The queue
+  (`S.horde.q`) comes out of the mouths a few at a time (`hordeSpawn`, every `pace` s), at most `room` (110) up at once,
+  down three lanes of waypoints (`hordeLanes`, `hordeMarch`); from wave 8 side tunnels open on the flanks partway down
+  (`hordeSide`, `side.share` of each wave). The waves route through Walls, Gates, Outposts and Keeps (`routeOpts` breach)
+  and bite through them (`hordeBreach`); Spitters go for guns (`murmurSpitStep` with `t.p`), Sappers dig under the first
+  defences they meet, Leeches drink a Fuel Station or Generator (`hordeLeech`). A wave cleared drops salvage crates by the
+  front line (`hordeSalvage`). Lost when the Murmur batter the Command Base to `fall` (it takes `baseTakes` of their
+  blows; a Harrow's floor for it is `fall` too). Won by clearing wave `HORDE.waves` (Fixed) or wrecking the Maw
+  (`hordeMawDown`); Endless (and Warlord, always) never ends on the count, and the best wave per level is kept on the
+  device (`terrafall.hordeBest`, UI only). A computer-run colony in Horde builds guns and an army (`S.horde` in
+  `js/ai.js`). `node tools/horde-test.js [level] [minutes] [seed] [fixed|endless] [--noai] [--fort]` plays one headless.
 - **The Murmur** in every game (the setting **The Murmur**: Off, Quiet or Active, Active by default, never on Lunar):
   native creatures, nobody's side, whose nests sit out in the wilds and whose tunnels spread toward power every night,
   packs coming up through their exits to raid every colony alike (see The Murmur below).
@@ -4271,6 +4291,10 @@ node tools/headless-sim.js 11 normal 45 versus 1 3 2
 
 ```bash
 node tools/headless-sim.js 99 normal 40 colony
+```
+
+```bash
+node tools/horde-test.js normal 40 4242 fixed --fort
 ```
 
 ```bash

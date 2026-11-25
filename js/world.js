@@ -2771,14 +2771,16 @@ function richRes(t) {
  * map to settle at your own pace). opts.difficulty applies to versus only.
  */
 function newGame(opts) {
-  const mode = opts.mode === 'colony' ? 'colony' : 'versus';
+  // Horde (opts.horde: { level, goal }, see HORDE): a Colony game on Long haul against the waves from the Maw.
+  const horde = opts.horde && typeof opts.horde === 'object' && !opts.mission && !opts.layout ? opts.horde : null;
+  const mode = horde || opts.mode === 'colony' ? 'colony' : 'versus';
   const settings = {
-    size: clamp(opts.size ?? DEFAULT_SIZE[mode], 0, SIZE_PRESETS.length - 1),
+    size: clamp(opts.size ?? (horde ? HORDE.size : DEFAULT_SIZE[mode]), 0, SIZE_PRESETS.length - 1),
     rough: clamp(opts.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1),
     rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
     resV: RES_V,
   };
-  settings.shape = clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
+  settings.shape = horde ? hordeShape() : clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
   // Free-for-all: three players (you and two rivals) on the map shapes that have room for three, or
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
@@ -2787,7 +2789,7 @@ function newGame(opts) {
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
   if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow) settings.upWin = true;
-  settings.biome = biomeAllowed(opts.biome, settings.shape) ? opts.biome : 'desert';
+  settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
@@ -2827,6 +2829,12 @@ function newGame(opts) {
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
+  // Horde: the waves' state (see hordeTick); the Maw goes down at the far end, the absent colony's landing spot.
+  if (horde) {
+    const lv = DIFFICULTY[horde.level] ? horde.level : 'normal';
+    S.horde = { p: 0, lv, goal: horde.goal === 'endless' || hordeLevel(lv).endless ? 'endless' : 'fixed', of: HORDE.waves, n: 0, at: hordeGap(1, lv), warned: 0,
+      q: [], open: [], cleared: 0, kills: 0, sides: 0, rr: 0, maw: 0, lanes: [], mx: m.bases[1] ? m.bases[1].x : Math.floor(W / 2), my: m.bases[1] ? m.bases[1].y : 2 };
+  }
   // Teams: four colonies, two against two, side by side (Crossroads: the two on the left against the two on the right).
   // A team game is won by taking the other team's Command Bases (no Domination or Uplinks).
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
@@ -2850,7 +2858,7 @@ function newGame(opts) {
   // biome (Argos: see murmurGround). The nests go down once the landing sites are in (murmurStart; in the Hollow, on
   // the sites its map laid out: placeHollowNests).
   const hand = !!(opts.layout || opts.setup || opts.mission);
-  let murmur = murmurLevelOk(opts.murmur) ? opts.murmur : opts.wildlife && mode === 'colony' && !hand ? 'active' : !hand && murmurLevelOk(SHAPE_PRESETS[settings.shape].murmur) ? SHAPE_PRESETS[settings.shape].murmur : 'off';
+  let murmur = horde ? 'active' : murmurLevelOk(opts.murmur) ? opts.murmur : opts.wildlife && mode === 'colony' && !hand ? 'active' : !hand && murmurLevelOk(SHAPE_PRESETS[settings.shape].murmur) ? SHAPE_PRESETS[settings.shape].murmur : 'off';
   if (!murmurGround(settings.biome) || !murmurShape(settings.shape)) murmur = 'off'; // (nor on a map type without room for nests)
   // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
   // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
@@ -2882,7 +2890,7 @@ function newGame(opts) {
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
     // (The Hollow: nothing grows, so a Worker comes down in the Agribot's place.)
     for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, m.hollow && type === 'agribot' ? 'worker' : type, base.x, base.y), L);
-    for (let k = 0; k < (mode === 'colony' ? 0 : START_WARBOTS); k++) {
+    for (let k = 0; k < (horde ? HORDE.start.warbot : mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
       enterBuilding(w, L);
     }
@@ -5223,6 +5231,7 @@ function killBot(bot, quiet) {
     if (b.staffInc === bot.id) b.staffInc = 0;
     if (b.builder === bot.id) b.builder = 0;
   }
+  if (bot.hw && S.horde) S.horde.kills = (S.horde.kills || 0) + 1; // (one of Horde's waves: hordeTick)
   bot.dead = true;
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
@@ -5397,7 +5406,7 @@ function isWild(p) { return !!(S && S.wildlife && p === wildOwner()); }
 /** Player p's colour where a colour stands for them (the Murmur: their violet). */
 function ownerColor(p) { return isWild(p) || (S && S.mode === 'colony' && p === WILD_OWNER && S.wildlife) ? WILD_COLOR : PLAYER_COLORS[p] || '#9aa2ab'; }
 /** Is building b a Murmur nest (a nest, or the Hollow's Deep's mound, the biggest of them)? */
-function isNestB(b) { return !!b && (b.type === 'nest' || b.type === 'mound'); }
+function isNestB(b) { return !!b && (b.type === 'nest' || b.type === 'mound' || b.type === 'maw'); } // (the Maw: Horde's)
 /** How many colonies the game was set up for (the Murmur's own slot, in a Versus game with them, isn't one). */
 function nColonies() { return S.players.length - (S.wildSlot ? 1 : 0); }
 /** ...on the same team (and not the same player). */
@@ -5589,6 +5598,16 @@ function checkSave(o) {
   if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
   if (o.settings?.size != null && (!Number.isInteger(o.settings.size) || !SIZE_PRESETS[o.settings.size])) bad();
   if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
+  // Horde's waves (S.horde: see hordeTick): its level and goal, plain numbers, the queue and the lanes.
+  if (o.horde != null) {
+    const H = o.horde, num = (v) => Number.isFinite(v);
+    if (!obj(H) || o.mode !== 'colony' || !ownKey(DIFFICULTY, H.lv) || !['fixed', 'endless'].includes(H.goal) || !['p', 'of', 'n', 'at', 'cleared', 'kills', 'maw'].every((k) => num(H[k]))) bad();
+    if (!Array.isArray(H.q) || H.q.length > HORDE.queueMost || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
+    if (!Array.isArray(H.open) || !H.open.every(Number.isInteger)) bad();
+    if (!Array.isArray(H.lanes) || !H.lanes.every((l) => Array.isArray(l) && l.every((w) => Array.isArray(w) && w.length === 3 && Number.isInteger(w[0]) && Number.isInteger(w[1]) && w[0] >= 0 && w[1] >= 0 && w[0] < o.W && w[1] < o.H && num(w[2])))) bad();
+    for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost']) if (H[k] != null && !num(H[k])) bad();
+    if (H.won != null && !['maw', 'waves'].includes(H.won)) bad();
+  }
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   if (o.diffLow != null && !ownKey(DIFFICULTY, o.diffLow)) bad(); // (the easiest level the rivals were at: ORDERS.rivalDifficulty)
   for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
@@ -5764,7 +5783,7 @@ function checkSave(o) {
     if (b.alId != null && !(Number.isSafeInteger(b.alId) && b.alId >= 0)) bad();
     if (b.alMsg != null && !Number.isFinite(b.alMsg)) bad();
     // the Deep's mound nearer death (DEEP_SURGES): its step, when its next burst comes, its last stand made (DEEP_LAST)
-    if (b.deepSurgeTier != null && !(Number.isInteger(b.deepSurgeTier) && b.deepSurgeTier >= 0 && b.deepSurgeTier <= DEEP_SURGES.length && b.type === 'mound')) bad();
+    if (b.deepSurgeTier != null && !(Number.isInteger(b.deepSurgeTier) && b.deepSurgeTier >= 0 && b.deepSurgeTier <= DEEP_SURGES.length && (b.type === 'mound' || b.type === 'maw'))) bad();
     if (b.deepSurgeAt != null && !Number.isFinite(b.deepSurgeAt)) bad();
     if (b.deepLast != null && !(b.deepLast === 1 && b.type === 'mound')) bad();
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig

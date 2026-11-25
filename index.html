@@ -271,6 +271,7 @@
                 <div class="seg" id="m-mode" role="radiogroup" aria-labelledby="m-l-mode">
                 <button type="button" role="radio" data-v="versus" class="on">Versus</button>
                 <button type="button" role="radio" data-v="colony">Colony</button>
+                <button type="button" role="radio" data-v="horde">Horde</button>
               </div>
               </div>
             </div>
@@ -328,6 +329,16 @@
                 <button type="button" role="radio" data-v="normal" class="on">Colonist</button>
                 <button type="button" role="radio" data-v="hard">Commander</button>
                 <button type="button" role="radio" data-v="warlord">Warlord</button>
+              </div>
+              </div>
+            </div>
+            <!-- Horde (HORDE): win by surviving a fixed number of waves (or wrecking the Maw), or Endless (the best wave kept). -->
+            <div class="m-row" id="m-hgoal-field" hidden>
+              <button type="button" class="m-prow" data-pop="m-hgoal" aria-haspopup="dialog" aria-expanded="false"><span class="m-rl" id="m-l-hgoal">Goal</span><span class="m-pv"><b class="m-pv-v"></b><small class="m-pv-s"></small></span><svg class="m-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="m-ctl" hidden>
+                <div class="seg" id="m-hgoal" role="radiogroup" aria-labelledby="m-l-hgoal">
+                <button type="button" role="radio" data-v="fixed" class="on">Fixed</button>
+                <button type="button" role="radio" data-v="endless">Endless</button>
               </div>
               </div>
             </div>
@@ -846,7 +857,7 @@
           </ul>
           <p class="hint">The rest is below: pick a section.</p>
         </div>
-        <p>Your robots have landed on a small planet: gather its resources, link them into supply chains and grow your colony. Play <b>Versus</b> to race and fight rival colonies, or <b>Colony</b> to build at your own pace with no rival at all.</p>
+        <p>Your robots have landed on a small planet: gather its resources, link them into supply chains and grow your colony. Play <b>Versus</b> to race and fight rival colonies, <b>Colony</b> to build at your own pace with no rival at all, or <b>Horde</b> to hold the line against ever bigger waves of the Murmur.</p>
         <nav class="help-toc" aria-label="Contents">
           <a href="#hs-start" data-jump="hs-start">Getting started</a>
           <a href="#hs-supply" data-jump="hs-supply">Economy and supply chain</a>
@@ -878,6 +889,7 @@
           <a href="#hs-forms" data-jump="hs-forms">The Murmur's forms</a>
           <a href="#hs-harrow" data-jump="hs-harrow">The Harrow</a>
           <a href="#hs-colony" data-jump="hs-colony">Colony extras</a>
+          <a href="#hs-horde" data-jump="hs-horde">Horde mode</a>
           <a href="#hs-maps" data-jump="hs-maps">Maps, biomes and terrain</a>
           <a href="#hs-hollow" data-jump="hs-hollow">The Hollow</a>
           <a href="#hs-town" data-jump="hs-town">Passenger Town: the city map</a>
@@ -1602,6 +1614,23 @@
           <li><b>Ringfall</b> (30 seconds): a meteor shower, pieces of the planet's Ring falling on marked spots, the same spots on every colony's side. They crater roads (your Workers re-lay them if you have the Cement), dent buildings and bots nearby without wrecking them, and leave a <b>rich deposit</b> of Ore or Crystal behind (sometimes Uranium).</li>
           <li><b>Solar flare</b> (45 to 60 seconds): batteries drain twice as fast, so keep the Fuel Stations in Fuel.</li>
           <li><b>The <i>Wren</i></b> (75 seconds): the Accord's automated supply ship, a trader in orbit. Usually it takes raw goods and brings finished goods: some of the <b>Stone, Fiber, Ore, Crystal or Crude</b> you have plenty of, for the <b>Cement, Alloy, Chips, Fuel or Ammo</b> you're shortest of. About one visit in four it brings a raw good instead: the <b>Ore, Crystal, Stone or Crude</b> your land is closest to running out of (what's in storage plus what's left in the ground on your land), for some of a good you have plenty of (never Chips, Ammo or Missiles). Either way the rate is good: 1.3 times the worth of what you give. The card says which kind of deal it is. Tap <b>Trade</b> on the card; the goods land in your Command Base. Its card also shows its cargo list, which is 31 years out of date.</li>
+        </ul>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
+      <section id="hs-horde">
+        <h3>Horde mode</h3>
+        <p><b>Horde</b> (Custom Game, Mode: Horde; single player) is pure survival: no rival colony, only you and the Murmur. It is played on <b>Long haul</b> (the map type is locked; Large unless you pick another size). You land at one end; at the far end lies <b>the Maw</b>, a great Murmur mound ringed by four huge tunnel mouths (a violet ring on the minimap and the planet preview). It has no nests and no nightly tunnels: everything comes out of the Maw.</p>
+        <ul>
+          <li><b>Waves.</b> The top bar counts down to the next one (<b>Wave 7 in 1:40</b>, and how many of them are up), and the Goal card says what's in it, with any new kind marked. About three minutes before the first, shrinking with each wave (a minute and a half late on Colonist; well under a minute on Warlord). A warning comes 20 seconds before each.</li>
+          <li><b>They add up.</b> Every wave keeps all the kinds of the waves before it, and more of each, and new kinds join: Scuttlers from the start, <b>Brutes</b> from wave 4, <b>Leeches</b> and <b>Spitters</b> from wave 7, <b>Sappers</b> from wave 10. Every 5th is a <b>boss wave</b>: the biggest mix yet, a quarter bigger, led by a <b>Harrow</b> (young and smaller in the first boss waves, bigger than any later; two in the late boss waves on Commander and Warlord). On Colonist that is about 20 Murmur by wave 5, near 50 by wave 10 and over 100 by wave 20.</li>
+          <li><b>The march.</b> They come out of the mouths a few at a time (at most 110 of them are up at once: the rest wait below and come as room frees) and march down the map along three lanes to your Command Base. From wave 8 a <b>side tunnel</b> splits open on a flank partway down (another every 4 waves, up to 3), and part of each wave comes up there: one Wall won't hold for ever. Send warbots to collapse a side tunnel (it stays shut) or one of the Maw's mouths (it is dug open again when the next wave sets out).</li>
+          <li><b>What they do.</b> They bite through Walls, Gates, Outposts and Keeps that stand in their way; Brutes batter what they reach; Spitters short out your guns and eat at Walls; Sappers tunnel under your defences and come up behind them; Leeches drink a Fuel Station's or Generator's power until they are killed.</li>
+          <li><b>Salvage.</b> Each wave cleared (all of it out of the Maw and killed) drops a pile of salvage crates by your front line (Alloy, Cement, Ammo, and Chips and Crystal later), more for each wave: your Haulers bring it in.</li>
+          <li><b>Waves</b> (the difficulty: Settler, Pioneer, Colonist, Commander, Warlord) sets how big the waves are, how fast they grow and how short the gaps are. <b>Warlord</b> is relentless and almost unsurvivable, and always Endless.</li>
+          <li><b>Goal: Fixed</b> wins once you clear wave 20. <b>Endless</b> never stops: how far you get is your score, and the best wave on each level is kept on this device (the end screen shows it). Either way, <b>wrecking the Maw</b> (armor 600, well guarded, and it spits out more defenders as it cracks) wins at once: a late job for an army, Missiles or a megastructure.</li>
+          <li><b>Lose:</b> the Murmur batter your Command Base down. Dug in, it takes only a fifth of their blows, but Brutes and a Harrow at the base will break it.</li>
+          <li>You land with four Warbots on top of a Colony landing. Defences, warbots, Ammo and the Research Lab are all open from the start, as in Colony (but no Colony goals or land milestones). The end screen shows the waves survived, the last wave, the Murmur killed and your best.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>

@@ -2517,7 +2517,29 @@ title on the main menu (the M2 cinematic menu's font, coral gradient and glow), 
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
 
-## Idea: Horde mode (owner, Nov 25; draft, open questions below)
+## Built: Horde mode (owner, Nov 25; built Nov 25 2026)
+
+**Built** (Custom Game, Mode: Horde; README's Horde entry has the code map). The owner's answers: (1) both, as a setting
+(Goal: **Fixed**, survive 20 waves, or **Endless**, best wave kept per level on the device); (2) **Long Haul only** for
+now; (3) **pure survival**, no rival colony; and **big waves** (20+ by mid-game, 100+ later on Colonist; Warlord is
+relentless, always Endless, near unsurvivable). Waves are **cumulative** (each keeps every earlier kind, growing, and adds
+the new ones; a boss wave is the biggest mix, led by a Harrow). As built: a countdown on the top bar and the Goal card,
+the Maw (armor 600, four huge mouths) at the far end, three lanes down the map, side tunnels from wave 8, salvage crates
+per wave cleared, at most 110 up at once (the rest staggered out of the Maw), the Command Base dug in (a fifth of the
+Murmur's blows). `tools/horde-test.js` plays it headless.
+
+**Left / open:**
+- Balance from real play: the gaps, the growth, the Harrow's health in the early boss waves, the salvage, the Command
+  Base's toughness, the Maw's 600 armor. The computer colony (autoplay) only half defends (guns and an army at home), so
+  the headless numbers say little about a human's game.
+- Horde on other maps (the Maw opposite you), and the 2-player co-op on the Long Haul 2v2 layout (multiplayer is
+  Versus/Colony only for now: Horde is hidden in the lobby).
+- Its own Records (best wave per level is kept, but not shown in Records yet) and achievements.
+- Art: the Maw is drawn from the nest art (bigger, ringed with spires); its own mound and mouths would look better.
+- A mission that teaches it? It's a mode rather than a mechanic of the main game, so no mission goal was added.
+
+### The draft (for reference)
+
 
 Survive ever bigger Murmur waves sent down a long map at you (it pairs with the "endless late-game horde" idea in the
 Murmur AI rework).

@@ -106,7 +106,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods', 'hgoal']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -411,6 +411,19 @@ const DIFF_INFO = {
   hard: 'Commander: a fast rival that lands with extra goods and attacks early and often.',
   warlord: 'Warlord: the hardest. Much faster, with twice the extra goods, it attacks within two minutes and never lets up. For a strong player.',
 };
+/** What each Horde level plays like (the Match section's line, Horde mode: the Waves row). */
+const HORDE_DIFF_INFO = {
+  easy: 'Settler waves: small and slow to grow, with long gaps between them. Brutes join at wave 4, the first young Harrow leads wave 5.',
+  medium: 'Pioneer waves: a little bigger, the gaps a little shorter.',
+  normal: 'Colonist waves: a fair fight. About 20 Murmur by wave 5, near 50 by wave 10 and over 100 by wave 20, three minutes apart at first, a minute and a half by the end.',
+  hard: 'Commander waves: big, fast-growing and close together, with two Harrows in the boss waves from wave 15.',
+  warlord: 'Warlord waves: relentless and almost unsurvivable. Always Endless: huge waves, under a minute apart from wave 13 on.',
+};
+/** What each Horde goal means (the Goal row). */
+const HORDE_GOAL_INFO = {
+  fixed: `Fixed: survive ${HORDE.waves} waves (clear the last one) to win, or wreck the Maw.`,
+  endless: 'Endless: the waves never stop. How far you get is your score: the best wave on each level is kept on this device. Wreck the Maw to end it with a win.',
+};
 /** What each Graphics step does (the line under it in the pause menu, and the new-game Rules line). */
 const GFX_INFO = {
   saver: 'Saver: for older phones and long sessions. Drawn at 1×, 30 frames a second, with fewer effects and plainer night lights (kept on this device).',
@@ -498,7 +511,8 @@ function checkMenuSettings() {
   if (!Object.prototype.hasOwnProperty.call(DIFFICULTY, m.diff)) m.diff = 'normal';
   if (!Object.prototype.hasOwnProperty.call(VICTORY, m.victory)) m.victory = 'capture';
   // (a value another version or a damaged store left: one the menu can't show stopped the game booting)
-  m.mode = m.mode === 'colony' ? 'colony' : 'versus';
+  m.mode = m.mode === 'colony' || m.mode === 'horde' ? m.mode : 'versus';
+  m.hgoal = m.hgoal === 'endless' ? 'endless' : 'fixed'; // (Horde: Fixed or Endless)
   m.players = ok(m.players, 5) && m.players >= 2 ? m.players : 2;
   m.style = ok(m.style, PERSONALITY_ORDER.length + 1) ? m.style : 1;
   // Each computer player's own doctrine (null: as the Rival doctrine chips say), by player slot 0 to 3. (A list of three
@@ -514,18 +528,18 @@ function checkMenuSettings() {
 
 /** Remember the new-game settings on this device. */
 function saveSettings() {
-  const m = UI.menu;
+  const m = UI.menu, keep = m.mode === 'horde' && m.shapeKeep; // (Horde's Long haul isn't the map type picked: the one before it is)
   try {
-    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, biome2: m.biome2, players: m.players,
-      diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: keep ? keep.shape : m.shape, nuke: m.nuke, mega: m.mega, upwin: m.upwin, biome: m.biome, biome2: m.biome2, players: m.players,
+      diff: m.diff, style: m.style, styles: m.styles, events: m.events, murmur: m.murmur, unlimited: m.unlimited, victory: m.victory, shapeRnd: (keep ? keep.rnd : m.shapeRnd) ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods, hgoal: m.hgoal }));
   } catch (e) { /* storage unavailable */ }
 }
 
 /** Can the Great Uplink win be on with the menu as it is (Megastructures on, not the Hollow)? */
 function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && (SHAPE_PRESETS[m.shape || 0] || {}).hollow); }
 /** Is the Great Uplink win on for the game the menu would start (Versus)? */
-function menuUpWin() { return UI.menu.mode !== 'colony' && !!UI.menu.upwin && menuUpWinOk(); }
-const menuSizePlayers = () => UI.menu.mode === 'colony' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
+function menuUpWin() { return UI.menu.mode === 'versus' && !!UI.menu.upwin && menuUpWinOk(); }
+const menuSizePlayers = () => UI.menu.mode !== 'versus' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
 const menuSize = () => mapSizeForPlayers(UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], menuSizePlayers());
 
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
@@ -545,7 +559,7 @@ function menuSlotStyle(p) { const v = (UI.menu.styles || [])[p]; return v === nu
  * ones nobody in the lobby takes, as the lobby lists them and the game seats them (mpCpuSlots).
  */
 function menuCpuSlots() {
-  if (UI.menu.mode === 'colony') return [];
+  if (UI.menu.mode !== 'versus') return [];
   if (UI.mpSetup && typeof mpCpuSlots === 'function') return mpCpuSlots(menuPlayers(), menuTeams() ? mpTeamSeats() : null);
   return Array.from({ length: menuPlayers() - 1 }, (_, k) => k + 1);
 }
@@ -581,7 +595,7 @@ const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name
 /** Can the menu's biome have the Murmur? Not Lunar (Random might still pick it: then there are none). */
 function menuMurmur() { return (UI.menu.shapeRnd || murmurShape(UI.menu.shape || 0)) && (UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0])); } // (nor a map type without room for nests: murmurShape)
 /** The Murmur as the menu has them: 'off', 'quiet' or 'active' (off on Argos, whatever the setting, which is kept for the next biome). */
-function menuMurmurLevel() { return menuMurmur() && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off'; }
+function menuMurmurLevel() { if (UI.menu.mode === 'horde') return 'active'; return menuMurmur() && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off'; }
 /** What each Murmur setting does (the Rules line). */
 const MURMUR_INFO = {
   off: 'The Murmur: off. No nests, no tunnels, no raids.',
@@ -595,6 +609,16 @@ const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); ret
  * How many players the menu is set to (Versus): you and one to three rivals, as many as the map type
  * has room for (Random picks a map type with room for them all).
  */
+/**
+ * The Mode choice: Versus, Colony or Horde. Horde is played on Long haul only: picking it puts the map type there (the
+ * one picked before is kept, UI.menu.shapeKeep, and comes back when another mode is picked).
+ */
+function setMenuMode(v) {
+  const m = UI.menu, was = m.mode;
+  m.mode = v === 'colony' || v === 'horde' ? v : 'versus';
+  if (m.mode === 'horde' && was !== 'horde') { m.shapeKeep = { shape: m.shape, rnd: m.shapeRnd }; m.shape = hordeShape(); m.shapeRnd = 0; }
+  else if (m.mode !== 'horde' && was === 'horde' && m.shapeKeep) { m.shape = m.shapeKeep.shape; m.shapeRnd = m.shapeKeep.rnd; m.shapeKeep = null; }
+}
 function menuPlayers() {
   const m = UI.menu, want = clamp(Math.round(m.players) || 2, 2, 4);
   if (m.mode !== 'versus') return 2;
@@ -613,6 +637,7 @@ function modeInfo(mode, n, teams) {
   const town = !m.shapeRnd && !!SH.city; // (Passenger Town: four on the edges of a square town, three round a round one)
   const dam = !m.shapeRnd && !!SH.dam; // (The Dam: a colony on each side of the high ground, a reservoir over each valley)
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
+  if (mode === 'horde') return `Horde: no rival, only the Murmur. You land at one end of Long haul; at the far end the Maw sends ever bigger waves down the map at you, a countdown between them. Hold the line: ${UI.menu.diff === 'warlord' ? 'on Warlord the waves never end' : UI.menu.hgoal === 'endless' ? 'Endless, how far can you get' : `survive ${HORDE.waves} waves`}, or wreck the Maw. Lose your Command Base and it's over.`;
   return mode === 'colony'
     ? (menuMurmurLevel() !== 'off' ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them, and come up through their tunnels by night. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
@@ -637,13 +662,13 @@ function resourceInfo(v) {
 }
 
 /** The challenge modifiers the menu has on, as a new game takes them (none that need a rival in Colony). */
-function menuMods() { return modList(UI.menu.mods, UI.menu.mode); }
+function menuMods() { return modList(UI.menu.mods, UI.menu.mode === 'versus' ? 'versus' : 'colony'); }
 
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
-  const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
+  const m = UI.menu, colony = m.mode !== 'versus', three = menuThree(), horde = m.mode === 'horde';
   const otherBiome = chosenSecondBiome(m, menuSize());
-  const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
+  const main = [horde ? `Horde · ${DIFFICULTY[m.diff].label} waves · ${m.diff === 'warlord' || m.hgoal === 'endless' ? 'Endless' : `${HORDE.waves} waves`}` : colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   if (menuUpWin()) main.push('Great Uplink win');
@@ -820,7 +845,8 @@ function hoverInfo(sec, show) {
 function initMenu() {
   UI.menuHover = {};
   const pick = (fn) => () => { fn(); syncMenu(); saveSettings(); sfx('click'); };
-  for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
+  for (const btn of $('m-mode').children) btn.onclick = () => { setMenuMode(btn.dataset.v); syncMenu(); sfx('click'); };
+  for (const btn of $('m-hgoal').children) btn.onclick = () => { if (btn.disabled) return; UI.menu.hgoal = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
   for (const btn of $('m-teams').children) btn.onclick = pick(() => { UI.menu.teams = +btn.dataset.v; });
@@ -861,7 +887,7 @@ function initMenu() {
   $('m-style-note').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-docmore]'); if (b) { UI.docOpen = b.dataset.docmore === '1'; sfx('click'); syncInfo(); } });
   // The Murmur: Off, Quiet or Active (none on Argos: there a tap says why, in the Rules line).
   for (const btn of $('m-murmur').children) btn.onclick = () => {
-    if (!menuMurmur()) { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
+    if (!menuMurmur() || UI.menu.mode === 'horde') { UI.menuHover['m-sec-rules'] = $('m-murmur-row'); syncInfo(); sfx('error'); return; }
     UI.menu.murmur = btn.dataset.v; UI.menuHover['m-sec-rules'] = btn; syncMenu(); saveSettings(); sfx('click');
   };
   // The Great Uplink win (beside Victory): it needs Megastructures, and there is no sky in the Hollow; a tap then says why.
@@ -906,7 +932,7 @@ function initMenu() {
   Object.defineProperty($('m-more'), 'open', { configurable: true, get: () => UI.menuView === 'setup', set: (v) => showMenuView(v ? 'setup' : 'home') });
   $('m-new').onclick = () => { audioUnlock(); if (UI.mpSetup) mpSetupDone(); else startNewGame(); };
   // Map type and Biome open their pickers.
-  $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
+  $('m-shape').onclick = () => { if (UI.menu.mode === 'horde') { UI.menuHover['m-sec-planet'] = $('m-shape'); syncInfo(); sfx('error'); return; } sfx('click'); openPicker('shape'); }; // (Horde: Long haul only)
   $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
   $('m-biome2').onchange = () => { UI.menu.biome2 = $('m-biome2').value || null; syncMenu(); saveSettings(); };
   $('m-picker-close').onclick = () => closePicker();
@@ -1029,21 +1055,31 @@ function syncSizeChoices(el, shape, players, random) {
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
 function syncMenu() {
   if (typeof ensureBiomeArt === 'function') ensureBiomeArt(BIOME_ORDER[UI.menu.biome || 0]); // the chosen biome's swatch
-  const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
+  // (Multiplayer settings: no Horde, a single-player mode for now.)
+  if (UI.mpSetup && UI.menu.mode === 'horde') setMenuMode('versus');
+  const m = UI.menu, colony = m.mode !== 'versus', three = menuThree(), horde = m.mode === 'horde';
   const mark = (b, on) => { b.classList.toggle('on', on); if (b.getAttribute('role') === 'radio') b.setAttribute('aria-checked', on ? 'true' : 'false'); };
-  for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
+  for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); btn.hidden = btn.dataset.v === 'horde' && !!UI.mpSetup; }
   // Multiplayer settings (the host, from the lobby): Versus only; Players counts everyone, people first, computer rivals after.
   const mps = !!UI.mpSetup;
   // (Versus or Colony in multiplayer too: Colony is co-op, everyone sharing the host's colony)
   // Co-op: Custom Game hosts a co-op game; the multiplayer settings say whether people who join share the colony.
-  $('m-coophost').hidden = mps;
+  $('m-coophost').hidden = mps || horde;
   $('m-coop').hidden = !mps || colony;
   $('m-coop-row').hidden = mps && colony;
   for (const btn of $('m-coop').children) mark(btn, +btn.dataset.v === (m.coop ? 1 : 0));
   $('m-unlimited-row').hidden = mps;
-  $('m-l-diff').textContent = mps ? 'Computer rivals' : 'Rival';
-  for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
-  $('m-diff-field').hidden = colony;
+  $('m-l-diff').textContent = horde ? 'Waves' : mps ? 'Computer rivals' : 'Rival';
+  for (const btn of $('m-diff').children) { mark(btn, btn.dataset.v === m.diff); btn.dataset.info = (horde ? HORDE_DIFF_INFO : DIFF_INFO)[btn.dataset.v] || ''; }
+  $('m-diff-field').hidden = colony && !horde;
+  // Horde's goal: Fixed (survive HORDE.waves waves) or Endless; Warlord is always Endless.
+  $('m-hgoal-field').hidden = !horde;
+  for (const btn of $('m-hgoal').children) {
+    const off = btn.dataset.v === 'fixed' && m.diff === 'warlord';
+    mark(btn, btn.dataset.v === (m.diff === 'warlord' ? 'endless' : m.hgoal));
+    btn.disabled = off;
+    btn.dataset.info = off ? 'Warlord waves never end: always Endless.' : HORDE_GOAL_INFO[btn.dataset.v];
+  }
   // (The Hollow has no Uplinks, the Pathfinder never having mapped it: that choice is greyed out, and the game is Capture.)
   const noUplinks = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow, vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
   for (const btn of $('m-victory').children) {
@@ -1119,14 +1155,14 @@ function syncMenu() {
   // The Murmur: none on Lunar (Argos, the moon, is silent ground), so there it shows Off and can't be changed (the
   // setting itself is kept for the next biome).
   const silent = !menuMurmur(), mur = menuMurmurLevel();
-  $('m-murmur-row').classList.toggle('na', silent);
+  $('m-murmur-row').classList.toggle('na', silent || horde);
   // (The Hollow is their lair: it picks Active, and Off there says what's missing. Whether Off belongs there at all is the
   // owner's call: see IDEAS.md.)
   const lair = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow;
   const info = (v) => (lair && v === 'off' ? 'The Murmur: off. The Hollow is the Murmur\'s lair, and it plays best with them: with them off its nests stand empty and no surges come.' : MURMUR_INFO[v]);
   const noRoom = !m.shapeRnd && !murmurShape(m.shape || 0);
-  $('m-murmur-row').dataset.info = silent ? (noRoom ? `The Murmur: none on ${SHAPE_PRESETS[m.shape || 0].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : info(mur);
-  for (const btn of $('m-murmur').children) { mark(btn, btn.dataset.v === mur); btn.dataset.info = silent ? $('m-murmur-row').dataset.info : info(btn.dataset.v); }
+  $('m-murmur-row').dataset.info = horde ? 'The Murmur: always Active in Horde (the waves are theirs). There are no nests or nightly tunnels: only the Maw.' : silent ? (noRoom ? `The Murmur: none on ${SHAPE_PRESETS[m.shape || 0].name} (its land has no room for their nests: no tunnels, no raids).` : 'The Murmur: none on Argos, the moon (no nests, no tunnels, no raids).') : info(mur);
+  for (const btn of $('m-murmur').children) { mark(btn, btn.dataset.v === mur); btn.dataset.info = silent || horde ? $('m-murmur-row').dataset.info : info(btn.dataset.v); }
   for (const [id, on] of [['m-nuke', m.nuke], ['m-mega', m.mega], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
@@ -1253,7 +1289,9 @@ function setRowValue(id) {
   const on = [...el.children].find((b) => b.classList.contains('on'));
   const name = on ? (on.getAttribute('aria-label') || on.textContent).trim() : '';
   if (id === 'm-size') return [name, ''];
-  if (id === 'm-mode') return [name, m.mode === 'colony' ? 'no rival' : ''];
+  if (id === 'm-mode') return [name, m.mode === 'colony' ? 'no rival' : m.mode === 'horde' ? 'the Murmur\'s waves' : ''];
+  if (id === 'm-hgoal') return [name, m.diff === 'warlord' ? 'Warlord' : m.hgoal === 'fixed' ? `${HORDE.waves} waves` : 'best wave kept'];
+  if (id === 'm-diff' && m.mode === 'horde') return [name, 'waves'];
   if (id === 'm-victory') return [name, menuUpWin() ? '+ Great Uplink win' : ''];
   if (id === 'm-diff') return [name, menuThree() ? `${menuPlayers() - 1} rivals` : ''];
   return [name, ''];
@@ -1965,7 +2003,7 @@ const PV = { timer: 0, maps: new Map(), drawn: '', failed: false };
 
 /** The settings newGame would make of the menu (Random biome: drawn as the Rust, the red desert). */
 function previewSettings() {
-  const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus';
+  const m = UI.menu, mode = m.mode !== 'versus' ? 'colony' : 'versus';
   const st = { size: clamp(menuSize(), 0, SIZE_PRESETS.length - 1), rough: clamp(m.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1), rich: clamp(m.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1) };
   st.shape = clamp(m.shape || 0, 0, SHAPE_PRESETS.length - 1);
   st.players = playerCount(mode, st.shape, m.players);
@@ -1977,7 +2015,7 @@ function previewSettings() {
 }
 function previewKey() {
   const p = previewSettings(), s = p.st;
-  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.biome2, s.teams ? 1 : 0].join(':');
+  return UI.menu.shapeRnd ? 'rnd' : [p.seed, UI.menu.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.biome2, s.teams ? 1 : 0].join(':');
 }
 
 function schedulePreview(now) {
@@ -2086,6 +2124,16 @@ function renderPreview(cv, m, p) {
     ctx.shadowColor = col; ctx.shadowBlur = 8;
     ctx.fillStyle = col; roundRect(ctx, cx - bs / 2, cy - bs / 2, bs, bs, bs * 0.25); ctx.fill();
     ctx.shadowBlur = 0; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  // Horde: the Maw at the far end, in the Murmur's violet.
+  if (UI.menu.mode === 'horde' && m.bases[1]) {
+    const b = m.bases[1], cx = x0 + (b.x + 0.5) * k, cy = y0 + (b.y + 0.5) * k;
+    ctx.beginPath(); ctx.arc(cx, cy, k * 6, 0, Math.PI * 2);
+    ctx.fillStyle = WILD_COLOR + '40'; ctx.fill();
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = '#ff5a6a'; ctx.lineWidth = 1.4; ctx.stroke(); ctx.setLineDash([]);
+    ctx.shadowColor = WILD_COLOR; ctx.shadowBlur = 10;
+    ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(cx, cy, Math.max(4, k * 1.6), 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
   }
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; roundRect(ctx, x0 + 0.5, y0 + 0.5, mw - 1, mh - 1, 6); ctx.stroke();
@@ -3798,8 +3846,10 @@ function startNewGame(again) {
   closePicker(false);
   // Random map type or biome: picked now (see resolveRandom); the menu keeps Random for next time.
   const pick = again ? null : resolveRandom();
+  const horde = UI.menu.mode === 'horde';
   const opts = again || {
-    seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
+    seed: UI.menu.seed, difficulty: UI.menu.diff, mode: horde ? 'colony' : UI.menu.mode,
+    horde: horde ? { level: UI.menu.diff, goal: UI.menu.diff === 'warlord' ? 'endless' : UI.menu.hgoal } : undefined,
     size: menuSize(), rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
@@ -3810,7 +3860,7 @@ function startNewGame(again) {
   enterGame();
   updateHUD();
   placeMinimap();
-  postMsg(ME, opts.mode === 'colony'
+  postMsg(ME, S.horde ? hordeBriefing() : opts.mode === 'colony'
     ? (BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? `Your bots have landed on ${regionName(S.settings.biome)}. Build, expand and make this moon home.`
       : `Your bots have landed in ${regionName(S.settings.biome)}. Build, expand and make this planet home.`)
     : nColonies() > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
@@ -3818,7 +3868,7 @@ function startNewGame(again) {
   if (!again && (UI.menu.shapeRnd || UI.menu.biomeRnd)) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   doctrineLines();
   modsBriefing();
-  if (S.wildlife) {
+  if (S.wildlife && !S.horde) {
     // Pointed at the nest nearest home (J jumps there), the rest are violet on the minimap.
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && isNestB(b));
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
@@ -4184,6 +4234,7 @@ function showGameOver() {
   $('o-log').hidden = true;
   $('o-report').hidden = true;
   if (S.mission) { showMissionOver(); return; }
+  if (S.horde) { showHordeOver(); return; } // (Horde: the waves survived, the best kept)
   const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = nColonies() > 2;
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
@@ -10145,6 +10196,7 @@ function objectiveText() {
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
   if (S.contingency && typeof contObjective === 'function') return warn + contObjective(); // (js/contingency-battle.js)
+  if (S.horde) return warn + hordeObjective(); // (Horde: the next wave)
   for (const o of OBJECTIVES) if (!o.done()) return warn + o.text;
   if (warn) return warn;
   if (S.mode === 'colony') {
@@ -10193,7 +10245,7 @@ function updateHUD() {
   if (cs && cs.dataset.k !== CALLSIGNS[ME] + PLAYER_COLORS[ME]) { cs.dataset.k = CALLSIGNS[ME] + PLAYER_COLORS[ME]; cs.style.setProperty('--pc', PLAYER_COLORS[ME]); $('callsign-name').textContent = callsign(ME); }
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = (todEnabled() ? `<small class="ck-l">${TOD_NAMES[tn]}</small>` : '') + '<span class="ck-v">' + tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)) + '</span>'; // (a Contingency battle against the Murmur: dawn and the nests)
+  const ct = (todEnabled() ? `<small class="ck-l">${TOD_NAMES[tn]}</small>` : '') + '<span class="ck-v">' + tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.horde ? hordeTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)) + '</span>'; // (a Contingency battle against the Murmur: dawn and the nests)
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
@@ -11023,4 +11075,66 @@ function agPickEnd(text) {
   setMode('normal');
   refreshAgCards();
   if (g) openAgSheet(g);
+}
+
+/* ------------------------------------------------------------------ Horde mode: its briefing, top bar, goal and end */
+
+/** The best wave reached in Horde on this device, by level (UI only: never read by the game). */
+function hordeBests() { try { const o = JSON.parse(localStorage.getItem('terrafall.hordeBest') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+/** Keep wave n as the best at level k (and Endless or Fixed) if it beats the one kept; true if it did. */
+function hordeKeepBest(k, n) {
+  const o = hordeBests(), was = +o[k] || 0;
+  if (n <= was) return false;
+  o[k] = n;
+  try { localStorage.setItem('terrafall.hordeBest', JSON.stringify(o)); } catch (e) { /* storage unavailable */ }
+  return true;
+}
+/** How many of the waves' Murmur are up now. */
+function hordeUpCount() { let n = 0; for (const u of S.bots) if (!u.dead && u.hw) n++; return n; }
+
+/** The landing message for a Horde game: where the Maw is, the first wave, the goal. */
+function hordeBriefing() {
+  const H = S.horde, L = getE(S.players[ME].lander), maw = getE(H.maw);
+  const goal = hordeEndless() ? `Endless${H.lv === 'warlord' ? ' (Warlord)' : ''}: the waves never stop; how far you get is your score (best here: ${hordeBests()[H.lv] ? 'wave ' + hordeBests()[H.lv] : 'none yet'}).` : `Survive ${H.of} waves to win.`;
+  return `Your bots have landed at one end of Long haul. At the far end${L && maw ? ' (' + dirText(L, maw).replace(/^\d+ tiles? /, '') + ')' : ''} lies the Maw, the Murmur's great mound, and every few minutes a wave pours out of its tunnel mouths and marches down the map at you, bigger each time. Wave 1 in ${fmtClock(H.at - S.time)}: ${hordeWaveText(1)}. Build guns (Pulse Turrets, Minigun Nests, Mortar Pits), Walls and warbots across the map in front of your Command Base. ${goal} Wreck the Maw and you win; lose your Command Base and it's over.`;
+}
+
+/** The top bar's line in Horde: "Wave 7 in 1:40", with how many are up. */
+function hordeTopLine() {
+  const H = S.horde, up = hordeUpCount();
+  if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length} left`;
+  return `Wave ${H.n + 1} in ${fmtClock(H.at - S.time)}${up ? ` · ${up} up` : ''}`;
+}
+
+/** The Goal card in Horde: the next wave and what's in it (what's new), how many cleared, the best kept. */
+function hordeObjective() {
+  const H = S.horde, n = H.n + 1, nk = hordeNewKinds(n), best = hordeBests()[H.lv];
+  const head = !hordeEndless() && H.n >= H.of ? `<b>The last wave</b> is out: clear it to win. ${hordeUpCount() + H.q.length} Murmur left.`
+    : `Hold the line. <b>${n % HORDE.boss.every === 0 ? 'Boss wave' : 'Wave'} ${n}</b> in ${fmtClock(H.at - S.time)}: ${hordeWaveText(n)}${nk.length ? ` <span class="err">New: ${nk.join(', ')}.</span>` : '.'}`;
+  return `${head}<br>Cleared ${H.cleared || 0}${hordeEndless() ? '' : ` of ${H.of}`}${hordeEndless() && best ? ` · best wave ${best}` : ''} · ${H.kills || 0} Murmur killed.`;
+}
+
+/** The end screen of a Horde game: waves survived, the Murmur killed, the best kept (Endless). */
+function showHordeOver() {
+  const H = S.horde, won = S.winner === ME, reached = H.cleared || 0;
+  const endless = hordeEndless(), isBest = endless && !MP.on && hordeKeepBest(H.lv, reached), best = hordeBests()[H.lv] || reached;
+  $('o-log').textContent = won ? (H.won === 'maw' ? 'The Maw is silent. Region secured for the Sponsor. Report sent. No reply. Continuing current directive.' : 'Region held. The tunnels are quiet. Report sent. No reply. Continuing current directive.')
+    : 'Command core lost. The Murmur hold the region. Transferring authority. Hold position.';
+  $('o-log').hidden = false;
+  sfx(won ? 'win' : 'lose');
+  $('o-title').textContent = won ? (H.won === 'maw' ? 'The Maw has fallen!' : 'The line held!') : 'Overrun';
+  $('o-text').textContent = won
+    ? (H.won === 'maw' ? `You wrecked the Maw${reached ? ` after ${reached} wave${reached === 1 ? '' : 's'}` : ''}: its mouths cave in and the waves are over.` : `You survived all ${H.of} waves on ${DIFFICULTY[H.lv].label}. The Murmur fall back into the dark.`)
+    : `The Murmur broke your Command Base ${H.n ? `during wave ${H.n}` : 'before the first wave'}. You cleared ${reached} wave${reached === 1 ? '' : 's'}${endless ? (isBest ? ': a new best on this level!' : ` (your best on ${DIFFICULTY[H.lv].label}: wave ${best}).`) : '.'}`;
+  const st = S.players[ME].stats;
+  $('o-stats').innerHTML = [
+    ['Mode', `Horde · ${DIFFICULTY[H.lv].label} · ${endless ? 'Endless' : `${H.of} waves`}`], ['Waves survived', reached], ['Last wave', H.n], ['Murmur killed', H.kills || 0],
+    ...(endless ? [['Best wave (this level)', best + (isBest ? ' (new!)' : '')]] : []),
+    ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots lost', st.lost],
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  $('o-report').innerHTML = typeof gameReport === 'function' ? gameReport(won) : '';
+  $('o-report').hidden = !$('o-report').innerHTML;
+  $('o-keep').hidden = true;
+  syncRematch();
+  $('screen-over').hidden = false;
 }

@@ -766,7 +766,7 @@ function aiThink(p) {
   // (The Murmur cut the power at one of our buildings lately, with no gun over it: one Pulse Turret more, beside it: see aiMurCut.)
   const defAt = AI_DEFENCE_AT * (st.turrets ? 0.5 : 1);
   const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - defAt) / FT.every)) + (aiMurCut(P) ? 1 : 0);
-  const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
+  const defence = (type) => (S.mode !== 'colony' || !!S.horde) && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
      (type === 'keep' && wantKeeps > 0));
@@ -822,7 +822,7 @@ function aiThink(p) {
   // The first Pulse Turret waits for its doctrine's time (a Warden's comes at half of it, and first once it is due):
   // as a plain plan entry it went up whenever the goods happened to be there, a Herald's three minutes in and a
   // Warden's a minute late, behind the Refinery and the rest of the plan.
-  const firstTurret = S.mode !== 'colony' && !counts.turret;
+  const firstTurret = (S.mode !== 'colony' || !!S.horde) && !counts.turret;
   if (firstTurret && st.turrets && S.time > defAt && counts.foundry) plan = [['turret', 1]].concat(plan);
   // (A Warden's next turrets, up to its six, go first too as each falls due: behind the plan's Mines, Outposts and Keep
   // it had two of the six it promises by 18 minutes.)
@@ -838,7 +838,7 @@ function aiThink(p) {
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
       if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
       if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
-      if (S.mode === 'colony' && BDEFS[type].war) continue;
+      if (S.mode === 'colony' && !S.horde && BDEFS[type].war) continue; // (Horde: guns and Ammo, against the waves)
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
       const nCh = 1 + Math.floor((counts.outpost || 0) / 4);
@@ -1008,14 +1008,14 @@ function aiThink(p) {
   const wantTrucks = me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) ? 1 + Math.floor(me.length / 35) : 0;
   const army = aiArmyKinds(kinds); // (the whole army, specialists too)
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
-  const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
+  const wantArmy = (S.mode === 'colony' && !S.horde) || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
   // The bot limit: the room left under it is kept for the army it wants (AI_ARMY_ROOM of the limit at most), so a
   // colony that has taken a lot of buildings can't fill the limit with workers, Haulers and the rest and never field an
   // army again. Workers stop where they would eat into that room, and so do the other non-fighting robots (but the one
   // Tanker it can't do without); warbots past what it wants leave AI_WORKER_ROOM free, for the workers it loses.
   const botCap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS, spare = botCap - sumValues(kinds);
-  const armyRoom = S.mode === 'colony' ? 0 : Math.max(0, Math.min(wantArmy, Math.floor(botCap * AI_ARMY_ROOM)) - army);
+  const armyRoom = S.mode === 'colony' && !S.horde ? 0 : Math.max(0, Math.min(wantArmy, Math.floor(botCap * AI_ARMY_ROOM)) - army);
   const civilOk = spare > armyRoom;
   wantWorkers = Math.min(wantWorkers, workers + Math.max(0, spare - armyRoom));
   let unarmed = 0;
@@ -1062,7 +1062,7 @@ function aiThink(p) {
     // workers already: until then a worker has to stay free to carry).
     if (few) { b.mode = 'worker'; b.orders = !kinds.hauler && workers >= 3 ? { hauler: 1 } : {}; continue; }
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
-    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffSoon + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
+    b.mode = S.mode === 'colony' && !S.horde ? 'worker' : workers < Math.min(staffSoon + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
         : workers < wantWorkers ? 'worker' : spare <= AI_WORKER_ROOM ? 'off' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     // (Workers scrapped lately (see aiScrap): no spare ones made in their place, only the ones its buildings call for.)

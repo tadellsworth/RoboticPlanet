@@ -1041,7 +1041,7 @@ const SORTIE_LEASH = 9;
 // Area defence (garrisonDefense): a fort with nobody at its own walls sends guards to a building of its owner's that
 // enemy warbots are shooting at within AREA_DEFENCE tiles; they come home once it has been quiet AREA_QUIET seconds.
 const AREA_DEFENCE = 14, AREA_QUIET = 6;
-const DEFAULT_SIZE = { versus: 1, colony: 3 };
+const DEFAULT_SIZE = { versus: 1, colony: 3, horde: 2 }; // (Horde: Large, HORDE.size)
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
 
@@ -1690,6 +1690,11 @@ const BDEFS = {
     name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. As it cracks, it sends out more defenders in faster waves. A brighter pulse and deeper rumble warn of the stronger waves. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
     cost: {}, wild: true, armor: 160, buildTime: 1,
   },
+  // Horde mode (HORDE): the Maw at the far end of Long haul, the waves' nest, with its tunnel mouths round it.
+  maw: {
+    name: 'The Maw', desc: 'A great Murmur mound at the far end of the planet, ringed by huge tunnel mouths: every wave in Horde comes up out of it and marches down the map at you. Heavily armored and well guarded, and as it cracks it spits out more defenders. Wreck it with an army (or a megastructure) and the waves end: you win.',
+    cost: {}, wild: true, armor: 600, buildTime: 1,
+  },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
@@ -2237,6 +2242,84 @@ const TECHS = {
 const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'nanites'];
 
 /** Starting goods in each Command Base. */
+/*
+ * Horde mode (the owner's, Nov 25 2026; the new-game screen's third mode): survive ever bigger Murmur waves sent down Long
+ * haul at you from the Maw at the far end. A Colony game underneath (no rival: you, the planet and the Murmur), with
+ * S.horde holding the waves (hordeSetup and hordeTick in js/sim.js). Its own Murmur only: no nests, no nightly tunnels.
+ *   shape, size   the map type it is locked to (Long haul) and the size it starts on (Large)
+ *   waves         a Fixed game is won by surviving (clearing) this many waves, or wrecking the Maw; Endless never ends
+ *                 but on the Maw or your Command Base (the best wave is kept on the device: UI only)
+ *   levels        the difficulty, by the rival levels' keys (Settler to Warlord): `mult` scales every kind's count,
+ *                 `ramp` makes it grow faster each wave (times 1 + ramp × (wave − 1)), `gap` the countdown between waves
+ *                 [first, less each wave, least] in seconds, `endless`: always Endless (Warlord: relentless, near
+ *                 unsurvivable)
+ *   kinds         each kind joins from wave `from` with `base` and `per` more each wave after; they stay in every later
+ *                 wave and keep growing (the waves are cumulative: the owner's call). `cap` the most of a kind in a wave.
+ *   boss          every `every`th wave is a boss wave: every kind `mul` times as many, led by `harrows` Harrows (more
+ *                 from `twoFrom` on Commander and Warlord: `twoMult`)
+ *   room          the most of the waves' Murmur up at once (the rest wait in the Maw and come as room frees: the scale
+ *                 is kept, the spawns staggered); `pace` seconds between two out of the same mouth; `queueMost` the
+ *                 most waiting at once
+ *   mouths        the Maw's tunnel mouths round it, `mouthR` tiles out (armor `mouthArmor`: caved in, it is dug open
+ *                 again at the next wave); `mawGuards` more on guard round the Maw than a nest has
+ *   side          side tunnels partway down from wave `from` (one more every `every` waves, at most `most` open),
+ *                 `at` of the way from the Maw toward you; `share` of each wave comes up through them
+ *   lanes         the lanes down the map (waypoints every `step` of the way; each creature makes for a spot up to `spread`
+ *                 tiles either side of a lane's waypoint, so a wave comes on as a broad front)
+ *   warn          seconds before a wave the warning comes
+ *   salvage       a cleared wave drops crates by your front line: `base` of each good plus `per` × the wave
+ *   start         robots you land with on top of a Colony landing (warbots: a Colony game has none)
+ *   fall          your Command Base falls when the Murmur batter it down to this much armor; dug in, it takes
+ *                 `baseTakes` of their blows (theirs only)
+ *   harrow        a boss wave's Harrow's health, a share of a full-grown one's: `base` + `per` × the wave, at most `most`
+ */
+const HORDE = {
+  shape: 'Long haul', size: 2, waves: 20,
+  levels: {
+    easy:    { mult: 0.6, ramp: 0,     gap: [210, 5, 120] },
+    medium:  { mult: 0.8, ramp: 0.01,  gap: [195, 6, 105] },
+    normal:  { mult: 1.0, ramp: 0.025, gap: [180, 6, 90] },
+    hard:    { mult: 1.3, ramp: 0.04,  gap: [165, 7, 70] },
+    warlord: { mult: 1.7, ramp: 0.07,  gap: [130, 7, 40], endless: true },
+  },
+  kinds: {
+    scuttler: { from: 1, base: 4, per: 2, cap: 140 },
+    brute:    { from: 4, base: 1, per: 0.5, cap: 40 },
+    leech:    { from: 7, base: 1, per: 0.34, cap: 20 },
+    spitter:  { from: 7, base: 1, per: 0.4, cap: 24 },
+    sapper:   { from: 10, base: 1, per: 0.3, cap: 20 },
+  },
+  boss: { every: 5, mul: 1.25, harrows: 1, twoFrom: 15, twoMult: 1.3 },
+  room: 110, pace: 0.5, queueMost: 400,
+  mouths: 4, mouthR: 5, mouthArmor: 90, mawGuards: 6,
+  side: { from: 8, every: 4, most: 3, at: [0.4, 0.55], share: 0.3 },
+  lanes: 3, step: 0.25, spread: 5,
+  warn: 20,
+  salvage: { base: { alloy: 3, cement: 4, ammo: 4 }, per: { alloy: 0.5, ammo: 0.8, chip: 0.25, crystal: 0.3 } },
+  start: { warbot: 4 },
+  fall: 1, baseTakes: 0.2,
+  harrow: { base: 0.25, per: 0.05, most: 1.5 },
+};
+/** The Horde level's numbers (HORDE.levels) for a difficulty key. */
+function hordeLevel(k) { return HORDE.levels[k] || HORDE.levels.normal; }
+/** The Long haul map type's index (Horde is played on it). */
+function hordeShape() { return Math.max(0, SHAPE_PRESETS.findIndex((P) => P.name === HORDE.shape)); }
+/** Wave n's Murmur at level k: { scuttler, brute, leech, spitter, sapper, harrow } (whole numbers; kinds not in it yet are left out). */
+function hordeWave(n, k) {
+  const L = hordeLevel(k), boss = n % HORDE.boss.every === 0, grow = 1 + L.ramp * (n - 1), out = {};
+  for (const type in HORDE.kinds) {
+    const K = HORDE.kinds[type];
+    if (n < K.from) continue;
+    out[type] = Math.min(K.cap, Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * grow * (boss ? HORDE.boss.mul : 1) + 1e-9)));
+  }
+  if (boss) out.harrow = HORDE.boss.harrows + (n >= HORDE.boss.twoFrom && L.mult >= HORDE.boss.twoMult ? 1 : 0);
+  return out;
+}
+/** How many Murmur in wave n at level k, all told. */
+function hordeWaveSize(n, k) { const w = hordeWave(n, k); let s = 0; for (const t in w) s += w[t]; return s; }
+/** The countdown before wave n (seconds) at level k: the first from the landing, then from the wave before. */
+function hordeGap(n, k) { const g = hordeLevel(k).gap; return Math.max(g[2], g[0] - g[1] * (n - 1)); }
+
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;

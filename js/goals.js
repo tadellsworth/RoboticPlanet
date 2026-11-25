@@ -207,7 +207,7 @@ function metaCliffs() {
 }
 
 /** Colony goals are for Colony free play. */
-function goalsOn() { return !!S && UI.inGame && S.mode === 'colony' && !S.mission && !!S.players[ME]; }
+function goalsOn() { return !!S && UI.inGame && S.mode === 'colony' && !S.mission && !S.horde && !!S.players[ME]; } // (not in Horde: the waves are its goals)
 function goalList() { return COLONY_GOALS.filter((g) => !g.when || g.when()); }
 
 /** Where each goal stands: { have, done } by id. A goal once met stays done (this game's entry on the device). */
