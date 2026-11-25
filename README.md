@@ -30,7 +30,7 @@ how goods move.
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones and an optional ladder of
   **Colony goals** (see Colony goals, Records and achievements below). Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab**.
-- **Horde** (Custom Game, Mode: Horde; single player; `HORDE` in `js/defs.js`, the Horde section of `js/sim.js`,
+- **Horde** (Custom Game, Mode: Horde; alone or co-op in multiplayer, below; `HORDE` in `js/defs.js`, the Horde section of `js/sim.js`,
   `hordeTopLine`/`hordeObjective`/`showHordeOver` in `js/ui.js`): pure survival on **Long haul** (locked; Large by default).
   A Colony game underneath (`opts.horde: { level, goal }` → `S.horde`), with no nests and no nightly tunnels: at the far
   end (the absent colony's landing spot) **the Maw** (`BDEFS.maw`, armor 600, a nest for `isNestB`: guards, alarm, and
@@ -49,7 +49,20 @@ how goods move.
   blows; a Harrow's floor for it is `fall` too). Won by clearing wave `HORDE.waves` (Fixed) or wrecking the Maw
   (`hordeMawDown`); Endless (and Warlord, always) never ends on the count, and the best wave per level is kept on the
   device (`terrafall.hordeBest`, UI only). A computer-run colony in Horde builds guns and an army (`S.horde` in
-  `js/ai.js`). `node tools/horde-test.js [level] [minutes] [seed] [fixed|endless] [--noai] [--fort]` plays one headless.
+  `js/ai.js`). `node tools/horde-test.js [level] [minutes] [seed] [fixed|endless] [--noai] [--fort] [--pair]` plays one headless.
+  **Co-op Horde** (multiplayer; `mpHordeSettings` in `js/mpui.js`, the host's Waves and Goal as `settings.horde`, newGame's
+  `opts.horde.pair`/`crew`): **side by side** (`pair`, the default for two): the host and the first partner each run a
+  colony, allies (`S.teams` [0, 0, 1, 1]) in the south-west and south-east places of **Long Haul 2v2**, the other two
+  places empty, the Maw midway across the north end; the Murmur take their own slot (`S.wildSlot`, as in Versus, player
+  1 being a colony). `S.horde.ps` [0, 1], `HORDE.lanes` lanes per colony across its half (`H.laneP`: whose), the queue
+  spread over all of them, a boss wave's Harrows one per colony (`hordeLaunch`), messages to both (`hordeSay`), salvage
+  per colony (`hordeSalvageAt`); lost when **either** Command Base falls (`H.lostP`). Waves × `HORDE.pair.mul` (1.8; the
+  kinds' caps too), `pair.room` (160) up at once, the Maw's guards × `pair.guards`. **One colony together** (the host
+  taps the partner across: shared colony co-op, `S.crew`, on Long haul): waves × `1 + HORDE.crew.per` (0.3) per extra
+  person, at most `crew.most`. Further people in the lobby share the host's colony. `S.horde.mul` (saved, checked) holds
+  the scale (`hordeWaveNow`); `hashState` covers the waves. `node tools/horde-lockstep-test.js [pair|crew|both] [minutes]`
+  plays co-op Horde on two headless devices through a stand-in relay, both giving orders, with a mid-wave reload and
+  rejoin, and checks their fingerprints every second.
 - **The Murmur** in every game (the setting **The Murmur**: Off, Quiet or Active, Active by default, never on Lunar):
   native creatures, nobody's side, whose nests sit out in the wilds and whose tunnels spread toward power every night,
   packs coming up through their exits to raid every colony alike (see The Murmur below).
@@ -3376,13 +3389,18 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   most land held, from single-player Versus and Colony games (`metaCounts`: no mission, no multiplayer, no autopilot,
   and never Boosts, rival bans or Unlimited resources at any point, `metaAssisted`). The end screen (`#o-meta`) lists
   the records a game beat (one it set where there was none isn't news, except a first win on a map type and level) and
-  the achievements it earned. **Achievements** (`ACHIEVEMENTS`, 22, `terrafall.achievements`): victories from the
+  the achievements it earned. **Achievements** (`ACHIEVEMENTS`, 32, `terrafall.achievements`): victories from the
   result (a win; on Hard; by Domination; on the Uplinks; a free-for-all; on every map type; each doctrine beaten at
   Medium or harder, and all five; no Pulse Turret site placed, Normal or Hard; **Full escort**, a rival Command Base
   taken with `STORM_MIN` (20) of your armed robots within `STORM_R` of it, counted each second before it fell,
   `metaStormTick`), deeds from any game played without help, multiplayer and missions too (`metaDeeds`: the first
   Ropeway and Freight Train, a nest cleared, every upgrade, the last Colony milestone, every Colony goal), and the
-  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** in the main
+  missions (`metaCampaign`, from `loadCampaign`), and nine for **Horde** (any Horde game without help, alone or co-op:
+  `metaHordeTick` once a second, 10 waves cleared, waves 15 and 25 in Endless, and each wave watched from its launch,
+  `META.hw`, for a boss wave cleared with no building lost, `stats.lostBld`, or with no army robot up; `metaHordeOver` at
+  the end, a Fixed win, Commander or harder, the Maw wrecked, a co-op win). The Records screen's **Horde** table: the
+  Endless best wave per level (`terrafall.hordeBest`, co-op's under `coop`) and the fastest Fixed win (`R0.horde`,
+  `R0.hordeCoop`). Earned in a game they pop up as a message. **Records** in the main
   menu's **More** (`#m-records` opens `#screen-records`, `openRecords`) shows them all; an earned achievement with
   `lore` has a button that opens the Lore guide on that page (`openLore(id)`). **Forget records and achievements**
   (two taps) clears both. Challenge modifiers don't stop a game counting: records keep the ones on (`mods`, `metaMods`)

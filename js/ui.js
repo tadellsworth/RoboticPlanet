@@ -637,7 +637,7 @@ function modeInfo(mode, n, teams) {
   const town = !m.shapeRnd && !!SH.city; // (Passenger Town: four on the edges of a square town, three round a round one)
   const dam = !m.shapeRnd && !!SH.dam; // (The Dam: a colony on each side of the high ground, a reservoir over each valley)
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
-  if (mode === 'horde') return `Horde: no rival, only the Murmur. You land at one end of Long haul; at the far end the Maw sends ever bigger waves down the map at you, a countdown between them. Hold the line: ${UI.menu.diff === 'warlord' ? 'on Warlord the waves never end' : UI.menu.hgoal === 'endless' ? 'Endless, how far can you get' : `survive ${HORDE.waves} waves`}, or wreck the Maw. Lose your Command Base and it's over.`;
+  if (mode === 'horde') return `Horde: no rival, only the Murmur. You land at one end of Long haul; at the far end the Maw sends ever bigger waves down the map at you, a countdown between them. Hold the line: ${UI.menu.diff === 'warlord' ? 'on Warlord the waves never end' : UI.menu.hgoal === 'endless' ? 'Endless, how far can you get' : `survive ${HORDE.waves} waves`}, or wreck the Maw. Lose your Command Base and it's over.${UI.mpSetup ? ` In multiplayer it's co-op: you and your partner land side by side on ${HORDE.pair.shape}, a colony each, against waves ${HORDE.pair.mul} times as big (or share one colony: tap them in the lobby).` : ''}`;
   return mode === 'colony'
     ? (menuMurmurLevel() !== 'off' ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them, and come up through their tunnels by night. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
@@ -854,7 +854,8 @@ function initMenu() {
   // Custom Game's Host a co-op game: a multiplayer game with these settings, whoever joins sharing your colony.
   $('m-coophost').onclick = () => {
     sfx('click'); audioUnlock();
-    UI.menu.coop = 1; UI.mpCoopOf = {};
+    if (UI.menu.mode !== 'horde') UI.menu.coop = 1; // (Horde: the partner gets a colony beside yours: mpCoopSeats)
+    UI.mpCoopOf = {};
     saveSettings();
     showMenuView('home');
     openMulti();
@@ -1055,16 +1056,17 @@ function syncSizeChoices(el, shape, players, random) {
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
 function syncMenu() {
   if (typeof ensureBiomeArt === 'function') ensureBiomeArt(BIOME_ORDER[UI.menu.biome || 0]); // the chosen biome's swatch
-  // (Multiplayer settings: no Horde, a single-player mode for now.)
-  if (UI.mpSetup && UI.menu.mode === 'horde') setMenuMode('versus');
   const m = UI.menu, colony = m.mode !== 'versus', three = menuThree(), horde = m.mode === 'horde';
   const mark = (b, on) => { b.classList.toggle('on', on); if (b.getAttribute('role') === 'radio') b.setAttribute('aria-checked', on ? 'true' : 'false'); };
-  for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); btn.hidden = btn.dataset.v === 'horde' && !!UI.mpSetup; }
+  for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
   // Multiplayer settings (the host, from the lobby): Versus only; Players counts everyone, people first, computer rivals after.
   const mps = !!UI.mpSetup;
   // (Versus or Colony in multiplayer too: Colony is co-op, everyone sharing the host's colony)
   // Co-op: Custom Game hosts a co-op game; the multiplayer settings say whether people who join share the colony.
-  $('m-coophost').hidden = mps || horde;
+  // (Horde: co-op side by side, a colony each on Long Haul 2v2: see mpHordeSettings)
+  $('m-coophost').hidden = mps;
+  $('m-coophost').dataset.info = horde ? `Co-op Horde: you host a multiplayer game with these settings; a friend lands beside you with a colony of their own, allies at one end of ${HORDE.pair.shape}, the Maw at the other, and the waves ${HORDE.pair.mul} times as big. (In the lobby you can have them share your colony instead.)`
+    : 'Two of you run this one colony together, each on their own device: you host a multiplayer game with these settings, and whoever joins shares your colony.';
   $('m-coop').hidden = !mps || colony;
   $('m-coop-row').hidden = mps && colony;
   for (const btn of $('m-coop').children) mark(btn, +btn.dataset.v === (m.coop ? 1 : 0));
@@ -11079,14 +11081,21 @@ function agPickEnd(text) {
 
 /* ------------------------------------------------------------------ Horde mode: its briefing, top bar, goal and end */
 
-/** The best wave reached in Horde on this device, by level (UI only: never read by the game). */
-function hordeBests() { try { const o = JSON.parse(localStorage.getItem('terrafall.hordeBest') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
-/** Keep wave n as the best at level k (and Endless or Fixed) if it beats the one kept; true if it did. */
-function hordeKeepBest(k, n) {
-  const o = hordeBests(), was = +o[k] || 0;
+/**
+ * The best wave reached in Endless Horde on this device, by level (UI only: never read by the game): alone
+ * ({ level: wave }), and in co-op games apart (`coop`: { level: wave }). The Records screen lists both.
+ */
+function hordeBestsAll() { try { const o = JSON.parse(localStorage.getItem('terrafall.hordeBest') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+/** The bests for this kind of game: alone, or (`coop`) in co-op. */
+function hordeBests(coop = hordeCoopGame()) { const o = hordeBestsAll(); return coop ? (o.coop && typeof o.coop === 'object' ? o.coop : {}) : o; }
+/** Is the Horde game on now played with friends (multiplayer)? */
+function hordeCoopGame() { return !!(typeof MP !== 'undefined' && MP.on && S && S.horde); }
+/** Keep wave n as the best at level k (alone, or in co-op) if it beats the one kept; true if it did. */
+function hordeKeepBest(k, n, coop = hordeCoopGame()) {
+  const all = hordeBestsAll(), o = coop ? (all.coop && typeof all.coop === 'object' ? all.coop : (all.coop = {})) : all, was = +o[k] || 0;
   if (n <= was) return false;
   o[k] = n;
-  try { localStorage.setItem('terrafall.hordeBest', JSON.stringify(o)); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('terrafall.hordeBest', JSON.stringify(all)); } catch (e) { /* storage unavailable */ }
   return true;
 }
 /** How many of the waves' Murmur are up now. */
@@ -11096,6 +11105,8 @@ function hordeUpCount() { let n = 0; for (const u of S.bots) if (!u.dead && u.hw
 function hordeBriefing() {
   const H = S.horde, L = getE(S.players[ME].lander), maw = getE(H.maw);
   const goal = hordeEndless() ? `Endless${H.lv === 'warlord' ? ' (Warlord)' : ''}: the waves never stop; how far you get is your score (best here: ${hordeBests()[H.lv] ? 'wave ' + hordeBests()[H.lv] : 'none yet'}).` : `Survive ${H.of} waves to win.`;
+  const mate = H.pair ? hordeCols().find((p) => p !== ME) : undefined;
+  if (mate !== undefined) return `Your bots have landed at the south end of ${HORDE.pair.shape}, beside ${playerName(mate)}'s colony: allies, holding one line. At the far end${L && maw ? ' (' + dirText(L, maw).replace(/^\d+ tiles? /, '') + ')' : ''} lies the Maw, the Murmur's great mound, and every few minutes a wave pours out of it and down the map at you both, half its lanes at each colony, ${HORDE.pair.mul} times as big as a lone colony faces; a boss wave sends a Harrow at each. Wave 1 in ${fmtClock(H.at - S.time)}: ${hordeWaveText(1)}. Build guns, Walls and warbots in front of your Command Bases, and help each other: if either Command Base falls, the line is lost. ${goal} Wreck the Maw and you win.`;
   return `Your bots have landed at one end of Long haul. At the far end${L && maw ? ' (' + dirText(L, maw).replace(/^\d+ tiles? /, '') + ')' : ''} lies the Maw, the Murmur's great mound, and every few minutes a wave pours out of its tunnel mouths and marches down the map at you, bigger each time. Wave 1 in ${fmtClock(H.at - S.time)}: ${hordeWaveText(1)}. Build guns (Pulse Turrets, Minigun Nests, Mortar Pits), Walls and warbots across the map in front of your Command Base. ${goal} Wreck the Maw and you win; lose your Command Base and it's over.`;
 }
 
@@ -11116,8 +11127,9 @@ function hordeObjective() {
 
 /** The end screen of a Horde game: waves survived, the Murmur killed, the best kept (Endless). */
 function showHordeOver() {
-  const H = S.horde, won = S.winner === ME, reached = H.cleared || 0;
-  const endless = hordeEndless(), isBest = endless && !MP.on && hordeKeepBest(H.lv, reached), best = hordeBests()[H.lv] || reached;
+  const H = S.horde, won = S.winner === ME || allies(S.winner, ME), reached = H.cleared || 0;
+  // (co-op keeps its own bests: hordeBests; a game with Unlimited resources keeps none)
+  const endless = hordeEndless(), isBest = endless && !S.unlimited && hordeKeepBest(H.lv, reached), best = hordeBests()[H.lv] || reached;
   $('o-log').textContent = won ? (H.won === 'maw' ? 'The Maw is silent. Region secured for the Sponsor. Report sent. No reply. Continuing current directive.' : 'Region held. The tunnels are quiet. Report sent. No reply. Continuing current directive.')
     : 'Command core lost. The Murmur hold the region. Transferring authority. Hold position.';
   $('o-log').hidden = false;
@@ -11125,16 +11137,17 @@ function showHordeOver() {
   $('o-title').textContent = won ? (H.won === 'maw' ? 'The Maw has fallen!' : 'The line held!') : 'Overrun';
   $('o-text').textContent = won
     ? (H.won === 'maw' ? `You wrecked the Maw${reached ? ` after ${reached} wave${reached === 1 ? '' : 's'}` : ''}: its mouths cave in and the waves are over.` : `You survived all ${H.of} waves on ${DIFFICULTY[H.lv].label}. The Murmur fall back into the dark.`)
-    : `The Murmur broke your Command Base ${H.n ? `during wave ${H.n}` : 'before the first wave'}. You cleared ${reached} wave${reached === 1 ? '' : 's'}${endless ? (isBest ? ': a new best on this level!' : ` (your best on ${DIFFICULTY[H.lv].label}: wave ${best}).`) : '.'}`;
+    : `The Murmur broke ${H.lostP !== undefined && H.lostP !== ME ? `${playerName(H.lostP)}'s` : 'your'} Command Base ${H.n ? `during wave ${H.n}` : 'before the first wave'}. You cleared ${reached} wave${reached === 1 ? '' : 's'}${endless ? (isBest ? ': a new best on this level!' : ` (your best on ${DIFFICULTY[H.lv].label}: wave ${best}).`) : '.'}`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
-    ['Mode', `Horde · ${DIFFICULTY[H.lv].label} · ${endless ? 'Endless' : `${H.of} waves`}`], ['Waves survived', reached], ['Last wave', H.n], ['Murmur killed', H.kills || 0],
+    ['Mode', `Horde · ${DIFFICULTY[H.lv].label} · ${endless ? 'Endless' : `${H.of} waves`}${H.pair ? ' · co-op, side by side' : S.crew ? ' · co-op' : ''}`], ['Waves survived', reached], ['Last wave', H.n], ['Murmur killed', H.kills || 0],
     ...(endless ? [['Best wave (this level)', best + (isBest ? ' (new!)' : '')]] : []),
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots lost', st.lost],
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   $('o-report').innerHTML = typeof gameReport === 'function' ? gameReport(won) : '';
   $('o-report').hidden = !$('o-report').innerHTML;
   $('o-keep').hidden = true;
+  metaGameOver(); // (Horde's achievements and records: js/goals.js)
   syncRematch();
   $('screen-over').hidden = false;
 }

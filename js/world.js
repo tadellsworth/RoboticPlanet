@@ -2780,7 +2780,9 @@ function newGame(opts) {
     rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
     resV: RES_V,
   };
-  settings.shape = horde ? hordeShape() : clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
+  // (Horde co-op side by side, horde.pair: two colonies, allies at the south end of Long Haul 2v2, the Maw at the north.)
+  const pair = !!(horde && horde.pair);
+  settings.shape = horde ? hordeShape(pair) : clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
   // Free-for-all: three players (you and two rivals) on the map shapes that have room for three, or
   // four (you and three rivals) on Crossroads.
   settings.players = playerCount(mode, settings.shape, opts.players);
@@ -2817,7 +2819,7 @@ function newGame(opts) {
     bAt: new Int32Array(W * H),
     players: Array.from({ length: settings.players }, (_, p) => ({
       id: p,
-      absent: mode === 'colony' && p !== 0,
+      absent: mode === 'colony' && p !== 0 && !(pair && p === 1),
       ai: (rival(p) && mode !== 'colony') || (p === 0 && !!opts.autoplay),
       mult: rival(p) ? DIFFICULTY[diff].mult : 1,
       lander: 0,
@@ -2834,6 +2836,13 @@ function newGame(opts) {
     const lv = DIFFICULTY[horde.level] ? horde.level : 'normal';
     S.horde = { p: 0, lv, goal: horde.goal === 'endless' || hordeLevel(lv).endless ? 'endless' : 'fixed', of: HORDE.waves, n: 0, at: hordeGap(1, lv), warned: 0,
       q: [], open: [], cleared: 0, kills: 0, sides: 0, rr: 0, maw: 0, lanes: [], mx: m.bases[1] ? m.bases[1].x : Math.floor(W / 2), my: m.bases[1] ? m.bases[1].y : 2 };
+    // Co-op: side by side (two colonies, allies: the Maw midway across the far end, between the empty landing sites;
+    // the waves HORDE.pair.mul times as big), or a shared colony (horde.crew people running it: HORDE.crew).
+    const crew = Number.isInteger(horde.crew) ? clamp(horde.crew, 1, 8) : 1;
+    if (pair && settings.players >= 4) {
+      Object.assign(S.horde, { ps: [0, 1], pair: 1, mul: HORDE.pair.mul, mx: Math.floor(W / 2), my: Math.round((m.bases[2].y + m.bases[3].y) / 2) });
+      S.teams = [0, 0, 1, 1];
+    } else if (crew > 1) S.horde.mul = Math.min(HORDE.crew.most, 1 + HORDE.crew.per * (crew - 1));
   }
   // Teams: four colonies, two against two, side by side (Crossroads: the two on the left against the two on the right).
   // A team game is won by taking the other team's Command Bases (no Domination or Uplinks).
@@ -5404,7 +5413,7 @@ function wildOwner() { return S && S.wildOwner !== undefined ? S.wildOwner : WIL
 /** Is p the Murmur (in a game that has them)? */
 function isWild(p) { return !!(S && S.wildlife && p === wildOwner()); }
 /** Player p's colour where a colour stands for them (the Murmur: their violet). */
-function ownerColor(p) { return isWild(p) || (S && S.mode === 'colony' && p === WILD_OWNER && S.wildlife) ? WILD_COLOR : PLAYER_COLORS[p] || '#9aa2ab'; }
+function ownerColor(p) { return isWild(p) || (S && S.mode === 'colony' && !S.wildSlot && p === WILD_OWNER && S.wildlife) ? WILD_COLOR : PLAYER_COLORS[p] || '#9aa2ab'; }
 /** Is building b a Murmur nest (a nest, or the Hollow's Deep's mound, the biggest of them)? */
 function isNestB(b) { return !!b && (b.type === 'nest' || b.type === 'mound' || b.type === 'maw'); } // (the Maw: Horde's)
 /** How many colonies the game was set up for (the Murmur's own slot, in a Versus game with them, isn't one). */
@@ -5605,7 +5614,10 @@ function checkSave(o) {
     if (!Array.isArray(H.q) || H.q.length > HORDE.queueMost || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
     if (!Array.isArray(H.open) || !H.open.every(Number.isInteger)) bad();
     if (!Array.isArray(H.lanes) || !H.lanes.every((l) => Array.isArray(l) && l.every((w) => Array.isArray(w) && w.length === 3 && Number.isInteger(w[0]) && Number.isInteger(w[1]) && w[0] >= 0 && w[1] >= 0 && w[0] < o.W && w[1] < o.H && num(w[2])))) bad();
-    for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost']) if (H[k] != null && !num(H[k])) bad();
+    for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost', 'pair', 'lostP']) if (H[k] != null && !num(H[k])) bad();
+    if (H.mul != null && !(num(H.mul) && H.mul >= 1 && H.mul <= 3)) bad();
+    if (H.ps != null && !(Array.isArray(H.ps) && H.ps.length >= 1 && H.ps.length <= 4 && H.ps.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
+    if (H.laneP != null && !(Array.isArray(H.laneP) && H.laneP.length === H.lanes.length && H.laneP.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.won != null && !['maw', 'waves'].includes(H.won)) bad();
   }
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();

@@ -183,6 +183,7 @@ function mpRejoinGame() {
 
 /** The host's settings, as they're sent round (final: Random picked, for the start). */
 function mpMenuSettings(final, people) {
+  if (UI.menu.mode === 'horde') return mpHordeSettings(final);
   const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus', colony = mode === 'colony';
   const least = m.shapeRnd ? 2 : minPlayers(m.shape || 0), total = clamp(Math.max(Math.round(m.players) || 2, people || 2, least), 2, 4);
   const keep = m.players;
@@ -201,6 +202,38 @@ function mpMenuSettings(final, people) {
     teams: !colony && !!m.teams && total === 4, teamOf: !colony && m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
     sum: mpSummary(size),
   };
+}
+
+/**
+ * (the host) Horde in multiplayer: co-op against the waves. Side by side (the owner's pick): the host and the first
+ * person to join each run a colony of their own, allies at the south end of Long Haul 2v2, the Maw at the north
+ * (horde.pair); anyone else shares the host's colony. The host can tap the partner across to share the host's colony
+ * instead: then it's one colony on Long haul, run together (shared colony co-op). The waves grow for co-op (HORDE.pair,
+ * HORDE.crew); the host picks the Waves level and the Goal.
+ */
+function mpHordeSettings(final) {
+  const m = UI.menu, coop = mpCoopSeats(), on = NET.seats.filter((s) => (final ? s.on : true)), own = on.filter((s) => !coop.includes(s.seat)).length;
+  const pair = own >= 2, shape = hordeShape(pair), players = pair ? 4 : 2;
+  const size = mapSizeForPlayers(m.size.horde ?? DEFAULT_SIZE.horde, players);
+  const goal = m.diff === 'warlord' ? 'endless' : m.hgoal === 'endless' ? 'endless' : 'fixed';
+  const crew = pair ? 1 : 1 + coop.filter((k) => on.some((s) => s.seat === k)).length;
+  return {
+    mode: 'colony', coop, horde: { level: m.diff, goal, pair, crew },
+    seed: m.seed, diff: m.diff, size, rough: m.rough, rich: m.rich,
+    shape, shapeRnd: false, biome: BIOME_ORDER[m.biomeRnd && final ? resolveRandom().biome : m.biome || 0], biome2: chosenSecondBiome(m, size), biomeRnd: !final && !!m.biomeRnd,
+    players, style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, upWin: false, events: !!m.events, victory: 'capture',
+    murmur: 'active', scars: scarsPref(), teams: false, teamOf: null, mods: modList(m.mods, 'colony'),
+    sum: mpHordeSummary(pair, crew, size),
+  };
+}
+/** Horde in multiplayer, in a line for the lobby. */
+function mpHordeSummary(pair, crew, size) {
+  const m = UI.menu, endless = m.diff === 'warlord' || m.hgoal === 'endless';
+  const mul = pair ? HORDE.pair.mul : Math.min(HORDE.crew.most, 1 + HORDE.crew.per * Math.max(0, crew - 1));
+  return [`Horde · ${DIFFICULTY[m.diff].label} waves · ${endless ? 'Endless' : `${HORDE.waves} waves`}`,
+    pair ? 'Co-op side by side: a colony each' : 'Co-op: one colony together',
+    pair ? HORDE.pair.shape : HORDE.shape, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[size].name.toLowerCase(),
+    mul > 1 ? `waves ×${Math.round(mul * 10) / 10}` : ''].filter(Boolean).join(' · ');
 }
 
 /**
@@ -223,6 +256,12 @@ function mpTeamSeats() {
 function mpCoopSeats() {
   if (NET.seat !== NET.host) return (NET.settings && NET.settings.coop) || [];
   const m = UI.menu, colony = m.mode === 'colony';
+  if (m.mode === 'horde') {
+    // (Horde: the first person in who isn't tapped across gets a colony beside the host's; everyone else shares the host's)
+    const T = UI.mpCoopOf || (UI.mpCoopOf = {});
+    let own = 0;
+    return NET.seats.filter((s) => s.seat !== NET.host).filter((s) => { if (!T[s.seat] && own < 1) { own++; return false; } return true; }).map((s) => s.seat);
+  }
   if (!colony && m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) return [];
   const T = UI.mpCoopOf || (UI.mpCoopOf = {});
   return NET.seats.filter((s) => s.seat !== NET.host && (colony || (T[s.seat] ?? !!m.coop))).map((s) => s.seat);
@@ -232,6 +271,7 @@ function mpHostName() { return (NET.seats.find((s) => s.seat === NET.host) || {}
 
 /** The game in a line, for the lobby. */
 function mpSummary(size = menuSize()) {
+  if (UI.menu.mode === 'horde') return mpHordeSettings(false).sum;
   const m = UI.menu, bits = [];
   if (m.mode === 'colony') bits.push('Colony, co-op');
   else if (mpCoopSeats().length) bits.push('Co-op');
@@ -299,15 +339,15 @@ function renderLobby() {
     if (away.length) html += '<li class="mp-team"><span>Away</span></li>' + away.map((s) => person(s, '#555', `Team ${st.teamOf[s.seat] ? 'B' : 'A'}`)).join('');
   } else {
     // (co-op: a person sharing the host's colony is in its colour; the host taps a person to move them across, in Versus)
-    const swap = host && !colony;
+    const horde = !!(st && st.horde), swap = host && (!colony || horde);
     for (const s of NET.seats) {
       const mate = coop.includes(s.seat);
-      let li = person(s, mate ? mpSeatColor(NET.seats.find((x) => x.seat === NET.host) || s, LOOK_BASE.colors[0]) : s.on ? LOOK_BASE.colors[k++ % 4] : '#555', mate ? `co-op: shares ${esc(mpHostName())}'s colony` : '');
+      let li = person(s, mate ? mpSeatColor(NET.seats.find((x) => x.seat === NET.host) || s, LOOK_BASE.colors[0]) : s.on ? LOOK_BASE.colors[k++ % 4] : '#555', mate ? `co-op: shares ${esc(mpHostName())}'s colony` : horde && s.seat !== NET.host ? `co-op: a colony beside ${esc(mpHostName())}'s` : '');
       if (swap && s.seat !== NET.host) li = li.replace('<li class="', '<li class="mp-coop ');
       html += li;
     }
     for (let a = 0; a < ai; a++) html += cpu(k++ % 4, false);
-    if (swap && people.length > 1) html += `<li class="mp-team mp-coophint"><small>Tap a player to have them share your colony (co-op), or to give them their own again</small></li>`;
+    if (swap && people.length > 1) html += `<li class="mp-team mp-coophint"><small>${horde ? 'Horde: your partner lands beside you with a colony of their own (side by side), others share yours. Tap a player to have them share your colony instead, or to give them their own again' : 'Tap a player to have them share your colony (co-op), or to give them their own again'}</small></li>`;
   }
   if (UI.mpLobbyHTML !== html || !$('mp-players').children.length) { $('mp-players').innerHTML = html; UI.mpLobbyHTML = html; }
   UI.mpCpuSlots = slots;
@@ -472,6 +512,11 @@ function mpHostStart() {
     while (slots.length < cols) slots.push(-1);
     for (const k of coop) slots.push(k);
     Object.assign(settings, { coop, cols, coopCol: 0, slotsN: slots.length });
+  } else if (settings.horde) {
+    // (Horde side by side, nobody sharing: the two colonies in the south-west and south-east places, the others empty)
+    slots = own.map((s) => s.seat);
+    while (slots.length < settings.players) slots.push(-1);
+    settings.coop = [];
   } else settings.coop = [];
   // Each colony's colour (the picks in the lobby: js/polish3.js), by place, so every device dresses them alike.
   const cols = settings.teams ? 4 : settings.cols || Math.max(settings.players, own.length);
@@ -503,6 +548,8 @@ function mpGameOpts(s, humans) {
     // (The Murmur: as the host set them; a host from before the setting sent none, and had none.)
     events: !!s.events, murmur: murmurLevelOk(s.murmur) ? s.murmur : 'off', victory: s.victory, humans, teams: !!s.teams, mods: s.mods,
     scars: scarsOk(s.scars) ? s.scars : 'off', // (a host from before War scars sent none, and had none)
+    // (Horde co-op: side by side, or a shared colony with how many running it: see mpHordeSettings)
+    horde: s.horde && typeof s.horde === 'object' ? { level: s.horde.level, goal: s.horde.goal, pair: !!s.horde.pair, crew: s.horde.crew | 0 } : undefined,
   };
 }
 
@@ -562,6 +609,7 @@ function mpOnStart(m) {
     const vs = [...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
     postMsg(ME, `Co-op: you and ${mates.join(' and ')} run one colony together${S.mode === 'colony' ? '' : vs ? `, against ${vs}` : ''}. Either of you can build, order and change anything; your cursors show on each other's map, and . (or Ping) marks a spot for both of you.`, 0, 0, 'info');
   } else postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  if (S.horde) postMsg(ME, hordeBriefing(), 0, 0, 'info'); // (Horde: the Maw, the first wave, the goal)
   doctrineLines();
   modsBriefing();
   $('br-title').textContent = 'Before you start';

@@ -2532,9 +2532,19 @@ Murmur's blows). `tools/horde-test.js` plays it headless.
 - Balance from real play: the gaps, the growth, the Harrow's health in the early boss waves, the salvage, the Command
   Base's toughness, the Maw's 600 armor. The computer colony (autoplay) only half defends (guns and an army at home), so
   the headless numbers say little about a human's game.
-- Horde on other maps (the Maw opposite you), and the 2-player co-op on the Long Haul 2v2 layout (multiplayer is
-  Versus/Colony only for now: Horde is hidden in the lobby).
-- Its own Records (best wave per level is kept, but not shown in Records yet) and achievements.
+- Horde on other maps (the Maw opposite you).
+- ~~Co-op Horde~~ **built Nov 25 2026** (the owner's pick: **side by side on Long Haul 2v2**): in multiplayer the host and
+  the first partner each run a colony, allies at the south end, the Maw midway across the north end; waves **×1.8**
+  (split over both colonies' lanes, so each meets ~0.9 of a lone colony's wave), a Harrow at each colony in a boss wave,
+  160 up at once, the Maw's guards doubled; **either Command Base falling loses the game for both**. The host can tap
+  the partner across to share one colony instead (shared colony co-op on Long haul, waves ×1.3 for two, +0.3 per extra
+  person); more people share the host's colony. `tools/horde-lockstep-test.js` checks two devices stay in step, with a
+  mid-wave reload. Open: is ×1.8 right from real play (the headless computer colonies lasted about as long side by side
+  as alone, to wave 5 on Colonist); should a fallen colony be **overrun but not lost** (its partner fights on, the waves
+  all at them) instead of both losing; side by side for three or four (Long Haul 2v2 has four places: two colonies at
+  each end against a Maw in the middle?); a "Rematch" for co-op Horde from the end screen.
+- ~~Its own Records and achievements~~ **built Nov 25 2026**: nine Horde achievements (32 in all) and a Horde table on the
+  Records screen (Endless best and fastest Fixed win per level, co-op apart).
 - Art: the Maw is drawn from the nest art (bigger, ringed with spires); its own mound and mouths would look better.
 - A mission that teaches it? It's a mode rather than a mechanic of the main game, so no mission goal was added.
 

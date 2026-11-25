@@ -79,7 +79,7 @@ function metaMode() { return S.mission ? 'mission:' + (S.mission.id || S.mission
  * one not further on than the save is. A save from somewhere else gets an entry of its own.
  */
 function metaStart() {
-  META.for = S; META.goals = null; META.primed = false; META.near = {}; META.out = {}; META.cliffs = null; META.sheetKey = '';
+  META.for = S; META.hw = {}; META.hwLast = undefined; META.goals = null; META.primed = false; META.near = {}; META.out = {}; META.cliffs = null; META.sheetKey = '';
   const list = metaGames(), mode = metaMode();
   let g = null;
   if (S.time > 5) g = list.filter((e) => e.seed === S.seed && e.mode === mode && (e.t || 0) <= S.time + 120).sort((a, b) => b.born - a.born)[0] || null;
@@ -409,6 +409,16 @@ const ACHIEVEMENTS = [
   { id: 'goals', name: 'Build phase complete', text: 'Finish every Colony goal in one game.' },
   { id: 'mission', name: 'Basic training', text: 'Finish a mission.' },
   { id: 'campaign', name: 'Every chapter', text: 'Finish every mission, at any level.' },
+  // Horde (any Horde game played without help, alone or in co-op: metaHordeTick, metaHordeOver)
+  { id: 'horde-10', name: 'Holding pattern', text: 'Clear 10 waves in a Horde game.' },
+  { id: 'horde-fixed', name: 'Perimeter held', text: `Win a Fixed Horde game: clear all ${HORDE.waves} waves, on any level.` },
+  { id: 'horde-hard', name: 'Threat level revised', text: 'Win a Horde game on Commander waves (or wreck the Maw on Warlord).' },
+  { id: 'horde-15', name: 'Sustained contact', text: 'Clear wave 15 in an Endless Horde game.' },
+  { id: 'horde-25', name: 'Directive unchanged', text: 'Clear wave 25 in an Endless Horde game.' },
+  { id: 'horde-maw', name: 'Source silenced', text: 'Wreck the Maw in a Horde game.', lore: 'ls-murmur' },
+  { id: 'horde-boss', name: 'No structural losses', text: 'Clear a Horde boss wave without losing a building.' },
+  { id: 'horde-guns', name: 'Fixed emplacements', text: 'Clear a Harrow-led wave with no army robots of yours up, start to finish: guns only.' },
+  { id: 'horde-coop', name: 'Shared directive', text: 'Win a Horde game in co-op, with a friend.' },
 ];
 
 /** Earn one (once, ever, on this device): a message in a game still going, the end screen's list otherwise. */
@@ -425,9 +435,56 @@ function metaEarn(id) {
   return true;
 }
 
+/**
+ * Horde's deeds, once a second: waves cleared, and each wave watched from its start here (META.hw: n → { lost: your
+ * buildings lost before it, army: any army robot of yours up during it }) for the boss-wave ones. A wave already out
+ * when this device took up the game (a loaded save, a rejoin) isn't watched.
+ */
+function metaHordeTick(A, P) {
+  const H = S.horde;
+  if (!H) return;
+  const c = H.cleared || 0;
+  if (c >= 10) metaEarn('horde-10');
+  if (hordeEndless() && c >= 15) metaEarn('horde-15');
+  if (hordeEndless() && c >= 25) metaEarn('horde-25');
+  const hw = META.hw || (META.hw = {});
+  if (META.hwLast === undefined) META.hwLast = H.n;
+  if (H.n > META.hwLast) { for (let n = META.hwLast + 1; n <= H.n; n++) hw[n] = { lost: P.stats.lostBld || 0, army: false }; META.hwLast = H.n; }
+  let army = false;
+  for (const u of S.bots) if (!u.dead && u.owner === ME && isArmy(u)) { army = true; break; }
+  for (const k of Object.keys(hw)) {
+    const n = +k, w = hw[k];
+    if (army) w.army = true;
+    if (H.open.includes(n)) continue;
+    delete hw[k];
+    if (c < n || H.lost) continue;
+    if (n % HORDE.boss.every !== 0) continue; // (a boss wave: a Harrow leads it)
+    if ((P.stats.lostBld || 0) === w.lost) metaEarn('horde-boss');
+    if (!w.army) metaEarn('horde-guns');
+  }
+}
+
+/** Horde's end (from metaGameOver): the wins' achievements, and a Fixed win's time (alone and co-op apart). */
+function metaHordeOver(g) {
+  const H = S.horde, won = S.winner === ME || allies(S.winner, ME);
+  if (g.f.ended || !metaWatched() || metaAssisted()) return;
+  g.f.ended = 1; META.gamesDirty = true;
+  if (!won) return;
+  const coop = typeof MP !== 'undefined' && MP.on;
+  if (H.won === 'waves') {
+    metaEarn('horde-fixed');
+    const R0 = metaRecords(), key = coop ? 'hordeCoop' : 'horde', row = R0[key] = R0[key] && typeof R0[key] === 'object' ? R0[key] : {}, t = Math.floor(S.time), old = row[H.lv];
+    if (!old || t < old.t) { row[H.lv] = { t, at: Date.now() }; META.recDirty = true; g.f.hordeFast = { lv: H.lv, t, was: old ? old.t : null, coop }; }
+  }
+  if (diffAtLeast('hard', H.lv)) metaEarn('horde-hard');
+  if (H.won === 'maw') metaEarn('horde-maw');
+  if (coop) metaEarn('horde-coop');
+}
+
 /** Things done in a game (any game played without help), looked at once a second. */
 function metaDeeds() {
   const A = metaAchieved(), P = S.players[ME];
+  if (S.horde) metaHordeTick(A, P);
   if (!A.ropeway && S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'ropeway' && b.far)) metaEarn('ropeway');
   if (!A.train && metaMade(P, 'freight') > 0) metaEarn('train');
   if (!A.nest && S.mode === 'colony' && S.wildlife && (P.stats.captured || 0) > 0) metaEarn('nest');
@@ -508,6 +565,7 @@ function metaGameOver() {
     const g = META.game, lines = [];
     if (metaWatched() && !metaAssisted()) { metaStormTick(); metaDeeds(); }
     if (S.mission) metaCampaign();
+    if (S.horde) metaHordeOver(g);
     const won = S.winner === ME || allies(S.winner, ME);
     if (!g.f.ended && S.mode === 'versus' && metaCounts()) {
       g.f.ended = 1; META.gamesDirty = true;
@@ -552,6 +610,7 @@ function metaGameOver() {
     metaFlush(true);
     // What fell in this game: the fastest win, and the other records this game holds that beat an earlier one.
     const R0 = metaRecords(), f = g.f;
+    if (f.hordeFast) lines.push(['rec', `New record: fastest Horde win (${HORDE.waves} waves) on ${DIFFICULTY[f.hordeFast.lv].label}${f.hordeFast.coop ? ', co-op' : ''}: ${metaClock(f.hordeFast.t)}` + (f.hordeFast.was != null ? ` (was ${metaClock(f.hordeFast.was)}).` : '.')]);
     if (f.fast) lines.push(['rec', `New record: fastest win on ${f.fast.shape}, ${DIFFICULTY[f.fast.diff].label}: ${fmtTime(f.fast.t)}` + (f.fast.was != null ? ` (was ${fmtTime(f.fast.was)})` : '') + (f.fast.mods ? `, with ${metaModNames(f.fast.mods)}.` : '.')]);
     if (f.won) {
       const nw = f.won.fresh || [];
@@ -611,6 +670,15 @@ function renderRecords() {
     return `<div class="rc-badge${on ? ' on' : ''}" title="${esc(MODS[k].desc)}"><i aria-hidden="true">${on ? '◆' : '◇'}</i><div><b>${esc(MODS[k].name)}</b>` +
       `<small>${on ? `${b.n} win${b.n > 1 ? 's' : ''}${DIFFICULTY[b.best] ? ` · best: ${DIFFICULTY[b.best].label}` : ''}` : 'Not yet'}</small></div></div>`;
   }).join('');
+  // Horde: the best wave reached in Endless, and the fastest Fixed win, by level; alone and in co-op apart.
+  const hb = typeof hordeBestsAll === 'function' ? hordeBestsAll() : {}, hbc = hb.coop && typeof hb.coop === 'object' ? hb.coop : {};
+  const hf = R0.horde && typeof R0.horde === 'object' ? R0.horde : {}, hfc = R0.hordeCoop && typeof R0.hordeCoop === 'object' ? R0.hordeCoop : {};
+  const hAny = diffs.some((d) => hb[d] || hbc[d] || hf[d] || hfc[d]);
+  const wv = (v) => (+v > 0 ? `wave ${+v}` : '–'), ft = (r) => (r && Number.isFinite(r.t) ? metaClock(r.t) : '–');
+  const horde = hAny
+    ? `<table class="rc-fast rc-horde"><thead><tr><th>Waves</th><th>Endless best</th><th>Co-op best</th><th>${HORDE.waves} waves won</th><th>Co-op won</th></tr></thead><tbody>` +
+      diffs.map((d) => `<tr><th>${DIFFICULTY[d].label}</th><td>${wv(hb[d])}</td><td>${wv(hbc[d])}</td><td>${d === 'warlord' ? '<small>always Endless</small>' : ft(hf[d])}</td><td>${d === 'warlord' ? '' : ft(hfc[d])}</td></tr>`).join('') + '</tbody></table>'
+    : '<p class="hint">No Horde games yet. Play one (Custom Game, Mode: Horde) and the best wave you reach in Endless, and your fastest Fixed win, go here by level; co-op games are kept apart.</p>';
   const AM = A._mods && typeof A._mods === 'object' ? A._mods : {};
   const got = ACHIEVEMENTS.filter((a) => A[a.id]).length;
   const achs = ACHIEVEMENTS.map((a) => {
@@ -619,9 +687,10 @@ function renderRecords() {
       `<small>${on ? 'Earned ' + metaDate(A[a.id]) + (modList(AM[a.id]).length ? ` · with ${esc(metaModNames(AM[a.id]))}` : '') : 'Not yet'}</small>` +
       (a.lore && on ? `<button type="button" class="btn small ghost rc-lore" data-lore-at="${a.lore}">Lore ›</button>` : '') + '</div></div>';
   }).join('');
-  $('rc-body').innerHTML = `<p class="mode-desc">Kept on this device. Records and wins count single-player Versus and Colony games (not missions or multiplayer) played without Boosts, rival bans or Unlimited resources. Challenge modifiers count, and are noted (<i class="rc-modmark">◆</i>); a win with Fragile robots isn't a fastest win.</p>
+  $('rc-body').innerHTML = `<p class="mode-desc">Kept on this device. Records and wins count single-player Versus and Colony games (not missions or multiplayer) played without Boosts, rival bans or Unlimited resources; Horde keeps its own, co-op games apart. Challenge modifiers count, and are noted (<i class="rc-modmark">◆</i>); a win with Fragile robots isn't a fastest win.</p>
     <div class="rc-tiles">${tiles}</div>
     <h3>Fastest wins</h3>${fast}
+    <h3>Horde</h3>${horde}
     <h3>Challenge badges <span class="rc-count">${nb} of ${MOD_ORDER.length}</span></h3>
     <p class="hint">Win a Versus game against the computer with a challenge modifier on (Custom Game, Challenge) and it earns that one's badge.</p>
     <div class="rc-badges">${badges}</div>
@@ -632,7 +701,7 @@ function renderRecords() {
     const b = $('rc-forget');
     if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'Tap again to forget them all on this device'; return; }
     META.rec = { fast: {}, beaten: {}, shapes: {}, mods: {} }; META.ach = {};
-    try { localStorage.removeItem(RECORDS_KEY); localStorage.removeItem(ACHIEVE_KEY); } catch (e) { /* storage blocked */ }
+    try { localStorage.removeItem(RECORDS_KEY); localStorage.removeItem(ACHIEVE_KEY); localStorage.removeItem('terrafall.hordeBest'); } catch (e) { /* storage blocked */ }
     sfx('click');
     renderRecords();
   };

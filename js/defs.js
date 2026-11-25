@@ -2272,6 +2272,13 @@ const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'na
  *   fall          your Command Base falls when the Murmur batter it down to this much armor; dug in, it takes
  *                 `baseTakes` of their blows (theirs only)
  *   harrow        a boss wave's Harrow's health, a share of a full-grown one's: `base` + `per` × the wave, at most `most`
+ *   pair          co-op side by side (multiplayer, two people with a colony each): played on `shape`, the two colonies
+ *                 allies at the south end and the Maw at the north; every kind `mul` times as many (split over both
+ *                 colonies' lanes, so each faces a little less than a lone colony would, but the two must hold
+ *                 together), a boss wave's Harrows one for each colony, `room` up at once, the Maw's guards `guards`
+ *                 times as many
+ *   crew          shared colony co-op (more than one person running the one colony): every kind 1 + `per` × each
+ *                 extra person times as many, at most `most` (one economy, more hands)
  */
 const HORDE = {
   shape: 'Long haul', size: 2, waves: 20,
@@ -2299,24 +2306,26 @@ const HORDE = {
   start: { warbot: 4 },
   fall: 1, baseTakes: 0.2,
   harrow: { base: 0.25, per: 0.05, most: 1.5 },
+  pair: { shape: 'Long Haul 2v2', mul: 1.8, room: 160, guards: 2 },
+  crew: { per: 0.3, most: 1.6 },
 };
 /** The Horde level's numbers (HORDE.levels) for a difficulty key. */
 function hordeLevel(k) { return HORDE.levels[k] || HORDE.levels.normal; }
-/** The Long haul map type's index (Horde is played on it). */
-function hordeShape() { return Math.max(0, SHAPE_PRESETS.findIndex((P) => P.name === HORDE.shape)); }
-/** Wave n's Murmur at level k: { scuttler, brute, leech, spitter, sapper, harrow } (whole numbers; kinds not in it yet are left out). */
-function hordeWave(n, k) {
+/** The Long haul map type's index (Horde is played on it; co-op side by side on Long Haul 2v2: `pair`). */
+function hordeShape(pair) { return Math.max(0, SHAPE_PRESETS.findIndex((P) => P.name === (pair ? HORDE.pair.shape : HORDE.shape))); }
+/** Wave n's Murmur at level k (`mul`: co-op's scale, S.horde.mul): { scuttler, brute, leech, spitter, sapper, harrow } (whole numbers; kinds not in it yet are left out). */
+function hordeWave(n, k, mul = 1) {
   const L = hordeLevel(k), boss = n % HORDE.boss.every === 0, grow = 1 + L.ramp * (n - 1), out = {};
   for (const type in HORDE.kinds) {
     const K = HORDE.kinds[type];
     if (n < K.from) continue;
-    out[type] = Math.min(K.cap, Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * grow * (boss ? HORDE.boss.mul : 1) + 1e-9)));
+    out[type] = Math.min(Math.round(K.cap * Math.max(1, mul)), Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * mul * grow * (boss ? HORDE.boss.mul : 1) + 1e-9)));
   }
   if (boss) out.harrow = HORDE.boss.harrows + (n >= HORDE.boss.twoFrom && L.mult >= HORDE.boss.twoMult ? 1 : 0);
   return out;
 }
 /** How many Murmur in wave n at level k, all told. */
-function hordeWaveSize(n, k) { const w = hordeWave(n, k); let s = 0; for (const t in w) s += w[t]; return s; }
+function hordeWaveSize(n, k, mul) { const w = hordeWave(n, k, mul); let s = 0; for (const t in w) s += w[t]; return s; }
 /** The countdown before wave n (seconds) at level k: the first from the landing, then from the wave before. */
 function hordeGap(n, k) { const g = hordeLevel(k).gap; return Math.max(g[2], g[0] - g[1] * (n - 1)); }
 
