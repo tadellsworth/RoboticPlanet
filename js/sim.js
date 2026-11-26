@@ -7176,6 +7176,7 @@ function doCrate(u, t, dt) {
 
 /** Crates of `goods` on tile (x, y). `keep`: they never rot (the Hollow's side chambers: robot parts laid out in rows). */
 function addLoot(x, y, goods, keep, dismantled) {
+  if (inMap(x, y) && voidTile(tIdx(x, y))) return; // (crates that fall into the void of The Ring are gone: nothing can reach them)
   S.loot = S.loot || [];
   const pile = S.loot.find((l) => l.x === x && l.y === y);
   if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); if (dismantled !== undefined) pile.dismantled = dismantled; return; }
@@ -12316,11 +12317,12 @@ function updateEvents() {
   const rng = makeRng(((S.seed ^ 0x51ed27) + S.evN * 7919) >>> 0);
   const recent = S.recentEvents || [];
   // (The Hollow: no dust storm or solar flare reaches underground, so Ringfall and the Wren take turns.)
-  const all = S.hollow ? EVENT_ORDER.filter((k) => k !== 'dust' && k !== 'flare') : EVENT_ORDER;
+  // (The Ring: no air, so no dust storm; Ringfall, solar flares and the Wren all reach it.)
+  const all = S.hollow ? EVENT_ORDER.filter((k) => k !== 'dust' && k !== 'flare') : ringShape() ? EVENT_ORDER.filter((k) => k !== 'dust') : EVENT_ORDER;
   let pool = all.filter((k) => !recent.includes(k)); // never one of the last two again
   if (!pool.length) pool = all.filter((k) => k !== recent[recent.length - 1]);
   // (Endless dust storm, a challenge modifier: a dust storm, and it never ends, so no other event comes)
-  const endless = modOn('dust'), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
+  const endless = modOn('dust') && !ringShape(), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
   const t0 = S.time + (def.warn ? EVENT_WARN : 0), dur = def.dur[0] + rng() * (def.dur[1] - def.dur[0]);
   S.event = { type, t0, t1: endless ? DUST_ENDLESS : t0 + dur, n: S.evN };
   if (endless) S.event.endless = 1;
@@ -16077,7 +16079,7 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
   for (let k = 1; k < n; k++) {
     const u = tIdx(ai + di * k, aj + dj * k);
     if (S.terrain[u] === T_GROUND || S.terrain[u] === T_ROCK) { if (S.elev[u] >= low) return 'The ground between has to be lower than both ends: a Viaduct spans a valley.'; dip = true; }
-    else if (bridgeable(u)) dip = true;
+    else if (bridgeable(u) || S.terrain[u] === T_CHASM) dip = true; // (the void of The Ring is spanned by a Viaduct, though no road crosses it)
   }
   if (!dip) return 'There is no valley here to span.';
   return '';

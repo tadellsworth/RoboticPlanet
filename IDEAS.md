@@ -275,11 +275,20 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
   Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
   (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
-- **The Ring** (in space, among the Ring's big asteroids). Like Sky islands but out in the Ring itself: base asteroids
-  and resource rocks with open space between, so armies must **fly to the other asteroids** (or bridge them) to fight.
-  A moving space background: drifting rubble, the planet and Argos turning, ringfall streaking down. Lore fit: the
-  Ring is the broken twin of Argos, and Ring Crystal makes rock float (LORE.md). Open: airless like Argos (no Murmur,
-  no farms?), how robots cross (Airships, cargo flights, tethers, Ropeways), and whether rocks drift over time.
+- **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
+  js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
+  side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
+  everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
+  are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
+  Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring (the
+  rest won at 20, 35 and 45 minutes), against 8 of 8 on Sky islands run the same way. The long ones are the fight over the middle rock
+  (both sides land a span there by minute 8) and then a span a stone at a time; the rival's economy there matches Standard's (more Cement,
+  Alloy and Fuel at 15 minutes).
+  Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
+  a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
+  home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
+  Viaduct only (as on Sky islands); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
   Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
   reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
@@ -1122,6 +1131,23 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Terrain detail view: see the routes through the terrain** (the owner, Nov 2026: for later). So a player can tell at a
+  glance which cliffs, ramps and gaps let an enemy walk round to the base, and so that no enemy robots can sneak round a
+  cliff into it unseen. An overlay, like the traffic map and the goods-flow overlay (a toggle, `Shift+T` style, and a
+  button on the phone), over the terrain:
+  - **Walkable routes:** shade the ground a ground robot can walk (the game already works out walkable areas, the
+    zones, and where ramps join levels), draw cliff edges and drops clearly, and mark **ramps, passes and chokepoints**
+    (a narrow gap shown as a bright gate).
+  - **Approach routes to your base:** from each rival's base (or the nearest enemy robot), the shortest walkable
+    routes to your Command Base and key buildings, drawn as lines, so the unguarded back door shows up; a warning where
+    a route reaches your land with no turret, wall or garrison covering it.
+  - **Other kinds of mover:** a switch between ground robots, aircraft (everything open) and ships (water only), since
+    Viaducts, Ropeways, bridges and Airships open routes the ground view does not show; show the routes a Viaduct or a
+    Ramp you could build would add or close (a "what if I wall this gap" preview).
+  - **Reuses:** the zone and walkability maps, the rival's route search (`findPath`), the Bottleneck finder's style of
+    highlighting, the traffic overlay's drawing. A cheap first version: just the walkable shading with cliffs and ramps
+    marked; then the approach lines. Pairs with the military roster work (Mine Layer and Skirmisher make
+    chokepoints matter) and the Grand Canyon and Spine maps.
 - **Polish and quality of life, to feel like a studio game** (the owner, Nov 2026: saved for later). The game already has
   photo mode, cloud saves with a QR code, goals, records and achievements, undo, control groups, idle-robot explanations,
   the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
@@ -2711,3 +2737,42 @@ Murmur AI rework).
   Later a great 2-player co-op: two colonies side by side at one end (the Long Haul 2v2 layout).
 - **Open questions for the owner:** (1) a fixed number of waves, Endless, or both as a setting? (2) Long Haul only, or a
   Horde option on any map with the Maw opposite you? (3) pure survival, or sometimes a rival colony defending too?
+
+## Idea: Terraforming expansion (owner, Nov 26; brainstorm, to plan later)
+
+Shaping the world for economic and other benefits. Builds on what's there: the Atmosphere Engine's greening, the
+Torch's scorched earth, Ramps, Quarries cutting rock faces, fertile soil, the Deep Core. A **Terraforming tab** in
+Build, a few new robots (a **Grader**, a **Planter**, a **Drill rig**); every change takes time and goods and is
+permanent on the map (and could show on the Contingency globe). Suggested stages: 1 land height and water, 2 soil /
+plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big projects.
+
+1. **Land and height:** raise or lower a tile a level (Grader / Earthworks), cost by earth moved, dug earth comes out as
+   Stone (quarry a mountain down); flatten a plateau for a big base, cut a pass, raise a defensive bank. Fill shallows
+   into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
+   walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
+   landslide onto an enemy road below).
+2. **Soil, plants and climate:** compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
+   crops on rich soil). Tree nurseries spread groves (slow Fiber/wood; cover that slows enemy robots). Irrigation:
+   pump water by pipe or canal to dry land so farms grow there (big lever on desert biomes). Local climate (the
+   Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
+   volcanic soil; greening pushing back the Murmur's blight. Biome shift: enough terraforming turns a region desert →
+   savanna → forest, with its look, animals and resource bonuses.
+3. **Resources from the ground:** deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
+   "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
+   hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
+   cable) back into usable land (pairs with "total war scars the land").
+4. **Military uses:** earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
+   enemy lowland by releasing dammed water anywhere (like the Dam map, buildable); collapsing Murmur tunnels, or digging
+   your own under a wall for a surprise attack (mirrors the Sapper); rival terraformers whose equipment you can raid.
+5. **Big projects (megastructure-sized) — the owner's favourite:** a Lake Maker (turn a basin into a lake: ports,
+   fishing, fertile shores), a Mountain Mover (level a whole hill over minutes), and **planetary greening** — green a
+   share of the planet as a goal (preparing Ithaca for Arrival, in LORE's terms).
+   **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the
+   **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
+   objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
+
+## To do: Argos on the main menu (owner, Nov 26)
+
+The moon Argos in the main menu's background (js/menuplanet.js) reads as an out-of-focus orb. Render it crisply at menu
+scale: a real surface (craters and maria, the grey lunar look of its biome), a sharp terminator and rim light matching
+the planet's sun, and it shouldn't be blurred by the depth-of-field/glow pass meant for the planet.

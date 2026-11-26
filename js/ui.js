@@ -1226,7 +1226,7 @@ function syncPvMods() {
 function syncPickRows() {
   const m = UI.menu;
   shapePickRow($('m-shape'), m.shapeRnd, menuShownShape(), mpHordePair() ? 2 : menuPlayers());
-  biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
+  biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, biomeForced(m.shapeRnd, m.shape));
   syncSecondBiome('m', m, menuSize());
 }
 
@@ -1261,8 +1261,12 @@ function shapePickRow(row, rnd, shape, np, when = 'when you land') {
   row.setAttribute('aria-label', `Map type: ${rnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
 }
-/** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`hollow`: the map type is the Hollow, which has its own look). */
-function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
+/** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), or false. */
+function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : false) : false; }
+/** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`forced`: 'hollow' or 'ring', the map type sets its own look). */
+function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
+  const ring = forced === 'ring', hollow = !!forced && !ring;
+  if (ring) { rnd = false; biome = BIOME_ORDER.indexOf('lunar'); }
   const bk = BIOME_ORDER[biome];
   row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
   row.querySelector('.m-pick-meta').textContent = rnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
@@ -1271,6 +1275,11 @@ function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
   if (hollow) {
     row.querySelector('.m-pick-meta').textContent = 'set by the map: The Hollow';
     row.dataset.info = `The Hollow has its own look, whatever the biome: ${BIOMES.hollow.desc} (The biome you pick here is for other maps.)`;
+  }
+  // (The Ring is on Argos's ground, in space: its look and its rules.)
+  if (ring) {
+    row.querySelector('.m-pick-meta').textContent = 'set by the map: The Ring';
+    row.dataset.info = `The Ring is on Argos's ground, whatever the biome: ${BIOMES.lunar.desc} (The biome you pick here is for other maps.)`;
   }
   row.setAttribute('aria-label', `Biome: ${rnd ? 'Random' : biomeName(biome)}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'biome:' + (rnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, rnd ? null : bk));
@@ -1681,6 +1690,18 @@ function drawShapeThumb(cv, P) {
     mesa(0.5, 0.86, 0.3, 0.1);
     for (let k = 0; k < 4; k++) mesa(0.15 + rnd() * 0.7, 0.52 + k * 0.08, 0.07 + rnd() * 0.05, 0.04 + rnd() * 0.02);
     crags = 0;
+  } else if (P.asteroids) {
+    // The Ring: grey asteroids in space (a home rock at each end, stepping stones, a rich rock in the middle with a rock to each side),
+    // the short gaps between them spanned (dashes: a Viaduct), a few stars and a few resource dots on the rocks.
+    ctx.fillStyle = '#070a14'; ctx.fillRect(x0, y0, mw, mh);
+    ctx.fillStyle = 'rgba(214,226,255,0.7)';
+    for (let k = 0; k < 22; k++) ctx.fillRect(X(rnd()), Y(rnd()), Math.max(1, U * 0.012), Math.max(1, U * 0.012));
+    const rock = (u, v, rx, ry) => blob(u, v, rx, ry, '#8b8d96', '#c3c5ce', true);
+    const span = (u, v0, v1) => { line([[u, v0], [u, v1]], '#f2d27a', Math.max(1, U * 0.03), [U * 0.03, U * 0.03]); line([[1 - u, 1 - v0], [1 - u, 1 - v1]], '#f2d27a', Math.max(1, U * 0.03), [U * 0.03, U * 0.03]); };
+    span(0.5, 0.58, 0.77); span(0.5, 0.64, 0.53);
+    rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
+    for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
+    crags = 0;
   } else if (P.hollow) {
     // The Hollow: solid rock, caverns joined by passages, a chasm with its floating Crystal on each side, the Deep's
     // mound in the middle and the breaches' daylight (gold) over the bases and the flank caverns.
@@ -1913,7 +1934,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2080,10 +2101,10 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : p.st.biome; // (the Hollow has its own look)
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
   const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
-    chasm: [18, 12, 10], fertile: [92, 98, 40] };
+    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
   const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
