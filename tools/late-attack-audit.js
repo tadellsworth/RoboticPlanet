@@ -18,7 +18,7 @@ const read = (file) => ref ? execFileSync('git', ['show', ref + ':' + file], { c
 const modules = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders', 'landmarks', 'city', 'walker', 'dam'];
 const source = modules.map((name) => read('js/' + name + '.js')).join('\n');
 const game = new Function('sfx', source + `
-  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter }) => {
+  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail }) => {
     const shapeId = SHAPE_PRESETS.findIndex((p) => p.name.toLowerCase() === shape.toLowerCase());
     if (shapeId < 0) throw new Error('Unknown map ' + shape);
     if (!DIFFICULTY[difficulty] || !isDoctrine(doctrine) || !Number.isFinite(holdAfter) || holdAfter < 0 || (holdAfter && players !== 2)) throw new Error('Invalid scenario');
@@ -27,6 +27,7 @@ const game = new Function('sfx', source + `
     S.watch = true;
     // Trace successful decisions from the running simulation. Samples do not issue orders.
     const events = [], strikes = Array.from({ length: players }, () => 0);
+    const contacts = Array.from({ length: players }, () => []);
     const launch = sendAttack, march = aiMarch, hit = hitBuilding;
     let thinking = -1;
     const think = aiThink;
@@ -49,7 +50,14 @@ const game = new Function('sfx', source + `
       return result;
     };
     hitBuilding = (b, dmg, by, src) => {
-      if (by >= 0 && by < players && b.owner >= 0 && b.owner < players && foes(by, b.owner) && dmg > 0) strikes[by]++;
+      if (by >= 0 && by < players && b.owner >= 0 && b.owner < players && foes(by, b.owner) && dmg > 0) {
+        strikes[by]++;
+        if (detail) {
+          const runs = contacts[by], last = runs[runs.length - 1], at = round(S.time);
+          if (last && at - last.end <= 1) { last.end = at; last.hits++; }
+          else runs.push({ start: at, end: at, hits: 1 });
+        }
+      }
       hit(b, dmg, by, src);
     };
     const size = SIZE_PRESETS[S.settings.size].name;
@@ -76,6 +84,18 @@ const game = new Function('sfx', source + `
         const enemy = rivalOf(p.id), target = enemy >= 0 ? getE(S.players[enemy].lander) : null;
         return { colony: p.id + 1, buildings: built()[p.id], army: army.length, garrisoned: army.filter((u) => u.inside).length,
           armed: army.filter(botArmed).length, produced: Object.entries(p.madeBots).reduce((n, [k, v]) => n + (BOTS[k]?.army ? v : 0), 0),
+          ...(detail ? {
+            pressure: {
+              produced: ['crystal', 'chip', 'alloy', 'ammo'].map(g => p.made?.[g] || 0),
+              used: ['crystal', 'chip', 'alloy', 'ammo'].map(g => p.used?.[g] || 0),
+              smelters: buildings.filter(b => b.type === 'smelter').map(b => ({
+                status: b.status, ore: b.stock.ore || 0, fiber: b.stock.fiber || 0, alloy: b.stock.alloy || 0,
+              })),
+              armoryParts: buildings.filter(b => b.type === 'armory').map(b => [b.stock.alloy || 0, b.inc.alloy || 0, b.stock.cement || 0, b.inc.cement || 0, b.stock.ammo || 0]),
+              trade: buildings.filter(b => b.type === 'terminal').map(b => ({ route: b.route && { ...b.route }, runs: b.runs || 0, status: b.status })),
+              fieldOrders: army.filter(u => !u.inside && botArmed(u)).map(u => [u.id, u.task?.type || 'idle', u.task?.rally || u.task?.bot || u.task?.bld || 0]),
+            },
+          } : {}),
           ammo: goods.ammo || 0, armories: buildings.filter((b) => b.type === 'armory').map((b) => b.status || ''),
           unarmedInDryGarrison: army.filter((u) => !botArmed(u) && u.inside && !(getE(u.inside)?.stock.ammo > 0)).length,
           ore: goods.ore || 0, alloy: goods.alloy || 0, chip: goods.chip || 0, hit: strikes[p.id],
@@ -87,7 +107,8 @@ const game = new Function('sfx', source + `
       }),
     });
     const checkpoints = [];
-    let nextCheck = 5;
+    const checkEvery = detail ? 1 : 5;
+    let nextCheck = checkEvery;
     const cap = Math.round(minutes * 60 / SIM_STEP), holdTick = Math.round(holdAfter * 60 / SIM_STEP);
     while (S.winner < 0 && S.tick < cap) {
       // A defensive proxy keeps its economy and local defence. The other colony runs its regular AI.
@@ -96,14 +117,14 @@ const game = new Function('sfx', source + `
         events.push({ p: 1, at: round(S.time), kind: 'hold' });
       }
       simStep(SIM_STEP);
-      if (S.tick === Math.round(nextCheck * 60 / SIM_STEP)) { checkpoints.push(snapshot()); nextCheck += 5; }
+      if (S.tick === Math.round(nextCheck * 60 / SIM_STEP)) { checkpoints.push(snapshot()); nextCheck += checkEvery; }
     }
     if (S.winner >= 0 && snapshot().alive.length !== 1) throw new Error('Capture ended before only one colony remained');
     return {
-      shape, size, seed, players, difficulty, doctrine, holdAfter, events, winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
+      shape, size, seed, players, difficulty, doctrine, holdAfter, events, ...(detail ? { contacts } : {}), winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
       end: snapshot().alive, eliminations: (S.log || []).filter((e) => e.k === 'out').map((e) => [e.p + 1, round(e.t)]),
       megastructuresSeized: colonies().map((p) => p.stats.megaSeized || 0), maglevRaids: colonies().map((p) => p.magCuts || 0),
     };
   };
 `)(() => {});
-console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter }) }));
+console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail: process.env.TERRAFALL_PRESSURE_TRACE === '1' }) }));

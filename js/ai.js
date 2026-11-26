@@ -488,7 +488,7 @@ function aiThink(p) {
     if (seaCrossing && r === R_ORE && S.amt[t] && S.zone[t] === hz && (S.owner[t] < 0 || S.owner[t] === p)) homeOre++;
     if (S.owner[t] !== p) continue;
     inLand[r] = (inLand[r] || 0) + 1;
-    if (r === R_CRYSTAL) crGround += S.amt[t];
+    if (r === R_CRYSTAL && !hotFor(p, t)) crGround += S.amt[t];
   }
   // At most the six deposits the usual three Mines need, even with all the home island Ore in reach.
   const firstFerry = seaCrossing && homeOre <= 3 * 2;
@@ -496,6 +496,7 @@ function aiThink(p) {
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
   // or when the Taps bring in less than the Fabs use with little in stock: then more Taps, and Crystal by trade.
+  // Deposits under fire cannot be worked, even when they are inside our border.
   const rates = goodRates(p), crRate = rates.crystal, crHave = playerGoods(p).crystal || 0;
   const crBurn = Math.max(crRate.used, counts.foundry ? AI_CRYSTAL_BURN : 0);
   const crShort = S.mode !== 'colony' && crBurn > 0 && crGround + crHave < crBurn * AI_CRYSTAL_MINS;
@@ -507,7 +508,7 @@ function aiThink(p) {
   if (crShort) {
     const forts = me.filter((b) => b.built && BDEFS[b.type].mil && BDEFS[b.type].terr), R2 = AI_CRYSTAL_REACH * AI_CRYSTAL_REACH;
     for (let t = 0; t < S.W * S.H && !crNear; t++) {
-      if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
+      if (S.res[t] === R_CRYSTAL && S.amt[t] && S.owner[t] < 0 && !hotFor(p, t)) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
     }
   }
   // Ore running dry (see AI_ORE_FIELD): and when the last look for a Mine's spot found none, short of Ore too.
@@ -849,9 +850,10 @@ function aiThink(p) {
     for (const [type, want0] of plan) {
       if (type === 'turret' && firstTurret && S.time <= defAt && !aiMurCut(P)) continue;
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
-      // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester, a Mine or a Crystal Tap)
-      if ((cementStarved || fiberStarved || starved.length) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') && !starved.includes(type)) continue;
-      if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
+      // Extra sites are for urgent supply only. Trade and a missing factory can qualify at the same time.
+      if (sites >= maxSites && (cementStarved || fiberStarved || starved.length || tradeFirst) &&
+          !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') &&
+          !starved.includes(type) && !(tradeFirst && type === 'terminal')) continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
       if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
@@ -3466,7 +3468,9 @@ function aiTrade(p, me) {
       if (k < 0 && !want(get)) return -Infinity; // (only for what it's short of, or wants)
       // (How much of what it sends comes back in worth: a little over a third for a raw good, three-quarters for a made one buying a raw one.)
       const worth = ((sellPrice(p, give) / buyPrice(get)) * TRADE_VALUE[get]) / TRADE_VALUE[give];
-      return want(get) * 100 + (k >= 0 ? (short.length - k) * 10 : 0) + Math.min(spare, 60) * 0.1 + worth * 20;
+      // When the Fabs run short, the actual batch of parts matters more than a good exchange rate on a small lot.
+      const parts = P.crLow && (get === 'chip' || get === 'crystal') ? tradeRun(p, { give, get }, b).pay : 0;
+      return want(get) * 100 + parts * 10 + (k >= 0 ? (short.length - k) * 10 : 0) + Math.min(spare, 60) * 0.1 + worth * 20;
     };
     let best = null, bs = -Infinity;
     for (const get of tradeGets()) for (const give of tradeSends()) {

@@ -64,6 +64,35 @@ The dispatch regression uses one Hauler and competing Foundry and Ammo Plant ord
 - **Standard 11, 1v1:** Colony 1 still won at 25.65. The minute-by-minute trace confirmed that Colony 2 burned through local Crystal. Its active Stone-for-Chips contract supplied only small amounts, and sample-time dispatchable Chip stock was zero even while the Foundry had Alloy. The new Crystal Tap was working by minute 23. There was no Warbot replacement from minute 20 through the minute-25 check. This calls for a separate supply fix.
 - **Standard 25, 1v1:** Colony 1 still won at 45.53. In a separate trace of the existing Ammo-fix revision, the four-colony Standard 25 winner already had ten armed units in the field at minute 48, including a group holding, units moving to garrisons, escorts and a looter. Ordinary rally counted only three additional garrison slots. Both sides' occupied garrisons were in the target ground zone at the minute-48 through minute-52 checks. The winner launched two storms in the final duel and finished at 52.44. This replay gives no basis for lowering the defense reserve.
 
+## Crystal, Ammo and returning troops
+
+### Crystal and Chips
+
+The reserve forecast counted Crystal under enemy fire, although Taps avoided those tiles. At the normal construction limit, the urgent Trade Terminal and emergency supply building rules could also block each other. The forecast now counts safe deposits, either urgent job can qualify for the extra slot, and a shortage makes the trade planner weigh how much Crystal or how many Chips a shipment actually brings back.
+
+On Standard 11, Colony 2 went from zero new army units during minutes 20–25 to 13. It gained 19 Chips over that interval versus five before, as measured by the simulation's made-goods counter, which includes trade. It still used a Stone-for-Chips route, so the improvement in this replay cannot be attributed to upgrading its contract. Its last rival-building hit moved from 19.49 to 26.33, with separate contact episodes beginning at 21.30 and 23.66. The small replay set does not establish a general balance change.
+
+### Sustained Ammo
+
+On the original Standard 25 1v1, Colony 1 dealt building damage in four episodes, beginning at 12.78, 30.83, 42.70 and 45.45. During the second Ammo drought the colony made no Alloy between the minute-31 and minute-36 snapshots. Cement sat in the Ammo Plant hopper, and there was no Alloy in the hopper or incoming at minutes 32–36. The Smelter reported waiting for Ore at all six samples even though the colony showed 6–7 Ore in stock. Its hopper held at most one Ore, short of the two it needs. The earlier rearm priority can redirect available Alloy. This spell was upstream of the Ammo Plant, and the trace does not establish whether the Ore had a safe freight route. A trial that let two dry Warbots trigger emergency priority for a small army produced identical traces on the revised Standard 25 and Standard 11 replays. The existing threshold stays in place.
+
+### Returning troops
+
+On the baseline Standard 25 final duel, individual garrison-return and convoy escort orders appeared for at most two consecutive one-minute samples. After the Crystal change, the longest garrison-return streak was one sample and the longest escort streak was two. In both replays the longest rally hold was three samples, and one Warbot was seen looting over three consecutive samples. These snapshots cannot distinguish repeated loot trips from one slow trip. The existing logic sends escorts home when the convoy ends and stops repeat looting when a storm is forming. There was no persistent stranded return order in either trace, so order rules stayed as they were.
+
+On the baseline final duel, Colony 1's first building damage against the remaining rival came about 2.05 minutes after the duel began. On the revised final duel, Colony 2 dealt damage 4.34 minutes after it began, then began its next damage episode 2.69 minutes after the previous one ended. These are different finalists, so compare the gaps as observations rather than an isolated effect of logistics.
+
+| Map and seed | Colonies | Before `d9bf339` | With Crystal changes |
+| --- | ---: | --- | --- |
+| Standard 11 | 2 | Colony 1 at 25.65 | Colony 2 at 26.33 |
+| Standard 25 | 2 | Colony 1 at 45.53 | Colony 1 at 17.32 |
+| Long haul 21 | 2 | Colony 2 at 23.81 | Colony 2 at 23.81 |
+| The Hollow 11 | 2 | Colony 2 at 32.39 | Colony 2 at 32.39 |
+| Standard 25 | 4 | Colony 1 at 52.44 | Colony 2 at 26.08 |
+| Crossroads 21 | 4 | Colony 1 at 30.48 | Colony 1 at 31.40 |
+
+Set `TERRAFALL_PRESSURE_TRACE=1` before the runner command to sample every minute and include production totals, Armory and Smelter inputs, trade routes, armed field orders, and building damage episodes. Episodes group positive rival-building hits no more than one minute apart. They omit combat that hits only units and damage paths outside the instrumented function. Replay the old Standard 25 1v1 with `d9bf339` to observe the second Ammo drought. The revised match finishes before that interval.
+
 ## Suggested fixes and checks
 
 1. If a rival still stays dry, trace whether it can produce or import Alloy and whether the garrison has a practical resupply or rearm route. Use Standard 25 to verify that both sides can sustain pressure after the first reload.
