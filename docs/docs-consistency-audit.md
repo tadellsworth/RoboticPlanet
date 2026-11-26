@@ -8,6 +8,7 @@ Status: In progress. This is a confirmed finding from the nuclear blast text. Th
 | Medium | The overview implies a colony can build only one megastructure in total. | `index.html:399`, `README.md:3235`, `js/world.js:2897` |
 | Medium | The guide describes an older Deep Core AI trigger. | `how-to-play.html:772`, `js/defs.js:1330`, `js/ai.js:2948` |
 | Medium | The Mass Driver guide omits the larger supply-order cap. | `how-to-play.html:492`, `js/sim.js:21375` |
+| Medium | Maglev raid help says rivals target a Terminal first, although they prefer a middle pylon on a long line. | `index.html:1218`, `js/ai.js:3662`, `js/ai.js:3672` |
 
 The in-game help and guide say every building inside the blast is wiped out. The simulation leaves a Command Base at one armor unless a qualifying direct hit destroys it, knocks Arrival City down rather than destroying it, and spares buildings on Trade Post ground. The next paragraph of the in-game help explains the Command Base exception, so the earlier absolute statement is also internally inconsistent. Replace the absolute wording with the general blast effect and identify the surviving exceptions.
 
@@ -16,3 +17,5 @@ The in-game help and guide say every building inside the blast is wiped out. The
 **Medium — Deep Core timing.** The guide at how-to-play.html:772 says rivals begin after 30 minutes and once Ore Mines run dry. The AI check at js/ai.js:2948 uses DEEP.aiAt, set to 20 minutes in js/defs.js:1330, along with build availability and resources. Update the guide to describe the actual timing and prerequisites.
 
 **Medium — Mass Driver far-end cap.** The guide at how-to-play.html:492 says a far end stops filling at 64 of a good. The in-game help at index.html:1233 and mdRoom at js/sim.js:21375 allow the configured keep amount when it exceeds 64, accounting for stock and incoming canisters. State the larger-keep exception in the guide.
+
+**Medium — Maglev raid target preference.** The same help paragraph at `index.html:1218` first says a raid can target a pylon in the middle of a long line, then says the rival chooses a Terminal first. `aiMagCut` sorts eligible middle-third pylons ahead of other targets at `js/ai.js:3662`–`3672`; it can fall back to other pylons or Terminals when needed. Replace the Terminal-first claim with the actual preference and safety conditions.
