@@ -6142,7 +6142,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
-const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
+const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
 const SPARSE_LAYERS = ['crater', 'ash', 'crk']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
