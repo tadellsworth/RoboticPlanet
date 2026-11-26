@@ -61,9 +61,9 @@ function rspStarTile(seed, size, n, bigShare, dim, d) {
   return c;
 }
 
-/** Ithaca I's face (256 × 128, longitude by latitude): seas, rust and green land, pale polar caps, a few clouds. */
+/** Ithaca I's face (384 × 192, longitude by latitude): seas, rust and green land, pale polar caps, a few clouds. */
 function rspPlanetTexture() {
-  const w = 256, h = 128, c = document.createElement('canvas');
+  const w = 384, h = 192, c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d'), img = g.createImageData(w, h), seed = 7311;
   for (let j = 0; j < h; j++) {
@@ -86,9 +86,9 @@ function rspPlanetTexture() {
   return c;
 }
 
-/** Argos's face (128 × 64): grey regolith pocked with craters. */
+/** Argos's face (192 × 96): grey regolith pocked with craters. */
 function rspMoonTexture() {
-  const w = 128, h = 64, c = document.createElement('canvas');
+  const w = 192, h = 96, c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d'), img = g.createImageData(w, h), seed = 4421;
   const craters = [];
