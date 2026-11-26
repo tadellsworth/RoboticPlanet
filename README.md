@@ -510,7 +510,7 @@ least ten times a standard map's) so Fuel (Oil Pump, Refinery) is never short; t
 offsets from the Command Base) and richer ones lie further out, each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
 Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
 the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
-crosses with Viaducts only (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge): it builds no aircraft or Airships, and the map is laid out so every gap on the way is
+crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
 short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only): the space
 behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`): a deep sky with faint nebulae, three layers of stars that
 drift slowly and slide a little as the view pans (the farther, the less), Corvane's glow in a corner, Ithaca I large and turning (about nine
@@ -1025,7 +1025,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
-  The AI never flies Cargo Planes.
+  On The Ring and Sky islands the rival flies Cargo Planes (Medium and up; see *The rival's aircraft* under the AI); it builds no Airships and Mooring Masts, and drops no Outposts or supplies.
 - **Airships and Mooring Masts** (every map but the Hollow; `BOTS.airship`, `BDEFS.mast`, `AIRSHIP`). A **Mooring Mast**
   (6 Cement, 3 Alloy; Build → Move, key T) is a one-tile store. Two make a **line**: the `mastLine` order
   (`setMastLine`, `mastLineWhy`: both built, at least `AIRSHIP.minDist` (8) tiles apart, a Mast on one line at most;
@@ -1377,7 +1377,32 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   calls the band off after seven minutes, or once it has lost two in five of what it sent. Later (after 15 minutes) it builds a
   second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked
   (not while its Ferry is on order: a yard builds a Container Ship first, and short of Alloy the Ferry waited half an
-  hour). The art is top-down like the trucks
+  hour). **The rival's aircraft** (`aiAir`, `AI_AIR`, `AI_AIR_STYLE`, js/ai.js; Medium, Normal and Hard, only on The Ring and
+  Sky islands, where every way across is a Viaduct, a Ropeway or a flight: the Viaducts of a Ring chain were measured to
+  join both home asteroids by minute 10, yet 5 of 8 Ring games and all 8 Sky islands games were still undecided at 45
+  minutes: the armies met at the Viaduct and neither got through; no other map is touched, so a connected map plays
+  exactly as before). From a few minutes before its doctrine's start time and an army of `AI_AIR.first` (5) it puts up an Airfield
+  (`aiAirFields`: the Airfield goes into its build plan; with a gap in the world the Vulcan Bomber waits until a Cargo
+  Plane is flying, so the Chips go to the plane first) and orders a Cargo Plane in its hangar; from an army of 10 it keeps
+  its doctrine's count of planes (a second Airfield each), one more from 18 (`aiAirPlanes`). From its doctrine's start
+  (`AI_AIR_STYLE.at`) and with the lead over a rival that doctrine wants (`lead`: a multiple of that rival's army, and
+  `more` over it), a plane ready and warbots to spare, it flies a band across like a beach landing (`aiBeach`): the target
+  is the rival's Command Base (or, for a Salvager, the fort it takes fewest to take) and the landing spot (`aiAirSpot`) a
+  ground tile of its area within `AI_AIR.reach` (22) tiles of it that a plane can drop on, out of every gun's reach and of
+  the sortie of the forts round it, and a plane's way there kept `Flak Gun range + 3` tiles clear of enemy Flak Guns
+  (`aiAirFlak`: the first test flew both planes into the Flak), off the rival's land where it can be. Each plane brings two
+  warbots a flight (`orderAirdrop`, `AI_AIR.flight`); the band gathers under the flag the drop leaves them at until it
+  has `need` (what the target takes, `aiAirNeed`: `aiTakeNeed` and `AI_AIR.more` over, times the doctrine's `need`; 24
+  at most; against a crushed rival, twice its army and two), then the flag moves beside the target and the band goes in
+  at the gun covering it first, as a beach landing does. It goes with seven tenths of its need after five minutes, is called off after nine
+  (`AI_AIR.give`) or once it has lost two in five of what it flew in (`P.beaten`, five minutes' peace for that place), and
+  the next band waits a minute (`AI_AIR.gap`). Warbots left idle in another area attack the nearest enemy building there.
+  Doctrines (`AI_AIR_STYLE`): the Herald starts first (8 minutes, with a lead of nine tenths and a band of seven tenths: a
+  rush), the Salvager from 9 with an even army and four fifths of a band, taking the fort that is cheapest to take rather
+  than the base (a raid), the Steward from 10 with a lead of 15 in 100, the Architect from 11 with a lead of a fifth, the
+  biggest band (115 in 100) and a second plane, the Warden from 13 and only with a decisive lead (half as many again), a band a fifth
+  bigger and its Flak Guns (the usual: Flak once a rival has an Airfield). Easy never flies. Not in the Hollow (`worldBan`). A rival
+  with next to nothing in the way of planes or an Airfield flies nothing; a Viaduct chain keeps coming (`aiBridge`). The art is top-down like the trucks
   (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
   up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
   `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).
