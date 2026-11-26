@@ -362,12 +362,12 @@ function drawTrails(ctx, ox, oy, z) {
   if (R.trailS !== S) { R.trailS = S; R.mLive = new Map(); R.mGone = []; }
   const now = S.time, seen = new Set(S.missiles);
   for (const [m] of R.mLive) if (!seen.has(m)) { R.mLive.delete(m); if (FX_TRAIL[fxKind(m)] && FX_TRAIL[fxKind(m)].life) R.mGone.push({ m, end: now }); }
-  for (const m of S.missiles) R.mLive.set(m, 1);
+  for (const m of S.missiles) if (!m.nuke) R.mLive.set(m, 1); // (a nuclear missile's smoke and plume: drawNukeFlight)
   R.mGone = R.mGone.filter((g) => now - g.end < FX_TRAIL[fxKind(g.m)].life);
   for (const g of R.mGone) drawTrail(ctx, g.m, 1, now - g.end, ox, oy, z);
   for (const m of S.missiles) {
     const kind = fxKind(m);
-    if (!kind) continue;
+    if (!kind || kind === 'nuke') continue;
     const k = Math.min(1, m.t / m.dur);
     drawTrail(ctx, m, k, 0, ox, oy, z);
     const T = FX_TRAIL[kind], p = fxFlight(m, k), sx = ox + p.x * z, sy = oy + p.y * z;

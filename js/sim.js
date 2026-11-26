@@ -147,6 +147,30 @@ function prioRank(b) {
   return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1;
 }
 
+/**
+ * What a computer player p still owes of good g to bring its seized megastructures online (their fee, less what is in
+ * them or on its way): while it does, its factories' conveyors don't hand g on to their neighbours and keep none back
+ * from the Haulers (feedStep, feedHold), so the fee comes first (prioRank). Without it the Alloy from a Smelter beside a
+ * Foundry never reached storage, and a seized Lance or Deep Core sat a few Alloy short for ten minutes. A rival's Mass
+ * Driver and Catcher sites it put first (High: aiMassDriver), and a Catcher kit it is loading, count the same. Kept
+ * for the tick.
+ */
+let _megaOwe = { tick: -1, S: null, by: null };
+function megaFeeOwed(p, g) {
+  if (_megaOwe.tick !== S.tick || _megaOwe.S !== S) {
+    _megaOwe = { tick: S.tick, S, by: null };
+    for (const b of S.buildings) {
+      if (b.dead || !S.players[b.owner]?.ai) continue;
+      // (and a rival's Mass Driver pair going up, or its Catcher kit loading, put first: aiMassDriver)
+      const owe = b.mOff && b.mNeed ? b.mNeed : mdEnd(b) && !b.built && b.sitePrio ? siteCost(b) : b.kitPrio && b.mdKit ? BDEFS.catcher.cost : null;
+      if (!owe) continue;
+      const by = (_megaOwe.by = _megaOwe.by || {}), o = (by[b.owner] = by[b.owner] || {});
+      for (const k in owe) o[k] = (o[k] || 0) + Math.max(0, owe[k] - (b.stock[k] || 0) - (b.inc[k] || 0));
+    }
+  }
+  return (_megaOwe.by && _megaOwe.by[p] && _megaOwe.by[p][g]) || 0;
+}
+
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
   if (BDEFS[b.type].tank) return b.built && !b.dead && isLiquid(g) && b.smode !== 'empty' && !(b.reject && b.reject[g]) && tankRoom(b) >= 1;
@@ -258,9 +282,6 @@ function needsOf(b) {
   } else if (def.lift && b.lfSend) {
     // An Orbital Lift's goods to send up: what the colony holds beyond each reserve, up to a climber's load (see liftWant).
     for (const g in b.lfSend) out.push([g, liftWant(b, g), true]);
-  } else if (def.mdriver && b.mdSend) {
-    // A Mass Driver's goods list: what the colony holds beyond each reserve, up to its hopper (see mdWant).
-    for (const g in b.mdSend) out.push([g, mdWant(b, g), true]);
   } else if (def.store && keepOf(b) && b.smode !== 'empty') {
     // A Depot's supply orders (a Rail Station's own stock too): keep this much of each good here (goods
     // already promised to someone don't count). What a far station stocks automatically comes by train
@@ -268,6 +289,13 @@ function needsOf(b) {
     const k = keepOf(b), bulk = ((def.station || def.mast || def.magterm) && farStation(b)) || b.type === 'depot';
     for (const g in k) out.push([g, k[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true, bulk && ((b.auto && b.auto[g]) || 0) > ((b.keep && b.keep[g]) || 0)]);
   }
+  // A Mass Driver end's goods to send (its list, or what it ships automatically): what the colony holds beyond each
+  // reserve, up to its hopper (see mdWant). Not at a far end: it ships what it holds.
+  if ((def.mdriver || def.catcher) && b.built && !b.mdFar) for (const g of mdSendGoods(b)) { const n = mdWant(b, g), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); }
+  // A Mass Driver with a Catcher kit to throw asks for the Catcher's cost, loaded into the kit (as urgently as a
+  // factory's inputs: a supply order is filled only from what storage holds beyond every other need, and a rival's
+  // Alloy and Chips never sit in storage).
+  if (def.mdriver && b.built && b.mdKit) for (const g in BDEFS.catcher.cost) { const n = BDEFS.catcher.cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n]); }
   // A Port where a Ferry is loading a kit to found a Port asks for it.
   if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
   // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
@@ -309,7 +337,7 @@ function supplyOf(b, g) {
   if (!b.built || b.dead) return 0;
   const def = BDEFS[b.type];
   if (def.terminal) return 0; // its goods leave only by train (terminalSpare), never for spending or by Hauler
-  if (def.mdriver && b.mdSend && b.mdSend[g] !== undefined) return 0; // (what a Mass Driver sends is for its canisters)
+  if ((def.mdriver || def.catcher) && (b.mdSend || b.mdAuto || b.mdKit)) return Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0) - mdHold(b, g)); // (what a Mass Driver end sends is for its canisters, and a Catcher kit's goods for the kit)
   if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0) - yardHeld(b, g);
   if (b.loot && b.loot[g]) return Math.max(0, Math.min(b.loot[g], b.stock[g] || 0) - (b.res[g] || 0)); // loot warbots left here
   return 0;
@@ -405,7 +433,7 @@ function feedStep(b, dt) {
     const need = BDEFS[c.type].tank ? goods.map((g) => [g, tankRoom(c)]) : needsOf(c);
     for (const g of goods) {
       const n = need.find((x) => x[0] === g);
-      if (!n || n[1] < 1 || feedSupply(b, g) < 1) continue;
+      if (!n || n[1] < 1 || feedSupply(b, g) < 1 || megaFeeOwed(b.owner, g) >= 1) continue; // (a seized megastructure's fee first)
       bump(b.stock, g, -1);
       bump(c.stock, g, 1);
       c.fedT = S.time;
@@ -444,7 +472,7 @@ function feedHaul(b, g, fed) {
 
 /** What of good g producer b keeps back from the Haulers for the factories it feeds by conveyor: what they still need of it. */
 function feedHold(b, g) {
-  if (b.paused || b.cut) return 0; // (its conveyors stand still)
+  if (b.paused || b.cut || megaFeeOwed(b.owner, g) >= 1) return 0; // (its conveyors stand still; or a seized megastructure's fee comes first)
   let n = 0;
   for (const { c, goods } of feedTargets(b)) {
     const inp = BDEFS[c.type].inp;
@@ -1945,6 +1973,8 @@ function moveDirect(u, x, y, dt, cap) {
 
 function dispatch(p) {
   railPlan(p);
+  mdPlan(p);
+  graderDispatch(p); // (Graders: Earthworks sites, and nothing else)
   const blds = [];
   const press = convoysPress(p);
   for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && (!shunned(b) || (press && BDEFS[b.type].terminal))) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about (but a Terminal whose convoys press on)
@@ -2005,10 +2035,12 @@ function dispatch(p) {
   const mine = S.buildings.filter((s) => !s.dead && s.owner === p); // (those in a rival gun's reach too: no flicker)
   const homePorts = cargoShips ? mine.filter((s) => s.built && BDEFS[s.type].port && onHomeG(s)) : [];
   const bySea = (b) => b.built && BDEFS[b.type].port && homePorts.some((h) => h !== b && seaLinked(h, b));
-  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s) || (BDEFS[s.type].mast && airLines().has(s.id)) || (BDEFS[s.type].magterm && magRunning(s)) || (BDEFS[s.type].catcher && mdFed(s))));
+  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s) || (BDEFS[s.type].mast && airLines().has(s.id)) || (BDEFS[s.type].magterm && magRunning(s)) || mdFed(s)));
   for (const b of blds) {
-    b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) && !(BDEFS[b.type].magterm && magPartner(b)) && !(BDEFS[b.type].catcher && mdFed(b)) &&
+    b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) && !(BDEFS[b.type].magterm && magPartner(b)) && !mdFed(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
+    // Earthworks no Hauler can reach: their Stone comes straight from storage instead, as it comes in (a Wall's way).
+    if (b.unlinked && b.tf && !b.built && !b.fromStore && !sumValues(b.inc)) { b.fromStore = true; b.unlinked = false; queuePlan('b', b.id, p); }
   }
   // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
   // Hauler a link of its chain that holds a round of what it works with takes even that one (lastLink), giving it back
@@ -2561,6 +2593,7 @@ function dispatch(p) {
       // Haulers and trucks leave it (and Workers don't ride across with a good each by hand).
       if (r.keep && !isLiquid(r.g) && BDEFS[r.b.type].mast && farStation(r.b) && airLines().has(r.b.id)) { r.n = 0; continue; }
       if (r.keep && !isLiquid(r.g) && BDEFS[r.b.type].magterm && farStation(r.b) && magRunning(r.b)) { r.n = 0; continue; } // (a far Maglev Terminal's by pod)
+      if (r.keep && r.b.mdFar && mdEnd(r.b) && mdFed(r.b)) { r.n = 0; continue; } // (a far Mass Driver end's by canister)
       // A building a far Rail Station serves: the train brings its goods, so trucks leave it alone while the
       // station is out of something that's on its way (or waiting at the home station), unless the
       // building has run dry with nothing coming. One a far Depot serves waits the same way for the Road
@@ -2698,10 +2731,12 @@ function dispatch(p) {
     }
     if (!any) break;
   }
-  // 4) Move finished goods from production buildings into storage.
+  // 4) Move finished goods from production buildings into storage. (Not from one carriers just turned back from on the
+  //    way to it: its wait, SHY_WAIT or longer, see SHY_ROAD; the pickups here never asked, so on Standard seed 25 a
+  //    Hauler was sent to a Mine every few seconds and each turned back from the same Scuttlers.)
   for (const b of blds) {
     const def = BDEFS[b.type];
-    if (!b.built || def.store || !def.out) continue;
+    if (!b.built || def.store || !def.out || !reachable(b)) continue;
     const sb = stationBeside(b), conv = sb && stationLinks(sb).some((l) => l.c === b) ? sb : null; // (a station's conveyor takes it)
     for (const g in def.out) {
       if (!idle.length) return;
@@ -3488,7 +3523,7 @@ function assignBuild(u, site, stands) {
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].earthwork ? tfApproach(u, site) : BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
 }
 
@@ -3767,6 +3802,7 @@ function updateWorker(u, dt) {
 function needsRoad(b) {
   if (b.mNeed) return true; // a seized megastructure needs its fee even if it takes no goods online
   const def = BDEFS[b.type];
+  if (def.earthwork && !sumValues(siteCost(b))) return false; // (Earthworks that only dig: nothing to bring)
   if (b.type === 'lander' || storeFunded(b)) return false; // Walls, Gates and Viaducts are paid from storage: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
@@ -3890,6 +3926,7 @@ function doHaul(u, t, dt) {
     }
     if (got < n) bump(dst.inc, t.good, got - n);
     t.n = got;
+    if (src.shyN) src.shyN = 0; // (a trip got there: see SHY_ROAD)
     bump(src.stock, t.good, -got);
     if (src.loot && src.loot[t.good]) { src.loot[t.good] = Math.max(0, src.loot[t.good] - got); if (!src.loot[t.good]) delete src.loot[t.good]; }
     u.carry = got > 0 ? t.good : null;
@@ -3906,6 +3943,7 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (dst.shyN) dst.shyN = 0; // (a trip got there: see SHY_ROAD)
   if (S.mission?.id === 'arterial' && u.owner === 0 && u.type === 'truck' && dst.id === S.mission.arterialDepot &&
     t.arterialTiles >= EXPRESS.minLen - 1) S.mission.arterialRuns++;
   if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
@@ -3931,7 +3969,7 @@ function doHaul(u, t, dt) {
  * its goods in and not finished (a site at 99% with everything delivered once never drew a builder: the last sliver
  * was under the margin).
  */
-function siteReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
+function siteReady(b) { if (BDEFS[b.type].earthwork) return false; /* (a Grader's, never a Worker's: tfReady) */ const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
 function siteFrac(site) { const total = sumValues(siteCost(site)); return total > 0 ? deliveredCount(site) / total : 1; }
 
 function deliveredCount(site) {
@@ -3954,6 +3992,7 @@ function doBuild(u, t, dt) {
   if (s.progress < cap) {
     s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s) * stormWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone or under a foe's Storm Front)
     u.busy = 1;
+    if (s.tf) graderWork(u, s);
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
     if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
   }
@@ -4019,7 +4058,9 @@ function completeBuilding(b) {
   const def = BDEFS[b.type];
   if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
+  if (def.earthwork) { completeEarthwork(b); return; }
   b.built = true;
+  delete b.kitT; // (a Catcher kit: assembled)
   if (def.ropeway && !b.link) ropewayAcross(b);
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
@@ -4067,6 +4108,275 @@ function completeRamp(b) {
   postMsg(b.owner, 'Ramp is complete: a road now climbs the cliff here.', b.x, b.y, 'good');
   if (isMe(b.owner)) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
+}
+
+/* ------------------------------------------------------------------ terraforming, stage 1 (TERRA) */
+
+/*
+ * Build → Terraform plans jobs, one per tile, as Earthworks sites (BDEFS.earthwork, b.tf: { k, to, n }): k 'up' or
+ * 'down' (to level `to`, n levels of earth moved: Raise, Lower, Flatten), 'fill' (water becomes ground at level `to`)
+ * or 'dig' (ground becomes water). Graders take them (graderDispatch) and do nothing else; Workers never build them
+ * (siteReady says no). Stone for Raise and Fill comes by Hauler where a road reaches, else from storage as it comes in
+ * (fromStore); dug earth comes out as crates of Stone on the spot. Done, the site goes and the ground stays changed
+ * (completeEarthwork): the areas, territory, the sea, the bake and the minimap follow (terrainChanged).
+ */
+const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig'];
+
+/** The job planned on tile t: in `plan` (a Map being put together), else an Earthworks site's, else null. */
+function tfJobAt(t, plan) {
+  if (plan && plan.has(t)) return plan.get(t);
+  const b = S.bAt[t] ? getE(S.bAt[t]) : null;
+  return b && !b.dead && !b.built && b.tf ? b.tf : null;
+}
+/** Tile t's ground level once the jobs planned are done, or null if it is (or will be) water, rock or a chasm. */
+function tfLevel(t, plan) {
+  const J = tfJobAt(t, plan);
+  if (J) return J.k === 'dig' ? null : J.to;
+  return S.terrain[t] === T_GROUND && !(S.ford && S.ford[t]) ? S.elev[t] : null;
+}
+/** Will tile t be open water (shallows or a ford count) once the jobs planned are done? */
+function tfWet(t, plan) {
+  const J = tfJobAt(t, plan);
+  if (J) return J.k === 'dig';
+  return S.terrain[t] === T_WATER && !(S.tidal && S.tidal[t]);
+}
+/**
+ * Was tile t dry land when the map was made? Ground the Graders changed says what it was before they first did (S.tfTiles:
+ * 1 dry, 2 water); a tidal flat counts as shore whatever the tide. (Fill shallows reaches TERRA.reach tiles from it.)
+ */
+function tfDry0(t) {
+  const was = S.tfTiles && S.tfTiles[t];
+  if (was) return was === 1;
+  return S.terrain[t] !== T_WATER || !!(S.tidal && S.tidal[t]);
+}
+/** Is water tile t within TERRA.reach tiles (8-way steps) of the shore as the map was made? */
+function tfInReach(t) {
+  const i = t % S.W, j = (t / S.W) | 0, R = TERRA.reach;
+  for (let y = Math.max(0, j - R); y <= Math.min(S.H - 1, j + R); y++) for (let x = Math.max(0, i - R); x <= Math.min(S.W - 1, i + R); x++) if (tfDry0(y * S.W + x)) return true;
+  return false;
+}
+function tfSides(t) {
+  const i = t % S.W, j = (t / S.W) | 0, out = [];
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) out.push(tIdx(i + di, j + dj));
+  return out;
+}
+
+/** Why `owner` can't work tile t at all ('' if it can): the land, what stands on it, whether a Grader could get beside it. */
+function tfWhere(owner, t, plan) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (!inMap(i, j)) return 'Outside the map.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds this ground: terraform your own land or no-one\'s.';
+  if (postAt(t) || calmAt(i + 0.5, j + 0.5)) return 'A Trade Post\'s ground: it stays as it is.';
+  if (uplinkAt(t)) return 'A neutral Uplink stands here.';
+  if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return lw; }
+  if (S.dam && damAt(t)) return 'The dam stands here.';
+  if (S.town && townRuinAt(t)) return 'A building of Passenger Town stands here.';
+  if (S.walker && walkerYard(i, j)) return 'The Walking Factory\'s yard: it walks here.';
+  const s = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (s && s.tf && !s.built && s.owner === owner) return 'Already planned here.';
+  if (s) return 'A building stands here.';
+  if (runwayAt(t)) return 'That\'s an Airfield\'s runway: keep it clear.';
+  if (S.road[t] || S.plan[t]) return 'A road runs here (a ramp too): take it up first.';
+  if ((S.rail && S.rail[t]) || (S.railPlan && S.railPlan[t])) return 'Railway track runs here.';
+  if ((S.pipe && S.pipe[t]) || (S.pipePlan && S.pipePlan[t])) return 'A pipe runs here.';
+  if (S.res[t]) return 'Resources lie here: gather them first.';
+  if (S.ramp[t]) return 'A slope: it stays as it is.';
+  if ((S.lava && S.lava[t]) || (S.fault && S.fault[t]) || (S.tidal && S.tidal[t])) return 'This ground can\'t be worked.';
+  if (S.terrain[t] === T_ROCK || S.terrain[t] === T_CHASM) return 'Rock and chasms can\'t be worked (a Quarry cuts rock).';
+  if (liftWreckAt(t)) return LIFT_WRECK_WHY;
+  if (S.wildlife) for (const e of S.buildings) if (!e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return 'Too close to a Murmur nest: clear it with warbots first.';
+  // A Grader works from beside the tile (or on it): somewhere its owner's robots can walk to, or ground being made
+  // there (a land bridge is filled out a tile at a time).
+  const zones = buildZones(owner);
+  if (![t, ...tfSides(t)].some((u) => (walkable(u) && zones.has(S.zone[u])) || (u !== t && tfJobAt(u, plan) && tfJobAt(u, plan).k !== 'dig'))) return 'Your robots can\'t get beside this tile yet.';
+  return '';
+}
+
+/**
+ * The job tool `tool` (TF_TOOLS) would plan on tile t for `owner` ({ k, to, n } with its cost, yield and time), or
+ * { why }. `target`: Flatten's level. `plan`: the jobs planned so far in the same plan (a Map; tiles in it count at
+ * their new level, so a land bridge or a canal can be dragged out tile by tile).
+ */
+function tfJob(owner, tool, t, target, plan) {
+  const where = tfWhere(owner, t, plan);
+  if (where) return { why: where };
+  const sides = tfSides(t);
+  let k, to;
+  if (tool === 'fill') {
+    if (!tfWet(t)) return { why: 'Fill shallows: only water beside land.' };
+    if (!tfInReach(t)) return { why: `Too far out to sea: fill reaches ${TERRA.reach} tiles from the original shore.` };
+    const lv = sides.map((u) => tfLevel(u, plan)).filter((v) => v !== null);
+    if (!lv.length) return { why: 'Too far out: shallows are water right beside land (fill out from the shore).' };
+    // Level with the ground it's built out from: new ground planned beside it (a land bridge keeps its level all the
+    // way out), else the shore its owner's robots stand on, else the lowest ground beside it.
+    const zones = buildZones(owner), lvOf = (us) => us.map((u) => tfLevel(u, plan)).filter((v) => v !== null);
+    const chain = lvOf(sides.filter((u) => tfJobAt(u, plan))), shore = lvOf(sides.filter((u) => walkable(u) && zones.has(S.zone[u])));
+    k = 'fill'; to = chain.length ? chain[0] : shore.length ? Math.min(...shore) : Math.min(...lv);
+  } else if (tool === 'dig') {
+    if (tfLevel(t) === null) return { why: 'Dig channel: only land beside water.' };
+    const wet = sides.filter((u) => tfWet(u, plan));
+    if (!wet.length) return { why: 'Dig channel: only land right beside water (dig in from the shore).' };
+    // The waterline: the lowest ground the water beside it touches (this tile aside).
+    let line = Infinity;
+    for (const w of wet) for (const u of tfSides(w)) { if (u === t) continue; const v = tfLevel(u, plan); if (v !== null) line = Math.min(line, v); }
+    if (line < Infinity && S.elev[t] > line) return { why: `Above the waterline: Lower it to level ${line} first.` };
+    k = 'dig'; to = S.elev[t];
+  } else {
+    if (tfLevel(t) === null) return { why: S.terrain[t] === T_WATER ? 'Water: Fill shallows first.' : 'Only open ground can be raised or lowered.' };
+    const e = S.elev[t];
+    to = tool === 'raise' ? e + 1 : tool === 'lower' ? e - 1 : Math.round(+target);
+    if (!Number.isInteger(to)) return { why: 'Pick a level.' };
+    if (to > TERRA.top) return { why: 'As high as the ground goes.' };
+    if (to < 0) return { why: 'As low as the ground goes.' };
+    if (to === e) return { why: 'Already at that level.', same: true };
+    // No cliff steeper than a level (or than it already was): every step stays one a Ramp can climb.
+    for (const u of sides) {
+      const v = tfLevel(u, plan);
+      if (v === null || S.terrain[u] !== T_GROUND) continue;
+      if (Math.abs(to - v) > Math.max(1, Math.abs(e - S.elev[u]))) return { why: 'Too steep: the ground beside it would be more than a level away (work round it first).' };
+    }
+    k = to > e ? 'up' : 'down';
+  }
+  const n = k === 'up' || k === 'down' ? Math.abs(to - S.elev[t]) : 1;
+  const cost = k === 'up' ? { stone: TERRA.stone * n } : k === 'fill' ? { stone: TERRA.fill } : {};
+  const yieldN = k === 'down' ? TERRA.dug * n : k === 'dig' ? TERRA.dig : 0;
+  const time = k === 'fill' ? TERRA.fillTime : k === 'dig' ? TERRA.digTime : TERRA.time * n;
+  return { k, to, n, cost, yieldN, time };
+}
+
+/**
+ * Plan Terraform jobs for `owner` (ORDERS.terraform): `list` of tiles, all with tool `tool` (Flatten: to `target`),
+ * in the order dragged. Each that can be done becomes an Earthworks site. { placed, why, stone, yieldN, graders }.
+ */
+function tfPlace(owner, tool, list, target) {
+  const out = { placed: 0, why: '', stone: 0, yieldN: 0, graders: 0 };
+  if (!TF_TOOLS.includes(tool) || !Array.isArray(list)) { out.why = 'Unknown tool.'; return out; }
+  const plan = new Map(), N = S.W * S.H;
+  for (const t of list.slice(0, TERRA.most)) {
+    if (!Number.isInteger(t) || t < 0 || t >= N || plan.has(t)) continue;
+    const J = tfJob(owner, tool, t, target, plan);
+    if (J.why) { if (!out.why && !J.same) out.why = J.why; continue; } // (a Flatten's tiles already at its level: nothing to do)
+    plan.set(t, J);
+  }
+  for (const [t, J] of plan) {
+    const b = addBuilding(owner, 'earthwork', t % S.W, (t / S.W) | 0, false);
+    b.tf = { k: J.k, to: J.to, n: J.n };
+    b.cost = J.cost; b.buildTime = J.time;
+    // (Out on the water no Hauler can come: the Stone for filling is paid from storage as it comes in.)
+    if (J.k === 'fill') { b.fromStore = true; queuePlan('b', b.id, owner); }
+    markDirty(t % S.W, (t / S.W) | 0);
+    out.placed++; out.stone += J.cost.stone || 0; out.yieldN += J.yieldN;
+  }
+  if (out.placed) settlePlans();
+  out.graders = S.bots.filter((u) => !u.dead && u.owner === owner && BOTS[u.type].grader).length;
+  return out;
+}
+
+/** Can a Grader start (or go on with) Earthworks site b now: its Stone in as far as the work has got? (siteReady for Workers.) */
+function tfReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
+
+/** The Grader building site b, if one is (on its way or at work). */
+function tfGrader(b) {
+  const u = b.builder ? getE(b.builder) : null;
+  return u && !u.dead && u.task && u.task.type === 'build' && u.task.site === b.id ? u : null;
+}
+
+/** Where Grader u stands to work site b: a free tile beside it (or the tile itself) it can walk to, nearest first; -1 if none. */
+function tfApproach(u, b) {
+  const t = tIdx(b.x, b.y), z = u.inside ? S.zone[tIdx(getE(u.inside)?.x ?? Math.floor(u.x), getE(u.inside)?.y ?? Math.floor(u.y))] : botZone(u);
+  let best = -1, bd = Infinity;
+  for (const c of tfSides(t)) {
+    if (!walkable(c) || S.terrain[c] !== T_GROUND || (S.bAt[c] && !passTile(c, u.owner)) || S.zone[c] !== z) continue;
+    const d = dist2((c % S.W) + 0.5, ((c / S.W) | 0) + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+
+/** Player p's free Graders take the Earthworks sites waiting for one, the nearest first (from dispatch). */
+function graderDispatch(p) {
+  let sites = null;
+  const P = S.players[p];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !BOTS[u.type].grader || !isIdleWorker(u) || recycling(u)) continue;
+    if (!sites) {
+      sites = S.buildings.filter((b) => !b.dead && b.owner === p && !b.built && b.tf && !tfGrader(b) && tfReady(b) && !(b.tfNo > S.time) && !(P.danger && dangerAt(p, b.x, b.y)));
+      if (!sites.length) return;
+    }
+    let best = null, bd = Infinity;
+    for (const b of sites) {
+      if (b.builder && tfGrader(b)) continue;
+      const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+      if (d >= bd) continue;
+      if (tfApproach(u, b) >= 0) { bd = d; best = b; } else b.tfNoAt = S.time; // (no free ground beside it on this Grader's side)
+    }
+    if (!best) continue;
+    assignBuild(u, best);
+    if (!(u.task && u.task.type === 'build')) { best.tfNo = S.time + 20; best.tfNoAt = S.time; } // (no way there now: try again in a while)
+  }
+}
+
+/** A Grader at work on site s (doBuild): it faces the tile and throws up dust now and then. */
+function graderWork(u, s) {
+  u.face = datan2(s.y + 0.5 - u.y, s.x + 0.5 - u.x);
+  if (S.tick % 40 === u.id % 40) addFx('dustcloud', s.x + 0.5, s.y + 0.5, { r: 0.6 });
+}
+
+/** What an Earthworks site shows on its panel. */
+function tfStatus(b) {
+  const g = tfGrader(b), owed = storeFunded(b) ? stillOwed(b) : null;
+  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging' }[b.tf.k];
+  if (g && g.task.phase !== 'go') return `${verb}: ${Math.floor(b.progress * 100)}%`;
+  if (owed && Object.keys(owed).length && !tfReady(b)) return `Waiting for ${costText(owed)} from storage`;
+  if (b.unlinked && !tfReady(b)) return 'No road to storage yet';
+  if (!tfReady(b)) return 'Waiting for Stone';
+  if (g) return 'A Grader is on its way';
+  if (!S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].grader)) return 'Waiting for a Grader: order one at the Bot Foundry';
+  return b.tfNoAt > S.time - 45 ? 'No Grader can get beside it: it needs free ground beside it that your robots can reach' : 'Waiting for a Grader';
+}
+
+/** Ramp tile r still leads somewhere: ground a level up or down beside it. */
+function tfRampHolds(r) { return tfSides(r).some((u) => S.terrain[u] === T_GROUND && Math.abs(S.elev[u] - S.elev[r]) === 1); }
+
+/** An Earthworks site is done: the ground changes for good and the site goes. */
+function completeEarthwork(b) {
+  const t = tIdx(b.x, b.y), J = b.tf, P = S.players[b.owner], g = tfGrader(b);
+  const gt = g ? tIdx(Math.floor(g.x), Math.floor(g.y)) : -1;
+  releaseBotsFrom(b, false);
+  b.dead = true; b.gone = 1; // (finished, not lost: see noteGone)
+  S.byId.delete(b.id);
+  S.bAt[t] = 0;
+  S.tfTiles = S.tfTiles || {};
+  if (!S.tfTiles[t]) S.tfTiles[t] = J.k === 'fill' ? 2 : 1; // (what it was before the Graders first changed it: see tfDry0)
+  if (J.k === 'fill') { S.terrain[t] = T_GROUND; if (S.ford) S.ford[t] = 0; S.elev[t] = J.to; S.res[t] = R_NONE; S.amt[t] = 0; }
+  else if (J.k === 'dig') { S.terrain[t] = T_WATER; S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
+  else S.elev[t] = J.to;
+  if (S.decor) S.decor[t] = 0;
+  // No ramp left leading nowhere.
+  for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = S.tfTiles[u] || 1; }
+  // Dug earth: crates of Stone beside the tile.
+  const yieldN = J.k === 'down' ? TERRA.dug * J.n : J.k === 'dig' ? TERRA.dig : 0;
+  if (yieldN) {
+    // (Where its Grader stands: a lowered tile on its own is a pit no one could walk into.)
+    let at = gt >= 0 && gt !== t && S.terrain[gt] === T_GROUND ? gt : J.k === 'down' ? t : -1;
+    if (at < 0) { const dry = tfSides(t).filter((u) => S.terrain[u] === T_GROUND && !S.bAt[u]); at = dry.length ? dry[0] : -1; }
+    if (at >= 0) addLoot(at % S.W, (at / S.W) | 0, { stone: yieldN }, false, b.owner);
+  }
+  if (P) { const k = 'tf' + J.k; P.stats[k] = (P.stats[k] || 0) + (J.k === 'up' || J.k === 'down' ? J.n : 1); }
+  for (let y = b.y - 2; y <= b.y + 2; y++) for (let x = b.x - 2; x <= b.x + 2; x++) if (inMap(x, y)) markDirty(x, y);
+  terrainChanged();
+  // Nobody is left inside raised ground or under new water: robots on it step off (ships to open water), and routes
+  // over it are worked out again.
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air) continue;
+    const at = tIdx(Math.floor(u.x), Math.floor(u.y)), sea = !!BOTS[u.type].sea;
+    if (at === t) {
+      const to = nearestTile(t, sea ? (v) => v !== t && S.terrain[v] === T_WATER : (v) => v !== t && walkable(v) && !S.bAt[v] && S.terrain[v] !== T_WATER);
+      if (to >= 0) moveOff(u, to, 0); else dropPath(u);
+    } else if (u.path && u.path.slice(u.pi).includes(t)) dropPath(u);
+  }
+  addFx('dustcloud', b.x + 0.5, b.y + 0.5, { r: 1.1 });
+  if (!S.buildings.some((e) => !e.dead && e.owner === b.owner && e.tf && !e.built)) postMsg(b.owner, 'Terraforming done: the Graders have finished every job.', b.x, b.y, 'good');
 }
 
 /** The nearest rock face (see rockFace) a Quarry's worker can cut Stone from, in its owner's or no-one's land. */
@@ -4575,6 +4885,14 @@ function updateBuilding(b, dt) {
   b.working = false;
   if (def.burrow) return; // (a Murmur tunnel exit: see murmurTick)
   if (def.wild) { updateNest(b); return; }
+  if (!b.built && b.kitT) {
+    // A Catcher kit assembling itself where it came down (mdKitLand): no Worker needed.
+    b.progress = Math.min(1, b.progress + dt / MASSDRIVER.kitBuild);
+    b.status = `Assembling itself: ${Math.floor(b.progress * 100)}%`;
+    if (b.progress >= 1) completeBuilding(b);
+    return;
+  }
+  if (!b.built && def.earthwork) { b.status = tfStatus(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
     if (owed && Object.keys(owed).length && !(b.builder && siteReady(b))) b.status = `Waiting for ${costText(owed)} from storage`;
@@ -4714,7 +5032,7 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
@@ -6334,7 +6652,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
 }
 
 function hitBuilding(b, dmg, by, src) {
-  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Wreck it can still deal damage)
+  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Demolish it can still deal damage)
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   if (src && isNestB(b)) nestAlarm(b, src); // (a Murmur nest shot at from out of its guards' reach: they come for the shooter)
   dmg = keepShield(b, dmg);
@@ -6611,6 +6929,20 @@ const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's g
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
 const SAFE_POCKET = 4;   // a goods carrier caught in a gun's reach may cross this many tiles of it to get out (safeRoute)
 const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried again (noSafeRoute)
+/*
+ * A building whose carriers keep turning back from the Murmur on the way to it (the owner, Nov 26 2026: on Standard
+ * seed 25 Haulers turned back 102 times from Scuttlers roaming 6 to 11 tiles off one Mine's road, each turn-back
+ * putting the Mine on SHY_WAIT, and the next Hauler sent turned back the same way): each turn-back that comes once the
+ * last wait is over (b.shyN, b.shyAt) doubles the wait before another is sent, SHY_ROAD.wait s to SHY_ROAD.max, and a
+ * trip that gets there (a pickup or a delivery) starts it again. From SHY_ROAD.show turn-backs in a row, for
+ * SHY_ROAD.keep s after the last, its panel says why ("Haulers turning back: Murmur near the road": murmurShy), and a
+ * rival sends a few warbots to clear the road (aiRoadGuard).
+ */
+const SHY_ROAD = { wait: 5, max: 40, show: 2, keep: 60 }; // (not for storage, which carriers reach by every road)
+/** Do carriers keep turning back from the Murmur on their way to building b (see SHY_ROAD)? */
+function murmurShy(b) { return !!b && b.shyN >= SHY_ROAD.show && S.time - (b.shyAt ?? -999) < SHY_ROAD.keep; }
+/** How long building b waits before another carrier is sent after its last turn-back from the Murmur (s). */
+function shyRoadWait(n) { return Math.min(SHY_ROAD.max, SHY_ROAD.wait * 2 ** Math.max(0, n - 1)); }
 const SAFE_FREE = new Set(['flee', 'cover', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
 
 /*
@@ -6948,7 +7280,17 @@ function takeCover(u, caught) {
   if (!caught && t) {
     const id = t.type === 'haul' ? (t.phase === 'toSrc' ? t.src : t.dst) : t.type === 'build' ? t.site : t.type === 'staff' || t.type === 'fix' ? t.bld : 0;
     const b = id ? getE(id) : null;
-    if (b && b.owner === u.owner) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + SHY_WAIT);
+    if (b && b.owner === u.owner) {
+      let wait = SHY_WAIT;
+      if (u.shyOf === 'wild' && !BDEFS[b.type].store) { // (not storage: carriers come and go to it by every road)
+        // (another turn-back in a row once the last wait is over: a longer one; several carriers turning back from
+        // the same creatures at once count once)
+        if (!(b.unreachUntil > S.time)) { b.shyN = (b.shyN || 0) + 1; b.shyAt = S.time; }
+        wait = Math.max(wait, shyRoadWait(b.shyN || 1));
+        if (foe) { b.shyX = Math.floor(foe.x); b.shyY = Math.floor(foe.y); }
+      }
+      b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + wait);
+    }
   }
   if (t && t.type === 'haul' && t.phase !== 'toSrc' && u.carry) {
     // A load aboard: it keeps it (for the storage it shelters at), and the drop-off stops waiting for it.
@@ -7146,6 +7488,7 @@ function doCrate(u, t, dt) {
 
 /** Crates of `goods` on tile (x, y). `keep`: they never rot (the Hollow's side chambers: robot parts laid out in rows). */
 function addLoot(x, y, goods, keep, dismantled) {
+  if (inMap(x, y) && voidTile(tIdx(x, y))) return; // (crates that fall into the void of The Ring are gone: nothing can reach them)
   S.loot = S.loot || [];
   const pile = S.loot.find((l) => l.x === x && l.y === y);
   if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); if (dismantled !== undefined) pile.dismantled = dismantled; return; }
@@ -10171,11 +10514,8 @@ function updateMissiles(dt) {
       continue;
     }
     if (m.nuke) {
+      // (its countdown in the Silo, the launch at NUKE_LAUNCH s to go, the climb, its smoke and the fall are all drawn: drawNukeFlight)
       if (!m.roar && m.dur - m.t <= MISSILE_WARN * 1.6) { m.roar = true; sfx('nukefall', m.x1, m.y1); }
-      if (S.tick % 3 === 0) {
-        const k = Math.min(1, m.t / m.dur);
-        addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
-      }
       if (m.t >= m.dur) nukeImpact(m);
       continue;
     }
@@ -10316,9 +10656,9 @@ function fireNukeAt(silo, i, j) {
     x0: silo.x + 0.5, y0: silo.y + 0.5, x1: i + 0.5, y1: j + 0.5,
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#9dff3a', r: 2, life: 1.2 });
-  sfx('launch');
+  sfx('klaxon'); // (the launch itself comes NUKE_LAUNCH s before impact: drawNukeFlight)
   if (!isMe(silo.owner) && !S.players[ME].absent) sfx('siren');
-  postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
+  postMsg(silo.owner, `Launch sequence started: liftoff in ${NUKE.flight - NUKE_LAUNCH} seconds, impact in ${NUKE.flight}.`, i, j, 'good');
   // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
   if (!isMe(silo.owner)) {
     const atUs = nukesThreatening(ME).includes(S.missiles[S.missiles.length - 1]), L = getE(S.players[ME].lander);
@@ -11416,7 +11756,7 @@ function undoSite(b) {
 
 /** Settings a building keeps when it moves. */
 const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply', 'yard', 'yardParts',
-  'partsBy', 'yardT', 'reload', 'armed', 'mdTo', 'mdSend', 'mdSent']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
+  'partsBy', 'yardT', 'reload', 'armed', 'mdTo', 'mdSend', 'mdSent', 'mdGot']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -12005,7 +12345,7 @@ function damStands(d) {
 function damOrder(p, k, what, on) {
   const d = damByK(k);
   if (!d) return 'No dam there.';
-  if (what !== 'wreck' && what !== 'mend') return 'Wreck it or shore it up.';
+  if (what !== 'wreck' && what !== 'mend') return 'Demolish it or shore it up.';
   if (on && d.broke >= 0) return 'This dam has already burst.';
   const bit = 1 << p;
   if (what === 'wreck') { if (on) { d.by |= bit; d.mend &= ~bit; } else d.by &= ~bit; }
@@ -12286,11 +12626,12 @@ function updateEvents() {
   const rng = makeRng(((S.seed ^ 0x51ed27) + S.evN * 7919) >>> 0);
   const recent = S.recentEvents || [];
   // (The Hollow: no dust storm or solar flare reaches underground, so Ringfall and the Wren take turns.)
-  const all = S.hollow ? EVENT_ORDER.filter((k) => k !== 'dust' && k !== 'flare') : EVENT_ORDER;
+  // (The Ring: no air, so no dust storm; Ringfall, solar flares and the Wren all reach it.)
+  const all = S.hollow ? EVENT_ORDER.filter((k) => k !== 'dust' && k !== 'flare') : ringShape() ? EVENT_ORDER.filter((k) => k !== 'dust') : EVENT_ORDER;
   let pool = all.filter((k) => !recent.includes(k)); // never one of the last two again
   if (!pool.length) pool = all.filter((k) => k !== recent[recent.length - 1]);
   // (Endless dust storm, a challenge modifier: a dust storm, and it never ends, so no other event comes)
-  const endless = modOn('dust'), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
+  const endless = modOn('dust') && !ringShape(), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
   const t0 = S.time + (def.warn ? EVENT_WARN : 0), dur = def.dur[0] + rng() * (def.dur[1] - def.dur[0]);
   S.event = { type, t0, t1: endless ? DUST_ENDLESS : t0 + dur, n: S.evN };
   if (endless) S.event.endless = 1;
@@ -16047,7 +16388,7 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
   for (let k = 1; k < n; k++) {
     const u = tIdx(ai + di * k, aj + dj * k);
     if (S.terrain[u] === T_GROUND || S.terrain[u] === T_ROCK) { if (S.elev[u] >= low) return 'The ground between has to be lower than both ends: a Viaduct spans a valley.'; dip = true; }
-    else if (bridgeable(u)) dip = true;
+    else if (bridgeable(u) || S.terrain[u] === T_CHASM) dip = true; // (the void of The Ring is spanned by a Viaduct, though no road crosses it)
   }
   if (!dip) return 'There is no valley here to span.';
   return '';
@@ -20566,8 +20907,10 @@ function hashState() {
     if (b.keepStaff) int(-77); // (Keep staffed: ORDERS.keepStaff)
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
+    if (b.shyN) { int(b.shyN); num(b.shyAt); num(b.unreachUntil || 0); } // (carriers turning back from the Murmur: SHY_ROAD)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
+    if (b.tf) { str(b.tf.k); int(b.tf.to); } // (an Earthworks site's job: TERRA)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   // Army Groups: each, its order and its flag.
@@ -20589,6 +20932,7 @@ function hashState() {
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  for (const k in S.tfTiles || {}) { const t = +k; int(t); int(S.terrain[t]); int(S.elev[t]); int(S.ramp[t]); } // (the ground Graders changed: TERRA)
   for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
   for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
   for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)
@@ -20642,9 +20986,9 @@ function hashState() {
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier || b.deepLast) { int(b.id); int(b.deepSurgeTier || 0); num(b.deepSurgeAt || 0); int(b.deepLast || 0); }
     if (b.crater) { int(b.id); int(b.nest || 0); } // (a Harrow's crater, a tunnel exit)
-    if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
+    if (BDEFS[b.type].mdriver || BDEFS[b.type].catcher) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); int(b.mdAt || 0); int(b.mdNext || 0); int(b.mdFar || 0); obj(b.auto); for (const k in b.mdAuto || {}) { str(k); obj(b.mdAuto[k]); } if (b.mdKit) { int(b.mdKit[0]); int(b.mdKit[1]); } if (b.kitT || b.claim) { int(b.kitT || 0); int(b.claim || 0); } } // (Mass Driver ends, a Catcher kit to throw or assembling)
   }
-  for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
+  for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); if (m.kit) { int(m.from); num(m.x1); num(m.y1); } } // (their canisters in flight)
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
@@ -20677,7 +21021,7 @@ function hashState() {
     for (const z of D.spots) { int(z.t); int(z.u); int(z.r); num(z.at); }
     if (D.fall) { num(D.fall.at); int(D.fall.r); int(D.fall.amt); for (const [a, b] of D.fall.tiles) { int(a); int(b); } }
   }
-  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); int(H.falls || 0); } // (Horde's waves)
+  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); int(H.falls || 0); if (H.over) for (const t in H.over) int(H.over[t]); } // (Horde's waves)
   if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
@@ -20685,171 +21029,512 @@ function hashState() {
 /* ------------------------------------------------------------------ the Mass Driver */
 
 /**
- * The Mass Driver and its Catcher (MASSDRIVER; BDEFS.mdriver, BDEFS.catcher). The Driver (b.mdTo: its Catcher's id;
- * b.mdSend: {good: the reserve kept at home}, up to MASSDRIVER.goods of them) loads canisters from its stock of the
- * goods it sends, charges its coils (b.mdFire: the time it fires), and throws them (S.cans) in an arc to its Catcher.
- * Haulers keep it stocked from what the colony holds beyond each reserve (needsOf, mdWant); buildings touching it hand
- * over their output by conveyor, and a Catcher's conveyor feeds the buildings touching it (mdConveyor). It fires only
- * with power (a Generator in reach: magPowered). Flak can burst a canister (canHit), and one with no Catcher at the end
- * lands anyway: either way its goods fall as crates (addLoot).
+ * The Mass Driver and its Catcher (MASSDRIVER; BDEFS.mdriver, BDEFS.catcher). A Driver (b.mdTo: its Catcher's id, or an
+ * Outpost's or Keep's) and its Catcher are one line, and either end fires to the other: each loads canisters, charges
+ * its coils (b.mdFire: the time it fires, b.mdAt: at which end) and throws them (S.cans) in an arc. mdPlan works out,
+ * every 2 s, which end is the far one (b.mdFar), what it keeps for the buildings round it (b.auto) and what each end
+ * ships to each partner (b.mdAuto); a goods list (b.mdSend: {good: the reserve kept at home}) overrides that. Haulers
+ * keep the near end stocked from what the colony holds beyond each reserve (needsOf, mdWant); buildings touching an
+ * end hand over their output by conveyor and are fed from it (mdConveyor). An end fires only with power (a Generator
+ * in reach: magPowered). Flak can burst a canister (canHit), and one with no end to land in lands anyway: either way
+ * its goods fall as crates (addLoot).
  */
 
-/** Driver b's Catcher, if it is still there, finished and b's owner's; else null. */
+/** Is b a Mass Driver or a Catcher (an end of a Mass Driver line, which fires and catches)? */
+function mdEnd(b) { const d = b && BDEFS[b.type]; return !!(d && (d.mdriver || d.catcher)); }
+
+/** Is a building of type t one a Mass Driver can keep supplied, one way (an Outpost, a Keep)? */
+function mdFortType(t) { return MASSDRIVER.forts.includes(t); }
+
+/** Driver b's far end (its Catcher, or the Outpost or Keep it supplies), if it is still there, finished and b's owner's; else null. */
 function mdCatcher(b) {
   const c = b && b.mdTo ? getE(b.mdTo) : null;
-  return c && !c.dead && c.built && c.owner === b.owner && BDEFS[c.type].catcher ? c : null;
+  return c && !c.dead && c.built && c.owner === b.owner && !c.mDown && (BDEFS[c.type].catcher || mdFortType(c.type)) ? c : null;
 }
 
-/** Is a built Mass Driver of Catcher c's owner aimed at it (its goods come by canister)? */
-function mdFed(c) { return S.buildings.some((d) => !d.dead && d.built && d.owner === c.owner && d.mdTo === c.id && BDEFS[d.type].mdriver); }
+/** The Drivers aimed at Catcher c that it takes: the first MASSDRIVER.drivers built ones of its owner's. */
+function mdDriversOf(c) {
+  return S.buildings.filter((d) => !d.dead && d.built && d.owner === c.owner && d.mdTo === c.id && BDEFS[d.type].mdriver).slice(0, MASSDRIVER.drivers);
+}
 
-/** Can player `owner`'s Mass Driver b aim at Catcher c? '' if so, otherwise why not. */
+/** The ends end b fires to: a Driver's Catcher (or fort); a Catcher's built Drivers aimed at it (MASSDRIVER.drivers at most). */
+function mdPartners(b) {
+  if (!b || b.dead || !b.built) return [];
+  const def = BDEFS[b.type];
+  if (def.mdriver) { const c = mdCatcher(b); return c && (!BDEFS[c.type].catcher || mdDriversOf(c).includes(b)) ? [c] : []; }
+  if (def.catcher) return mdDriversOf(b);
+  return [];
+}
+
+/** Could a robot walk from end b to end c (the same walking area: no water, chasm or cliff between them but what a road, bridge or ramp crosses)? Then the line is a shortcut over land. */
+function mdOverland(b, c) { const z = walkZones(), zb = z[tIdx(b.x, b.y)]; return zb >= 0 && zb === z[tIdx(c.x, c.y)]; }
+
+/** Seconds between shots from end b to end c: MASSDRIVER.reloadLand over land (mdOverland), else MASSDRIVER.reload. */
+function mdReload(b, c) { return c && mdOverland(b, c) ? MASSDRIVER.reloadLand : MASSDRIVER.reload; }
+
+/** Is end b on a working line (its goods come and go by canister)? */
+function mdFed(b) { return mdEnd(b) && mdPartners(b).length > 0; }
+
+/** Is end b the far end of its line: is a partner nearer the Command Base? (A Driver aimed at a fort never is.) */
+function mdIsFar(b, ps) {
+  const L = getE(S.players[b.owner] && S.players[b.owner].lander);
+  ps = ps || mdPartners(b);
+  if (!ps.length || !L || L.dead) return false;
+  if (BDEFS[b.type].mdriver && mdFortType(ps[0].type)) return false;
+  const d = dist2(b.x, b.y, L.x, L.y);
+  return ps.some((o) => { const e = dist2(o.x, o.y, L.x, L.y); return e < d || (e === d && !!BDEFS[b.type].catcher); });
+}
+
+/** Good g in flight to building o. */
+function mdFlying(o, g) {
+  let n = 0;
+  for (const m of S.cans || []) if (m.to === o.id && !m.gone) n += m.goods[g] || 0;
+  return n;
+}
+
+/** What end or fort o lacks, by canister ({good: n}): a fort's needs; an end's keep (b.auto, its supply orders), less what is on the way. */
+function mdLack(o) {
+  const out = {};
+  if (mdFortType(o.type)) { for (const [g, n] of needsOf(o)) if (n >= 1 && g !== 'crude') out[g] = (out[g] || 0) + n; }
+  else {
+    const k = keepOf(o);
+    if (k) for (const g in k) if (g !== 'crude') out[g] = k[g] - ((o.stock[g] || 0) - (o.res[g] || 0)) - (o.inc[g] || 0);
+  }
+  for (const g in out) { out[g] = Math.floor(out[g] - mdFlying(o, g)); if (out[g] < 1) delete out[g]; }
+  return out;
+}
+
+/** Does end o send good g to end b (its goods list, or what it ships automatically)? */
+function mdSends(o, b, g) { return o.mdSend ? o.mdSend[g] !== undefined : !!(o.mdAuto && o.mdAuto[b.id] && o.mdAuto[b.id][g] !== undefined); }
+
+/** How much of good g end b ships automatically, to all its partners. */
+function mdAutoN(b, g) {
+  let n = 0;
+  if (b.mdAuto) for (const k in b.mdAuto) n += b.mdAuto[k][g] || 0;
+  return n;
+}
+
+/** The goods end b sends: its goods list, or what it ships automatically. */
+function mdSendGoods(b) {
+  if (b.mdSend) return Object.keys(b.mdSend);
+  const out = [];
+  if (b.mdAuto) for (const k in b.mdAuto) for (const g in b.mdAuto[k]) if (!out.includes(g)) out.push(g);
+  return out;
+}
+
+/**
+ * Plan player p's Mass Driver lines (every 2 s): which end of each is the far one (b.mdFar), what the far end keeps for
+ * the buildings round it (b.auto: as a far Rail Station's, see railPlan) and what each end ships to each partner
+ * (b.mdAuto): what the partner lacks, and from a far end what it can spare (spareForHome) going home. An end with a
+ * goods list ships that instead; a fort gets only its own needs.
+ */
+function mdPlan(p) {
+  const P = S.players[p];
+  const ends = S.buildings.filter((b) => !b.dead && b.owner === p && b.built && mdEnd(b));
+  if (!ends.length) return;
+  if (P.mdT !== undefined && S.time - P.mdT < 2 && S.time >= P.mdT) return;
+  P.mdT = S.time;
+  const hub = getE(P.lander);
+  const fars = [];
+  for (const b of ends) { b.auto = null; b.mdFar = mdIsFar(b) ? 1 : 0; if (b.mdFar) fars.push(b); }
+  if (fars.length && hub && !hub.dead && hub.owner === p) {
+    // Each building goes to the nearest far end that can serve it (see railPlan).
+    const blds = S.buildings.filter((c) => !c.dead && c.owner === p && !BDEFS[c.type].store && !BDEFS[c.type].barrier && !storeFunded(c));
+    const by = new Map();
+    for (const c of blds) {
+      let best = null, bd = Infinity;
+      const toHub = dist(c.x, c.y, hub.x, hub.y);
+      for (const s of fars) {
+        const d = dist(c.x, c.y, s.x, s.y);
+        if (d > STATION_REACH || d > toHub - STATION_NEARER || d >= bd) continue;
+        if (!touching(c).includes(s) && !roadLinked(c, s) && !footNear(c, s)) continue;
+        best = s; bd = d;
+      }
+      if (best) by.set(c, best);
+    }
+    for (const s of fars) {
+      const mine = blds.filter((c) => by.get(c) === s), want = {}, made = new Set();
+      for (const c of mine) if (c.built && BDEFS[c.type].out) for (const g in BDEFS[c.type].out) made.add(g);
+      for (const c of mine) for (const [g, n] of needsOf(c)) {
+        if (g === 'crude' || made.has(g)) continue; // (Fuel flies in sealed drums; Crude doesn't fly)
+        const full = Math.max(0, n) + (c.built ? (c.stock[g] || 0) + (c.inc[g] || 0) : 0);
+        want[g] = (want[g] || 0) + (c.built ? 2 * full : Math.max(0, (siteCost(c)[g] || 0) - (c.stock[g] || 0)));
+      }
+      for (const g in want) { want[g] = Math.min(RAIL_AUTO_MAX, Math.ceil(want[g])); if (want[g] < 1 || !storeTakes(s, g)) delete want[g]; }
+      if (Object.keys(want).length) s.auto = want;
+    }
+  }
+  // What each end ships to each partner.
+  for (const b of ends) {
+    b.mdAuto = null;
+    const ps = mdPartners(b);
+    if (!ps.length || (b.mdSend && !mdFortType(ps[0].type))) continue; // (its goods list instead; a fort gets only what it needs)
+    const plan = {};
+    for (const o of ps) {
+      const want = mdLack(o);
+      if (b.mdFar && o === ps[0] && !o.mdFar && !mdFortType(o.type)) {
+        // The far end's spare goods go home, to its first Driver: not what that end sends here, nor what it wants already.
+        const spare = spareForHome(b, o, 999, false, false);
+        for (const g in spare) if (!mdSends(o, b, g)) want[g] = (want[g] || 0) + spare[g];
+      }
+      if (Object.keys(want).length) plan[o.id] = want;
+    }
+    if (Object.keys(plan).length) b.mdAuto = plan;
+  }
+}
+
+/** Can player `owner`'s Mass Driver b aim at Catcher (or fort) c? '' if so, otherwise why not. */
 function mdAimWhy(owner, b, c) {
   const M = MASSDRIVER;
   if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
   if (!b.built) return 'That Mass Driver is still going up.';
-  if (!c || c.dead || !BDEFS[c.type].catcher) return 'Tap one of your Catchers.';
-  if (c.owner !== owner) return 'That Catcher isn\'t yours: tap one of your own.';
+  if (!c || c.dead || !(BDEFS[c.type].catcher || mdFortType(c.type))) return 'Tap one of your Catchers, or an Outpost or Keep to keep supplied.';
+  if (c.owner !== owner) return `That ${BDEFS[c.type].name} isn't yours: tap one of your own.`;
   const d = dist(b.x, b.y, c.x, c.y);
-  if (d < M.min) return `Too close: that Catcher is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
-  if (d > M.max) return `Too far: that Catcher is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d < M.min) return `Too close: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d > M.max) return `Too far: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (BDEFS[c.type].catcher && S.buildings.filter((o) => o !== b && !o.dead && o.owner === owner && o.mdTo === c.id && BDEFS[o.type].mdriver).length >= M.drivers) {
+    return `That Catcher already takes ${M.drivers} Mass Drivers, the most one can: aim at another Catcher, or build one.`;
+  }
   return '';
 }
 
-/** Aim Mass Driver b at Catcher c (null: stand down). '' or why not. */
+/** Aim Mass Driver b at Catcher (or fort) c (null: stand down). '' or why not. */
 function setMdAim(owner, b, c) {
   if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
   if (c) { const why = mdAimWhy(owner, b, c); if (why) return why; }
   b.mdTo = c ? c.id : 0;
   b.mdLast = S.time; // (a part load waits MASSDRIVER.partWait from here)
   if (!c) b.mdFire = 0;
+  S.players[owner].mdT = undefined; // (plan the lines again now)
   return '';
 }
 
-/** Send good g from Mass Driver b (on), or stop sending it. '' or why not. */
+/** Is tile t ground a Catcher kit can come down on for `owner` (open, empty, no one else's, no Trade Post's, its ring cutting no rival off)? */
+function mdKitGround(owner, i, j) {
+  if (!inMap(i, j)) return false;
+  const t = tIdx(i, j), r = MASSDRIVER.kitClaim;
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return false;
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return false;
+  if ((S.posts || []).some((q) => Math.max(Math.abs(q.x - i), Math.abs(q.y - j)) <= r + 1)) return false;
+  if (ringOverRival(owner, i, j, r)) return false;
+  return !(S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear));
+}
+
+/** What of good g Driver b holds back for the Catcher kit it is loading (the Catcher's cost), if it has one to throw. */
+function mdKitHold(b, g) { return b.mdKit ? BDEFS.catcher.cost[g] || 0 : 0; }
+
+/** Is Driver b's Catcher kit loaded (the Catcher's cost in its stock)? */
+function mdKitLoaded(b) { const c = BDEFS.catcher.cost; return !!b.mdKit && Object.keys(c).every((g) => (b.stock[g] || 0) >= c[g]); }
+
+/** Can player `owner`'s Mass Driver b throw a Catcher kit to tile (i, j)? '' if so, otherwise why not. */
+function mdKitWhy(owner, b, i, j) {
+  const M = MASSDRIVER, cost = BDEFS.catcher.cost;
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
+  if (!b.built) return 'That Mass Driver is still going up.';
+  if (worldBan('catcher')) return 'No Catchers here.';
+  if (b.mdKit || (S.cans || []).some((m) => m.kit && m.from === b.id && !m.gone)) return 'That Mass Driver already has a Catcher kit on the way.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j), d = dist(b.x, b.y, i, j), r = M.kitClaim;
+  if (d < M.min) return `Too close: that spot is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d > M.max) return `Too far: that spot is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Throw it onto open, empty ground (no water, road, track, runway or deposit).';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+  if ((S.posts || []).some((q) => Math.max(Math.abs(q.x - i), Math.abs(q.y - j)) <= r + 1)) return 'Not on a Trade Post\'s ground.';
+  if (ringOverRival(owner, i, j, r)) return `Too close to a rival's buildings: the Catcher's land (${r} tiles round it) would cut them off.`;
+  if (!mdKitGround(owner, i, j)) return 'Too close to a Murmur nest.';
+  void cost;
+  return '';
+}
+
+/**
+ * Mass Driver b throws a Catcher kit to tile (i, j) (i < 0: the kit not yet thrown is called off; what was loaded for
+ * it stays in the Driver's storage). Haulers bring the Catcher's cost to the Driver (needsOf), loaded into the kit; the
+ * Driver throws it as soon as it is loaded and the coils can fire (mdLaunchKit). '' or why not.
+ */
+function setMdKit(owner, b, i, j) {
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
+  if (i < 0) {
+    if (!b.mdKit) return '';
+    if (b.mdFire && !b.mdAt) b.mdFire = 0; // (charging for it: stood down)
+    delete b.mdKit;
+    return '';
+  }
+  const why = mdKitWhy(owner, b, i, j);
+  if (why) return why;
+  b.mdKit = [i, j];
+  return '';
+}
+
+/** Driver b's coils are charged for its Catcher kit: it flies to its spot (S.cans, `kit`), and the Driver reloads. */
+function mdLaunchKit(b) {
+  const M = MASSDRIVER, [i, j] = b.mdKit, o = bCentre(b);
+  if (!magPowered(b) || !mdKitLoaded(b)) return; // (its power or its load went while it charged: it tries again)
+  delete b.mdKit;
+  for (const g in BDEFS.catcher.cost) bump(b.stock, g, -BDEFS.catcher.cost[g]);
+  const d = dist(b.x, b.y, i, j), k = clamp((d - M.min) / (M.max - M.min), 0, 1);
+  S.cans = S.cans || [];
+  S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: 0, kit: 1, goods: Object.assign({}, BDEFS.catcher.cost), t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
+    x0: o.x, y0: o.y, x1: i + 0.5, y1: j + 0.5, hp: M.hp });
+  b.mdCd = M.reload - M.charge;
+  b.mdLast = S.time;
+  b.mdShot = S.time;
+  b.working = true;
+  sfx('mdlaunch', b.x + 0.5, b.y + 0.5);
+}
+
+/**
+ * A Catcher kit (canister m) comes down: a Catcher site on its spot (or the nearest open ground within 2 tiles that
+ * will take it) that assembles itself (b.kitT) and will claim the land round it (b.claim); its Driver is aimed at it.
+ * With nowhere to stand, its goods lie there in crates.
+ */
+function mdKitLand(m) {
+  m.gone = true;
+  const i0 = Math.floor(m.x1), j0 = Math.floor(m.y1);
+  let at = mdKitGround(m.owner, i0, j0) ? tIdx(i0, j0) : -1;
+  for (let r = 1; r <= 2 && at < 0; r++) for (let dj = -r; dj <= r && at < 0; dj++) for (let di = -r; di <= r && at < 0; di++) if (Math.max(Math.abs(di), Math.abs(dj)) === r && mdKitGround(m.owner, i0 + di, j0 + dj)) at = tIdx(i0 + di, j0 + dj);
+  if (at < 0) {
+    addLoot(clamp(i0, 0, S.W - 1), clamp(j0, 0, S.H - 1), m.goods);
+    addFx('puff', m.x1, m.y1, { r: 0.5, life: 0.9 });
+    sfx('mdthud', m.x1, m.y1);
+    postMsg(m.owner, 'A Catcher kit came down where a Catcher couldn\'t stand: its goods lie there in crates.', i0, j0, 'warn');
+    return;
+  }
+  const x = at % S.W, y = (at / S.W) | 0;
+  const c = addBuilding(m.owner, 'catcher', x, y, false);
+  for (const g in m.goods) bump(c.stock, g, m.goods[g]);
+  c.kitT = 1; // (it assembles itself: see updateBuilding)
+  c.claim = MASSDRIVER.kitClaim;
+  const D = getE(m.from);
+  if (D && !D.dead && D.owner === m.owner && D.built && BDEFS[D.type].mdriver && !mdAimWhy(m.owner, D, c)) { D.mdTo = c.id; D.mdLast = S.time; S.players[m.owner].mdT = undefined; }
+  addFx('puff', x + 0.5, y + 0.5, { r: 0.7, life: 1.1 });
+  sfx('mdcatch', x + 0.5, y + 0.5);
+  postMsg(m.owner, `A Catcher kit is down: it assembles itself in ${MASSDRIVER.kitBuild} s and claims the land ${MASSDRIVER.kitClaim} tiles round it.`, x, y, 'good');
+}
+
+/** Send good g from Mass Driver or Catcher b (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
 function setMdSend(b, g, on) {
-  if (!ownKey(GOOD, g) || isLiquid(g)) return 'A Mass Driver throws goods in crates: no Crude or Fuel.';
+  if (!ownKey(GOOD, g) || g === 'crude') return 'A Mass Driver throws goods in sealed canisters: no Crude.';
   const list = b.mdSend || {};
   if (on) {
     if (list[g] !== undefined) return '';
-    if (Object.keys(list).length >= MASSDRIVER.goods) return `A Mass Driver sends up to ${MASSDRIVER.goods} goods: take one off its list first.`;
+    if (Object.keys(list).length >= MASSDRIVER.goods) return `A goods list holds up to ${MASSDRIVER.goods} goods: take one off it first.`;
     list[g] = MASSDRIVER.reserve;
   } else delete list[g];
   if (Object.keys(list).length) b.mdSend = list; else delete b.mdSend;
+  S.players[b.owner].mdT = undefined;
   return '';
 }
 
-/** The reserve of good g Mass Driver b leaves at home: d more (or less), in MASSDRIVER.reserveStep steps. */
+/** Back to automatic supply: end b's goods list goes. */
+function setMdAuto(b) { delete b.mdSend; S.players[b.owner].mdT = undefined; return ''; }
+
+/** The reserve of good g end b leaves at home: d more (or less), in MASSDRIVER.reserveStep steps. */
 function setMdReserve(b, g, d) {
   if (!b.mdSend || b.mdSend[g] === undefined) return;
   b.mdSend[g] = clamp(Math.round(b.mdSend[g] + d), 0, MASSDRIVER.reserveMax);
 }
 
-/** What player p's Mass Drivers hold and have on the way of good g (among the goods they send), and its Catchers hold: none of it is home. */
+/** What player p's Mass Driver ends hold and have on the way of good g (the goods they send), and their far ends hold: none of it is home. */
 function mdHeld(p, g) {
   let n = 0;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== p || !b.built) continue;
-    if (BDEFS[b.type].mdriver && b.mdSend && b.mdSend[g] !== undefined) n += (b.stock[g] || 0) + (b.inc[g] || 0);
-    else if (BDEFS[b.type].catcher) n += b.stock[g] || 0;
+    if (b.dead || b.owner !== p || !b.built || !mdEnd(b)) continue;
+    if (b.mdSend ? b.mdSend[g] !== undefined : mdAutoN(b, g) > 0) n += (b.stock[g] || 0) + (b.inc[g] || 0);
+    else if (b.mdFar) n += b.stock[g] || 0;
   }
   return n;
 }
 
-/** How much more of good g Haulers should bring Mass Driver b: up to its hopper, from what the colony holds beyond the reserve. */
+/** The reserve end b keeps at home of good g it sends (its goods list's, else MASSDRIVER.reserve), or undefined if it doesn't send it. */
+function mdReserveOf(b, g) { return b.mdSend ? b.mdSend[g] : mdAutoN(b, g) > 0 ? MASSDRIVER.reserve : undefined; }
+
+/** How much more of good g Haulers should bring end b (the near end only): up to its hopper (or what it ships), from what the colony holds beyond the reserve. */
 function mdWant(b, g) {
-  if (!b.built || !b.mdSend || b.mdSend[g] === undefined || !b.mdTo) return 0;
-  const room = MASSDRIVER.hopper - (b.stock[g] || 0) - (b.inc[g] || 0);
-  const spare = Math.floor(tickTotal(b.owner, g) - mdHeld(b.owner, g) - b.mdSend[g]);
+  if (!b.built || b.mdFar) return 0; // (a far end ships what it holds)
+  const res = mdReserveOf(b, g);
+  if (res === undefined || !mdPartners(b).length) return 0;
+  const cap = b.mdSend ? MASSDRIVER.hopper : Math.min(MASSDRIVER.hopper, mdAutoN(b, g));
+  const room = cap - (b.stock[g] || 0) - (b.inc[g] || 0);
+  const spare = Math.floor(tickTotal(b.owner, g) - mdHeld(b.owner, g) - res);
   return Math.max(0, Math.min(room, spare));
 }
 
-/** Goods Mass Driver b holds ready to load: whole units of the goods it sends. */
+/** What end b holds back of good g for its canisters (supplyOf leaves it alone): all of a good on its list; at the near end, what it ships. */
+function mdHold(b, g) {
+  if (!b.built) return 0;
+  if (b.mdKit && BDEFS.catcher.cost[g]) return b.mdSend && b.mdSend[g] !== undefined ? Infinity : (b.mdFar ? 0 : mdAutoN(b, g)) + BDEFS.catcher.cost[g]; // (and a Catcher kit's load)
+  if (b.mdSend) return b.mdSend[g] !== undefined ? Infinity : 0;
+  return b.mdFar ? 0 : mdAutoN(b, g);
+}
+
+/**
+ * Room for good g at end o, by canister: at a far end, MASSDRIVER.full of it (or what it keeps, if more) less what it
+ * holds and what is on the way, so a far end nothing collects from doesn't fill up for ever; anywhere else, no limit.
+ */
+function mdRoom(o, g) {
+  if (!o.mdFar || mdFortType(o.type)) return Infinity;
+  const k = keepOf(o);
+  return Math.max(MASSDRIVER.full, (k && k[g]) || 0) - (o.stock[g] || 0) - mdFlying(o, g);
+}
+
+/** The goods end b would send partner o but o has no room for (mdRoom): its far end is full of them. */
+function mdFullGoods(b, o) {
+  const gs = b.mdSend && !mdFortType(o.type) ? Object.keys(b.mdSend) : Object.keys((b.mdAuto && b.mdAuto[o.id]) || {});
+  return gs.filter((g) => (b.stock[g] || 0) >= 1 && mdRoom(o, g) < 1);
+}
+
+/** What end b can load of good g for partner o: whole units (no more than o has room for). */
+function mdAvail(b, o, g) {
+  const room = Math.floor(mdRoom(o, g)), kit = mdKitHold(b, g);
+  if (room < 1) return 0;
+  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.max(0, Math.min(room, Math.floor((b.stock[g] || 0) - kit))) : 0;
+  const plan = b.mdAuto && b.mdAuto[o.id];
+  if (!plan || !plan[g]) return 0;
+  const has = (b.mdFar ? keepSupply(b, g) : (b.stock[g] || 0) - (b.res[g] || 0)) - kit;
+  return Math.max(0, Math.min(plan[g], room, Math.floor(has)));
+}
+
+/** The goods end b could load for partner o now, and how many in all. */
+function mdLoadFor(b, o) {
+  const out = {};
+  let n = 0;
+  const gs = b.mdSend && !mdFortType(o.type) ? Object.keys(b.mdSend) : Object.keys((b.mdAuto && b.mdAuto[o.id]) || {});
+  for (const g of gs) { const k = mdAvail(b, o, g); if (k >= 1) { out[g] = k; n += k; } }
+  return { goods: out, n };
+}
+
+/** Goods end b holds ready to load, for all its partners. */
 function mdLoadable(b) {
   let n = 0;
-  for (const g in b.mdSend || {}) n += Math.floor(b.stock[g] || 0);
+  for (const o of mdPartners(b)) n += mdLoadFor(b, o).n;
   return n;
 }
 
 /**
- * A Mass Driver's or Catcher's conveyors, every MASSDRIVER.feed s: a Driver takes the goods it sends from a Command
- * Base or Depot touching it (what that store can spare, beyond the reserve) and from the factories touching it that
- * make them; a Catcher feeds the factories and sites touching it what they're short of, a unit a link a round.
+ * A Mass Driver end's conveyors, every MASSDRIVER.feed s: it takes the goods it sends from a Command Base or Depot
+ * touching it (what that store can spare, beyond the reserve) and from the factories touching it that make them; it
+ * feeds the factories and sites touching it what they're short of (Fuel to a Generator too), a unit a link a round;
+ * and a far end takes the output of the factories touching it (it goes home by canister).
  */
 function mdConveyor(b, dt) {
   b.feedT = (b.feedT || 0) - dt;
   if (b.feedT > 0) return;
   b.feedT = MASSDRIVER.feed;
-  const def = BDEFS[b.type];
+  const sends = mdSendGoods(b);
   for (const c of touching(b)) {
     const cd = BDEFS[c.type];
-    if (def.mdriver) {
-      if (!c.built || !b.mdSend) continue;
-      for (const g in b.mdSend) {
+    if (c.built && sends.length && !b.mdFar) {
+      let took = false;
+      for (const g of sends) {
         if (mdWant(b, g) < 1) continue;
         const store = c.type === 'lander' || c.type === 'depot';
-        if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); break; }
+        if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); took = true; break; }
       }
-    } else if (!cd.store && !cd.barrier && (!c.built ? !storeFunded(c) : cd.inp || cd.ammo || cd.repair || cd.bots)) {
+      if (took) continue;
+    }
+    if (cd.store || cd.barrier) continue;
+    if (!c.built ? !storeFunded(c) : cd.inp || cd.ammo || cd.repair || cd.bots || cd.fuelCap) {
       for (const [g, n] of needsOf(c)) {
-        if (n < 1 || isLiquid(g) || supplyOf(b, g) < 1) continue;
+        if (n < 1 || (isLiquid(g) && !(g === 'fuel' && cd.burner)) || supplyOf(b, g) < 1) continue;
         bump(b.stock, g, -1); bump(c.stock, g, 1);
         if (c.built) c.fedT = S.time;
         break;
       }
     }
+    if (b.mdFar && c.built && cd.out) for (const g in cd.out) {
+      if (isLiquid(g) || supplyOf(c, g) < 1 || !storeTakes(b, g)) continue;
+      bump(c.stock, g, -1); bump(b.stock, g, 1);
+      break;
+    }
   }
 }
 
-/** Every step, for a built Mass Driver: load, charge, fire; and its status. (A Catcher only runs its conveyors.) */
+/** Every step, for a built Mass Driver or Catcher: load, charge, fire; and its status. */
 function updateMassDriver(b, dt) {
-  const M = MASSDRIVER;
+  const M = MASSDRIVER, drv = !!BDEFS[b.type].mdriver;
   mdConveyor(b, dt);
-  if (BDEFS[b.type].catcher) {
-    const n = S.buildings.filter((d) => !d.dead && d.owner === b.owner && d.mdTo === b.id && BDEFS[d.type].mdriver).length;
-    b.status = n ? `Catching for ${n} Mass Driver${n === 1 ? '' : 's'}` : 'Storing goods: no Mass Driver is aimed at it yet';
-    return;
-  }
   if (b.mdCd > 0) b.mdCd = Math.max(0, b.mdCd - dt);
-  const C = mdCatcher(b);
   if (b.mdFire) {
     b.working = true; // (the Generator in reach burns Fuel for it)
     b.status = 'Charging the coils';
-    if (S.time >= b.mdFire) mdLaunch(b, C);
+    if (S.time >= b.mdFire) mdLaunch(b);
     return;
   }
-  const c0 = b.mdTo ? getE(b.mdTo) : null, n = mdLoadable(b);
-  if (!b.mdTo) b.status = 'Not aimed: tap Aim at a Catcher below';
-  else if (!C) b.status = c0 && !c0.dead && c0.owner === b.owner && BDEFS[c0.type].catcher ? 'Its Catcher is still going up' : 'Its Catcher is gone: aim at another';
-  else if (!b.mdSend) b.status = 'Aimed: pick the goods to send below';
-  else if (!magPowered(b)) b.status = n ? 'Waiting for power: it fires only with a Generator (with Fuel) within 4 tiles' : 'No power: build a Generator (with Fuel) within 4 tiles';
+  if (drv && b.mdKit && mdKitLoaded(b)) {
+    // A Catcher kit loaded comes first.
+    if (!magPowered(b)) b.status = `A Catcher kit is loaded: waiting for power (a Generator with Fuel within ${BDEFS.generator.burner.radius} tiles)`;
+    else if (b.mdCd > 0) b.status = `A Catcher kit is loaded: it flies in ${Math.ceil(b.mdCd)}s`;
+    else {
+      b.mdFire = S.time + MASSDRIVER.charge;
+      b.mdAt = 0;
+      b.working = true;
+      b.status = 'Charging the coils';
+      sfx('mdcharge', b.x + 0.5, b.y + 0.5);
+    }
+    return;
+  }
+  const ps = mdPartners(b);
+  if (!ps.length) {
+    if (!drv) b.status = 'Storing goods: no Mass Driver is aimed at it yet';
+    else if (b.mdKit) { const c = BDEFS.catcher.cost; b.status = `Loading a Catcher kit: ${Object.keys(c).reduce((n, g) => n + Math.min(c[g], Math.floor(b.stock[g] || 0)), 0)} of ${sumValues(c)} goods (Haulers bring them)`; }
+    else {
+      const c0 = b.mdTo ? getE(b.mdTo) : null;
+      b.status = !b.mdTo ? 'Not aimed: tap Aim below' : c0 && !c0.dead && c0.owner === b.owner && !c0.built ? `Its ${BDEFS[c0.type].name} is still going up`
+        : mdCatcher(b) ? `Its Catcher already takes ${M.drivers} Mass Drivers, the most one can: aim at another` : 'Its far end is gone: aim at another';
+    }
+    return;
+  }
+  // The partner to fire to: the next one after the last, with a load worth the shot.
+  const start = Math.max(0, ps.findIndex((o) => o.id === b.mdNext) + 1);
+  let to = null, n = 0, best = 0;
+  for (let k = 0; k < ps.length; k++) {
+    const o = ps[(start + k) % ps.length], L = mdLoadFor(b, o);
+    if (L.n > best) best = L.n;
+    if (!L.n) continue;
+    const whole = b.mdSend && !mdFortType(o.type) ? Infinity : sumValues((b.mdAuto && b.mdAuto[o.id]) || {});
+    if (L.n >= M.load || (S.time - (b.mdLast || 0) >= M.partWait && L.n >= Math.min(M.partMin, whole))) { to = o; n = L.n; break; }
+  }
+  const pow = magPowered(b);
+  if (!pow) b.status = best ? `Waiting for power: it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles` : `Catching${drv ? '' : ' canisters'}; it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles`;
   else if (b.mdCd > 0) b.status = `Reloading: next shot in ${Math.ceil(b.mdCd)}s`;
-  else if (n >= M.load || (n >= M.partMin && S.time - (b.mdLast || 0) >= M.partWait)) {
+  else if (to) {
     b.mdFire = S.time + M.charge;
+    b.mdAt = to.id; b.mdNext = to.id;
     b.working = true;
     b.status = 'Charging the coils';
     sfx('mdcharge', b.x + 0.5, b.y + 0.5);
-  } else b.status = n ? `Loading: ${n} of ${M.load} goods for the next canister` : 'Waiting for goods to send';
+  } else if (drv && b.mdKit && !best) {
+    const c = BDEFS.catcher.cost, has = Object.keys(c).reduce((n, g) => n + Math.min(c[g], Math.floor(b.stock[g] || 0)), 0);
+    b.status = `Loading a Catcher kit: ${has} of ${sumValues(c)} goods (Haulers bring them)`;
+  } else if (!best && ps.some((o) => mdFullGoods(b, o).length)) {
+    const full = [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))];
+    b.status = `Far end full: nothing there collects its ${full.map((g) => GOOD[g].name).join(', ')}, so no more is sent`;
+  } else b.status = best ? `Loading: ${Math.min(best, M.load)} of ${M.load} goods for the next canister` : !b.mdSend && !b.mdAuto ? (b.mdFar ? 'Nothing needed here, nothing spare to send home' : 'Nothing needed at the far end yet') : 'Waiting for goods to send';
 }
 
-/** Mass Driver b's coils are charged: a canister of up to MASSDRIVER.load of the goods it sends flies to Catcher C. */
-function mdLaunch(b, C) {
+/** End b's coils are charged: a canister of up to MASSDRIVER.load goods flies to the end it charged for (b.mdAt). */
+function mdLaunch(b) {
   const M = MASSDRIVER;
   b.mdFire = 0;
-  if (!C || !magPowered(b)) return; // (its Catcher or power went while it charged: it tries again)
-  const goods = {};
+  if (!b.mdAt && b.mdKit) { mdLaunchKit(b); return; } // (a Catcher kit)
+  const C = getE(b.mdAt);
+  if (!C || !mdPartners(b).includes(C) || !magPowered(b)) return; // (its far end or power went while it charged: it tries again)
+  const L = mdLoadFor(b, C), goods = {};
   let n = 0;
-  // (a unit of each good in turn, so each good it sends gets its share of the canister)
+  // (a unit of each good in turn, so each good gets its share of the canister)
   for (let more = true; more && n < M.load;) {
     more = false;
-    for (const g in b.mdSend || {}) if (n < M.load && Math.floor(b.stock[g] || 0) >= 1) { goods[g] = (goods[g] || 0) + 1; n++; bump(b.stock, g, -1); more = true; }
+    for (const g in L.goods) if (n < M.load && L.goods[g] >= 1) { goods[g] = (goods[g] || 0) + 1; L.goods[g]--; n++; more = true; }
   }
   if (!n) return;
+  for (const g in goods) bump(b.stock, g, -goods[g]);
+  if (b.mdAuto && b.mdAuto[C.id]) for (const g in goods) if (b.mdAuto[C.id][g]) b.mdAuto[C.id][g] = Math.max(0, b.mdAuto[C.id][g] - goods[g]); // (shipped: the plan is up to date till it's made again)
   const d = dist(b.x, b.y, C.x, C.y), k = clamp((d - M.min) / (M.max - M.min), 0, 1), o = bCentre(b);
   S.cans = S.cans || [];
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
     x0: o.x, y0: o.y, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
-  b.mdCd = M.reload - M.charge; // (a shot every `reload` s, its coils' charge included)
+  b.mdCd = mdReload(b, C) - M.charge; // (a shot every `reload` s, `reloadLand` s over land, its coils' charge included)
   b.mdLast = S.time;
   b.mdShot = S.time; // (the muzzle flash and the guidance beam: see drawMassDrivers)
   b.mdSent = (b.mdSent || 0) + n;
@@ -20899,7 +21584,7 @@ function canDown(m, p, by) {
   if (by !== undefined) {
     blastFx(p.x, p.y, 0.5, { small: true });
     sfx('mdburst', p.x, p.y);
-    postMsg(m.owner, 'A Mass Driver canister was shot down: its goods fell as crates.', i, j, 'bad');
+    postMsg(m.owner, m.kit ? 'A Catcher kit was shot down: its goods fell as crates.' : 'A Mass Driver canister was shot down: its goods fell as crates.', i, j, 'bad');
     if (by >= 0 && foes(by, m.owner)) postMsg(by, 'Your flak burst an enemy canister: its goods fell as crates.', i, j, 'good');
   } else {
     addFx('puff', p.x, p.y, { r: 0.5, life: 0.9 });
@@ -20908,7 +21593,7 @@ function canDown(m, p, by) {
   }
 }
 
-/** Canisters in flight: each lands in its Catcher at the end of its flight, or as crates if the Catcher is gone. */
+/** Canisters in flight: each lands in its end (a Catcher, a Driver, a fort) at the end of its flight, or as crates if that is gone. */
 function updateCans(dt) {
   for (const m of S.cans) {
     if (m.gone) continue;
@@ -20916,8 +21601,9 @@ function updateCans(dt) {
     // A rival's Shield Dome bursts a canister coming down into it (one flying over, high, goes on).
     if (m.t < m.dur && m.t / m.dur > 0.5 && S.tick % 3 === 0) { const p = canPos(m); if (p.alt < 2.5 && domeCatch(p.x, p.y, m.owner, 'canister', m.x0, m.y0)) { canDown(m, p, -1); continue; } }
     if (m.t < m.dur) continue;
+    if (m.kit) { mdKitLand(m); continue; }
     const C = getE(m.to), i = Math.floor(m.x1), j = Math.floor(m.y1);
-    if (C && !C.dead && C.built && C.owner === m.owner && BDEFS[C.type].catcher && C.x === i && C.y === j) {
+    if (C && !C.dead && C.built && C.owner === m.owner && (mdEnd(C) || mdFortType(C.type)) && C.x === i && C.y === j) {
       let n = 0;
       for (const g in m.goods) { bump(C.stock, g, m.goods[g]); n += m.goods[g]; }
       C.mdGot = (C.mdGot || 0) + n;
@@ -21572,8 +22258,8 @@ function megaDarkStep(b, dt) {
  */
 function megaWreckOrder(p, b, on) {
   if (!b || b.dead || !b.built || !BDEFS[b.type].mega) return 'That megastructure is gone.';
-  if (BDEFS[b.type].city) return 'Arrival City can\'t be wrecked: knock it out and hold it to take it.';
-  if (!foes(p, b.owner)) return 'Only an enemy megastructure can be wrecked.';
+  if (BDEFS[b.type].city) return 'Arrival City can\'t be demolished: knock it out and hold it to take it.';
+  if (!foes(p, b.owner)) return 'Only an enemy megastructure can be demolished.';
   if (on) b.mWreck = (b.mWreck || 0) | (1 << p); else b.mWreck = (b.mWreck || 0) & ~(1 << p);
   return '';
 }
@@ -24076,16 +24762,24 @@ function hordeLaunch(n) {
   let k = 0;
   // (side by side: a boss wave's Harrows, one for each colony, down a lane of its own)
   const each = cols.length > 1 ? cols.length : 1, per = Math.max(1, Math.floor(H.lanes.length / each));
-  for (const t of ['brute', 'harrow', 'sapper', 'spitter', 'leech', 'scuttler']) for (let q = 0; q < (w[t] || 0) * (t === 'harrow' ? each : 1); q++, k++) {
-    if (H.q.length >= HORDE.queueMost) break;
+  // (more than the Maw holds: held over in it (H.over) to join the next wave, with those held over before)
+  const most = hordeQueueMost(H.lv), over = H.over || {}, held = {};
+  for (const t of ['brute', 'harrow', 'sapper', 'spitter', 'leech', 'scuttler']) for (let q = 0, all = (w[t] || 0) * (t === 'harrow' ? each : 1) + (over[t] || 0); q < all; q++, k++) {
+    if (H.q.length >= most) { held[t] = all - q; break; }
     const l = t === 'harrow' && each > 1 ? ((q % each) * per + (n + Math.floor(q / each)) % per) % H.lanes.length : (k + n) % H.lanes.length;
     H.q.push({ t, n, s: sides && t !== 'harrow' && hash2(n, k, S.seed & 0xffff) < HORDE.side.share ? 1 : 0, l });
   }
+  if (Object.keys(held).length) H.over = held; else delete H.over;
   H.open.push(n);
   const boss = !!w.harrow;
-  hordeSay(`${boss ? 'Boss wave' : 'Wave'} ${n} is coming out of the Maw: ${hordeWaveText(n)}.${boss ? (each > 1 ? ' A Harrow leads it at each colony.' : ' A Harrow leads it.') : ''}`, maw.x, maw.y, boss ? 'lost' : 'bad');
+  let carried = 0;
+  for (const t in over) carried += over[t];
+  hordeSay(`${boss ? 'Boss wave' : 'Wave'} ${n} is coming out of the Maw: ${hordeWaveText(n)}${carried ? `, and ${carried} held over from the waves before` : ''}.${boss ? (each > 1 ? ' A Harrow leads it at each colony.' : ' A Harrow leads it.') : ''}`, maw.x, maw.y, boss ? 'lost' : 'bad');
   sfx(boss ? 'deepsurge' : 'alert', maw.x + 0.5, maw.y + 0.5, boss ? 3 : undefined);
 }
+
+/** How many are held over in the Maw for the next wave (more than its queue holds: H.over). */
+function hordeHeld() { const o = S.horde && S.horde.over; let s = 0; if (o) for (const t in o) s += o[t]; return s; }
 
 /** The Murmur the waves have up now (by wave), in one pass. */
 function hordeUp() {
@@ -24264,7 +24958,7 @@ function hordeTick() {
   }
   for (const c of hordeCols()) if (S.players[c].down) hordeRetake(c); // (a partner holding the ruin brings it back)
   if (!maw) return; // (the Maw wrecked: see hordeMawDown)
-  maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length} waiting below`;
+  maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length + hordeHeld()} waiting below`;
   // Waves cleared: all out of the Maw and none left up.
   const up = hordeUp();
   for (const n of H.open.slice()) {
@@ -24341,7 +25035,7 @@ function hordeMawDown(b, by) {
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d797ff', r: 5, life: 2 });
   for (const e of S.buildings) if (!e.dead && e.type === 'burrow' && e.nest === b.id) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1.2 }); destroyBuilding(e, false); }
   destroyBuilding(b, true);
-  if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; S.winner = by >= 0 && hordeCols().includes(by) ? by : H.p; S.endHow = 'horde'; }
+  if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; delete H.over; S.winner = by >= 0 && hordeCols().includes(by) ? by : H.p; S.endHow = 'horde'; }
   if (H) hordeSay('The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good'); else postMsg(by, 'The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good');
   if (isMe(by)) sfx('capture');
 }

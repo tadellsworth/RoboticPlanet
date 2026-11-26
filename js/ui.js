@@ -248,6 +248,12 @@ function initUI() {
   const syncWx = () => pauseSwitch('p-weather', weatherOn());
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Voice lines (js/voice.js): the machine voice with its subtitles, on or off (remembered on this device); a tap on
+  // the subtitle skips the line.
+  const syncVoice = () => pauseSwitch('p-voice', VOICE.on);
+  syncVoice();
+  $('p-voice').onclick = () => { setVoiceOn(!VOICE.on); syncVoice(); sfx('click'); };
+  $('voice-sub').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); voiceStop(); });
   // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
   const syncScouts = () => pauseSwitch('p-scouts', SCOUT.on);
   syncScouts();
@@ -269,7 +275,7 @@ function initUI() {
   syncCursor();
   $('p-cursor').onclick = () => { setCursorOn(!CURSOR.on); syncCursor(); sfx('click'); };
   // (Weather can be switched in Custom Game's Rules too: the switches are read again as Settings opens.)
-  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); syncCursor(); };
+  UI.syncSwitches = () => { syncWx(); syncVoice(); syncScouts(); syncHaptics(); syncCursor(); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -419,7 +425,7 @@ const HORDE_DIFF_INFO = {
   medium: 'Pioneer waves: a little bigger, the gaps a little shorter.',
   normal: 'Colonist waves: a fair fight. About 20 Murmur by wave 5, near 50 by wave 10 and over 100 by wave 20, three minutes apart at first, a minute and a half by the end.',
   hard: 'Commander waves: big, fast-growing and close together, with two Harrows in the boss waves from wave 15.',
-  warlord: 'Warlord waves: relentless and almost unsurvivable. Always Endless: huge waves, under a minute apart from wave 13 on.',
+  warlord: 'Warlord waves: relentless and almost unsurvivable. Always Endless: huge waves that never stop growing, under a minute apart from wave 13 on.',
 };
 /** What each Horde goal means (the Goal row). */
 const HORDE_GOAL_INFO = {
@@ -645,12 +651,12 @@ function modeInfo(mode, n, teams) {
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
     : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
       : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
-    : n === 4 && haul ? `Free-for-all · 4 on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
-    : n >= 3 && dam ? `Free-for-all · ${n}: you and ${n === 4 ? 'three rival colonies (red, green and purple)' : 'two rival colonies'} round the high ground of ${SH.name}, each valley under its own reservoir and dam. ${win}`
-    : n === 4 && town ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
-    : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
+    : n === 4 && haul ? `Free-for-all · 4 players on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
+    : n >= 3 && dam ? `Free-for-all · ${n} players: you and ${n === 4 ? 'three rival colonies (red, green and purple)' : 'two rival colonies'} round the high ground of ${SH.name}, each valley under its own reservoir and dam. ${win}`
+    : n === 4 && town ? `Free-for-all · 4 players: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
+    : n === 4 ? `Free-for-all · 4 players: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
       : n === 3 && town ? `Free-for-all: you and two rival colonies round ${where}, a round town in the middle with an old avenue from each colony to its heart. ${win}`
-      : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
+      : n === 3 && onCross ? `Free-for-all · 3 players: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
           : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';
 }
@@ -670,7 +676,7 @@ function menuMods() { return modList(UI.menu.mods, UI.menu.mode === 'versus' ? '
 function menuSummary() {
   const m = UI.menu, colony = m.mode !== 'versus', three = menuThree(), horde = m.mode === 'horde';
   const otherBiome = chosenSecondBiome(m, menuSize());
-  const main = [horde ? `Horde · ${DIFFICULTY[m.diff].label} waves · ${m.diff === 'warlord' || m.hgoal === 'endless' ? 'Endless' : `${HORDE.waves} waves`}` : colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
+  const main = [horde ? `Horde · ${DIFFICULTY[m.diff].label} waves · ${m.diff === 'warlord' || m.hgoal === 'endless' ? 'Endless' : `${HORDE.waves} waves`}` : colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()} players` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   if (menuUpWin()) main.push('Great Uplink win');
@@ -1118,7 +1124,7 @@ function syncMenu() {
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
     btn.textContent = mps ? String(v) : btn.dataset.lbl; // (multiplayer: how many colonies, people and computers together)
     btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
-    btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
+    btn.dataset.info = v === 2 ? '2 players: you and one rival colony, landing at the far end of the planet.'
       : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
         : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
     if (mps) btn.dataset.info = `${v} colonies: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
@@ -1220,7 +1226,7 @@ function syncPvMods() {
 function syncPickRows() {
   const m = UI.menu;
   shapePickRow($('m-shape'), m.shapeRnd, menuShownShape(), mpHordePair() ? 2 : menuPlayers());
-  biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, !m.shapeRnd && !!SHAPE_PRESETS[m.shape || 0].hollow);
+  biomePickRow($('m-biome'), m.biomeRnd, m.biome || 0, biomeForced(m.shapeRnd, m.shape));
   syncSecondBiome('m', m, menuSize());
 }
 
@@ -1255,8 +1261,12 @@ function shapePickRow(row, rnd, shape, np, when = 'when you land') {
   row.setAttribute('aria-label', `Map type: ${rnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
 }
-/** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`hollow`: the map type is the Hollow, which has its own look). */
-function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
+/** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), or false. */
+function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : false) : false; }
+/** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`forced`: 'hollow' or 'ring', the map type sets its own look). */
+function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
+  const ring = forced === 'ring', hollow = !!forced && !ring;
+  if (ring) { rnd = false; biome = BIOME_ORDER.indexOf('lunar'); }
   const bk = BIOME_ORDER[biome];
   row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
   row.querySelector('.m-pick-meta').textContent = rnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
@@ -1265,6 +1275,11 @@ function biomePickRow(row, rnd, biome, hollow, when = 'when you land') {
   if (hollow) {
     row.querySelector('.m-pick-meta').textContent = 'set by the map: The Hollow';
     row.dataset.info = `The Hollow has its own look, whatever the biome: ${BIOMES.hollow.desc} (The biome you pick here is for other maps.)`;
+  }
+  // (The Ring is on Argos's ground, in space: its look and its rules.)
+  if (ring) {
+    row.querySelector('.m-pick-meta').textContent = 'set by the map: The Ring';
+    row.dataset.info = `The Ring is on Argos's ground, whatever the biome: ${BIOMES.lunar.desc} (The biome you pick here is for other maps.)`;
   }
   row.setAttribute('aria-label', `Biome: ${rnd ? 'Random' : biomeName(biome)}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'biome:' + (rnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, rnd ? null : bk));
@@ -1675,6 +1690,18 @@ function drawShapeThumb(cv, P) {
     mesa(0.5, 0.86, 0.3, 0.1);
     for (let k = 0; k < 4; k++) mesa(0.15 + rnd() * 0.7, 0.52 + k * 0.08, 0.07 + rnd() * 0.05, 0.04 + rnd() * 0.02);
     crags = 0;
+  } else if (P.asteroids) {
+    // The Ring: grey asteroids in space (a home rock at each end, stepping stones, a rich rock in the middle with a rock to each side),
+    // the short gaps between them spanned (dashes: a Viaduct), a few stars and a few resource dots on the rocks.
+    ctx.fillStyle = '#070a14'; ctx.fillRect(x0, y0, mw, mh);
+    ctx.fillStyle = 'rgba(214,226,255,0.7)';
+    for (let k = 0; k < 22; k++) ctx.fillRect(X(rnd()), Y(rnd()), Math.max(1, U * 0.012), Math.max(1, U * 0.012));
+    const rock = (u, v, rx, ry) => blob(u, v, rx, ry, '#8b8d96', '#c3c5ce', true);
+    const span = (u, v0, v1) => { line([[u, v0], [u, v1]], '#f2d27a', Math.max(1, U * 0.03), [U * 0.03, U * 0.03]); line([[1 - u, 1 - v0], [1 - u, 1 - v1]], '#f2d27a', Math.max(1, U * 0.03), [U * 0.03, U * 0.03]); };
+    span(0.5, 0.58, 0.77); span(0.5, 0.64, 0.53);
+    rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
+    for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
+    crags = 0;
   } else if (P.hollow) {
     // The Hollow: solid rock, caverns joined by passages, a chasm with its floating Crystal on each side, the Deep's
     // mound in the middle and the breaches' daylight (gold) over the bases and the flank caverns.
@@ -1907,7 +1934,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2074,10 +2101,10 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : p.st.biome; // (the Hollow has its own look)
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
   const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
-    chasm: [18, 12, 10], fertile: [92, 98, 40] };
+    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
   const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
@@ -2564,7 +2591,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 
 /**
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
- * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All); Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All), 7 Terraform (its five tools, not buildings); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
  * map, and B closes the menu except on the Make tab, where B is the Bot Foundry (Build, 2, B). R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
@@ -2576,8 +2603,10 @@ const BUILD_KEYS = {
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
+  // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c' },
 };
-const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6', terra: '7' };
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
@@ -2673,9 +2702,9 @@ const SHEET_KEYS = {
   'sh-strip': ['s', 'Passenger Town: Strip for salvage'],
   'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
   'sh-board': ['e', 'The Walking Factory: Send warbots aboard'],
-  'sh-damwreck': ['w', 'The Dam: Wreck the dam'],
-  'sh-mwreck': ['w', 'Megastructure: Wreck it, or seize it'],
-  'sh-damstop': ['w', 'The Dam: Stop wrecking'],
+  'sh-damwreck': ['d', 'The Dam: Demolish the dam'],
+  'sh-mwreck': ['d', 'Megastructure: Demolish it, or seize it'],
+  'sh-damstop': ['d', 'The Dam: Stop demolishing'],
   'sh-dammend': ['u', 'The Dam: Shore it up'],
   'sh-focus': ['t', 'Aim a defence at an enemy'],
   'sh-focus-clear': ['x', 'Clear a defence\'s aim'],
@@ -2853,8 +2882,8 @@ function renderKeys() {
   };
   const tabs = Object.entries(BUILD_TAB_KEYS).map(([group, key]) => {
     const def = BUILD_GROUPS.find(({ key }) => key === group);
-    const title = `${caps([key])} ${def ? def.name : 'All'}`;
-    const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type].name]);
+    const title = `${caps([key])} ${def ? def.name : group === 'terra' ? 'Terraform' : 'All'}`;
+    const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type] ? BDEFS[type].name : TF_TOOLS_UI[type.slice(3)].name]);
     if (def?.roads) rows.unshift([['r'], 'Roads']);
     if (def?.walls) rows.unshift([['x'], 'Walls']);
     return rows.length ? sub(title, rows) : `<h4>${title}</h4><p>Use a card’s tab number, then its letter.</p>`;
@@ -3012,6 +3041,8 @@ function initKeyboard() {
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
     // Picking a bomber's target: B and N switch its payload (Bomb or Napalm).
     if (R.mode === 'strike' && (k === 'b' || k === 'n')) { e.preventDefault(); setStrikeKind(k === 'n' ? 'napalm' : 'bomb'); return; }
+    // In the Terraform mode a tool's letter switches to it (R, L, F, H, C: js/terraform.js).
+    if (tfKey(k)) { e.preventDefault(); return; }
     // A key on the open panel's buttons (SHEET_KEYS) presses that button.
     const sk = sheetKeyButton(k);
     if (sk) { e.preventDefault(); sk.click(); return; }
@@ -3023,11 +3054,11 @@ function initKeyboard() {
     if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && (k !== 'b' || (BUILD_KEYS[UI.buildTab] && Object.values(BUILD_KEYS[UI.buildTab]).includes('b')))) {
       const keys = BUILD_KEYS[UI.buildTab];
       const type = keys && Object.keys(keys).find((t) => keys[t] === k);
-      const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
+      const card = type && $('sheet-body').querySelector(type.startsWith('tf-') ? `.bcard[data-tf="${type.slice(3)}"]` : `.bcard[data-t="${type}"]`);
       if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
       if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
         e.preventDefault();
-        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega.`, 'info');
+        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega, 7 Terraform.`, 'info');
         return;
       }
     }
@@ -4245,7 +4276,12 @@ function showGameOver() {
   showCheckpoints('o');
   $('o-rematch').hidden = true;
   if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
-  if (S.contingency && typeof contBattleOver === 'function') { contBattleOver(false); return; } // (a Contingency battle: its result goes back to the globe)
+  if (S.contingency && typeof contBattleOver === 'function') { // (a Contingency battle: its result goes back to the globe, after the word in the Command Deck's blue)
+    const cwon = S.winner === ME || allies(S.winner, ME);
+    sfx(cwon ? 'win' : 'lose');
+    overFlare(cwon ? 'Victory' : 'Defeat', cwon ? 'Battle won' : 'Battle lost', cwon ? 'win' : 'loss', () => { $('screen-over').hidden = true; if (S && S.contingency) contBattleOver(false); });
+    return;
+  }
   clearSave();
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
@@ -4264,7 +4300,11 @@ function showGameOver() {
   $('o-log').hidden = false;
   // (Contact: silence, then one answering tone, the same for everyone: see gupSilence.)
   if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (how === 'contact' ? 'Contact!' : how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
+  // (the heading, the word that flares in: overFlare; under it, how it was won or lost)
+  const word = won ? (how === 'contact' ? 'Contact' : 'Victory') : 'Defeat';
+  const kick = won ? (S.teams ? 'Your team wins' : { domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike' }[how] || 'Capture')
+    : how === 'surrender' && S.players[ME].out ? 'You surrendered' : how === 'contact' ? 'A rival made contact' : how === 'domination' ? 'Rival domination' : how === 'uplinks' ? 'A rival held the Uplinks'
+      : S.players[ME].out ? 'Command Base lost' : 'The planet is lost';
   $('o-text').textContent = won
     ? (how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
       : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
@@ -4295,7 +4335,7 @@ function showGameOver() {
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
   dailyOver(won); // (the Daily Planet's best time: js/polish3.js)
   syncRematch(); // (js/polish.js)
-  $('screen-over').hidden = false;
+  overFlare(word, kick, won ? 'win' : 'loss');
 }
 
 /**
@@ -4613,7 +4653,6 @@ function showMissionOver() {
   const M = S.mission, def = missionDef(M), states = missionStates(M), k = Math.max(0, MISSIONS.indexOf(def));
   const won = M.result === 'won';
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? 'Mission complete' : 'Mission failed';
   $('o-text').textContent = won
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
@@ -4643,7 +4682,7 @@ function showMissionOver() {
   UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
   metaGameOver(); // (achievements earned: js/goals.js)
   syncRematch(); // (js/polish.js)
-  $('screen-over').hidden = false;
+  overFlare(won ? 'Complete' : 'Failed', `Mission ${k + 1} · ${def.name}`, won ? 'win' : 'loss');
 }
 
 /* ------------------------------------------------------------------ statistics screen */
@@ -4759,7 +4798,7 @@ function setMode(mode, keepPlan) {
   if (mode !== 'focusaim') UI.focusB = 0;
   if (mode !== 'allyaim') UI.allyAim = null;
   if (mode !== 'mastlink') UI.linkMast = 0;
-  if (mode !== 'mdaim') UI.mdAim = 0;
+  if (mode !== 'mdaim') { UI.mdAim = 0; UI.mdKit = false; }
   if (mode !== 'strike') R.napalmAt = null;
   if (mode !== 'scorch') { R.scorchAt = null; UI.scorchIds = null; }
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
@@ -4776,6 +4815,7 @@ function setMode(mode, keepPlan) {
   UI.moveFrom = 0;
   if (mode !== 'bppick') UI.bpPick = null; // (blueprints: picking buildings, placing one: js/blueprint.js)
   if (mode !== 'bpplace') UI.bpPlace = null;
+  if (mode !== 'terra') UI.tf = null; // (a Terraform plan never sent is dropped: it cost nothing)
   if (UI.bpOffer && mode !== 'normal') { UI.bpOffer = null; bpOfferShow(); }
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
@@ -5573,52 +5613,80 @@ function mdSection(b) {
   return `<div class="section-label">${BDEFS[b.type].mdriver ? 'Mass Driver' : 'Catcher'}</div><div id="sh-md"></div>`;
 }
 
-/** Where Catcher c is, for a panel: from the Command Base. */
+/** Where Catcher (or fort) c is, for a panel: from the Command Base. */
 function mdWhere(c) {
   const L = getE(S.players[c.owner] && S.players[c.owner].lander);
   return L && !L.dead ? `the ${BDEFS[c.type].name} ${dirText(L, c)} of the Command Base` : `the ${BDEFS[c.type].name}`;
 }
 
-/** A Mass Driver's aim, power and goods list, or a Catcher's Drivers (rebuilt only when something changes). */
+/** A Mass Driver's or Catcher's line: its other end (or ends), which end it is, its power, its supply (Auto or a goods list) and its counts (rebuilt only when something changes). */
 function renderMdSection(b) {
   const el = $('sh-md');
   if (!el) return;
-  const M = MASSDRIVER, def = BDEFS[b.type];
-  if (def.catcher) {
-    const ds = S.buildings.filter((d) => !d.dead && d.owner === b.owner && d.mdTo === b.id && BDEFS[d.type].mdriver);
-    const sig = JSON.stringify([ds.map((d) => d.id), b.mdGot || 0]);
-    if (el.dataset.sig === sig) return;
-    el.dataset.sig = sig;
-    el.innerHTML = (ds.length ? ds.map((d) => `<div class="kv army-row"><span>Mass Driver ${dirText(b, d)} from here</span><span><button class="btn small ghost" data-md="${d.id}">Driver ›</button></span></div>`).join('')
-      : `<p class="hint"><b>No Mass Driver is aimed here yet.</b> Build one ${M.min} to ${M.max} tiles away (Build → Move → Mass Driver), then on its panel: <b>Aim at a Catcher</b>, and tap this one.</p>`) +
-      `<div class="kv"><span>Goods caught</span><span>${b.mdGot || 0}</span></div><p class="hint">Canisters land in its funnel and its four arms swing in to brake them. What lands is shared out like a Depot's stock; buildings touching it are fed by conveyor.</p>`;
-    for (const btn of el.querySelectorAll('button[data-md]')) btn.onclick = () => { const d = getE(+btn.dataset.md); if (d && !d.dead) { sfx('click'); openBuildingSheet(d); } };
-    return;
-  }
-  const C = b.mdTo ? getE(b.mdTo) : null, live = C && !C.dead && C.owner === b.owner && BDEFS[C.type].catcher ? C : null, pow = magPowered(b), list = b.mdSend || {};
-  const sig = JSON.stringify([b.mdTo, live && live.built, pow, list, Object.keys(list).map((g) => Math.floor(b.stock[g] || 0)), b.mdSent || 0, UI.mdAdd]);
+  const M = MASSDRIVER, def = BDEFS[b.type], drv = !!def.mdriver, pow = magPowered(b), list = b.mdSend || null;
+  const T = drv && b.mdTo ? getE(b.mdTo) : null, live = T && !T.dead && T.owner === b.owner && (BDEFS[T.type].catcher || mdFortType(T.type)) ? T : null;
+  const fort = !!(live && mdFortType(live.type)), ps = mdPartners(b), far = !!b.mdFar, manual = !!list || UI.mdList === b.id;
+  const ships = mdSendGoods(b).map((g) => [g, list ? Math.floor(b.stock[g] || 0) : mdAutoN(b, g)]);
+  const served = far ? S.buildings.filter((c) => !c.dead && c.owner === b.owner && !BDEFS[c.type].store && b.auto && needsOf(c).some(([g]) => b.auto[g]) && dist(c.x, c.y, b.x, b.y) <= STATION_REACH).length : 0;
+  const rates = ps.map((o) => mdReload(b, o));
+  const full = [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))], kit = drv ? (b.mdKit ? 'load' : (S.cans || []).some((m) => m.kit && m.from === b.id) ? 'fly' : '') : '';
+  const sig = JSON.stringify([b.mdTo, live && live.built, ps.map((o) => o.id), rates, pow, far, list, manual, ships, b.auto, served, b.mdSent || 0, b.mdGot || 0, full, kit, b.mdKit, b.mdKit ? Object.keys(BDEFS.catcher.cost).map((g) => Math.floor(b.stock[g] || 0)) : 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
+  const gl = (o) => Object.keys(o).map((g) => `<span class="gtag"><i class="gi ${g}"></i>${o[g]} ${GOOD[g].name}</span>`).join(' ');
   let h = '';
-  if (live) h += `<div class="status">Aimed at ${mdWhere(live)} (${dirText(b, live)} from here)${live.built ? '' : ': still going up'}.</div><div class="actions"><button class="btn" id="sh-mdaim">Aim at another Catcher</button><button class="btn ghost" id="sh-mdoff">Stand down</button></div>`;
-  else h += `<div class="status">${b.mdTo ? 'Its Catcher is gone.' : 'Not aimed yet.'}</div><p class="hint">Tap <b>Aim at a Catcher</b>, then one of your Catchers ${M.min} to ${M.max} tiles away. Its canisters fly over anything: water, cliffs, rivals' ground.</p><button class="btn primary" id="sh-mdaim">Aim at a Catcher</button>`;
-  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach' : `<span class="err">None: it waits</span>`}</span></div>`;
-  if (!pow) h += `<p class="hint">It burns no Fuel itself, but it fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles.</p>`;
-  const gs = Object.keys(list);
-  h += `<div class="section-label">Goods to send <span class="label-note">up to ${M.goods}; the number is what stays home</span></div>`;
-  h += gs.length ? `<div class="keep-list" id="sh-mdlist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name} <small>(${Math.floor(b.stock[g] || 0)} loaded)</small></span><b class="n">${list[g]}</b>
-      <button class="btn" data-d="-${M.reserveStep}" aria-label="Keep less ${GOOD[g].name} at home">−${M.reserveStep}</button><button class="btn" data-d="${M.reserveStep}" aria-label="Keep more ${GOOD[g].name} at home">+${M.reserveStep}</button><button class="btn ghost" data-x="1" aria-label="Stop sending ${GOOD[g].name}">✕</button></div>`).join('')}</div>`
-    : '<p class="hint"><b>Nothing to send yet:</b> add a good below.</p>';
-  if (gs.length < M.goods) {
-    const opts = GOODS.filter((g) => !isLiquid(g) && !list[g] && (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
-    h += `<div class="goodlist" id="sh-mdadd">${opts.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span></button>`).join('')}</div>`;
+  // The line: where the other end is.
+  if (drv) {
+    if (live) h += `<div class="status">Aimed at ${mdWhere(live)} (${dirText(b, live)} from here)${live.built ? '' : ': still going up'}.</div><div class="actions"><button class="btn" id="sh-mdaim">Aim elsewhere</button><button class="btn ghost" id="sh-mdoff">Stand down</button></div>`;
+    else h += `<div class="status">${b.mdTo ? 'Its far end is gone.' : 'Not aimed yet.'}</div><p class="hint">Tap <b>Aim</b>, then one of your Catchers ${M.min} to ${M.max} tiles away (over anything: water, cliffs, rivals' ground), or an Outpost or Keep to keep its Ammo topped up.</p><button class="btn primary" id="sh-mdaim">Aim</button>`;
+    // A Catcher kit: thrown to open ground with no foothold, it assembles itself into a Catcher there.
+    if (kit === 'load') h += `<div class="kv"><span>Catcher kit</span><span>for the ground ${dirText(b, { x: b.mdKit[0], y: b.mdKit[1] })} from here: ${mdKitLoaded(b) ? 'loaded, it flies when the coils can fire' : `loading ${Object.keys(BDEFS.catcher.cost).map((g) => `${Math.min(BDEFS.catcher.cost[g], Math.floor(b.stock[g] || 0))}/${BDEFS.catcher.cost[g]} ${GOOD[g].name}`).join(', ')} (Haulers bring them)`}</span></div><button class="btn ghost" id="sh-mdkitoff">Call off the kit</button>`;
+    else if (kit === 'fly') h += '<div class="kv"><span>Catcher kit</span><span>in flight</span></div>';
+    else h += `<button class="btn" id="sh-mdkit">Throw a Catcher kit <small>${costText(BDEFS.catcher.cost)}</small></button><p class="hint">For an island or a mesa with no foothold: tap open ground ${M.min} to ${M.max} tiles away that no one else holds. Haulers bring the Catcher's cost to the Driver, loaded into the kit; it flies, lands, assembles itself into a Catcher in ${M.kitBuild} s (no Worker needed), claims the land ${M.kitClaim} tiles round it, and this Driver aims at it.</p>`;
+  } else {
+    h += ps.length ? ps.map((d) => `<div class="kv army-row"><span>Mass Driver ${dirText(b, d)} from here</span><span><button class="btn small ghost" data-md="${d.id}">Driver ›</button></span></div>`).join('')
+      : `<p class="hint"><b>No Mass Driver is aimed here yet.</b> Build one ${M.min} to ${M.max} tiles away (Build → Move → Mass Driver), then on its panel: <b>Aim</b>, and tap this one.</p>`;
+    h += `<div class="kv"><span>Drivers</span><span>${ps.length} of ${M.drivers} at most</span></div>`;
   }
-  h += `<div class="kv"><span>Goods thrown</span><span>${b.mdSent || 0}</span></div>`;
-  h += `<p class="hint">Haulers bring it what your colony holds of these beyond the number kept home, and buildings touching it hand over their output by conveyor. A canister of ${M.load} goods flies every ${M.reload} s (a part load after ${M.partWait} s), in an arc over everything. An enemy Flak Gun can burst one in flight; its goods fall as crates.</p>`;
+  // The rate, and why: a shortcut over land fires slower than a crossing (mdOverland).
+  ps.forEach((o, k) => {
+    const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
+    h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
+  });
+  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
+  if (!pow) h += `<p class="hint">It burns no Fuel itself, but it fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles. Fuel can fly here by canister, in sealed drums.</p>`;
+  if (fort) {
+    h += `<p class="hint">One way: it keeps the ${BDEFS[live.type].name}'s Ammo${live.type === 'keep' ? ' and its cannon\'s Crystal' : ''} topped up for the warbots stationed there, out of what your colony holds beyond ${M.reserve} at home.${ships.length ? ` On its way: ${gl(Object.fromEntries(ships))}.` : ''}</p>`;
+  } else if (ps.length) {
+    h += `<div class="kv"><span>This end</span><span>${far ? `the far end: it stocks what ${served} building${served === 1 ? '' : 's'} round it need${served === 1 ? 's' : ''}` : 'the near end: it ships what the far end needs'}</span></div>`;
+    if (far && b.auto) h += `<div class="kv"><span>Keeps here</span><span>${gl(b.auto)}</span></div>`;
+    h += `<div class="section-label">Goods to send <span class="label-note">${manual ? `a goods list: up to ${M.goods}; the number is what stays home` : 'Auto: what the other end needs'}</span></div>`;
+    h += `<div class="seg" id="sh-mdmode"><button data-v="auto" class="${manual ? '' : 'on'}">Auto</button><button data-v="list" class="${manual ? 'on' : ''}">Goods list</button></div>`;
+    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each.`}</p>`;
+    else {
+      const gs = Object.keys(list || {});
+      h += gs.length ? `<div class="keep-list" id="sh-mdlist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name} <small>(${Math.floor(b.stock[g] || 0)} loaded)</small></span><b class="n">${list[g]}</b>
+      <button class="btn" data-d="-${M.reserveStep}" aria-label="Keep less ${GOOD[g].name} at home">−${M.reserveStep}</button><button class="btn" data-d="${M.reserveStep}" aria-label="Keep more ${GOOD[g].name} at home">+${M.reserveStep}</button><button class="btn ghost" data-x="1" aria-label="Stop sending ${GOOD[g].name}">✕</button></div>`).join('')}</div>`
+        : '<p class="hint"><b>Nothing on the list yet:</b> add a good below. It sends just these, instead of what the other end needs.</p>';
+      if (gs.length < M.goods) {
+        const opts = GOODS.filter((g) => g !== 'crude' && !(list && list[g] !== undefined) && (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
+        h += `<div class="goodlist" id="sh-mdadd">${opts.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span></button>`).join('')}</div>`;
+      }
+    }
+  }
+  if (full.length) h += `<div class="kv"><span>Far end full</span><span class="err">${full.map((g) => GOOD[g].name).join(', ')}: nothing there collects ${full.length === 1 ? 'it' : 'them'}, so no more is sent (${M.full} at most of each, or what it keeps)</span></div>`;
+  h += `<div class="kv"><span>Goods thrown</span><span>${b.mdSent || 0}</span></div><div class="kv"><span>Goods caught</span><span>${b.mdGot || 0}</span></div>`;
+  h += `<p class="hint">A canister of ${M.load} goods flies every ${M.reload} s from each end over water, a chasm or cliffs, every ${M.reloadLand} s when a robot could walk between the ends (a part load after ${M.partWait} s), in an arc over everything; buildings touching it hand over their output and are fed by conveyor. A Catcher takes ${M.drivers} Drivers at most. An enemy Flak Gun can burst one in flight; its goods fall as crates.</p>`;
   el.innerHTML = h;
   const done = (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); };
   if ($('sh-mdaim')) $('sh-mdaim').onclick = () => { sfx('click'); startMdAim(b); };
   if ($('sh-mdoff')) $('sh-mdoff').onclick = () => act('mdAim', [b.id, 0], done);
+  if ($('sh-mdkit')) $('sh-mdkit').onclick = () => { sfx('click'); startMdAim(b, true); };
+  if ($('sh-mdkitoff')) $('sh-mdkitoff').onclick = () => act('mdKit', [b.id, -1, -1], done);
+  for (const btn of el.querySelectorAll('button[data-md]')) btn.onclick = () => { const d = getE(+btn.dataset.md); if (d && !d.dead) { sfx('click'); openBuildingSheet(d); } };
+  if ($('sh-mdmode')) for (const btn of $('sh-mdmode').querySelectorAll('button')) btn.onclick = () => {
+    if (btn.dataset.v === 'auto') { UI.mdList = 0; if (b.mdSend) act('mdAuto', [b.id], done); else done(''); } else { UI.mdList = b.id; done(''); }
+  };
   if ($('sh-mdlist')) for (const btn of $('sh-mdlist').querySelectorAll('button')) btn.onclick = () => {
     const g = btn.parentElement.dataset.g;
     if (btn.dataset.x) act('mdSend', [b.id, g, false], done); else act('mdReserve', [b.id, g, +btn.dataset.d], done);
@@ -5702,28 +5770,42 @@ function renderGupSection(b) {
   if ($('sh-gup-stop')) $('sh-gup-stop').onclick = () => act('gupStop', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); });
 }
 
-/** Aim at a Catcher: pick it on the map (a tap on it aims the Driver). */
-function startMdAim(b) {
+/** Aim a Mass Driver: pick its far end on the map (a tap on a Catcher, an Outpost or a Keep aims the Driver). */
+function startMdAim(b, kit) {
   closeSheet();
   setMode('mdaim');
   UI.mdAim = b.id;
+  UI.mdKit = !!kit; // (aiming a Catcher kit: a tap on open ground)
   showMdAimBanner();
 }
 
 function showMdAimBanner(problem) {
-  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap one of your <b>Catchers</b> ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (ringed) to aim this Mass Driver at it.`, null, 'Cancel');
+  if (UI.mdKit) { showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap open ground ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (inside the ring) that no one else holds: a <b>Catcher kit</b> (${costText(BDEFS.catcher.cost)}, loaded at the Driver) flies there and assembles itself.`, null, 'Cancel'); return; }
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap one of your <b>Catchers</b> ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (ringed) to make a line with it, or an <b>Outpost</b> or <b>Keep</b> to keep its Ammo topped up.`, null, 'Cancel');
 }
 
 function mdAimTap(i, j, wx, wy) {
   const a = getE(UI.mdAim);
   if (!a || a.dead) { setMode('normal'); return; }
+  if (UI.mdKit) {
+    const why = mdKitWhy(ME, a, i, j);
+    if (why) { sfx('error'); showMdAimBanner(why); return; }
+    act('mdKit', [a.id, i, j], (r) => {
+      if (r) { sfx('error'); showMdAimBanner(r); return; }
+      sfx('order');
+      toast(`Catcher kit ordered: Haulers bring the Driver its goods, it flies as soon as it's loaded and the coils can fire, and it assembles itself where it lands in ${MASSDRIVER.kitBuild} s.`, 'good');
+      setMode('normal');
+      openBuildingSheet(a);
+    });
+    return;
+  }
   const c = inMap(i, j) ? buildingAtTap(i, j, wx, wy) : null;
-  const why = mdAimWhy(ME, a, c && BDEFS[c.type].catcher ? c : null);
+  const why = mdAimWhy(ME, a, c && (BDEFS[c.type].catcher || mdFortType(c.type)) ? c : null);
   if (why) { sfx('error'); showMdAimBanner(why); return; }
   act('mdAim', [a.id, c.id], (r) => {
     if (r) { sfx('error'); showMdAimBanner(r); return; }
     sfx('order');
-    toast(a.mdSend ? 'Aimed: canisters fly once it has a load and power.' : 'Aimed. Now pick the goods to send on its panel.', 'good');
+    toast(mdFortType(c.type) ? `Aimed: it keeps the ${BDEFS[c.type].name}'s Ammo topped up, once it has power.` : 'Aimed: the two ends now supply each other, once each has power.', 'good');
     setMode('normal');
     openBuildingSheet(a);
   });
@@ -6275,6 +6357,7 @@ function recallAllWarbots() {
 }
 
 function confirmBanner() {
+  if (R.mode === 'terra') { tfConfirm(); return; }
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'bppick') { if (UI.bpPick && UI.bpPick.size) bpSave([...UI.bpPick]); return; }
   if (R.mode === 'bpplace') { bpPlaceNow(); return; }
@@ -6463,6 +6546,7 @@ function onMapTap(i, j, wx, wy) {
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'scorch') { scorchTap(i, j); return; }
+  if (R.mode === 'terra') { tfTap(i, j); return; } // (a Terraform plan: js/terraform.js)
   if (R.mode === 'bppick') { bpPickTap(i, j, wx, wy); return; } // (blueprints: js/blueprint.js)
   if (R.mode === 'bpplace') { bpPlaceTap(i, j); return; }
   if (UI.bpOffer) { UI.bpOffer = null; bpOfferShow(); }
@@ -7025,6 +7109,7 @@ function dragCliff(stroke, p, t) {
  * carries the road on from there as before.
  */
 function onRoadPaint(i, j, first) {
+  if (R.mode === 'terra') { tfPaint(i, j, first); return; } // (a Terraform plan's drag: js/terraform.js)
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
   if (first) {
@@ -8012,10 +8097,10 @@ function openBuildMenu() {
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
-  if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
+  if (UI.buildTab !== 'all' && UI.buildTab !== 'terra' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
   // (A tab marked `late`, Mega, comes after All, in the order of the number keys.)
   const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
-  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}</div>`;
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}${tfTabButton()}</div>`; // (Terraform last: tools, not buildings, js/terraform.js)
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   // The cards in tab order, each tab's under its name (shown on All on a desktop, where All is a wide grid of columns):
   // Roads and Blueprints lead Move, Walls lead Defend. (Elsewhere the grid's CSS order puts the next step, then Roads,
@@ -8034,7 +8119,7 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}${groups.map((g) => `<div class="b-grp" data-grp="${g.key}" aria-hidden="true"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}</div>`
-      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}</div>`;
+      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}${tfCards()}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
@@ -8042,11 +8127,12 @@ function openBuildMenu() {
   $('build-roads').onclick = () => openRoadDraw();
   if ($('build-bp')) $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
+  tfBind($('sheet-body'));
   const show = (g) => {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard, .build-grid .tf-note')) el.hidden = el.dataset.g === 'terra' || g === 'terra' ? el.dataset.g !== g : g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
     $('sheet-body').querySelector('.build-grid').classList.toggle('all', g === 'all'); // (on a desktop: grouped, in columns: style.css)
     document.body.classList.toggle('sheet-build-all', g === 'all');
     // On All, a card's key reads "2 K": its tab's number, then its letter.
@@ -8584,7 +8670,7 @@ function openBuildingSheet(b) {
       const on = !megaWrecking(b, ME);
       act('megaWreck', [b.id, on], (why) => {
         if (why) { sfx('error'); toast(why, 'warn'); return; }
-        sfx('click'); toast(on ? `Your warbots will wreck the ${def.name}: they shoot it on past 0 until it's destroyed.` : `Your warbots will seize the ${def.name}: knocked out, they hold it ${MEGA.cap} s and it's yours.`, 'info');
+        sfx('click'); toast(on ? `Your warbots will demolish the ${def.name}: they shoot it on past 0 until it's destroyed.` : `Your warbots will seize the ${def.name}: knocked out, they hold it ${MEGA.cap} s and it's yours.`, 'info');
         refreshSheet();
       });
     };
@@ -8702,6 +8788,7 @@ function refreshBuildingSheet(b) {
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
     : mine && S.time - (b.noSafe ?? -99) < NOSAFE_WAIT * 2 ? 'No safe route: enemy defences in the way. Your carriers wait until the way is clear (destroy the guns, or build a road round them).'
+    : mine && murmurShy(b) ? `Haulers turning back: Murmur near the road. Each turn-back in a row doubles the wait before the next is sent (now ${Math.round(shyRoadWait(b.shyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear the road.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
   if (!b.built) {
@@ -9135,6 +9222,7 @@ function refreshBuildingSheet(b) {
       : `${short ? 'Topping it up' : 'Stocked to your minimum'}. Tankers and Haulers bring more whenever it drops below.`) : !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (b.airSupply && !onHomeNet(b) ? `A Cargo Plane flies them in, ${BOTS.cargoplane.carry} goods a flight (see Supply by air).`
+        : b.mdFar && mdFed(b) ? 'Its Mass Driver throws them in by canister, with what the buildings round it need.'
         : trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
@@ -9171,10 +9259,10 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-mwreck')) {
     const w = megaWrecking(b, ME);
-    $('sh-mwreck').textContent = w ? 'Seize it instead' : 'Wreck it';
+    $('sh-mwreck').textContent = w ? 'Seize it instead' : 'Demolish it';
     $('sh-mwreck').classList.toggle('danger', !w);
-    $('sh-mwreck-hint').textContent = w ? `Ordered wrecked: your warbots shoot it on past 0 until it's destroyed, and part of its goods spill out in crates.`
-      : `Beaten to 0 by your warbots it is knocked out, not wrecked: hold it ${MEGA.cap} s and it's yours, then bring it online for a quarter of its cost. Wreck it to destroy it instead.`;
+    $('sh-mwreck-hint').textContent = w ? `Ordered demolished: your warbots shoot it on past 0 until it's destroyed, and part of its goods spill out in crates.`
+      : `Beaten to 0 by your warbots it is knocked out, not wrecked: hold it ${MEGA.cap} s and it's yours, then bring it online for a quarter of its cost. Demolish it to destroy it instead.`;
   }
 }
 
@@ -10470,6 +10558,7 @@ function openMsgSheet() {
 function landingLog() { return S && !S.mission ? `${NARRATOR.start} Landing site: ${regionName(S.settings.biome)}.` : ''; }
 
 function showBriefing(log) {
+  voiceOpening(); // (the Carrier's line as the lander comes down: js/voice.js)
   // (Not under test automation, whose scripts expect the game to start at once, unless a test asks for it.)
   if (typeof navigator !== 'undefined' && navigator.webdriver && !window.BOTFALL_BRIEF) return;
   const items = S.msgs.splice(0);
@@ -11088,14 +11177,14 @@ function hordeTopLine() {
     const c = hordeCols().find((q) => S.players[q].down);
     return `${c === ME ? 'You are' : `${playerName(c)} is`} down · wave ${H.n + 1} in ${fmtClock(H.at - S.time)}`;
   }
-  if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length} left`;
+  if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length + hordeHeld()} left`;
   return `Wave ${H.n + 1} in ${fmtClock(H.at - S.time)}${up ? ` · ${up} up` : ''}`;
 }
 
 /** The Goal card in Horde: the next wave and what's in it (what's new), how many cleared, the best kept. */
 function hordeObjective() {
   const H = S.horde, n = H.n + 1, nk = hordeNewKinds(n), best = hordeBests()[H.lv];
-  const head = !hordeEndless() && H.n >= H.of ? `<b>The last wave</b> is out: clear it to win. ${hordeUpCount() + H.q.length} Murmur left.`
+  const head = !hordeEndless() && H.n >= H.of ? `<b>The last wave</b> is out: clear it to win. ${hordeUpCount() + H.q.length + hordeHeld()} Murmur left.`
     : `Hold the line. <b>${n % HORDE.boss.every === 0 ? 'Boss wave' : 'Wave'} ${n}</b> in ${fmtClock(H.at - S.time)}: ${hordeWaveText(n)}${nk.length ? ` <span class="err">New: ${nk.join(', ')}.</span>` : '.'}`;
   return `${head}<br>Cleared ${H.cleared || 0}${hordeEndless() ? '' : ` of ${H.of}`}${hordeEndless() && best ? ` · best wave ${best}` : ''} · ${H.kills || 0} Murmur killed.`;
 }
@@ -11109,7 +11198,6 @@ function showHordeOver() {
     : 'Command core lost. The Murmur hold the region. Transferring authority. Hold position.';
   $('o-log').hidden = false;
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (H.won === 'maw' ? 'The Maw has fallen!' : 'The line held!') : 'Overrun';
   $('o-text').textContent = won
     ? (H.won === 'maw' ? `You wrecked the Maw${reached ? ` after ${reached} wave${reached === 1 ? '' : 's'}` : ''}: its mouths cave in and the waves are over.` : `You survived all ${H.of} waves on ${DIFFICULTY[H.lv].label}. The Murmur fall back into the dark.`)
     : `The Murmur broke ${H.lostP !== undefined && H.lostP !== ME ? `${playerName(H.lostP)}'s` : 'your'} Command Base ${H.n ? `during wave ${H.n}` : 'before the first wave'}. You cleared ${reached} wave${reached === 1 ? '' : 's'}${endless ? (isBest ? ': a new best on this level!' : ` (your best on ${DIFFICULTY[H.lv].label}: wave ${best}).`) : '.'}`;
@@ -11124,5 +11212,70 @@ function showHordeOver() {
   $('o-keep').hidden = true;
   metaGameOver(); // (Horde's achievements and records: js/goals.js)
   syncRematch();
-  $('screen-over').hidden = false;
+  overFlare(won ? (H.won === 'maw' ? 'Victory' : 'Held') : 'Overrun', won ? (H.won === 'maw' ? 'The Maw has fallen' : `The line held · ${H.of} waves`)
+    : H.n ? `Wave ${H.n} · ${reached} cleared` : 'Before the first wave', won ? 'win' : 'loss');
+}
+
+/**
+ * The end of a game, announced (owner, Nov 2026): the result, in the main menu's TERRAFALL look (Chakra Petch, the
+ * coral gradient, its glow), flares in over the dimmed map with a light streak and a soft flash, holds a moment, then
+ * shrinks into place as the end screen's heading while the dashboard fades in under it. A defeat is darker, grey and
+ * slower, with no streak. A tap, a click or a key skips straight to the dashboard; with reduced motion it only fades.
+ * tone: 'win', 'loss' or 'neutral' (an Observer's end). done: Contingency's battles, which have no dashboard here (the
+ * result goes back to the globe): the word in the Command Deck's blue, then done().
+ */
+function overFlare(word, kick, tone, done) {
+  const scr = $('screen-over'), fl = $('o-flare'), w = fl.querySelector('.of-word'), card = scr.querySelector('.card');
+  if (UI.flareEnd) UI.flareEnd(true);
+  $('o-title').textContent = word;
+  $('o-title').classList.toggle('loss', tone === 'loss');
+  $('o-kicker').textContent = kick || ''; $('o-kicker').hidden = !kick;
+  w.textContent = word; fl.querySelector('.of-kick').textContent = kick || '';
+  w.style.transform = ''; w.style.transition = '';
+  fl.className = `o-flare ${tone}${done ? ' blue' : ''}`;
+  scr.classList.remove('settling', 'flare-loss', 'flare-blue');
+  scr.classList.add('flaring');
+  if (tone === 'loss') scr.classList.add('flare-loss');
+  if (done) scr.classList.add('flare-blue');
+  fl.hidden = false;
+  scr.hidden = false;
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (!calm) sfx(tone === 'loss' ? 'flareDown' : 'flare');
+  // The end's music and the Command core's last line (js/audio.js musicCue, js/voice.js voiceEnding); not for Contact,
+  // which ends in silence and one answering tone (gupSilence).
+  if (word !== 'Contact') { musicCue(tone, !!done); voiceEnding(tone, word, !!done); }
+  let timer = 0, settled = false;
+  const finish = (quiet) => { // the dashboard in place (quiet: replaced by another, nothing more to run)
+    clearTimeout(timer);
+    UI.flareEnd = null;
+    removeEventListener('keydown', onKey, true);
+    scr.removeEventListener('pointerdown', onTap, true);
+    fl.hidden = true;
+    scr.classList.remove('flaring', 'settling', 'flare-loss', 'flare-blue');
+    if (!quiet && done) done();
+    else if (!quiet && !scr.hidden) { const b = $('o-new'); if (b && matchMedia('(pointer: fine)').matches) b.focus({ preventScroll: true }); }
+  };
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    if (scr.hidden && !done) { finish(true); return; }
+    scr.classList.add('settling');
+    if (done || calm) { fl.classList.add('out'); timer = setTimeout(finish, calm ? 300 : 500); return; }
+    // (FLIP: from the middle of the screen to the heading's own text box, scaled by the font size)
+    const box = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
+    const a = box(w), b = box($('o-title')), fs = (el) => parseFloat(getComputedStyle(el).fontSize) || 0;
+    const k = fs(w) ? fs($('o-title')) / fs(w) : 0.3;
+    w.style.transition = `transform ${tone === 'loss' ? 0.8 : 0.62}s cubic-bezier(0.6, 0, 0.2, 1), opacity 0.25s ease ${tone === 'loss' ? 0.6 : 0.42}s`;
+    w.style.transform = `translate(${b.left + b.width / 2 - (a.left + a.width / 2)}px, ${b.top + b.height / 2 - (a.top + a.height / 2)}px) scale(${k})`;
+    fl.classList.add('out');
+    timer = setTimeout(finish, tone === 'loss' ? 900 : 700);
+  };
+  // (a tap or a key skips it: the dashboard at once, its buttons live a moment later so the tap doesn't press one)
+  const skip = () => { finish(); if (!done) { card.style.pointerEvents = 'none'; setTimeout(() => { card.style.pointerEvents = ''; }, 250); } };
+  const onTap = (e) => { e.preventDefault(); e.stopPropagation(); skip(); };
+  const onKey = (e) => { if (e.repeat || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return; e.preventDefault(); e.stopPropagation(); skip(); };
+  addEventListener('keydown', onKey, true);
+  scr.addEventListener('pointerdown', onTap, true);
+  UI.flareEnd = finish;
+  timer = setTimeout(settle, calm ? 1100 : tone === 'loss' ? 2300 : 1900);
 }

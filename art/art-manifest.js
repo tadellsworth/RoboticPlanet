@@ -28,9 +28,9 @@
  *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
- *   Resources: stalk boulder ore crystal crop uranium   (crop is drawn smaller while it ripens; stalk has an image
- *              for each growth stage, stalk-1 … stalk-3; stalk-glow and stalk-3-glow are its light at night. An oil
- *              seep has no art: it is a puddle of crude made in code from its tiles, js/seep.js)
+ *   Resources: boulder ore crystal crop uranium   (crop is drawn smaller while it ripens. Fiber's Stalks have no
+ *              art: each is a clump of Lantern Cane drawn in code for its stage, js/reedcane.js; nor has an oil
+ *              seep: it is a puddle of crude made in code from its tiles, js/seep.js)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles;
  *              512x512 keeps them sharp when zoomed in)
  *   Biomes:    ground-jungle water-jungle rock-jungle cliff-jungle, and the same with -polar
@@ -47,7 +47,7 @@
  *              anchor ('bottom' or [x, y]), a 3/4-view base only, plus head images turret-head-0@0 … turret-head-7@0
  *              (and @1): the gun head alone on the same canvas, facing right (0), then each 45° step
  *              clockwise on screen (1 down-right … 6 up/away, 7 up-right). 16 heads (0-15) also work.
- *   Markers:   missile (in flight, facing right; 128x128)  nuclear-missile  rally (your rally flag; 128x128)
+ *   Markers:   missile (in flight, facing right; 128x128)  rally (your rally flag; 128x128)
  *              oneway (arrow painted on a one-way path, pointing right; 64x64)
  *   Effects:   nuke-blast (a 6×4 sprite sheet, 24 frames)  nuke-scorch (the scorched crater)
  *              Weapon effects (ART_GUIDE Batch 15), sprite sheets given with frames and cols, e.g.
@@ -133,12 +133,19 @@ const ART_MANIFEST = {
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
   ...driveSet('bulwark'), ...driveSet('torch'), ...driveSet('skirmisher'), ...driveSet('arccaster'), ...driveSet('railgunner'),
+  // The Grader (ART_GUIDE Batch 35, the owner's concept A "Dozer"): driving with the blade raised (its driveSet), at
+  // work with it down (grader-work), the heap of earth ahead of the blade at three sizes (team-neutral, drawn under the
+  // sprite), and the terraforming effect sheets: clods and dust off the blade (a loop, facing right), earth splashing
+  // into water, silt plumes (variants). Drawn by js/terraform.js.
+  ...driveSet('grader'),
+  ...(() => { const o = {}; for (const t of [0, 1]) for (let f = 0; f < 4; f++) o[`grader-work@${t}-f${f}`] = { src: `bots/grader-work@${t}-f${f}.webp`, shadow: true }; return o; })(),
+  'grader-load-1': 'bots/grader-load-1.webp', 'grader-load-2': 'bots/grader-load-2.webp', 'grader-load-3': 'bots/grader-load-3.webp',
+  'fx-grader-clods': { src: 'effects/fx-grader-clods.webp', frames: 8, cols: 4, slice: true },
+  'fx-grader-splash': { src: 'effects/fx-grader-splash.webp', frames: 8, cols: 4, slice: true },
+  'fx-mud-plume': { src: 'effects/fx-mud-plume.webp', frames: 3, cols: 3 },
   ground: 'tiles/ground.webp',
-  // Fiber's Stalks (Reedcane, renderer/b/resources.js): full grown, then a quarter, half and three-quarters grown as
-  // it comes back; the plumes' light at night. (Oil has no art: a seep is a puddle of crude made in code from its tiles,
-  // js/seep.js.)
-  stalk: 'resources/stalk.webp', 'stalk-1': 'resources/stalk-1.webp', 'stalk-2': 'resources/stalk-2.webp', 'stalk-3': 'resources/stalk-3.webp',
-  'stalk-glow': 'resources/stalk-glow.webp', 'stalk-3-glow': 'resources/stalk-3-glow.webp',
+  // (Fiber's Stalks have no art: each is a clump of Lantern Cane drawn in code for its stage, js/reedcane.js; and Oil
+  // none either: a seep is a puddle of crude made in code from its tiles, js/seep.js.)
   boulder: 'resources/boulder.webp',
   ore: 'resources/ore.webp',
   crystal: 'resources/crystal.webp',
@@ -186,7 +193,6 @@ const ART_MANIFEST = {
   // The same Silos with no missile in them: drawn until one is armed and ready to fire.
   'nukesilo-empty@0': B3D('buildings/nuclear-silo-empty@0.webp'),
   'nukesilo-empty@1': B3D('buildings/nuclear-silo-empty@1.webp'),
-  'nuclear-missile': 'markers/nuclear-missile.webp',
   'nuke-blast': 'effects/nuke-blast-sheet.webp',
   'nuke-scorch': 'effects/nuke-scorch.webp',
 

@@ -11,7 +11,8 @@ weapon effects, explosions and building collapses (muzzle flashes, tracers, smok
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
 and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the Airship and
 the Mooring Mast in [Batch 18](#batch-18-the-airship-and-the-mooring-mast-installed); the Maglev line in
-[Batch 21](#batch-21-the-maglev-line-installed).
+[Batch 21](#batch-21-the-maglev-line-installed); Fiber's Stalks as Lantern Cane, drawn in code, in
+[Batch 34](#batch-34-fibers-stalks-as-lantern-cane-installed-drawn-in-code).
 
 This guide has three parts:
 
@@ -218,7 +219,7 @@ Make them roughly in this order. The first few change the look of the game the m
 | `worker@0`, `worker@1` | Worker bot: carries goods, builds, runs buildings | A small, sturdy utility robot seen from directly above, facing right: a compact rounded body on treads or four small wheels, a cargo cradle on its back, one glowing team-colour sensor eye at the front. Chunky and friendly-looking but worn. |
 | `warbot@0`, `warbot@1` | Combat bot | An aggressive, low-slung combat robot seen from directly above, facing right: an arrowhead or wedge-shaped armoured chassis, twin forward weapon barrels, team-colour glowing armour seams and visor. Clearly more dangerous than the worker. |
 | `ground` | Basic sand tile (128×128, **seamless, opaque**) | A seamless top-down texture of rust-ochre alien sand and packed dust with small pebbles and subtle wind ripples. Low contrast so buildings stand out on it. |
-| `stalk` | Fungal plants, harvested for Fiber | A small cluster of 2–3 alien fungal stalks seen from above: thin dark-teal stems topped with glowing mint-teal bulbous caps, slightly bioluminescent. |
+| `stalk` | Fungal plants, harvested for Fiber (no longer an image: Lantern Cane, drawn in code, [Batch 34](#batch-34-fibers-stalks-as-lantern-cane-installed-drawn-in-code)) | A small cluster of 2–3 alien fungal stalks seen from above: thin dark-teal stems topped with glowing mint-teal bulbous caps, slightly bioluminescent. |
 | `boulder` | Rocks, quarried for Stone | A cluster of 2–3 pale grey weathered boulders with cracks and dust, seen from above. |
 | `ore` | Ore vein, mined for Ore | A jagged chunk of near-black rock seamed with glowing molten-orange metallic veins, seen from above. |
 | `crystal` | Crystal cluster, tapped for Crystal | A cluster of 3 tall hexagonal violet crystals jutting from the ground at angles, faintly glowing from inside, seen from above. |
@@ -1640,7 +1641,8 @@ toward a pale crest; and here and there a short fissure off the crest where the 
 `paintRidges`, baked as before). Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
 morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the ground while it stays shut).
 
-**Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
+**Fiber and Oil, on every map** (`art/resources/`). (Both since redone in code: Fiber as Lantern Cane, Batch 34, its
+images removed; Oil as a puddle of crude, Batch 20.) Fiber's Stalks were then **Reedcane**: a clump of jointed sage-teal
 canes with mint plumes. `stalk` is full grown and `stalk-1`, `stalk-2`, `stalk-3` show it a quarter, half and three
 quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glow` are the plumes' light at night. All
 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they have no time-of-day
@@ -1821,6 +1823,44 @@ the body also holds the sky: a faint cool sheen across its top half, gone toward
 colours just inside its edge (both baked with it, in `drawSeepPuddle`). Everything is render state (`SEEP`),
 read from `S` and never written to it; the simulation never reads it.
 
+### Batch 34: Fiber's Stalks as Lantern Cane (installed; drawn in code)
+
+The owner asked for a new Fiber plant (IDEAS, Nov 18). Six Reedcane directions were drawn inside the running game (on
+the Rust and Greenreach, by day and at night, at 80/64/48/28 px a tile, a whole field and one being cut and regrown);
+the owner picked **A, Lantern Cane**: tall jointed canes in Fiber's mint-teal, a dark ring at every joint and a few
+narrow leaves off the joints. Ripe, the rings turn pale mint, and at night they're lit, so a field after dark reads as
+rows of mint lights. Cut canes leave pale stumps, and the canes grow back a joint at a time.
+
+**There are no images** (the old `stalk`, `stalk-1…3`, `stalk-glow` and `stalk-3-glow` WebPs are gone from
+`art/resources/` and the manifest): each look is drawn in code (`js/reedcane.js`, a port of the design sheet's
+prototype) the first time it's needed, into a small canvas, and kept (`REED.cache`), so it costs one image a clump when
+the ground is baked and nothing per frame by day.
+
+| Look | When (`reedState`) | What |
+|---|---|---|
+| A quarter grown | `S.grow` under 0.375 | Mostly pale cut stumps, a few short shoots |
+| Half, three quarters grown | under 0.625, under 0.875 | The canes at about half and three quarters height, a joint at a time, their rings dull green (paler at three quarters) |
+| Ripe | 0.875 and up | Full height, the rings pale mint with a white glint |
+| Ripe, being cut | `S.amt` down to two thirds or less of a grove's (`RES[R_STALK].amount`) | A third, then two thirds of its canes cut to pale stumps (a rich grove shows full until it's down to a plain grove's) |
+
+- **Size and place:** a sprite is 1.5 tiles square (`REED.scale`, anchor [0.5, 2/3]): the clump's foot at the tile's
+  middle and its canes standing up half a tile into the tile above. 128 px a tile (the sharp map's finest). So the
+  clumps are drawn after the ground of the tiles round them, row by row (`drawStalks`, from `bakeMap`, `hdBake`,
+  `redrawRegion` and `redrawAround`, before the decorative plants), and a tile repainted near a Stalk, or where one
+  stood, repaints the tiles round it too (`reedNear`, `R.reedAt`).
+- **Variety:** three clumps (`REED.variants`: 10, 12 or 13 canes, a little narrower or wider), each tile picking one by
+  its position and nudged a little off the middle (`reedVariant`), so a field isn't one clump repeated on a grid.
+- **Shadows:** a soft pool under the clump and each cane's shadow cast down-right, drawn small and laid on enlarged
+  (soft in every browser, no canvas filter).
+- **Evening and night:** the clumps are graded with the ground, like every resource. Their light: a soft mint halo of
+  the rings in the night glow map (`drawStalks` with glow), and zoomed in past 30 px a tile (fully by 46), where that
+  map is too coarse for single rings, each ring's own small light (`drawReedLights`: one cached sprite a clump in view,
+  each pulsing a little on its own; not on the Saver step). A grove growing back is lit too, dimmer the less grown
+  (`REED.lit`: 0.28, 0.45, 0.68, ripe 1); its shoots' tips glow, and a quarter-grown grove's stumps faintly. Under a
+  road or track a Stalk shows faintly and gives no light.
+
+All of it is render state, read from `S` and never written to it; the simulation never reads it.
+
 ### Batch 21: the Maglev line (installed)
 
 In play, pylons sharing a road or track show their footing on the shoulder, with a support arm connecting to the straight guideway.
@@ -1891,6 +1931,7 @@ writes the WebP files (jobs.txt lists each one; RENDERER.md, "The Mass Driver an
 | `mdriver-<dir>@0`, `mdriver-<dir>@1` (dir: e w (lying east-west), n s (north-south); + morning, evening, night) | The Mass Driver, two tiles long on a 2 × 1 pad: a pale concrete ramp with buttresses down its flanks carrying a coil-gun rail of eleven copper coil rings on gunmetal yokes, rising to a flared muzzle with a team-light ring and a red light; a breech house with a hopper at its foot, capacitor banks on both flanks cabled to the coils, three sealed canisters on a rack; the coils' inner bands glow pale blue-white after dark. 512 px, the buildings' angle, framed wide (the pad's two tiles across 0.85 of the frame) | `MD_FRAME` in the manifest (its scale and anchor, from the render: the anchor is the middle of its two tiles); drawn over the middle of its tiles, the end facing its Catcher (`mdDir`); `mdriver@T` (the menu, a Driver not yet aimed) is the east one |
 | `catcher@0`, `catcher@1`, `catcher-closed@0`, `catcher-closed@1` (+ times of day) | The Catcher: a wide ribbed steel funnel cradle on an octagonal concrete plinth, its rim lit in the team colour, copper braking rings glowing in its throat, four magnetic arms in hazard yellow on legs round it, swung up and out (open) or in over the funnel with their magnet heads lit (closed); a small control cabin, a floodlight pole. 512 px | `B3D` at scale 1.4; the closed art while a canister is landing (`mdArmsIn`) |
 | (code) | The shot | `drawMassDrivers`: the coils light blue-white in sequence breech to muzzle as it charges, arcs of light crackling between them and up the rail, a ray along the rail; on the shot every coil blazes and a flash at the muzzle; a faint dashed guidance beam from the muzzle to the Catcher's cradle while a canister flies; the canister, a stubby gunmetal cargo container (ribbed sides, dark corner castings, a band in the team colour, an amber running light blinking at its nose) holding its heading along the arc, with a short glowing streak and its shadow on the ground; after dark the coils glow faintly between shots. `MD_ART` holds the renders' marks |
+| (code) | The shot back (Nov 26 2026: the line is two-way) | `drawCatcherLamps`: a Catcher charging gathers a blue-white glow in its funnel that swells with the charge, arcs crackling between its arms, then a flash and a short ray straight up as it fires; `drawMassDriverLamps`: a canister caught at the Driver lights its muzzle and the coils down the rail. The canister leaves from and lands at each end's port (`mdPort`: the Driver's muzzle, the Catcher's cradle, an Outpost's or Keep's roof). No new renders. |
 
 ### Batch 24: the megastructures, the Lance of Corvane and the Shield Dome (installed)
 
@@ -2038,6 +2079,70 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `skirmisher@0-f0`…`@1-f3` (+ morning, evening, night), `-brake`, `-boost` | A lean arrowhead body slung low between four big all-terrain tyres on swing arms (the tread rolls a quarter block a frame), team strips along its flanks, swept tail fins, a swivel with twin short autoguns, two dash thrusters in the tail glowing team colour. Smaller than the Warbot in the same frame | `drawArmyLights`: its thrusters flare (a glow and two streaks of team light) while it dashes; `'dash'`: a kick of dust and twin light streaks where it sets off |
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
+
+### Batch 35: the Grader and the Earthworks (installed; the ground and the plans drawn in code)
+
+Stage 1 of terraforming (Nov 2026; README, "Terraforming, stage 1") needed a new robot and a new kind of site. Their
+look went through Claude Design (IDEAS.md, "Redraw the code-drawn art through Claude Design"; the canvas:
+https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU, with four concepts, storyboards, the ground and the planning
+overlays). The owner picked **concept A, "Dozer"** (Nov 26 2026). The Grader is rendered with `renderer/` like the
+other robots; the ground being worked and the plans are drawn in code to the canvas, in `js/terraform.js`, the only
+file that draws them. Looks only: nothing here touches the simulation (`hashState` is the same).
+
+**The Grader** (`BOTS.grader`): a compact, heavy crawler dozer in the Lancer line (`renderer/b/robkit.js`: seen
+straight down, facing east, 10 world units across, 256 px, no drop shadow). Wide exposed tracks under narrow fenders
+with team light strips, an earth-ochre engine hood (the terraforming crews' paint) with louvres and an exhaust stack, a
+cab set back with a pale work-paint roof, the team-lit sensor slit and an amber beacon, a wide curved blade on push arms
+with two lift rams (hazard stripes along its top, a worn bright cutting edge), and a three-shank ripper at the tail.
+Hood lamps and roof work lights light up in the evening and night renders. Modelled in `renderer/b/rob_grader.js`
+(helpers in `renderer/b/gradekit.js`: the game's own ground texture as fresh earth, a heap of it, lamps, the beacon),
+rendered by `renderer/tools/render_grader.sh` (compose_any.py `--b1 3.5 --b2 10 --glow 1.4`, as the other robots) and
+installed as WebP by `renderer/tools/install_grader.py` (82 files, about 590 KB). The scene loads textures, so
+`renderer/index.html` now awaits an async scene and `renderer/run.js` serves the game's `art/` folder at `/art/`.
+Drawn half a tile across (like the civilians), turned to its heading; the third and fourth teams are recoloured from
+the first two (`recolorArt`), as every robot.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `grader@0-f0`…`@1-f3` (+ morning, evening, night) | Driving, the blade raised: the tracks roll a quarter link a frame (`driveSet('grader')`) | `drawGrader`: by distance driven (`driveFrame`), with `grader-brake` / `grader-boost` as the other robots |
+| `grader-work@0-f0`…`@1-f3` (+ times of day) | At work, the blade down | `graderPose` cutting, pushing, filling or finishing: the frames at 8 a second; it noses up to the tile it works from the one beside it and pushes in and backs off (finishing: slow passes back and forth), rocking as the blade bites |
+| `grader-load-1`…`3` (+ times of day) | The heap of earth ahead of the blade at three sizes, team-neutral, in the Grader's framing (the scene's `part=load`) | Under the sprite (the blade stands in front of it): cutting, it builds up 1 → 3 and dumps; pushing, a full 3; filling, it spreads 3 → 1; none while finishing |
+| `grader-brake`, `grader-boost` | The brake lenses and the dust kicked up (`post/robot_overlays.py`) | As the other robots, while driving |
+| `tod/shared/grader-headlights` | Two hood lamps' long beams and two roof work lights' wide, short flood (`post/grader_post.py`; 3 × the sprite, halved to 384 px) | `drawHeadlights` at dusk and night (`TOD_VEHICLES`); at work the amber beacon pulses and the work lights throw a pool over the tile (`drawEarthwork`) |
+| `fx-grader-clods` | 8 frames (4 × 2) of 128 px, a loop, facing east: clods and dust off a blade biting in, spilling off its ends (`renderer/fx/terraform.py`) | Ahead of the blade while cutting, pushing or filling, turned with it; graded for the time of day (`tfGraded`) |
+| `fx-grader-splash` | 8 frames: earth dropped into water, a crown of muddy spray and droplets, a foam ring spreading | At the front of a Fill shallows tongue while a Grader works it |
+| `fx-mud-plume` | 3 variants of 256 px: silt spreading in the water | Ahead of a tongue of new land, thinning as it nears done; over a freshly dug tile, fading out |
+
+Code exhaust (three soft grey puffs off the stack) while it idles or works.
+
+**The ground** (`tfGround`, called before the time of day's grading, so it is re-lit with the ground; `tfSiteGround`
+for each site, `b.tf.k` and `b.progress` 0 to 1). Fresh soil is each biome's own earth (`TF_SOIL`: the Rust's red-brown,
+darker and browner in Greenreach and Blackwater, grey on Argos), a 96 px grain tile made once a biome (`tfSoil`) laid as
+a pattern that scrolls and zooms with the map. Heaps are 128 px sprites made once a kind (`tfHeap`: spoil, fill with
+blade furrows, grey Stone), lit from the upper left with clods round their foot. All shapes have ragged, seeded edges
+(`tfRagged`), so they keep their shape frame to frame.
+
+| Job | What | How it's drawn |
+|---|---|---|
+| Lower, Flatten down (`down`) | The cut opens from the side the Grader works from (west to east until one is there) and its face moves across: exposed soil, darker the deeper the job, the near walls in shade and the far ones lit, a dark edge where the blade bites; a spoil heap growing beside it | nothing until work starts |
+| Raise, Flatten up (`up`) | Fill heaped onto the tile with blade furrows, spread, then levelled: a pad of fresh soil with its new south face as a dark band; a small grey Stone heap in a corner while Stone brought for it waits to be worked in | |
+| Fill shallows (`fill`) | A tongue of wet new land pushed out from the shore, a foam rim round it, a mud plume spreading ahead; a splash at its front while a Grader works | |
+| Dig channel (`dig`) | A trench cut in from the water with spoil berms either side, the biome's water following it in behind with a muddy front; near done it widens to the whole tile | |
+| Finished | New ground stays fresh soil and weathers into the biome's over three minutes of game time (`TF_FRESH`); a dug tile has silt settling in its water and banks of fresh soil on the land round it | `R.tfFresh`, noted when a site finishes (`tfSites`) |
+| Track marks | Two bands of cleat prints where each Grader drove, fading over 45 s | `tfTracks`, from each Grader's trail (`R.tfTrail`) |
+
+**The plans** (`tfPlanTile`, on the site in the buildings' pass: interface, so full strength by night with a slight
+glow), in the road plans' language (`drawPlans`): an inset dashed outline, amber for yours and faint red for a rival's,
+a pale fill in the job's tint (paler once work starts), and the job's glyph: warm up-chevrons (Raise), cool
+down-chevrons (Lower), pale level bars (Flatten: the tiles of a Flatten you planned, `R.tfFlat`), waves over new ground
+(Fill shallows), a channel band with flow arrows toward the water (Dig channel). While a Grader works it, a grey bar
+fills along the bottom and the tint rises from the bottom. Waiting for its Stone (`tfReady` says no): the sparser
+orange dash and a small grey Stone pip, as roads waiting for goods. The plan being drawn in the Terraform mode
+(`tfDrawPlan`) uses the same tiles, its new level small in the corner, refused tiles crossed out in red. Survey stakes
+(a pale post, an orange band, a tip in the owner's colour, glowing at night) stand at each site's corners (`tfStake`).
+
+**Cost:** every sprite is cached (per biome, kind, team colour); the site list is refreshed twice a second. On the
+Saver graphics setting the extras are left out: track marks, plumes, clods, splashes, exhaust and fresh soil.
 
 ### War scars (drawn in code; no images)
 
@@ -2202,6 +2307,58 @@ does (1 / (1 + (r/r0)²)^1.5) through the colour itself to a long faint tail, fi
 replaced the tinted `art/tod/shared/light-pool.webp` (kept for `renderer/`'s mock-ups; no longer loaded). The street
 lamps' own pools are still art (`streetlamp-*-pool`).
 
+### Megastructures at night (drawn in code; no images)
+
+The owner, Nov 25 2026: the megastructures stood dark beside a lit base, their night renders' lamps too dim. So at dusk
+and night (as `TOD.state.lights` rises) each one but Arrival City (its own `cityLights`) gets, over its sprite
+(`megaNight` in `js/render.js`):
+- **A light layer**, made once per night image and colony colour (`megaNightLayer`, 512 px, kept with the image) and laid
+  on additively in one draw: the night art multiplied by itself three times (only its lamps and lit windows left) and
+  bloomed (a 96 px and a 32 px copy scaled back up); the deck floodlit warm-white (`#ffd9a8`) from the middle of its pad
+  (the day art, faded out toward the edge, at 34%); an LED strip in the owner's colour round the pad's edge, with a soft
+  glow. Only blending, no pixel reads, so it works on a page opened from a file.
+- **Beacons** (`MEGA_LAMPS`: the pad's edge and each lamp as fractions of the sprite): red warning lights blinking slowly
+  on the tall parts (the Lift's anchor and huts, the Ray's stacks and bore tower, the Deep Core's headframe, the Engine's
+  rim, the Uplink's small dishes, the Lance's corner rigs and its muzzle, `lanceTipLight`, which turns with the gun);
+  white floods on lamp heads; a lamp in the owner's colour on the Dome's emitter and the Lift's anchor.
+Their own lights stay as they were (the Lift's cable, the Uplink's rim, the Deep Core's shaft, the Engine's plume, the
+Lance's charge glow, the Dome's shimmer). Knocked out or offline (`megaOut`) it is dark: its graded day art in place of
+the lit night art (`drawMegaArt`), no layer, no pools, its Lift cable dim and unlit, and only its amber lamp blinking
+(`drawMegaDark`). Their moving parts go dark with them (Nov 26 2026): the Sundering Ray's rams and plates and the Deep
+Core's winding wheels are drawn through `drawMegaArt` too, so no lit night frames sit on a dark structure. A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
+render, 0..1 across and down).
+
+### The nuclear missile (drawn in code; no images)
+
+The owner, Nov 26 2026: longer and more rounded, like a modern ICBM, still menacing; painted in the Garrison look. It replaced
+`markers/nuclear-missile.webp` (the old black-and-yellow rocket) and the missile baked into `nukesilo@T`: the Nuclear Silo
+is now always drawn with its open shaft (`nukesilo-empty@T`) and the missile in code standing in it.
+- **The sprite** (`icbmArt` in `js/render.js`, made once, 768 px square, nose to the right, kept as an art entry so
+  `drawArt` grades it for morning, evening and night like any image): `ICBM.len` 1.85 tiles long, `ICBM.dia` 0.155 wide
+  (12 : 1). Three stages, each a little narrower (radius 0.5, 0.47, 0.435 of its width), darker separation bands with
+  rivet rows, a rounded ogive nose (about 1.9 calibres, blunt at the tip).
+- **The Garrison look** (the owner's pick from the design sheet of six looks, Nov 26 2026; it replaced the first
+  off-white, red-marked body): matte olive drab (`#5b6444`, bands `#363c2b`), a matte black re-entry body on the nose
+  (`#1f2120`, its last tenth), a yellow live-warhead band (`#d8b326`) just behind it, white stencils (a serial block, a
+  data plate, a small trefoil; `rgba(232,230,218,0.8)`), olive fins (two edge-on, one face-on), tan dust on its
+  underside, heavier soot toward the base and a dark nozzle. Shaded as a cylinder lit from above (multiply), with only a
+  faint sheen (it's matte) and a cool reflected rim below.
+- **Readable on any ground**: olive on rust is the hardest pairing at 48 px a tile, so it has a slightly lighter rim
+  (`rgba(196,206,150,0.3)`, a stroke following the profile just inside its lit edge) and a soft dark halo round the whole
+  silhouette, fins included (blurred, about a screen pixel at normal zoom), under a fine dark outline. Checked on the
+  Rust, Greenreach, the Polar Caps and Argos, by day and at night, in the Silo, at liftoff and falling.
+- **Drawing it** (`drawIcbm`): turned to any angle, flipped so its lit side stays up and to the left; at night its day
+  colours come back at 45% (floodlit by its Silo, then its own fire); `drawIcbmFlame` is its exhaust (three additive
+  layers, a white-hot core, flickering) with a glow; re-entry adds a hot glow at the nose.
+- **In the Silo** (`drawSiloIcbm`, `NSILO_HOLE`: the shaft's mouth in tiles from the square's middle): standing in the
+  shaft, cut off at the mouth (the back half of the rim behind it, the front lip over it), falling into shadow down the
+  shaft; armed, `ICBM_OUT` (24%) of it shows; it rises into place over `SILO_RISE`. During a strike, `drawNukeSiloAlarm`:
+  four red beacons turning round the pad (a sweep of light each), the hatch rim flashing red faster toward liftoff, white
+  steam (`steamPuff`) from four vents, and in the last 1.6 s fire and smoke out of the mouth as it shakes.
+- **Climb and fall** (`drawNukeClimb`, `drawNukeFall`): see README (Nuclear race). Smoke puffs are laid every third of a
+  tile of the climb (so the column has no gaps however fast it goes), white steam with grey smoke mixed in, drifting
+  downwind as they age; the fall is a white-hot streak 7 tiles long behind it.
+
 ### The minimap (drawn in code)
 
 `minimapDetail` makes its picture at a few pixels a tile whenever the land, the borders or the roads change: the tile
@@ -2315,7 +2472,7 @@ Campaign's picture is unchanged.
 - All six robots now drive with Batch 8 frames (`worker`, `warbot`, `hauler`, `agribot`, `paver`, `truck`, each
   `@0/@1-f0…f3` plus `-brake` and `-boost`, stored as WebP in `art/bots/` and listed with `driveSet()`); the hauler's
   crates are drawn on its bed. The military buildings, the 3D Command Base, the Repair Bay (`repair`) and the nuclear
-  set (`reactor`, `nukesilo@0/@1`, `nuclear-missile`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
+  set (`reactor`, `nukesilo@0/@1`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
   installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
   Installed since: the Batch 14 defences, streetlamps (`streetlamp-road`/`-asphalt`, `-lit`, `-pool`) and the Pulse
@@ -2357,7 +2514,8 @@ Campaign's picture is unchanged.
   to adjust angle, lighting and scale with two assets than with twenty.
 - If a building looks too small or too big in the game, change its `scale` in the manifest rather than
   re-exporting. `scale: 1.2` draws it 20% larger.
-- Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
+- Stalks show how far they've grown back (stumps, then canes a joint at a time, then ripe: Batch 34); Ore and Crystal
+  shrink a little as they are mined out.
 
 
 ### Deer and wildebeest

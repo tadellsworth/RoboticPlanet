@@ -1,6 +1,9 @@
 // Trace late-game attacks and production in a deterministic Versus match.
 // TERRAFALL_ECONOMY_TRACE=1 adds one-minute factory input and staffing observations.
 // TERRAFALL_ECONOMY_LOSS=colony:building:minute optionally simulates one targeted building loss.
+// TERRAFALL_PICKUP_TRACE=1 records every time a goods carrier gives up a trip for safety (noSafeRoute, haltUnsafe), the
+// building it was going to and what covered it, so a stalled pickup (the Ore drought) can be put down to its cause.
+// TERRAFALL_ROAD_CUT=colony:minute optionally removes the road tiles of the colony's busiest link (see cutRoadLink).
 // node tools/late-attack-audit.js Standard 25 4 75 [git-ref|-] [difficulty] [rival-doctrine] [hold-after-min]
 const { execFileSync } = require('node:child_process');
 const { readFileSync } = require('node:fs');
@@ -20,7 +23,7 @@ const read = (file) => ref ? execFileSync('git', ['show', ref + ':' + file], { c
 const modules = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders', 'landmarks', 'city', 'walker', 'dam'];
 const source = modules.map((name) => read('js/' + name + '.js')).join('\n');
 const game = new Function('sfx', source + `
-  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail, economy, loss }) => {
+  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail, economy, loss, pickups, roadCut }) => {
     const shapeId = SHAPE_PRESETS.findIndex((p) => p.name.toLowerCase() === shape.toLowerCase());
     if (shapeId < 0) throw new Error('Unknown map ' + shape);
     if (!DIFFICULTY[difficulty] || !isDoctrine(doctrine) || !Number.isFinite(holdAfter) || holdAfter < 0 || (holdAfter && players !== 2)) throw new Error('Invalid scenario');
@@ -30,11 +33,67 @@ const game = new Function('sfx', source + `
     const intervention = loss && /^([1-4]):(mine|smelter|charger|fab):([1-9][0-9]*)$/.exec(loss);
     if (loss && (!intervention || Number(intervention[1]) > players || Number(intervention[3]) >= minutes)) throw new Error('Invalid economic setback');
     const lossTick = intervention ? Math.round(Number(intervention[3]) * 60 / SIM_STEP) : -1;
+    const cutPlan = roadCut && /^([1-4]):([1-9][0-9]*)$/.exec(roadCut);
+    if (roadCut && (!cutPlan || Number(cutPlan[1]) > players || Number(cutPlan[2]) >= minutes)) throw new Error('Invalid road cut');
+    const cutTick = cutPlan ? Math.round(Number(cutPlan[2]) * 60 / SIM_STEP) : -1;
+    let cut = null;
+    // The colony's key road link: the middle three tiles of the road from its Command Base to its farthest Mine or
+    // Smelter on the same road network (the longest haul every Ore load makes), taken up as if bulldozed.
+    function cutRoadLink(p) {
+      const base = getE(S.players[p].lander);
+      if (!base || base.dead) return { colony: p + 1, at: round(S.time), tiles: [] };
+      const near = (b) => { const out = []; const w = BDEFS[b.type].long ? 2 : 1;
+        for (let j = b.y - 1; j <= b.y + 1; j++) for (let i = b.x - 1; i <= b.x + w; i++) if (inMap(i, j) && S.road[tIdx(i, j)]) out.push(tIdx(i, j)); return out; };
+      const prev = new Map(), q = near(base);
+      for (const t of q) prev.set(t, -1);
+      for (let k = 0; k < q.length; k++) {
+        const a = q[k], i = a % S.W, j = (a / S.W) | 0;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!inMap(i + di, j + dj)) continue;
+          const b = tIdx(i + di, j + dj);
+          if (S.road[b] && !prev.has(b)) { prev.set(b, a); q.push(b); }
+        }
+      }
+      let target = null, best = -1, end = -1;
+      for (const b of playerBuildings(p)) {
+        if (!b.built || (b.type !== 'mine' && b.type !== 'smelter')) continue;
+        for (const t of near(b)) { let n = 0; for (let x = t; prev.has(x) && x >= 0; x = prev.get(x)) n++; if (prev.has(t) && n > best) { best = n; target = b; end = t; } }
+      }
+      if (!target || best < 6) return { colony: p + 1, at: round(S.time), tiles: [] };
+      const route = [];
+      for (let x = end; x >= 0; x = prev.get(x)) route.push(x);
+      const mid = Math.floor(route.length / 2), tiles = route.slice(mid - 1, mid + 2);
+      for (const t of tiles) setRoad(t % S.W, (t / S.W) | 0, false);
+      return { colony: p + 1, at: round(S.time), type: target.type, id: target.id, x: target.x, y: target.y, route: route.length,
+        tiles: tiles.map((t) => [t % S.W, (t / S.W) | 0]), linkedAfter: roadLinked(base, target), rejoined: null, roadBack: null };
+    }
     let setback = null;
     // Trace successful decisions from the running simulation. Samples do not issue orders.
     const events = [], strikes = Array.from({ length: players }, () => 0);
     const contacts = Array.from({ length: players }, () => []);
     const launch = sendAttack, march = aiMarch, hit = hitBuilding;
+    // Carrier trips given up for safety: why, and at what.
+    const stalls = [];
+    if (pickups) {
+      const cause = (u, goal) => {
+        const b = S.bAt[goal] ? getE(S.bAt[goal]) : null, gx = goal % S.W, gy = (goal / S.W) | 0, at = tIdx(Math.floor(u.x), Math.floor(u.y));
+        const gun = b ? gunOver(u.owner, gx, gy) : null, here = gunOver(u.owner, Math.floor(u.x), Math.floor(u.y));
+        return { at: round(S.time), colony: u.owner + 1, carrier: u.type, phase: u.task?.phase || u.task?.type || '', type: b ? b.type : '', x: gx, y: gy,
+          good: u.task?.good || '', gunAtGoal: gun ? gun.type : '', foesAtGoal: foeCovers(u.owner, goal), gunHere: here ? here.type : '', foesHere: foeCovers(u.owner, at) };
+      };
+      const nsr = noSafeRoute, halt = haltUnsafe;
+      noSafeRoute = (u, goal) => { stalls.push({ kind: 'noSafeRoute', ...cause(u, goal) }); return nsr(u, goal); };
+      const target = (u) => { const t = u.task, id = t && (t.type === 'haul' ? (t.phase === 'toSrc' ? t.src : t.dst) : t.type === 'build' ? t.site : t.bld); return id ? getE(id) : null; };
+      haltUnsafe = (u) => { const b = target(u); if (b) stalls.push({ kind: 'haltUnsafe', ...cause(u, tIdx(b.x, b.y)) }); return halt(u); };
+      // (giving way to enemy warbots or the Murmur: the building it was going to waits SHY_WAIT)
+      const cover = takeCover;
+      takeCover = (u, caught) => {
+        const b = !caught && target(u), foe = nearestFoe(u);
+        if (b && b.owner === u.owner) stalls.push({ kind: 'takeCover', ...cause(u, tIdx(b.x, b.y)), foe: foe ? foe.type : '', foeOwner: foe ? foe.owner + 1 : 0,
+          foeDist: foe ? +Math.sqrt(dist2(foe.x, foe.y, u.x, u.y)).toFixed(1) : null, foeToGoal: foe ? +Math.sqrt(dist2(foe.x, foe.y, b.x + 0.5, b.y + 0.5)).toFixed(1) : null });
+        return cover(u, caught);
+      };
+    }
     let thinking = -1;
     const think = aiThink;
     aiThink = (p) => {
@@ -154,15 +213,22 @@ const game = new Function('sfx', source + `
         if (target) destroyBuilding(target);
         setback = { colony: owner + 1, type, at: round(S.time), id: target?.id ?? null };
       }
+      if (S.tick === cutTick) cut = cutRoadLink(Number(cutPlan[1]) - 1);
       simStep(SIM_STEP);
+      if (cut && cut.id && S.tick % 30 === 0) {
+        const base = getE(S.players[cut.colony - 1].lander), b = getE(cut.id);
+        if (cut.rejoined === null && base && b && !b.dead && roadLinked(base, b)) cut.rejoined = round(S.time);
+        if (cut.roadBack === null && cut.tiles.every(([i, j]) => S.road[tIdx(i, j)])) cut.roadBack = round(S.time);
+      }
       if (S.tick === Math.round(nextCheck * 60 / SIM_STEP)) { checkpoints.push(snapshot()); nextCheck += checkEvery; }
     }
     if (S.winner >= 0 && snapshot().alive.length !== 1) throw new Error('Capture ended before only one colony remained');
     return {
-      shape, size, seed, players, difficulty, doctrine, holdAfter, events, ...(loss ? { setback } : {}), ...(detail ? { contacts } : {}), winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
+      shape, size, seed, players, difficulty, doctrine, holdAfter, events, ...(loss ? { setback } : {}), ...(roadCut ? { cut } : {}), ...(pickups ? { stalls } : {}), ...(detail ? { contacts } : {}), winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
       end: snapshot().alive, eliminations: (S.log || []).filter((e) => e.k === 'out').map((e) => [e.p + 1, round(e.t)]),
       megastructuresSeized: colonies().map((p) => p.stats.megaSeized || 0), maglevRaids: colonies().map((p) => p.magCuts || 0),
     };
   };
 `)(() => {});
-console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail: process.env.TERRAFALL_PRESSURE_TRACE === '1', economy: process.env.TERRAFALL_ECONOMY_TRACE === '1', loss: process.env.TERRAFALL_ECONOMY_LOSS }) }));
+console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail: process.env.TERRAFALL_PRESSURE_TRACE === '1', economy: process.env.TERRAFALL_ECONOMY_TRACE === '1', loss: process.env.TERRAFALL_ECONOMY_LOSS,
+  pickups: process.env.TERRAFALL_PICKUP_TRACE === '1', roadCut: process.env.TERRAFALL_ROAD_CUT }) }));

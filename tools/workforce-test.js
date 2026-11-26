@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// The Workforce ladder, headless (wfOrder and the rest in js/sim.js; its orders in js/orders.js). A computer colony's
-// game is played for a while, then copied (a save and a load) into a few games that go on side by side from the same
-// moment, each with other Workforce settings for colony 0:
+// The Workforce ladder, headless (wfOrder and the rest in js/sim.js; its orders in js/orders.js). A colony of its own is
+// set up the same way every time: a Colony game (no rival to end it, the Murmur off) that the computer plays for a while,
+// then its stores topped up (so its factories have what they work with) and two building sites placed by its Command
+// Base. That moment is copied (a save and a load) into a few games that go on side by side, each with other Workforce
+// settings for colony 0:
 //   - none, and settings set and then taken back: the same game, tick for tick (Auto is untouched);
 //   - Manual with a row put on top: that row's buildings get their Workers before those of the rows under it;
 //   - a cap: the row never has more Workers than it, once the extra have left;
@@ -13,13 +15,14 @@
 //   - the player's own presets: the same orders as setting it all by hand, and the same game;
 //   - Rebalance now: Workers come off buildings that can't work or make what there's plenty of, and go to the jobs waiting;
 //   - a save and a load keep the settings, and the game plays on the same.
-// Usage: node tools/workforce-test.js [seed] [minutes before the copies]
+// Every check runs on every seed (none is skipped for want of the right moment).
+// Usage: node tools/workforce-test.js [seed] [minutes the computer plays first]
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const files = ['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js', 'missions.js', 'orders.js'];
 const src = files.map((f) => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8')).join('\n') +
-  '\n;globalThis.__api = { newGame, simStep, hashState, serializeGame, deserializeGame, applyOrder, getS: () => S, wfCounts, wfAutoOrder, wfOrder, wfRowOf, wfRebalance, siteReady, removeBot, wantsStaff, stallWhy, BDEFS, WF_KEYS, isIdleWorker, wfKeepFree, wfSettings, wfPresetOrders, atLimit, siteCount };';
-const seed = +(process.argv[2] || 4242), lead = +(process.argv[3] || 14);
+  '\n;globalThis.__api = { newGame, simStep, hashState, serializeGame, deserializeGame, applyOrder, getS: () => S, wfCounts, wfAutoOrder, wfOrder, wfRowOf, wfRebalance, siteReady, removeBot, wantsStaff, stallWhy, BDEFS, WF_KEYS, isIdleWorker, wfKeepFree, wfSettings, wfPresetOrders, atLimit, siteCount, cancelTask, addBot, completeBuilding, getE };';
+const seed = +(process.argv[2] || 4242), lead = +(process.argv[3] || 10);
 
 function game() {
   const ctx = { console, Math, JSON, Map, Set, Array, Object, Number, String, Infinity, Uint8Array, Uint16Array, Int8Array, Int16Array, Int32Array, Uint32Array, Float32Array, Float64Array };
@@ -38,20 +41,54 @@ const BDEFS = (g) => g.BDEFS;
 let fails = 0;
 const check = (ok, what) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) fails++; };
 
-// The game everything starts from.
+const kilnIds = []; // (the two Cement Works the test adds: see below)
+// The game everything starts from: a Colony game, so no rival can end it, and the Murmur off.
 const base = game();
-base.newGame({ seed, difficulty: 'normal', autoplay: true, mode: 'versus' });
+base.newGame({ seed, difficulty: 'normal', autoplay: true, mode: 'colony', murmur: 'off' });
 run(base, lead * 60);
-const snap = base.serializeGame();
 // (Colony 0 is the player's from here on: its computer stops running it, as one of yours would be. Its builds and
 // settings stay as they were.)
+{
+  const S = base.getS(), P = S.players[P0], L = S.buildings.find((b) => !b.dead && b.owner === P0 && b.type === 'lander');
+  P.ai = false; delete P.triage;
+  // Its stores topped up, so no factory waits for what it works with (the same every time).
+  // (the raw goods only: a factory's own product stops at its stock limit)
+  // (Stone to 30: a Quarry rests at 40)
+  for (const g of ['fiber', 'stone', 'ore', 'crystal', 'crude']) L.stock[g] = Math.max(L.stock[g] || 0, g === 'stone' ? 30 : 60);
+  // Two Cement Works more, finished, with Stone in them and no stock limit: a row with two buildings that can always work.
+  const spots = [];
+  for (let r = 2; r < 16; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) spots.push([L.x + dx, L.y + dy]);
+  let kilns = 0;
+  for (const [x, y] of spots) {
+    if (kilns >= 2) break;
+    const o = base.applyOrder(P0, 'place', ['kiln', x, y]);
+    if (!o || !o.ok) continue;
+    const b = base.getE(o.id);
+    base.completeBuilding(b);
+    b.limit = -1; b.stock.stone = 6;
+    kilnIds.push(b.id); kilns++;
+  }
+  // Two building sites by the Command Base, so there's building to keep Workers free for.
+  let placed = 0;
+  for (let r = 3; r < 14 && placed < 2; r++) for (let dy = -r; dy <= r && placed < 2; dy++) for (let dx = -r; dx <= r && placed < 2; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    for (const t of ['lab', 'airfield', 'depot']) {
+      if (S.buildings.some((b) => !b.dead && b.owner === P0 && !b.built && b.type === t)) continue;
+      const o = base.applyOrder(P0, 'place', [t, L.x + dx, L.y + dy]);
+      if (o && o.ok) { placed++; break; }
+    }
+  }
+  run(base, 1);
+}
+const snap = base.serializeGame();
 // (Loaded once more as the player's: a load settles a few things for a person's colony, a Foundry left on the computer's
 // warbot mode say, so later saves and loads compare like with like.)
-const copy = () => { const g = game(); g.deserializeGame(snap); const P = g.getS().players[P0]; P.ai = false; delete P.triage; g.deserializeGame(g.serializeGame()); return g; };
+const copy = () => { const g = game(); g.deserializeGame(snap); g.deserializeGame(g.serializeGame()); return g; };
 const S0 = base.getS();
 const blds = (g, k) => g.getS().buildings.filter((b) => !b.dead && b.owner === P0 && b.built && g.wfRowOf(b.type) === k);
 const staffed = (g, k) => g.wfCounts(P0)[k];
-console.log(`seed ${seed}: copies at ${(S0.time / 60).toFixed(1)} min; colony 0 has ${S0.bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker').length} Workers`);
+console.log(`seed ${seed}: copies at ${(S0.time / 60).toFixed(1)} min; colony 0 has ${S0.bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker').length} Workers, ${S0.buildings.filter((b) => !b.dead && b.owner === P0 && b.built).length} buildings, ${base.siteCount(P0)} site(s)`);
+if (S0.winner >= 0) { console.log('the game is over by then: try another seed or fewer minutes'); process.exit(2); }
 if (!S0.bots.some((u) => !u.dead && u.owner === P0 && u.type === 'worker')) { console.log('colony 0 is out by then: try another seed or fewer minutes'); process.exit(2); }
 console.log(`  rows now: ${JSON.stringify(base.wfCounts(P0))}`);
 console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
@@ -75,11 +112,13 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   // (the row Auto puts lowest of those with a building that could work now: the one it would staff last)
   const auto = a.wfAutoOrder(P0).order;
   const top = auto.filter((k) => !['sites', 'repair', 'pave'].includes(k) && waiting(a, k)).pop();
+  const ready = blds(m, top).filter((b) => m.wantsStaff(b) && !m.stallWhy(b)).map((b) => b.id); // (those that can work now)
   m.applyOrder(P0, 'wfOrder', [[top, ...auto.filter((k) => k !== top)]]);
   check(m.wfOrder(P0)[0] === top && m.wfOrder(P0).length === m.WF_KEYS.length, `Manual order set: ${top} first, every row in it`);
   run(a, 8); run(m, 8);
-  console.log(`  ${top}: ${blds(m, top).length} built; 8 s after the raid Auto staffs ${staffed(a, top)} (${waiting(a, top)} waiting), Manual ${staffed(m, top)} (${waiting(m, top)} waiting)`);
-  check(staffed(m, top) >= staffed(a, top) && waiting(m, top) === 0 && staffed(m, top) > 0, `Manual with ${top} on top staffs every one of it that can work, Auto ${staffed(a, top)}`);
+  const has = (q) => ready.filter((id) => { const b = q.getE(id); return b && (b.staff || b.staffInc); }).length;
+  console.log(`  ${top}: ${blds(m, top).length} built, ${ready.length} could work at the raid; 8 s on Auto staffs ${has(a)} of those, Manual ${has(m)} (${staffed(a, top)} and ${staffed(m, top)} in the row)`);
+  check(ready.length > 0 && has(m) === ready.length && has(m) > has(a), `Manual with ${top} on top staffs every one of it that could work, Auto fewer`);
 }
 
 // 3) A cap: the row with the most Workers gets "at most 1".
@@ -128,25 +167,40 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   for (const r of bad.slice(0, 4)) console.log('     ', r.type, r.why);
 }
 
-// 6) Rebalance now: a raid leaves the colony six Workers, freed, and the player calls them to buildings that make what
-// there's plenty of (or can't work) while other jobs wait. Rebalance takes them off those, and the jobs waiting get them.
+// 6) Rebalance now: a raid leaves the colony six Workers, freed, and the player calls them to buildings that can't work
+// (a factory held at its stock limit) or make what there's plenty of, while other jobs wait. Rebalance takes them off
+// those, and the jobs waiting get them: more of them than in the same game with Rebalance not pressed.
 {
-  const g = copy();
-  free(g, 6);
-  run(g, 1);
-  const S = g.getS(), want = g.wfAutoOrder(P0);
-  const poor = S.buildings.filter((b) => !b.dead && b.owner === P0 && b.built && g.wfRowOf(b.type) && !b.staff && !b.staffInc && (g.stallWhy(b) || want.why[g.wfRowOf(b.type)] === 'plenty'));
-  for (const b of poor.slice(0, 3)) g.applyOrder(P0, 'callWorker', [b.id]); // (Call a worker takes a busy one too)
-  run(g, 1);
-  const before = waitingJobs(g), would = g.wfRebalance(P0, true);
+  const g = copy(), c = copy();
+  for (const q of [g, c]) {
+    free(q, 6);
+    run(q, 1);
+    const S = q.getS(), want = q.wfAutoOrder(P0);
+    // (one factory that can't work, for sure: held at a stock limit of 0)
+    const full = S.buildings.find((b) => !b.dead && b.owner === P0 && b.built && BDEFS(q)[b.type].make && !BDEFS(q)[b.type].bots && q.wfRowOf(b.type) && !b.staff && !b.staffInc);
+    if (full) full.limit = 0;
+    const poor = S.buildings.filter((b) => !b.dead && b.owner === P0 && b.built && q.wfRowOf(b.type) && !b.staff && !b.staffInc && (q.stallWhy(b) || q.atLimit(b) || want.why[q.wfRowOf(b.type)] === 'plenty'));
+    for (const b of poor.slice(0, 3)) q.applyOrder(P0, 'callWorker', [b.id]); // (Call a worker takes a busy one too)
+    q.poor = poor.length; q.called = poor.slice(0, 3).map((b) => b.id);
+    run(q, 1);
+  }
+  const waitingIds = (q) => q.getS().buildings.filter((b) => !b.dead && b.owner === P0 && (!b.built ? !b.builder && q.siteReady(b) : q.wantsStaff(b) && !q.stallWhy(b))).map((b) => b.id);
+  const got = (q, ids) => ids.filter((id) => { const b = q.getS().buildings.find((e) => e.id === id); return b && !b.dead && (b.built ? b.staff || b.staffInc : b.builder); }).length;
+  // (Workers at work: building, or running a building that could work, and didn't make what there was plenty of, when
+  // Rebalance was pressed)
+  const plenty = g.wfAutoOrder(P0).why;
+  const poor = g.getS().buildings.filter((b) => !b.dead && b.owner === P0 && b.built && (g.stallWhy(b) || g.atLimit(b) || plenty[g.wfRowOf(b.type)] === 'plenty' || g.called.includes(b.id))).map((b) => b.id);
+  const useful = (q) => q.getS().bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker' && u.task && (u.task.type === 'build' || (u.task.type === 'staff' && !poor.includes(u.task.bld)))).length;
+  const ids = waitingIds(g), would = g.wfRebalance(P0, true);
+  check(JSON.stringify(ids) === JSON.stringify(waitingIds(c)), 'the two games are the same up to Rebalance');
   g.released.length = 0;
   const moved = g.applyOrder(P0, 'wfRebalance', []);
   const off = g.released.filter((r) => r.owner === P0).length;
-  run(g, 20);
-  const after = waitingJobs(g);
-  console.log(`  rebalance: ${poor.length} buildings with plenty or stalled, called to; ${before} jobs waiting; ${moved} moved (dry run said ${would}); 20 s later ${after} waiting`);
-  if (!would) console.log('  (nothing for Rebalance to do at this moment of this seed: skipped)');
-  else check(moved === would && off === moved && after < before, 'Rebalance now frees Workers off them and the waiting jobs get them');
+  // (5 s: long enough for the dispatch to send them, short of a stock limit's own release in the other game)
+  run(g, 5); run(c, 5);
+  console.log(`  rebalance: ${g.poor} buildings stalled or with plenty, called to; ${ids.length} jobs waiting; ${moved} moved (dry run said ${would}); 5 s later ${useful(g)} Workers at work (${useful(c)} not pressing it), ${got(g, ids)} of those jobs have one (${got(c, ids)})`);
+  check(would > 0 && moved === would && off === moved, 'Rebalance now frees Workers off them (as many as its dry run said)');
+  check(useful(g) > useful(c), 'and they go to the jobs waiting: more Workers at work than not pressing it');
 }
 
 // 7) A save and a load keep the settings (and Keep staffed), and the game goes on the same.
@@ -191,9 +245,10 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   z.applyOrder(P0, 'wfPreset', ['economy']); z.applyOrder(P0, 'wfRow', ['sites', 'cap', 0]);
   run(a, 10); run(m, 10); run(z, 10);
   const sites = a.siteCount(P0);
-  console.log(`  6 Workers, ${sites} site(s): not running a building 10 s on: Auto ${notStaff(a)}, Manual sites low ${notStaff(m)}, sites at most 0 ${notStaff(z)} (${building(z)} building)`);
-  if (!sites) console.log('  (no site at this moment of this seed: the in-play check skipped)');
-  else check(notStaff(a) >= 2 && notStaff(m) === 1 && notStaff(z) <= 1 && !building(z), 'in play: Auto keeps 2 off the buildings, Manual with sites low 1, a cap of 0 none (and nobody building)');
+  const what = (q) => mine(q).filter((u) => !(u.task && u.task.type === 'staff')).map((u) => u.task ? u.task.type : 'free').join(',') || 'none';
+  console.log(`  6 Workers, ${sites} site(s): not running a building 10 s on: Auto ${notStaff(a)} (${what(a)}), Manual sites low ${notStaff(m)} (${what(m)}), sites at most 0 ${notStaff(z)} (${what(z)})`);
+  check(sites > 0, 'a building site is waiting');
+  check(notStaff(a) >= 2 && notStaff(m) === 1 && notStaff(z) <= 1 && !building(z), 'in play: Auto keeps 2 off the buildings, Manual with sites low 1, a cap of 0 none (and nobody building)');
 }
 
 // 9) A minimum with nobody free: a raid leaves 6 Workers, all at work 10 s on; a row with two buildings waiting and
@@ -204,9 +259,16 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   free(g, 6);
   run(g, 10);
   const waiting = (k) => blds(g, k).filter((b) => g.wantsStaff(b) && !g.stallWhy(b)).length;
-  const k = g.wfAutoOrder(P0).order.filter((q) => !['sites', 'repair', 'pave'].includes(q) && waiting(q) >= 2 && !staffed(g, q)).pop();
-  if (!k) console.log('  (no row with two buildings waiting at this moment of this seed: skipped)');
-  else {
+  const rows = g.wfAutoOrder(P0).order.filter((q) => !['sites', 'repair', 'pave'].includes(q));
+  let k = rows.filter((q) => waiting(q) >= 2 && !staffed(g, q)).pop();
+  if (!k) {
+    // (none just now: the row Auto staffs last of those with two buildings that could work has its Workers sent off)
+    const could = (q) => blds(g, q).filter((b) => (b.staff || b.staffInc || g.wantsStaff(b)) && !g.stallWhy(b)).length;
+    k = rows.filter((q) => could(q) >= 2).pop();
+    for (const b of blds(g, k)) if (b.staff || b.staffInc) g.applyOrder(P0, 'pause', [b.id, true]), g.applyOrder(P0, 'pause', [b.id, false]);
+  }
+  check(!!k && waiting(k) >= 2 && !staffed(g, k), `a row with two buildings waiting and nobody on it: ${k}`);
+  {
     // (nobody free: any Worker still free is gone)
     for (const u of g.getS().bots.filter((v) => !v.dead && v.owner === P0 && v.type === 'worker' && g.isIdleWorker(v))) g.removeBot(u);
     const idle = g.getS().bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker' && g.isIdleWorker(u)).length;
@@ -227,25 +289,28 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
 }
 
 // 10) Pins and a full store: a pinned row's factory at its stock limit lets its Worker go after the usual while, and gets
-// one back first once it has room. One not pinned lets go too, and waits its turn.
+// one back first once it has room. (One of the two Cement Works the test added, with its Worker inside, at work.)
 {
   const g = copy();
-  const S = g.getS();
-  const b = S.buildings.find((q) => !q.dead && q.owner === P0 && q.built && q.staff && BDEFS(g)[q.type].make && !BDEFS(g)[q.type].bots && g.wfRowOf(q.type));
-  if (!b) console.log('  (no running factory at this moment of this seed: skipped)');
-  else {
-    const k = g.wfRowOf(b.type);
-    g.applyOrder(P0, 'wfRow', [k, 'pin', true]);
-    b.limit = 0; // (its stock limit: at it at once)
-    run(g, 14);
-    const off = !b.staff && !b.staffInc, back = b.wfBack === 1;
-    delete b.limit; // (room again)
-    let t = 0;
-    while (t < 90 && !(b.staff || b.staffInc)) { g.simStep(1 / 30); t++; }
-    console.log(`  full store: pinned ${b.type} ${off ? 'let its Worker go' : 'kept its Worker'} (marked to get one back: ${back}); with room, a Worker on its way after ${(t / 30).toFixed(2)} s`);
-    check(off && back, 'a pinned building at its stock limit lets its Worker go, marked to get one back first');
-    check(!!(b.staff || b.staffInc) && t <= 9 && !b.wfBack, 'and gets one back within a dispatch pass of having room');
-  }
+  const S = g.getS(), b = g.getE(kilnIds[0]);
+  if (!b.staff && !b.staffInc) g.applyOrder(P0, 'callWorker', [b.id]);
+  let t0 = 0;
+  while (t0 < 30 * 30 && !(b.staff && g.getE(b.staff) && g.getE(b.staff).inside === b.id)) { g.simStep(1 / 30); t0++; }
+  check(!!(b.staff && g.getE(b.staff).inside === b.id), `a Cement Works with its Worker inside (${(t0 / 30).toFixed(1)} s)`);
+  g.applyOrder(P0, 'wfRow', [g.wfRowOf(b.type), 'pin', true]);
+  b.limit = 0; // (its stock limit: at it at once)
+  let t1 = 0;
+  while (t1 < 30 * 30 && (b.staff || b.staffInc)) { g.simStep(1 / 30); t1++; }
+  const off = !b.staff && !b.staffInc, back = b.wfBack === 1;
+  b.limit = -1; // (room again: no limit at all)
+  // (a Worker comes free just then, by the Command Base: the first job it gets is this one's)
+  const L = S.buildings.find((q) => !q.dead && q.owner === P0 && q.type === 'lander');
+  g.addBot(P0, 'worker', L.x, L.y);
+  let t = 0;
+  while (t < 90 && !(b.staff || b.staffInc)) { g.simStep(1 / 30); t++; }
+  console.log(`  full store: pinned ${b.type} ${off ? `let its Worker go after ${(t1 / 30).toFixed(1)} s` : 'kept its Worker'} (marked to get one back: ${back}); with room, a Worker on its way after ${(t / 30).toFixed(2)} s`);
+  check(off && back, 'a pinned building at its stock limit lets its Worker go, marked to get one back first');
+  check(!!(b.staff || b.staffInc) && t <= 9 && !b.wfBack, 'and gets one back within a dispatch pass of having room');
 }
 
 // 11) The player's own presets: settings saved (wfSettings) and put back (wfPresetOrders: the same wfOrder and wfRow
@@ -273,10 +338,17 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   check(!h.wfOrder(P0) && JSON.stringify(h.wfSettings(P0).rows) === JSON.stringify({ fiber: { min: 0, cap: 0, pin: true } }), 'a damaged preset gives only what it can mean');
 }
 
-/** A raid: colony 0 keeps n Workers (those of the lowest ids), every building's freed. */
+/**
+ * A raid: colony 0 keeps n Workers (those of the lowest ids), every building's freed, and those n left standing free,
+ * charged full (none off to a charger, building or carrying a crate: what each does next is the dispatch's choice).
+ */
 function free(g, n) {
   for (const b of g.getS().buildings) if (!b.dead && b.owner === P0 && (b.staff || b.staffInc)) g.applyOrder(P0, 'pause', [b.id, true]), g.applyOrder(P0, 'pause', [b.id, false]);
-  g.getS().bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker').forEach((u, i) => { if (i >= n) g.removeBot(u); });
+  g.getS().bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker').forEach((u, i) => {
+    if (i >= n) { g.removeBot(u); return; }
+    if (u.task) g.cancelTask(u);
+    u.task = null; u.path = null; u.bat = 100;
+  });
 }
 
 function waitingJobs(g) {

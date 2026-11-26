@@ -15,6 +15,7 @@ CFG = {  # brake lens centres and dust sources (rear end of each track / rear wh
   'skirmisher': {'brake': [(46, 103), (46, 153)],     'dust': [(52, 78), (52, 178)]},
   'arccaster':  {'brake': [(27.5, 105.5), (27.5, 150.5)], 'dust': [(42, 72), (42, 184)]},
   'railgunner': {'brake': [(12.5, 97), (12.5, 159)],  'dust': [(24, 72), (24, 184)]},
+  'grader':     {'brake': [(33, 105.5), (33, 150.5)],   'dust': [(40, 64), (40, 192)]},
 }
 if len(sys.argv) > 3: CFG = {k: v for k, v in CFG.items() if k in sys.argv[3:]}  # (only these robots)
 def noise(seed, size):

@@ -98,7 +98,7 @@ while (S.winner < 0 && S.time < maxMin * 60) {
     lastLog = S.time;
     const mine = S.bots.filter((u) => !u.dead && u.owner === 0), war = mine.filter((u) => BOTSLIKE(u)).length;
     const col = (p) => { const L = S.buildings.find((b) => b.type === 'lander' && b.owner === p); return `${S.buildings.filter((b) => !b.dead && b.owner === p && b.built).length} bld, ${S.bots.filter((u) => !u.dead && u.owner === p && BOTSLIKE(u)).length} army, base armor ${L ? L.armor.toFixed(0) : '-'}`; };
-    console.log(`  t=${(S.time / 60).toFixed(0)}m wave ${S.horde.n} cleared ${S.horde.cleared} up ${up} queued ${S.horde.q.length} kills ${S.horde.kills} | colony: ${col(0)}${pair ? ' | colony 1: ' + col(1) : ''}`);
+    console.log(`  t=${(S.time / 60).toFixed(0)}m wave ${S.horde.n} cleared ${S.horde.cleared} up ${up} queued ${S.horde.q.length}${S.horde.over ? " held " + Object.values(S.horde.over).reduce((a, b) => a + b, 0) : ""} kills ${S.horde.kills} | colony: ${col(0)}${pair ? ' | colony 1: ' + col(1) : ''}`);
   }
 }
 function BOTSLIKE(u) { return ['warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner'].includes(u.type); }

@@ -8,7 +8,7 @@
  *
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
- * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
+ * Roads and Traffic, Industry and Trade, Sea and Sky (ports, bridges over canyons, airships and earthworks; all in Colony games, so the economy is learned in peace), then
  * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War,
  * including the Uplinks race in King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
@@ -1081,12 +1081,13 @@ const MISSIONS = [
   },
   {
     id: 'driver', name: 'The Schedule', chapter: 'Industry and Trade',
-    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and throw its supplies over everything, on the old schedule.',
+    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and a Catcher, and keep the camp supplied over everything, on the old schedule.',
     intro: [
-      'A <b>Mass Driver</b> throws sealed canisters of goods in an arc over anything to a <b>Catcher</b> 12 to 30 tiles away.',
-      'On the Driver\'s panel, <b>Aim at a Catcher</b>, then pick up to 3 <b>Goods to send</b>: Haulers keep it loaded.',
-      'It burns no Fuel, but it fires only with a <b>Generator</b> (with Fuel) within 4 tiles.',
-      'A canister of 12 goods flies every 10 seconds. Enemy Flak can burst one; a canister with no Catcher lands as crates.',
+      'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
+      'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
+      'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
+      'No foothold out there? A Driver throws a <b>Catcher kit</b> to open ground: it assembles itself into a Catcher.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     setup(S) {
@@ -1100,7 +1101,14 @@ const MISSIONS = [
       }
       computeTerritory();
       if (camp) { const route = roadRouteTo(0, camp) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); }
-      L.stock.cement += 120; L.stock.alloy += 30; L.stock.chip += 16; L.stock.fuel += 12; // (Cement to spare for the camp: what goes over the reserve flies)
+      // The camp's survey samples, crated beside it: Haulers take them to the nearest storage (the Catcher, once it stands).
+      let crate = null;
+      if (camp) for (let r = 2; r <= 4 && !crate; r++) for (let j = camp.y - r; j <= camp.y + r && !crate; j++) for (let i = camp.x - r; i <= camp.x + r && !crate; i++) {
+        const t = inMap(i, j) ? tIdx(i, j) : -1;
+        if (t >= 0 && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.road[t] && !S.ramp[t] && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => inMap(i + a, j + b) && S.road[tIdx(i + a, j + b)])) crate = [i, j];
+      }
+      if (crate) addLoot(crate[0], crate[1], { crystal: 24 }, true); // (by the road, where a Hauler can reach them)
+      L.stock.cement += 120; L.stock.alloy += 30; L.stock.chip += 16; L.stock.fuel += 40; // (Cement to spare for the camp, and Fuel for both ends' Generators: what goes over the reserve flies)
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generator's Fuel)
       P.stats.startBots = P.stats.bots;
     },
@@ -1112,13 +1120,25 @@ const MISSIONS = [
         hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>) by the survey camp\'s Outpost, far to the north.',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='catcher']" },
       { kind: 'mdAim', n: 1, text: 'Aim the Mass Driver at the Catcher', at: 'mdriver',
-        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b)) ? 1 : 0),
-        hint: 'Tap the <b>Mass Driver</b> → <b>Aim at a Catcher</b>, then tap your Catcher in the north.',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b) && BDEFS[mdCatcher(b).type].catcher) ? 1 : 0),
+        hint: 'Tap the <b>Mass Driver</b> → <b>Aim</b>, then tap your Catcher in the north.',
         ui: '#sh-mdaim' },
-      { kind: 'mdFreight', n: [24, 36, 48], text: 'Catch {n} goods by canister', at: 'mdriver',
+      { kind: 'mdPower', n: 1, text: 'Power both ends: a Generator by each', at: 'catcher',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && magPowered(b) && mdCatcher(b) && magPowered(mdCatcher(b))) ? 1 : 0),
+        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end. The camp\'s comes by canister.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      { kind: 'mdFreight', n: [16, 24, 32], text: 'Catch {n} goods by canister', at: 'catcher',
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].catcher ? b.mdGot || 0 : 0), 0),
-        hint: 'Driver panel: <b>Goods to send</b> → <b>Cement</b>; a <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles.',
-        ui: "#sh-mdadd [data-g='cement'], #btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+        hint: 'Auto ships what the camp needs. For more: Driver → <b>Goods list</b> → <b>Cement</b>.',
+        ui: "#sh-mdmode [data-v='list'], #sh-mdadd [data-g='cement']" },
+      { kind: 'mdBack', n: [8, 16, 24], text: 'Throw {n} goods back home', at: 'mdriver',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver ? b.mdGot || 0 : 0), 0),
+        hint: 'Haulers crate the camp\'s survey Crystal into the Catcher, and its spare flies home. Keep it powered.',
+        ui: '#sh-md' },
+      { kind: 'mdKit', n: 1, text: 'Throw a Catcher kit to open ground', at: 'mdriver',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].catcher && b.claim > 0) ? 1 : 0),
+        hint: 'Mass Driver → <b>Throw a Catcher kit</b>, then open ground 12 to 50 tiles off: it builds itself.',
+        ui: '#sh-mdkit' },
     ],
   },
   {
@@ -1402,6 +1422,38 @@ const MISSIONS = [
     ],
   },
 
+  {
+    id: 'earthworks', name: 'Cut and Fill', chapter: 'Sea and Sky',
+    brief: 'The ground the Pathfinder surveyed has moved in thirty-one years. Order a Grader, level the land and fill the shallows out to the island.',
+    intro: [
+      '<b>Build → Terraform</b> (<kbd>7</kbd>) plans earthworks: Raise, Lower, Flatten, Fill shallows and Dig channel.',
+      'A <b>Grader</b>, ordered at the Bot Foundry, does the work, slowly; Workers never touch it.',
+      'Dug earth comes out as Stone crates for the Haulers. Raised and filled ground takes Stone.',
+      'Fill shallows turns water beside land into land, up to 6 tiles out from the shore: drag out from the shore for a land bridge.',
+      'Dig channel does the reverse: a moat before your walls, or a canal so ships sail inland.',
+      'Planned tiles show a dashed outline and the job\'s mark; an orange dash and a Stone pip mean it waits for Stone, a grey bar fills as the Grader works.',
+    ],
+    mode: 'colony', seed: 23, size: 1, rough: 2, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 25],
+    setup(S) {
+      kit(S, KIT6, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.stone += 60; L.stock.alloy += 6; L.stock.chip += 6; L.stock.fuel += 10;
+    },
+    goals: [
+      { kind: 'bots', type: 'grader', n: 1, at: 'foundry',
+        hint: 'Tap the Bot Foundry → <b>Order bots</b>: Graders <b>+1</b>. It takes a while: a Grader is heavy.',
+        ui: "#sh-orders .order-row[data-k='grader'] [data-d='1']" },
+      { kind: 'levelled', n: [3, 4, 6], text: 'Level {n} tiles of ground',
+        count: (P) => (P.stats.tfup || 0) + (P.stats.tfdown || 0),
+        hint: '<b>Build</b> → <b>Terraform</b> (<kbd>7</kbd>) → <b>Flatten</b> (<kbd>F</kbd>): drag over uneven ground, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='flatten'], #tf-seg [data-tf='flatten'], #banner-ok" },
+      { kind: 'filled', n: [3, 4, 6], text: 'Fill {n} tiles of shallows',
+        count: (P) => P.stats.tffill || 0,
+        hint: '<b>Terraform</b> → <b>Fill shallows</b> (<kbd>H</kbd>): drag out from the shore, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='fill'], #tf-seg [data-tf='fill'], #banner-ok" },
+    ],
+  },
+
   // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
@@ -1412,6 +1464,7 @@ const MISSIONS = [
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
       'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert (again: the one before).',
+      'Where the Murmur haunt a road, Haulers wait longer each time they turn back; the building says <b>Haulers turning back</b>: send warbots to clear it.',
     ],
     // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them. The packs come only at
     // night, as in every game: the day is for a turret, warbots and the exit already open; the first night brings a
@@ -1738,7 +1791,7 @@ const MISSIONS = [
       'A high shelf runs down the middle of this planet. On it, in front of each colony, a lake held back by an old dam.',
       'Your dam holds the lake over your valley. Something has hit it already: tap it and <b>Shore it up</b> (<kbd>U</kbd>).',
       'Your free Workers mend it, but only while nothing is shooting at it.',
-      'The rival\'s dam stands over their valley, across the high ground. Tap it and <b>Wreck the dam</b> (<kbd>W</kbd>).',
+      'The rival\'s dam stands over their valley, across the high ground. Tap it and <b>Demolish the dam</b> (<kbd>D</kbd>).',
       'Then send warbots to it: every armed one within 3 tiles of its face chips at it. The ramps beside each dam lead up.',
       'Burst, its lake floods the valley below: robots swept, buildings damaged, roads washed out, and a river left behind.',
     ],
@@ -1756,7 +1809,7 @@ const MISSIONS = [
         hint: 'Tap your dam (the concrete wall above your valley) → <b>Shore it up</b> (<kbd>U</kbd>). Free Workers mend it.',
         ui: '#sh-dammend' },
       { kind: 'dams', text: 'Burst the rival\'s dam', count: (P) => P.stats.dams || 0,
-        hint: 'Tap their dam → <b>Wreck the dam</b> (<kbd>W</kbd>). Then select warbots and tap the dam to send them.',
+        hint: 'Tap their dam → <b>Demolish the dam</b> (<kbd>D</kbd>). Then select warbots and tap the dam to send them.',
         ui: '#sh-damwreck, #btn-attack, #ar-select' },
     ],
   },

@@ -5,11 +5,12 @@ and biomes started here and are now in the game.)
 
 ## Economy balance audit to-do
 
-1. **Resource bottlenecks.** [First pass](docs/economy-balance-audit.md#resource-bottlenecks). Trace Ore, Alloy, Crystal, Chips, Fuel and Cement from production to delivery. Distinguish exhausted deposits, disconnected freight, unsafe routes, staffing and priority. Start with the Ore-to-Smelter gap in Standard seed 25.
-2. **Opening fairness.** [Long Haul spot check](docs/economy-balance-audit.md#opening-fairness-spot-check). Compare time to reliable Fuel, Alloy and Chips across mirrored starts. Include route length and ramp cost on Islands, Long haul and team maps.
-3. **Recovery after setbacks.** [First pass](docs/economy-balance-audit.md#recovery-after-losing-a-building). Run paired games with a fixed-time loss of a Mine, Smelter, Fuel Station or road link. Measure time to restore capacity and resume output.
-4. **Investment payback.** Compare local production with trade and basic roads with Trucks, Express, rail and Maglev. Track delivered freight, cost and time to pay back on routes suited to each option.
-5. **Doctrines and snowballing.** Swap sides across seeds and track whether doctrine, starting position or an early lead predicts the winner. Include human replays when available.
+1. **Resource bottlenecks.** [First pass](docs/economy-balance-audit.md#resource-bottlenecks); [the Ore pickup stalls](docs/economy-balance-audit.md#why-ore-pickups-stall) were Haulers giving way to Murmur Scuttlers roaming by the road to the Mine (1,005 of 1,154 trips given up on `d9bf339`, none to guns). Done (the owner's call, [third pass](docs/economy-balance-audit.md#murmur-on-supply-roads)): turn-backs to one building back off 5 → 10 → 20 → 40 s, output pickups honour the wait (they never did), the panel says why, and a rival sends three warbots to clear the road. On `d9bf339`'s first 28 minutes Mine pickups turned back fell from 69 to 20.
+2. **Opening fairness.** [Long Haul spot check](docs/economy-balance-audit.md#opening-fairness-spot-check). Compare time to reliable Fuel, Alloy and Chips across mirrored starts. Include route length and ramp cost on Islands, Long haul and team maps. The doctrine games showed colony 1 winning 25 of 39 on Standard 25 and Long haul 21. Checked on six seeds ([side lean](docs/economy-balance-audit.md#side-lean)): no consistent lean, colony 1 50 and colony 2 58 of 120; only Standard 25 favours colony 1 (16–4), the starts are exact mirrors. Left: a 1v1 game always updates colony 1's units first (Teams alternate).
+3. **Recovery after setbacks.** [First pass](docs/economy-balance-audit.md#recovery-after-losing-a-building); [road link cut](docs/economy-balance-audit.md#losing-a-key-road-link): the rival relays it in 20–45 s, output dips a minute at most. Still to run: a cut held under enemy guns or raiders.
+4. **Investment payback.** [Production buildings](docs/economy-balance-audit.md#investment-payback) repay their cost within two minutes of their own output (the Ammo Plant five); the [Mass Driver](docs/economy-balance-audit.md#mass-driver-against-maglev) was tuned against Maglev, then slowed to a shot every 10 s over walkable land with two Drivers a Catcher at most ([the owner's call](docs/economy-balance-audit.md#mass-driver-overland-lines-and-two-drivers-a-catcher)). Still to do: roads with Trucks, Express and rail, and trade, on routes suited to each.
+5. **Doctrines and snowballing.** [40 swapped games](docs/economy-balance-audit.md#doctrines-and-snowballing): Herald 11–4, Salvager 10–6, Architect 8–8, Warden 6–9, Steward 4–12; the leader in goods made at 10 minutes won 65%. The owner: the Herald stays; the Steward, the default rival, made stronger ([third pass](docs/economy-balance-audit.md#the-steward): bots 10% faster, army 15% faster from a minute sooner): 6–8 with 2 undecided on the same 40 games (from 4–12), and third of five on six seeds (20–22). Next: the Architect went 13–31 on six seeds (5–23 on the four new ones); look at what its Missile programme costs its army. Include human replays when available.
+6. **The late Chip and Crystal shortage on Long haul** (for a later audit): in undecided Long haul games both sides sit at 0 Chips from about minute 20 (seed 15 to 45 minutes: both Foundries "Waiting for Chip", colony 1 out of Ammo from minute 26; the before-merge stalls look the same). Where do the Chips and Crystal go, and why does neither side expand to new Crystal?
 
 ## The Economy panel (built Nov 26 2026: calls made, open questions for the owner)
 
@@ -155,6 +156,10 @@ to the approved design, with new textures and sprites). In order:
 9. **The robots' work animations** (welding, paving, drilling, scything): small tool sprites.
 10. **The menu planet** (shares the globe's new look: its face already has the globe's colours; its shading, lights and clouds still to do), **the minimap** and **the interface** (panels, buttons, icons).
 
+Also done this way: **the Grader and the Earthworks** (BUILT Nov 26 2026: concept A, "Dozer"; ART_GUIDE Batch 35),
+rendered with `renderer/`, their ground and the plans' overlays drawn in code to the canvas. Canvas:
+https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU
+
 ## The Walking Factory (built Nov 23 2026: open questions for the owner)
 
 The owner's pitch (approved): "a huge old Accord mobile factory, a dormant machine, crawling slowly around a loop through
@@ -274,11 +279,21 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
   Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
   (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
-- **The Ring** (in space, among the Ring's big asteroids). Like Sky islands but out in the Ring itself: base asteroids
-  and resource rocks with open space between, so armies must **fly to the other asteroids** (or bridge them) to fight.
-  A moving space background: drifting rubble, the planet and Argos turning, ringfall streaking down. Lore fit: the
-  Ring is the broken twin of Argos, and Ring Crystal makes rock float (LORE.md). Open: airless like Argos (no Murmur,
-  no farms?), how robots cross (Airships, cargo flights, tethers, Ropeways), and whether rocks drift over time.
+- **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
+  js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
+  side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
+  everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
+  are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
+  Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring
+  before the rival flew (the rest won at 20, 35 and 45 minutes), 8 of 8 on Sky islands. The Viaduct chain was measured to join the two home
+  asteroids by minute 10, so the games stalled at the Viaduct (both armies meet there; the spans get shot down), not for want of a crossing.
+  The rival now also flies bands of warbots over in Cargo Planes (README, the AI: *The rival's aircraft*): 2 of 8 undecided.
+  Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
+  a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
+  home asteroid each round a rich middle one: only two now); the rival flies Cargo Planes but builds **no Airships or Mooring Masts**
+  and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
+  a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
   Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
   reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
@@ -517,7 +532,7 @@ teaches it. The calls made in building it, open for the owner:
   privacy note (only ID, name and scores until accounts), and Cloudflare's free tier covering it.
 - **Seizing megastructures: BUILT (Nov 24 2026)** (the owner's call; README, "Seizing megastructures"; How to play,
   Megastructures; the Overcast mission's new goal). Robots that beat one to 0 knock it out; held 40 s it's seized; seized,
-  a quarter of its cost and a Worker bring it online; Wreck it destroys it instead. Open questions:
+  a quarter of its cost and a Worker bring it online; Demolish it destroys it instead. Open questions:
   - **Contingency (done, owner Nov 24: "carry over to you maybe"):** a territory's megastructure the winner seized in a
     battle played carries over to it on the globe; otherwise (knocked out only, or an auto-resolved battle) taking the
     territory wrecks it as before. Revisit if it makes megastructure territories too easy a prize.
@@ -527,6 +542,13 @@ teaches it. The calls made in building it, open for the owner:
     veil and the amber offline lamp are drawn in code for now.
   - **The rivals** seize what they knock out, take their own back and wreck only a Lift they march on for its fall.
     Should a Raider (Salvager) wreck rather than seize, for the crates?
+  - **Re-checked Nov 26 2026** (after a39b0b5 joined them by road and gave their fee priority): in seeded AI games (Medium
+    map, a Lance or Deep Core knocked out a third of the way from the rival at 10 to 12 minutes) the rival seized it in
+    under a minute but never brought it online: 10 minutes on it still owed a few Alloy or Chips, because a Smelter's
+    Alloy went straight into the Foundry beside it by conveyor and never reached storage for the Haulers. Now, while a
+    rival owes its fee, its conveyors don't hand on what it owes, its Ammo Plant rests and, after 45 s, its Foundry:
+    online 289 s (Lance, seed 8) and 430 s (Deep Core, seed 12) after it was seized. Watch: a long fee on a war footing
+    rests the rival's Foundry for minutes; worth it for a Lance, maybe not for a Shield Dome.
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
   **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
@@ -1094,7 +1116,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   occasional whale spout (render-only scenery like the fauna; never blocks ships).
 - **Lava maps: steam vents and livelier lava:** steam plumes and vents on any lava map (Volcano, Cinderlands, Fault Line),
   and animated lava tiles (slow flowing/pulsing, crust cracks, glow) so it looks alive. Render-only, Saver off.
-- **Robotic dialogue, spoken at the start of each game and now and then** (generated audio): a robotic language we can't
+- **Built (Nov 26 2026): the start and the end** (js/voice.js; README's machine voice entry): a formant synthesizer
+  speaking the invented Accord machine tongue with subtitles, the Carrier as a game starts and the Command core as it
+  ends, Settings → Voice lines; a 'droid' radio preset is ready for the "now and then" callouts, still open (which
+  moments, how often). **Robotic dialogue, spoken at the start of each game and now and then** (generated audio): a robotic language we can't
   understand with subtitles ("Execute directives", "Directive acknowledged", etc.), in the voice of the colony's machines;
   a subtitle line on screen; an Ambience/Voice volume setting and an off switch. Tone per LORE.md (the Accord's orders, the
   contingency orders, COBALT); never states Earth's fate.
@@ -1118,6 +1143,23 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Terrain detail view: see the routes through the terrain** (the owner, Nov 2026: for later). So a player can tell at a
+  glance which cliffs, ramps and gaps let an enemy walk round to the base, and so that no enemy robots can sneak round a
+  cliff into it unseen. An overlay, like the traffic map and the goods-flow overlay (a toggle, `Shift+T` style, and a
+  button on the phone), over the terrain:
+  - **Walkable routes:** shade the ground a ground robot can walk (the game already works out walkable areas, the
+    zones, and where ramps join levels), draw cliff edges and drops clearly, and mark **ramps, passes and chokepoints**
+    (a narrow gap shown as a bright gate).
+  - **Approach routes to your base:** from each rival's base (or the nearest enemy robot), the shortest walkable
+    routes to your Command Base and key buildings, drawn as lines, so the unguarded back door shows up; a warning where
+    a route reaches your land with no turret, wall or garrison covering it.
+  - **Other kinds of mover:** a switch between ground robots, aircraft (everything open) and ships (water only), since
+    Viaducts, Ropeways, bridges and Airships open routes the ground view does not show; show the routes a Viaduct or a
+    Ramp you could build would add or close (a "what if I wall this gap" preview).
+  - **Reuses:** the zone and walkability maps, the rival's route search (`findPath`), the Bottleneck finder's style of
+    highlighting, the traffic overlay's drawing. A cheap first version: just the walkable shading with cliffs and ramps
+    marked; then the approach lines. Pairs with the military roster work (Mine Layer and Skirmisher make
+    chokepoints matter) and the Grand Canyon and Spine maps.
 - **Polish and quality of life, to feel like a studio game** (the owner, Nov 2026: saved for later). The game already has
   photo mode, cloud saves with a QR code, goals, records and achievements, undo, control groups, idle-robot explanations,
   the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
@@ -1390,9 +1432,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
   run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
   the dead are drawn too.
-- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18: for later). The Fiber plant on the map is the
-  Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`, ART_GUIDE; the Bloom and the Hollow
-  use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
+- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18). DONE, Nov 26 2026: from six directions drawn in
+  the running game the owner picked **A, Lantern Cane** (tall jointed mint-teal canes whose rings light up mint when
+  ripe, pale stumps where cut, the joints growing back one by one; 1.5 tiles tall, three clumps by position, lit at
+  night dimmer while growing), now drawn in code (`js/reedcane.js`, ART_GUIDE Batch 34). The original note: the Fiber
+  plant on the map was the Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`,
+  ART_GUIDE; the Bloom and the Hollow use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
   denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
   on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
   regrowing (the Grove Planter).
@@ -1402,12 +1447,15 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   line, a "no entry" bar at the wrong-way end), small roadside signs or bollards at the entry, a lit cat's-eye string
   at night as the Expressway has, or an arrow that fades out along the lane. Pair with the Express highway's art so the
   two share a marking language. A small sheet of three looks first.
-- **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
-  Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
-  `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
-  what the redesign covers (its look in the Silo, in flight and the blast; how it plays; or both), then show a design
-  sheet to pick from, as for the Airship. Mind the single file's room (see Room to grow below): its art may want a
-  bundle of its own beside the page.
+- **Redesign the nuclear missile** (the owner's to-do, Nov 17). DONE, Nov 26 2026 (the owner's spec): a long, rounded
+  three-stage ICBM drawn in code (first off-white with red warning marks, now olive drab: stage bands, small fins: ART_GUIDE,
+  The nuclear missile), and a launch sequence in the look only: the missile waits in its Silo with the warning lights
+  flashing and steam venting, lifts off 10 s before impact, climbs off the screen and falls onto the target (README,
+  Nuclear race). Open: the blast itself (`nuke-blast-sheet`) is unchanged; a rival's launch seen off screen shows only on
+  the minimap and in the messages (an edge marker pointing to it?); the Silo's art still has no closed hatch to open.
+  Its look: the owner chose **Garrison** (matte olive drab, a black nose, a yellow live-warhead band, white stencils)
+  from a design sheet of six (Lancet, Leviathan, Garrison, Nightshade, Redline, Hydra), Nov 26 2026; installed with a
+  lighter rim and a soft dark halo so it reads on rust ground. The first off-white look is gone.
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.
@@ -1691,15 +1739,46 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     or light bot off the road may step across a lane at any tile, not only at an overpass (pathing allows any crossing
     step across the lane's way); should open ground beside a lane be fenced, as the barrier art suggests?
   - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
-    shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
+    shot, only a Generator within 4 tiles; reach 12–30, now 12–50). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
     the air, from a goods list of up to 3 goods (each with a reserve the colony keeps at home); enemy Flak bursts
     canisters (crates where they fall), a canister with no Catcher lands as crates; none in the Hollow; the mission The
     Schedule teaches it. Decided after (the owner, Nov 19 2026): Flak as a hard counter is fine (a Flak Gun right under
     the arc bursts every canister that crosses its reach, so a line has to go round rival Flak); two tiles ("a 2x1
     footprint would be cooler"), laid east-west or north-south as it's placed, firing off the end facing its Catcher.
-    Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each end works today);
-    a Catcher full of goods nobody fetches (no cap today).
+    Reworked (the owner, Nov 26 2026: "not useful"; four changes approved, the "network power" idea skipped, the
+    Generator rule kept): **two-way** (the Catcher fires back: a Driver and its Catcher are one line, each end with its
+    own reload; old saves' pairs load as two-way, a Driver's goods list kept as its override), **automatic supply** like
+    a Maglev line (the far end stocks what the buildings round it need, the near end ships it beyond a reserve of 20, the
+    far end's spare goes home; a goods list on either end overrides; Fuel flies in drums so a far end can run its own
+    Generator), **over anything, longer** (12–50 tiles: the island and Sky islands tool; a Driver can be aimed at an
+    Outpost or Keep, one way, to keep its Ammo up), **more throughput** (16 goods a canister, a shot every 6 s each
+    way: 160 goods a minute each way over 30 tiles, measured, against 72 one way before and about 120 for a 4-pod
+    Maglev line). Open: the rival still builds none (an Architect pair to an island it holds on Islands or Sky islands
+    would be the natural first use: aiMaglev's far-cluster test with a Catcher instead); a Catcher still can't be put
+    on an island nobody of yours can reach yet (a foothold first: a Ferry, a Drop Outpost); a Catcher full of goods
+    nobody fetches (no cap today). **Tuned (Nov 26 2026 balance pass):** at 160 a minute each way for 16 Cement, 12
+    Alloy, 6 Chips a line it out-carried a 30-tile 4-pod Maglev line (about 120 a minute for some 46 Cement, 58 Alloy,
+    29 Chips with its pods) at a quarter of the cost, longer reach and nothing on the ground to defend: a shot every
+    **8 s** now (about 120 a minute each way, measured 118 over 30 tiles), and the Driver costs 12 Cement, 10 Alloy, 5
+    Chips, the Catcher 8, 5, 3. Still the only way over a gap a Maglev line can't span (over 6 tiles of chasm or deep
+    water) and still far cheaper on a long hop. *Open for the owner:* a further step would be a slower rate when both
+    ends stand on ground a robot can walk between (overland) than across water or a chasm; several Drivers aimed at one
+    Catcher still add up (each its own 120 a minute out), unlike a Maglev line's four pods.
+    **Follow-ups built (Nov 26 2026, owner-approved):** (1) **Catcher kit**: a Driver's panel *Throw a Catcher kit*, then
+    open ground 12–50 tiles off that no one else holds (not a Trade Post's ground, its ring cutting no rival off); Haulers
+    load the Catcher's cost (8 Cement, 5 Alloy, 3 Chips) into it at the Driver, it flies like a canister (Flak can burst
+    it: crates), lands as a Catcher that assembles itself in 20 s with no Worker, claims 3 tiles of land (as a Port
+    founded by sea) and the Driver aims at it. Calls made: loaded at the Driver rather than paid from storage at once
+    (a rival's Alloy and Chips never sit in storage, so a storage price was one it could never pay); a spot taken while
+    it flies moves it to the nearest open tile within 2, else its goods fall as crates. (2) **Rivals build pairs**
+    (`aiMassDriver`): Medium and up, one pair, the Architect from 10 minutes and the others from 15, on Islands, Sky
+    islands, Four Isles and the canyon maps, to the nearest fort or store of its own 16–52 tiles out on ground its robots
+    can't walk to (elsewhere only ground no road, Viaduct or ferry reaches); a Catcher site where its Haulers get (a
+    Viaduct), a kit where nothing of its can. Not done: a kit to a rich deposit nobody holds (no Worker can follow it
+    there, so nothing could be built round it: a Ferry or a Drop Outpost first). (3) **Far end full**: a far end stops
+    taking a good at 64 (or what it keeps, if more), the near end's status and panel say so, and it sends again once some
+    is used. Open: 64 a good, or a cap on the whole stock?
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
@@ -2284,6 +2363,15 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+  Nov 26 2026: the rival now flies bands over in Cargo Planes (`aiAir`; README, the AI), and it did not help here: 8 of 8
+  still undecided at 45 minutes (Normal, Balanced both, 4 seeds each of Medium and Large; a Herald or a Salvager against a Steward
+  too, 4 games). Every tile of an enemy mesa is within reach of a gun or a Mortar Pit from about minute 20 (checked: 308 tiles,
+  none free even with no margin; Mortar Pits reach 11 to 12), so a band has nowhere to land out of fire, and what the
+  armies build there (36 and 30 warbots by 30 minutes on seed 12) cannot take a mesa behind that many guns. On seed 11
+  both armies sat at 6 warbots for half an hour: Ore runs out on the home mesa (one Mine) and Alloy and Chips with it.
+  Open: the AI bombing the Mortar Pits and guns first (aiBomber does, one bomber, one bomb a minute), Howitzers (aiSiege) from the
+  mesa it holds, Drop Outposts and Workers on the ore mesas (an economy by air). (A Herald flew in one and three bands in two games
+  and decided neither.)
 - **Bombing a Viaduct's deck** (Nov 2026). A bomb on the deck counts against the span: 14 off the end nearer it, or
   off the other end if that one's weaker, so two bombs anywhere on a deck bring it down (bombs on each end tower still
   leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
@@ -2563,7 +2651,12 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
 
-## To do: megastructures lit at night (owner, Nov 25)
+## Built: megastructures lit at night (owner, Nov 25)
+
+**Built** (ART_GUIDE.md, Megastructures at night; `megaNight` in `js/render.js`): a cached light layer (lamps and windows
+bloomed, the deck floodlit, an LED strip in the owner's colour round the pad), red warning beacons on the tall parts and
+white floods; dark with its amber lamp while knocked out or offline. The original request:
+
 
 In game the megastructures stay dark at night while every other building is lit (owner's screenshot: the Orbital Lift
 by a lit base, its pad and tower unlit). Give all eight night lighting like the rest of the base: lit windows and
@@ -2571,12 +2664,40 @@ decks, beacons and warning lights, a glow in the owner's colour (see how the oth
 `daynight.js` do it; ART_GUIDE.md for the look). A knocked-out one stays dark (its offline look), and switches on
 again once it's back online.
 
-## To do: a cooler Victory screen (owner, Nov 25)
+## Built: a cooler Victory screen (owner, Nov 25)
+
+**Built** (Nov 26 2026: `overFlare` in `js/ui.js`, `#o-flare` in `index.html`, the `.o-flare` rules at the end of
+`style.css`; README's end screen entry has the code map). The word flares in over the dimmed map in the TERRAFALL look
+(Chakra Petch, the coral gradient, its glow) with a light streak, a shine across the letters and a soft flash, holds
+about two seconds, then shrinks into the end screen's heading while the dashboard fades in; under the heading, a short
+line says how (Capture, Domination, Uplinks held, Command Base lost...). DEFEAT is cold grey, slower, falls into place
+with a dark vignette and the map desaturated. The same word in every end: missions (COMPLETE / FAILED), Horde (HELD,
+OVERRUN with the wave, VICTORY for the Maw), Contact, Teams, Observer (GAME OVER, who won under it), and Contingency's
+battles in the Command Deck's blue before the globe. A tap or a key skips to the dashboard; reduced motion only fades.
+A short sound under it (`sfx('flare')`, a rising rush of air; `flareDown`, a low falling one) beside the old win and
+lose notes. The original ask:
 
 When you win, a big **VICTORY** flashes and animates in before the victory dashboard: the same look as the TERRAFALL
 title on the main menu (the M2 cinematic menu's font, coral gradient and glow), e.g. sweeping or flaring in over the
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
+
+## Built: victory and defeat music (owner, Nov 26)
+
+**Built** (Nov 26 2026: `musicCue` in js/audio.js, README's end's music entry; How to play, Sound): a scored cue of
+about 18 s, Victory (A, the main theme's chords turned major, drums, horns, a bell fanfare) or Defeat (D Phrygian, slow:
+drone, choir, a cold lead falling), then a quiet loop; Contingency's in the campaign theme's key and tune. Rescored the
+same day after the owner listened ("light and fun" for a victory, "too light hearted" for a defeat): a film-score
+victory (A, 76 bpm, i–♭VI–♭VII into A major, low horns, a heroic horn line, timpani, sub booms, a cymbal swell into a
+wide final chord) and a crushing defeat (D, 54 bpm, a sub pedal, distorted low brass on clusters and the tritone, the
+bass sinking by semitones, collapses far off, a knell, a final blow into a cold drone); see README. Open: a name for
+each on the Now playing card? The original ask:
+
+A short music cue, or a track, on the Victory and Defeat screens, generative like the game's other music in
+`js/audio.js`: a triumphant swell for Victory, a low, sombre one for Defeat; Horde, Teams, missions and Contingency could
+reuse the two. What's there now is only a sting: the old four-note `win` / `lose` arpeggios plus the flare's rush of air
+(`sfx('flare')`, `flareDown`) as the word comes in (see a cooler Victory screen, above). The music would follow it and
+carry on quietly under the dashboard.
 
 ## Built: Fallen allies, down not out (owner, Nov 25 2026)
 
@@ -2615,6 +2736,12 @@ Murmur's blows). `tools/horde-test.js` plays it headless.
   Base's toughness, the Maw's 600 armor. The computer colony (autoplay) only half defends (guns and an army at home), so
   the headless numbers say little about a human's game.
 - Horde on other maps (the Maw opposite you).
+- ~~How big can waves get?~~ **Decided Nov 26 2026** (the owner: the hardest level endless and almost unsurvivable):
+  Settler to Commander keep the per-kind caps (a wave tops out at about 250); **Warlord** has none (`uncapped`), so its
+  waves keep growing (about 330 by wave 20, 650 by 30, 1,100 by 40, 1,600 by 50). At most 110 are up at once as
+  before; the Maw holds 1,500 waiting on Warlord (400 on the others), and any more are held over to join the next wave
+  (never dropped). Headless, a test fort on Warlord (`horde-test.js warlord 45 4242 endless --fort`) falls at wave 31
+  (32 min) with thousands waiting. Open: whether a held-over backlog should show on the top bar.
 - ~~Co-op Horde~~ **built Nov 25 2026** (the owner's pick: **side by side on Long Haul 2v2**): in multiplayer the host and
   the first partner each run a colony, allies at the south end, the Maw midway across the north end; waves **×1.8**
   (split over both colonies' lanes, so each meets ~0.9 of a lone colony's wave), a Harrow at each colony in a boss wave,
@@ -2651,3 +2778,67 @@ Murmur AI rework).
   Later a great 2-player co-op: two colonies side by side at one end (the Long Haul 2v2 layout).
 - **Open questions for the owner:** (1) a fixed number of waves, Endless, or both as a setting? (2) Long Haul only, or a
   Horde option on any map with the Maw opposite you? (3) pure survival, or sometimes a rival colony defending too?
+
+## Idea: Terraforming expansion (owner, Nov 26; brainstorm, to plan later)
+
+Shaping the world for economic and other benefits. Builds on what's there: the Atmosphere Engine's greening, the
+Torch's scorched earth, Ramps, Quarries cutting rock faces, fertile soil, the Deep Core. A **Terraforming tab** in
+Build, a few new robots (a **Grader**, a **Planter**, a **Drill rig**); every change takes time and goods and is
+permanent on the map (and could show on the Contingency globe). Suggested stages: 1 land height and water, 2 soil /
+plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big projects.
+
+1. **Land and height** (stage 1 BUILT Nov 26 2026 without the blasting: Build → Terraform, the Grader, README "Terraforming, stage 1"; `tools/terraform-test.js`): raise or lower a tile a level (Grader / Earthworks), cost by earth moved, dug earth comes out as
+   Stone (quarry a mountain down); flatten a plateau for a big base, cut a pass, raise a defensive bank. Fill shallows
+   into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
+   walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
+   landslide onto an enemy road below).
+2. **Soil, plants and climate:** compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
+   crops on rich soil). Tree nurseries spread groves (slow Fiber/wood; cover that slows enemy robots). Irrigation:
+   pump water by pipe or canal to dry land so farms grow there (big lever on desert biomes). Local climate (the
+   Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
+   volcanic soil; greening pushing back the Murmur's blight. Biome shift: enough terraforming turns a region desert →
+   savanna → forest, with its look, animals and resource bonuses.
+3. **Resources from the ground:** deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
+   "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
+   hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
+   cable) back into usable land (pairs with "total war scars the land").
+4. **Military uses:** earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
+   enemy lowland by releasing dammed water anywhere (like the Dam map, buildable); collapsing Murmur tunnels, or digging
+   your own under a wall for a surprise attack (mirrors the Sapper); rival terraformers whose equipment you can raid.
+5. **Big projects (megastructure-sized) — the owner's favourite:** a Lake Maker (turn a basin into a lake: ports,
+   fishing, fertile shores), a Mountain Mover (level a whole hill over minutes), and **planetary greening** — green a
+   share of the planet as a goal (preparing Ithaca for Arrival, in LORE's terms).
+   **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the
+   **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
+   objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
+
+**Stage 1, the owner's decisions (Nov 26 2026; done):**
+- **Stone supply: keep the split.** Raising's Stone comes by Hauler where a road reaches the work, otherwise from
+  storage as it comes in (a Wall's way); filling's always comes from storage (no Hauler drives onto water).
+- **Fill shallows reaches 6 tiles from the original shore** (`TERRA.reach`): a water tile can be filled only if an
+  originally dry tile (land as the map was made) lies within 6 tiles (8-way steps; `tfInReach`). `S.tfTiles` records
+  what each changed tile was before the Graders first changed it (1 dry, 2 water), so new land never moves the shore and
+  a save keeps it; nothing new is hashed. Land bridges to near islands still work; the preview crosses out tiles beyond
+  ("Too far out to sea"). (The Dam's drained lake bed counts as shore once drained: the one place the coast moves
+  without a Grader.)
+- **Graders run on batteries like Workers.** Kept; How to play tells players to build a Fuel Station near a long job.
+- **Lowering yields less than raising costs**, so terraforming is no better a Quarry: Lower yields 2 Stone a level
+  (`TERRA.dug`; raising still costs 4), Dig channel 3 (was 6); the times stay, about 5 Stone a minute a Grader.
+
+**Stage 1, still open:**
+- Rivals don't terraform yet (the owner's call). They cope with what a player does (their routes, sites and Ports follow
+  the new ground), but they don't answer a moat or a land bridge on purpose. Teaching them is the next step once the
+  numbers settle.
+- Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
+  later option.
+- Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.
+- DONE (Nov 26 2026): the Grader's look and its animations, and the earthworks' ground art, went through Claude
+  Design; the owner picked concept A, "Dozer", now rendered and installed with the ground effects and the plans'
+  overlays (ART_GUIDE Batch 35). Open: should a raised tile show its new cliff face while it is being raised (the
+  bake only repaints it when the job is done)?
+
+## To do: Argos on the main menu (owner, Nov 26)
+
+The moon Argos in the main menu's background (js/menuplanet.js) reads as an out-of-focus orb. Render it crisply at menu
+scale: a real surface (craters and maria, the grey lunar look of its biome), a sharp terminator and rim light matching
+the planet's sun, and it shouldn't be blurred by the depth-of-field/glow pass meant for the planet.

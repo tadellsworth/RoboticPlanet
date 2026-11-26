@@ -114,7 +114,7 @@ const check = new Function('assert', 'sfx', source + `
         if (mapSizeForPlayers(size, players) !== size) continue;
         for (const teams of players === 4 ? [false, true] : [false]) {
           for (const seed of [11, 21, 37]) {
-            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow;
+            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids; // (The Ring is always on Argos: no second biome)
             const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks',
               murmur: preset.hollow || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
             const label = [preset.name, SIZE_PRESETS[size].name, players, teams ? 'Teams' : 'Versus', 'seed ' + seed].join(' / ');

@@ -91,7 +91,7 @@
   "art/biomes/** (terrain, cliffs, plants)",
   "art/canyon/*",
   "art/resources/*",
-  "art/markers/missile, nuclear-missile (optional)",
+  "art/markers/missile (optional)",
   "dust and smoke overlays: crawler-dust, truck-boost dust, freight-loco-exhaust"
  ],
  "never_grade": [

@@ -184,6 +184,9 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks takes two: they lay your planned roads, twice as fast as a Worker, and surface roads with asphalt.' },
+  // The earthmover (see TERRA): it works the Terraform plans (Build → Terraform) and nothing else.
+  grader:  { name: 'Grader', plural: 'Graders', speed: WORKER_SPEED * 0.6, hp: 12, grader: true, offroad: true, parts: 3,
+    desc: 'A slow tracked earthmover with a blade. It does your Terraform plans (Build → Terraform: raise, lower, flatten, fill shallows, dig a channel) and nothing else: dug earth comes out as Stone, and raised or filled ground takes Stone.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
@@ -245,7 +248,7 @@ const BOTS = {
   harrow:   { name: 'Harrow', plural: 'Harrows', speed: WORKER_SPEED * 0.45, hp: 240, wild: true, bite: 10, behemoth: true,
     desc: 'The biggest of the Murmur: a badger-mole the size of a hill, its back a mantle of crystal plate. It walks straight at a colony and the ground breaks under it: the roads, track and pipes it walks over are torn up, and every few seconds it rears and slams the ground, stunning every robot within 3 tiles and breaking the Walls, guns and buildings there. Small arms (warbots, Bulwarks, Skirmishers, turrets, Minigun Nests, Bunkers) do a quarter of their damage to it; Railgunners, Howitzers, Mortars, Rockets, Torches, bombs and Missiles do it all. Scuttlers ride on its back and drop off when it slams, and a pack comes with it. Only a real army brings it down: meet it in the open, spread out, before it reaches your walls.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -363,21 +366,35 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
 const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, bends: 4, maxBent: 60, seg: 3, turn: 120, corner: 0.35, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
- * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods
- * in an arc over everything to a Catcher `min` to `max` tiles away (b.mdTo on the Driver: one Catcher per Driver, a
- * Catcher may take several). Both are storage. The Driver's goods list (b.mdSend: up to `goods` goods, each with the
- * reserve its colony keeps at home, `reserve` by default) is a standing supply order: Haulers bring it what the colony
- * holds beyond that reserve, up to `hopper` of each, and buildings touching it hand over their output by conveyor. A
- * full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more); the coils charge for
- * `charge` s, then it fires, `reload` s between shots. The flight takes `flight` s at full range (`flightMin` at the
- * shortest), its arc `arc` tiles high at full range. Power: no Fuel of its own, but it fires only with a Generator
- * (with Fuel) within the Generator's radius (genPowered); without one it waits. A canister has `hp`: an enemy Flak Gun
+ * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun line that throws sealed canisters of goods
+ * in an arc over everything, both ways. The Driver is aimed (b.mdTo) at a Catcher `min` to `max` tiles away: the two
+ * are one line, and either end fires to the other (a Catcher may take up to `drivers` Drivers, firing to each in turn). Both
+ * are storage. Supply is automatic (mdPlan, every 2 s): the end farther from the Command Base (b.mdFar) stocks what the
+ * buildings round it need (b.auto, as a far Rail Station does: within STATION_REACH, nearer it than the Command Base,
+ * touching it, by road or on foot), and the other end ships what it lacks (b.mdAuto: {partner id: {good: n}}), out of
+ * what its colony holds beyond `reserve` of each (Haulers bring it, up to `hopper`); what the far end holds beyond its
+ * own needs that nothing round it uses goes home the other way. A goods list (b.mdSend: up to `goods` goods, each with
+ * the reserve its colony keeps at home) overrides an end's automatic shipments: it sends just those. A Driver may be
+ * aimed at one of its colony's `forts` (an Outpost or a Keep) instead, one way: it keeps that fort's Ammo (and a Keep's
+ * Crystal) topped up. A full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more, or
+ * the whole of a smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each end,
+ * or `reloadLand` s when a robot could walk from one end to the other (mdOverland: then it is a shortcut over land, not
+ * a crossing; the owner, Nov 26 2026). A Catcher takes `drivers` Drivers at most.
+ * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
+ * flies in sealed drums (no Crude). Power: no Fuel of its own, but an end fires only with a Generator (with Fuel) within
+ * the Generator's radius (magPowered); without one it waits (it still catches). A canister has `hp`: an enemy Flak Gun
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
- * its cargo falls as crates where it comes down; if the Catcher is gone when it lands, it lands anyway, as crates. None
- * in the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
+ * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
+ * the Hollow (nothing flies under the cavern roof).
+ * A Driver can also throw a Catcher kit (mdKit: the Catcher's cost, loaded at the Driver) to open ground `min` to `max`
+ * tiles away that no one else holds (no Trade Post's ground): it lands as a Catcher site that assembles itself in
+ * `kitBuild` s (no Worker needed), claims the land `kitClaim` tiles round it (b.claim, as a Port founded by sea does),
+ * and the Driver is aimed at it: a foothold on an island or a mesa with none. Flak can burst it like any canister.
+ * A far end nothing collects from fills up: past `full` of a good there (or what it keeps, if more), no more of it is
+ * shipped there ("Far end full"). The rival builds a pair to an island or mesa it holds that no road reaches (aiMassDriver).
  */
-const MASSDRIVER = { min: 12, max: 30, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 24, load: 12, partWait: 30, partMin: 4, charge: 1.6, reload: 10,
-  flight: 3, flightMin: 2, arc: 5, hp: 4, low: 0.1, feed: 1, muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
+const MASSDRIVER = { min: 12, max: 50, kitClaim: 3, kitBuild: 20, full: 64, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
+  flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
@@ -520,7 +537,7 @@ const CROSS = {
   [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 0.5 }, time: 9, weight: 16 },
 };
 /** Can a bridge (road or rail) go out over tile t? Water and chasms, not rock. */
-function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
+function bridgeable(t) { return S.terrain[t] === T_WATER || (S.terrain[t] === T_CHASM && !voidTile(t)); } // (not the void of The Ring: only a Viaduct or Ropeway spans it)
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
 const RAIL_BRIDGE_COST = { cement: 3, alloy: 0.5 }; // the same as a Viaduct's span
 // Naval maps (Islands, Lakes): a bridge or rail-bridge tile over water costs more the further it is from
@@ -533,6 +550,18 @@ const LAKES_WET = 0.37;
 // a bot waiting at a Port gives up after FERRY_GIVEUP s. In routes a ferry crossing costs FERRY_COST times
 // the straight distance, plus FERRY_BOARD tiles' worth for the wait.
 const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off everywhere)
+/*
+ * Terraforming, stage 1 (Build → Terraform; a Grader does the work, see tfPlace and completeEarthwork in sim.js).
+ * One job per tile. Raise or lower it a level (a flatten moves it as many levels as it takes to reach its target):
+ * `time` seconds of a Grader's work for each level of earth moved; raising costs `stone` Stone a level, lowering yields
+ * `dug` (less than it costs, so a Grader is no better a Quarry: about 5 Stone a minute). Fill shallows (water beside land
+ * becomes land, level with the lowest ground beside it): `fill` Stone, `fillTime` s, and only within `reach` tiles of the
+ * shore as the map was made (tfInReach: no causeways across open sea). Dig a channel (land at the waterline beside water
+ * becomes water): yields `dig` Stone, `digTime` s. Levels go from 0 to `top`. A plan takes `most` tiles at once. Yields
+ * come out as crates on the spot (Haulers take them to storage). Raising's Stone comes by Hauler where a road reaches
+ * the work, else straight from storage as the work goes (a Wall's way); filling's always comes from storage.
+ */
+const TERRA = { time: 24, stone: 4, dug: 2, fill: 8, fillTime: 40, reach: 6, dig: 3, digTime: 36, top: 4, most: 48 };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
@@ -757,10 +786,19 @@ const SHAPE_PRESETS = [
   // The Dam (the owner's idea, approved Nov 2026): a raised shelf runs from the middle toward each colony, holding a
   // reservoir behind a dam over that colony's valley (damShape in world.js, the rules in sim.js, the look in js/dam.js).
   // Two colonies face each other across the high ground; three or four sit round it, each with its own lake and dam.
-  { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Wreck a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
-    tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Wreck it (W) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
-    quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Wreck it (W) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
+  { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Demolish a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
+    tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Demolish it (D) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
+    quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Demolish it (D) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
+  // The Ring (the owner's idea, Nov 2026): out in space among the Ring's big asteroids (ringMap in world.js, the backdrop in
+  // js/ring.js). Two colonies only. Argos's look and rules whatever the Biome setting (the biome is forced to Lunar), no
+  // Murmur, no weather, no dust storm.
+  { name: 'The Ring', group: 'heights', noMurmur: true, blurb: 'Out in space among the Ring\'s great asteroids: a home rock each, a rich one in the middle and stepping stones between, with empty space all round. Cross by Viaduct or Ropeway, or fly.', w: 1.15, h: 1.45, asteroids: true, flat: true,
+    tip: 'The Ring: your colony stands on a home asteroid in space, with a rich rock in the middle and a chain of stepping stones between you and your rival. There is nothing in the space between: no floor, no way across on foot and no road to lay. Span a gap with a Viaduct or a Ropeway (Paths), or fly: Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers. Ring Crystal keeps craft aloft out here, so flight works as it does anywhere. Every rock has oil for your Fuel. Argos\'s ground, no weather, no Murmur.' },
 ];
+/** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
+function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.asteroids); }
+/** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
+function voidTile(t) { return S.terrain[t] === T_CHASM && ringShape(); }
 /**
  * The Walking Factory (SHAPE_PRESETS walker: walkerSetup in world.js, the rules in sim.js, the look in js/walker.js).
  *   ring      its loop's radius about the middle of the map: a share of the way from the middle to a base (`min` tiles
@@ -976,6 +1014,17 @@ const ISLE_GAP = 4;       // Islands maps: at least this much sea between island
 const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
 const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
+/**
+ * The Ring (SHAPE_PRESETS asteroids: ringMap in world.js, the space backdrop in js/ring.js). Two colonies, each on a home
+ * asteroid, a rich rock in the middle, a chain of stepping stones between, and resource rocks beside them, in empty space:
+ * the space between is `T_CHASM` that nothing can cross or build on (no Sky bridge: `voidTile`), so a crossing is a
+ * Viaduct or Ropeway, or flight. Argos's look and rules (the biome is forced to Lunar).
+ *   gap    tiles of space between neighbouring asteroids: from `gap[0]` to `gap[1]` (a Viaduct spans gap + 1)
+ *   mul    Ore, Crystal, Stalk and Stone on the asteroids hold this much more than usual (small rocks, few fields)
+ *   oil    seep fields on each side: on the home asteroid, on each resource rock, and in the middle (both sides' share)
+ *   stone  Stone each home asteroid holds at the start (HOME_STONE, topped up near the base)
+ */
+const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE };
 const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
 const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`
@@ -1103,6 +1152,7 @@ const NUKE_GOODS = ['uranium', 'fissile'];
  * A Command Base in the blast is left with almost no armor and no garrison, ready to be captured.
  */
 const URANIUM_DEPOSITS = 6;
+const NUKE_LAUNCH = 10; // (looks only) the missile waits in its Silo, warning lights flashing, until this many seconds before impact, then climbs away
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 /*
@@ -1158,7 +1208,7 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * boost falls to `dark` of itself. It can never be destroyed: whatever hits it (warbots, Missiles, bombs, shells, a nuke,
  * a Lance shot) knocks it down to 0 at most, and then it is knocked out like any megastructure (MEGA, b.mDown; b.cDown
  * while it's dark): its bonus stops and its windows go dark, and whoever holds it takes it (land, bonus and all). It
- * has no Wreck it. Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
+ * has no Demolish it. Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
  */
 const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5 };
 /*
@@ -1170,7 +1220,7 @@ const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5 };
  * it stands at `armor` of its armor, switched off (b.mOff): its new owner's Haulers bring `fee` of its build cost
  * (b.mNeed, what's still owed), then a Worker brings it online, mending it up to `online` of its armor. Anything it was
  * charging starts again; its stage (a Deep Core's depth, an Engine's stage) is kept. A colony that orders an enemy one
- * wrecked (Wreck it on its panel, ORDERS.megaWreck: b.mWreck, a bit per colony) shoots it on past 0: `wreck` of its
+ * wrecked (Demolish it on its panel, ORDERS.megaWreck: b.mWreck, a bit per colony) shoots it on past 0: `wreck` of its
  * armor more and it is destroyed, `salvage` of its build cost spilling out in crates with what was inside. Missiles,
  * nukes, bombs, napalm, Howitzer shells and the Lance's shot destroy one as before (Arrival City: never destroyed).
  */
@@ -1559,6 +1609,12 @@ const BDEFS = {
     name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff. A worker builds it from whichever side is the shorter trip, so a Ramp down off high ground is built from the top: nobody drives all the way round.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
+  // A Terraform job on one tile (see TERRA): planned from Build → Terraform, worked by a Grader, gone when it's done.
+  // Not in the build menu; its cost and time are its own (b.cost, b.buildTime), its job b.tf.
+  earthwork: {
+    name: 'Earthworks', desc: 'Ground being raised, lowered, filled or dug by a Grader (Build → Terraform). When the Grader is done the site goes and the new ground stays.',
+    cost: { stone: 1 }, earthwork: true, armor: 4, buildTime: 20,
+  },
   repair: {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
@@ -1618,12 +1674,12 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher): it throws sealed canisters of 12 goods in an arc over everything, one every 10 seconds, to a Catcher 12 to 30 tiles away. On its panel, Aim at a Catcher, then tap one; then pick up to 3 goods to send. Haulers bring it what your colony holds of them beyond the reserve you set (20 to start), and buildings touching it hand it their output by conveyor. It burns no Fuel, but it fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight, and a canister with no Catcher to land in still lands: either way its goods fall as crates.',
-    cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
-    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. What lands here is shared out like any Depot\'s stock: Haulers take it where it is needed, and buildings touching it are fed by conveyor. Aim a Mass Driver at it from the Driver\'s panel, 12 to 30 tiles away; one Catcher can take several Drivers.',
-    cost: { cement: 6, alloy: 4, chip: 2 }, store: true, catcher: true, armor: 12, buildTime: 12,
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers.',
+    cost: { cement: 8, alloy: 5, chip: 3 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
   // square of foot x foot tiles from its own tile, east and south: footTiles).
@@ -1850,7 +1906,8 @@ function diffAtLeast(k, d = S.difficulty) { return DIFF_ORDER.indexOf(d) >= DIFF
  * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls,
  * push (a big all-in push when its army outgrows its rival's: aiPush), harass (raids that form up out of sight and go for the roads by its
  * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
- * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
+ * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty with a little more of
+ * everything: its bots 10% faster, its army from a minute sooner and 15% faster (Nov 26 2026: it won 4 of 16 without).
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
  * words, for the lobby's one-line note: "walls in, then pushes in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
@@ -1863,7 +1920,7 @@ const PERSONALITIES = {
     name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
     tag: 'builds, defends and attacks in good measure',
     quote: 'This action has been logged for review by the Accord tribunal.',
-    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    play: 'Grows a full economy and a steady army (its bots work 10% faster, and its army starts growing a minute sooner and grows a little faster), and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
     weak: 'No great strength and no great weakness: a fair first opponent.',
     // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
     voice: {
@@ -1873,6 +1930,9 @@ const PERSONALITIES = {
         'Please take shelter. The tribunal has been notified.'],
       surrender: ['Please tell the colonists the roads are finished.', 'We yield, under protest. The tribunal will hear of this.'],
     },
+    // (The owner, Nov 26 2026: the default rival should be a fair fight. As the plain difficulty it won 4 of 16
+    // doctrine games; its economy lasted, but its army never caught up. See docs/economy-balance-audit.md.)
+    army: 1.15, armyFrom: 0.8, econ: 1.1,
   },
   turtle: {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in, builds Keeps and turrets, then grinds forward in big pushes',
@@ -2252,14 +2312,16 @@ const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'na
  *   levels        the difficulty, by the rival levels' keys (Settler to Warlord): `mult` scales every kind's count,
  *                 `ramp` makes it grow faster each wave (times 1 + ramp × (wave − 1)), `gap` the countdown between waves
  *                 [first, less each wave, least] in seconds, `endless`: always Endless (Warlord: relentless, near
- *                 unsurvivable)
+ *                 unsurvivable), `uncapped`: no kind's `cap` (Warlord's waves grow without end: the owner's call, Nov
+ *                 2026), `queue`: its own `queueMost`
  *   kinds         each kind joins from wave `from` with `base` and `per` more each wave after; they stay in every later
  *                 wave and keep growing (the waves are cumulative: the owner's call). `cap` the most of a kind in a wave.
  *   boss          every `every`th wave is a boss wave: every kind `mul` times as many, led by `harrows` Harrows (more
  *                 from `twoFrom` on Commander and Warlord: `twoMult`)
  *   room          the most of the waves' Murmur up at once (the rest wait in the Maw and come as room frees: the scale
  *                 is kept, the spawns staggered); `pace` seconds between two out of the same mouth; `queueMost` the
- *                 most waiting at once
+ *                 most waiting at once (a level's `queue` instead where it has one): any more are held over in the Maw
+ *                 (S.horde.over) and join the next wave, never dropped
  *   mouths        the Maw's tunnel mouths round it, `mouthR` tiles out (armor `mouthArmor`: caved in, it is dug open
  *                 again at the next wave); `mawGuards` more on guard round the Maw than a nest has
  *   side          side tunnels partway down from wave `from` (one more every `every` waves, at most `most` open),
@@ -2287,7 +2349,7 @@ const HORDE = {
     medium:  { mult: 0.8, ramp: 0.01,  gap: [195, 6, 105] },
     normal:  { mult: 1.0, ramp: 0.025, gap: [180, 6, 90] },
     hard:    { mult: 1.3, ramp: 0.04,  gap: [165, 7, 70] },
-    warlord: { mult: 1.7, ramp: 0.07,  gap: [130, 7, 40], endless: true },
+    warlord: { mult: 1.7, ramp: 0.07,  gap: [130, 7, 40], endless: true, uncapped: true, queue: 1500 },
   },
   kinds: {
     scuttler: { from: 1, base: 4, per: 2, cap: 140 },
@@ -2330,11 +2392,14 @@ function hordeWave(n, k, mul = 1) {
   for (const type in HORDE.kinds) {
     const K = HORDE.kinds[type];
     if (n < K.from) continue;
-    out[type] = Math.min(Math.round(K.cap * Math.max(1, mul)), Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * mul * grow * (boss ? HORDE.boss.mul : 1) + 1e-9)));
+    const count = Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * mul * grow * (boss ? HORDE.boss.mul : 1) + 1e-9));
+    out[type] = L.uncapped ? count : Math.min(Math.round(K.cap * Math.max(1, mul)), count);
   }
   if (boss) out.harrow = HORDE.boss.harrows + (n >= HORDE.boss.twoFrom && L.mult >= HORDE.boss.twoMult ? 1 : 0);
   return out;
 }
+/** The most of the waves' Murmur waiting in the Maw at once at level k (HORDE.queueMost, or the level's `queue`). */
+function hordeQueueMost(k) { return hordeLevel(k).queue || HORDE.queueMost; }
 /** How many Murmur in wave n at level k, all told. */
 function hordeWaveSize(n, k, mul) { const w = hordeWave(n, k, mul); let s = 0; for (const t in w) s += w[t]; return s; }
 /** The countdown before wave n (seconds) at level k: the first from the landing, then from the wave before. */
@@ -2525,7 +2590,7 @@ const FLAVOR = {
   deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
   atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
-  catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
+  catcher: 'A canister every eight seconds, each way, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
@@ -2538,6 +2603,8 @@ const FLAVOR = {
   hauler: 'Certified for paved roads. Will not go anywhere else. Do not ask.',
   agribot: 'Plants for a harvest nobody has scheduled.',
   paver: 'Every road built to passenger standard. No passengers yet.',
+  grader: 'Levels the ground the Pathfinder surveyed for the arks. The survey is thirty-one years old; the ground has moved.',
+  earthwork: 'Cut and fill, to the Accord grade. Somebody will want a level place to land.',
   express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',

@@ -74,7 +74,7 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring bughunt hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks bughunt hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 
@@ -95,6 +95,9 @@ const controls = [
   ['hill', 2, ['Outpost (B 4 O)', 'Bunker (U)'], [".bcard[data-t='outpost']", ".bcard[data-t='bunker']"]],
   ['hill', 3, ['Army (Q)', 'Hold ground (G)'], ['#btn-attack', '#ar-hold', '#win-card']],
   ['standing', 3, ['Raid (R)'], []],
+  ['earthworks', 1, ['Order bots', 'Graders +1'], ["#sh-orders .order-row[data-k='grader'] [data-d='1']"]],
+  ['earthworks', 2, ['Terraform (7)', 'Flatten (F)', 'Terraform'], ["#build-tabs [data-g='terra']", ".bcard[data-tf='flatten']", '#banner-ok']],
+  ['earthworks', 3, ['Fill shallows (H)', 'Terraform'], [".bcard[data-tf='fill']", '#banner-ok']],
   ['standing', 4, ['Retreat when weak', '50%', 'Stance', 'Aggressive', 'Hold fire'], []],
 ];
 const uiSource = read('js/ui.js') + read('index.html');

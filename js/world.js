@@ -26,6 +26,7 @@ function getE(id) { return id ? S.byId.get(id) || null : null; }
 function generateMap(seed, W, H, cfg) {
   cfg = cfg || {};
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
@@ -2610,6 +2611,227 @@ function hollowMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ The Ring */
+
+/**
+ * The Ring (SHAPE_PRESETS asteroids, RING in defs.js): two colonies on asteroids in open space. Its own generator, called by
+ * generateMap first thing, because everything is laid out round the rocks and nothing is the usual noise. Point-symmetric
+ * (every tile is made to its twin, the same spot turned half round), the noise read at each tile's canonical place, so
+ * both colonies get exactly the same.
+ *   - A home asteroid at each end (player 0's at the bottom), a rich rock at the middle of the map (its own twin), and
+ *     between them a chain of stepping stones along the middle line, the empty space between neighbours RING.gap wide
+ *     (a Viaduct spans one more than that, and every rock has a rim tile to start or land it on: the rim is kept clear).
+ *   - Resource rocks (flank rocks) beside the stones where the map is wide enough: Ore, Crystal, Stone and oil, each
+ *     joined by a short span to the stone or the home rock beside it.
+ *   - The space is T_CHASM that bridgeable() and the road code refuse (voidTile): nothing crosses or is built on it. The
+ *     rocks are flat ground, level 0, with a few crags.
+ *   - Resources: the standard colony's starter fields on the home asteroid (the same offsets from the Command Base), the
+ *     richer fields out beyond it, more oil than a standard map has (RING.oil: seeps on the home rock, each resource rock
+ *     and the middle one), Stone topped up to RING.stone, Ore, Crystal, Stalk and Stone RING.mul richer (small rocks, few
+ *     fields), and richer toward the middle as everywhere.
+ * Returns what generateMap does, with `ring`: { rocks: [{ x, y, rx, ry, kind }] } (the nominal rocks, twins too, for tests).
+ */
+function ringMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const N = W * H, half = Math.floor(H / 2), ccx = (W - 1) / 2, ccy = (H - 1) / 2;
+  const terrain = new Uint8Array(N).fill(T_CHASM), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0x2b7e15) >>> 0), sO = seed * 29 + 41, sH = seed * 7 + 11;
+  const dens = RPR.density, stampDens = clamp(dens, 0.7, 1.15);
+  // 1) The rocks, laid out for player 0's half (the bottom) and turned onto the other. Rows from the bottom: the home
+  //    asteroid, space, stepping stones with space between, the middle rock.
+  const homeRy = clamp(Math.round(W * 0.2), 9, 13), homeRx = clamp(W * 0.33, 10.5, 17);
+  const homeY = H - 2.5 - homeRy, bx = Math.floor(W / 2), by = Math.round(homeY + 1.5);
+  const midRx = clamp(W * 0.2, 7, 11), midRy = clamp(H * 0.06, 4.5, 8);
+  const yH = homeY - homeRy, yM = ccy + midRy, D = yH - yM; // the rows between the home's top edge and the middle rock's bottom edge
+  const [gLo, gHi] = RING.gap;
+  let plan = null;
+  for (let n = 0; n <= 8 && !plan; n++) {
+    for (const rs of n ? [5.5, 5, 4.5, 4, 3.6, 3.3] : [0]) {
+      const g = (D - 2 * rs * n) / (n + 1);
+      if (g >= gLo - 0.1 && g <= gHi + 0.3) { plan = { n, rs, g }; break; }
+    }
+  }
+  if (!plan) { const n = Math.max(0, Math.round(D / 11)); plan = { n, rs: 4.5, g: Math.max(2.5, (D - 9 * n) / (n + 1)) }; }
+  const twin = (o) => ({ ...o, x: W - 1 - o.x, y: H - 1 - o.y });
+  const rocks = [{ x: ccx, y: homeY, rx: homeRx, ry: homeRy, kind: 'home' }];
+  const mid = { x: ccx, y: ccy, rx: midRx, ry: midRy, kind: 'mid' };
+  const edgeD = (o, x, y) => (Math.sqrt(sq((x - o.x) / o.rx) + sq((y - o.y) / o.ry)) - 1) * Math.min(o.rx, o.ry);
+  // The empty space between two rocks (about): the nearest two points of their outlines.
+  const outline = (o) => { const pts = []; for (let k = 0; k < 40; k++) { const an = (k / 40) * Math.PI * 2; pts.push([o.x + dcos(an) * o.rx, o.y + dsin(an) * o.ry]); } return pts; };
+  const spaceBetween = (a, b) => { const pa = outline(a), pb = outline(b); let m = Infinity; for (const p of pa) for (const q of pb) m = Math.min(m, dist(p[0], p[1], q[0], q[1])); return m; };
+  for (let k = 0; k < plan.n; k++) {
+    const rs = plan.rs, y = yM + plan.g * (k + 1) + 2 * rs * k + rs, x = ccx + (k % 2 ? 1 : -1) * Math.min(1.6, rs * 0.3);
+    rocks.push({ x, y, rx: rs * 1.25, ry: rs, kind: 'stone', k });
+  }
+  // The side rocks: a resource rock to each side of the middle one on the middle row (the same distance from both colonies: where the
+  // Trade Posts go). Both are laid out here and stamped, as the middle rock is: every other rock's twin is made from the bottom half.
+  const sides = [];
+  if (W >= 40) {
+    for (const s of [-1, 1]) {
+      const avail = s < 0 ? mid.x - mid.rx - 2.5 : W - 1 - (mid.x + mid.rx) - 2.5, rx = Math.min(5.5, (avail - plan.g) / 2);
+      if (rx < 3.2) continue;
+      sides.push({ x: mid.x + s * (mid.rx + plan.g + rx), y: ccy, rx, ry: Math.min(rx * 0.9, 4.8), kind: 'side', k: s });
+    }
+  }
+  // The resource rocks beside the stones, to either side: as big as the room out to the map's edge allows (at most the stone's size),
+  // their space to the stone `g` and to the home rock at least the least gap.
+  if (W >= 40) {
+    for (const st of rocks.filter((o) => o.kind === 'stone')) {
+      for (const s of [-1, 1]) {
+        const avail = s < 0 ? st.x - st.rx - 2.5 : W - 1 - (st.x + st.rx) - 2.5, rx = Math.min(5.8, (avail - plan.g) / 2);
+        if (rx < 3.2) continue;
+        const ry = Math.min(rx * 0.85, plan.rs * 1.05);
+        // (Beside the stone, then a little nearer the middle if the home rock crowds it.)
+        for (let d = 0; d <= 6; d += 1) {
+          const o = { x: st.x + s * (st.rx + plan.g + rx), y: st.y - d, rx, ry, kind: 'flank', k: st.k }, o2 = twin(o);
+          const rest = [mid, ...sides, ...rocks, ...rocks.map(twin)];
+          if (rest.every((r) => spaceBetween(r, o) >= gLo) && spaceBetween(o2, o) >= gLo) { rocks.push(o); break; }
+        }
+      }
+    }
+  }
+  const all = [mid, ...sides, ...rocks, ...rocks.map(twin)];
+  // 2) The land: each tile belongs to the rock it is nearest, wobbling the outline; every other rock stays a gap away.
+  const gapMin = Math.max(2, gLo - 1.2);
+  for (let t = 0; t < N; t++) {
+    const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
+    const wob = (fbm(mi / 4, mj / 4, sO, 2) - 0.5) * 3;
+    let k = -1, best = Infinity;
+    for (let n = 0; n < all.length; n++) { const d = edgeD(all[n], i, j) - wob; if (d < best) { best = d; k = n; } }
+    if (best > 0 || i < 1 || j < 1 || i >= W - 1 || j >= H - 1) continue;
+    let clear = true;
+    for (let n = 0; n < all.length && clear; n++) if (n !== k && edgeD(all[n], i, j) < gapMin) clear = false;
+    if (clear) terrain[t] = T_GROUND;
+  }
+  // Specks the wobble cut off from their rock go back to space.
+  {
+    const lab = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_GROUND || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] === T_GROUND) { lab[u] = t; q.push(u); } });
+      if (q.length < 14) for (const u of q) terrain[u] = T_CHASM;
+    }
+  }
+  // The rim: ground with space beside it. Kept clear (no deposit, crag or fertile soil), so a Viaduct can start or land on any of it.
+  const rim = new Uint8Array(N);
+  const markRim = () => { rim.fill(0); for (let t = 0; t < N; t++) if (terrain[t] !== T_CHASM) { const i = t % W, j = (t / W) | 0; if (i === 0 || j === 0 || i === W - 1 || j === H - 1) { rim[t] = 1; continue; } orth(t, (u) => { if (terrain[u] === T_CHASM) rim[t] = 1; }); } };
+  markRim();
+  const near = new Uint8Array(N); // (rim, or beside it)
+  for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
+  // The middle of the middle rock and of every stepping stone stays bare, open ground (5 × 5): a Trade Post or an Uplink can stand there.
+  const bare = new Uint8Array(N);
+  for (const o of [mid, ...sides, ...rocks.filter((r) => r.kind === 'stone')]) {
+    for (let j = Math.round(o.y) - 2; j <= Math.round(o.y) + 2; j++) for (let i = Math.round(o.x) - 2; i <= Math.round(o.x) + 2; i++) if (i >= 0 && j >= 0 && i < W && j < H) bare[id(i, j)] = bare[mir(id(i, j))] = 1; // (each tile and its twin: rounding a twin's centre can differ by one)
+  }
+  // A few crags, away from the rim, the middle and the bases.
+  for (let t = 0; t < N; t++) {
+    if (terrain[t] !== T_GROUND || near[t] || bare[t]) continue;
+    const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
+    if (dist2(i, j, bx, by) < 100 || dist2(i, j, W - 1 - bx, H - 1 - by) < 100 || dist2(i, j, ccx, ccy) < 20) continue;
+    if (fbm(mi / 6.5, mj / 6.5, sH, 3) > TPR.rock + 0.05) terrain[t] = T_ROCK;
+  }
+  // 3) The resources. Every tile is made to its twin as well, so the map is the same turned half round.
+  const free = (t) => terrain[t] === T_GROUND && !rim[t] && !res[t] && !fert[t] && !bare[t];
+  const stamp = (x, y, rad, type, fill) => {
+    for (let j = Math.max(half, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t)) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+      }
+    }
+  };
+  // An oil field: the `k` free tiles nearest (x, y) become seeps (always as many: Fuel on every rock).
+  const oil = (x, y, k) => {
+    const c = [];
+    for (let j = Math.max(half, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t)) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
+  };
+  // The landing zone: open ground (no crags, no deposits) round each Command Base.
+  for (let j = by - 4; j <= by + 4; j++) for (let i = bx - 4; i <= bx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
+  // The home asteroid: the standard colony's starter fields, then the richer ones out beyond, and oil.
+  stamp(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens);
+  stamp(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens);
+  stamp(bx + 6, by, 1.8, R_BOULDER, 0.8 * stampDens);
+  stamp(bx - 4, by - 5, 1.3, R_ORE, 0.9 * stampDens);
+  stamp(bx + 4, by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens);
+  stamp(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens);
+  stamp(bx - 1, by - 6.5, 2.0, 'fert', 0.85);
+  stamp(bx + 9, by - 3.5, 1.6, R_ORE, 0.8 * stampDens);
+  stamp(bx - 10, by + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens);
+  for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, RING.oil.home)) oil(bx + dx, by + dy, 4);
+  stamp(bx - 8, by + 6, 1.4, R_BOULDER, 0.75 * stampDens);
+  // The middle rock, in the bottom half (the top half is its twin): ore, crystal and oil round a clear centre for the Trade Post.
+  const mp = (u, v) => [mid.x + u * mid.rx, mid.y + v * mid.ry];
+  stamp(...mp(-0.55, 0.5), 1.6, R_ORE, 0.85);
+  stamp(...mp(0.55, 0.5), 1.4, R_CRYSTAL, 0.85);
+  for (const [u, v] of [[-0.12, 0.72], [0.78, 0.18]].slice(0, RING.oil.mid)) oil(...mp(u, v), 3);
+  stamp(...mp(-0.8, 0.12), 1.3, R_BOULDER, 0.8);
+  // The stepping stones and resource rocks of player 0's half: stone on every stone (Cement for the next span), the rest on the rocks beside.
+  for (const o of [...sides, ...rocks]) {
+    const at = (u, v) => [o.x + u * o.rx, o.y + v * o.ry];
+    if (o.kind === 'side') {
+      stamp(...at(-0.45 * o.k, 0.5), 1.6, o.k < 0 ? R_ORE : R_CRYSTAL, 0.85);
+      stamp(...at(0.5 * o.k, 0.55), 1.3, R_BOULDER, 0.8);
+      for (let n = 0; n < RING.oil.rock; n++) oil(...at(0, n ? 0.85 : 0.6), 3);
+    } else if (o.kind === 'stone') {
+      stamp(...at(0, 0.05), 1.7, R_BOULDER, 0.8);
+      if (o.k % 2) stamp(...at(-0.3, -0.35), 1.2, R_CRYSTAL, 0.85); else stamp(...at(0.3, -0.35), 1.3, R_ORE, 0.85);
+    } else if (o.kind === 'flank') {
+      stamp(...at(-0.3, -0.2), 1.7, o.k % 2 ? R_CRYSTAL : R_ORE, 0.85);
+      stamp(...at(0.3, 0.3), 1.4, o.k % 2 ? R_ORE : R_CRYSTAL, 0.85);
+      for (let n = 0; n < RING.oil.rock; n++) oil(...at(n ? 0.5 : 0, 0.62), 3);
+      stamp(...at(0.35, -0.5), 1.3, R_BOULDER, 0.8);
+    }
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = 2 + Math.floor(rng() * (W - 4)), j = half + 1 + Math.floor(rng() * (H - half - 3)), t = id(i, j);
+      if (!free(t) || dist(i, j, bx, by) < 12) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // Stone: each home asteroid is topped up to RING.stone (Cement comes from Stone alone, and every span costs Cement).
+  {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * RING.mul), 1, 255), target = Math.round(RING.stone * RPR.amount);
+    const b0 = id(bx, by), land = new Uint8Array(N), q = [b0];
+    land[b0] = 1;
+    for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!land[u] && terrain[u] !== T_CHASM) { land[u] = 1; q.push(u); } });
+    let have = 0;
+    for (const t of q) if (res[t] === R_BOULDER) have += per;
+    const spots = q.filter((t) => free(t) && dist((t % W), (t / W) | 0, bx, by) >= 4.5)
+      .sort((a, c) => (dist2(a % W, (a / W) | 0, bx + 3, by + 7) - dist2(c % W, (c / W) | 0, bx + 3, by + 7)) || a - c);
+    for (let k = 0; k < spots.length && have < target; k++) { for (const u of [spots[k], mir(spots[k])]) res[u] = R_BOULDER; have += per; }
+  }
+  // 4) The rim and the Command Base's ground stay clear.
+  for (let t = 0; t < N; t++) {
+    if (rim[t]) { if (terrain[t] === T_ROCK) terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+    if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  }
+  // How much each holds: Ore, Crystal, Stalk and Stone RING.mul times as much, richer out toward the middle as on every map.
+  const reach = Math.max(1, dist(bx, by, W - 1 - bx, H - 1 - by) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (SKY_RICH.includes(res[t]) ? RING.mul : 1)), 1, 255);
+  }
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    ring: { rocks: all.map((o) => ({ x: o.x, y: o.y, rx: o.rx, ry: o.ry, kind: o.kind })) },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -2794,6 +3016,7 @@ function newGame(opts) {
   settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].asteroids) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring has Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
@@ -3193,7 +3416,14 @@ function stepPlan(a, b) {
  * Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). Nobody turns on
  * an overpass (see findPath): the areas are joined straight across one, and its own tile goes with its east-west road.
  */
-function computeZones() {
+function computeZones() { S.zone = zoneFill(true); }
+
+/**
+ * The areas of computeZones as a label per tile: with `links`, a Ropeway, Viaduct, ferry line or Airship line joins
+ * the areas at its two ends (S.zone); without, only ground a robot can walk (roads, bridges and tunnels included), as
+ * a Mass Driver's rate asks (walkZones).
+ */
+function zoneFill(links) {
   const N = S.W * S.H, W = S.W, ov = anyOverpass();
   const z = new Int32Array(N).fill(-1);
   let next = 0;
@@ -3221,7 +3451,7 @@ function computeZones() {
         q.push(b);
       }
       // A Ropeway, a Viaduct, a ferry line or an Airship line joins the areas at its two ends, whatever lies between.
-      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a), airLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
+      if (links && S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a), airLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -3231,7 +3461,14 @@ function computeZones() {
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && z[u] >= 0 && !S.over[u] && canStep(t, u)) { z[t] = z[u]; break; }
     if (z[t] < 0) z[t] = next++;
   }
-  S.zone = z;
+  return z;
+}
+
+/** The areas a robot can walk between, links aside (zoneFill without them): worked out again when S.zone is. Not saved. */
+let _walkZones = { of: null, z: null };
+function walkZones() {
+  if (_walkZones.of !== S.zone) _walkZones = { of: S.zone, z: zoneFill(false) };
+  return _walkZones.z;
 }
 
 /** The area a player's bots can reach (the one their Command Base stands in). */
@@ -3609,6 +3846,7 @@ function computeTerritory() {
       }
     }
   }
+  if (ringShape()) for (let t = 0; t < N; t++) if (S.terrain[t] === T_CHASM) S.owner[t] = -1; // (the void of The Ring is no one's land)
   S.territoryVer++;
   // Roads, track and pipe a rival left inside our military ring (an Outpost, Keep or the Command Base
   // took the ground) are ours now: we can use them, change them or rip them up, and the rival can't.
@@ -3857,7 +4095,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
-  if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Wreck it or Shore it up.' };
+  if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   if (S.walker && walkerYard(i, j)) return { ok: false, reason: 'The Walking Factory\'s yard: it walks here, so nothing can be built on it.' };
   const land = landRule(owner, type, t);
@@ -4114,7 +4352,7 @@ function keepsRoadSide(u, t) {
 
 function siteCount(owner) {
   let n = 0;
-  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp) n++; // Ramps are part of a path, like roads
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp && !BDEFS[b.type].earthwork) n++; // Ramps are part of a path, like roads
   return n;
 }
 
@@ -4188,6 +4426,7 @@ function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
+  if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
@@ -5672,8 +5911,9 @@ function checkSave(o) {
   if (o.horde != null) {
     const H = o.horde, num = (v) => Number.isFinite(v);
     if (!obj(H) || o.mode !== 'colony' || !ownKey(DIFFICULTY, H.lv) || !['fixed', 'endless'].includes(H.goal) || !['p', 'of', 'n', 'at', 'cleared', 'kills', 'maw'].every((k) => num(H[k]))) bad();
-    if (!Array.isArray(H.q) || H.q.length > HORDE.queueMost || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
+    if (!Array.isArray(H.q) || H.q.length > hordeQueueMost(H.lv) || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
     if (!Array.isArray(H.open) || !H.open.every(Number.isInteger)) bad();
+    if (H.over != null && !(obj(H.over) && Object.keys(H.over).every((t) => ownKey(BOTS, t) && BOTS[t].wild && Number.isInteger(H.over[t]) && H.over[t] > 0))) bad();
     if (!Array.isArray(H.lanes) || !H.lanes.every((l) => Array.isArray(l) && l.every((w) => Array.isArray(w) && w.length === 3 && Number.isInteger(w[0]) && Number.isInteger(w[1]) && w[0] >= 0 && w[1] >= 0 && w[0] < o.W && w[1] < o.H && num(w[2])))) bad();
     for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost', 'pair', 'lostP', 'falls']) if (H[k] != null && !num(H[k])) bad();
     if (H.mul != null && !(num(H.mul) && H.mul >= 1 && H.mul <= 3)) bad();
@@ -5692,6 +5932,8 @@ function checkSave(o) {
   if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k])) && (f.p == null || (Number.isInteger(f.p) && f.p >= -1 && f.p < o.players.length))))) bad();
   // The drought under a Storm Front (tile: whole seconds a foe's crop there has been under it, short of STORM.drought).
   if (o.drought != null && !(obj(o.drought) && Object.keys(o.drought).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && Number.isInteger(o.drought[k]) && o.drought[k] > 0 && o.drought[k] < STORM.drought))) bad();
+  // The ground Graders changed (tile: 1 dry before they first changed it, 2 water: tfDry0), hashed for a network game (hashState).
+  if (o.tfTiles != null && !(obj(o.tfTiles) && Object.keys(o.tfTiles).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && (o.tfTiles[k] === 1 || o.tfTiles[k] === 2)))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
@@ -5802,6 +6044,9 @@ function checkSave(o) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
+    // an Earthworks site's job (TERRA): raise or lower to a level, fill or dig
+    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
+    if (b.type === 'earthwork' && b.tf == null) bad();
     if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
     // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)
@@ -5825,6 +6070,14 @@ function checkSave(o) {
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();
     if (b.mdSend != null && !(obj(b.mdSend) && Object.keys(b.mdSend).length <= MASSDRIVER.goods && Object.keys(b.mdSend).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdSend[g])))) bad();
     for (const k of ['mdFire', 'mdCd', 'mdLast', 'mdShot', 'mdSent', 'mdGot', 'mdCaught']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // and its plan (mdPlan): the end it charged for, the last it fired to, whether it's the far end, what it ships to each partner
+    for (const k of ['mdAt', 'mdNext']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad();
+    if (b.mdFar != null && b.mdFar !== 0 && b.mdFar !== 1) bad();
+    // a Catcher kit to throw (its tile), a Catcher kit assembling itself, the land a Port or a kit's Catcher claims
+    if (b.mdKit != null && !(b.type === 'mdriver' && Array.isArray(b.mdKit) && b.mdKit.length === 2 && Number.isInteger(b.mdKit[0]) && Number.isInteger(b.mdKit[1]) && b.mdKit[0] >= 0 && b.mdKit[1] >= 0 && b.mdKit[0] < o.W && b.mdKit[1] < o.H)) bad();
+    if (b.kitT != null && !(b.type === 'catcher' && b.kitT === 1)) bad();
+    if (b.claim != null && !(Number.isInteger(b.claim) && b.claim >= 0 && b.claim <= 8)) bad();
+    if (b.mdAuto != null && !(obj(b.mdAuto) && Object.keys(b.mdAuto).length <= 64 && Object.keys(b.mdAuto).every((k) => /^[0-9]+$/.test(k) && obj(b.mdAuto[k]) && Object.keys(b.mdAuto[k]).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdAuto[k][g]))))) bad();
     // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();
@@ -5964,7 +6217,7 @@ function checkSave(o) {
   if (o.ruins != null && !(Array.isArray(o.ruins) && o.ruins.length <= 4 * RAD.ruins && o.ruins.every((r) => onMap(r) && Number.isInteger(r.x) && Number.isInteger(r.y) && Number.isFinite(r.id) && Number.isFinite(r.t) && owner(r.o)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
-    Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
+    Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 && (m.kit == null || m.kit === 1) &&
     [m.x0, m.x1].every((x) => Number.isFinite(x) && x >= 0 && x <= o.W) && [m.y0, m.y1].every((y) => Number.isFinite(y) && y >= 0 && y <= o.H)))) bad();
   // The Ring drizzle (S.drizzle, see updateDrizzle): its clock, its deposits and the pieces in the sky, numbers and tiles.
   if (o.drizzle != null) {
@@ -6132,7 +6385,10 @@ function deserializeGame(json) {
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
     clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
+    const terrWas = S.territoryVer;
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
+    // (The load's own count of the land is not a change of land: the AI's "no spot found" notes, which hold only while the land is as it was, keep holding, as in a game that wasn't saved.)
+    for (const P of S.players) if (P.noSpot) for (const k in P.noSpot) if (P.noSpot[k] && P.noSpot[k].ver === terrWas) P.noSpot[k].ver = S.territoryVer;
     scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }
   // Unit types switched off for now (BOTS_OFF) leave the game.

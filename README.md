@@ -38,9 +38,12 @@ how goods move.
   A countdown between waves (`hordeGap`: `levels[k].gap` [first, less each wave, least]) on the top bar ("Wave 7 in 1:40 ·
   23 up") and the Goal card (what's coming, new kinds marked). Waves are **cumulative** (`hordeWave`): each kind joins at
   its wave (`kinds`: Scuttlers 1, Brutes 4, Leeches and Spitters 7, Sappers 10) and stays, growing (`base + per × (n −
-  from)`, times the level's `mult` and `1 + ramp × (n − 1)`, capped per kind); every 5th is a boss wave (× 1.25, led by a
+  from)`, times the level's `mult` and `1 + ramp × (n − 1)`, capped per kind by `cap`, except on Warlord, `uncapped`: its
+  waves grow without end, about 330 by wave 20, 650 by 30, 1,100 by 40); every 5th is a boss wave (× 1.25, led by a
   Harrow whose health grows with the wave, `hordeHarrowHp`; two from wave 15 on Commander and Warlord). The queue
   (`S.horde.q`) comes out of the mouths a few at a time (`hordeSpawn`, every `pace` s), at most `room` (110) up at once,
+  at most `queueMost` (400; a level's `queue`, Warlord's 1,500: `hordeQueueMost`) waiting, and any more held over in
+  `S.horde.over` (counts by kind, `hordeHeld`) to join the next wave's queue, never dropped;
   down three lanes of waypoints (`hordeLanes`, `hordeMarch`); from wave 8 side tunnels open on the flanks partway down
   (`hordeSide`, `side.share` of each wave). The waves route through Walls, Gates, Outposts and Keeps (`routeOpts` breach)
   and bite through them (`hordeBreach`); Spitters go for guns (`murmurSpitStep` with `t.p`), Sappers dig under the first
@@ -308,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -317,7 +320,7 @@ With Planetary events enabled, Immense Ringfall targets up to nine sites per col
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
 The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
-scenery. The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+scenery (The Ring is always on Argos's, whatever the Biome setting). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
 Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
 and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -443,7 +446,7 @@ middle two tiles to `DAM.chan` of the way, ending in a pool). `S.dam` = `{ v, ve
 (bit p: colony p's orders), hitT, hitBy, broke (-1 or when), brokeBy, fi, ri, li (flood, recede and drain progress), x0
 y0 x1 y1, tiles, gap, lake (far shore first), stream, flood, fd, chan, wet }] }`: saved, checked by checkSave, hashed.
 The `ford` layer is always made on this map. **Rules** (sim.js, three times a second, `damTick`): the `damOrder` order
-(panel: Wreck the dam W, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
+(panel: Demolish the dam D, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
 the wreck bit within `DAM.reach` (3) of the dam's face takes `DAM.hit` (1) a second off its `DAM.hp` (400); a Howitzer
 within `DAM.siegeReach` (6), `DAM.siege` (3) (rivals' times their difficulty's mult). Its colony is told when it is
 first hit, everyone at half and a quarter (`damHurt`). **Blasts** (`damBlast`, the owner's call of Nov 23 2026): a
@@ -476,6 +479,48 @@ valley face with a spillway gate and a trickle, cracks spreading as it weakens, 
 strength bar while hurt, your order as a dashed outline; burst, rubble and the lake pouring through), the flood under
 the robots (water spreading with a foaming front and streaks running down the valley, then wet silt), the lakebed's mud.
 The mission **The Dam** (First Contact) teaches it.
+
+**The Ring** (`SHAPE_PRESETS` `asteroids`, under Heights and depths, two players; flat, `noMurmur`; the owner's idea from IDEAS.md) is a map
+in space: asteroids with nothing between them. `ringMap` (js/world.js, called first by `generateMap`, as `hollowMap` is) lays it
+out whole and point-symmetric, every tile made to its twin and the outline noise read at each tile's canonical place, so both
+colonies get the same to the bit (`tools/map-symmetry-test.js` checks it). The map is 1.15 × 1.45 times the size's (46 × 82 at
+Medium). From the bottom: a **home asteroid** (`homeRx` a third of the width, `homeRy` a fifth, its Command Base a little below
+its middle), **stepping stones** along the middle line, and the **middle rock** at the centre (its own twin; `midRx` a fifth of the
+width). The space between neighbours is `RING.gap` (3½ to 6 tiles: a Viaduct spans one more), so the chain is a few stones of
+half-height 3.3 to 5.5 chosen to fit the rows (none on Small, one on Medium and Large, two or three on Huge and up). A **side rock**
+lies to each side of the middle rock on the middle row, the same distance from both colonies, and from 40 tiles wide a **resource
+rock** beside each stone. Outlines wobble; two rocks never come nearer than `gap - 1.2` (about 2.3 tiles); specks under 14 tiles go.
+Every rock is flat ground (level 0, no ramps), its rim (any ground tile beside space) clear of deposits, crags and fertile soil so a
+Viaduct can start or land anywhere on it, with a few crags in from the rim (never near a base or the middle) and the middle 5 × 5 of
+every stone and side rock bare (a Trade Post or an Uplink can stand there). **The space** is `T_CHASM` (the Rift's and old Sky bridge
+chasm tile) that `voidTile` (defs.js: `T_CHASM` on a Ring map) makes unlike water or a canyon: `bridgeable` refuses it, `canRoad`
+refuses it (so no road, Sky bridge, pipe or track over it), `computeTerritory` leaves it no one's (borders stop at an asteroid's
+rim), `addLoot` lets crates that fall into it go, a plane that crashes into it only explodes (`wreckGround`) and a Viaduct
+(`viaductBlocked`: no `dip` test needed beyond `T_CHASM`) or a Ropeway spans it; a robot on a span that comes down goes back to the
+end it set out from, as anywhere. Airdrops, Drop Outposts, Mooring Masts and every building need ground (`T_GROUND`), so
+nothing can be put into space: `airdropBlocked` refuses a drop over it. Flight is as anywhere (Ring Crystal keeps craft aloft, LORE.md): Cargo
+Plane drops, Airships and Masts, Vulcan Bombers, Missiles. There are no ships or Ferries (no water).
+**Look and rules**: `newGame` sets the biome to Lunar whatever the Biome setting (and drops the second biome), so Argos's art, cliffs
+(the canyon wall under each rim) and rules hold: silent (no Murmur, which `noMurmur` also says), no weather, no Arrival City or Atmosphere Engine
+(`worldBan`), no Crystal from the Deep Core; the new-game Biome row reads *set by the map: The Ring* (`biomeForced` in js/ui.js,
+the Observer's setup too). Planetary events run but **no dust storm** (`updateEvents`; the Endless dust storm challenge does nothing there);
+Ringfall, solar flares and the Wren come. **Economy**: Argos's, with **more oil** than any other map (`RING.oil`: three fields of four
+seeps on each home asteroid, two of three on the middle rock (and its twin) and one of three on every side and resource rock, at
+least ten times a standard map's) so Fuel (Oil Pump, Refinery) is never short; the starter fields are the standard colony's (the same
+offsets from the Command Base) and richer ones lie further out, each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
+Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
+the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
+crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
+short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only): the space
+behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`): a deep sky with faint nebulae, three layers of stars that
+drift slowly and slide a little as the view pans (the farther, the less), Corvane's glow in a corner, Ithaca I large and turning (about nine
+minutes a turn) with its Ring round it, Argos turning small beside it (both made once, procedurally, from noise, and turned by sampling
+a couple of times a second: no image files), and a streak of ringfall now and then. The asteroids stay put. The land is clipped (`ringClipLand`) when the
+day and night light is graded over it, so the space keeps its own light. A void tile is left clear in the map's bake (`drawVoidTile`)
+but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles of it fading into the dark; the other sides have the
+canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves; reduced motion holds everything still; no planet tilt,
+frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
+list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
@@ -561,8 +606,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Maglev Terminal | 8 Cement, 6 Alloy, 3 Chips, one tile: storage at the end of a **Maglev line**, or a hub of up to three (Paths → Maglev: see Maglev lines below); its Pod bay builds Maglev Pods; a Generator within 4 tiles powers it |
 | Maglev Pylon | Not built by hand: one every 3 tiles along a Maglev line (over a road or track too, its feet at the side: the way stays open), 24 armour like a Wall; shot down it cuts the line until a Worker rebuilds it |
-| Mass Driver | 10 Cement, 8 Alloy, 4 Chips, two tiles (east-west or north-south, R turns it as you place it): storage that throws canisters of 12 goods every 10 s in an arc over anything to its **Catcher** 12–30 tiles away; it fires only with a Generator within 4 tiles (see Mass Drivers below) |
-| Catcher | 6 Cement, 4 Alloy, 2 Chips, one tile: storage that catches a Mass Driver's canisters; its stock is shared out like a Depot's |
+| Mass Driver | 12 Cement, 10 Alloy, 5 Chips, two tiles (east-west or north-south, R turns it as you place it): storage at one end of a line to its **Catcher** 12–50 tiles away (or one way to an Outpost or Keep): canisters of 16 goods fly both ways over anything, every 8 s from each end across a gap (10 s when a robot could walk between the ends), supplied automatically; a Catcher takes 2 Drivers at most; each end fires only with a Generator within 4 tiles; it can throw a **Catcher kit** (the Catcher's cost) to open ground 12–50 tiles away, which assembles itself in 20 s and claims 3 tiles of land (see Mass Drivers below) |
+| Catcher | 8 Cement, 5 Alloy, 3 Chips, one tile: storage at the other end of a Mass Driver's line: it catches canisters and throws them back; out on an island it stocks what the buildings round it need and sends home what they can spare |
 | Mooring Mast | 6 Cement, 3 Alloy, one tile: storage at one end of an **Airship line** (Link two: see Airships and Mooring Masts below); keeps 8 Fuel for its Airships, by Tanker or pipeline |
 | Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. (In a mission with `pressOn`, Convoy, the rival's Road Trains press on: `convoysPress` takes them off `gunShy`, so they never turn back and set out from a besieged Command Base, its run taken from storage enemy warbots are at.) **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. A Terminal holds no land round itself (`civClaims`: every other finished civilian building holds `CIV_CLAIM` tiles), so the post's ground stays open to everyone's roads; it still reaches out for building like one (`reachMap`). (It used to hold its ring, and as nothing on the post's ground can be attacked, a rival's shut roads out of there for good.) **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes), but for a Trade Terminal's construction site: enemy robots can wreck one there like any site, by an attack order, `sendAttack` or a flag held beside it (`calmShield`: only a finished building there is spared; bombs, shells and Missiles still spare the site; warbots used to fire at one for ever, the owner's call, Nov 2026); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break), so **no deposit lies there** either, where nothing could ever mine it (the owner's call, Nov 2026: `clearCalmGround`, at the start of a game once the posts, Uplinks and a mission's setup are in, and as a save loads, moves each one, the same kind and amount, to the nearest open tile just off the ground, `calmSpill`/`calmSpillOk`, on the same land if it can, the edge of the ground first; on a new Versus planet made from the seed the map's own symmetry is kept (`uplinkOrbit`: the half turn, the quarter turns, Long Haul 2v2's two mirrors, the three-way turn): a deposit moves with its twins on every other colony's side, whether or not they lie on a post's ground (most posts have no twin), to a tile and its twins, one on a line of symmetry staying on it, so every side stays the same tile for tile while the posts and Uplinks keep their places (Long Haul 2v2's centre post, the middle Uplink); an Energy crop just goes; no dice, the same on every device and on a rejoin), Ringfall's pieces that would land there lie just off it (`meteorImpact`), the drizzle keeps off it (`drizzleOk`), Grove Planters and Bio Farms plant nothing there (`findPlantSpot`, `findCropSpot`), and the Hollow's falling rock (`rockfall`) has no posts to mind; warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
@@ -629,7 +674,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   two at a time, and **only drive on roads**. A factory less than a Hauler's load short of an input, with more than
   its next batch in hand or on the way, waits to be topped up (`dispatch`), so Haulers carry full loads instead of one
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
-  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
+  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt), **Graders** do Terraform plans and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Who gets a worker** (`dispatch` step 2, the same for rivals): player priority (`prioRank`) first; then a building
   that can work now before one that would only sit waiting (`stallWhy`: short of an input counting what's on its way,
@@ -760,6 +805,42 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
   order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
   type being built is highlighted. The AI keeps the default order, taking turns.
+- **Terraforming, stage 1** (Nov 2026; `TERRA` in `js/defs.js`, the rules and the work in `js/sim.js`: `tfWhere`,
+  `tfJob`, `tfPlace`, `graderDispatch`, `tfApproach`, `completeEarthwork`; the tab, the plan mode and the drawing in
+  `js/terraform.js`). **Build → Terraform** (key 7, `BUILD_KEYS.terra`): **Raise** (R) and **Lower** (L) a tile a
+  level, **Flatten** (F: a dragged rectangle to the level of its first tile), **Fill shallows** (H: water beside land
+  becomes land, level with the ground it's built out from: new ground planned beside it, else the shore its owner's
+  robots stand on) and **Dig channel** (C: land at the waterline beside water becomes water). The plan mode
+  (`R.mode 'terra'`, `UI.tf`) previews each tile with the order's own rules (`tfJob`, given the tiles planned before it,
+  so a bridge or canal drags out tile by tile), totals the Stone and the Grader time, and sends one order
+  (`ORDERS.terraform(tool, tiles, target)`, at most `TERRA.most` = 48 tiles). Each tile becomes an **Earthworks** site
+  (`BDEFS.earthwork`, `b.tf = { k: 'up'|'down'|'fill'|'dig', to, n }`, its own `b.cost` and `b.buildTime`), outside the
+  site limit. Only **Graders** (`BOTS.grader`: a Foundry robot, 3 rounds of parts, 0.6 of a Worker's speed) build them:
+  `siteReady` says no to Workers, so no Worker step, the Workforce rows or Call a builder touch them; `graderDispatch`
+  (from `dispatch`) sends each free Grader to the nearest one it can stand beside (`tfReady`, `tfApproach`), and
+  `doBuild` works it (`graderWork`: it faces the tile and throws dust). On the map (looks only, `js/terraform.js`):
+  each site in the road plans' language (`tfPlanTile`: a dashed amber outline, faint red for a rival's, the job's
+  glyph, a sparser orange dash and a Stone pip while `tfReady` says no, a grey bar and a rising tint as `b.progress`
+  grows), the ground being worked drawn with the ground before the time-of-day grading (`tfGround`), and the Grader's
+  rendered frames by `graderPose` (idle, driving, cutting, pushing, filling, finishing; ART_GUIDE Batch 35). Numbers: a level of earth is `TERRA.time` (24) s;
+  raising costs `TERRA.stone` (4) Stone a level, lowering yields `TERRA.dug` (2) a level (about 5 Stone a minute a Grader,
+  so it's no better a Quarry); Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (3) Stone, 36 s. Stone
+  supply (the owner's split): a Raise site's comes by Hauler where a road reaches it, and from storage as the goods come
+  in where `dispatch` finds it unlinked (`fromStore`, as a Wall); a Fill site's always comes from storage. Fill reaches
+  only `TERRA.reach` (6) tiles from the shore as the map was made (`tfInReach`: an originally dry tile within 6, 8-way;
+  `tfDry0` reads `S.tfTiles`, which records what each changed tile was before the Graders first changed it, 1 dry or
+  2 water, so new land never moves the shore and a save keeps it; a tidal flat counts as shore). Graders run on
+  batteries like Workers and charge at a Fuel Station. Yields are crates of Stone (`addLoot`, its owner's priority) where the
+  Grader stood. Refused: a rival's land, buildings (sites too), roads and planned roads, Ramps, track, pipes, resources,
+  Trade Posts, Uplinks, landmarks, the dam, Passenger Town's ruins, the Walking Factory's yard, runways, rock, chasms,
+  lava, tidal flats, the fault, fallen Lift cable, near a Murmur nest, and anywhere no robot of its owner's could get
+  beside; and no cliff steeper than a level (or than it already was). Done (`completeEarthwork`): the terrain and
+  `S.elev` change, a Ramp left leading nowhere is cleared, the tile and the two rings round it are repainted, and
+  `terrainChanged` redoes the zones, territory, the sea (`seaNet`, `shoreDist`), road and plan versions and the minimap;
+  robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
+  `S.tfTiles` (1 or 2, see above) and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
+  as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
+  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -980,7 +1061,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
-  The AI never flies Cargo Planes.
+  On The Ring and Sky islands the rival flies Cargo Planes (Medium and up; see *The rival's aircraft* under the AI); it builds no Airships and Mooring Masts, and drops no Outposts or supplies.
 - **Airships and Mooring Masts** (every map but the Hollow; `BOTS.airship`, `BDEFS.mast`, `AIRSHIP`). A **Mooring Mast**
   (6 Cement, 3 Alloy; Build → Move, key T) is a one-tile store. Two make a **line**: the `mastLine` order
   (`setMastLine`, `mastLineWhy`: both built, at least `AIRSHIP.minDist` (8) tiles apart, a Mast on one line at most;
@@ -1153,37 +1234,82 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (IDEAS.md has the measurements). The mission **Phase 2** (Industry and
   Trade: its last goal a hub) and the colony goal *Phase 2* teach it.
 - **Mass Drivers** (every map but the Hollow; `BDEFS.mdriver`, `BDEFS.catcher`, `MASSDRIVER`; the owner's look A, "Coil
-  Ramp"). A **Mass Driver** (10 Cement, 8 Alloy, 4 Chips; Build → Move, key V) and a **Catcher** (6 Cement, 4 Alloy, 2
-  Chips; key C) are stores. The Driver is **two tiles** (`def.long`): its own tile and the one east (`b.mdAxis` 'ew') or
-  south ('ns') of it (`longTile`), set as it's placed (R or the banner's Turn: `UI.mdAxis`, `mdTurn`; the `place` and
-  `moveBuilding` orders take the axis); `S.bAt` holds it on both (`longClaim`, `longRelease`, `setLongAxis`), so the
-  second tile blocks the way and building and a tap there picks it; `canPlace` checks both tiles (level, the same
-  rules each); `touching` looks round both, so conveyors join buildings at either; its door is its own tile; it's
-  drawn over the middle of the two (`bCentre`); a save from before the two tiles lays it east-west. On the Driver's panel **Aim at a Catcher** (`startMdAim`, mode `mdaim`, `mdAimTap`,
-  the `mdAim` order, `setMdAim`, `mdAimWhy`) sets `b.mdTo`: a Catcher of yours `min` (12) to `max` (30) tiles away; one
-  Catcher per Driver, a Catcher takes any number (`mdFed`). **Goods to send** (`b.mdSend`, `mdSend`/`mdReserve` orders:
-  up to `goods` (3), no liquids, each with the reserve kept home, `reserve` 20, ±`reserveStep` 10) is a standing supply
-  order (`needsOf` → `mdWant`): Haulers bring what the colony holds beyond the reserve (`tickTotal` less `mdHeld`, which
-  counts what the Drivers hold and have coming and what the Catchers hold), up to `hopper` (24) of each; its stock of
-  those goods is for its canisters (`supplyOf` 0). Conveyors (`mdConveyor`, every `feed` s): a Driver takes the goods
-  it sends from a Command Base or Depot touching it and from the factories touching it that make them; a Catcher feeds
-  the factories and sites touching it. **Firing** (`updateMassDriver`): with a Catcher, a goods list and power, once it
-  holds `load` (12) goods (or `partMin` 4 after `partWait` 30 s) it charges (`b.mdFire`, `charge` 1.6 s; `b.working`, so
-  its Generator burns Fuel) and fires (`mdLaunch`: a unit of each good in turn), a shot every `reload` (10) s. **Power**:
-  no Fuel of its own; it fires only with a Generator in reach (`magPowered`), and waits loaded without one. **Canisters**
-  (`S.cans`: id, owner, from, to, goods, t, dur, ends, hp): fly `flightMin` (2) to `flight` (3) s by range in an arc
-  `arc` tiles high at full range (`canPos`, `canAlt`); land in the Catcher (`updateCans`: its stock, `c.mdGot`,
-  `c.mdCaught`), or, the Catcher gone, as crates on its tile (`canDown`, `addLoot`). **Flak**: an enemy Flak Gun with no
-  aircraft in reach targets the nearest canister in the air (`canNear`, leading it; not in the first and last `low` of
-  its flight), and its bursts take `hp` (4) off canisters in the splash (`canFlak`): a canister burst falls as crates
-  where it was. Saves keep `S.cans` and the Drivers' fields (`checkSave`); `hashState` hashes both. Not in the Hollow
-  (`worldBan`); the rival builds none. **Drawn**: the Driver's art points along its tiles toward its Catcher (`mdriver-<dir>@T`, e/w lying east-west,
-  n/s north-south, `mdDir`; framed wide, `MD_FRAME`), the Catcher's arms swing in as one lands (`catcher-closed@T`, `mdArmsIn`); `drawMassDrivers` (in the
-  air layer) lights the coils in sequence while it charges, with arcs crackling up the rail from the breech, the shot's
-  flash, a faint guidance beam toward the Catcher while a canister flies, the canister (a stubby gunmetal cargo container, ribbed, with corner castings, a team-colour band and an amber running light, holding its heading) with its streak and shadow, the
-  coils' faint glow after dark, and the aiming preview (the reach, your Catchers ringed, the arc to the one under the
-  pointer); `MD_ART` holds the renders' marks. Sounds: `mdcharge`, `mdlaunch` (the crack and the whistle), `mdcatch`,
-  `mdburst`, `mdthud`. The mission **The Schedule** (Industry and Trade) teaches it.
+  Ramp"; two-way, automatic, 50 tiles and 16-good canisters since Nov 26 2026). A **Mass Driver** (12 Cement, 10 Alloy, 5
+  Chips; Build → Move, key V) and a **Catcher** (8 Cement, 5 Alloy, 3 Chips; key C) are stores, and both are **ends** of
+  a line (`mdEnd`): each fires and catches. The Driver is **two tiles** (`def.long`): its own tile and the one east
+  (`b.mdAxis` 'ew') or south ('ns') of it (`longTile`), set as it's placed (R or the banner's Turn: `UI.mdAxis`,
+  `mdTurn`; the `place` and `moveBuilding` orders take the axis); `S.bAt` holds it on both (`longClaim`, `longRelease`,
+  `setLongAxis`), so the second tile blocks the way and building and a tap there picks it; `canPlace` checks both tiles
+  (level, the same rules each); `touching` looks round both, so conveyors join buildings at either; its door is its own
+  tile; it's drawn over the middle of the two (`bCentre`); a save from before the two tiles lays it east-west. On the
+  Driver's panel **Aim** (`startMdAim`, mode `mdaim`, `mdAimTap`, the `mdAim` order, `setMdAim`, `mdAimWhy`) sets
+  `b.mdTo`: a Catcher of yours `min` (12) to `max` (50) tiles away, or an Outpost or Keep (`forts`, `mdFortType`) to
+  keep supplied one way (`mdCatcher` gives the far end). A Catcher takes `drivers` (2) Drivers at most (`mdDriversOf`: the first two built; `mdAimWhy` refuses a third,
+  "That Catcher already takes 2 Mass Drivers") and fires to each in turn (`mdPartners`; `b.mdNext`). **The plan** (`mdPlan`, from `dispatch` every 2 s, nothing for a player with no ends):
+  the end farther from the Command Base is the far end (`mdIsFar`, `b.mdFar`); it keeps what the buildings round it need
+  (`b.auto`, worked out as a far Rail Station's in `railPlan`: within `STATION_REACH`, nearer it than the Command Base
+  by `STATION_NEARER`, touching it, by road or on foot (`footNear`); twice a working building's fill, a site's lack;
+  Fuel too, never Crude), and Haulers leave its keep to the canisters (`dispatch`). Each end ships to each partner
+  (`b.mdAuto`: {partner id: {good: n}}) what that partner lacks (`mdLack`: its keep, its supply orders, or a fort's
+  `needsOf`, less what's in flight, `mdFlying`); a far end adds what it can spare going home (`spareForHome`, not what
+  the other end sends it: `mdSends`). **Goods list** (`b.mdSend`, on either end; `mdSend`/`mdReserve`/`mdAuto` orders:
+  up to `goods` (3), no Crude, each with the reserve kept home, `reserve` 20, ±`reserveStep` 10) overrides an end's plan
+  (not toward a fort). The near end's goods to send (`mdSendGoods`) are a standing supply order (`needsOf` → `mdWant`):
+  Haulers bring what the colony holds beyond the reserve (`tickTotal` less `mdHeld`), up to `hopper` (32) (or what it
+  ships); that stock is for its canisters (`supplyOf` less `mdHold`). A far end ships what it holds (`mdAvail`:
+  `keepSupply`). Conveyors (`mdConveyor`, every `feed` s): the near end takes the goods it sends from a Command Base or
+  Depot touching it and from the factories touching it that make them; every end feeds the factories and sites touching
+  it (Fuel to a Generator); a far end takes the output of the factories touching it. **Firing** (`updateMassDriver`):
+  with power and a partner, once it has `load` (16) goods for one (or `partMin` 4, or the whole of a smaller need, after
+  `partWait` 20 s) it charges (`b.mdFire`, `b.mdAt`, `charge` 1.6 s; `b.working`, so its Generator burns Fuel) and fires
+  (`mdLaunch`: a unit of each good in turn), a shot every `reload` (8) s from each end, or `reloadLand` (10) s when a robot could walk from one end to the other (`mdOverland`: the two ends in one area of `walkZones`, the walking areas of `zoneFill` without the Ropeway, Viaduct, ferry and Airship links; `mdReload`; the owner, Nov 26 2026: then it is a shortcut over land, not a crossing; each end's panel shows its Rate and why) (6 s and 10/8/4 and 6/4/2 costs before the Nov 26 2026 balance pass, when a line out-carried a 4-pod Maglev line for a quarter of its cost). **Power**: no Fuel of its own; an
+  end fires only with a Generator in reach (`magPowered`), and waits loaded without one (it still catches). **Canisters**
+  (`S.cans`: id, owner, from, to, goods, t, dur, ends, hp): fly `flightMin` (2) to `flight` (4) s by range in an arc
+  `arc` (6) tiles high at full range (`canPos`, `canAlt`); land in their end (`updateCans`: its stock, `mdGot`,
+  `mdCaught`), or, that gone, as crates on its tile (`canDown`, `addLoot`). **Flak**: an enemy Flak Gun with no aircraft
+  in reach targets the nearest canister in the air (`canNear`, leading it; not in the first and last `low` of its
+  flight), and its bursts take `hp` (4) off canisters in the splash (`canFlak`): a canister burst falls as crates where it
+  was. Saves keep `S.cans` and the ends' fields (`checkSave`); `hashState` hashes both; a save from before (a one-way
+  Driver, often with a goods list) loads as a two-way pair, its list kept as the Driver's override. **Catcher kit**
+  (Nov 26 2026): the Driver's panel **Throw a Catcher kit** (`startMdAim(b, true)`, `UI.mdKit`, the `mdKit` order,
+  `setMdKit`, `mdKitWhy`) sets `b.mdKit` (the tile); the Driver asks Haulers for the Catcher's cost (`needsOf`, as
+  urgently as a factory's inputs, not a supply order: a rival's Alloy never sits in storage) and holds it for the kit
+  (`mdKitHold` in `mdHold`, `mdAvail`); called off, what was loaded stays in its storage. Loaded (`mdKitLoaded`), it
+  charges for the kit before anything else (`b.mdAt` 0) and throws it
+  (`mdLaunchKit`: a canister with `kit` 1, no end, `to` 0) to open, empty ground `min`–`max` tiles off that no one else
+  holds, not within `kitClaim` + 1 of a Trade Post, whose ring cuts no rival off (`mdKitGround`, `ringOverRival`). It
+  lands (`mdKitLand`) as a Catcher site on its tile (or the nearest that will take it within 2; none, its goods fall as
+  crates) holding its cost, `b.kitT` 1: it assembles itself over `kitBuild` (20) s, no Worker needed (`updateBuilding`),
+  then claims `kitClaim` (3) tiles of land (`b.claim`, a military claim as a Port founded by sea has); the Driver is
+  aimed at it. Flak bursts a kit as any canister (`canDown`: "A Catcher kit was shot down"). **Far end full**: what a
+  far end has room for (`mdRoom`: `full` (64) of a good, or its keep if more, less what it holds and what's in flight)
+  caps every load toward it (`mdAvail`), so a goods list to a far end nothing collects from stops; the near end's status
+  and panel say "Far end full" (`mdFullGoods`). **The rival** (`aiMassDriver`, `AI_MDRIVER`; Medium and up, one pair,
+  the Architect from 600 s, the others from 900 s, every 20 s): on a map of islands, mesas or canyons (`aiMdMap`:
+  Islands, Sky islands, Four Isles, Canyon maze, Grand Canyon) to its nearest fort or store 16–52 tiles out on ground its
+  robots can't walk to (another `walkZones` area: over a Viaduct, a landing's), elsewhere only to one no link or road
+  reaches; with Cement in hand, a usual site free, a Bot Foundry and Chip Fab of its own and Fuel to spare (12, and a
+  Refinery or two Bio Farms: the Driver fires by a Generator), not the Alloy and Chips (they never sit in its storage:
+  the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a Generator by it, and a Catcher
+  site by the foothold (`aiMdFarSpots`) when its Workers and Haulers get there (the same `S.zone`), else a Catcher kit
+  once the Driver stands; the sites and the kit's load are High priority (`sitePrio`, `b.kitPrio`) and count as owed
+  like a seized megastructure's fee (`megaFeeOwed`: its conveyors don't hand on what they need, its Ammo Plant and then
+  its Foundry rest), and its usual 120 s give-up waits 420 s for them as for a Silo; then it aims the Driver, puts a
+  Generator by a Catcher its Workers reach, and `mdPlan` runs the line. Lost, it tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
+  (`mdriver-<dir>@T`, e/w lying east-west, n/s north-south, `mdDir`; framed wide, `MD_FRAME`), the Catcher's arms swing
+  in as one lands (`catcher-closed@T`, `mdArmsIn`); `drawMassDrivers` (in the air layer) lights the coils in sequence
+  while it charges, with arcs crackling up the rail from the breech, the shot's flash, a faint guidance beam while a
+  canister flies (from the muzzle or the cradle, to the cradle, the muzzle or a fort's roof: `mdPort`), the canister (a
+  stubby gunmetal cargo container, ribbed, with corner castings, a team-colour band and an amber running light, holding
+  its heading) with its streak and shadow, the coils' faint glow after dark, and the aiming preview (the reach, your
+  Catchers and forts ringed, the arc to the one under the pointer); a Catcher charging gathers a glow and arcs in its
+  funnel and flashes as it fires (`drawCatcherLamps`), and a Driver catching one flashes at its muzzle; `MD_ART` holds
+  the renders' marks. Sounds: `mdcharge`, `mdlaunch` (the crack and the whistle), `mdcatch`, `mdburst`, `mdthud`. The
+  mission **The Schedule** (Industry and Trade) teaches it: the line, power at both ends, Auto and a goods list, and
+  the camp's spare coming home. `node tools/massdriver-test.js` checks both ways, Auto, 50 tiles over the sea on
+  Islands, Outpost resupply, Flak, an old save, the Catcher kit (refusals, a save in flight, self-assembly, its land,
+  Flak), Far end full and a rival's pair. Measured over 30 tiles (kept loaded): 160 goods a minute each way
+  (the one-way Driver before: 72; a Maglev line with 4 pods: about 120).
 - **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
   keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
@@ -1312,7 +1438,32 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   calls the band off after seven minutes, or once it has lost two in five of what it sent. Later (after 15 minutes) it builds a
   second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked
   (not while its Ferry is on order: a yard builds a Container Ship first, and short of Alloy the Ferry waited half an
-  hour). The art is top-down like the trucks
+  hour). **The rival's aircraft** (`aiAir`, `AI_AIR`, `AI_AIR_STYLE`, js/ai.js; Medium, Normal and Hard, only on The Ring and
+  Sky islands, where every way across is a Viaduct, a Ropeway or a flight: the Viaducts of a Ring chain were measured to
+  join both home asteroids by minute 10, yet 5 of 8 Ring games and all 8 Sky islands games were still undecided at 45
+  minutes: the armies met at the Viaduct and neither got through; no other map is touched, so a connected map plays
+  exactly as before). From a few minutes before its doctrine's start time and an army of `AI_AIR.first` (5) it puts up an Airfield
+  (`aiAirFields`: the Airfield goes into its build plan; with a gap in the world the Vulcan Bomber waits until a Cargo
+  Plane is flying, so the Chips go to the plane first) and orders a Cargo Plane in its hangar; from an army of 10 it keeps
+  its doctrine's count of planes (a second Airfield each), one more from 18 (`aiAirPlanes`). From its doctrine's start
+  (`AI_AIR_STYLE.at`) and with the lead over a rival that doctrine wants (`lead`: a multiple of that rival's army, and
+  `more` over it), a plane ready and warbots to spare, it flies a band across like a beach landing (`aiBeach`): the target
+  is the rival's Command Base (or, for a Salvager, the fort it takes fewest to take) and the landing spot (`aiAirSpot`) a
+  ground tile of its area within `AI_AIR.reach` (22) tiles of it that a plane can drop on, out of every gun's reach and of
+  the sortie of the forts round it, and a plane's way there kept `Flak Gun range + 3` tiles clear of enemy Flak Guns
+  (`aiAirFlak`: the first test flew both planes into the Flak), off the rival's land where it can be. Each plane brings two
+  warbots a flight (`orderAirdrop`, `AI_AIR.flight`); the band gathers under the flag the drop leaves them at until it
+  has `need` (what the target takes, `aiAirNeed`: `aiTakeNeed` and `AI_AIR.more` over, times the doctrine's `need`; 24
+  at most; against a crushed rival, twice its army and two), then the flag moves beside the target and the band goes in
+  at the gun covering it first, as a beach landing does. It goes with seven tenths of its need after five minutes, is called off after nine
+  (`AI_AIR.give`) or once it has lost two in five of what it flew in (`P.beaten`, five minutes' peace for that place), and
+  the next band waits a minute (`AI_AIR.gap`). Warbots left idle in another area attack the nearest enemy building there.
+  Doctrines (`AI_AIR_STYLE`): the Herald starts first (8 minutes, with a lead of nine tenths and a band of seven tenths: a
+  rush), the Salvager from 9 with an even army and four fifths of a band, taking the fort that is cheapest to take rather
+  than the base (a raid), the Steward from 10 with a lead of 15 in 100, the Architect from 11 with a lead of a fifth, the
+  biggest band (115 in 100) and a second plane, the Warden from 13 and only with a decisive lead (half as many again), a band a fifth
+  bigger and its Flak Guns (the usual: Flak once a rival has an Airfield). Easy never flies. Not in the Hollow (`worldBan`). A rival
+  with next to nothing in the way of planes or an Airfield flies nothing; a Viaduct chain keeps coming (`aiBridge`). The art is top-down like the trucks
   (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
   up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
   `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).
@@ -1626,6 +1777,18 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   for `stashCarry`). The danger map is the cached one (per player, every 15 ticks), never rebuilt per search. Enemy
   warbots stay a cost and `foeSweep`'s turning back; how far robots keep from one is its real reach now (`foeReach`:
   a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all). Freight Trains also avoid covered track (`railRoute`), replan if guns cover a queued route, and release the delivery reservation while keeping cargo aboard if no safe detour exists.
+- **Haulers turning back from the Murmur on a road** (the owner, Nov 26 2026; `SHY_ROAD`, `murmurShy`, `shyRoadWait`,
+  `aiRoadGuard`). A carrier whose way runs near enemy warbots or creatures turns back (`foeSweep`, `takeCover`) and the
+  building it was going to waits `SHY_WAIT` (5 s) before another job there is handed out (`unreachUntil`, `reachable`).
+  The output pickups (`dispatch` step 4) now ask too: they never did, so on Standard seed 25 (`d9bf339`) a Hauler was
+  sent to one Mine every few seconds and each turned back from the same Scuttlers (102 times). Turning back from the
+  Murmur, each turn-back that comes once the last wait is over (`b.shyN`, `b.shyAt`, `b.shyX`/`b.shyY`: where the
+  creature was; in `hashState`) doubles the wait, 5, 10, 20, 40 s at most, and a pickup or delivery there starts it
+  again (not storage, which carriers reach by every road). From two in a row, for 60 s after the last, the panel's
+  status says *Haulers turning back: Murmur near the road* with the wait, and the "Why idle?" and the Economy panel's
+  bottlenecks name it (`haulWhy`, `outWhy`). A rival (`aiMurmur`, by day, with its army at its attack threshold and
+  `AI_NEST_SPARE` more) sends `AI_ROAD_GUARD.n` (3) warbots to a rally flag where they last turned back, one flag at
+  a time for `AI_ROAD_GUARD.hold` (90) s (`P.roadRally`).
 - **Cargo pickups:** after the usual capacity and network checks, dispatch compares estimated travel times when multiple carriers are eligible. The estimate uses their routes and travel speeds, including road surface and direction. It is reused for that carrier and pickup for the current dispatch pass. It does not predict traffic queues or boarding waits.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
@@ -1708,6 +1871,73 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Economy panel's
   Bottlenecks lead with it. Display only: it never asks the danger map unless it is current (`insGuns`), so it
   can't change when the simulation works it out.
+- **The end announced (`overFlare(word, kick, tone, done)`, `js/ui.js`; `#o-flare` in `#screen-over`; the `.o-flare`
+  rules at the end of `style.css`):** every end screen (`showGameOver`, `showMissionOver`, `showHordeOver`, `watchOver`)
+  shows itself through it: the word (`#o-title`, VICTORY / DEFEAT / CONTACT, COMPLETE / FAILED, HELD / OVERRUN, GAME
+  OVER) flares in over the dimmed map in the main menu title's look (Chakra Petch, the coral gradient, its glow) with a
+  streak, a shine and a soft flash (`tone` 'win'; 'loss': grey, slower, a vignette, the map desaturated; 'neutral':
+  Observer, no flash), holds ~1.9 s (2.3 s a loss), then a FLIP transition carries it onto the heading's own text box
+  (a Range's rect) as the card fades in (`.flaring`, `.settling`); `#o-kicker` under the heading says how. A tap or a
+  key (capture phase) skips to the dashboard, its buttons dead for 250 ms so the tap can't press one;
+  `prefers-reduced-motion` only fades. `done`: Contingency's battles, the word in the Command Deck's blue (`.blue`, no
+  card), then `contBattleOver`. Sound: `sfx('flare')` / `flareDown` beside `win` / `lose`, then the end's music
+  (`musicCue(tone, story)`) and the Command core's spoken line (`voiceEnding`), neither for Contact (`gupSilence`). UI only.
+- **The end's music (`musicCue`, `cueMood`, `MOODS.victory` / `defeat` / `victoryC` / `defeatC`, `cueMelody` in
+  `js/audio.js`):** film-score cues (rescored Nov 26 2026 after the owner listened: grand, not cute; crushing, not
+  light), each scored bar by bar (`cue`: each bar's chord `c`, parts `L`, the horns' dynamic `v`, `hold` to let its
+  chords ring that many bars, one-off hits `fx`, lead notes `mel` [step, semitones over the key an octave up, length] and
+  a low line `low` [step, semitones over the key two octaves down, length]), then a quiet loop on its `progs` /
+  `arrange` at `settle` of its level (from loop bar `settleAt`). Its own orchestra, at the end of the file: `mHorn` (low
+  brass: saws and a square a note, scooped into pitch, the filter blaring open, vibrato, spread; `hornVoicing` keeps the
+  chord low and wide; `soft` for the loop), `mHornLead` (the heroic solo horn, an octave under for weight), `mTimp` /
+  `mTimpRoll` (timpani, a roll swelling over a bar), `mTaiko`, `mBoom` (a sub boom into the soft clipper), `mSwell` (a
+  cymbal swell into the next bar; dark, a low hollow one), `mDarkBrass` / `mDarkLead` (detuned saws driven into the
+  clipper, sour and distorted), `mSubDrone` (a beating sub pedal), `mCollapse` (something huge falling far off: boom,
+  rumble, a metal groan, rubble), `mKnell` (a low funeral bell). fx: 'roll', 'swell', 'swellDark', 'hit' (crash, impact,
+  boom), 'boom', 'collapse', 'knell', 'crush' (the final blow: a huge boom, a collapse, a distorted cluster), and the
+  older 'riser', 'toll', 'thud'. **Victory** (A, 76 bpm, 7 bars, about 22 s): Am, F, G (i–♭VI–♭VII) under a timpani roll,
+  low horns and the timpani's march, the horn's call rising (E, A B C, D B D E), a cymbal swell into A MAJOR with a crash,
+  sub boom, the big drums and the choir, the horn on C♯ E A (the Picardy third); F, G again with a roll and a swell, home
+  on A major held two bars, wide; then a calm, proud loop (A, F, G, A in soft horns and pads, a timpani stroke a chord).
+  **Defeat** (D, 54 bpm, 5 bars, about 22 s): a sub pedal on low D throughout; a collapse far off; distorted low brass
+  on chords with a minor second ground in (Dm, E♭ over D, B♭ diminished, A♭: the tritone), the bass sinking a semitone
+  at a time (D C♯ C B B♭ A), the dark brass sighing down (E♭ D, C♯ B♭, A♭ G), the choir an octave down, a funeral knell,
+  more collapses, a dark swell, then the final blow, held, decaying into a cold, empty drone; the loop is the pedal, a far
+  choir on Dm and E♭ and now and then something falling a long way off. `victoryC` / `defeatC` are Contingency's, in the
+  campaign theme's key (D): the same climb (Dm, B♭, C into D major, 80 bpm, the tune's opening D A B♭ A on the horn) and
+  the same descent (58 bpm, the tune twisted, its fifth flattened to A♭, on the dark brass; the Murmur's knock in its
+  loop). `musicCue` dips the music bus
+  to silence, makes the cue's first bar the next step (`MUSIC.next`, `MUSIC.step`) and `musicSetMood` swells it in over
+  2.2 s; `musicMood` returns it (`cueMood`) while its game's end screen is up, or for Contingency (`keep`) until it has
+  played out over the globe (`until`); leaving it fades out (`musicFades`: out of a cue it fades, the next swells in).
+  It follows the Music volume like the rest.
+- **The machine voice (`js/voice.js`):** spoken lines in an invented language with subtitles; not text-to-speech but a
+  small formant synthesizer in Web Audio (`voiceRender(ac, dest, text, preset, t0)`, any context, an
+  OfflineAudioContext too). The source: a glottal pulse wave (a `PeriodicWave`, harmonics falling as n^-0.75, all in
+  phase: buzzy, nasal), a quieter saw and a square an octave down (the sub, also straight through a 220 Hz low-pass for
+  weight), gated by the voicing; four parallel band-pass formants (`VOX_FORMANTS`, F1–F4, scaled by `fscale`) gliding to
+  each vowel or voiced consonant (m n r v z d g); one noise band-pass set per consonant (`VOX_NOISE`: hisses for s sh kh
+  z v, a closure then a crisp click and burst for the stops k t d g p). Then the machine: a nasal peak at 1.25 kHz, a
+  band limit, a short metallic comb (a delay with feedback), an amplitude ring at `ringHz`, a little bit-crush, a soft
+  clip, a dark reverb (`voxKit`: low-passed noise decaying, energy held to one). Two presets
+  (`VOICE_PRESETS`): **cinematic** (64 Hz, slow, measured: a syllable about 0.26 s, long pauses at full stops, the pitch
+  drifting down and falling at each full stop, a 3.3 s reverb at 0.3 wet (it was 5.5 s at 0.42: "tone it down a touch", the owner, Nov 26 2026), over a low drone on D that swells in before it speaks and
+  a deep boom as it opens) for the opening and ending lines; **droid** (96 Hz, quick and even, flat pitch, narrow 290 Hz
+  to 3.4 kHz radio band, sharper formants, a stronger comb and ring, a 1.2 s metal room at 0.1 wet, a radio squelch in and out) for short callouts
+  later (`VOICE_CALLOUTS`). **The tongue** (`voxParse`, `voxWord`): each English word becomes its machine word of one to
+  three syllables ((onset) vowel (coda) from `VOX_ONSET` / `VOX_VOWEL` / `VOX_CODA`, the first stressed: longer and
+  higher), from a generator seeded with the English word (`voxHash`, `voxRng`), so a word always comes out the same and
+  a line always sounds the same. **The lines** (`VOICE_LINES`, LORE.md's voice; Earth's fate never said): the openings,
+  the Carrier in orbit (`voiceOpening`, from `showBriefing`: `versus`, `many` (a free-for-all), `teams`, `colony`,
+  `argos`, `hollow`, `horde` (the Maw), `mission`, `contingency`); the endings, your Command core (`voiceEnding`, from
+  `overFlare`: `victory`, `defeat`, `held`, `overrun`, `complete`, `failed`, `contWon`, `contLost`). `voiceSay(key,
+  delay, opts)` plays one on its own bus into the master at the Effects volume (`VOICE.lvl`), ducks the music under it
+  (`AUDIO.musicDuck`), and shows the subtitle (`#voice-sub`, `voiceCaption`: the speaker, the machine words lighting up
+  as each is said (`.said`), the English; at the foot of the screen, or at the top for an ending, `.top`); without sound
+  (Effects at 0, audio locked) the subtitle alone. A tap on the subtitle skips it (`voiceStop`); it stops with its game
+  (quit, or another one started) unless `keep` (Contingency's ending, over the globe). Not under test automation unless
+  `window.BOTFALL_VOICE`, not for an Observer. **Settings → Voice lines** (`#p-voice`, `setVoiceOn`, `botfall.voice` in
+  localStorage, on by default). Local display only: nothing reaches the simulation or the lockstep.
 - **Post-game report (`gameReport`, on the end screen, `#o-report`; missions too):** the moments that mattered
   (`reportMoments`, the dozen weightiest, in order): your first robot and first defence, the first attack each way,
   runs of buildings lost or taken, every shortage of 45 s or more and how long it lasted (still going at the end
@@ -2274,7 +2504,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **Rival doctrines** (the lore's command doctrines, LORE.md; `PERSONALITIES` in `js/defs.js`, each player's `style`,
   applied by `aiStyle`/`aiLevel` in `js/ai.js`; the keys stay the old style words): each scales the difficulty's grace
   period, attack threshold, army growth and raid rate (the attack threshold stays between 3 and `AI_THRESHOLD_MAX`, 9:
-  an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
+  an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI with a little more of everything (Nov 26 2026: `econ` 1.1, `army` 1.15, `armyFrom` 0.8; as the plain AI it won 4 of 16 doctrine games, its economy lasting but its army never catching up; see docs/economy-balance-audit.md). The **Warden** (`turtle`):
   rare raids, a square ring of Walls and Gates six tiles round its Command Base (`aiTurtleWalls`: once it has
   `AI_TURTLE_KEEP` (3) Outposts, the side facing its rival first, at most `AI_TURTLE_WALLS` (12) pieces standing,
   Chokepoint mouths included; with the Murmur Active not before `AI_TURTLE_ACTIVE`, 20 minutes, and its `army` 1.15
@@ -2947,8 +3177,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
-  A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
-  armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
+  A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading), then the missile fades
+  in (`siloRise`; art `silo-empty`). A Nuclear Silo is always drawn open (`nukesilo-empty`), the nuclear missile (drawn in
+  code: `icbmArt`) rising into its hatch once it's armed.
   To fire, tap a Silo and press **Aim missile**: its 22-tile range shows as a red ring; tap any spot inside it (a
   building, open ground, or a rival robot or vehicle on the ground) to see the blast radius, then **Fire**. With no
   building there, a rival robot or vehicle within `MISSILE_LOCK` (0.9) tiles of the tile's middle is the target
@@ -2960,12 +3191,22 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   strike and a Howitzer's target are picked by a tap, ringed, then confirmed on the banner (`pickTarget`).
 - **Nuclear race** (new-game option): six small Uranium deposits on each side (`URANIUM_DEPOSITS`, in each colony's half, third or quarter) glow green. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
-  Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
+  Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It lands `NUKE.flight` (30) s after it's fired (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
   `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
   garrison and 1 armor, unless the missile lands on it (within `NUKE.direct`, 2 tiles, of its centre): then it's
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
+  **The strike as it looks** (render only, `drawNukeFlight` in `js/render.js`; the game still just counts the 30 s down,
+  the owner's spec, Nov 26 2026): a klaxon (`sfx('klaxon')`) and the launch sequence in the Silo, the missile still in
+  its shaft with its nose out of the hatch, beacons turning, the hatch rim flashing red and steam venting
+  (`drawNukeSiloAlarm`), the engine lighting in the shaft in the last 1.6 s; liftoff `NUKE_LAUNCH` (10) s before impact
+  (`sfx('nukelaunch')`, heard far off), straight up and faster and faster (`icbmClimb`) off the top of the screen,
+  leaving a smoke column and a ground cloud that linger 9 s after the blast (`drawNukeAfter`); in its last `NUKE_FALL`
+  (2) s it falls steeply out of the sky onto the target from the Silo's side, nose glowing with re-entry heat, a
+  white-hot streak behind it (`drawNukeFall`). The minimap shows a blinking red dot at the Silo until liftoff, then the
+  missile crossing to the target. The missile is a long three-stage ICBM drawn in code (`icbmArt`, see ART_GUIDE): the Garrison look, matte olive drab
+  with a black nose, a yellow live-warhead band and white stencils.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
   - **Radiation** (`RAD` in `js/defs.js`; the rules in `js/sim.js`, "radiation"; the looks and sound in `js/radfx.js`).
     A nuke's fallout (`radAdd(..., 'nuke')` in `nukeImpact`, after `domeCatch`: a nuke a Shield Dome stops leaves none)
@@ -3045,7 +3286,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     it at 0 instead and calls `cityDown` (`hitBuilding`, `missileImpact` and its splash, `rocketHit`, `bombHit`,
     `nukeImpact`, `lanceFire`; `destroyBuilding` by force as a backstop; `demolish` and the order refuse it; not on a
     fault line that will open, `footPlace`). **Knocked out** (`b.cDown` while dark): seized like any megastructure (see
-    **Seizing megastructures** below), with no Wreck it; taken, its land, boost and Domination count change sides
+    **Seizing megastructures** below), with no Demolish it; taken, its land, boost and Domination count change sides
     (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, Fuel and dark
     (the seize state with every megastructure's). Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): four prefab panel blocks
     of raw concrete round a square (lawns, deer, a fountain, the Arrival clock on a stele ringed like Ithaca I, an empty
@@ -3318,20 +3559,27 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `armor` (25%) of its armor owing `b.mNeed` = `fee` (a quarter) of its build cost (`megaFee`, rounded up). `needsOf`
     asks Haulers for it; `megaCommission` takes what reaches its stock off the bill; paid (`b.mReady`) it sets `fixLeft` to
     mend it to `online` (50%) of its armor (at least 5 s of work), dispatch's repair step sends a Worker, and `doFix`
-    finishing calls `megaOnline` (a Dome warms up again; `logEvent` `megaOn`). **Wreck it** (ORDERS.`megaWreck`,
+    finishing calls `megaOnline` (a Dome warms up again; `logEvent` `megaOn`). **Demolish it** (ORDERS.`megaWreck`,
     `megaWreckOrder`: `b.mWreck`, a bit per colony; not Arrival City): that colony's robots knock it out and shoot on,
     `wreck` (half) of its armor more in `b.mWr`, then `captureBuilding` destroys it, adding `salvage` (a quarter) of its
     build cost to what spills in crates (`dropLoot`). Missiles, nukes, bombs, napalm, Howitzer shells, fuel blasts and the
     Lance's shot destroy one as before (a City: knocked out). The panel (`megaParts` in `js/ui.js`): Knocked out (who is
-    seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Wreck it** / **Seize it
-    instead** (`sh-mwreck`, key W); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
-    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's offline. The rivals
+    seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Demolish it** / **Seize it
+    instead** (`sh-mwreck`, key D); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
+    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's knocked out or offline;
+    its night lights stay out meanwhile (`megaOut`: `drawMegaArt` draws its graded day art, not its lit night art; no
+    `megaNight` layer, pools, beacons or Lift cable lights) and come on again once it's back online. The rivals
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
     seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. A rival plans a
     road to a seized megastructure ahead of ordinary sites when it can afford one, and gives the commissioning fee
-    High delivery priority until it is paid. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
+    High delivery priority until it is paid; while it owes a good (`megaFeeOwed`, a rival's only), its factories'
+    conveyors don't hand that good on and keep none back from the Haulers (`feedStep`, `feedHold`), its Ammo Plant
+    rests, and its Bot Foundry too once the fee has waited `AI_SEIZE.rest` (45) s (`b.feeRest`): before (Nov 26 2026,
+    seeded games, a Lance or Deep Core seized at 10 to 12 minutes) a Smelter's Alloy went straight into the Foundry
+    beside it and the fee sat a few Alloy and Chips short for ten minutes and more; now it comes online 5 to 7 minutes
+    after it is seized. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or
@@ -3538,7 +3786,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Save to the cloud, their full names in `aria-label` and `title`), the line on when the game last saved, then
   **Feedback** and **Save & quit**. **Settings** (`#p-setview`; **Back** or Esc returns, and the focus goes to Back on
   the way in and to Settings on the way out): the Music, Effects and Ambience sliders, **Graphics**, a switch each
-  (`role="switch"`, `pauseSwitch`) for Full screen, Weather, Scout reports and Vibration where they apply on the device,
+  (`role="switch"`, `pauseSwitch`) for Voice lines (`#p-voice`, js/voice.js), Full screen, Weather, Scout reports and Vibration where they apply on the device,
   and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
   always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
@@ -3606,7 +3854,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
   (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war themes Overdrive and Redline, the Murmur's Night
   Murmurs, the nuke alarm Zero Hour, the campaign theme The Long Silence (not shown over the Lore guide, a full screen), `end`
-  none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
+  and the end cues none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a
@@ -3741,7 +3989,7 @@ Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Pla
 (team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
 plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
-The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too, and so are the Bunker,
+The nuclear missile's 24-frame detonation sheet and the scorch mark are custom too (the missile itself is drawn in code: `icbmArt`), and so are the Bunker,
 Disruptor Tower and Mortar Pit (with their firing overlays, the Mortar's tube in 16 directions and morning, evening
 and night sets), the streetlamps along roads (`streetLamps`: posts sorted with buildings and bots, lit heads and
 light pools at dusk and night) and the Pulse Turret's twin violet laser and hit burst (`fx-pulse-laser`,
@@ -3751,13 +3999,23 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
-growth stage, `stalkKey`; their light at night in the night glow map, `resourceGlow`) (ART_GUIDE Batch 16). An oil seep
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Fiber's Stalks have no art: each is a clump
+of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
+a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
+then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),
+one of three clumps a tile by its position (`reedVariant`), each look drawn once and cached (`REED.cache`) and baked with
+the ground after the tiles round it (`drawStalks`); at night the rings glow, a halo in the night glow map and, zoomed in,
+each ring's own light (`drawReedLights`), dimmer the less grown. An oil seep
 has no art at all: it is a puddle of crude made in code from its tiles (`js/seep.js`: one glossy black shape across the
 seep with a white rim light, sheen and droplets, baked with the ground and gleaming faintly at night; it recedes from a
 pump as it is pumped and breaks into pools) (ART_GUIDE Batch 20). The crash sites aircraft leave when they're shot down are rendered too: the broken,
 burnt airframes of the Cargo Plane, the Vulcan Bomber and the Airship (`wreck-cargoplane`, `wreck-bomber`,
-`wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 19).
+`wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 19). The **Grader** is the owner's
+concept A, "Dozer" (`renderer/b/rob_grader.js`, ART_GUIDE Batch 35): driving frames with its blade raised and work
+frames with it down for both teams at every time of day, the earth heaped ahead of its blade at three sizes, brake,
+dust and headlight overlays, and effect sheets for clods and dust off the blade, splashes and silt plumes; the ground
+of the Earthworks (cuts, spoil and fill heaps, tongues of new land, trenches, fresh soil in each biome's earth, track
+marks) and the plans' outlines and marks are drawn in code (`js/terraform.js`).
 Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be
@@ -4286,7 +4544,7 @@ its Command Base, drawn as a crate crossing the map. State: `P.allyCmd` (`atk`, 
 allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
 Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
 won by **Capture**: take both enemy Command Bases and both colonies of your team win. A colony captured while its
-teammate stands is down, not out, until its team captures the base back (see Fallen allies). Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+teammate stands is down, not out, until its team captures the base back (see Fallen allies). Teams also work in a one-person game (Versus, **4 players**: you and a computer
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 
@@ -4424,10 +4682,33 @@ node tools/workforce-test.js
 node tools/workforce-lockstep-test.js
 ```
 
-The Workforce ladder: a computer colony's game copied into side-by-side games with different settings (Auto untouched,
+The Workforce ladder: a colony set up the same way every time (a Colony game the computer plays for 10 minutes, no
+rival and the Murmur off, then its raw goods topped up, two finished Cement Works with no stock limit and two building
+sites added; `node tools/workforce-test.js [seed] [minutes]`, every check runs on any seed) copied into side-by-side
+games with different settings (Auto untouched,
 Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load, builders kept free, minimums with
 nobody free, a pinned factory at its stock limit, the player's own presets), then two devices over the lockstep
-changing the settings all game, one reloading halfway, their fingerprints compared every second.
+changing the settings all game (and ordering Graders and Terraform jobs), one reloading halfway, their fingerprints compared every second.
+
+```bash
+node tools/massdriver-test.js
+```
+
+The Mass Driver line: goods both ways between a Driver and its Catcher, automatic supply of the far end with no goods
+list, a 50-tile line across the sea on Islands (allowed on Sky islands and Four Isles, not in the Hollow), a goods list
+overriding Auto, an Outpost kept in Ammo, a rival's Flak bursting a canister, an old one-way save loading, and the
+measured pace over 30 tiles.
+
+```bash
+node tools/terraform-test.js
+```
+
+Terraforming: Raise, Lower, Flatten, Fill shallows and Dig channel done by Graders (never Workers), the Stone each costs
+and yields, the refusals (a building, a road, a rival's land, too steep), robots' routes after a raise and a flatten, a
+land bridge a Worker walks over to an island, a fill dragged out to open sea stopping 6 tiles from the original shore
+(and still refused past its new land, before and after a save), a canal joining two lakes that a Ferry then sails through, a robot on a
+flooding tile stepping off, a save made mid-job loading and playing on to the same hash, and the same plan twice
+giving the same hash.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

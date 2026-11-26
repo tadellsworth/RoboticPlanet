@@ -442,7 +442,7 @@ function natWetNight(ctx, ox, oy, z, v0, v1, w) {
  */
 function natureFrost() {
   const k = NATFX.frost[biome()];
-  if (!k || !S || !weatherOn() || typeof TOD === 'undefined') return 0;
+  if (!k || !S || !weatherOn() || typeof TOD === 'undefined' || R.void) return 0; // (no air on The Ring: no frost)
   const x = natDayPos();
   if (x === null) return 0;
   const N0 = NIGHT_TO - 90, M1 = 30, D1 = 300; // (from 90 s before night ends; melting slowly from early morning to midday: the owner, Nov 21)
@@ -551,7 +551,7 @@ function natureLight(ctx, ox, oy, z, v0, v1) {
   if (!S || !S.settings) return;
   natState();
   const night = fxNight();
-  if (night > 0.02 && natSky()) {
+  if (night > 0.02 && natSky() && !R.void) {
     natNightSky(ctx, ox, oy, z, night);
   }
   natWater(ctx, ox, oy, z, v0, v1, night);
@@ -811,7 +811,7 @@ function natureOffMap(ctx, ox, oy, z) {
  * zoom, so screenToWorld and worldToScreen agree with the frame drawn. None on Saver, nor behind the menu.
  */
 function natureTiltAt(z) {
-  if (!S || !R.w || natSaver() || typeof UI === 'undefined' || !UI.inGame) return 0;
+  if (!S || !R.w || natSaver() || typeof UI === 'undefined' || !UI.inGame || R.void) return 0; // (The Ring: space, not a planet's surface: no tilt)
   const lo = minZoom(), hi = lo * NATFX.tilt.from;
   if (z >= hi) return 0;
   const f = clamp(Math.log(hi / z) / Math.log(hi / lo), 0, 1);

@@ -117,7 +117,7 @@ function watchSummary(w) {
   if (watchUpWin(w)) main.push('Great Uplink win');
   const size = watchSize(w, n), otherBiome = chosenSecondBiome(w, size);
   if (otherBiome) main.push(BIOMES[otherBiome].name);
-  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
+  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, biomeForced(w.shapeRnd, w.shape) === 'ring' ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');
@@ -264,7 +264,7 @@ function syncWatch() {
 function watchPickRows() {
   const w = WATCH.setup;
   shapePickRow($('w-shape'), w.shapeRnd, w.shape, watchCount(w), 'when the game starts');
-  biomePickRow($('w-biome'), w.biomeRnd, w.biome, watchHollow(w), 'when the game starts');
+  biomePickRow($('w-biome'), w.biomeRnd, w.biome, biomeForced(w.shapeRnd, w.shape), 'when the game starts');
   syncSecondBiome('w', w, watchSize(w));
 }
 
@@ -362,7 +362,6 @@ function watchOver() {
   // (Teams: the winner and its ally, who won together, the ally even if its own base fell on the way.)
   const side = S.players.filter((P) => !P.absent && (P.id === win || allies(P.id, win))).map((P) => P.id);
   const who = side.length > 1 ? `${watchThe(side[0], true)} and ${watchThe(side[1])}` : watchThe(win, true);
-  $('o-title').textContent = `${who} win${side.length > 1 ? '' : 's'}`;
   $('o-text').textContent = how === 'contact' ? `${side.length > 1 ? 'Their team' : `${callsign(win)}, the ${(RIVAL_NAMES[win] || '').toLowerCase()} ${watchDoc(win)},`} made contact after ${fmtTime(S.time)}: ${callsign(win)}'s Great Uplink held its transmission for ${GUP.hold / 60} minutes.` : side.length > 1
     ? `Their team took the planet after ${fmtTime(S.time)}: ` + (how === 'surrender' ? 'the last colony against them surrendered.' : how === 'nuke' ? 'a nuclear missile destroyed the last Command Base against them.' : 'both Command Bases against them are theirs.')
     : `${callsign(win)}, the ${(RIVAL_NAMES[win] || '').toLowerCase()} ${watchDoc(win)}, took the planet after ${fmtTime(S.time)}: ` + (how === 'surrender' ? 'the last colony against it surrendered.'
@@ -373,7 +372,7 @@ function watchOver() {
     `<i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i> ${watchDoc(P.id)}`,
     side.includes(P.id) ? (w.out[P.id] !== undefined ? `Won (fell at ${fmtTime(w.out[P.id])})` : 'Won') : w.out[P.id] !== undefined ? `Fell at ${fmtTime(w.out[P.id])}` : how === 'domination' || how === 'uplinks' || how === 'contact' ? 'Standing' : 'Fell',
   ])).map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-  $('screen-over').hidden = false;
+  overFlare('Game over', `${who} win${side.length > 1 ? '' : 's'}`, 'neutral'); // (the end, announced: js/ui.js)
 }
 
 /* ------------------------------------------------------------------ the scout report */
