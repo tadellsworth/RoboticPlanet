@@ -3355,7 +3355,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Lance's shot destroy one as before (a City: knocked out). The panel (`megaParts` in `js/ui.js`): Knocked out (who is
     seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Wreck it** / **Seize it
     instead** (`sh-mwreck`, key W); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
-    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's offline. The rivals
+    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's knocked out or offline;
+    its night lights stay out meanwhile (`megaOut`: `drawMegaArt` draws its graded day art, not its lit night art; no
+    `megaNight` layer, pools, beacons or Lift cable lights) and come on again once it's back online. The rivals
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is

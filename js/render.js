@@ -3343,7 +3343,8 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     }
     // Flat (top-down) turret art is drawn barrel-right and rotated to aim. 3/4-view turret art
     // (anchored at the bottom) is a fixed base plus a head image for each direction (see turretHead).
-    drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && !art.anchor ? b.aim : 0);
+    if (b && BDEFS[type].mega) drawMegaArt(ctx, art, cx, cy, s, b); else drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && !art.anchor ? b.aim : 0);
+    if (b && BDEFS[type].mega) megaNight(ctx, art, cx, cy, s, owner, b); // (the Lance's and the Dome's lights at night)
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
@@ -3355,7 +3356,8 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       // along the shot exactly and swings round smoothly (the owner, Nov 21 2026).
       const tw = lanceTwist(b, aim, cx, cy, s);
       if (tw) { ctx.save(); ctx.translate(tw.x, tw.y); ctx.rotate(tw.d); ctx.translate(-tw.x, -tw.y); }
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) drawMegaArt(ctx, head, cx, cy, s, b);
+      if (b && b.id) lanceTipLight(ctx, b, cx, cy, s);
       if (b && b.id) drawLanceCharge(ctx, b, cx, cy, s);
       if (tw) ctx.restore();
     }
@@ -7054,10 +7056,13 @@ function refreshOverlay(type) {
 function buildingNightOn(b) {
   if (b.ent !== 'b' || !b.built || b.dead || murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y)) return false;
   const def = BDEFS[b.type];
+  if (def.mega && megaOut(b)) return false; // (a megastructure knocked out or offline: dark, but for its amber lamp)
   return !def.viaduct && !def.pylon && !def.ramp;
 }
-/** A structure's own lamps (Arrival City's, a Lift's, a Great Uplink's) are out: the Murmur cut its power, it's shorted, or it stands in a blackout. */
-function nightDark(b) { return !!b && (murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y)); }
+/** A structure's own lamps (Arrival City's, a Lift's, a Great Uplink's) are out: the Murmur cut its power, it's shorted, it stands in a blackout, or (a megastructure) it's knocked out or offline. */
+function nightDark(b) { return !!b && (murmurCutOn(b) || shorted(b) || murmurDarkAt(b.x, b.y) || megaOut(b)); }
+/** A megastructure knocked out or seized and not online yet (MEGA: megaDark in sim.js), for its looks. */
+function megaOut(b) { return typeof megaDark === 'function' && megaDark(b); }
 
 function drawCityGlow(ctx, ox, oy, z, items) {
   const night = gfx().night;
@@ -11833,6 +11838,126 @@ function cityLedTint(art, col, px) {
   return c;
 }
 
+/*
+ * The megastructures at night (the owner, Nov 25 2026: they stood dark by a lit base). Their re-lit night art has its
+ * lamps, but dim beside the rest of the base, so over it, as the light goes, in code:
+ * - a light layer made once per sprite and colony colour (megaNightLayer) and laid on additively in one draw: the deck
+ *   floodlit warm-white from its middle, its lamps and windows glowing (the night art's bright parts, picked out by
+ *   multiplying it by itself, with a soft bloom round them), and an LED strip in the owner's colour round the pad's edge;
+ * - beacons on its tall parts (MEGA_LAMPS): red warning lights blinking slowly (the Lift's huts, the Ray's stacks and
+ *   bore tower, the Deep Core's headframe, the Engine's rim, the Uplink's small dishes, the Lance's muzzle:
+ *   lanceTipLight), white floods on its lamp heads, a lamp in the owner's colour on the Dome's emitter and the Lift's anchor.
+ * Their own lights (the Lift's cable, the Uplink's rim, the Deep Core's shaft, the Engine's plume, the Lance's charge,
+ * the Dome's shimmer, Arrival City's windows) are drawn as before. Dark while it's knocked out or offline (its amber
+ * lamp blinks: drawMegaDark), its power cut by the Murmur, shorted or blacked out (nightDark); a site is drawn as a site.
+ */
+/** Each megastructure's pad (its edge in its sprite, as fractions of the image: left, right top, bottom; the top
+ *  edge a little narrower, foreshortened) and its lamps ([u, v, kind]: r red warning, w white flood, o owner colour). */
+const MEGA_LAMPS = {
+  lift: { pad: [0.2, 0.78, 0.325, 0.195, 0.805, 0.82], lamps: [[0.5, 0.43, 'r'], [0.27, 0.4, 'r'], [0.73, 0.4, 'r'], [0.24, 0.26, 'w'], [0.755, 0.26, 'w'], [0.21, 0.71, 'w'], [0.785, 0.71, 'w'], [0.5, 0.5, 'o']] },
+  lance: { pad: [0.22, 0.775, 0.325, 0.2, 0.8, 0.82], lamps: [[0.25, 0.31, 'r'], [0.75, 0.31, 'r'], [0.33, 0.34, 'w'], [0.665, 0.34, 'w']] },
+  dome: { pad: [0.195, 0.8, 0.34, 0.155, 0.84, 0.885], lamps: [[0.5, 0.33, 'o'], [0.23, 0.31, 'r'], [0.8, 0.81, 'r'], [0.735, 0.37, 'w']] },
+  sunder: { pad: [0.22, 0.78, 0.325, 0.2, 0.8, 0.82], lamps: [[0.27, 0.175, 'r'], [0.73, 0.175, 'r'], [0.5, 0.19, 'r'], [0.25, 0.31, 'w'], [0.75, 0.31, 'w']] },
+  gup: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.29, 0.37, 'r'], [0.71, 0.37, 'r'], [0.25, 0.74, 'r'], [0.37, 0.69, 'w'], [0.63, 0.69, 'w']] },
+  deepcore: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.445, 0.275, 'r'], [0.35, 0.285, 'r'], [0.545, 0.285, 'r'], [0.34, 0.34, 'w'], [0.545, 0.34, 'w']] },
+  atmos: { pad: [0.195, 0.8, 0.42, 0.19, 0.81, 0.925], lamps: [[0.35, 0.35, 'r'], [0.69, 0.35, 'r'], [0.52, 0.215, 'r'], [0.23, 0.38, 'w'], [0.76, 0.38, 'w']] },
+};
+const _megaNightLayers = new WeakMap();
+/**
+ * Megastructure sprite `night` (its re-lit image) lit at night for colony colour `col` (see MEGA_LAMPS): one canvas the
+ * size of the sprite, made once and kept with the image (a new night image, a new layer). `day` is its day art (the
+ * floodlit deck). Only drawing and blending: it works on a page opened from a file too.
+ */
+function megaNightLayer(type, day, night, col) {
+  let per = _megaNightLayers.get(night);
+  if (!per) _megaNightLayers.set(night, (per = new Map()));
+  let c = per.get(col);
+  if (c) return c;
+  const n = 512, L = MEGA_LAMPS[type], mk = (w) => { const k = document.createElement('canvas'); k.width = k.height = w; return k; };
+  c = mk(n);
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  // the lamps and windows: the night art multiplied by itself (x^4, so only its bright parts are left), then bloomed
+  const e = mk(n), eg = e.getContext('2d');
+  eg.drawImage(night, 0, 0, n, n);
+  eg.globalCompositeOperation = 'multiply';
+  for (let k = 0; k < 3; k++) eg.drawImage(night, 0, 0, n, n);
+  eg.globalCompositeOperation = 'destination-in'; eg.drawImage(night, 0, 0, n, n);
+  g.globalCompositeOperation = 'lighter';
+  g.globalAlpha = 0.9; g.drawImage(e, 0, 0);
+  for (const [w, a] of [[96, 1], [32, 0.9]]) { const sm = mk(w), sg = sm.getContext('2d'); sg.imageSmoothingQuality = 'high'; sg.drawImage(e, 0, 0, w, w); g.globalAlpha = a; g.drawImage(sm, 0, 0, n, n); }
+  // the deck floodlit from its middle: the day art, warm, fading out toward the pad's edge
+  const [l, r, t, bl, br, bt] = L.pad, mx = (l + r) / 2 * n, my = (t + bt) / 2 * n, rad = (r - l) * n * 0.62;
+  const f = mk(n), fg = f.getContext('2d');
+  fg.drawImage(day.img || day, 0, 0, n, n);
+  fg.globalCompositeOperation = 'multiply'; fg.fillStyle = '#ffd9a8'; fg.fillRect(0, 0, n, n);
+  const gr = fg.createRadialGradient(mx, my, 0, mx, my, rad);
+  gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.6)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  fg.globalCompositeOperation = 'destination-in'; fg.fillStyle = gr; fg.fillRect(0, 0, n, n);
+  g.globalAlpha = 0.34; g.drawImage(f, 0, 0);
+  // an LED strip in the owner's colour round the pad's edge, with a soft glow
+  g.beginPath(); g.moveTo(l * n, t * n); g.lineTo(r * n, t * n); g.lineTo(br * n, bt * n); g.lineTo(bl * n, bt * n); g.closePath();
+  g.strokeStyle = col; g.lineJoin = 'round';
+  g.globalAlpha = 0.18; g.lineWidth = 12; g.stroke();
+  g.globalAlpha = 0.85; g.lineWidth = 2.5; g.stroke();
+  if (per.size > 4) per.clear();
+  per.set(col, c);
+  return c;
+}
+/**
+ * Draw megastructure b's sprite `art`: as any building's (drawArt), but knocked out or offline its lamps are out, so out
+ * of the day its graded copy (todGraded: the day art in the light now, no lamps lit) stands in for its re-lit art.
+ */
+function drawMegaArt(ctx, art, cx, cy, s, b) {
+  if (!art || !TOD.active || R.inMap || !b || !b.built || !megaOut(b)) { drawArt(ctx, art, cx, cy, s); return; }
+  artSeen(art);
+  const st = TOD.state, g = (n) => (n === 'day' ? art : todGraded(art, n)), A = g(st.a), B = st.f > 0.002 && st.b !== st.a ? g(st.b) : A;
+  if (B === A) { drawArtRaw(ctx, A, cx, cy, s); return; }
+  const late = st.f >= 0.5, over = late ? 1 - st.f : st.f, ga = ctx.globalAlpha; // (crossfaded as in drawArt)
+  drawArtRaw(ctx, late ? B : A, cx, cy, s);
+  if (over > 0.002) { ctx.globalAlpha = ga * over; drawArtRaw(ctx, late ? A : B, cx, cy, s); ctx.globalAlpha = ga; }
+}
+/** Megastructure b's lights at night over its sprite `art` (drawn at cx, cy, tile size s): see MEGA_LAMPS. */
+function megaNight(ctx, art, cx, cy, s, owner, b) {
+  if (!TOD.active || R.inMap || !b || !b.id || !b.built || !art || !Array.isArray(art.anchor)) return;
+  const L = MEGA_LAMPS[b.type], on = Math.min(1, TOD.state.lights || 0);
+  if (!L || on < 0.01 || nightDark(b)) return;
+  const st = TOD.state, name = st.a === 'night' || st.b === 'night' ? 'night' : st.a !== 'day' ? st.a : st.b;
+  const v = todVariant(art, name), col = PLAYER_COLORS[owner] || '#ffd9a0';
+  const S2 = s * (art.scale || 1), x0 = cx - art.anchor[0] * S2, y0 = cy - art.anchor[1] * S2;
+  // (a Leech drinking from it dims it; so does its colony's Lance charging, flickering, as the rest of its lights)
+  const pc = bCentre(b);
+  let dim = S.wildlife ? drunkLight(pc.x, pc.y) : 1;
+  if (b.owner >= 0 && b.type !== 'lance' && lanceDim(b.owner)) dim *= 0.3 + 0.12 * Math.sin(R.time * 23 + b.id) + 0.08 * Math.sin(R.time * 7.3 + b.id * 3);
+  const ga = ctx.globalAlpha;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  if (v && v.img && v.img.width) { ctx.globalAlpha = ga * on * dim; ctx.drawImage(megaNightLayer(b.type, art, v.img, col), x0, y0, S2, S2); }
+  for (const [u, w, k] of L.lamps) {
+    const x = x0 + u * S2, y = y0 + w * S2;
+    let a = 1, c = '#f4f8ff', rr = s * 0.16;
+    if (k === 'r') { const ph = (R.time * 0.6 + hash2(b.id, Math.round(u * 100), 17)) % 1; a = ph < 0.4 ? Math.sin(ph / 0.4 * Math.PI) : 0.08; c = '#ff3a2a'; rr = s * 0.2; }
+    else if (k === 'o') { a = 0.8 + 0.2 * Math.sin(R.time * 1.6 + b.id); c = col; rr = s * 0.26; }
+    if (a < 0.02) continue;
+    ctx.globalAlpha = ga * on * dim * a;
+    ctx.drawImage(glowDisc(c), x - rr, y - rr, rr * 2, rr * 2);
+    ctx.globalAlpha = ga * on * dim * a * 0.9; const hr = rr * 0.3;
+    ctx.drawImage(glowDisc(k === 'r' ? '#ffd0c0' : '#ffffff'), x - hr, y - hr, hr * 2, hr * 2); // (its hot core)
+  }
+  ctx.restore();
+}
+/** The Lance's red warning light at its muzzle, blinking at night (out while it charges: its lens takes over). */
+function lanceTipLight(ctx, b, cx, cy, s) {
+  if (!TOD.active || R.inMap || !b.built || b.lOn || nightDark(b)) return;
+  const on = Math.min(1, TOD.state.lights || 0), ph = (R.time * 0.6 + hash2(b.id, 3, 17)) % 1, a = ph < 0.4 ? Math.sin(ph / 0.4 * Math.PI) : 0.08;
+  if (on * a < 0.02) return;
+  const M = lanceMarks(b), x = cx + M.m[0] * s, y = cy + M.m[1] * s, rr = s * 0.2, ga = ctx.globalAlpha;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga * on * a;
+  ctx.drawImage(glowDisc('#ff3a2a'), x - rr, y - rr, rr * 2, rr * 2);
+  ctx.drawImage(glowDisc('#ffd0c0'), x - rr * 0.3, y - rr * 0.3, rr * 0.6, rr * 0.6);
+  ctx.restore();
+}
+
 /**
  * A megastructure knocked out or offline (MEGA): a dark veil over its square (not Arrival City's, whose art goes dark
  * itself), and while it's knocked out the ring its seizers must stand in (MEGA.reach tiles round its walls, dashed),
@@ -11860,9 +11985,11 @@ function drawMegaDark(ctx, b, cx, cy, z) {
       ctx.beginPath(); ctx.moveTo(cx, cy - r - z * 0.9); ctx.lineTo(cx + z * 0.5, cy - r - z * 0.7); ctx.lineTo(cx, cy - r - z * 0.5); ctx.closePath(); ctx.fill();
       ctx.fillRect(cx - z * 0.03, cy - r - z * 0.9, z * 0.06, z * 0.9);
     }
-  } else if (b.mOff) {
-    // (offline: a slow amber blink, its power lamp waiting)
+  }
+  if (b.mDown || b.mOff) {
+    // (knocked out or offline: a slow amber blink, its power lamp waiting; its night lights stay out: megaNight)
     ctx.globalAlpha = 0.5 + 0.5 * Math.sin(R.time * 2.2);
+    if (TOD.active && TOD.state.lights > 0.05) { const r = z * 0.32, ga = ctx.globalAlpha; ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga * 0.6 * TOD.state.lights; ctx.drawImage(glowDisc('#ffb347'), cx - r, cy - z * f * 0.32 - r, r * 2, r * 2); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = ga; }
     ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.arc(cx, cy - z * f * 0.32, Math.max(2, z * 0.09), 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
@@ -11923,7 +12050,7 @@ function drawFallenBase(ctx, b, cx, cy, z) {
 function drawLift(ctx, cx, cy, s, owner, b) {
   const weak = !!(b && b.built && b.armor < BDEFS.lift.armor * LIFT.weak);
   const art = (weak && artFor('lift-down', owner)) || artFor('lift', owner);
-  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  if (art) { drawMegaArt(ctx, art, cx, cy, s, b); megaNight(ctx, art, cx, cy, s, owner, b); return; }
   drawMegaPlain(ctx, 'lift', cx, cy, s, owner, b);
 }
 
@@ -11938,7 +12065,8 @@ const ATMOS_MARKS = { rimL: [-1.016, -2.005], rimR: [1.294, -2.005], throat: [0.
 function drawAtmos(ctx, cx, cy, s, owner, b) {
   const art = artFor('atmos', owner);
   if (!art) { drawMegaPlain(ctx, 'atmos', cx, cy, s, owner, b); return; }
-  drawArt(ctx, art, cx, cy, s);
+  drawMegaArt(ctx, art, cx, cy, s, b);
+  megaNight(ctx, art, cx, cy, s, owner, b);
 }
 /** Every Atmosphere Engine's plume on the screen, drifting downwind; at night lit pale cyan from the throat, its waist band and rim lights; rain round it from stage 2. */
 function drawAtmosPlumes(ctx, ox, oy, z) {
@@ -12007,7 +12135,8 @@ const DEEP_WHEEL = new Map(); // (each Core's wheel frame where it stopped: look
 function drawDeep(ctx, cx, cy, s, owner, b) {
   const art = artFor('deepcore', owner);
   if (!art) { drawMegaPlain(ctx, 'deepcore', cx, cy, s, owner, b); return; }
-  drawArt(ctx, art, cx, cy, s);
+  drawMegaArt(ctx, art, cx, cy, s, b);
+  megaNight(ctx, art, cx, cy, s, owner, b);
   const live = !!(b && b.id && b.built);
   let f = 0;
   if (live) {
@@ -12073,7 +12202,7 @@ const GUP_MARKS = { feed: [0, -0.664], dish: [0, -0.458], rim: [0, -1.268], rimL
 function drawGup(ctx, cx, cy, s, owner, b) {
   const weak = !!(b && b.built && b.armor < BDEFS.gup.armor * 0.3);
   const art = (weak && artFor('gup-down', owner)) || artFor('gup', owner);
-  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  if (art) { drawMegaArt(ctx, art, cx, cy, s, b); megaNight(ctx, art, cx, cy, s, owner, b); return; }
   drawMegaPlain(ctx, 'gup', cx, cy, s, owner, b);
 }
 
@@ -12170,7 +12299,9 @@ function drawLiftCables(ctx, ox, oy, z) {
 function drawLiftBeam(ctx, x, y, H, z, owner, sway, b) {
   const night = TOD.active && !nightDark(b) ? TOD.state.lights || 0 : 0, col = PLAYER_COLORS[owner] || '#ffffff';
   const top = (h) => x + Math.sin(R.time * 1.3) * sway * z * 3 * h * h; // (the cable's x at height fraction h)
+  const out = !!b && megaOut(b); // (knocked out or offline: the cable stands unlit, its warning lights out)
   ctx.save();
+  if (out) ctx.globalAlpha *= 0.3;
   // The soft column of light round it: its owner's colour, brighter at night, fading out up the screen.
   ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createLinearGradient(0, y, 0, y - H);
@@ -12187,7 +12318,7 @@ function drawLiftBeam(ctx, x, y, H, z, owner, sway, b) {
   ctx.stroke();
   ctx.globalCompositeOperation = 'source-over';
   // Red warning lights stepping up it, blinking in turn (bright by night).
-  for (let k = 1; k <= 6; k++) {
+  for (let k = 1; k <= (out ? 0 : 6); k++) {
     const h = k / 7, on = (Math.floor(R.time * 1.5) + k) % 3 === 0 ? 1 : 0.35;
     const a = (0.35 + 0.65 * night) * on * (1 - h * 0.6), r = Math.max(1.4, z * 0.07 * (1 - h * 0.5));
     ctx.fillStyle = `rgba(255,60,50,${a})`; ctx.beginPath(); ctx.arc(top(h), y - H * h, r, 0, Math.PI * 2); ctx.fill();
@@ -13309,7 +13440,8 @@ function sunderPhase(b) {
 function drawSunder(ctx, cx, cy, s, owner, b) {
   const art = artFor('sunder', owner);
   if (!art) { drawSunderPlain(ctx, cx, cy, s, owner, b); return; }
-  drawArt(ctx, art, cx, cy, s);
+  drawMegaArt(ctx, art, cx, cy, s, b);
+  megaNight(ctx, art, cx, cy, s, owner, b);
   const A = sunderAnim(b), night = TOD.active ? TOD.state.lights || 0 : 0;
   // the shot hole's glow under the tower (behind the rams), brightest at the blow
   const bo = sunderMark('bore', cx, cy, s), glow = Math.max(A.bore * (0.45 + 0.55 * night), A.flash);
