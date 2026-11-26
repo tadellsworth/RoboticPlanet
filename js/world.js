@@ -6362,7 +6362,10 @@ function deserializeGame(json) {
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
     clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
+    const terrWas = S.territoryVer;
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
+    // (The load's own count of the land is not a change of land: the AI's "no spot found" notes, which hold only while the land is as it was, keep holding, as in a game that wasn't saved.)
+    for (const P of S.players) if (P.noSpot) for (const k in P.noSpot) if (P.noSpot[k] && P.noSpot[k].ver === terrWas) P.noSpot[k].ver = S.territoryVer;
     scarSetup(); // (a save from before War scars: Full from here on, its land unscarred)
   } catch (e) { S = prev; throw e; }
   // Unit types switched off for now (BOTS_OFF) leave the game.
