@@ -255,9 +255,6 @@ function needsOf(b) {
   } else if (def.lift && b.lfSend) {
     // An Orbital Lift's goods to send up: what the colony holds beyond each reserve, up to a climber's load (see liftWant).
     for (const g in b.lfSend) out.push([g, liftWant(b, g), true]);
-  } else if (def.mdriver && b.mdSend) {
-    // A Mass Driver's goods list: what the colony holds beyond each reserve, up to its hopper (see mdWant).
-    for (const g in b.mdSend) out.push([g, mdWant(b, g), true]);
   } else if (def.store && keepOf(b) && b.smode !== 'empty') {
     // A Depot's supply orders (a Rail Station's own stock too): keep this much of each good here (goods
     // already promised to someone don't count). What a far station stocks automatically comes by train
@@ -265,6 +262,9 @@ function needsOf(b) {
     const k = keepOf(b), bulk = ((def.station || def.mast || def.magterm) && farStation(b)) || b.type === 'depot';
     for (const g in k) out.push([g, k[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true, bulk && ((b.auto && b.auto[g]) || 0) > ((b.keep && b.keep[g]) || 0)]);
   }
+  // A Mass Driver end's goods to send (its list, or what it ships automatically): what the colony holds beyond each
+  // reserve, up to its hopper (see mdWant). Not at a far end: it ships what it holds.
+  if ((def.mdriver || def.catcher) && b.built && !b.mdFar) for (const g of mdSendGoods(b)) { const n = mdWant(b, g), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); }
   // A Port where a Ferry is loading a kit to found a Port asks for it.
   if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
   // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
@@ -306,7 +306,7 @@ function supplyOf(b, g) {
   if (!b.built || b.dead) return 0;
   const def = BDEFS[b.type];
   if (def.terminal) return 0; // its goods leave only by train (terminalSpare), never for spending or by Hauler
-  if (def.mdriver && b.mdSend && b.mdSend[g] !== undefined) return 0; // (what a Mass Driver sends is for its canisters)
+  if ((def.mdriver || def.catcher) && (b.mdSend || b.mdAuto)) return Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0) - mdHold(b, g)); // (what a Mass Driver end sends is for its canisters)
   if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0) - yardHeld(b, g);
   if (b.loot && b.loot[g]) return Math.max(0, Math.min(b.loot[g], b.stock[g] || 0) - (b.res[g] || 0)); // loot warbots left here
   return 0;
@@ -1937,6 +1937,7 @@ function moveDirect(u, x, y, dt, cap) {
 
 function dispatch(p) {
   railPlan(p);
+  mdPlan(p);
   const blds = [];
   const press = convoysPress(p);
   for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && (!shunned(b) || (press && BDEFS[b.type].terminal))) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about (but a Terminal whose convoys press on)
@@ -1997,9 +1998,9 @@ function dispatch(p) {
   const mine = S.buildings.filter((s) => !s.dead && s.owner === p); // (those in a rival gun's reach too: no flicker)
   const homePorts = cargoShips ? mine.filter((s) => s.built && BDEFS[s.type].port && onHomeG(s)) : [];
   const bySea = (b) => b.built && BDEFS[b.type].port && homePorts.some((h) => h !== b && seaLinked(h, b));
-  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s) || (BDEFS[s.type].mast && airLines().has(s.id)) || (BDEFS[s.type].magterm && magRunning(s)) || (BDEFS[s.type].catcher && mdFed(s))));
+  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s) || (BDEFS[s.type].mast && airLines().has(s.id)) || (BDEFS[s.type].magterm && magRunning(s)) || mdFed(s)));
   for (const b of blds) {
-    b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) && !(BDEFS[b.type].magterm && magPartner(b)) && !(BDEFS[b.type].catcher && mdFed(b)) &&
+    b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) && !(BDEFS[b.type].magterm && magPartner(b)) && !mdFed(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
   }
   // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
@@ -2500,6 +2501,7 @@ function dispatch(p) {
       // Haulers and trucks leave it (and Workers don't ride across with a good each by hand).
       if (r.keep && !isLiquid(r.g) && BDEFS[r.b.type].mast && farStation(r.b) && airLines().has(r.b.id)) { r.n = 0; continue; }
       if (r.keep && !isLiquid(r.g) && BDEFS[r.b.type].magterm && farStation(r.b) && magRunning(r.b)) { r.n = 0; continue; } // (a far Maglev Terminal's by pod)
+      if (r.keep && r.b.mdFar && mdEnd(r.b) && mdFed(r.b)) { r.n = 0; continue; } // (a far Mass Driver end's by canister)
       // A building a far Rail Station serves: the train brings its goods, so trucks leave it alone while the
       // station is out of something that's on its way (or waiting at the home station), unless the
       // building has run dry with nothing coming. One a far Depot serves waits the same way for the Road
@@ -4605,7 +4607,7 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || (BDEFS[c.type].mdriver && c.mdTo) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, an aimed Mass Driver, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '')) busy++;
@@ -11276,7 +11278,7 @@ function undoSite(b) {
 
 /** Settings a building keeps when it moves. */
 const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply', 'yard', 'yardParts',
-  'partsBy', 'yardT', 'reload', 'armed', 'mdTo', 'mdSend', 'mdSent']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
+  'partsBy', 'yardT', 'reload', 'armed', 'mdTo', 'mdSend', 'mdSent', 'mdGot']; // (and the work in hand: a Foundry's parts, a yard's, a Silo's reload, a Nuclear Silo's finished missile)
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -20501,7 +20503,7 @@ function hashState() {
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier || b.deepLast) { int(b.id); int(b.deepSurgeTier || 0); num(b.deepSurgeAt || 0); int(b.deepLast || 0); }
     if (b.crater) { int(b.id); int(b.nest || 0); } // (a Harrow's crater, a tunnel exit)
-    if (b.mdTo || b.mdSend || b.mdAxis) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); } // (Mass Drivers)
+    if (BDEFS[b.type].mdriver || BDEFS[b.type].catcher) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); int(b.mdAt || 0); int(b.mdNext || 0); int(b.mdFar || 0); obj(b.auto); for (const k in b.mdAuto || {}) { str(k); obj(b.mdAuto[k]); } } // (Mass Driver ends)
   }
   for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
@@ -20544,166 +20546,350 @@ function hashState() {
 /* ------------------------------------------------------------------ the Mass Driver */
 
 /**
- * The Mass Driver and its Catcher (MASSDRIVER; BDEFS.mdriver, BDEFS.catcher). The Driver (b.mdTo: its Catcher's id;
- * b.mdSend: {good: the reserve kept at home}, up to MASSDRIVER.goods of them) loads canisters from its stock of the
- * goods it sends, charges its coils (b.mdFire: the time it fires), and throws them (S.cans) in an arc to its Catcher.
- * Haulers keep it stocked from what the colony holds beyond each reserve (needsOf, mdWant); buildings touching it hand
- * over their output by conveyor, and a Catcher's conveyor feeds the buildings touching it (mdConveyor). It fires only
- * with power (a Generator in reach: magPowered). Flak can burst a canister (canHit), and one with no Catcher at the end
- * lands anyway: either way its goods fall as crates (addLoot).
+ * The Mass Driver and its Catcher (MASSDRIVER; BDEFS.mdriver, BDEFS.catcher). A Driver (b.mdTo: its Catcher's id, or an
+ * Outpost's or Keep's) and its Catcher are one line, and either end fires to the other: each loads canisters, charges
+ * its coils (b.mdFire: the time it fires, b.mdAt: at which end) and throws them (S.cans) in an arc. mdPlan works out,
+ * every 2 s, which end is the far one (b.mdFar), what it keeps for the buildings round it (b.auto) and what each end
+ * ships to each partner (b.mdAuto); a goods list (b.mdSend: {good: the reserve kept at home}) overrides that. Haulers
+ * keep the near end stocked from what the colony holds beyond each reserve (needsOf, mdWant); buildings touching an
+ * end hand over their output by conveyor and are fed from it (mdConveyor). An end fires only with power (a Generator
+ * in reach: magPowered). Flak can burst a canister (canHit), and one with no end to land in lands anyway: either way
+ * its goods fall as crates (addLoot).
  */
 
-/** Driver b's Catcher, if it is still there, finished and b's owner's; else null. */
+/** Is b a Mass Driver or a Catcher (an end of a Mass Driver line, which fires and catches)? */
+function mdEnd(b) { const d = b && BDEFS[b.type]; return !!(d && (d.mdriver || d.catcher)); }
+
+/** Is a building of type t one a Mass Driver can keep supplied, one way (an Outpost, a Keep)? */
+function mdFortType(t) { return MASSDRIVER.forts.includes(t); }
+
+/** Driver b's far end (its Catcher, or the Outpost or Keep it supplies), if it is still there, finished and b's owner's; else null. */
 function mdCatcher(b) {
   const c = b && b.mdTo ? getE(b.mdTo) : null;
-  return c && !c.dead && c.built && c.owner === b.owner && BDEFS[c.type].catcher ? c : null;
+  return c && !c.dead && c.built && c.owner === b.owner && !c.mDown && (BDEFS[c.type].catcher || mdFortType(c.type)) ? c : null;
 }
 
-/** Is a built Mass Driver of Catcher c's owner aimed at it (its goods come by canister)? */
-function mdFed(c) { return S.buildings.some((d) => !d.dead && d.built && d.owner === c.owner && d.mdTo === c.id && BDEFS[d.type].mdriver); }
+/** The ends end b fires to: a Driver's Catcher (or fort); a Catcher's built Drivers aimed at it. */
+function mdPartners(b) {
+  if (!b || b.dead || !b.built) return [];
+  const def = BDEFS[b.type];
+  if (def.mdriver) { const c = mdCatcher(b); return c ? [c] : []; }
+  if (def.catcher) return S.buildings.filter((d) => !d.dead && d.built && d.owner === b.owner && d.mdTo === b.id && BDEFS[d.type].mdriver);
+  return [];
+}
 
-/** Can player `owner`'s Mass Driver b aim at Catcher c? '' if so, otherwise why not. */
+/** Is end b on a working line (its goods come and go by canister)? */
+function mdFed(b) { return mdEnd(b) && mdPartners(b).length > 0; }
+
+/** Is end b the far end of its line: is a partner nearer the Command Base? (A Driver aimed at a fort never is.) */
+function mdIsFar(b, ps) {
+  const L = getE(S.players[b.owner] && S.players[b.owner].lander);
+  ps = ps || mdPartners(b);
+  if (!ps.length || !L || L.dead) return false;
+  if (BDEFS[b.type].mdriver && mdFortType(ps[0].type)) return false;
+  const d = dist2(b.x, b.y, L.x, L.y);
+  return ps.some((o) => { const e = dist2(o.x, o.y, L.x, L.y); return e < d || (e === d && !!BDEFS[b.type].catcher); });
+}
+
+/** Good g in flight to building o. */
+function mdFlying(o, g) {
+  let n = 0;
+  for (const m of S.cans || []) if (m.to === o.id && !m.gone) n += m.goods[g] || 0;
+  return n;
+}
+
+/** What end or fort o lacks, by canister ({good: n}): a fort's needs; an end's keep (b.auto, its supply orders), less what is on the way. */
+function mdLack(o) {
+  const out = {};
+  if (mdFortType(o.type)) { for (const [g, n] of needsOf(o)) if (n >= 1 && g !== 'crude') out[g] = (out[g] || 0) + n; }
+  else {
+    const k = keepOf(o);
+    if (k) for (const g in k) if (g !== 'crude') out[g] = k[g] - ((o.stock[g] || 0) - (o.res[g] || 0)) - (o.inc[g] || 0);
+  }
+  for (const g in out) { out[g] = Math.floor(out[g] - mdFlying(o, g)); if (out[g] < 1) delete out[g]; }
+  return out;
+}
+
+/** Does end o send good g to end b (its goods list, or what it ships automatically)? */
+function mdSends(o, b, g) { return o.mdSend ? o.mdSend[g] !== undefined : !!(o.mdAuto && o.mdAuto[b.id] && o.mdAuto[b.id][g] !== undefined); }
+
+/** How much of good g end b ships automatically, to all its partners. */
+function mdAutoN(b, g) {
+  let n = 0;
+  if (b.mdAuto) for (const k in b.mdAuto) n += b.mdAuto[k][g] || 0;
+  return n;
+}
+
+/** The goods end b sends: its goods list, or what it ships automatically. */
+function mdSendGoods(b) {
+  if (b.mdSend) return Object.keys(b.mdSend);
+  const out = [];
+  if (b.mdAuto) for (const k in b.mdAuto) for (const g in b.mdAuto[k]) if (!out.includes(g)) out.push(g);
+  return out;
+}
+
+/**
+ * Plan player p's Mass Driver lines (every 2 s): which end of each is the far one (b.mdFar), what the far end keeps for
+ * the buildings round it (b.auto: as a far Rail Station's, see railPlan) and what each end ships to each partner
+ * (b.mdAuto): what the partner lacks, and from a far end what it can spare (spareForHome) going home. An end with a
+ * goods list ships that instead; a fort gets only its own needs.
+ */
+function mdPlan(p) {
+  const P = S.players[p];
+  const ends = S.buildings.filter((b) => !b.dead && b.owner === p && b.built && mdEnd(b));
+  if (!ends.length) return;
+  if (P.mdT !== undefined && S.time - P.mdT < 2 && S.time >= P.mdT) return;
+  P.mdT = S.time;
+  const hub = getE(P.lander);
+  const fars = [];
+  for (const b of ends) { b.auto = null; b.mdFar = mdIsFar(b) ? 1 : 0; if (b.mdFar) fars.push(b); }
+  if (fars.length && hub && !hub.dead && hub.owner === p) {
+    // Each building goes to the nearest far end that can serve it (see railPlan).
+    const blds = S.buildings.filter((c) => !c.dead && c.owner === p && !BDEFS[c.type].store && !BDEFS[c.type].barrier && !storeFunded(c));
+    const by = new Map();
+    for (const c of blds) {
+      let best = null, bd = Infinity;
+      const toHub = dist(c.x, c.y, hub.x, hub.y);
+      for (const s of fars) {
+        const d = dist(c.x, c.y, s.x, s.y);
+        if (d > STATION_REACH || d > toHub - STATION_NEARER || d >= bd) continue;
+        if (!touching(c).includes(s) && !roadLinked(c, s) && !footNear(c, s)) continue;
+        best = s; bd = d;
+      }
+      if (best) by.set(c, best);
+    }
+    for (const s of fars) {
+      const mine = blds.filter((c) => by.get(c) === s), want = {}, made = new Set();
+      for (const c of mine) if (c.built && BDEFS[c.type].out) for (const g in BDEFS[c.type].out) made.add(g);
+      for (const c of mine) for (const [g, n] of needsOf(c)) {
+        if (g === 'crude' || made.has(g)) continue; // (Fuel flies in sealed drums; Crude doesn't fly)
+        const full = Math.max(0, n) + (c.built ? (c.stock[g] || 0) + (c.inc[g] || 0) : 0);
+        want[g] = (want[g] || 0) + (c.built ? 2 * full : Math.max(0, (siteCost(c)[g] || 0) - (c.stock[g] || 0)));
+      }
+      for (const g in want) { want[g] = Math.min(RAIL_AUTO_MAX, Math.ceil(want[g])); if (want[g] < 1 || !storeTakes(s, g)) delete want[g]; }
+      if (Object.keys(want).length) s.auto = want;
+    }
+  }
+  // What each end ships to each partner.
+  for (const b of ends) {
+    b.mdAuto = null;
+    const ps = mdPartners(b);
+    if (!ps.length || (b.mdSend && !mdFortType(ps[0].type))) continue; // (its goods list instead; a fort gets only what it needs)
+    const plan = {};
+    for (const o of ps) {
+      const want = mdLack(o);
+      if (b.mdFar && o === ps[0] && !o.mdFar && !mdFortType(o.type)) {
+        // The far end's spare goods go home, to its first Driver: not what that end sends here, nor what it wants already.
+        const spare = spareForHome(b, o, 999, false, false);
+        for (const g in spare) if (!mdSends(o, b, g)) want[g] = (want[g] || 0) + spare[g];
+      }
+      if (Object.keys(want).length) plan[o.id] = want;
+    }
+    if (Object.keys(plan).length) b.mdAuto = plan;
+  }
+}
+
+/** Can player `owner`'s Mass Driver b aim at Catcher (or fort) c? '' if so, otherwise why not. */
 function mdAimWhy(owner, b, c) {
   const M = MASSDRIVER;
   if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
   if (!b.built) return 'That Mass Driver is still going up.';
-  if (!c || c.dead || !BDEFS[c.type].catcher) return 'Tap one of your Catchers.';
-  if (c.owner !== owner) return 'That Catcher isn\'t yours: tap one of your own.';
+  if (!c || c.dead || !(BDEFS[c.type].catcher || mdFortType(c.type))) return 'Tap one of your Catchers, or an Outpost or Keep to keep supplied.';
+  if (c.owner !== owner) return `That ${BDEFS[c.type].name} isn't yours: tap one of your own.`;
   const d = dist(b.x, b.y, c.x, c.y);
-  if (d < M.min) return `Too close: that Catcher is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
-  if (d > M.max) return `Too far: that Catcher is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d < M.min) return `Too close: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d > M.max) return `Too far: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
   return '';
 }
 
-/** Aim Mass Driver b at Catcher c (null: stand down). '' or why not. */
+/** Aim Mass Driver b at Catcher (or fort) c (null: stand down). '' or why not. */
 function setMdAim(owner, b, c) {
   if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
   if (c) { const why = mdAimWhy(owner, b, c); if (why) return why; }
   b.mdTo = c ? c.id : 0;
   b.mdLast = S.time; // (a part load waits MASSDRIVER.partWait from here)
   if (!c) b.mdFire = 0;
+  S.players[owner].mdT = undefined; // (plan the lines again now)
   return '';
 }
 
-/** Send good g from Mass Driver b (on), or stop sending it. '' or why not. */
+/** Send good g from Mass Driver or Catcher b (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
 function setMdSend(b, g, on) {
-  if (!ownKey(GOOD, g) || isLiquid(g)) return 'A Mass Driver throws goods in crates: no Crude or Fuel.';
+  if (!ownKey(GOOD, g) || g === 'crude') return 'A Mass Driver throws goods in sealed canisters: no Crude.';
   const list = b.mdSend || {};
   if (on) {
     if (list[g] !== undefined) return '';
-    if (Object.keys(list).length >= MASSDRIVER.goods) return `A Mass Driver sends up to ${MASSDRIVER.goods} goods: take one off its list first.`;
+    if (Object.keys(list).length >= MASSDRIVER.goods) return `A goods list holds up to ${MASSDRIVER.goods} goods: take one off it first.`;
     list[g] = MASSDRIVER.reserve;
   } else delete list[g];
   if (Object.keys(list).length) b.mdSend = list; else delete b.mdSend;
+  S.players[b.owner].mdT = undefined;
   return '';
 }
 
-/** The reserve of good g Mass Driver b leaves at home: d more (or less), in MASSDRIVER.reserveStep steps. */
+/** Back to automatic supply: end b's goods list goes. */
+function setMdAuto(b) { delete b.mdSend; S.players[b.owner].mdT = undefined; return ''; }
+
+/** The reserve of good g end b leaves at home: d more (or less), in MASSDRIVER.reserveStep steps. */
 function setMdReserve(b, g, d) {
   if (!b.mdSend || b.mdSend[g] === undefined) return;
   b.mdSend[g] = clamp(Math.round(b.mdSend[g] + d), 0, MASSDRIVER.reserveMax);
 }
 
-/** What player p's Mass Drivers hold and have on the way of good g (among the goods they send), and its Catchers hold: none of it is home. */
+/** What player p's Mass Driver ends hold and have on the way of good g (the goods they send), and their far ends hold: none of it is home. */
 function mdHeld(p, g) {
   let n = 0;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== p || !b.built) continue;
-    if (BDEFS[b.type].mdriver && b.mdSend && b.mdSend[g] !== undefined) n += (b.stock[g] || 0) + (b.inc[g] || 0);
-    else if (BDEFS[b.type].catcher) n += b.stock[g] || 0;
+    if (b.dead || b.owner !== p || !b.built || !mdEnd(b)) continue;
+    if (b.mdSend ? b.mdSend[g] !== undefined : mdAutoN(b, g) > 0) n += (b.stock[g] || 0) + (b.inc[g] || 0);
+    else if (b.mdFar) n += b.stock[g] || 0;
   }
   return n;
 }
 
-/** How much more of good g Haulers should bring Mass Driver b: up to its hopper, from what the colony holds beyond the reserve. */
+/** The reserve end b keeps at home of good g it sends (its goods list's, else MASSDRIVER.reserve), or undefined if it doesn't send it. */
+function mdReserveOf(b, g) { return b.mdSend ? b.mdSend[g] : mdAutoN(b, g) > 0 ? MASSDRIVER.reserve : undefined; }
+
+/** How much more of good g Haulers should bring end b (the near end only): up to its hopper (or what it ships), from what the colony holds beyond the reserve. */
 function mdWant(b, g) {
-  if (!b.built || !b.mdSend || b.mdSend[g] === undefined || !b.mdTo) return 0;
-  const room = MASSDRIVER.hopper - (b.stock[g] || 0) - (b.inc[g] || 0);
-  const spare = Math.floor(tickTotal(b.owner, g) - mdHeld(b.owner, g) - b.mdSend[g]);
+  if (!b.built || b.mdFar) return 0; // (a far end ships what it holds)
+  const res = mdReserveOf(b, g);
+  if (res === undefined || !mdPartners(b).length) return 0;
+  const cap = b.mdSend ? MASSDRIVER.hopper : Math.min(MASSDRIVER.hopper, mdAutoN(b, g));
+  const room = cap - (b.stock[g] || 0) - (b.inc[g] || 0);
+  const spare = Math.floor(tickTotal(b.owner, g) - mdHeld(b.owner, g) - res);
   return Math.max(0, Math.min(room, spare));
 }
 
-/** Goods Mass Driver b holds ready to load: whole units of the goods it sends. */
+/** What end b holds back of good g for its canisters (supplyOf leaves it alone): all of a good on its list; at the near end, what it ships. */
+function mdHold(b, g) {
+  if (!b.built) return 0;
+  if (b.mdSend) return b.mdSend[g] !== undefined ? Infinity : 0;
+  return b.mdFar ? 0 : mdAutoN(b, g);
+}
+
+/** What end b can load of good g for partner o: whole units. */
+function mdAvail(b, o, g) {
+  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.floor(b.stock[g] || 0) : 0;
+  const plan = b.mdAuto && b.mdAuto[o.id];
+  if (!plan || !plan[g]) return 0;
+  const has = b.mdFar ? keepSupply(b, g) : (b.stock[g] || 0) - (b.res[g] || 0);
+  return Math.max(0, Math.min(plan[g], Math.floor(has)));
+}
+
+/** The goods end b could load for partner o now, and how many in all. */
+function mdLoadFor(b, o) {
+  const out = {};
+  let n = 0;
+  const gs = b.mdSend && !mdFortType(o.type) ? Object.keys(b.mdSend) : Object.keys((b.mdAuto && b.mdAuto[o.id]) || {});
+  for (const g of gs) { const k = mdAvail(b, o, g); if (k >= 1) { out[g] = k; n += k; } }
+  return { goods: out, n };
+}
+
+/** Goods end b holds ready to load, for all its partners. */
 function mdLoadable(b) {
   let n = 0;
-  for (const g in b.mdSend || {}) n += Math.floor(b.stock[g] || 0);
+  for (const o of mdPartners(b)) n += mdLoadFor(b, o).n;
   return n;
 }
 
 /**
- * A Mass Driver's or Catcher's conveyors, every MASSDRIVER.feed s: a Driver takes the goods it sends from a Command
- * Base or Depot touching it (what that store can spare, beyond the reserve) and from the factories touching it that
- * make them; a Catcher feeds the factories and sites touching it what they're short of, a unit a link a round.
+ * A Mass Driver end's conveyors, every MASSDRIVER.feed s: it takes the goods it sends from a Command Base or Depot
+ * touching it (what that store can spare, beyond the reserve) and from the factories touching it that make them; it
+ * feeds the factories and sites touching it what they're short of (Fuel to a Generator too), a unit a link a round;
+ * and a far end takes the output of the factories touching it (it goes home by canister).
  */
 function mdConveyor(b, dt) {
   b.feedT = (b.feedT || 0) - dt;
   if (b.feedT > 0) return;
   b.feedT = MASSDRIVER.feed;
-  const def = BDEFS[b.type];
+  const sends = mdSendGoods(b);
   for (const c of touching(b)) {
     const cd = BDEFS[c.type];
-    if (def.mdriver) {
-      if (!c.built || !b.mdSend) continue;
-      for (const g in b.mdSend) {
+    if (c.built && sends.length && !b.mdFar) {
+      let took = false;
+      for (const g of sends) {
         if (mdWant(b, g) < 1) continue;
         const store = c.type === 'lander' || c.type === 'depot';
-        if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); break; }
+        if (store ? keepSupply(c, g) >= 1 : (!cd.store && cd.out && cd.out[g] && supplyOf(c, g) >= 1)) { bump(c.stock, g, -1); bump(b.stock, g, 1); took = true; break; }
       }
-    } else if (!cd.store && !cd.barrier && (!c.built ? !storeFunded(c) : cd.inp || cd.ammo || cd.repair || cd.bots)) {
+      if (took) continue;
+    }
+    if (cd.store || cd.barrier) continue;
+    if (!c.built ? !storeFunded(c) : cd.inp || cd.ammo || cd.repair || cd.bots || cd.fuelCap) {
       for (const [g, n] of needsOf(c)) {
-        if (n < 1 || isLiquid(g) || supplyOf(b, g) < 1) continue;
+        if (n < 1 || (isLiquid(g) && !(g === 'fuel' && cd.burner)) || supplyOf(b, g) < 1) continue;
         bump(b.stock, g, -1); bump(c.stock, g, 1);
         if (c.built) c.fedT = S.time;
         break;
       }
     }
+    if (b.mdFar && c.built && cd.out) for (const g in cd.out) {
+      if (isLiquid(g) || supplyOf(c, g) < 1 || !storeTakes(b, g)) continue;
+      bump(c.stock, g, -1); bump(b.stock, g, 1);
+      break;
+    }
   }
 }
 
-/** Every step, for a built Mass Driver: load, charge, fire; and its status. (A Catcher only runs its conveyors.) */
+/** Every step, for a built Mass Driver or Catcher: load, charge, fire; and its status. */
 function updateMassDriver(b, dt) {
-  const M = MASSDRIVER;
+  const M = MASSDRIVER, drv = !!BDEFS[b.type].mdriver;
   mdConveyor(b, dt);
-  if (BDEFS[b.type].catcher) {
-    const n = S.buildings.filter((d) => !d.dead && d.owner === b.owner && d.mdTo === b.id && BDEFS[d.type].mdriver).length;
-    b.status = n ? `Catching for ${n} Mass Driver${n === 1 ? '' : 's'}` : 'Storing goods: no Mass Driver is aimed at it yet';
-    return;
-  }
   if (b.mdCd > 0) b.mdCd = Math.max(0, b.mdCd - dt);
-  const C = mdCatcher(b);
   if (b.mdFire) {
     b.working = true; // (the Generator in reach burns Fuel for it)
     b.status = 'Charging the coils';
-    if (S.time >= b.mdFire) mdLaunch(b, C);
+    if (S.time >= b.mdFire) mdLaunch(b);
     return;
   }
-  const c0 = b.mdTo ? getE(b.mdTo) : null, n = mdLoadable(b);
-  if (!b.mdTo) b.status = 'Not aimed: tap Aim at a Catcher below';
-  else if (!C) b.status = c0 && !c0.dead && c0.owner === b.owner && BDEFS[c0.type].catcher ? 'Its Catcher is still going up' : 'Its Catcher is gone: aim at another';
-  else if (!b.mdSend) b.status = 'Aimed: pick the goods to send below';
-  else if (!magPowered(b)) b.status = n ? 'Waiting for power: it fires only with a Generator (with Fuel) within 4 tiles' : 'No power: build a Generator (with Fuel) within 4 tiles';
+  const ps = mdPartners(b);
+  if (!ps.length) {
+    if (!drv) b.status = 'Storing goods: no Mass Driver is aimed at it yet';
+    else {
+      const c0 = b.mdTo ? getE(b.mdTo) : null;
+      b.status = !b.mdTo ? 'Not aimed: tap Aim below' : c0 && !c0.dead && c0.owner === b.owner && !c0.built ? `Its ${BDEFS[c0.type].name} is still going up` : 'Its far end is gone: aim at another';
+    }
+    return;
+  }
+  // The partner to fire to: the next one after the last, with a load worth the shot.
+  const start = Math.max(0, ps.findIndex((o) => o.id === b.mdNext) + 1);
+  let to = null, n = 0, best = 0;
+  for (let k = 0; k < ps.length; k++) {
+    const o = ps[(start + k) % ps.length], L = mdLoadFor(b, o);
+    if (L.n > best) best = L.n;
+    if (!L.n) continue;
+    const whole = b.mdSend && !mdFortType(o.type) ? Infinity : sumValues((b.mdAuto && b.mdAuto[o.id]) || {});
+    if (L.n >= M.load || (S.time - (b.mdLast || 0) >= M.partWait && L.n >= Math.min(M.partMin, whole))) { to = o; n = L.n; break; }
+  }
+  const pow = magPowered(b);
+  if (!pow) b.status = best ? `Waiting for power: it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles` : `Catching${drv ? '' : ' canisters'}; it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles`;
   else if (b.mdCd > 0) b.status = `Reloading: next shot in ${Math.ceil(b.mdCd)}s`;
-  else if (n >= M.load || (n >= M.partMin && S.time - (b.mdLast || 0) >= M.partWait)) {
+  else if (to) {
     b.mdFire = S.time + M.charge;
+    b.mdAt = to.id; b.mdNext = to.id;
     b.working = true;
     b.status = 'Charging the coils';
     sfx('mdcharge', b.x + 0.5, b.y + 0.5);
-  } else b.status = n ? `Loading: ${n} of ${M.load} goods for the next canister` : 'Waiting for goods to send';
+  } else b.status = best ? `Loading: ${Math.min(best, M.load)} of ${M.load} goods for the next canister` : !b.mdSend && !b.mdAuto ? (b.mdFar ? 'Nothing needed here, nothing spare to send home' : 'Nothing needed at the far end yet') : 'Waiting for goods to send';
 }
 
-/** Mass Driver b's coils are charged: a canister of up to MASSDRIVER.load of the goods it sends flies to Catcher C. */
-function mdLaunch(b, C) {
+/** End b's coils are charged: a canister of up to MASSDRIVER.load goods flies to the end it charged for (b.mdAt). */
+function mdLaunch(b) {
   const M = MASSDRIVER;
   b.mdFire = 0;
-  if (!C || !magPowered(b)) return; // (its Catcher or power went while it charged: it tries again)
-  const goods = {};
+  const C = getE(b.mdAt);
+  if (!C || !mdPartners(b).includes(C) || !magPowered(b)) return; // (its far end or power went while it charged: it tries again)
+  const L = mdLoadFor(b, C), goods = {};
   let n = 0;
-  // (a unit of each good in turn, so each good it sends gets its share of the canister)
+  // (a unit of each good in turn, so each good gets its share of the canister)
   for (let more = true; more && n < M.load;) {
     more = false;
-    for (const g in b.mdSend || {}) if (n < M.load && Math.floor(b.stock[g] || 0) >= 1) { goods[g] = (goods[g] || 0) + 1; n++; bump(b.stock, g, -1); more = true; }
+    for (const g in L.goods) if (n < M.load && L.goods[g] >= 1) { goods[g] = (goods[g] || 0) + 1; L.goods[g]--; n++; more = true; }
   }
   if (!n) return;
+  for (const g in goods) bump(b.stock, g, -goods[g]);
+  if (b.mdAuto && b.mdAuto[C.id]) for (const g in goods) if (b.mdAuto[C.id][g]) b.mdAuto[C.id][g] = Math.max(0, b.mdAuto[C.id][g] - goods[g]); // (shipped: the plan is up to date till it's made again)
   const d = dist(b.x, b.y, C.x, C.y), k = clamp((d - M.min) / (M.max - M.min), 0, 1), o = bCentre(b);
   S.cans = S.cans || [];
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
@@ -20767,7 +20953,7 @@ function canDown(m, p, by) {
   }
 }
 
-/** Canisters in flight: each lands in its Catcher at the end of its flight, or as crates if the Catcher is gone. */
+/** Canisters in flight: each lands in its end (a Catcher, a Driver, a fort) at the end of its flight, or as crates if that is gone. */
 function updateCans(dt) {
   for (const m of S.cans) {
     if (m.gone) continue;
@@ -20776,7 +20962,7 @@ function updateCans(dt) {
     if (m.t < m.dur && m.t / m.dur > 0.5 && S.tick % 3 === 0) { const p = canPos(m); if (p.alt < 2.5 && domeCatch(p.x, p.y, m.owner, 'canister', m.x0, m.y0)) { canDown(m, p, -1); continue; } }
     if (m.t < m.dur) continue;
     const C = getE(m.to), i = Math.floor(m.x1), j = Math.floor(m.y1);
-    if (C && !C.dead && C.built && C.owner === m.owner && BDEFS[C.type].catcher && C.x === i && C.y === j) {
+    if (C && !C.dead && C.built && C.owner === m.owner && (mdEnd(C) || mdFortType(C.type)) && C.x === i && C.y === j) {
       let n = 0;
       for (const g in m.goods) { bump(C.stock, g, m.goods[g]); n += m.goods[g]; }
       C.mdGot = (C.mdGot || 0) + n;

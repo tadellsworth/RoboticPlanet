@@ -127,12 +127,14 @@ const ORDERS = {
   cancelMove(p, id) { const b = ownB(p, id); if (b && b.moving) cancelMove(b); },
   pack(p, id) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mobile) return 0; const u = packCrawler(b); return u ? u.id : 0; },
   gate(p, id) { const b = ownB(p, id); return b ? wallToGate(p, b) : 'That Wall is gone.'; },
-  /** Aim Mass Driver `id` at Catcher `to` (0: stand down). '' or why not. */
+  /** Aim Mass Driver `id` at Catcher `to`, or an Outpost or Keep to keep supplied (0: stand down). '' or why not. */
   mdAim(p, id, to) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; const c = to ? ownB(p, to) : null; if (to && !c) return 'Tap one of your Catchers.'; return setMdAim(p, b, c); },
-  /** Send good g from Mass Driver `id` (on), or stop sending it. '' or why not. */
-  mdSend(p, id, g, on) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; return setMdSend(b, String(g), !!on); },
-  /** The reserve of good g Mass Driver `id` leaves at home, d more (or less). */
-  mdReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].mdriver) setMdReserve(b, String(g), +d || 0); },
+  /** Send good g from Mass Driver or Catcher `id` (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
+  mdSend(p, id, g, on) { const b = ownB(p, id); if (!b || !mdEnd(b)) return 'That Mass Driver is gone.'; return setMdSend(b, String(g), !!on); },
+  /** Mass Driver or Catcher `id` back to automatic supply (its goods list goes). */
+  mdAuto(p, id) { const b = ownB(p, id); if (!b || !mdEnd(b)) return 'That Mass Driver is gone.'; return setMdAuto(b); },
+  /** The reserve of good g Mass Driver or Catcher `id` leaves at home, d more (or less). */
+  mdReserve(p, id, g, d) { const b = ownB(p, id); if (b && mdEnd(b)) setMdReserve(b, String(g), +d || 0); },
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
   /**
    * Plan a Maglev line from Maglev Terminal `id` (built, with a line to spare) to tile (bi, bj): the far Terminal (or a

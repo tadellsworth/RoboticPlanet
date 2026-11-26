@@ -1683,15 +1683,26 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     or light bot off the road may step across a lane at any tile, not only at an overpass (pathing allows any crossing
     step across the lane's way); should open ground beside a lane be fenced, as the barrier art suggests?
   - **Mass driver** (built, Nov 19 2026: look A, "Coil Ramp", from the design sheet, with the owner's changes: no Fuel a
-    shot, only a Generator within 4 tiles; reach 12–30). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
+    shot, only a Generator within 4 tiles; reach 12–30, now 12–50). A Mass Driver (Build → Move, V; 10 Cement, 8 Alloy, 4 Chips)
     aimed on its panel at a Catcher (C; 6 Cement, 4 Alloy, 2 Chips) throws a canister of 12 goods every 10 s, 2–3 s in
     the air, from a goods list of up to 3 goods (each with a reserve the colony keeps at home); enemy Flak bursts
     canisters (crates where they fall), a canister with no Catcher lands as crates; none in the Hollow; the mission The
     Schedule teaches it. Decided after (the owner, Nov 19 2026): Flak as a hard counter is fine (a Flak Gun right under
     the arc bursts every canister that crosses its reach, so a line has to go round rival Flak); two tiles ("a 2x1
     footprint would be cooler"), laid east-west or north-south as it's placed, firing off the end facing its Catcher.
-    Open: the rival (it builds none); whether a Catcher should also send goods back (a Driver at each end works today);
-    a Catcher full of goods nobody fetches (no cap today).
+    Reworked (the owner, Nov 26 2026: "not useful"; four changes approved, the "network power" idea skipped, the
+    Generator rule kept): **two-way** (the Catcher fires back: a Driver and its Catcher are one line, each end with its
+    own reload; old saves' pairs load as two-way, a Driver's goods list kept as its override), **automatic supply** like
+    a Maglev line (the far end stocks what the buildings round it need, the near end ships it beyond a reserve of 20, the
+    far end's spare goes home; a goods list on either end overrides; Fuel flies in drums so a far end can run its own
+    Generator), **over anything, longer** (12–50 tiles: the island and Sky islands tool; a Driver can be aimed at an
+    Outpost or Keep, one way, to keep its Ammo up), **more throughput** (16 goods a canister, a shot every 6 s each
+    way: 160 goods a minute each way over 30 tiles, measured, against 72 one way before and about 120 for a 4-pod
+    Maglev line). Open: the rival still builds none (an Architect pair to an island it holds on Islands or Sky islands
+    would be the natural first use: aiMaglev's far-cluster test with a Catcher instead); a Catcher still can't be put
+    on an island nobody of yours can reach yet (a foothold first: a Ferry, a Drop Outpost); a Catcher full of goods
+    nobody fetches (no cap today); whether 160 a minute each way for 28 goods of buildings is too strong next to a
+    Maglev line (watch it).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no

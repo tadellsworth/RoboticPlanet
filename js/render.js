@@ -7412,6 +7412,7 @@ function render(dtReal) {
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
+      else if (e.built && BDEFS[e.type].catcher) drawCatcherLamps(ctx, e, cx, cy, z);
       if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
       if (e.built && (e.mDown || e.mOff) && BDEFS[e.type].mega && R.clean < 2) drawMegaDark(ctx, e, cx, cy, z); // (knocked out: its seize ring; offline: a dark veil)
       if (e.type === 'lander' && R.clean < 2 && fallenBaseOf(e) >= 0) drawFallenBase(ctx, e, cx, cy, z); // (a fallen ally's: its retake ring, FALLEN)
@@ -11352,9 +11353,19 @@ function mdGlow(ctx, x, y, r, col, a) {
   ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
 }
 
+/**
+ * Where a canister leaves or lands at end e, from its tile's centre (in tiles, on screen): a Driver's muzzle (its canisters
+ * come back down the rail), a Catcher's cradle, a fort's roof.
+ */
+function mdPort(e, mid) {
+  if (!e || e.dead || !BDEFS[e.type]) return MD_ART.cradle;
+  if (BDEFS[e.type].mdriver) { const A = MD_ART[mdDir(e)], c = bCentre(e); return mid ? A.m : [A.m[0] + c.x - e.x - 0.5, A.m[1] + c.y - e.y - 0.5]; } // (from the middle of its two tiles, `mid`, as a canister it throws starts)
+  return BDEFS[e.type].catcher ? MD_ART.cradle : [0, -0.35];
+}
+
 /** Where canister m is on screen: { x, y, gx, gy (the ground under it) }. */
 function canScreen(m, ox, oy, z, t) {
-  const k = clamp(t / m.dur, 0, 1), from = getE(m.from), dir = MD_ART[from && !from.dead ? mdDir(from) : 'e'], c0 = dir.m, c1 = MD_ART.cradle;
+  const k = clamp(t / m.dur, 0, 1), c0 = mdPort(getE(m.from), true), c1 = mdPort(getE(m.to));
   const gx = m.x0 + (m.x1 - m.x0) * k, gy = m.y0 + (m.y1 - m.y0) * k, alt = canAlt(m, k) * MD_ART.lift;
   return { x: ox + (gx + c0[0] * (1 - k) + c1[0] * k) * z, y: oy + (gy + c0[1] * (1 - k) + c1[1] * k - alt) * z, gx: ox + gx * z, gy: oy + gy * z, k };
 }
@@ -12407,9 +12418,41 @@ function drawMassDriverLamps(ctx, b, cx, cy, z) {
     mdGlow(ctx, mx, my, z * (0.35 + 0.5 * (1 - f)), BLUE, f * 0.85);
     ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
+  } else if (S.time - (b.mdCaught ?? -99) < 0.6) {
+    // a canister back from its Catcher: caught at the muzzle, the coils braking it down the rail
+    const f = 1 - (S.time - b.mdCaught) / 0.6, [mx, my] = P(A.m);
+    mdGlow(ctx, mx, my, z * 0.4, BLUE, f * 0.7);
+    for (let k = A.c.length - 1; k >= 0; k -= 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, f * 0.4 * (k / A.c.length)); }
   } else if (!charging && dark > 0.3 && buildingNightOn(b)) {
     // after dark the coils glow faintly between shots
     for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
+  }
+  ctx.restore();
+}
+
+/**
+ * A Catcher throwing a canister back: its cradle's coils gather light as they charge (a blue glow swelling in the
+ * funnel, arcs crackling between its arms), then a flash and a ray straight up as it fires. A Driver catching one
+ * back flashes at its muzzle (drawMassDriverLamps).
+ */
+function drawCatcherLamps(ctx, b, cx, cy, z) {
+  const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
+  if (!charging && since >= 0.5) return;
+  const BLUE = 'rgba(191,227,255,A)', x = cx + MD_ART.cradle[0] * z, y = cy + MD_ART.cradle[1] * z;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  if (charging) {
+    const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1);
+    mdGlow(ctx, x, y, z * (0.2 + 0.25 * p), BLUE, 0.25 + 0.45 * p);
+    for (let k = 0; k < 1 + Math.floor(p * 3); k++) {
+      const a0 = (k / 4) * Math.PI * 2 + R.time * 3, a1 = a0 + Math.PI * (0.6 + 0.3 * Math.random());
+      mdBolt(ctx, x + Math.cos(a0) * z * 0.3, y + Math.sin(a0) * z * 0.14, x + Math.cos(a1) * z * 0.3, y + Math.sin(a1) * z * 0.14, Math.max(1, z * 0.01), 5, z * 0.05, 'rgba(120,195,255,1)');
+    }
+  } else {
+    const f = 1 - since / 0.5;
+    mdGlow(ctx, x, y, z * (0.35 + 0.4 * (1 - f)), BLUE, f * 0.85);
+    ctx.strokeStyle = `rgba(200,232,255,${0.5 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - z * 0.9); ctx.stroke();
   }
   ctx.restore();
 }
@@ -12435,7 +12478,7 @@ function drawStructureMarkers(ctx, b, x, y, s) {
 function drawMassDrivers(ctx, ox, oy, z, inView) {
   const ui = typeof UI !== 'undefined' ? UI : {}, BLUE = 'rgba(191,227,255,A)';
   ctx.save();
-  // the aiming preview: the Driver's reach (12 to 30 tiles), its Catchers ringed, an arc to the one under the pointer
+  // the aiming preview: the Driver's reach (12 to 50 tiles), its Catchers (and forts) ringed, an arc to the one under the pointer
   const aimB = R.mode === 'mdaim' ? getE(ui.mdAim) : null, selB = getE(R.selected);
   const showLine = (b) => b && !b.dead && BDEFS[b.type] && BDEFS[b.type].mdriver;
   if (showLine(aimB)) {
@@ -12446,14 +12489,14 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     for (const r of [MASSDRIVER.min, MASSDRIVER.max]) { ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.stroke(); }
     ctx.setLineDash([]);
     for (const c of S.buildings) {
-      if (c.dead || c.owner !== b.owner || !BDEFS[c.type].catcher) continue;
+      if (c.dead || c.owner !== b.owner || !(BDEFS[c.type].catcher || mdFortType(c.type))) continue;
       const ok = !mdAimWhy(b.owner, b, c);
       ctx.strokeStyle = ok ? col : 'rgba(255,107,107,0.7)'; ctx.lineWidth = Math.max(2, z * 0.05);
       ctx.beginPath(); ctx.arc(ox + (c.x + 0.5) * z, oy + (c.y + 0.5) * z, z * 0.7, 0, Math.PI * 2); ctx.stroke();
     }
     const h = R.aimHover;
     if (h) {
-      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = !!c && BDEFS[c.type].catcher && !mdAimWhy(b.owner, b, c);
+      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = !!c && (BDEFS[c.type].catcher || mdFortType(c.type)) && !mdAimWhy(b.owner, b, c);
       mdArc(ctx, b, h.i + 0.5, h.j + 0.5, ox, oy, z, ok ? col : '#ff6b6b');
     }
   } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
@@ -12463,7 +12506,7 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     const from = getE(m.from), to = getE(m.to), p = canScreen(m, ox, oy, z, m.t);
     if (!inView(m.x0 + (m.x1 - m.x0) * p.k, m.y0 + (m.y1 - m.y0) * p.k, 6) && !inView(m.x1, m.y1, 2)) continue;
     if (from && !from.dead && from.built && to && !to.dead && to.built) {
-      const A = MD_ART[mdDir(from)], fc = bCentre(from), mx = ox + (fc.x + A.m[0]) * z, my = oy + (fc.y + A.m[1]) * z, tx = ox + (m.x1 + MD_ART.cradle[0]) * z, ty = oy + (m.y1 + MD_ART.cradle[1]) * z;
+      const p0 = mdPort(from), p1 = mdPort(to), mx = ox + (from.x + 0.5 + p0[0]) * z, my = oy + (from.y + 0.5 + p0[1]) * z, tx = ox + (m.x1 + p1[0]) * z, ty = oy + (m.y1 + p1[1]) * z;
       const fade = Math.min(1, p.k * 6, (1 - p.k) * 6) * 0.3, g = ctx.createLinearGradient(mx, my, tx, ty);
       g.addColorStop(0, `rgba(191,227,255,${fade})`); g.addColorStop(0.5, `rgba(191,227,255,${fade * 0.35})`); g.addColorStop(1, `rgba(191,227,255,${fade * 0.8})`);
       ctx.strokeStyle = g; ctx.lineCap = 'round';

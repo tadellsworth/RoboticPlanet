@@ -5825,6 +5825,10 @@ function checkSave(o) {
     if (b.mdAxis != null && b.mdAxis !== 'ew' && b.mdAxis !== 'ns') bad();
     if (b.mdSend != null && !(obj(b.mdSend) && Object.keys(b.mdSend).length <= MASSDRIVER.goods && Object.keys(b.mdSend).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdSend[g])))) bad();
     for (const k of ['mdFire', 'mdCd', 'mdLast', 'mdShot', 'mdSent', 'mdGot', 'mdCaught']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    // and its plan (mdPlan): the end it charged for, the last it fired to, whether it's the far end, what it ships to each partner
+    for (const k of ['mdAt', 'mdNext']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad();
+    if (b.mdFar != null && b.mdFar !== 0 && b.mdFar !== 1) bad();
+    if (b.mdAuto != null && !(obj(b.mdAuto) && Object.keys(b.mdAuto).length <= 64 && Object.keys(b.mdAuto).every((k) => /^[0-9]+$/.test(k) && obj(b.mdAuto[k]) && Object.keys(b.mdAuto[k]).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdAuto[k][g]))))) bad();
     // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
     if (b.lSrc != null && !['', 'gen', 'reactor'].includes(b.lSrc)) bad();

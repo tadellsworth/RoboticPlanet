@@ -1081,12 +1081,12 @@ const MISSIONS = [
   },
   {
     id: 'driver', name: 'The Schedule', chapter: 'Industry and Trade',
-    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and throw its supplies over everything, on the old schedule.',
+    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and a Catcher, and keep the camp supplied over everything, on the old schedule.',
     intro: [
-      'A <b>Mass Driver</b> throws sealed canisters of goods in an arc over anything to a <b>Catcher</b> 12 to 30 tiles away.',
-      'On the Driver\'s panel, <b>Aim at a Catcher</b>, then pick up to 3 <b>Goods to send</b>: Haulers keep it loaded.',
-      'It burns no Fuel, but it fires only with a <b>Generator</b> (with Fuel) within 4 tiles.',
-      'A canister of 12 goods flies every 10 seconds. Enemy Flak can burst one; a canister with no Catcher lands as crates.',
+      'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
+      'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 6 seconds from each end.',
+      'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     setup(S) {
@@ -1100,7 +1100,14 @@ const MISSIONS = [
       }
       computeTerritory();
       if (camp) { const route = roadRouteTo(0, camp) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); }
-      L.stock.cement += 120; L.stock.alloy += 30; L.stock.chip += 16; L.stock.fuel += 12; // (Cement to spare for the camp: what goes over the reserve flies)
+      // The camp's survey samples, crated beside it: Haulers take them to the nearest storage (the Catcher, once it stands).
+      let crate = null;
+      if (camp) for (let r = 2; r <= 4 && !crate; r++) for (let j = camp.y - r; j <= camp.y + r && !crate; j++) for (let i = camp.x - r; i <= camp.x + r && !crate; i++) {
+        const t = inMap(i, j) ? tIdx(i, j) : -1;
+        if (t >= 0 && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.road[t] && !S.ramp[t] && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => inMap(i + a, j + b) && S.road[tIdx(i + a, j + b)])) crate = [i, j];
+      }
+      if (crate) addLoot(crate[0], crate[1], { crystal: 24 }, true); // (by the road, where a Hauler can reach them)
+      L.stock.cement += 120; L.stock.alloy += 30; L.stock.chip += 16; L.stock.fuel += 40; // (Cement to spare for the camp, and Fuel for both ends' Generators: what goes over the reserve flies)
       enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generator's Fuel)
       P.stats.startBots = P.stats.bots;
     },
@@ -1112,13 +1119,21 @@ const MISSIONS = [
         hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>) by the survey camp\'s Outpost, far to the north.',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='catcher']" },
       { kind: 'mdAim', n: 1, text: 'Aim the Mass Driver at the Catcher', at: 'mdriver',
-        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b)) ? 1 : 0),
-        hint: 'Tap the <b>Mass Driver</b> → <b>Aim at a Catcher</b>, then tap your Catcher in the north.',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b) && BDEFS[mdCatcher(b).type].catcher) ? 1 : 0),
+        hint: 'Tap the <b>Mass Driver</b> → <b>Aim</b>, then tap your Catcher in the north.',
         ui: '#sh-mdaim' },
-      { kind: 'mdFreight', n: [24, 36, 48], text: 'Catch {n} goods by canister', at: 'mdriver',
+      { kind: 'mdPower', n: 1, text: 'Power both ends: a Generator by each', at: 'catcher',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && magPowered(b) && mdCatcher(b) && magPowered(mdCatcher(b))) ? 1 : 0),
+        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end. The camp\'s comes by canister.',
+        ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+      { kind: 'mdFreight', n: [16, 24, 32], text: 'Catch {n} goods by canister', at: 'catcher',
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].catcher ? b.mdGot || 0 : 0), 0),
-        hint: 'Driver panel: <b>Goods to send</b> → <b>Cement</b>; a <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles.',
-        ui: "#sh-mdadd [data-g='cement'], #btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
+        hint: 'Auto ships what the camp needs. For more: Driver → <b>Goods list</b> → <b>Cement</b>.',
+        ui: "#sh-mdmode [data-v='list'], #sh-mdadd [data-g='cement']" },
+      { kind: 'mdBack', n: [8, 16, 24], text: 'Throw {n} goods back home', at: 'mdriver',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver ? b.mdGot || 0 : 0), 0),
+        hint: 'Haulers crate the camp\'s survey Crystal into the Catcher, and its spare flies home. Keep it powered.',
+        ui: '#sh-md' },
     ],
   },
   {

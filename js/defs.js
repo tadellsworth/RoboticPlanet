@@ -363,21 +363,27 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
 const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, bends: 4, maxBent: 60, seg: 3, turn: 120, corner: 0.35, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
- * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun rail that throws sealed canisters of goods
- * in an arc over everything to a Catcher `min` to `max` tiles away (b.mdTo on the Driver: one Catcher per Driver, a
- * Catcher may take several). Both are storage. The Driver's goods list (b.mdSend: up to `goods` goods, each with the
- * reserve its colony keeps at home, `reserve` by default) is a standing supply order: Haulers bring it what the colony
- * holds beyond that reserve, up to `hopper` of each, and buildings touching it hand over their output by conveyor. A
- * full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more); the coils charge for
- * `charge` s, then it fires, `reload` s between shots. The flight takes `flight` s at full range (`flightMin` at the
- * shortest), its arc `arc` tiles high at full range. Power: no Fuel of its own, but it fires only with a Generator
- * (with Fuel) within the Generator's radius (genPowered); without one it waits. A canister has `hp`: an enemy Flak Gun
+ * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun line that throws sealed canisters of goods
+ * in an arc over everything, both ways. The Driver is aimed (b.mdTo) at a Catcher `min` to `max` tiles away: the two
+ * are one line, and either end fires to the other (a Catcher may take several Drivers, firing to each in turn). Both
+ * are storage. Supply is automatic (mdPlan, every 2 s): the end farther from the Command Base (b.mdFar) stocks what the
+ * buildings round it need (b.auto, as a far Rail Station does: within STATION_REACH, nearer it than the Command Base,
+ * touching it, by road or on foot), and the other end ships what it lacks (b.mdAuto: {partner id: {good: n}}), out of
+ * what its colony holds beyond `reserve` of each (Haulers bring it, up to `hopper`); what the far end holds beyond its
+ * own needs that nothing round it uses goes home the other way. A goods list (b.mdSend: up to `goods` goods, each with
+ * the reserve its colony keeps at home) overrides an end's automatic shipments: it sends just those. A Driver may be
+ * aimed at one of its colony's `forts` (an Outpost or a Keep) instead, one way: it keeps that fort's Ammo (and a Keep's
+ * Crystal) topped up. A full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more, or
+ * the whole of a smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each end.
+ * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
+ * flies in sealed drums (no Crude). Power: no Fuel of its own, but an end fires only with a Generator (with Fuel) within
+ * the Generator's radius (magPowered); without one it waits (it still catches). A canister has `hp`: an enemy Flak Gun
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
- * its cargo falls as crates where it comes down; if the Catcher is gone when it lands, it lands anyway, as crates. None
- * in the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
+ * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
+ * the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
  */
-const MASSDRIVER = { min: 12, max: 30, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 24, load: 12, partWait: 30, partMin: 4, charge: 1.6, reload: 10,
-  flight: 3, flightMin: 2, arc: 5, hp: 4, low: 0.1, feed: 1, muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
+const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 6,
+  flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
@@ -1618,11 +1624,11 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher): it throws sealed canisters of 12 goods in an arc over everything, one every 10 seconds, to a Catcher 12 to 30 tiles away. On its panel, Aim at a Catcher, then tap one; then pick up to 3 goods to send. Haulers bring it what your colony holds of them beyond the reserve you set (20 to start), and buildings touching it hand it their output by conveyor. It burns no Fuel, but it fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight, and a canister with no Catcher to land in still lands: either way its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 6 seconds from each end. Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
-    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. What lands here is shared out like any Depot\'s stock: Haulers take it where it is needed, and buildings touching it are fed by conveyor. Aim a Mass Driver at it from the Driver\'s panel, 12 to 30 tiles away; one Catcher can take several Drivers.',
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take several Drivers.',
     cost: { cement: 6, alloy: 4, chip: 2 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
@@ -2525,7 +2531,7 @@ const FLAVOR = {
   deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
   atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
-  catcher: 'A canister every ten seconds, around the clock, for settlements still on the drawing board.',
+  catcher: 'A canister every six seconds, each way, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
