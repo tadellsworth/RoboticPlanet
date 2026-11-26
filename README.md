@@ -1753,7 +1753,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
-  Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Its worker builds it from whichever side of the cliff is the shorter trip (`rampStand`: the Ramp's tile or the ground across the cliff, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they
+  Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Worker assignment compares safe route lengths to the Ramp tile and the work tiles across the cliff (`rampApproach`, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they
   would block the only way through a pass.
 - **Placement undo:** for `SITE_UNDO` (10) seconds after you place a building (the `place` order notes `b.placedAt`,
   game time) an **Undo** chip shows at the foot of the map (`siteUndoTick`, `#undo-site`), and **Ctrl+Z** / **Cmd+Z**

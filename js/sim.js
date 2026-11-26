@@ -2110,6 +2110,8 @@ function dispatch(p) {
     // A job done on foot (building, running a building) goes to a bot on the same ground: the nearest idle one
     // may stand across a cliff or the water (a foothold's workers), and then nobody else was ever sent.
     const zs = hauling ? null : jobZones(x, y);
+    const site = role === 'build' ? getE(S.bAt[goal]) : null;
+    const ramp = site && BDEFS[site.type].ramp ? site : null;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
       if (u.failUntil > S.time && (u.failGoal === goal || (hauling && dst && u.failGoal === tIdx(dst.x, dst.y)))) continue;
@@ -2132,14 +2134,21 @@ function dispatch(p) {
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
       if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u)) continue;
-      if (d < bd) { bd = d; best = k; }
+      // A Ramp can be built on either side. Rank eligible builders by the safe walk to a work tile.
+      let score = d;
+      if (ramp) {
+        const at = rampApproach(u, ramp);
+        if (!at) continue;
+        score = sq(at.steps);
+      }
+      if (score < bd) { bd = score; best = k; }
     }
     if (best < 0) return null;
     return preview ? idle[best] : idle.splice(best, 1)[0];
   };
   const canCarry = (u, n, g) => (u ? Math.max(1, Math.min(n, carryOf(u, g))) : 1);
   // The areas a job at (x, y) can be done from: its own, and for a Ramp site the ground across the cliff too
-  // (see rampStand). Null if its area isn't known (then anyone may try).
+  // (see rampApproach). Null if its area isn't known (then anyone may try).
   function jobZones(x, y) {
     const t = tIdx(x, y), b = getE(S.bAt[t]);
     if (!(S.zone[t] >= 0)) return null;
@@ -2319,7 +2328,7 @@ function dispatch(p) {
         if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
         const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
         const u = take(at.x, at.y, 'build');
-        if (u && nearSoon(u, at)) { idle.push(u); continue; }
+        if (u && !BDEFS[b.type].ramp && nearSoon(u, at)) { idle.push(u); continue; }
         assignBuild(u, b, stands);
         if (W && u && u.task && u.task.type === 'build') W.add('sites');
       }
@@ -3386,7 +3395,7 @@ function assignBuild(u, site, stands) {
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampStand(u, site) : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
 }
 
@@ -3426,18 +3435,17 @@ function wallStands(p) {
   return { at, wait };
 }
 
-/**
- * Where a worker builds Ramp b from: on its tile, or from the top or foot of the cliff beside it (it cuts
- * the slope from either side), whichever is the shorter trip from where the worker is. So a Ramp down off
- * your plateau is built from the top: nobody drives all the way round to the bottom. -1 if neither.
- */
-function rampStand(u, b) {
-  const t = tIdx(b.x, b.y), sx = Math.floor(u.x), sy = Math.floor(u.y);
-  let best = -1, bl = Infinity;
+/** Shortest safe route by step count to the Ramp tile or the work tile across its cliff. */
+function rampApproach(u, b) {
+  const t = tIdx(b.x, b.y), sx = Math.floor(u.x), sy = Math.floor(u.y), start = tIdx(sx, sy);
+  const opts = routeOpts(u), danger = dangerMap(u.owner);
+  let best = null;
   for (const c of [t, ...rampSides(t)]) {
-    if (c !== t && S.bAt[c]) continue;
-    const p = findPath(sx, sy, c % S.W, (c / S.W) | 0, u.owner, routeOpts(u));
-    if (p && p.length < bl) { bl = p.length; best = c; }
+    if ((danger[c] & 1) || (c !== t && S.bAt[c])) continue;
+    const x = c % S.W, y = (c / S.W) | 0;
+    let p = findPath(sx, sy, x, y, u.owner, opts);
+    if (p && hotStep(danger, start, p, 0) >= 0) p = findPath(sx, sy, x, y, u.owner, { ...opts, safe: danger });
+    if (p && (!best || p.length < best.steps)) best = { tile: c, steps: p.length };
   }
   return best;
 }
@@ -3476,13 +3484,15 @@ function roadToSites(p, blds) {
     }
     const at = siteWorkAt(b), cx = at.x + 0.5, cy = at.y + 0.5, z = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
     let best = null, bd = PAVE_LEAVE * PAVE_LEAVE;
+    const builderDistance = (u) => ramp ? sq(rampApproach(u, b)?.steps ?? Infinity) : dist2(u.x, u.y, cx, cy);
     for (const u of crew) {
-      const d = dist2(u.x, u.y, cx, cy);
+      if (ramp && Math.max(Math.abs(Math.floor(u.x) - at.x), Math.abs(Math.floor(u.y) - at.y)) > PAVE_LEAVE + 1) continue;
+      const d = builderDistance(u);
       if (d > bd || (!ramp && botZone(u) !== z) || ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u))) continue;
       bd = d; best = u;
     }
     if (!best) continue;
-    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && dist2(v.x, v.y, cx, cy) <= bd && (ramp || botZone(v) === z))) continue;
+    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && (ramp || botZone(v) === z) && builderDistance(v) <= bd)) continue;
     crew.splice(crew.indexOf(best), 1);
     assignBuild(best, b, stands);
   }
@@ -3506,7 +3516,9 @@ function callBuilder(owner, b) {
     const t = u.task, tt = t && t.type;
     if (tt === 'build' && !(getE(t.site) || {}).built && t.site !== b.id) continue; // (not off another site)
     const cost = !tt ? 0 : tt === 'staff' ? 30 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 60 : 8;
-    cands.push({ u, ux, uy, s: dist(ux, uy, at.x, at.y) + cost });
+    const steps = ramp ? rampApproach(u, b)?.steps : dist(ux, uy, at.x, at.y);
+    if (steps === undefined) continue;
+    cands.push({ u, ux, uy, s: steps + cost });
   }
   cands.sort((a, c) => a.s - c.s || a.u.id - c.u.id);
   for (const { u, ux, uy } of cands) {
@@ -6506,7 +6518,7 @@ const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's g
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
 const SAFE_POCKET = 4;   // a goods carrier caught in a gun's reach may cross this many tiles of it to get out (safeRoute)
 const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried again (noSafeRoute)
-const SAFE_FREE = new Set(['flee', 'cover', 'home', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
+const SAFE_FREE = new Set(['flee', 'cover', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
 
 /*
  * Goods carriers never drive into enemy guns (the owner, Nov 23 2026: on Volcano the rival joined its road to the far
