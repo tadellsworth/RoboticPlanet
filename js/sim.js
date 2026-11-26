@@ -13307,21 +13307,26 @@ function placeHollowNests(rng) {
 }
 
 /**
- * Half underground: the Murmur live in the caves only (and only with the Murmur on): a nest on each of the sites cavesMap laid out inside (twin
- * pairs, west and east), CAVES.nests of them a side by Size, half the pairs (rounded up) with the Murmur Quiet. No mound: these are the
- * ordinary nests, level 1, owned by the Murmur's slot. They dig tunnels and open exits like any nest, so what grows below the caves
- * comes up through them, and out of the entrances when the wall lets them (their packs go for whoever is nearest).
+ * Half underground: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
+ * sites cavesMap laid out in twin pairs, west and east (CAVES.nests of them by Size); outside, the same on the surface sites (S.caves.nestsOut: as
+ * many as a map of the surface's size gets, MURMUR.active's rule). Half the pairs (rounded up) with the Murmur Quiet, on each side. No mound and no
+ * tremors (those are the Hollow's). They dig tunnels and open exits like any nest, so what grows below the caves comes up through them, and out of
+ * the entrances when the wall lets them (their packs go for whoever is nearest); on the surface they work as they do on any map: night swarms,
+ * packs, their craft on Active. The mirror is west to east, so each colony meets as many nests as its twin, and an inside colony and an outside one the same.
  */
 function placeCaveNests() {
-  const sites = S.caves.nests, keep = murmurLevel() === 'quiet' ? Math.ceil(sites.length / 4) * 2 : sites.length;
-  for (const n of sites.slice(0, keep)) {
-    const t = tIdx(n.x, n.y);
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) continue;
-    S.res[t] = R_NONE; S.amt[t] = 0;
-    const b = addBuilding(wildOwner(), 'nest', n.x, n.y, true);
-    b.level = 1;
-    for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
-    for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+  const quiet = murmurLevel() === 'quiet';
+  for (const sites of [S.caves.nests, S.caves.nestsOut || []]) {
+    const keep = quiet ? Math.ceil(sites.length / 4) * 2 : sites.length;
+    for (const n of sites.slice(0, keep)) {
+      const t = tIdx(n.x, n.y);
+      if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) continue;
+      S.res[t] = R_NONE; S.amt[t] = 0;
+      const b = addBuilding(wildOwner(), 'nest', n.x, n.y, true);
+      b.level = 1;
+      for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
+      for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+    }
   }
 }
 
