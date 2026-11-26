@@ -6345,18 +6345,22 @@ function seaRoute(u, x, y, arrivalComps) {
 
 /**
  * A train's route along the track from where it is (on the track, or inside a station: from its
- * platforms) to the platform of the building at (x, y) (or to track tile (x, y)). Null if there is none.
+ * platforms) to the platform of the building at (x, y) (or to track tile (x, y)). Avoids enemy guns.
+ * Pass a null danger map to check whether the track would connect with the guns out of the way.
  */
-function railRoute(u, x, y, arrivalComps) {
+function railRoute(u, x, y, arrivalComps, danger = dangerMap(u.owner)) {
   const W = S.W, N = W * S.H, net = railNet().comp;
   let starts = [];
   if (u.inside) { const b = getE(u.inside); if (b) starts = railPlatforms(b.x, b.y); }
   else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.rail[t]) starts = [t]; }
+  if (u.inside && danger) starts = starts.filter((t) => !(danger[t] & 1));
   if (!starts.length) return null;
   const g = tIdx(x, y), goals = (S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [])
-    .filter((t) => !arrivalComps || arrivalComps.includes(net[t]));
+    .filter((t) => (!arrivalComps || arrivalComps.includes(net[t])) && !(danger?.[t] & 1));
   if (!goals.length) return null;
   const isGoal = new Set(goals), from = new Int32Array(N).fill(-2), q = [];
+  // Only a locomotive already in the danger area may cross a few covered tiles to get out.
+  const escape = danger && (danger[starts[0]] & 1) ? new Uint8Array(N) : null;
   for (const s of starts) { from[s] = -1; q.push(s); }
   let hit = -1;
   for (let k = 0; k < q.length && hit < 0; k++) {
@@ -6364,6 +6368,10 @@ function railRoute(u, x, y, arrivalComps) {
     if (isGoal.has(a)) { hit = a; break; }
     for (const b of railNbrs(a)) {
       if (from[b] !== -2 || net[b] !== net[a]) continue;
+      if (danger?.[b] & 1) {
+        if (!escape || !(danger[a] & 1) || escape[a] >= SAFE_POCKET) continue;
+        escape[b] = escape[a] + 1;
+      }
       from[b] = a; q.push(b);
     }
   }

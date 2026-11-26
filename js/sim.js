@@ -142,7 +142,10 @@ function nearestStoreTo(owner, x, y, except) {
 }
 
 /** Building priority set by the player: high-priority buildings get workers and goods first. */
-function prioRank(b) { return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1; }
+function prioRank(b) {
+  if (b.mNeed && S.players[b.owner]?.ai) return 0; // commissioning fee first, until paid
+  return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1;
+}
 
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
@@ -1282,7 +1285,11 @@ function goTo(u, x, y, arrivalComps) {
   // Freight Trains keep to the track.
   if (BOTS[u.type].rail) {
     const p = railRoute(u, x, y, arrivalComps);
-    if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    if (!p) {
+      if (DANGER.guns[u.owner]?.length && railRoute(u, x, y, arrivalComps, null)) noSafeRoute(u, goal);
+      else routeFailed(u, goal);
+      return false;
+    }
     exitBuilding(u);
     u.path = p; u.pi = 0; u.idleT = 0; u.goal = goal; u.trackVer = S.railVer || 0;
     return true;
@@ -1628,7 +1635,7 @@ function routeCheck(u) {
   return true;
 }
 
-/** A Freight Train rechecks its remaining track before driving over a removed tile. */
+/** A Freight Train rechecks its remaining track when track is removed or an enemy gun covers its route. */
 function trainRouteCheck(u) {
   const ver = S.railVer || 0;
   if (u.trackVer === ver) return true;
@@ -1641,7 +1648,8 @@ function trainRouteCheck(u) {
     if (!S.rail[t] || (prev !== t && (k > u.pi || S.rail[prev]) && !railNbrs(prev).includes(t))) { valid = false; break; }
     prev = t;
   }
-  if (valid) return true;
+  const hot = hotStep(dangerMap(u.owner), here, u.path, u.pi) >= 0;
+  if (valid && !hot) return true;
   // If the track was taken up under the locomotive, roll back to the rail tile it just left.
   if (!S.rail[here] && S.rail[from] && dist2(here % S.W, (here / S.W) | 0, from % S.W, (from / S.W) | 0) <= 1) {
     u.x = (from % S.W) + 0.5; u.y = ((from / S.W) | 0) + 0.5;
@@ -1651,8 +1659,8 @@ function trainRouteCheck(u) {
   const src = task?.type === 'haul' && task.phase === 'toSrc' && getE(task.src);
   const dst = src && getE(task.dst);
   if (src && dst ? haulGoPickup(u, src, dst) : goTo(u, goal % S.W, (goal / S.W) | 0)) return true;
-  cancelTask(u, true);
-  u.path = null;
+  if (hot) haltUnsafe(u);
+  else { cancelTask(u, true); u.path = null; }
   return false;
 }
 
@@ -2100,6 +2108,7 @@ function dispatch(p) {
   // For 'haul', `src` is where the goods are: a hauler must be able to reach it by road.
   // With good `g`: Crude and Fuel (liquids) go by Tanker, whatever the role asked for (never by train),
   // or by Hauler, one at a time, when no Tanker can get to `src`. Tankers carry nothing else.
+  const pickupTimes = new Map(); // (one estimate per carrier, origin and pickup platforms in this dispatch pass)
   const take = (x, y, role, src, g, dst, preview = false) => {
     let best = -1, bd = Infinity;
     const liq = isLiquid(g), tank = liq && src && tankerReach(src, dst);
@@ -2108,6 +2117,9 @@ function dispatch(p) {
     // A job done on foot (building, running a building) goes to a bot on the same ground: the nearest idle one
     // may stand across a cliff or the water (a foothold's workers), and then nobody else was ever sent.
     const zs = hauling ? null : jobZones(x, y);
+    const site = role === 'build' ? getE(S.bAt[goal]) : null;
+    const ramp = site && BDEFS[site.type].ramp ? site : null;
+    const carriers = hauling && src ? [] : null;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
       if (u.failUntil > S.time && (u.failGoal === goal || (hauling && dst && u.failGoal === tIdx(dst.x, dst.y)))) continue;
@@ -2130,14 +2142,30 @@ function dispatch(p) {
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
       if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u)) continue;
-      if (d < bd) { bd = d; best = k; }
+      if (carriers) { carriers.push(k); continue; }
+      // A Ramp can be built on either side. Rank eligible builders by the safe walk to a work tile.
+      let score = d;
+      if (ramp) {
+        const at = rampApproach(u, ramp);
+        if (!at) continue;
+        score = sq(at.steps);
+      }
+      if (score < bd) { bd = score; best = k; }
+    }
+    if (carriers?.length === 1) best = carriers[0];
+    else if (carriers) for (const k of carriers) {
+      const u = idle[k], bt = BOTS[u.type], comps = dst && (bt.rail || bt.sea) ? haulPickupComps(u, src, dst) : undefined;
+      const key = u.id + ':' + src.id + ':' + (comps || []).join(',');
+      if (!pickupTimes.has(key)) pickupTimes.set(key, cargoPickupTime(u, src, comps));
+      const eta = pickupTimes.get(key);
+      if (eta < bd) { bd = eta; best = k; }
     }
     if (best < 0) return null;
     return preview ? idle[best] : idle.splice(best, 1)[0];
   };
   const canCarry = (u, n, g) => (u ? Math.max(1, Math.min(n, carryOf(u, g))) : 1);
   // The areas a job at (x, y) can be done from: its own, and for a Ramp site the ground across the cliff too
-  // (see rampStand). Null if its area isn't known (then anyone may try).
+  // (see rampApproach). Null if its area isn't known (then anyone may try).
   function jobZones(x, y) {
     const t = tIdx(x, y), b = getE(S.bAt[t]);
     if (!(S.zone[t] >= 0)) return null;
@@ -2166,6 +2194,32 @@ function dispatch(p) {
     finishing.splice(k, 1);
     idle.push(u);
     return null;
+  };
+  // A captured depot network can have parts and Workers but no freight vehicle. Let one free
+  // rival Worker carry the next Foundry input a short distance while the network is isolated.
+  let freightNets = null;
+  const takeFoundrySupply = (src, dst) => {
+    if (!P.ai || free <= minFree || dst.type !== 'foundry' || !dst.built || farApart(src, dst) ||
+        dist2(src.x, src.y, dst.x, dst.y) > FOOT_CARRY ** 2) return null;
+    const z = zoneAt(src.x + 0.5, src.y + 0.5);
+    if (z < 0 || z !== zoneAt(dst.x + 0.5, dst.y + 0.5)) return null;
+    if (!freightNets) {
+      freightNets = new Set();
+      for (const u of S.bots) if (!u.dead && u.owner === p && !recycling(u) && (u.type === 'hauler' || u.type === 'truck')) {
+        for (const net of botGroups(u)) freightNets.add(net);
+      }
+    }
+    if (fleetReaches(freightNets, src, dst)) return null;
+    let best = -1, eta = Infinity;
+    for (let k = 0; k < idle.length; k++) {
+      const u = idle[k];
+      if (u.type !== 'worker' || botZone(u) !== z || dist2(u.x, u.y, src.x + 0.5, src.y + 0.5) > FOOT_CARRY ** 2 ||
+          (u.failUntil > S.time && (u.failGoal === tIdx(src.x, src.y) || u.failGoal === tIdx(dst.x, dst.y)))) continue;
+      const fromPickup = { ...u, x: src.x + 0.5, y: src.y + 0.5, inside: src.id };
+      const time = cargoPickupTime(u, src) + cargoPickupTime(fromPickup, dst);
+      if (time < eta) { best = k; eta = time; }
+    }
+    return best < 0 ? null : idle.splice(best, 1)[0];
   };
   function fleetReaches(nets, src, dst) {
     if (!nets.size) return false;
@@ -2317,7 +2371,7 @@ function dispatch(p) {
         if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
         const at = siteWorkAt(b); // (a Maglev line's site is built from the near Terminal)
         const u = take(at.x, at.y, 'build');
-        if (u && nearSoon(u, at)) { idle.push(u); continue; }
+        if (u && !BDEFS[b.type].ramp && nearSoon(u, at)) { idle.push(u); continue; }
         assignBuild(u, b, stands);
         if (W && u && u.task && u.task.type === 'build') W.add('sites');
       }
@@ -2417,6 +2471,7 @@ function dispatch(p) {
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
   //    priority the Foundry goes first (new workers unblock everything), then construction sites
   //    and production inputs share turns, whichever has the fewest goods on the way first.
+  const dryGarrisons = idle.length ? aiDryGarrisons(p) : null;
   const reqs = [], load = botCarry({ type: 'hauler', owner: p }); // (what a Hauler of ours carries: 2, or 3 with the cargo research)
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && (BDEFS[b.type].bots || (BDEFS[b.type].yard && hasYardOrders(b))) ? 0 : 1); // (a yard with orders: its parts as urgent as a Foundry's)
@@ -2428,14 +2483,20 @@ function dispatch(p) {
     const fed = b.built && BDEFS[b.type].inp ? feedersOf(b) : null;
     const inp = b.built && BDEFS[b.type].inp;
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
-      const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
+      const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null;
+      const normal = h === null ? n0 : Math.min(n0, h);
+      // First reloads for a grounded rival army, and only the next batch of parts for its Ammo Plant.
+      const held = (b.stock[g] || 0) + (b.inc[g] || 0);
+      const rearm = dryGarrisons && b.built && !keep ? Math.max(0, (g === 'ammo' ? dryGarrisons.get(b.id) || 0
+        : b.type === 'armory' ? inp[g] || 0 : 0) - held) : 0;
+      const n = rearm ? Math.min(normal, rearm) : normal;
       if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
       if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based, until a road reaches it: see above)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
       if (inp && inp[g] && !keep && n < load && !isLiquid(g) && (b.stock[g] || 0) + (b.inc[g] || 0) >= 2 * inp[g]) continue;
-      reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+      reqs.push({ b, g, n, pri: dry ? -1 : rearm ? -0.5 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly, rearm });
     }
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
@@ -2557,7 +2618,7 @@ function dispatch(p) {
         const have = sup(src, r.g), avail = Math.min(r.n, have);
         const long = farApart(src, r.b);
         const s2s = !!BDEFS[src.type].store && !!BDEFS[r.b.type].store;
-        const bulk = Math.min(have, r.b.built && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
+        const bulk = Math.min(have, r.b.built && !r.rearm && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
         let u = null;
         const byRoad = truckLinked(src, r.b), vansOnRoute = byRoad && fleetReaches(vanNets, src, r.b);
         const held = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0), starving = held <= 0;
@@ -2617,6 +2678,8 @@ function dispatch(p) {
         }
         // Every Hauler busy: an idle Freight Truck takes a short run too, if it's a truckload.
         if (!u && !long && vansOnRoute && !isLiquid(r.g) && bulk >= TRUCK_MIN_LOAD && !idle.some((v) => v.type === 'hauler')) u = take(src.x, src.y, 'truck', src, r.g, r.b);
+        const hand = !u && !r.keep && starving && (r.g === 'chip' || r.g === 'alloy') && takeFoundrySupply(src, r.b);
+        if (hand) u = hand;
         if (!u) continue;
         // (Trucks bring a full load on the long runs. A Tanker brings a factory a full buffer too, near or
         // far, and anything else what it asks for.)
@@ -2628,6 +2691,7 @@ function dispatch(p) {
           for (const r2 of reqs) if (r2 !== r && r2.b === r.b && r2.n >= 1 && !isLiquid(r2.g) && !extra[r2.g]) { const m = Math.min(r2.n, Math.floor(sup(src, r2.g))); if (m >= 1) extra[r2.g] = m; }
         }
         if (!assignHaul(u, src, r.b, r.g, n, extra)) { idle.push(u); continue; }
+        if (hand) { free--; r.n = 0; }
         for (const r2 of reqs) if (r2.b === r.b) r2.n -= r2.g === r.g ? u.task.n : u.task.mix?.[r2.g] || 0;
         sent = any = true;
         break;
@@ -3270,6 +3334,14 @@ function staffPriority(b) {
  */
 function assignHaul(u, src, dst, g, n, extra) {
   if (!u || !src || !dst || src === dst || src.dead || dst.dead || src.owner !== u.owner || dst.owner !== u.owner) return false;
+  // Check the delivery leg before the train reserves goods it cannot carry safely.
+  if (BOTS[u.type].rail) {
+    const fromPickup = { ...u, inside: src.id };
+    if (!railRoute(fromPickup, dst.x, dst.y)) {
+      if (DANGER.guns[u.owner]?.length && railRoute(fromPickup, dst.x, dst.y, undefined, null)) noSafeRoute(u, tIdx(dst.x, dst.y));
+      return false;
+    }
+  }
   cancelTask(u);
   n = Math.min(Math.floor(n || 1), carryOf(u, g), Math.floor((src.stock[g] || 0) - (src.res[g] || 0)), Math.floor(tankRoom(dst)));
   if (n < 1 || !haulGoPickup(u, src, dst)) return false;
@@ -3318,6 +3390,39 @@ function haulGoPickup(u, src, dst) {
   if (!bt.rail && !bt.sea) return goTo(u, src.x, src.y);
   const comps = haulPickupComps(u, src, dst);
   return comps.length > 0 && goTo(u, src.x, src.y, comps);
+}
+
+/**
+ * Estimated time to the pickup, using the planned route and the vehicle's speed. Live queues and boarding waits
+ * vary, so this is a comparison of the trips themselves. A preview leaves unit and building assignments alone.
+ */
+function cargoPickupTime(u, src, comps) {
+  const bt = BOTS[u.type], sx = Math.floor(u.x), sy = Math.floor(u.y), opts = routeOpts(u);
+  const path = bt.rail ? railRoute(u, src.x, src.y, comps) : bt.sea ? seaRoute(u, src.x, src.y, comps) :
+    safeRoute(u, sx, sy, src.x, src.y, findPath(sx, sy, src.x, src.y, u.owner, opts), false);
+  if (!path) return Infinity;
+  let x = u.x, y = u.y, time = 0;
+  const speed = bt.speed * batFactor(u) * speedMul(u);
+  for (const t of path) {
+    const tx = t % S.W + 0.5, ty = ((t / S.W) | 0) + 0.5;
+    const dx = tx - x, dy = ty - y;
+    let pace = 1;
+    if (!bt.rail && !bt.sea) {
+      if (S.road[t]) {
+        const p = S.pave[t] || 1, r = S.road[t];
+        const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
+        pace = wrong ? ONEWAY_WRONG : p === 3 ? expressSpeed(bt, S.wear[t]) : p === 2 ? asphaltSpeed(S.wear[t]) : PAVE[p].speed;
+        if (bt.truck && p < 2) pace *= bt.train ? TRAIN_ROAD : TRUCK_ROAD;
+      } else if (!S.bAt[t]) {
+        pace = bt.roadOnly ? HAULER_STRANDED : bt.offroad ? OFFROAD_SLOW : 1;
+        if (S.ramp[t]) pace *= SLOPE_SPEED;
+        else if (S.res[t]) pace *= 0.75;
+      }
+    }
+    time += dhypot(dx, dy) / (speed * pace);
+    x = tx; y = ty;
+  }
+  return time;
 }
 
 /** Everything bot u has aboard: [[good, n], ...] (its main load first, then a mixed load's other goods). */
@@ -3385,7 +3490,7 @@ function assignBuild(u, site, stands) {
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampStand(u, site) : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
 }
 
@@ -3425,18 +3530,17 @@ function wallStands(p) {
   return { at, wait };
 }
 
-/**
- * Where a worker builds Ramp b from: on its tile, or from the top or foot of the cliff beside it (it cuts
- * the slope from either side), whichever is the shorter trip from where the worker is. So a Ramp down off
- * your plateau is built from the top: nobody drives all the way round to the bottom. -1 if neither.
- */
-function rampStand(u, b) {
-  const t = tIdx(b.x, b.y), sx = Math.floor(u.x), sy = Math.floor(u.y);
-  let best = -1, bl = Infinity;
+/** Shortest safe route by step count to the Ramp tile or the work tile across its cliff. */
+function rampApproach(u, b) {
+  const t = tIdx(b.x, b.y), sx = Math.floor(u.x), sy = Math.floor(u.y), start = tIdx(sx, sy);
+  const opts = routeOpts(u), danger = dangerMap(u.owner);
+  let best = null;
   for (const c of [t, ...rampSides(t)]) {
-    if (c !== t && S.bAt[c]) continue;
-    const p = findPath(sx, sy, c % S.W, (c / S.W) | 0, u.owner, routeOpts(u));
-    if (p && p.length < bl) { bl = p.length; best = c; }
+    if ((danger[c] & 1) || (c !== t && S.bAt[c])) continue;
+    const x = c % S.W, y = (c / S.W) | 0;
+    let p = findPath(sx, sy, x, y, u.owner, opts);
+    if (p && hotStep(danger, start, p, 0) >= 0) p = findPath(sx, sy, x, y, u.owner, { ...opts, safe: danger });
+    if (p && (!best || p.length < best.steps)) best = { tile: c, steps: p.length };
   }
   return best;
 }
@@ -3475,13 +3579,15 @@ function roadToSites(p, blds) {
     }
     const at = siteWorkAt(b), cx = at.x + 0.5, cy = at.y + 0.5, z = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
     let best = null, bd = PAVE_LEAVE * PAVE_LEAVE;
+    const builderDistance = (u) => ramp ? sq(rampApproach(u, b)?.steps ?? Infinity) : dist2(u.x, u.y, cx, cy);
     for (const u of crew) {
-      const d = dist2(u.x, u.y, cx, cy);
+      if (ramp && Math.max(Math.abs(Math.floor(u.x) - at.x), Math.abs(Math.floor(u.y) - at.y)) > PAVE_LEAVE + 1) continue;
+      const d = builderDistance(u);
       if (d > bd || (!ramp && botZone(u) !== z) || ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u))) continue;
       bd = d; best = u;
     }
     if (!best) continue;
-    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && dist2(v.x, v.y, cx, cy) <= bd && (ramp || botZone(v) === z))) continue;
+    if (S.bots.some((v) => !v.dead && v.owner === p && BOTS[v.type].build && isIdleWorker(v) && !(v.failUntil > S.time) && (ramp || botZone(v) === z) && builderDistance(v) <= bd)) continue;
     crew.splice(crew.indexOf(best), 1);
     assignBuild(best, b, stands);
   }
@@ -3505,7 +3611,9 @@ function callBuilder(owner, b) {
     const t = u.task, tt = t && t.type;
     if (tt === 'build' && !(getE(t.site) || {}).built && t.site !== b.id) continue; // (not off another site)
     const cost = !tt ? 0 : tt === 'staff' ? 30 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 60 : 8;
-    cands.push({ u, ux, uy, s: dist(ux, uy, at.x, at.y) + cost });
+    const steps = ramp ? rampApproach(u, b)?.steps : dist(ux, uy, at.x, at.y);
+    if (steps === undefined) continue;
+    cands.push({ u, ux, uy, s: steps + cost });
   }
   cands.sort((a, c) => a.s - c.s || a.u.id - c.u.id);
   for (const { u, ux, uy } of cands) {
@@ -3659,6 +3767,7 @@ function updateWorker(u, dt) {
  * bring their materials), and so do Depots and any building that takes goods in or sends them out.
  */
 function needsRoad(b) {
+  if (b.mNeed) return true; // a seized megastructure needs its fee even if it takes no goods online
   const def = BDEFS[b.type];
   if (b.type === 'lander' || storeFunded(b)) return false; // Walls, Gates and Viaducts are paid from storage: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
@@ -5538,9 +5647,10 @@ function botArmed(u) {
 const SHIELDS = [];
 
 /** Does w's active shield intercept a shot toward u or its proposed firing position? */
-function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
+function shieldProtects(w, u, sx, sy, x = u.x, y = u.y, moving = false) {
   if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
-  if (u !== w && !(w.covIds && w.covIds.has(u.id))) return false; // (one of the BULWARK.coverMax it shelters: shieldCovers)
+  // A proposed move can use a free slot. Damage still uses the current step's shield assignment.
+  if (u !== w && !w.covIds?.has(u.id) && !(moving && w.covIds?.size < BULWARK.coverMax)) return false;
   const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
   if (ad < BULWARK.r + 0.15) return false;
   const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
@@ -6159,7 +6269,7 @@ function firingCover(u, x, y, range, dt) {
       const dd = dist2(u.x, u.y, tx, ty), i = Math.floor(tx), j = Math.floor(ty);
       if (dd >= bd || dist2(tx, ty, x, y) > range * range || !inMap(i, j)) continue;
       const t = tIdx(i, j);
-      if (S.bAt[t] || !walkable(t) || !shieldProtects(w, u, x, y, tx, ty) || !clearLine(u.x, u.y, tx, ty)) continue;
+      if (S.bAt[t] || !walkable(t) || !shieldProtects(w, u, x, y, tx, ty, true) || !clearLine(u.x, u.y, tx, ty)) continue;
       best = { x: tx, y: ty }; bd = dd;
     }
   }
@@ -6226,6 +6336,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
 }
 
 function hitBuilding(b, dmg, by, src) {
+  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Wreck it can still deal damage)
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   if (src && isNestB(b)) nestAlarm(b, src); // (a Murmur nest shot at from out of its guards' reach: they come for the shooter)
   dmg = keepShield(b, dmg);
@@ -6502,7 +6613,7 @@ const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's g
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
 const SAFE_POCKET = 4;   // a goods carrier caught in a gun's reach may cross this many tiles of it to get out (safeRoute)
 const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried again (noSafeRoute)
-const SAFE_FREE = new Set(['flee', 'cover', 'home', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
+const SAFE_FREE = new Set(['flee', 'cover', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
 
 /*
  * Goods carriers never drive into enemy guns (the owner, Nov 23 2026: on Volcano the rival joined its road to the far
@@ -6533,7 +6644,7 @@ function hotStep(m, start, path, from) {
   return -1;
 }
 /** Goods carrier u's route p from (sx, sy) to (x, y): p, the way round any enemy gun it runs into, or null if there's none (noSafeRoute). */
-function safeRoute(u, sx, sy, x, y, p) {
+function safeRoute(u, sx, sy, x, y, p, report = true) {
   if (!p || !p.length || !safeHaul(u)) return p;
   const m = dangerMap(u.owner);
   if (hotStep(m, tIdx(sx, sy), p, 0) < 0) return p;
@@ -6541,7 +6652,7 @@ function safeRoute(u, sx, sy, x, y, p) {
   o.safe = m;
   const q = findPath(sx, sy, x, y, u.owner, o);
   if (q) return q;
-  noSafeRoute(u, tIdx(x, y));
+  if (report) noSafeRoute(u, tIdx(x, y));
   return null;
 }
 /**
@@ -6551,7 +6662,11 @@ function safeRoute(u, sx, sy, x, y, p) {
 function noSafeRoute(u, goal) {
   u.failGoal = goal; u.failUntil = S.time + NOSAFE_WAIT;
   const b = S.bAt[goal] ? getE(S.bAt[goal]) : null, P = S.players[u.owner];
-  if (b && b.owner === u.owner) { b.noSafe = S.time; b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT); }
+  if (b && b.owner === u.owner) {
+    b.noSafe = S.time;
+    // Covered track can stop the train without closing the same station to road freight.
+    if (!BOTS[u.type].rail) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT);
+  }
   if (isMe(u.owner) && P && S.time - (P.safeMsgAt ?? -999) > 45) {
     P.safeMsgAt = S.time;
     const what = b && b.owner === u.owner ? ` to your ${BDEFS[b.type].name}${b.built ? '' : ' site'}` : '';
@@ -6765,8 +6880,12 @@ function dangerSweep() {
   }
   // Goods carriers on their way whose route ahead now runs into an enemy gun: they look at it again (routeCheck).
   for (const u of S.bots) {
-    if (u.dead || !u.path || u.inside || u.pi >= u.path.length || !safeHaul(u)) continue;
-    if (hotStep(dangerMap(u.owner), tIdx(Math.floor(u.x), Math.floor(u.y)), u.path, u.pi) >= 0) u.rv = -1;
+    if (u.dead || !u.path || u.inside || u.pi >= u.path.length) continue;
+    const rail = BOTS[u.type].rail;
+    if (!rail && !safeHaul(u)) continue;
+    if (hotStep(dangerMap(u.owner), tIdx(Math.floor(u.x), Math.floor(u.y)), u.path, u.pi) < 0) continue;
+    if (rail) u.trackVer = -1;
+    else u.rv = -1;
   }
 }
 
@@ -9065,6 +9184,7 @@ function orderPark(owner, ids, i, j) {
 
 /** Take a warbot out of its garrison and off its current job, ready for a new order. */
 function readyForOrder(u) {
+  const ropeEnd = u.ride >= 0 && u.path?.[u.pi] === u.ride ? u.ride : null;
   exitBuilding(u);
   cancelTask(u);
   u.recycleTo = 0;
@@ -9073,40 +9193,52 @@ function readyForOrder(u) {
   u.retreat = false; u.resume = null;
   u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
-  u.path = null;
+  if (u.ferryWait && !u.ferryWait.ferry) u.ferryWait = null;
+  u.failGoal = -1; u.failUntil = 0;
+  // Finish an active Ropeway ride before taking the new route.
+  u.path = ropeEnd === null ? null : [ropeEnd];
+  u.pi = 0; u.goal = -1;
 }
 
-/** Send selected warbots to a rally. Direct move commands also report which armed bots have no route. */
-function orderMove(owner, ids, i, j, result) {
+/** Test the route with the movement options the new order will use, before abandoning the old order. */
+function armyOrderRoute(u, i, j, inRange) {
+  if (u.ferryWait?.ferry) return false;
+  if (inRange) return true;
+  const ropeEnd = u.ride >= 0 && u.path?.[u.pi] === u.ride ? u.ride : null;
+  const start = ropeEnd ?? deckEnds(u)?.[0] ?? tIdx(Math.floor(u.x), Math.floor(u.y));
+  return !!squadRoute({ ...u, fight: 0, task: null }, start, i, j);
+}
+
+/** Send selected warbots to a rally for one exact destination and order. */
+function orderMove(owner, ids, i, j, result, follow = 0) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
   const armed = orderable(owner, ids).filter((u) => botArmed(u));
-  let r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
-  const goalX = r ? Math.floor(r.x) : i, goalY = r ? Math.floor(r.y) : j;
-  const bots = result ? armed.filter((u) => {
-    if (u.ferryWait?.ferry) return false;
-    const start = deckEnds(u)?.[0] ?? tIdx(Math.floor(u.x), Math.floor(u.y));
-    return !!squadRoute(u, start, goalX, goalY);
-  }) : armed;
+  const bots = armed.filter((u) => armyOrderRoute(u, i, j, follow && armyInRange(u, getE(follow))));
   if (result) result.blocked = armed.length - bots.length;
   if (!bots.length) return 0;
-  if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
-  if (S.walker) walkerFlag(r); // (sent onto the Walking Factory's deck: they board it and ride with it)
+  let r = S.rallies.find((q) => q.owner === owner && !q.grp && !q.target && !q.raid && !q.first && !q.safe &&
+    (q.follow || 0) === follow && Math.floor(q.x) === i && Math.floor(q.y) === j);
+  if (!r) {
+    r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 };
+    if (follow) r.follow = follow;
+    S.rallies.push(r);
+  }
+  if (S.walker) walkerFlag(r);
   let slot = rallyMembers(r.id).length;
-  for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
+  for (const u of bots) {
+    readyForOrder(u);
+    u.task = { type: 'hold', rally: r.id, slot: slot++ };
+    if (!follow && usesPosts(owner)) u.march = S.time + MARCH_MAX;
+  }
   marchTogether(bots);
   breachCheck(owner, bots, i, j);
   return bots.length;
 }
 
-/** Send selected warbots after an enemy robot (a flag that follows it: see followRallies). Only armed ones go. */
-function orderHunt(owner, ids, e) {
+/** Send selected warbots after this enemy robot. */
+function orderHunt(owner, ids, e, result) {
   if (!e || e.dead || !foes(e.owner, owner)) return 0;
-  const i = Math.floor(e.x), j = Math.floor(e.y), r0 = S.rallies.length;
-  const n = orderMove(owner, ids, i, j);
-  if (!n) return 0;
-  const r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
-  if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; for (const u of rallyMembers(r.id)) u.march = 0; }
-  return n;
+  return orderMove(owner, ids, Math.floor(e.x), Math.floor(e.y), result, e.id);
 }
 
 /**
@@ -9134,9 +9266,15 @@ function orderRepair(owner, ids, b) {
 }
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
-function orderAttack(owner, ids, target) {
+function orderAttack(owner, ids, target, result) {
   if (!target || target.dead || !foes(target.owner, owner) || calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
-  const bots = orderable(owner, ids).filter((u) => botArmed(u));
+  const armed = orderable(owner, ids).filter((u) => botArmed(u));
+  const bots = armed.filter((u) => {
+    const inReach = megaHeldBy(target, owner) ? footDist(target, u.x, u.y) <= MEGA.reach - 0.6 :
+      dist2(u.x, u.y, target.x + 0.5, target.y + 0.5) <= sq(armyBldReach(u));
+    return armyOrderRoute(u, target.x, target.y, inReach);
+  });
+  if (result) result.blocked = armed.length - bots.length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   marchTogether(bots);
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
@@ -9144,18 +9282,20 @@ function orderAttack(owner, ids, target) {
 }
 
 /** Station selected warbots in one of your garrisons, as many as it has room for. */
-function orderStation(owner, ids, to) {
+function orderStation(owner, ids, to, result) {
   if (!to || !to.built || to.dead || to.owner !== owner || !BDEFS[to.type].mil) return 0;
-  let room = garrisonRoom(to), sent = 0;
+  let room = garrisonRoom(to), sent = 0, blocked = 0;
   for (const u of orderable(owner, ids)) {
     if (room <= 0) break;
     if (u.inside === to.id || (u.task && u.task.type === 'garrison' && u.task.bld === to.id)) continue;
+    if (!armyOrderRoute(u, to.x, to.y)) { blocked++; continue; }
     readyForOrder(u);
     u.task = { type: 'garrison', bld: to.id };
     if (usesPosts(owner)) { u.post = to.type === 'lander' ? 0 : to.id; u.march = S.time + MARCH_MAX; } // stationed there from now on (marching there)
     to.garInc = (to.garInc || 0) + 1;
     room--; sent++;
   }
+  if (result) result.blocked = blocked;
   return sent;
 }
 
@@ -17410,9 +17550,10 @@ function orderBoardFerry(owner, ids, f) {
   }
   if (best < 0) return 'The Ferry isn\'t at a shore: sail it right up to the land first.';
   const bi = best % S.W, bj = (best / S.W) | 0;
-  const n = orderMove(owner, ids.filter((id) => { const v = getE(id); return v && isArmy(v); }), bi, bj);
+  const us = orderable(owner, ids), tasks = us.map((u) => u.task);
+  const n = orderMove(owner, us.map((u) => u.id), bi, bj);
   if (!n) return 'None of them can walk there.';
-  for (const id of ids) { const v = getE(id); if (v && isArmy(v) && v.task) v.embarkOn = f.id; }
+  us.forEach((u, k) => { if (u.task !== tasks[k]) u.embarkOn = f.id; });
   if (!f.manual) { f.manual = { i: Math.floor(f.x), j: Math.floor(f.y) }; ferryChanged(); } // it waits there for them (its line waits)
   return n;
 }

@@ -3,6 +3,14 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Economy balance audit to-do
+
+1. **Resource bottlenecks.** [First pass](docs/economy-balance-audit.md#resource-bottlenecks). Trace Ore, Alloy, Crystal, Chips, Fuel and Cement from production to delivery. Distinguish exhausted deposits, disconnected freight, unsafe routes, staffing and priority. Start with the Ore-to-Smelter gap in Standard seed 25.
+2. **Opening fairness.** [Long Haul spot check](docs/economy-balance-audit.md#opening-fairness-spot-check). Compare time to reliable Fuel, Alloy and Chips across mirrored starts. Include route length and ramp cost on Islands, Long haul and team maps.
+3. **Recovery after setbacks.** [First pass](docs/economy-balance-audit.md#recovery-after-losing-a-building). Run paired games with a fixed-time loss of a Mine, Smelter, Fuel Station or road link. Measure time to restore capacity and resume output.
+4. **Investment payback.** Compare local production with trade and basic roads with Trucks, Express, rail and Maglev. Track delivered freight, cost and time to pay back on routes suited to each option.
+5. **Doctrines and snowballing.** Swap sides across seeds and track whether doctrine, starting position or an early lead predicts the winner. Include human replays when available.
+
 ## The Economy panel (built Nov 26 2026: calls made, open questions for the owner)
 
 Built from the owner's ask: goods flow, like the Workforce panel, replacing the Goods panel. Calls made:

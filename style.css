@@ -3835,6 +3835,11 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   body.deck #hud #sheet .goodlist .gtag.toggle { min-height: 0; padding-top: 2px; padding-bottom: 2px; font-size: 12px; }
 }
 
+/* Leave enough room for Supply orders and the pinned actions on the two mobile depots. */
+@media (min-width: 1000px) and (min-height: 520px) and (pointer: fine) {
+  body.deck #sheet.compact-supply #sheet-body > .sheet-title { padding-bottom: 6px; margin-bottom: 6px; }
+}
+
 /* ---------- The Workforce panel (Shift+W, the Workers count: js/workforce.js). On a phone one column (it scrolls, as
    panels do there); on a desktop three across, wide, ending above the tool dock, and nothing in it scrolls: the Workers
    list shows a page at a time and the Problems their first six. ---------- */

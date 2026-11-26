@@ -134,6 +134,46 @@ const fp = () => { const k = mk(); run(k, SETUP); return run(k, `
 const f1 = fp(), f2 = fp();
 check('a line built, run, and its far Terminal lost, twice from scratch, ends with the same fingerprint', f1 === f2, { f1, f2 });
 
+// A rival sends an actual warbot band to take down a pylon on a long Maglev line.
+const raid = JSON.parse(run(mk(), `
+  newGame({ seed: 4, mode: 'versus', players: 2, size: 2, rough: 0, events: false, murmur: 'off' });
+  for (const P of S.players) P.ai = false;
+  const P = S.players[0], L = getE(P.lander), foe = getE(S.players[1].lander);
+  const free = (i, j) => {
+    const t = tIdx(i, j);
+    return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !S.res[t] &&
+      S.owner[t] !== 0 && S.zone[t] === S.zone[tIdx(L.x, L.y)] && !calmAt(i + 0.5, j + 0.5);
+  };
+  let pair;
+  for (let j = 5; j < S.H - 5 && !pair; j++) for (let i = 4; i < S.W - 28 && !pair; i++) {
+    if (!free(i, j) || !free(i + 24, j) || dist(i + 12, j, L.x, L.y) > 30 || dist(i + 12, j, foe.x, foe.y) < 14) continue;
+    if (!magLineCheck(1, magGhost(1, i, j), i + 24, j).why) pair = [i, j];
+  }
+  if (!pair) throw new Error('no room for the rival line');
+  const [i, j] = pair, A = addBuilding(1, 'magterm', i, j, true);
+  const order = placeMagLine(1, A, i + 24, j);
+  if (!order.ok) throw new Error(order.reason);
+  const B = getE(order.id);
+  completeBuilding(B);
+  const pod = addBot(1, 'magpod', A.x, A.y);
+  pod.home = A.id;
+  enterBuilding(pod, A);
+  const whole = !magPairCut(A, B) && magRunning(A);
+  for (let k = 0; k < 8; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+  P.raidN = 1;
+  const sent = aiMagCut(0, [], 3, {});
+  const r = sent && rallyById(P.raid.id), target = r && getE(r.target);
+  const middle = target && target.type === 'magpylon' && magSpotD(A, B, target.k) / 24;
+  const until = S.time + 100;
+  while (sent && !target.dead && S.time < until) simStep(SIM_STEP);
+  const cut = magPairCut(A, B);
+  for (let k = 0; k < 30; k++) simStep(SIM_STEP);
+  return JSON.stringify({ whole, sent, target: target?.type, middle, cut, elapsed: +S.time.toFixed(1),
+    ends: !A.dead && !B.dead, recalled: !!r && !rallyById(r.id) });
+`));
+check('rival raids a pylon in the middle of a long Maglev line and cuts it', raid.whole && raid.sent &&
+  raid.target === 'magpylon' && raid.middle >= 1 / 3 && raid.middle <= 2 / 3 && raid.cut && raid.ends && raid.recalled, raid);
+
 function MAGLEV_PER_LINE(k) { return vm.runInContext('MAGLEV.perLine', k); }
 console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;

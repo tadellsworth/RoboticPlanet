@@ -1604,10 +1604,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   **Maglev lines** (`aiMagCut`, `AI_MAGCUT`; Medium and up): in place of every other raid, at most once every five
   minutes, a band of the raid's size (one more if it can spare it) goes for a building of a foe's line that carries
   goods (pods on it), out of every gun's reach and the garrisons a raid keeps clear of, with fewer armed warbots than
-  the band within 8 tiles of it, forts or out (each counting against it): a Terminal (its lines stand broken until one
-  is built on its tile again) before a pylon (a Worker rebuilds that in 20 s), the nearer first. Its flag goes beside
-  it and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
+  the band within 8 tiles of it, forts or out (each counting against it). On a line at least 12 tiles long, the band
+  prefers a pylon in the middle third. If it can't safely reach a target, it tries the next one. Its flag goes beside
+  the target and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
   `P.magCuts`).
+- **Direct Warbot orders:** Move uses the clicked tile and cannot inherit a nearby hunt flag. Move, Hunt, Attack and Station validate each unit before changing its task or reserving garrison space. Units already in firing range can take an Attack or Hunt order. A Warbot can step into a Bulwark’s available cover while keeping its shot.
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
@@ -1644,7 +1645,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `routeCheck` plans again, round it, or stops it where it is and drops the job (`haltUnsafe`: a load aboard stays,
   for `stashCarry`). The danger map is the cached one (per player, every 15 ticks), never rebuilt per search. Enemy
   warbots stay a cost and `foeSweep`'s turning back; how far robots keep from one is its real reach now (`foeReach`:
-  a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all).
+  a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all). Freight Trains also avoid covered track (`railRoute`), replan if guns cover a queued route, and release the delivery reservation while keeping cargo aboard if no safe detour exists.
+- **Cargo pickups:** after the usual capacity and network checks, dispatch compares estimated travel times when multiple carriers are eligible. The estimate uses their routes and travel speeds, including road surface and direction. It is reused for that carrier and pickup for the current dispatch pass. It does not predict traffic queues or boarding waits.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
   not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own
@@ -1743,6 +1745,14 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   are in `P.stats` (`lostBld`, `lostMat`, `lostIn`, `lostAboard`); open shortages in `P.dry`. A save from before the
   log starts it where it was loaded (`S.logFrom`).
 - **Ammo:** warbots carry 10 shots (each Ammo is 5: `AMMO_SHOTS`; a Railgunner's 2 slugs of its 4) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant.
+  A rival with a Bot Foundry and no working charging building can give one replacement Fuel Station an emergency
+  build slot. The station uses normal placement, construction and Fuel deliveries.
+  Rivals exclude Crystal deposits under fire when estimating local reserves. An urgent Trade Terminal and a missing
+  supply building can both qualify for an extra construction slot, and the rival weighs how many Chips or Crystal a
+  contract will actually bring back during a shortage.
+  A rival Foundry short of its next part can get a one-unit delivery from a nearby spare Worker if its road network
+  has no Hauler or Freight Truck to serve the trip. The Worker uses safe routes and leaves the building reserve free.
+  When many of a rival’s Warbots are unarmed in garrison, it prioritizes the next batch of Alloy and Cement for its Ammo Plants and sends the first reloads to the waiting troops.
   A reload fills to full (`reloadAmmo`): the spare shots of an Ammo it opened earlier (`u.ammoCr`, fewer than one
   Ammo's worth) go in first, then a whole Ammo from the garrison if it's still short, and what of that doesn't fit
   becomes its spare. No Ammo is made or lost: every Ammo taken is all its shots, loaded or spare (both lost with the
@@ -1772,7 +1782,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
-  Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Its worker builds it from whichever side of the cliff is the shorter trip (`rampStand`: the Ramp's tile or the ground across the cliff, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they
+  Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Worker assignment compares safe route lengths to the Ramp tile and the work tiles across the cliff (`rampApproach`, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they
   would block the only way through a pass.
 - **Placement undo:** for `SITE_UNDO` (10) seconds after you place a building (the `place` order notes `b.placedAt`,
   game time) an **Undo** chip shows at the foot of the map (`siteUndoTick`, `#undo-site`), and **Ctrl+Z** / **Cmd+Z**
@@ -3322,7 +3332,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Lift's reserve and reload). **Seize clock** (`megaSeize`): armed army robots of one side (not aloft, not inside) within
     `reach` (3) tiles of its walls (`footDist`) and none of a foe's fill `b.mCap` toward `cap` (40) s for `b.mBy`; contested,
     it stops; empty, it runs back `decay` times as fast; a new side starts from 0 (its owner is told). Robots sent to attack
-    it stop shooting and stand within reach (`strikeBuilding`: `megaHeldBy`), so an attack or a flag on it holds it.
+    it stop shooting and stand within reach (`strikeBuilding`: `megaHeldBy`), so an attack or a flag on it holds it. While they seize it, the owner gets a seize warning instead of repeated attack alerts.
     **Seized** (`megaSeized`; its old owner too, retaking it): owner, `noteLost`, `P.stats.captured` and `megaSeized`
     (`cities` for a City), `logEvent` `megaTaken` (`city` for a City), territory and roads redone; offline (`b.mOff`) at
     `armor` (25%) of its armor owing `b.mNeed` = `fee` (a quarter) of its build cost (`megaFee`, rounded up). `needsOf`
@@ -3339,8 +3349,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
-    seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. Bringing one online is
-    its Haulers' work, as its goods allow. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
+    seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. A rival plans a
+    road to a seized megastructure ahead of ordinary sites when it can afford one, and gives the commissioning fee
+    High delivery priority until it is paid. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or

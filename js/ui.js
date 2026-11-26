@@ -3450,7 +3450,7 @@ function onMapCommand(i, j, wx, wy, done) {
     }
     if (!n) {
       sfx('error');
-      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} armed warbots`}.`
+      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} selected warbots`}.`
         : mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
       return;
     }
@@ -7796,6 +7796,8 @@ function openSheet(kind, id, html) {
   // (In a .sheet-flow, which lays out as nothing, except where a long panel on a desktop takes two or three columns: sheetCols.)
   $('sheet-body').innerHTML = `<div class="sheet-flow">${html}</div>`;
   $('sheet').hidden = false;
+  const type = kind === 'bld' ? getE(id)?.type : null;
+  $('sheet').classList.toggle('compact-supply', type === 'dropost' || type === 'crawlerbase');
   document.body.classList.add('sheet-open');
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
   if (kind !== 'build') document.body.classList.remove('sheet-build-all'); // (its All tab: wider still on a desktop)

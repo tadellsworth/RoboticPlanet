@@ -398,6 +398,23 @@ function aiScrap(p, c) {
   }
 }
 
+/** Garrisons that hold a third of a rival's army waiting for Ammo. Tanked units need Fuel or Crystal instead. */
+function aiDryGarrisons(p) {
+  if (!S.players[p].ai || !warOn()) return null;
+  let army = 0, waiting = 0, dry = null;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !isArmy(u)) continue;
+    army++;
+    if (!u.inside || botTank(u.type) || botArmed(u)) continue;
+    const b = getE(u.inside);
+    if (!b || b.dead || b.owner !== p || !BDEFS[b.type].ammoStock || b.stock.ammo > 0) continue;
+    if (!dry) dry = new Map();
+    dry.set(b.id, (dry.get(b.id) || 0) + 1);
+    waiting++;
+  }
+  return waiting >= Math.max(4, army / 3) ? dry : null;
+}
+
 function aiThink(p) {
   const P = S.players[p];
   let lvl = aiLevel(p);
@@ -422,7 +439,10 @@ function aiThink(p) {
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') nWorkers++;
   const wantStaff = me.reduce((n, b) => n + (b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew ? 1 : 0), 0);
   const few = S.mode !== 'colony' && S.time > 60 && nWorkers < (P.triage ? clamp(wantStaff + MIN_FREE_WORKERS, AI_ENOUGH, AI_PLENTY) : AI_FEW);
-  if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type)) demolish(b);
+  const needsCharge = me.some(b => b.built && b.type === 'foundry') &&
+    !me.some(b => b.built && BDEFS[b.type].charger && !aiShut(b));
+  if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type) &&
+      !(needsCharge && b.type === 'charger')) demolish(b);
   if (few) me = me.filter((b) => !b.dead);
 
   // 1) Construction
@@ -471,7 +491,7 @@ function aiThink(p) {
     if (seaCrossing && r === R_ORE && S.amt[t] && S.zone[t] === hz && (S.owner[t] < 0 || S.owner[t] === p)) homeOre++;
     if (S.owner[t] !== p) continue;
     inLand[r] = (inLand[r] || 0) + 1;
-    if (r === R_CRYSTAL) crGround += S.amt[t];
+    if (r === R_CRYSTAL && !hotFor(p, t)) crGround += S.amt[t];
   }
   // At most the six deposits the usual three Mines need, even with all the home island Ore in reach.
   const firstFerry = seaCrossing && homeOre <= 3 * 2;
@@ -479,6 +499,7 @@ function aiThink(p) {
   // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
   // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
   // or when the Taps bring in less than the Fabs use with little in stock: then more Taps, and Crystal by trade.
+  // Deposits under fire cannot be worked, even when they are inside our border.
   const rates = goodRates(p), crRate = rates.crystal, crHave = playerGoods(p).crystal || 0;
   const crBurn = Math.max(crRate.used, counts.foundry ? AI_CRYSTAL_BURN : 0);
   const crShort = S.mode !== 'colony' && crBurn > 0 && crGround + crHave < crBurn * AI_CRYSTAL_MINS;
@@ -490,7 +511,7 @@ function aiThink(p) {
   if (crShort) {
     const forts = me.filter((b) => b.built && BDEFS[b.type].mil && BDEFS[b.type].terr), R2 = AI_CRYSTAL_REACH * AI_CRYSTAL_REACH;
     for (let t = 0; t < S.W * S.H && !crNear; t++) {
-      if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
+      if (S.res[t] === R_CRYSTAL && S.amt[t] && S.owner[t] < 0 && !hotFor(p, t)) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
     }
   }
   // Ore running dry (see AI_ORE_FIELD): and when the last look for a Mine's spot found none, short of Ore too.
@@ -703,6 +724,9 @@ function aiThink(p) {
   // first, as a starved Mine is. (The Hollow, Scarce, seed 25: the Murmur wrecked a colony's Foundry, Fab and Smelters
   // at 25 minutes, an Outpost and a Refinery waiting for goods held both its sites, and it never made a robot again.)
   if ((P.opened || (!smart && S.time > AI_EASY_OPENING * 2)) && !few) for (const t of ['smelter', 'fab', 'foundry']) if (!me.some((b) => b.type === t)) starved.push(t);
+  // Recover charging as a critical link even when other construction occupies the normal slots.
+  const replaceCharger = needsCharge && !counts.charger;
+  if (replaceCharger) starved.push('charger');
   for (const t of starved) plan = [[t, (counts[t] || 0) + 1]].concat(plan);
   if (starved.length) siteCap = Math.max(siteCap, sites + 1);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
@@ -828,17 +852,20 @@ function aiThink(p) {
   // (A Warden's next turrets, up to its six, go first too as each falls due: behind the plan's Mines, Outposts and Keep
   // it had two of the six it promises by 18 minutes.)
   else if (st.turrets && !firstTurret && (counts.turret || 0) < turretsWanted && counts.foundry && !me.some((b) => b.type === 'turret' && !b.built)) plan = [['turret', turretsWanted]].concat(plan);
+  if (replaceCharger) plan = [['charger', 1]].concat(plan.filter(([type]) => type !== 'charger'));
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (type === 'turret' && firstTurret && S.time <= defAt && !aiMurCut(P)) continue;
-      if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
-      // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester, a Mine or a Crystal Tap)
-      if ((cementStarved || fiberStarved || starved.length) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') && !starved.includes(type)) continue;
-      if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
-      if (flakFirst && sites >= capBefore && type !== 'flak') continue;
-      if (upFirst && sites >= capBefore && type !== 'bunker') continue;
-      if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
-      if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
+      const restoreCharge = type === 'charger' && replaceCharger;
+      if (few && !restoreCharge && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
+      // Extra sites are for urgent supply only. Trade and a missing factory can qualify at the same time.
+      if (sites >= maxSites && (cementStarved || fiberStarved || starved.length || tradeFirst) &&
+          !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') &&
+          !starved.includes(type) && !(tradeFirst && type === 'terminal')) continue;
+      if (flakFirst && sites >= capBefore && type !== 'flak' && !restoreCharge) continue;
+      if (upFirst && sites >= capBefore && type !== 'bunker' && !restoreCharge) continue;
+      if (blobFirst && sites >= capBefore && type !== 'mortar' && !restoreCharge) continue;
+      if (reactorFirst && sites >= capBefore && type !== 'reactor' && !restoreCharge) continue;
       if (S.mode === 'colony' && !S.horde && BDEFS[type].war) continue; // (Horde: guns and Ammo, against the waves)
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -868,7 +895,7 @@ function aiThink(p) {
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
       // So is an Architect's Missile Factory or Silo: waiting for the whole price to lie in storage while the Foundry and
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
-      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
+      const defenceNow = (restoreCharge && counts.smelter && aiAffordable(p, type, ['alloy'])) || (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
         (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
         (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])) || // (the Hollow's first Refinery: see oilFirst)
         (type === 'mortar' && blobFirst && aiAffordable(p, type, ['alloy'])); // (against a blob: see blobFirst)
@@ -889,7 +916,7 @@ function aiThink(p) {
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
         if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && (!counts[type] || (type === 'mine' && oreLow))) placed.building.prio = 'high';
         if (type === 'armory') placed.building.prio = 'low';
-        if (defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
+        if (restoreCharge || defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
         break;
       }
     }
@@ -3201,17 +3228,15 @@ function aiRaid(p, lvl) {
  * Cutting a foe's Maglev line (Medium and up): in place of a road raid, at most once every AI_MAGCUT.every seconds and
  * never two raids running, a band of a raid's size (one more when it can spare it) goes for a building of a running line (pods on it)
  * that no gun covers, clear of every garrison the raid keeps clear of (`guards`, see aiRaid) and of as many armed
- * warbots as the band within AI_MAGCUT.fort tiles (in forts or out; fewer count against it), with a free tile beside
- * it on the band's ground: a Terminal (it suspends every line it ends until one is built on its tile again) before a
- * pylon (a Worker rides out and rebuilds that), the nearer first. Its flag is planted beside the target and the band
- * shoots it first (rally.target); once it's down the flag comes in (followRallies) and the raid is over. True if sent.
+ * warbots as the band within AI_MAGCUT.fort tiles. Prefer the middle third of a long line, away from its Terminals.
+ * If a target has no safe approach, try the next. The band shoots its target first and is recalled once it falls.
  */
-const AI_MAGCUT = { every: 300, term: 12, pylon: 7, far: 0.08, fort: 8 };
+const AI_MAGCUT = { every: 300, long: MAGLEV.spacing * 4, term: 12, pylon: 7, far: 0.08, fort: 8 };
 function aiMagCut(p, guards, size, st) {
   const P = S.players[p], L = getE(P.lander);
   if (S.difficulty === 'easy' || !L || S.time - (P.magCutT ?? -999) < AI_MAGCUT.every || (P.raidN || 0) % 2 !== 1) return false;
   const z = homeZone(p), forts = S.buildings.filter((f) => !f.dead && f.built && f.owner >= 0 && foes(f.owner, p) && BDEFS[f.type].mil);
-  let best = null, bs = -Infinity;
+  const targets = [];
   for (const b of S.buildings) {
     if (b.dead || !b.built || b.owner < 0 || isWild(b.owner) || !foes(b.owner, p)) continue;
     const d = BDEFS[b.type];
@@ -3225,26 +3250,36 @@ function aiMagCut(p, guards, size, st) {
     for (const f of forts) if (f.owner === b.owner && dist2(f.x, f.y, b.x, b.y) <= AI_MAGCUT.fort * AI_MAGCUT.fort) near += armedIn(f);
     near += agFoesNear(p, b.x + 0.5, b.y + 0.5, AI_MAGCUT.fort);
     if (near >= size) continue;
-    const sc = (d.magterm ? AI_MAGCUT.term : AI_MAGCUT.pylon) - dist(b.x, b.y, L.x, L.y) * AI_MAGCUT.far - near * 4;
-    if (sc <= bs) continue;
-    let spot = null;
+    let middle = false;
+    if (d.pylon) {
+      const [A, B] = ends, length = magPathLen(magPathOf(A, B));
+      if (length >= AI_MAGCUT.long) {
+        const along = magSpotD(A, B, b.k);
+        middle = along >= length / 3 && along <= length * 2 / 3;
+      }
+    }
+    const score = (d.magterm ? AI_MAGCUT.term : AI_MAGCUT.pylon) - dist(b.x, b.y, L.x, L.y) * AI_MAGCUT.far - near * 4;
+    targets.push({ b, middle, score });
+  }
+  targets.sort((a, b) => b.middle - a.middle || b.score - a.score || a.b.id - b.b.id);
+  for (const { b } of targets) {
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
       const i = b.x + di, j = b.y + dj;
-      if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z && !gunCovers(p, tIdx(i, j))) { spot = { i, j }; break; }
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!walkable(t) || S.bAt[t] || S.zone[t] !== z || gunCovers(p, t)) continue;
+      const n = Math.min(size + 1, rallyAvailable(p, i, j, !!st.harass) - (st.raidKeep ?? 2));
+      if (n < size || aiRouteHot(p, i, j)) continue;
+      const { sent, rally } = sendToRally(p, i, j, n, !!st.harass);
+      if (!sent) continue;
+      rally.target = b.id;
+      P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * dist(i, j, L.x, L.y) };
+      P.raidN = (P.raidN || 0) + 1; P.magCutT = S.time;
+      P.magCuts = (P.magCuts || 0) + 1;
+      return true;
     }
-    if (!spot) continue;
-    bs = sc; best = { b, spot };
   }
-  if (!best) return false;
-  const { i, j } = best.spot, n = Math.min(size + 1, rallyAvailable(p, i, j, !!st.harass) - (st.raidKeep ?? 2));
-  if (n < size || aiRouteHot(p, i, j)) return false;
-  const { sent, rally } = sendToRally(p, i, j, n, !!st.harass);
-  if (!sent) return false;
-  rally.target = best.b.id;
-  P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * dist(i, j, L.x, L.y) };
-  P.raidN = (P.raidN || 0) + 1; P.magCutT = S.time;
-  P.magCuts = (P.magCuts || 0) + 1;
-  return true;
+  return false;
 }
 
 /**
@@ -3441,7 +3476,9 @@ function aiTrade(p, me) {
       if (k < 0 && !want(get)) return -Infinity; // (only for what it's short of, or wants)
       // (How much of what it sends comes back in worth: a little over a third for a raw good, three-quarters for a made one buying a raw one.)
       const worth = ((sellPrice(p, give) / buyPrice(get)) * TRADE_VALUE[get]) / TRADE_VALUE[give];
-      return want(get) * 100 + (k >= 0 ? (short.length - k) * 10 : 0) + Math.min(spare, 60) * 0.1 + worth * 20;
+      // When the Fabs run short, the actual batch of parts matters more than a good exchange rate on a small lot.
+      const parts = P.crLow && (get === 'chip' || get === 'crystal') ? tradeRun(p, { give, get }, b).pay : 0;
+      return want(get) * 100 + parts * 10 + (k >= 0 ? (short.length - k) * 10 : 0) + Math.min(spare, 60) * 0.1 + worth * 20;
     };
     let best = null, bs = -Infinity;
     for (const get of tradeGets()) for (const give of tradeSends()) {
@@ -4122,15 +4159,16 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
 function aiRoadCrew(p) { S.players[p].roadCrew = 0; }
 
 /**
- * Lay roads from storage to buildings that have none, construction sites first, as far as the
- * Cement allows. A site that no road can reach is given up after a while.
+ * Lay roads from storage to buildings that have none, seized megastructures and then sites first,
+ * as far as the Cement allows. A site that no road can reach is given up after a while.
  */
 function aiRoads(p, me) {
   const P = S.players[p];
   aiRoadCrew(p);
   let budget = roadTilesAffordable(p), done = 0;
+  const roadRank = (b) => b.mNeed ? 0 : b.built ? 2 : 1;
   const todo = me.filter((b) => needsRoad(b) && !onHomeNet(b))
-    .sort((a, b) => (a.built - b.built) || a.born - b.born);
+    .sort((a, b) => roadRank(a) - roadRank(b) || a.born - b.born);
   for (const b of todo) {
     if (done >= 3) break;
     // Ramps cut for this one's road still going up: wait for them (aiRampCut), the road then takes the short way.
