@@ -1420,9 +1420,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
   run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
   the dead are drawn too.
-- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18: for later). The Fiber plant on the map is the
-  Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`, ART_GUIDE; the Bloom and the Hollow
-  use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
+- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18). DONE, Nov 26 2026: from six directions drawn in
+  the running game the owner picked **A, Lantern Cane** (tall jointed mint-teal canes whose rings light up mint when
+  ripe, pale stumps where cut, the joints growing back one by one; 1.5 tiles tall, three clumps by position, lit at
+  night dimmer while growing), now drawn in code (`js/reedcane.js`, ART_GUIDE Batch 34). The original note: the Fiber
+  plant on the map was the Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`,
+  ART_GUIDE; the Bloom and the Hollow use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
   denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
   on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
   regrowing (the Grove Planter).

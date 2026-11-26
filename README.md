@@ -3907,8 +3907,13 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
-growth stage, `stalkKey`; their light at night in the night glow map, `resourceGlow`) (ART_GUIDE Batch 16). An oil seep
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Fiber's Stalks have no art: each is a clump
+of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
+a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
+then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),
+one of three clumps a tile by its position (`reedVariant`), each look drawn once and cached (`REED.cache`) and baked with
+the ground after the tiles round it (`drawStalks`); at night the rings glow, a halo in the night glow map and, zoomed in,
+each ring's own light (`drawReedLights`), dimmer the less grown. An oil seep
 has no art at all: it is a puddle of crude made in code from its tiles (`js/seep.js`: one glossy black shape across the
 seep with a white rim light, sheen and droplets, baked with the ground and gleaming faintly at night; it recedes from a
 pump as it is pumped and breaks into pools) (ART_GUIDE Batch 20). The crash sites aircraft leave when they're shot down are rendered too: the broken,

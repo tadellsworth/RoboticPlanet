@@ -797,7 +797,9 @@ function bakeMap() {
   R.mapCtx.hdScale = scale;
   hdReset();
   seepIndexBuild(); // (the oil seeps' puddles, drawn with the ground: js/seep.js)
+  R.reedAt = null;
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
+  drawStalks(R.mapCtx, 0, 0, S.W - 1, S.H - 1); // (Fiber's clumps of cane, standing up over the tile above: js/reedcane.js)
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
   if (typeof duskSilReset === 'function') duskSilReset(); // (the plants' sunset silhouettes are made again for the new map)
@@ -858,12 +860,13 @@ function repaintTile(t) {
  */
 function redrawAround(ctx, i, j) {
   const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
-  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile
+  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale) && !reedNear(i, j)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile (a Stalk's canes do: reedNear)
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
   ctx.rect((i - 1) * TP, (j - 1) * TP, 3 * TP, 3 * TP);
   ctx.clip();
+  drawStalks(ctx, i - 2, j - 2, i + 2, j + 2);
   drawPlants(ctx, i - 2, j - 2, i + 2, j + 2);
   ctx.restore();
 }
@@ -881,6 +884,7 @@ function redrawRegion(i0, j0, i1, j1) {
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) drawTile(i, j, ctx);
     ctx.save();
     ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+    drawStalks(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
     drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
     ctx.restore();
   }
@@ -899,7 +903,7 @@ function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const biomes = R.secondRegion ? [R.biome, R.secondRegion.biome] : [R.biome];
-  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
+  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || typeof drawStalks === 'function' || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' rings and the oil seeps' gleam everywhere)
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (biomes.some((b) => ART[`plant-${b}-${k}-glow`])) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
@@ -925,7 +929,7 @@ function glowTiles(i0, j0, i1, j1) {
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
-    if (S.res[t] && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (Stalks' plumes, the Bloom's veins)
+    if (S.res[t] && S.res[t] !== R_STALK && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (the Bloom's veins; Stalks' rings below)
     if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
@@ -939,29 +943,22 @@ function glowTiles(i0, j0, i1, j1) {
   R.inMap = false;
   ctx.save();
   ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+  drawStalks(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true); // (their rings' halo, reaching over the tiles round them: js/reedcane.js)
   drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true);
   ctx.restore();
 }
 
 /**
  * A resource's light in the night glow map, from its art's glow image where it has one (drawn just as drawResource draws
- * the resource): a Stalk's plumes once grown, a Bloom vein (or, without art, a violet glow). (An oil seep's gleam is
- * drawn with its puddle: drawSeepTile.)
+ * the resource): a Bloom vein (or, without art, a violet glow). (A Stalk's rings are drawn with the clumps, drawStalks in
+ * js/reedcane.js, and an oil seep's gleam with its puddle, drawSeepTile.)
  */
 function resourceGlow(ctx, type, amt, grow, i, j) {
   const cx = i * TP + TP / 2, cy = j * TP + TP / 2;
-  if (type === R_STALK) {
-    const art = ART[stalkKey(grow) + '-glow'];
-    if (art) drawArt(ctx, art, cx, cy, TP);
-  } else if (type === R_VEIN) {
+  if (type === R_VEIN) {
     if (ART['vein-glow-hollow']) drawArt(ctx, ART['vein-glow-hollow'], cx, cy, TP * (0.5 + 0.5 * grow));
     else veinGlow(ctx, i, j, grow);
   }
-}
-
-/** Which of a Stalk's images shows it at growth `grow` (0..1): a quarter, half or three-quarters grown, or full. */
-function stalkKey(grow) {
-  return grow >= 0.875 || !ART['stalk-1'] ? 'stalk' : grow < 0.375 ? 'stalk-1' : grow < 0.625 ? 'stalk-2' : 'stalk-3';
 }
 
 /** A Bloom vein's glow in the night glow map (dimmer while it grows back): violet light along it. */
@@ -1038,6 +1035,7 @@ function hdBake(level, cx, cy) {
   const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
   // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
   for (let j = j0 - 1; j <= j0 + HD_CHUNK; j++) for (let i = i0 - 1; i <= i0 + HD_CHUNK; i++) if (inMap(i, j)) drawTile(i, j, ctx);
+  drawStalks(ctx, i0 - 1, j0 - 1, i0 + HD_CHUNK, j0 + HD_CHUNK);
   drawPlants(ctx, i0 - 1, j0 - 1, i0 + HD_CHUNK, j0 + HD_CHUNK);
   return { c, ctx, level, i0, j0, used: 0 };
 }
@@ -1314,6 +1312,7 @@ function paintTile(ctx, i, j, other, blend) {
       }
       return; // (no glint on a rich seep: the puddle's sheen is its shine)
     }
+    if (S.res[t] === R_STALK) return; // (a clump of cane stands up over the tiles round it: drawn after their ground, drawStalks)
     if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (under) ctx.restore();
@@ -3135,8 +3134,9 @@ function drawBurnt(ctx, i, j, x, y) {
 }
 
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
-  // A Stalk has an image for each stage as it grows back (stalk-1 … stalk-3, then stalk: see stalkKey), drawn full size.
-  if (type === R_STALK && ART['stalk-1']) { const a = ART[stalkKey(grow)]; if (a) { drawArt(ctx, a, cx, cy, s); return; } }
+  // A Stalk is a clump of Lantern Cane drawn in code for its stage (js/reedcane.js; on the map drawStalks draws them, after
+  // the ground round them). Here, as an icon (drawDepletedRes), its foot is set a little low so the clump sits in the middle.
+  if (type === R_STALK && typeof reedArt === 'function') { drawArt(ctx, reedArt(0, reedState(grow, amt), 'art'), cx, cy + s * 0.28, s); return; }
   const art = ART[RES[type].key] || (type === R_VEIN ? ART['vein-hollow'] : null); // (the Bloom veins' art comes with the Hollow's)
   if (art) {
     const sc = type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
@@ -7187,6 +7187,7 @@ function render(dtReal) {
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
+  drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
