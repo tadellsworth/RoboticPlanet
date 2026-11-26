@@ -1085,7 +1085,7 @@ const MISSIONS = [
     intro: [
       'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
       'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
-      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 8 seconds from each end.',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
       'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
@@ -1427,6 +1427,7 @@ const MISSIONS = [
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
       'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert (again: the one before).',
+      'Where the Murmur haunt a road, Haulers wait longer each time they turn back; the building says <b>Haulers turning back</b>: send warbots to clear it.',
     ],
     // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them. The packs come only at
     // night, as in every game: the day is for a turret, warbots and the exit already open; the first night brings a

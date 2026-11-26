@@ -5602,7 +5602,8 @@ function renderMdSection(b) {
   const fort = !!(live && mdFortType(live.type)), ps = mdPartners(b), far = !!b.mdFar, manual = !!list || UI.mdList === b.id;
   const ships = mdSendGoods(b).map((g) => [g, list ? Math.floor(b.stock[g] || 0) : mdAutoN(b, g)]);
   const served = far ? S.buildings.filter((c) => !c.dead && c.owner === b.owner && !BDEFS[c.type].store && b.auto && needsOf(c).some(([g]) => b.auto[g]) && dist(c.x, c.y, b.x, b.y) <= STATION_REACH).length : 0;
-  const sig = JSON.stringify([b.mdTo, live && live.built, ps.map((o) => o.id), pow, far, list, manual, ships, b.auto, served, b.mdSent || 0, b.mdGot || 0]);
+  const rates = ps.map((o) => mdReload(b, o));
+  const sig = JSON.stringify([b.mdTo, live && live.built, ps.map((o) => o.id), rates, pow, far, list, manual, ships, b.auto, served, b.mdSent || 0, b.mdGot || 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   const gl = (o) => Object.keys(o).map((g) => `<span class="gtag"><i class="gi ${g}"></i>${o[g]} ${GOOD[g].name}</span>`).join(' ');
@@ -5614,7 +5615,13 @@ function renderMdSection(b) {
   } else {
     h += ps.length ? ps.map((d) => `<div class="kv army-row"><span>Mass Driver ${dirText(b, d)} from here</span><span><button class="btn small ghost" data-md="${d.id}">Driver ›</button></span></div>`).join('')
       : `<p class="hint"><b>No Mass Driver is aimed here yet.</b> Build one ${M.min} to ${M.max} tiles away (Build → Move → Mass Driver), then on its panel: <b>Aim</b>, and tap this one.</p>`;
+    h += `<div class="kv"><span>Drivers</span><span>${ps.length} of ${M.drivers} at most</span></div>`;
   }
+  // The rate, and why: a shortcut over land fires slower than a crossing (mdOverland).
+  ps.forEach((o, k) => {
+    const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
+    h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
+  });
   h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
   if (!pow) h += `<p class="hint">It burns no Fuel itself, but it fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles. Fuel can fly here by canister, in sealed drums.</p>`;
   if (fort) {
@@ -5637,7 +5644,7 @@ function renderMdSection(b) {
     }
   }
   h += `<div class="kv"><span>Goods thrown</span><span>${b.mdSent || 0}</span></div><div class="kv"><span>Goods caught</span><span>${b.mdGot || 0}</span></div>`;
-  h += `<p class="hint">A canister of ${M.load} goods flies every ${M.reload} s from each end (a part load after ${M.partWait} s), in an arc over everything; buildings touching it hand over their output and are fed by conveyor. An enemy Flak Gun can burst one in flight; its goods fall as crates.</p>`;
+  h += `<p class="hint">A canister of ${M.load} goods flies every ${M.reload} s from each end over water, a chasm or cliffs, every ${M.reloadLand} s when a robot could walk between the ends (a part load after ${M.partWait} s), in an arc over everything; buildings touching it hand over their output and are fed by conveyor. A Catcher takes ${M.drivers} Drivers at most. An enemy Flak Gun can burst one in flight; its goods fall as crates.</p>`;
   el.innerHTML = h;
   const done = (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); };
   if ($('sh-mdaim')) $('sh-mdaim').onclick = () => { sfx('click'); startMdAim(b); };
@@ -8729,6 +8736,7 @@ function refreshBuildingSheet(b) {
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
     : mine && S.time - (b.noSafe ?? -99) < NOSAFE_WAIT * 2 ? 'No safe route: enemy defences in the way. Your carriers wait until the way is clear (destroy the guns, or build a road round them).'
+    : mine && murmurShy(b) ? `Haulers turning back: Murmur near the road. Each turn-back in a row doubles the wait before the next is sent (now ${Math.round(shyRoadWait(b.shyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear the road.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
   if (!b.built) {

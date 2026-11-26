@@ -68,7 +68,7 @@ Standard seed 25, 38-minute cap, Normal, Balanced:
 | `d9bf339` (the Ammo drought) | Undecided at 38 | 1,154 | 1,005 | 149 | 0 |
 | `81f7823` (main before this pass) | Colony 1 at 17.32 | 400 | 292 | 108 | 0 |
 
-On `d9bf339`, trips to Mines were given up 239 times, most in two bursts (minutes 22–23 and 30–34). Colony 1's Mine at (8, 31), the one the first pass found in the unreachable state at minutes 31–34, accounts for 102 Hauler turn-backs on the way to it, every one from Murmur Scuttlers 6–11 tiles off its route (never at the Mine itself, never a gun). Each turn-back put the Mine on its 5-second cooldown, and the next Hauler sent turned back the same way. So the Ore stall was the Murmur roaming by the Haulers' road, not freight eligibility, the road network or the route estimate. `takeCover` works as designed (keep 6 tiles from a creature); the cost is that nobody clears the creatures off a supply road. Left for the owner: should a rival send a few warbots to a Mine whose Haulers keep turning back from the Murmur (the AI only strikes nests, `aiMurmur`), and should a Hauler that turns back from the same building several times in a row wait longer before another is sent?
+On `d9bf339`, trips to Mines were given up 239 times, most in two bursts (minutes 22–23 and 30–34). Colony 1's Mine at (8, 31), the one the first pass found in the unreachable state at minutes 31–34, accounts for 102 Hauler turn-backs on the way to it, every one from Murmur Scuttlers 6–11 tiles off its route (never at the Mine itself, never a gun). Each turn-back put the Mine on its 5-second cooldown, and the next Hauler sent turned back the same way. So the Ore stall was the Murmur roaming by the Haulers' road, not freight eligibility, the road network or the route estimate. `takeCover` works as designed (keep 6 tiles from a creature); the cost is that nobody clears the creatures off a supply road. The owner chose both: see [Murmur on supply roads](#murmur-on-supply-roads) in the third pass.
 
 ## Losing a key road link
 
@@ -113,7 +113,7 @@ For the long links, the cost of a line, not its output, is what decides. Over 30
 | Set-up | two buildings | two buildings | a Worker builds it out at 3 s a tile (90 s for 30) |
 | Weak point | enemy Flak under the arc | the same | any pylon shot down cuts it |
 
-The Driver line did everything a Maglev line does point to point, for a quarter of the cost, with more reach and nothing to defend between the ends. Now each end fires every 8 s (it was 6) and the ends cost a little more. It still carries about as much as a 30-tile Maglev line for about a third of the cost. It remains the only way over a gap a Maglev line can't span, while Maglev keeps its networks and hubs. `tools/massdriver-test.js` checks 100–130 a minute each way over 30 tiles. Left for the owner: a slower rate when both ends stand on ground a robot can walk between, and whether several Drivers on one Catcher should share its rate.
+The Driver line did everything a Maglev line does point to point, for a quarter of the cost, with more reach and nothing to defend between the ends. Now each end fires every 8 s (it was 6) and the ends cost a little more. It still carries about as much as a 30-tile Maglev line for about a third of the cost. It remains the only way over a gap a Maglev line can't span, while Maglev keeps its networks and hubs. `tools/massdriver-test.js` checks 100–130 a minute each way over 30 tiles of sea. The owner's decision (third pass, below): over land a robot can walk, each end fires every 10 s (96 a minute measured over 30 tiles, from 118), and a Catcher takes two Drivers at most.
 
 ## Doctrines and snowballing
 
@@ -162,4 +162,100 @@ node tools/doctrine-audit.js Standard 25 rusher balanced 40 81f7823      # each 
 node tools/ai-baseline-audit.js 'Long haul' 15 2 40 288eb8f              # and 81f7823; seeds 3 7 11 15 19 21 25 31
 TERRAFALL_PRESSURE_TRACE=1 node tools/late-attack-audit.js 'Long haul' 15 2 45 81f7823
 node tools/massdriver-test.js
+```
+
+## Third pass: the owner's decisions
+
+November 26, 2026, the same day: the owner's calls on the second pass. The Herald stays as it is. Doctrine games are `tools/doctrine-audit.js` as before (Medium Versus, Normal, Murmur Active, 40-minute cap, every pair both ways round); the revisions are `2f13f2a` (main before this pass), `34bc575` (the freight and Mass Driver changes below, no Steward change) and `ada824f` (this pass).
+
+### Murmur on supply roads
+
+Two changes, for every colony. **Turn-backs back off**: each time carriers turn back from the Murmur on the way to a building, once its last wait is over, the wait before another is sent doubles (5, 10, 20, then 40 s at most), and a pickup or delivery there starts it again (storage excepted: carriers reach it by every road). The building's status then says *Haulers turning back: Murmur near the road*, and so do the Economy panel's bottlenecks and "Why idle?". Tracing it showed why the 5-second wait never helped a Mine: **the output pickups (`dispatch` step 4) never asked whether a building was waiting**, so a Hauler was sent every few seconds into the same Scuttlers. They ask now. **A rival guards the road**: by day, with its army at its attack threshold and four more, it sends three warbots to a rally flag where its carriers last turned back, for 90 s (`aiRoadGuard`). Sent any time, the squad cost a Steward its Command Base on Standard 25 (its army was 7 instead of 10 when the rival marched at minute 10), hence the conditions.
+
+`TERRAFALL_PICKUP_TRACE=1 node tools/late-attack-audit.js Standard 25 2 38`, `d9bf339` (the Ammo drought) against `d9bf339` with this pass's freight changes applied. The changed game ends at 28.5 minutes (colony 1 wins), so both are compared over the first 28 minutes:
+
+| Standard 25, first 28 minutes | `d9bf339` | with the changes |
+| --- | ---: | ---: |
+| Carrier trips given up to the Murmur | 668 | 492 |
+| ...on the way to Mines | 138 | 79 |
+| Hauler pickups at Mines turned back | 69 | 20 |
+| Turn-backs at the Mine at (8, 31) | 48 | 0 |
+| Ore made, colony 1 / colony 2 | 130 / 137 | 148 / 122 |
+| Alloy made, colony 1 / colony 2 | 159 / 134 | 187 / 141 |
+
+On current main (`2f13f2a` against `ada824f`'s freight changes, first 17 minutes, the shorter game's length) Murmur turn-backs fell from 292 to 253, with no Mine stalls in either.
+
+### Mass Driver: overland lines and two Drivers a Catcher
+
+When a robot could walk from one end to the other (the two ends in one walking area: roads, bridges and ramps count, Ropeways, Viaducts, ferries and Airships don't), each end fires every 10 s instead of 8: then it's a shortcut over land, not a crossing. Over water, a chasm or cliffs it stays 8 s. A Catcher takes two Drivers at most; aiming a third at it is refused ("That Catcher already takes 2 Mass Drivers, the most one can"). Each end's panel shows its rate and why. Measured by `tools/massdriver-test.js` over 30 tiles both ways at once: over land 118 goods a minute each way before, 96 now; across the sea on Islands 118, unchanged.
+
+### The Steward
+
+**Why it lost.** Traced games (`late-attack-audit`, a per-minute probe of army, goods, sites and foundries) showed the same story: its economy kept pace, often ahead (Long haul 21 against the Warden it had made 1,902 raw units to 1,608 by minute 40) but its army never caught up. It played the plain difficulty: army growth 1.0 from minute 4, where the Salvager grows 1.15 from minute 2.8, the Herald 1.35 from 1.6 and the Architect 1.3 from 2.8 with bots 15% faster. Against a Herald its army was 7 at minute 7 to the Herald's 14, and a march at minute 8 took its Command Base at about 9:00 (in three runs of that pairing). Late on, its Ore ran out (its Mines' veins worked out round minute 15–20) and its Alloy and Chips with it, while a Nuclear Reactor, a Keep and Arrival City waited for them; its army fell from 20 to 6 (Long haul 21 against the Architect).
+
+**The change** (`PERSONALITIES.balanced`): its bots work 10% faster (`econ` 1.1), its army grows 15% faster (`army` 1.15) and starts a minute sooner (`armyFrom` 0.8). Nothing else: it still builds, defends and attacks in good measure, raids now and then, offers truces in Contingency and builds Arrival City from minute 12. Steward games only, Standard 25 and Long haul 21 (16 games):
+
+| Steward variant | Won | Lost | Undecided |
+| --- | ---: | ---: | ---: |
+| Plain, `2f13f2a` | 4 | 12 | 0 |
+| Plain, `34bc575` (the freight changes) | 5 | 10 | 1 |
+| econ 1.08, army 1.15 from 0.8 | 6 | 8 | 2 |
+| econ 1.12, army 1.15 from 0.8 | 9 | 6 | 1 |
+| econ 1.08, army 1.25 from 0.7 | 9 | 7 | 0 |
+| **econ 1.1, army 1.15 from 0.8 (shipped)** | 6 | 8 | 2 |
+
+Any change reshuffles a deterministic game, so 16 games swing by two or three either way; the 6-seed table below is the better measure. The army-heavy variant went 0–4 against the Salvager and 4–0 against the Architect, so the shipped one leans on the economy, the all-rounder's way.
+
+**The tournament, before and after.** All 40 games of Standard 25 and Long haul 21:
+
+| Doctrine | Before (`2f13f2a`) | After (`ada824f`) |
+| --- | --- | --- |
+| Herald | 11–3, 1 undecided | 10–5, 1 undecided |
+| Salvager | 10–6 | 7–9 |
+| Architect | 7–8 | 8–8 |
+| Warden | 6–9, 1 undecided | 7–8, 1 undecided |
+| Steward | 4–12 | 6–8, 2 undecided |
+
+| Steward against | Before | After |
+| --- | --- | --- |
+| Warden | 1–3 | 0–3 |
+| Salvager | 0–4 | 2–2 |
+| Herald | 1–3 | 1–2 |
+| Architect | 2–2 | 3–1 |
+
+And on six seeds (Standard 25, 11 and 19, Long haul 21, 3 and 11; 120 games, `ada824f`):
+
+| Doctrine | Won | Lost | Undecided |
+| --- | ---: | ---: | ---: |
+| Herald | 30 | 13 | 5 |
+| Salvager | 28 | 17 | 3 |
+| Steward | 20 | 22 | 6 |
+| Warden | 17 | 25 | 6 |
+| Architect | 13 | 31 | 4 |
+
+The Steward lands in the middle: 3–7 against the Warden, 4–6 against the Salvager, 5–6 against the Herald and 8–3 against the Architect. The Architect, 8–8 on the first two seeds, is 5–23 on the four new ones: worth a look in a later pass (its Missile Factory and Silos come at the cost of its army).
+
+### Side lean
+
+The 120 games above: colony 1 won 50, colony 2 58, 12 undecided. By seed:
+
+| Seed | Colony 1 | Colony 2 | Undecided |
+| --- | ---: | ---: | ---: |
+| Standard 25 | 16 | 4 | 0 |
+| Standard 11 | 6 | 13 | 1 |
+| Standard 19 | 7 | 11 | 2 |
+| Long haul 21 | 8 | 10 | 2 |
+| Long haul 3 | 8 | 10 | 2 |
+| Long haul 11 | 5 | 10 | 5 |
+
+Of the 48 swapped pairs with two results, 30 went to the same doctrine both ways, 8 to colony 1 both ways and 10 to colony 2 both ways. **No consistent lean**: Standard 25 favours colony 1 (14–6 before this pass too, and in every Steward variant), the other seeds lean the other way or not at all. The starts are exact point mirrors on all six seeds (the Command Bases, every deposit within 15 tiles and the nearest Murmur nests and exits at the same distances), so Standard 25's lean is in how its games unfold, not the map. One ordering difference remains in two-colony games, noted for whoever looks next: Teams games alternate which side's units and buildings update first each tick and interleave the AI turns (`simStep`, the 2v2 fairness fix in [ai-stalemate-fixes](ai-stalemate-fixes.md#4-2v2-fairness)); a 1v1 game always updates colony 1 first and lets colony 1's AI think first on a tie. Nothing was changed for it.
+
+### Reproduce
+
+```sh
+node tools/doctrine-audit.js Standard 25 balanced rusher 40 ada824f      # each pair, both ways round, six seeds
+TERRAFALL_PICKUP_TRACE=1 TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js Standard 25 2 38 d9bf339
+TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js Standard 25 2 26 2f13f2a normal rusher   # a Steward's Ore running out
+node tools/massdriver-test.js
+node tools/civilian-pathing-audit.cjs     # the turn-back waits
 ```

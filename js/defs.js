@@ -365,7 +365,7 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
 /**
  * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun line that throws sealed canisters of goods
  * in an arc over everything, both ways. The Driver is aimed (b.mdTo) at a Catcher `min` to `max` tiles away: the two
- * are one line, and either end fires to the other (a Catcher may take several Drivers, firing to each in turn). Both
+ * are one line, and either end fires to the other (a Catcher may take up to `drivers` Drivers, firing to each in turn). Both
  * are storage. Supply is automatic (mdPlan, every 2 s): the end farther from the Command Base (b.mdFar) stocks what the
  * buildings round it need (b.auto, as a far Rail Station does: within STATION_REACH, nearer it than the Command Base,
  * touching it, by road or on foot), and the other end ships what it lacks (b.mdAuto: {partner id: {good: n}}), out of
@@ -374,7 +374,9 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * the reserve its colony keeps at home) overrides an end's automatic shipments: it sends just those. A Driver may be
  * aimed at one of its colony's `forts` (an Outpost or a Keep) instead, one way: it keeps that fort's Ammo (and a Keep's
  * Crystal) topped up. A full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more, or
- * the whole of a smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each end.
+ * the whole of a smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each end,
+ * or `reloadLand` s when a robot could walk from one end to the other (mdOverland: then it is a shortcut over land, not
+ * a crossing; the owner, Nov 26 2026). A Catcher takes `drivers` Drivers at most.
  * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
  * flies in sealed drums (no Crude). Power: no Fuel of its own, but an end fires only with a Generator (with Fuel) within
  * the Generator's radius (magPowered); without one it waits (it still catches). A canister has `hp`: an enemy Flak Gun
@@ -382,7 +384,7 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
  * the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
  */
-const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8,
+const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
   flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
@@ -1624,11 +1626,11 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end. Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
-    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take several Drivers.',
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers.',
     cost: { cement: 8, alloy: 5, chip: 3 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
@@ -1856,7 +1858,8 @@ function diffAtLeast(k, d = S.difficulty) { return DIFF_ORDER.indexOf(d) >= DIFF
  * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls,
  * push (a big all-in push when its army outgrows its rival's: aiPush), harass (raids that form up out of sight and go for the roads by its
  * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
- * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
+ * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty with a little more of
+ * everything: its bots 10% faster, its army from a minute sooner and 15% faster (Nov 26 2026: it won 4 of 16 without).
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
  * words, for the lobby's one-line note: "walls in, then pushes in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
@@ -1869,7 +1872,7 @@ const PERSONALITIES = {
     name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
     tag: 'builds, defends and attacks in good measure',
     quote: 'This action has been logged for review by the Accord tribunal.',
-    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    play: 'Grows a full economy and a steady army (its bots work 10% faster, and its army starts growing a minute sooner and grows a little faster), and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (at Colonist level). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
     weak: 'No great strength and no great weakness: a fair first opponent.',
     // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
     voice: {
@@ -1879,6 +1882,9 @@ const PERSONALITIES = {
         'Please take shelter. The tribunal has been notified.'],
       surrender: ['Please tell the colonists the roads are finished.', 'We yield, under protest. The tribunal will hear of this.'],
     },
+    // (The owner, Nov 26 2026: the default rival should be a fair fight. As the plain difficulty it won 4 of 16
+    // doctrine games; its economy lasted, but its army never caught up. See docs/economy-balance-audit.md.)
+    army: 1.15, armyFrom: 0.8, econ: 1.1,
   },
   turtle: {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in, builds Keeps and turrets, then grinds forward in big pushes',

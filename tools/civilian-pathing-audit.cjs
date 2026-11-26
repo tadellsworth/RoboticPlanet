@@ -118,4 +118,40 @@ runInNewContext(source + `
     assert.equal(callBuilder(0, ramp).u, far);
     console.log('Ramp worker choices: ' + nearest + ' versus ' + across + ' steps; automatic and manual orders use the short route.');
   }
+  {
+    // Haulers turning back from the Murmur on the way to one building: each turn-back in a row once the last wait is
+    // over doubles its wait (SHY_ROAD), output pickups honour it, and a trip that gets there starts it again.
+    newGame({ seed: 43199, mode: 'versus', size: 1, murmur: 'active' });
+    S.time = 100;
+    S.buildings.length = S.bots.length = S.posts.length = 0;
+    S.byId.clear();
+    S.terrain.fill(T_GROUND); S.elev.fill(0); S.ramp.fill(0); S.res.fill(0);
+    S.bAt.fill(0); S.road.fill(0); S.plan.fill(0); S.owner.fill(-1); S.zone.fill(0);
+    const L = addBuilding(0, 'lander', 5, 21, true);
+    S.players[0].lander = L.id;
+    for (let x = 5; x <= 22; x++) road(x, 20);
+    const mine = addBuilding(0, 'mine', 22, 21, true);
+    mine.stock.ore = 6;
+    const u = addBot(0, 'hauler', 6, 20), w = addBot(wildOwner(), 'scuttler', 14, 23);
+    computeTerritory();
+    const turn = () => { u.task = { type: 'haul', src: mine.id, dst: L.id, good: 'ore', phase: 'toSrc', n: 1 }; u.shyUntil = 0; takeCover(u, false); return [mine.shyN, Math.round(mine.unreachUntil - S.time)]; };
+    const waits = [];
+    waits.push(turn());
+    S.time += 1; waits.push(turn()); // (another carrier turning back while it waits: no count, the usual 5 s)
+    for (const k of [0, 1, 2, 3]) { S.time = mine.unreachUntil + 1; waits.push(turn()); }
+    assert.deepEqual(waits.map((x) => x[1]), [5, 5, 10, 20, 40, 40], JSON.stringify(waits));
+    assert.equal(waits[1][0], 1);
+    assert.ok(murmurShy(mine) && !reachable(mine));
+    // (an idle Hauler by the road is not sent to the Mine while it waits)
+    u.task = null; u.shyUntil = 0; u.x = 6.5; u.y = 20.5;
+    w.dead = true; S.bots = S.bots.filter((b) => !b.dead); updateDanger();
+    dispatch(0);
+    assert.ok(!(u.task && u.task.src === mine.id), 'output pickup waits out the turn-back');
+    S.time = mine.unreachUntil + 0.1;
+    dispatch(0);
+    assert.equal(u.task?.src, mine.id, 'and goes once the wait is over');
+    for (let k = 0; k < 30 * 20 && u.task && u.task.phase === 'toSrc'; k++) simStep(SIM_STEP);
+    assert.equal(mine.shyN, 0, 'a pickup that gets there starts the count again');
+    console.log('Murmur on a road: waits ' + waits.map((x) => x[1]).join(', ') + ' s; output pickups wait it out; a pickup resets it.');
+  }
 `, { assert, console, sfx() {} });

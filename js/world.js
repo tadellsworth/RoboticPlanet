@@ -3193,7 +3193,14 @@ function stepPlan(a, b) {
  * Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). Nobody turns on
  * an overpass (see findPath): the areas are joined straight across one, and its own tile goes with its east-west road.
  */
-function computeZones() {
+function computeZones() { S.zone = zoneFill(true); }
+
+/**
+ * The areas of computeZones as a label per tile: with `links`, a Ropeway, Viaduct, ferry line or Airship line joins
+ * the areas at its two ends (S.zone); without, only ground a robot can walk (roads, bridges and tunnels included), as
+ * a Mass Driver's rate asks (walkZones).
+ */
+function zoneFill(links) {
   const N = S.W * S.H, W = S.W, ov = anyOverpass();
   const z = new Int32Array(N).fill(-1);
   let next = 0;
@@ -3221,7 +3228,7 @@ function computeZones() {
         q.push(b);
       }
       // A Ropeway, a Viaduct, a ferry line or an Airship line joins the areas at its two ends, whatever lies between.
-      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a), airLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
+      if (links && S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a), airLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -3231,7 +3238,14 @@ function computeZones() {
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && z[u] >= 0 && !S.over[u] && canStep(t, u)) { z[t] = z[u]; break; }
     if (z[t] < 0) z[t] = next++;
   }
-  S.zone = z;
+  return z;
+}
+
+/** The areas a robot can walk between, links aside (zoneFill without them): worked out again when S.zone is. Not saved. */
+let _walkZones = { of: null, z: null };
+function walkZones() {
+  if (_walkZones.of !== S.zone) _walkZones = { of: S.zone, z: zoneFill(false) };
+  return _walkZones.z;
 }
 
 /** The area a player's bots can reach (the one their Command Base stands in). */

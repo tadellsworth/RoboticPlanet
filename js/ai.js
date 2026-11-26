@@ -1550,6 +1550,9 @@ function aiMurmur(p, lvl, lander, smart) {
     const res = sendToRally(p, u.task.x, u.task.y, 3, false, true);
     if (res && res.sent) { P.sapRally = { id: res.rally.id, t: S.time }; return; }
   }
+  // 0b) A road its carriers keep turning back on from the Murmur: by day, with the army to spare, a few warbots to
+  //     clear it (aiRoadGuard).
+  if (!night && aiArmyOf(p) >= lvl.threshold + AI_NEST_SPARE && aiRoadGuard(p)) return;
   // 1) Exits near its land, nearest first (the first three it might reach). By day, with nothing up round it, the
   //    garrisons send even the warbots they keep at home (all: only the Command Base keeps its own): a quiet exit is
   //    a short walk and a few shots, and every night it stays open it brings a pack.
@@ -1576,6 +1579,40 @@ function aiMurmur(p, lvl, lander, smart) {
   const rich = riches.has(nest.id), need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
   if (aiMurmurStrike(p, nest, need + 2, need + 2, false, rich) || !rich) return;
   if (!(P.massFor && S.time <= P.massFor.until && P.massFor.need >= need + 2)) P.massFor = { need: need + 2, until: S.time + 120 };
+}
+
+/**
+ * A building of rival p's whose carriers keep turning back from the Murmur on their way to it (murmurShy, SHY_ROAD:
+ * on Standard seed 25 Haulers turned back 102 times on one Mine's road and its Ore stalled): AI_ROAD_GUARD.n warbots
+ * to a rally flag where they last turned back from (b.shyX, b.shyY), to clear the road; the flag comes down after
+ * AI_ROAD_GUARD.hold s. One such flag at a time; the building worst off first; by day, with the army to spare for a
+ * nest (aiMurmur: a squad sent off early, before its first march, cost a Steward its Command Base on Standard seed 25).
+ * True if it sent a squad.
+ */
+const AI_ROAD_GUARD = { n: 3, hold: 90, near: 3 };
+function aiRoadGuard(p) {
+  const P = S.players[p];
+  if (P.roadRally) {
+    const r = rallyById(P.roadRally.id);
+    if (r && S.time - P.roadRally.t <= AI_ROAD_GUARD.hold) return false;
+    if (r) recallRally(r.id);
+    P.roadRally = null;
+  }
+  let b = null;
+  for (const e of S.buildings) if (!e.dead && e.owner === p && e.shyX !== undefined && murmurShy(e) && (!b || e.shyN > b.shyN)) b = e;
+  if (!b) return false;
+  const hz = homeZone(p);
+  let spot = null;
+  for (let r = 0; r <= AI_ROAD_GUARD.near && !spot; r++) for (let dj = -r; dj <= r && !spot; dj++) for (let di = -r; di <= r && !spot; di++) {
+    const i = b.shyX + di, j = b.shyY + dj;
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== hz) continue;
+    spot = [i, j];
+  }
+  if (!spot || rallyAvailable(p, spot[0], spot[1]) < AI_ROAD_GUARD.n) return false;
+  const res = sendToRally(p, spot[0], spot[1], AI_ROAD_GUARD.n, false, true);
+  if (!res || !res.sent) return false;
+  P.roadRally = { id: res.rally.id, t: S.time };
+  return true;
 }
 
 /**

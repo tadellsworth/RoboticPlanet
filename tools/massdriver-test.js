@@ -1,5 +1,5 @@
 // Headless checks for the Mass Driver line (MASSDRIVER, mdPlan): goods flying both ways between a Driver and its
-// Catcher, automatic supply filling the far end's needs with no goods list, a 50-tile line across the sea on Islands
+// Catcher (every 10 s over land, every 8 s across the sea), two Drivers at most on a Catcher, automatic supply filling the far end's needs with no goods list, a 50-tile line across the sea on Islands
 // (and allowed on Sky islands and Four Isles, none in the Hollow), a Driver keeping an Outpost's Ammo up, a rival's Flak
 // bursting a canister, and a save from before (a one-way pair with a goods list) loading and running.
 // Run: node tools/massdriver-test.js
@@ -72,14 +72,15 @@ check('goods fly out to the island: the Catcher catches, the Generator gets its 
 check('two-way: the island\'s spare Stone flies home to the Driver', flow.home > 0 && flow.thrownC > 0, flow);
 
 // ---- both ways at once, measured over 30 tiles: goods a minute out and home
-const rate = (c2, distT, shape) => JSON.parse(run(c2, `
-  newGame({ seed: 5, mode: 'colony', size: 3, rough: 0 ${shape ? `, shape: SHAPE_PRESETS.findIndex((s) => s.name === '${shape}')` : ''} });
+// (over land: the Catcher on ground a robot can walk to; across the sea on Islands: on another island)
+const rate = (c2, distT, sea) => JSON.parse(run(c2, `
+  newGame({ seed: ${sea ? 11 : 5}, mode: 'colony', size: 3 ${sea ? `, shape: SHAPE_PRESETS.findIndex((s) => s.name === 'Islands')` : ', rough: 0'} });
   ${HELP}
   const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)];
   for (const g of ['cement', 'alloy', 'chip', 'fuel', 'stone', 'fiber']) bump(L.stock, g, 2000);
-  const d = spot(L.x, L.y, 3, 6, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
+  const d = spot(L.x, L.y, 3, 7, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
   const D = driver(d[0], d[1]); gen(D.x, D.y);
-  const far = spot(D.x, D.y, ${distT}, ${distT + 1}, (i, j) => dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + ${distT - 4});
+  const far = spot(D.x, D.y, ${distT}, ${sea ? 'MASSDRIVER.max - 1' : distT + 1}, (i, j) => ${sea ? 'S.zone[tIdx(i, j)] !== hz && S.zone[tIdx(i, j)] > 0 && free(tIdx(i + 1, j)) && ' : 'S.zone[tIdx(i, j)] === hz && '}dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + ${distT - 4});
   const C = addBuilding(0, 'catcher', far[0], far[1], true); gen(C.x, C.y);
   computeTerritory(); computeZones();
   applyOrder(0, 'mdAim', [D.id, C.id]);
@@ -89,11 +90,29 @@ const rate = (c2, distT, shape) => JSON.parse(run(c2, `
   const t0 = S.time, out0 = C.mdGot || 0, in0 = D.mdGot || 0;
   until(() => { if ((D.stock.cement || 0) < 16) bump(D.stock, 'cement', 16); return S.time - t0 >= 300; }, 310); // (the line's own pace: kept loaded)
   const m = (S.time - t0) / 60;
-  return JSON.stringify({ d: Math.round(dist(D.x, D.y, C.x, C.y)), out: Math.round(((C.mdGot || 0) - out0) / m), home: Math.round(((D.mdGot || 0) - in0) / m) });
+  return JSON.stringify({ d: Math.round(dist(D.x, D.y, C.x, C.y)), land: mdOverland(D, C), every: mdReload(D, C), out: Math.round(((C.mdGot || 0) - out0) / m), home: Math.round(((D.mdGot || 0) - in0) / m) });
 `));
 const r30 = rate(mk(), 30);
-console.log(`  measured over ${r30.d} tiles: ${r30.out} goods/min out, ${r30.home} goods/min home`);
-check('both ways at once over 30 tiles: goods move out and home, a canister of 16 every 8 s each way (about 120 a minute)', r30.out >= 100 && r30.home >= 100 && r30.out <= 130 && r30.home <= 130, r30);
+console.log(`  measured over land, ${r30.d} tiles: ${r30.out} goods/min out, ${r30.home} goods/min home`);
+check('both ways at once over 30 tiles of land: a robot could walk between the ends, so a canister of 16 every 10 s each way (about 96 a minute)', r30.land && r30.every === 10 && r30.out >= 85 && r30.home >= 85 && r30.out <= 100 && r30.home <= 100, r30);
+const rSea = rate(mk(), 30, true);
+console.log(`  measured across the sea, ${rSea.d} tiles: ${rSea.out} goods/min out, ${rSea.home} goods/min home`);
+check('both ways at once across the sea on Islands: a crossing, so a canister of 16 every 8 s each way (about 120 a minute)', !rSea.land && rSea.every === 8 && rSea.out >= 100 && rSea.home >= 100 && rSea.out <= 130 && rSea.home <= 130, rSea);
+
+// ---- a Catcher takes two Drivers at most: a third is refused, with why
+const cap = JSON.parse(run(mk(), `
+  newGame({ seed: 5, mode: 'colony', size: 3, rough: 0 });
+  ${HELP}
+  const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)];
+  const far = spot(L.x, L.y, 30, 32, (i, j) => S.zone[tIdx(i, j)] === hz);
+  const C = addBuilding(0, 'catcher', far[0], far[1], true);
+  const ds = [];
+  for (let k = 0; k < 3; k++) { const d = spot(L.x, L.y, 3, 10, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)) && dist(i, j, C.x, C.y) >= MASSDRIVER.min); ds.push(driver(d[0], d[1])); }
+  computeTerritory(); computeZones();
+  const r = ds.map((D) => applyOrder(0, 'mdAim', [D.id, C.id]));
+  return JSON.stringify({ r, partners: mdPartners(C).length, third: ds[2].mdTo || 0 });
+`));
+check('a Catcher takes two Drivers: aiming a third at it is refused with a clear message', cap.r[0] === '' && cap.r[1] === '' && /already takes 2 Mass Drivers/.test(cap.r[2]) && cap.partners === 2 && !cap.third, cap);
 
 // ---- the far end's goods list overrides: it sends only what's on it
 const ov = JSON.parse(run(c, `

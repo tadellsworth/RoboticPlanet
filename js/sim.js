@@ -2700,10 +2700,12 @@ function dispatch(p) {
     }
     if (!any) break;
   }
-  // 4) Move finished goods from production buildings into storage.
+  // 4) Move finished goods from production buildings into storage. (Not from one carriers just turned back from on the
+  //    way to it: its wait, SHY_WAIT or longer, see SHY_ROAD; the pickups here never asked, so on Standard seed 25 a
+  //    Hauler was sent to a Mine every few seconds and each turned back from the same Scuttlers.)
   for (const b of blds) {
     const def = BDEFS[b.type];
-    if (!b.built || def.store || !def.out) continue;
+    if (!b.built || def.store || !def.out || !reachable(b)) continue;
     const sb = stationBeside(b), conv = sb && stationLinks(sb).some((l) => l.c === b) ? sb : null; // (a station's conveyor takes it)
     for (const g in def.out) {
       if (!idle.length) return;
@@ -3892,6 +3894,7 @@ function doHaul(u, t, dt) {
     }
     if (got < n) bump(dst.inc, t.good, got - n);
     t.n = got;
+    if (src.shyN) src.shyN = 0; // (a trip got there: see SHY_ROAD)
     bump(src.stock, t.good, -got);
     if (src.loot && src.loot[t.good]) { src.loot[t.good] = Math.max(0, src.loot[t.good] - got); if (!src.loot[t.good]) delete src.loot[t.good]; }
     u.carry = got > 0 ? t.good : null;
@@ -3908,6 +3911,7 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (dst.shyN) dst.shyN = 0; // (a trip got there: see SHY_ROAD)
   if (S.mission?.id === 'arterial' && u.owner === 0 && u.type === 'truck' && dst.id === S.mission.arterialDepot &&
     t.arterialTiles >= EXPRESS.minLen - 1) S.mission.arterialRuns++;
   if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
@@ -6613,6 +6617,20 @@ const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's g
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
 const SAFE_POCKET = 4;   // a goods carrier caught in a gun's reach may cross this many tiles of it to get out (safeRoute)
 const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried again (noSafeRoute)
+/*
+ * A building whose carriers keep turning back from the Murmur on the way to it (the owner, Nov 26 2026: on Standard
+ * seed 25 Haulers turned back 102 times from Scuttlers roaming 6 to 11 tiles off one Mine's road, each turn-back
+ * putting the Mine on SHY_WAIT, and the next Hauler sent turned back the same way): each turn-back that comes once the
+ * last wait is over (b.shyN, b.shyAt) doubles the wait before another is sent, SHY_ROAD.wait s to SHY_ROAD.max, and a
+ * trip that gets there (a pickup or a delivery) starts it again. From SHY_ROAD.show turn-backs in a row, for
+ * SHY_ROAD.keep s after the last, its panel says why ("Haulers turning back: Murmur near the road": murmurShy), and a
+ * rival sends a few warbots to clear the road (aiRoadGuard).
+ */
+const SHY_ROAD = { wait: 5, max: 40, show: 2, keep: 60 }; // (not for storage, which carriers reach by every road)
+/** Do carriers keep turning back from the Murmur on their way to building b (see SHY_ROAD)? */
+function murmurShy(b) { return !!b && b.shyN >= SHY_ROAD.show && S.time - (b.shyAt ?? -999) < SHY_ROAD.keep; }
+/** How long building b waits before another carrier is sent after its last turn-back from the Murmur (s). */
+function shyRoadWait(n) { return Math.min(SHY_ROAD.max, SHY_ROAD.wait * 2 ** Math.max(0, n - 1)); }
 const SAFE_FREE = new Set(['flee', 'cover', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
 
 /*
@@ -6950,7 +6968,17 @@ function takeCover(u, caught) {
   if (!caught && t) {
     const id = t.type === 'haul' ? (t.phase === 'toSrc' ? t.src : t.dst) : t.type === 'build' ? t.site : t.type === 'staff' || t.type === 'fix' ? t.bld : 0;
     const b = id ? getE(id) : null;
-    if (b && b.owner === u.owner) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + SHY_WAIT);
+    if (b && b.owner === u.owner) {
+      let wait = SHY_WAIT;
+      if (u.shyOf === 'wild' && !BDEFS[b.type].store) { // (not storage: carriers come and go to it by every road)
+        // (another turn-back in a row once the last wait is over: a longer one; several carriers turning back from
+        // the same creatures at once count once)
+        if (!(b.unreachUntil > S.time)) { b.shyN = (b.shyN || 0) + 1; b.shyAt = S.time; }
+        wait = Math.max(wait, shyRoadWait(b.shyN || 1));
+        if (foe) { b.shyX = Math.floor(foe.x); b.shyY = Math.floor(foe.y); }
+      }
+      b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + wait);
+    }
   }
   if (t && t.type === 'haul' && t.phase !== 'toSrc' && u.carry) {
     // A load aboard: it keeps it (for the storage it shelters at), and the drop-off stops waiting for it.
@@ -20568,6 +20596,7 @@ function hashState() {
     if (b.keepStaff) int(-77); // (Keep staffed: ORDERS.keepStaff)
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
+    if (b.shyN) { int(b.shyN); num(b.shyAt); num(b.unreachUntil || 0); } // (carriers turning back from the Murmur: SHY_ROAD)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
@@ -20710,14 +20739,25 @@ function mdCatcher(b) {
   return c && !c.dead && c.built && c.owner === b.owner && !c.mDown && (BDEFS[c.type].catcher || mdFortType(c.type)) ? c : null;
 }
 
-/** The ends end b fires to: a Driver's Catcher (or fort); a Catcher's built Drivers aimed at it. */
+/** The Drivers aimed at Catcher c that it takes: the first MASSDRIVER.drivers built ones of its owner's. */
+function mdDriversOf(c) {
+  return S.buildings.filter((d) => !d.dead && d.built && d.owner === c.owner && d.mdTo === c.id && BDEFS[d.type].mdriver).slice(0, MASSDRIVER.drivers);
+}
+
+/** The ends end b fires to: a Driver's Catcher (or fort); a Catcher's built Drivers aimed at it (MASSDRIVER.drivers at most). */
 function mdPartners(b) {
   if (!b || b.dead || !b.built) return [];
   const def = BDEFS[b.type];
-  if (def.mdriver) { const c = mdCatcher(b); return c ? [c] : []; }
-  if (def.catcher) return S.buildings.filter((d) => !d.dead && d.built && d.owner === b.owner && d.mdTo === b.id && BDEFS[d.type].mdriver);
+  if (def.mdriver) { const c = mdCatcher(b); return c && (!BDEFS[c.type].catcher || mdDriversOf(c).includes(b)) ? [c] : []; }
+  if (def.catcher) return mdDriversOf(b);
   return [];
 }
+
+/** Could a robot walk from end b to end c (the same walking area: no water, chasm or cliff between them but what a road, bridge or ramp crosses)? Then the line is a shortcut over land. */
+function mdOverland(b, c) { const z = walkZones(), zb = z[tIdx(b.x, b.y)]; return zb >= 0 && zb === z[tIdx(c.x, c.y)]; }
+
+/** Seconds between shots from end b to end c: MASSDRIVER.reloadLand over land (mdOverland), else MASSDRIVER.reload. */
+function mdReload(b, c) { return c && mdOverland(b, c) ? MASSDRIVER.reloadLand : MASSDRIVER.reload; }
 
 /** Is end b on a working line (its goods come and go by canister)? */
 function mdFed(b) { return mdEnd(b) && mdPartners(b).length > 0; }
@@ -20840,6 +20880,9 @@ function mdAimWhy(owner, b, c) {
   const d = dist(b.x, b.y, c.x, c.y);
   if (d < M.min) return `Too close: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
   if (d > M.max) return `Too far: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (BDEFS[c.type].catcher && S.buildings.filter((o) => o !== b && !o.dead && o.owner === owner && o.mdTo === c.id && BDEFS[o.type].mdriver).length >= M.drivers) {
+    return `That Catcher already takes ${M.drivers} Mass Drivers, the most one can: aim at another Catcher, or build one.`;
+  }
   return '';
 }
 
@@ -20989,7 +21032,8 @@ function updateMassDriver(b, dt) {
     if (!drv) b.status = 'Storing goods: no Mass Driver is aimed at it yet';
     else {
       const c0 = b.mdTo ? getE(b.mdTo) : null;
-      b.status = !b.mdTo ? 'Not aimed: tap Aim below' : c0 && !c0.dead && c0.owner === b.owner && !c0.built ? `Its ${BDEFS[c0.type].name} is still going up` : 'Its far end is gone: aim at another';
+      b.status = !b.mdTo ? 'Not aimed: tap Aim below' : c0 && !c0.dead && c0.owner === b.owner && !c0.built ? `Its ${BDEFS[c0.type].name} is still going up`
+        : mdCatcher(b) ? `Its Catcher already takes ${M.drivers} Mass Drivers, the most one can: aim at another` : 'Its far end is gone: aim at another';
     }
     return;
   }
@@ -21035,7 +21079,7 @@ function mdLaunch(b) {
   S.cans = S.cans || [];
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
     x0: o.x, y0: o.y, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
-  b.mdCd = M.reload - M.charge; // (a shot every `reload` s, its coils' charge included)
+  b.mdCd = mdReload(b, C) - M.charge; // (a shot every `reload` s, `reloadLand` s over land, its coils' charge included)
   b.mdLast = S.time;
   b.mdShot = S.time; // (the muzzle flash and the guidance beam: see drawMassDrivers)
   b.mdSent = (b.mdSent || 0) + n;
