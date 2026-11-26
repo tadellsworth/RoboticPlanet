@@ -2331,6 +2331,15 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+  Nov 26 2026: the rival now flies bands over in Cargo Planes (`aiAir`; README, the AI), and it did not help here: 8 of 8
+  still undecided at 45 minutes (Normal, Balanced both, 4 seeds each of Medium and Large; a Herald or a Salvager against a Steward
+  too, 4 games). Every tile of an enemy mesa is within reach of a gun or a Mortar Pit from about minute 20 (checked: 308 tiles,
+  none free even with no margin; Mortar Pits reach 11 to 12), so a band has nowhere to land out of fire, and what the
+  armies build there (36 and 30 warbots by 30 minutes on seed 12) cannot take a mesa behind that many guns. On seed 11
+  both armies sat at 6 warbots for half an hour: Ore runs out on the home mesa (one Mine) and Alloy and Chips with it.
+  Open: the AI bombing the Mortar Pits and guns first (aiBomber does, one bomber, one bomb a minute), Howitzers (aiSiege) from the
+  mesa it holds, Drop Outposts and Workers on the ore mesas (an economy by air). (A Herald flew in one and three bands in two games
+  and decided neither.)
 - **Bombing a Viaduct's deck** (Nov 2026). A bomb on the deck counts against the span: 14 off the end nearer it, or
   off the other end if that one's weaker, so two bombs anywhere on a deck bring it down (bombs on each end tower still
   leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
