@@ -308,3 +308,7 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Fixed all three Warbot routing findings. Ground moves keep their clicked destination, unreachable units retain their orders, and Warbots can step into available Bulwark firing cover. Both army pathing checks passed.
 - Audited civilian routes around a supplied Pulse Turret. Workers and four ground freight vehicles used a safe detour. Fixed automatic parking routes to keep the same safety check and changed ramp dispatch to pick an 8-step approach over a 40-step detour. Freight Train routes through covered track remain a finding. [Civilian route audit](civilian-pathing-audit.md)
 - Closed the remaining civilian pathing findings. Freight Trains stop or reroute when enemy guns cover the track, and cargo dispatch compares pickup travel times for eligible carriers. A loaded train kept its cargo when it stopped, and dispatch chose the Hauler estimated at 3.3 seconds over one estimated at 12.3 seconds. [Civilian route audit](civilian-pathing-audit.md)
+
+## November 26, 2026
+
+- Replayed the two long four-colony games and traced nine 1v1s, including defending-opponent variants. Reproduced a 1v1 Ammo drought, a losing rival unable to replace units without Chips, and a four-colony final duel still undecided at 75 minutes. Saved a headless runner and seed results. [Late-game attack audit](late-attack-audit.md)
