@@ -3119,7 +3119,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   leaving a smoke column and a ground cloud that linger 9 s after the blast (`drawNukeAfter`); in its last `NUKE_FALL`
   (2) s it falls steeply out of the sky onto the target from the Silo's side, nose glowing with re-entry heat, a
   white-hot streak behind it (`drawNukeFall`). The minimap shows a blinking red dot at the Silo until liftoff, then the
-  missile crossing to the target. The missile is a long three-stage ICBM drawn in code (`icbmArt`, see ART_GUIDE).
+  missile crossing to the target. The missile is a long three-stage ICBM drawn in code (`icbmArt`, see ART_GUIDE): the Garrison look, matte olive drab
+  with a black nose, a yellow live-warhead band and white stencils.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
   - **Radiation** (`RAD` in `js/defs.js`; the rules in `js/sim.js`, "radiation"; the looks and sound in `js/radfx.js`).
     A nuke's fallout (`radAdd(..., 'nuke')` in `nukeImpact`, after `domeCatch`: a nuke a Shield Dome stops leaves none)
