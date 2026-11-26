@@ -2837,8 +2837,14 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
   overlays (ART_GUIDE Batch 35). Open: should a raised tile show its new cliff face while it is being raised (the
   bake only repaints it when the job is done)?
 
-## To do: Argos on the main menu (owner, Nov 26)
+## Done: Argos on the main menu (owner, Nov 26)
 
 The moon Argos in the main menu's background (js/menuplanet.js) reads as an out-of-focus orb. Render it crisply at menu
 scale: a real surface (craters and maria, the grey lunar look of its biome), a sharp terminator and rim light matching
 the planet's sun, and it shouldn't be blurred by the depth-of-field/glow pass meant for the planet.
+
+Done (Nov 26 2026): Argos now has a face of its own, made once (`mplMoonMap`, a few rows a frame, then it fades in):
+grey regolith, darker maria mostly on the side toward Ithaca I, a few hundred craters with bowls and rims, a few young
+ones with rays. It is shaded per pixel at the size it shows, at the canvas's own resolution (`mplMoonShade`: a hard
+terminator, crater walls catching the light, a thin rim on the limb toward Corvane, faint planetshine on the night side),
+cached and shaded again only when it has turned a step (tidally locked, it turns once an orbit). Same place and size.

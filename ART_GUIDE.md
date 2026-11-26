@@ -2404,8 +2404,12 @@ redrawn as images:
   fronts near the lights, a red glow (and by day a smudge of smoke) where they fought, now and then a missile's thin
   line arcing between colonies and a brighter strike with a fading ring; after a few minutes on the menu, rarely, a
   nuclear blast (a white flash lighting the night side and the Ring, a pale ring spreading, an orange glow fading over
-  half a minute). The Ring in cream bands, brightest toward the star; Argos, grey and cratered, going round with its
-  shadow crossing the planet; the four vanguard Carriers as tiny white specks with a blinking light; ringfall streaking
+  half a minute). The Ring in cream bands, brightest toward the star; Argos going round with its shadow crossing the
+  planet, drawn sharp at the screen's own pixels, never soft like a glow (since Nov 26 2026: `mplMoonMap`, `mplMoonShade`):
+  pale cool-grey highlands (about `#cdcac4` lit), darker brown-grey maria (about `#6a6866`, mostly on the face toward
+  Ithaca I, as it's tidally locked), craters of every size with dark bowls and bright rims, a few young ones with rays;
+  airless, so a hard terminator with crater walls catching the low light, a thin warm-white rim on the limb toward
+  Corvane, and on the night side only a faint coral planetshine; the four vanguard Carriers as tiny white specks with a blinking light; ringfall streaking
   into the atmosphere; the Wren's speck and thruster trail coming in from the system's edge. A deep starfield (far stars
   and a faint nebula, nearer stars drifting a little), and a soft dark shade behind the card.
 
