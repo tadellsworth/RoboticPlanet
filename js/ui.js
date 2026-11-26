@@ -248,6 +248,12 @@ function initUI() {
   const syncWx = () => pauseSwitch('p-weather', weatherOn());
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Voice lines (js/voice.js): the machine voice with its subtitles, on or off (remembered on this device); a tap on
+  // the subtitle skips the line.
+  const syncVoice = () => pauseSwitch('p-voice', VOICE.on);
+  syncVoice();
+  $('p-voice').onclick = () => { setVoiceOn(!VOICE.on); syncVoice(); sfx('click'); };
+  $('voice-sub').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); voiceStop(); });
   // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
   const syncScouts = () => pauseSwitch('p-scouts', SCOUT.on);
   syncScouts();
@@ -269,7 +275,7 @@ function initUI() {
   syncCursor();
   $('p-cursor').onclick = () => { setCursorOn(!CURSOR.on); syncCursor(); sfx('click'); };
   // (Weather can be switched in Custom Game's Rules too: the switches are read again as Settings opens.)
-  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); syncCursor(); };
+  UI.syncSwitches = () => { syncWx(); syncVoice(); syncScouts(); syncHaptics(); syncCursor(); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -10492,6 +10498,7 @@ function openMsgSheet() {
 function landingLog() { return S && !S.mission ? `${NARRATOR.start} Landing site: ${regionName(S.settings.biome)}.` : ''; }
 
 function showBriefing(log) {
+  voiceOpening(); // (the Carrier's line as the lander comes down: js/voice.js)
   // (Not under test automation, whose scripts expect the game to start at once, unless a test asks for it.)
   if (typeof navigator !== 'undefined' && navigator.webdriver && !window.BOTFALL_BRIEF) return;
   const items = S.msgs.splice(0);
@@ -11174,6 +11181,9 @@ function overFlare(word, kick, tone, done) {
   scr.hidden = false;
   const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   if (!calm) sfx(tone === 'loss' ? 'flareDown' : 'flare');
+  // The end's music and the Command core's last line (js/audio.js musicCue, js/voice.js voiceEnding); not for Contact,
+  // which ends in silence and one answering tone (gupSilence).
+  if (word !== 'Contact') { musicCue(tone, !!done); voiceEnding(tone, word, !!done); }
   let timer = 0, settled = false;
   const finish = (quiet) => { // the dashboard in place (quiet: replaced by another, nothing more to run)
     clearTimeout(timer);

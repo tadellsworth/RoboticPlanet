@@ -1094,7 +1094,10 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   occasional whale spout (render-only scenery like the fauna; never blocks ships).
 - **Lava maps: steam vents and livelier lava:** steam plumes and vents on any lava map (Volcano, Cinderlands, Fault Line),
   and animated lava tiles (slow flowing/pulsing, crust cracks, glow) so it looks alive. Render-only, Saver off.
-- **Robotic dialogue, spoken at the start of each game and now and then** (generated audio): a robotic language we can't
+- **Built (Nov 26 2026): the start and the end** (js/voice.js; README's machine voice entry): a formant synthesizer
+  speaking the invented Accord machine tongue with subtitles, the Carrier as a game starts and the Command core as it
+  ends, Settings → Voice lines; a 'droid' radio preset is ready for the "now and then" callouts, still open (which
+  moments, how often). **Robotic dialogue, spoken at the start of each game and now and then** (generated audio): a robotic language we can't
   understand with subtitles ("Execute directives", "Directive acknowledged", etc.), in the voice of the colony's machines;
   a subtitle line on screen; an Ambience/Voice volume setting and an off switch. Tone per LORE.md (the Accord's orders, the
   contingency orders, COBALT); never states Earth's fate.
@@ -2611,7 +2614,16 @@ title on the main menu (the M2 cinematic menu's font, coral gradient and glow), 
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
 
-## To do: victory and defeat music (owner, Nov 26)
+## Built: victory and defeat music (owner, Nov 26)
+
+**Built** (Nov 26 2026: `musicCue` in js/audio.js, README's end's music entry; How to play, Sound): a scored cue of
+about 18 s, Victory (A, the main theme's chords turned major, drums, horns, a bell fanfare) or Defeat (D Phrygian, slow:
+drone, choir, a cold lead falling), then a quiet loop; Contingency's in the campaign theme's key and tune. Rescored the
+same day after the owner listened ("light and fun" for a victory, "too light hearted" for a defeat): a film-score
+victory (A, 76 bpm, i–♭VI–♭VII into A major, low horns, a heroic horn line, timpani, sub booms, a cymbal swell into a
+wide final chord) and a crushing defeat (D, 54 bpm, a sub pedal, distorted low brass on clusters and the tritone, the
+bass sinking by semitones, collapses far off, a knell, a final blow into a cold drone); see README. Open: a name for
+each on the Now playing card? The original ask:
 
 A short music cue, or a track, on the Victory and Defeat screens, generative like the game's other music in
 `js/audio.js`: a triumphant swell for Victory, a low, sombre one for Defeat; Horde, Teams, missions and Contingency could
