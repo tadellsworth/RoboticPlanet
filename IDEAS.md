@@ -274,11 +274,20 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
   Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
   (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
-- **The Ring** (in space, among the Ring's big asteroids). Like Sky islands but out in the Ring itself: base asteroids
-  and resource rocks with open space between, so armies must **fly to the other asteroids** (or bridge them) to fight.
-  A moving space background: drifting rubble, the planet and Argos turning, ringfall streaking down. Lore fit: the
-  Ring is the broken twin of Argos, and Ring Crystal makes rock float (LORE.md). Open: airless like Argos (no Murmur,
-  no farms?), how robots cross (Airships, cargo flights, tethers, Ropeways), and whether rocks drift over time.
+- **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
+  js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
+  side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
+  everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
+  are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
+  Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring (the
+  rest won at 20, 35 and 45 minutes), against 8 of 8 on Sky islands run the same way. The long ones are the fight over the middle rock
+  (both sides land a span there by minute 8) and then a span a stone at a time; the rival's economy there matches Standard's (more Cement,
+  Alloy and Fuel at 15 minutes).
+  Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
+  a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
+  home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
+  Viaduct only (as on Sky islands); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
   Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
   reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or

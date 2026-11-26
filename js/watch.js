@@ -117,7 +117,7 @@ function watchSummary(w) {
   if (watchUpWin(w)) main.push('Great Uplink win');
   const size = watchSize(w, n), otherBiome = chosenSecondBiome(w, size);
   if (otherBiome) main.push(BIOMES[otherBiome].name);
-  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
+  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, biomeForced(w.shapeRnd, w.shape) === 'ring' ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');
@@ -264,7 +264,7 @@ function syncWatch() {
 function watchPickRows() {
   const w = WATCH.setup;
   shapePickRow($('w-shape'), w.shapeRnd, w.shape, watchCount(w), 'when the game starts');
-  biomePickRow($('w-biome'), w.biomeRnd, w.biome, watchHollow(w), 'when the game starts');
+  biomePickRow($('w-biome'), w.biomeRnd, w.biome, biomeForced(w.shapeRnd, w.shape), 'when the game starts');
   syncSecondBiome('w', w, watchSize(w));
 }
 
