@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -320,7 +320,7 @@ With Planetary events enabled, Immense Ringfall targets up to nine sites per col
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
 The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
-scenery. The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+scenery (The Ring is always on Argos's, whatever the Biome setting). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
 Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
 and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -479,6 +479,48 @@ valley face with a spillway gate and a trickle, cracks spreading as it weakens, 
 strength bar while hurt, your order as a dashed outline; burst, rubble and the lake pouring through), the flood under
 the robots (water spreading with a foaming front and streaks running down the valley, then wet silt), the lakebed's mud.
 The mission **The Dam** (First Contact) teaches it.
+
+**The Ring** (`SHAPE_PRESETS` `asteroids`, under Heights and depths, two players; flat, `noMurmur`; the owner's idea from IDEAS.md) is a map
+in space: asteroids with nothing between them. `ringMap` (js/world.js, called first by `generateMap`, as `hollowMap` is) lays it
+out whole and point-symmetric, every tile made to its twin and the outline noise read at each tile's canonical place, so both
+colonies get the same to the bit (`tools/map-symmetry-test.js` checks it). The map is 1.15 × 1.45 times the size's (46 × 82 at
+Medium). From the bottom: a **home asteroid** (`homeRx` a third of the width, `homeRy` a fifth, its Command Base a little below
+its middle), **stepping stones** along the middle line, and the **middle rock** at the centre (its own twin; `midRx` a fifth of the
+width). The space between neighbours is `RING.gap` (3½ to 6 tiles: a Viaduct spans one more), so the chain is a few stones of
+half-height 3.3 to 5.5 chosen to fit the rows (none on Small, one on Medium and Large, two or three on Huge and up). A **side rock**
+lies to each side of the middle rock on the middle row, the same distance from both colonies, and from 40 tiles wide a **resource
+rock** beside each stone. Outlines wobble; two rocks never come nearer than `gap - 1.2` (about 2.3 tiles); specks under 14 tiles go.
+Every rock is flat ground (level 0, no ramps), its rim (any ground tile beside space) clear of deposits, crags and fertile soil so a
+Viaduct can start or land anywhere on it, with a few crags in from the rim (never near a base or the middle) and the middle 5 × 5 of
+every stone and side rock bare (a Trade Post or an Uplink can stand there). **The space** is `T_CHASM` (the Rift's and old Sky bridge
+chasm tile) that `voidTile` (defs.js: `T_CHASM` on a Ring map) makes unlike water or a canyon: `bridgeable` refuses it, `canRoad`
+refuses it (so no road, Sky bridge, pipe or track over it), `computeTerritory` leaves it no one's (borders stop at an asteroid's
+rim), `addLoot` lets crates that fall into it go, a plane that crashes into it only explodes (`wreckGround`) and a Viaduct
+(`viaductBlocked`: no `dip` test needed beyond `T_CHASM`) or a Ropeway spans it; a robot on a span that comes down goes back to the
+end it set out from, as anywhere. Airdrops, Drop Outposts, Mooring Masts and every building need ground (`T_GROUND`), so
+nothing can be put into space: `airdropBlocked` refuses a drop over it. Flight is as anywhere (Ring Crystal keeps craft aloft, LORE.md): Cargo
+Plane drops, Airships and Masts, Vulcan Bombers, Missiles. There are no ships or Ferries (no water).
+**Look and rules**: `newGame` sets the biome to Lunar whatever the Biome setting (and drops the second biome), so Argos's art, cliffs
+(the canyon wall under each rim) and rules hold: silent (no Murmur, which `noMurmur` also says), no weather, no Arrival City or Atmosphere Engine
+(`worldBan`), no Crystal from the Deep Core; the new-game Biome row reads *set by the map: The Ring* (`biomeForced` in js/ui.js,
+the Observer's setup too). Planetary events run but **no dust storm** (`updateEvents`; the Endless dust storm challenge does nothing there);
+Ringfall, solar flares and the Wren come. **Economy**: Argos's, with **more oil** than any other map (`RING.oil`: three fields of four
+seeps on each home asteroid, two of three on the middle rock (and its twin) and one of three on every side and resource rock, at
+least ten times a standard map's) so Fuel (Oil Pump, Refinery) is never short; the starter fields are the standard colony's (the same
+offsets from the Command Base) and richer ones lie further out, each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
+Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
+the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
+crosses with Viaducts only (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge): it builds no aircraft or Airships, and the map is laid out so every gap on the way is
+short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only): the space
+behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`): a deep sky with faint nebulae, three layers of stars that
+drift slowly and slide a little as the view pans (the farther, the less), Corvane's glow in a corner, Ithaca I large and turning (about nine
+minutes a turn) with its Ring round it, Argos turning small beside it (both made once, procedurally, from noise, and turned by sampling
+a couple of times a second: no image files), and a streak of ringfall now and then. The asteroids stay put. The land is clipped (`ringClipLand`) when the
+day and night light is graded over it, so the space keeps its own light. A void tile is left clear in the map's bake (`drawVoidTile`)
+but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles of it fading into the dark; the other sides have the
+canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves; reduced motion holds everything still; no planet tilt,
+frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
+list it like any map. State: none beyond the map (`S.settings.shape`).
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
