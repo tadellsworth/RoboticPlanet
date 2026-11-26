@@ -293,3 +293,12 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 
 - Replaced the shared bird silhouette with distinct wing and tail profiles, including a hawk’s rusty fan, fingered vulture wings, a crow’s fan tail and a raven’s wedge tail. Each uses its own flap and glide cadence. Updated the perched crow too.
 - Verified the flight and shadow silhouettes in Chromium and made before-and-after views at close-up and game scale.
+
+## November 25, 2026
+
+- Synced the working branch from main at `f7f35be`. Knocked-out megastructures now show the seize warning without repeated attack alerts while enemies hold them. **Wreck it** attacks continue to warn. [Alert fix](https://github.com/tadellsworth/RoboticPlanet/commit/875813e36cfc06d6ca6c6551da368aeb344343f8)
+- Rival Maglev raids prefer a reachable pylon in the middle third of a long line. In the headless test the band cut the line, left both Terminals standing, and came home. [Maglev fix](https://github.com/tadellsworth/RoboticPlanet/commit/6f60ba4a2bc2e7ee823e821ed223bb037ffe512b)
+- Rivals plan roads to seized megastructures and prioritize their commissioning fees. In the headless test a rival connected a seized Lance, delivered its goods and brought it online. [Recommissioning fix](https://github.com/tadellsworth/RoboticPlanet/commit/a39b0b54eeb292d133349e3d4cdd0b8d75302a74)
+- Drop Outpost and deployed Crawler panels now fit without vertical scrolling at 1440×900 in the desktop Command Deck layout. The browser measured 5 px of overflow before and 0 px after. [Panel fix](https://github.com/tadellsworth/RoboticPlanet/commit/572588d07f8fc8a7b3bc16cf12ab09397345e1bd)
+- The Workforce audit found identical counts in nine seeded two-colony games across all three revisions, for 584 completed builds on each revision. [Seed-by-seed staffing results](workforce-ai-audit.md)
+- Verified with the megastructure, transit, Workforce, Workforce lockstep, help, mission data and lint checks, and built the single-file game.
