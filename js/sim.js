@@ -147,6 +147,25 @@ function prioRank(b) {
   return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1;
 }
 
+/**
+ * What a computer player p still owes of good g to bring its seized megastructures online (their fee, less what is in
+ * them or on its way): while it does, its factories' conveyors don't hand g on to their neighbours and keep none back
+ * from the Haulers (feedStep, feedHold), so the fee comes first (prioRank). Without it the Alloy from a Smelter beside a
+ * Foundry never reached storage, and a seized Lance or Deep Core sat a few Alloy short for ten minutes. Kept for the tick.
+ */
+let _megaOwe = { tick: -1, S: null, by: null };
+function megaFeeOwed(p, g) {
+  if (_megaOwe.tick !== S.tick || _megaOwe.S !== S) {
+    _megaOwe = { tick: S.tick, S, by: null };
+    for (const b of S.buildings) {
+      if (b.dead || !b.mOff || !b.mNeed || !S.players[b.owner]?.ai) continue;
+      const by = (_megaOwe.by = _megaOwe.by || {}), o = (by[b.owner] = by[b.owner] || {});
+      for (const k in b.mNeed) o[k] = (o[k] || 0) + Math.max(0, b.mNeed[k] - (b.stock[k] || 0) - (b.inc[k] || 0));
+    }
+  }
+  return (_megaOwe.by && _megaOwe.by[p] && _megaOwe.by[p][g]) || 0;
+}
+
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
   if (BDEFS[b.type].tank) return b.built && !b.dead && isLiquid(g) && b.smode !== 'empty' && !(b.reject && b.reject[g]) && tankRoom(b) >= 1;
@@ -268,6 +287,10 @@ function needsOf(b) {
   // A Mass Driver end's goods to send (its list, or what it ships automatically): what the colony holds beyond each
   // reserve, up to its hopper (see mdWant). Not at a far end: it ships what it holds.
   if ((def.mdriver || def.catcher) && b.built && !b.mdFar) for (const g of mdSendGoods(b)) { const n = mdWant(b, g), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); }
+  // A Mass Driver with a Catcher kit to throw asks for the Catcher's cost, loaded into the kit (as urgently as a
+  // factory's inputs: a supply order is filled only from what storage holds beyond every other need, and a rival's
+  // Alloy and Chips never sit in storage).
+  if (def.mdriver && b.built && b.mdKit) for (const g in BDEFS.catcher.cost) { const n = BDEFS.catcher.cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n]); }
   // A Port where a Ferry is loading a kit to found a Port asks for it.
   if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
   // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
@@ -309,7 +332,7 @@ function supplyOf(b, g) {
   if (!b.built || b.dead) return 0;
   const def = BDEFS[b.type];
   if (def.terminal) return 0; // its goods leave only by train (terminalSpare), never for spending or by Hauler
-  if ((def.mdriver || def.catcher) && (b.mdSend || b.mdAuto)) return Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0) - mdHold(b, g)); // (what a Mass Driver end sends is for its canisters)
+  if ((def.mdriver || def.catcher) && (b.mdSend || b.mdAuto || b.mdKit)) return Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0) - mdHold(b, g)); // (what a Mass Driver end sends is for its canisters, and a Catcher kit's goods for the kit)
   if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0) - yardHeld(b, g);
   if (b.loot && b.loot[g]) return Math.max(0, Math.min(b.loot[g], b.stock[g] || 0) - (b.res[g] || 0)); // loot warbots left here
   return 0;
@@ -405,7 +428,7 @@ function feedStep(b, dt) {
     const need = BDEFS[c.type].tank ? goods.map((g) => [g, tankRoom(c)]) : needsOf(c);
     for (const g of goods) {
       const n = need.find((x) => x[0] === g);
-      if (!n || n[1] < 1 || feedSupply(b, g) < 1) continue;
+      if (!n || n[1] < 1 || feedSupply(b, g) < 1 || megaFeeOwed(b.owner, g) >= 1) continue; // (a seized megastructure's fee first)
       bump(b.stock, g, -1);
       bump(c.stock, g, 1);
       c.fedT = S.time;
@@ -444,7 +467,7 @@ function feedHaul(b, g, fed) {
 
 /** What of good g producer b keeps back from the Haulers for the factories it feeds by conveyor: what they still need of it. */
 function feedHold(b, g) {
-  if (b.paused || b.cut) return 0; // (its conveyors stand still)
+  if (b.paused || b.cut || megaFeeOwed(b.owner, g) >= 1) return 0; // (its conveyors stand still; or a seized megastructure's fee comes first)
   let n = 0;
   for (const { c, goods } of feedTargets(b)) {
     const inp = BDEFS[c.type].inp;
@@ -20918,6 +20941,12 @@ function mdKitGround(owner, i, j) {
   return !(S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear));
 }
 
+/** What of good g Driver b holds back for the Catcher kit it is loading (the Catcher's cost), if it has one to throw. */
+function mdKitHold(b, g) { return b.mdKit ? BDEFS.catcher.cost[g] || 0 : 0; }
+
+/** Is Driver b's Catcher kit loaded (the Catcher's cost in its stock)? */
+function mdKitLoaded(b) { const c = BDEFS.catcher.cost; return !!b.mdKit && Object.keys(c).every((g) => (b.stock[g] || 0) >= c[g]); }
+
 /** Can player `owner`'s Mass Driver b throw a Catcher kit to tile (i, j)? '' if so, otherwise why not. */
 function mdKitWhy(owner, b, i, j) {
   const M = MASSDRIVER, cost = BDEFS.catcher.cost;
@@ -20934,26 +20963,25 @@ function mdKitWhy(owner, b, i, j) {
   if ((S.posts || []).some((q) => Math.max(Math.abs(q.x - i), Math.abs(q.y - j)) <= r + 1)) return 'Not on a Trade Post\'s ground.';
   if (ringOverRival(owner, i, j, r)) return `Too close to a rival's buildings: the Catcher's land (${r} tiles round it) would cut them off.`;
   if (!mdKitGround(owner, i, j)) return 'Too close to a Murmur nest.';
-  if (!canAffordRoad(owner, cost)) return `A Catcher kit costs ${costText(cost)}: not enough ${missingGoods(owner, cost)} in storage.`;
+  void cost;
   return '';
 }
 
 /**
- * Mass Driver b throws a Catcher kit to tile (i, j) (i < 0: the kit not yet thrown is called off, its goods back in
- * storage). It is paid from storage now; the Driver throws it as soon as it can fire (mdLaunchKit). '' or why not.
+ * Mass Driver b throws a Catcher kit to tile (i, j) (i < 0: the kit not yet thrown is called off; what was loaded for
+ * it stays in the Driver's storage). Haulers bring the Catcher's cost to the Driver (needsOf), loaded into the kit; the
+ * Driver throws it as soon as it is loaded and the coils can fire (mdLaunchKit). '' or why not.
  */
 function setMdKit(owner, b, i, j) {
   if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
   if (i < 0) {
     if (!b.mdKit) return '';
     if (b.mdFire && !b.mdAt) b.mdFire = 0; // (charging for it: stood down)
-    refundRoad(owner, BDEFS.catcher.cost, b.x, b.y);
     delete b.mdKit;
     return '';
   }
   const why = mdKitWhy(owner, b, i, j);
   if (why) return why;
-  payRoad(owner, BDEFS.catcher.cost);
   b.mdKit = [i, j];
   return '';
 }
@@ -20961,8 +20989,9 @@ function setMdKit(owner, b, i, j) {
 /** Driver b's coils are charged for its Catcher kit: it flies to its spot (S.cans, `kit`), and the Driver reloads. */
 function mdLaunchKit(b) {
   const M = MASSDRIVER, [i, j] = b.mdKit, o = bCentre(b);
-  if (!magPowered(b)) return; // (its power went while it charged: it tries again)
+  if (!magPowered(b) || !mdKitLoaded(b)) return; // (its power or its load went while it charged: it tries again)
   delete b.mdKit;
+  for (const g in BDEFS.catcher.cost) bump(b.stock, g, -BDEFS.catcher.cost[g]);
   const d = dist(b.x, b.y, i, j), k = clamp((d - M.min) / (M.max - M.min), 0, 1);
   S.cans = S.cans || [];
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: 0, kit: 1, goods: Object.assign({}, BDEFS.catcher.cost), t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
@@ -21054,6 +21083,7 @@ function mdWant(b, g) {
 /** What end b holds back of good g for its canisters (supplyOf leaves it alone): all of a good on its list; at the near end, what it ships. */
 function mdHold(b, g) {
   if (!b.built) return 0;
+  if (b.mdKit && BDEFS.catcher.cost[g]) return b.mdSend && b.mdSend[g] !== undefined ? Infinity : (b.mdFar ? 0 : mdAutoN(b, g)) + BDEFS.catcher.cost[g]; // (and a Catcher kit's load)
   if (b.mdSend) return b.mdSend[g] !== undefined ? Infinity : 0;
   return b.mdFar ? 0 : mdAutoN(b, g);
 }
@@ -21076,12 +21106,12 @@ function mdFullGoods(b, o) {
 
 /** What end b can load of good g for partner o: whole units (no more than o has room for). */
 function mdAvail(b, o, g) {
-  const room = Math.floor(mdRoom(o, g));
+  const room = Math.floor(mdRoom(o, g)), kit = mdKitHold(b, g);
   if (room < 1) return 0;
-  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.min(room, Math.floor(b.stock[g] || 0)) : 0;
+  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.max(0, Math.min(room, Math.floor((b.stock[g] || 0) - kit))) : 0;
   const plan = b.mdAuto && b.mdAuto[o.id];
   if (!plan || !plan[g]) return 0;
-  const has = b.mdFar ? keepSupply(b, g) : (b.stock[g] || 0) - (b.res[g] || 0);
+  const has = (b.mdFar ? keepSupply(b, g) : (b.stock[g] || 0) - (b.res[g] || 0)) - kit;
   return Math.max(0, Math.min(plan[g], room, Math.floor(has)));
 }
 
@@ -21151,8 +21181,8 @@ function updateMassDriver(b, dt) {
     if (S.time >= b.mdFire) mdLaunch(b);
     return;
   }
-  if (drv && b.mdKit) {
-    // A Catcher kit to throw comes first.
+  if (drv && b.mdKit && mdKitLoaded(b)) {
+    // A Catcher kit loaded comes first.
     if (!magPowered(b)) b.status = `A Catcher kit is loaded: waiting for power (a Generator with Fuel within ${BDEFS.generator.burner.radius} tiles)`;
     else if (b.mdCd > 0) b.status = `A Catcher kit is loaded: it flies in ${Math.ceil(b.mdCd)}s`;
     else {
@@ -21167,6 +21197,7 @@ function updateMassDriver(b, dt) {
   const ps = mdPartners(b);
   if (!ps.length) {
     if (!drv) b.status = 'Storing goods: no Mass Driver is aimed at it yet';
+    else if (b.mdKit) { const c = BDEFS.catcher.cost; b.status = `Loading a Catcher kit: ${Object.keys(c).reduce((n, g) => n + Math.min(c[g], Math.floor(b.stock[g] || 0)), 0)} of ${sumValues(c)} goods (Haulers bring them)`; }
     else {
       const c0 = b.mdTo ? getE(b.mdTo) : null;
       b.status = !b.mdTo ? 'Not aimed: tap Aim below' : c0 && !c0.dead && c0.owner === b.owner && !c0.built ? `Its ${BDEFS[c0.type].name} is still going up`
@@ -21193,6 +21224,9 @@ function updateMassDriver(b, dt) {
     b.working = true;
     b.status = 'Charging the coils';
     sfx('mdcharge', b.x + 0.5, b.y + 0.5);
+  } else if (drv && b.mdKit && !best) {
+    const c = BDEFS.catcher.cost, has = Object.keys(c).reduce((n, g) => n + Math.min(c[g], Math.floor(b.stock[g] || 0)), 0);
+    b.status = `Loading a Catcher kit: ${has} of ${sumValues(c)} goods (Haulers bring them)`;
   } else if (!best && ps.some((o) => mdFullGoods(b, o).length)) {
     const full = [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))];
     b.status = `Far end full: nothing there collects its ${full.map((g) => GOOD[g].name).join(', ')}, so no more is sent`;

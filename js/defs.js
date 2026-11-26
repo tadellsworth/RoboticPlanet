@@ -383,7 +383,7 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
  * the Hollow (nothing flies under the cavern roof).
- * A Driver can also throw a Catcher kit (mdKit: the Catcher's cost, paid from storage) to open ground `min` to `max`
+ * A Driver can also throw a Catcher kit (mdKit: the Catcher's cost, loaded at the Driver) to open ground `min` to `max`
  * tiles away that no one else holds (no Trade Post's ground): it lands as a Catcher site that assembles itself in
  * `kitBuild` s (no Worker needed), claims the land `kitClaim` tiles round it (b.claim, as a Port founded by sea does),
  * and the Driver is aimed at it: a foothold on an island or a mesa with none. Flak can burst it like any canister.
@@ -1652,7 +1652,7 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {

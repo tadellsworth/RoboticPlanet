@@ -1236,8 +1236,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   was. Saves keep `S.cans` and the ends' fields (`checkSave`); `hashState` hashes both; a save from before (a one-way
   Driver, often with a goods list) loads as a two-way pair, its list kept as the Driver's override. **Catcher kit**
   (Nov 26 2026): the Driver's panel **Throw a Catcher kit** (`startMdAim(b, true)`, `UI.mdKit`, the `mdKit` order,
-  `setMdKit`, `mdKitWhy`) pays the Catcher's cost from storage (`payRoad`; called off before it flies, `refundRoad`)
-  and sets `b.mdKit` (the tile); the Driver charges for it before anything else (`b.mdAt` 0) and throws it
+  `setMdKit`, `mdKitWhy`) sets `b.mdKit` (the tile); the Driver asks Haulers for the Catcher's cost (`needsOf`, as
+  urgently as a factory's inputs, not a supply order: a rival's Alloy never sits in storage) and holds it for the kit
+  (`mdKitHold` in `mdHold`, `mdAvail`); called off, what was loaded stays in its storage. Loaded (`mdKitLoaded`), it
+  charges for the kit before anything else (`b.mdAt` 0) and throws it
   (`mdLaunchKit`: a canister with `kit` 1, no end, `to` 0) to open, empty ground `min`–`max` tiles off that no one else
   holds, not within `kitClaim` + 1 of a Trade Post, whose ring cuts no rival off (`mdKitGround`, `ringOverRival`). It
   lands (`mdKitLand`) as a Catcher site on its tile (or the nearest that will take it within 2; none, its goods fall as
@@ -1250,7 +1252,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   the Architect from 600 s, the others from 900 s, every 20 s): on a map of islands, mesas or canyons (`aiMdMap`:
   Islands, Sky islands, Four Isles, Canyon maze, Grand Canyon) to its nearest fort or store 16–52 tiles out on ground its
   robots can't walk to (another `walkZones` area: over a Viaduct, a landing's), elsewhere only to one no link or road
-  reaches; with the goods for both ends and a spare, a Driver site 3–9 tiles from its Command Base facing it, a
+  reaches; with Cement in hand, a usual site free and a Bot Foundry and Chip Fab of its own (not the Alloy and Chips: they never sit in its storage, the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a
   Generator by it, and a Catcher site by the foothold (`aiMdFarSpots`) when its Workers and Haulers get there (the same
   `S.zone`), else a Catcher kit once the Driver stands; then it aims the Driver, and `mdPlan` runs the line. Lost, it
   tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
@@ -3496,7 +3498,12 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
     seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. A rival plans a
     road to a seized megastructure ahead of ordinary sites when it can afford one, and gives the commissioning fee
-    High delivery priority until it is paid. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
+    High delivery priority until it is paid; while it owes a good (`megaFeeOwed`, a rival's only), its factories'
+    conveyors don't hand that good on and keep none back from the Haulers (`feedStep`, `feedHold`), its Ammo Plant
+    rests, and its Bot Foundry too once the fee has waited `AI_SEIZE.rest` (45) s (`b.feeRest`): before (Nov 26 2026,
+    seeded games, a Lance or Deep Core seized at 10 to 12 minutes) a Smelter's Alloy went straight into the Foundry
+    beside it and the fee sat a few Alloy and Chips short for ten minutes and more; now it comes online 5 to 7 minutes
+    after it is seized. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or

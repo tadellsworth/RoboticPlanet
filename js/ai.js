@@ -531,7 +531,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield') && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield' || b.type === 'mdriver' || b.type === 'catcher') && S.time - b.born < 420) continue; // saved up for: give it time
       if (BDEFS[b.type].mega) continue; // (a megastructure is saved up for as long as it takes: see aiMega)
       const cost = siteCost(b);
       let stuck = false;
@@ -952,7 +952,7 @@ function aiThink(p) {
   const forFoundry = !me.some((b) => b.type === 'foundry' && (b.built || (b.stock.alloy || 0) + (b.inc.alloy || 0) >= fCost.alloy));
   for (const b of me) {
     const cap = AI_CAPS[b.type];
-    if (!cap || !b.built) continue;
+    if (!cap || !b.built || b.feeRest) continue; // (resting for a seized megastructure's fee: below)
     if (forBridge && (b.type === 'armory' || b.type === 'fab')) { if (!b.paused) setPaused(b, true); continue; }
     if (forFoundry && (b.type === 'armory' || (b.type === 'fab' && (stockNow.chip || 0) >= fCost.chip))) { if (!b.paused) setPaused(b, true); continue; }
     if (b.type === 'armory' && aiMissileShort(p, me) && (stockNow.ammo || 0) >= 4) { if (!b.paused) setPaused(b, true); continue; } // (an Architect's missile site first: aiMissileShort)
@@ -960,6 +960,16 @@ function aiThink(p) {
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
     else if (b.paused && have < lo) setPaused(b, false);
+  }
+  // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed): the Ammo Plant rests at
+  // once, and the Bot Foundry too once the fee has waited AI_SEIZE.rest s, so what the Smelters and Chip Fabs make
+  // reaches it (they ate it all, and a seized Lance sat a few Alloy and Chips short for ten minutes). Not in triage.
+  const owe = !few && (megaFeeOwed(p, 'alloy') >= 1 || megaFeeOwed(p, 'chip') >= 1);
+  if (owe) P.feeT = P.feeT ?? S.time; else delete P.feeT;
+  for (const b of me) {
+    if (!b.built) continue;
+    if (owe && (b.type === 'armory' || (b.type === 'foundry' && S.time - P.feeT >= AI_SEIZE.rest))) { if (!b.paused) { setPaused(b, true); b.feeRest = 1; } }
+    else if (b.feeRest) { delete b.feeRest; if (b.paused) setPaused(b, false); }
   }
 
   // Fuel first: a Grove Planter gives up its Agribot while a Bio Farm has none (and takes one back
@@ -2174,7 +2184,7 @@ function aiMaglev(p, me, lander) {
  * foothold, or throws a Catcher kit there when its robots can't get there at all; then it aims the Driver at the Catcher and the line supplies itself (mdPlan). The Architect from AI_MDRIVER.from,
  * the others from AI_MDRIVER.others; one pair each; not on Easy. Lost, it tries again after AI_MDRIVER.retry.
  */
-const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, spare: { cement: 10, alloy: 12, chip: 6 } };
+const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, cement: 10, fuel: 12 };
 function aiMdMap() { const sh = SHAPE_PRESETS[S.settings.shape] || {}; return !!(sh.islands || sh.sky || /Canyon/.test(sh.name || '')); }
 function aiMassDriver(p, me, lander) {
   const P = S.players[p], A = AI_MDRIVER, M = MASSDRIVER;
@@ -2198,8 +2208,6 @@ function aiMassDriver(p, me, lander) {
     // No Catcher (or it was lost): a kit to the foothold's ground, when there's one to throw it to and it can pay.
     const T = getE(pair.to);
     if (!T || T.dead || T.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
-    const have = playerGoods(p), c = BDEFS.catcher.cost;
-    if ((have.cement || 0) < c.cement + A.spare.cement || (have.alloy || 0) < c.alloy + A.spare.alloy || (have.chip || 0) < c.chip + A.spare.chip) return;
     for (const [i, j] of aiMdFarSpots(p, T, D.x, D.y)) if (!mdKitWhy(p, D, i, j)) { setMdKit(p, D, i, j); return; }
     return;
   }
@@ -2216,8 +2224,12 @@ function aiMassDriver(p, me, lander) {
     if (dl < bt) { bt = dl; T = b; }
   }
   if (!T) return;
-  const have = playerGoods(p), cd = BDEFS.mdriver.cost, cc = BDEFS.catcher.cost;
-  for (const g of ['cement', 'alloy', 'chip']) if ((have[g] || 0) < cd[g] + cc[g] + A.spare[g]) return;
+  // (Its Alloy and Chips never sit in storage, so it doesn't wait to hold them: the sites ask for them as any site does.
+  // Only Cement in hand, a usual site free, a Bot Foundry and Chip Fab of its own, and Fuel to spare for the Generator
+  // the Driver fires by, from a Refinery or two Bio Farms: on Sky islands, seed 3, a Steward's pair stood idle for
+  // minutes by a Generator with no Fuel, the colony holding 1.)
+  const have = playerGoods(p), built = (t) => me.filter((b) => b.built && b.type === t).length;
+  if ((have.cement || 0) < BDEFS.mdriver.cost.cement + A.cement || (have.fuel || 0) < A.fuel || aiSiteCount(p) >= 2 || !built('foundry') || !built('fab') || !(built('refinery') || built('farm') >= 2)) return;
   // The Driver's spot at home (3 to 9 tiles from the Command Base, nearest the foothold), its axis toward it.
   const axis = Math.abs(T.x - lander.x) >= Math.abs(T.y - lander.y) ? 'ew' : 'ns';
   const homes = [];
@@ -5362,7 +5374,7 @@ function aiWalker(p, lvl) {
  * it back, with a band under a flag by its walls (P.megaHold: { rid, id, t }), called home once it's taken or after
  * AI_SEIZE.stay s. Bringing one online is its Haulers' work (needsOf), as far as its goods go.
  */
-const AI_SEIZE = { every: 5, stay: 180, reach: 45, own: 4, foe: 6 };
+const AI_SEIZE = { every: 5, stay: 180, reach: 45, own: 4, foe: 6, rest: 45 };
 /** Is a band of rival p's seizing a knocked-out megastructure near flag r (its clock theirs)? */
 function aiSeizing(p, r) { return S.buildings.some((b) => !b.dead && b.mDown && b.mBy === p && dist2(bCentre(b).x, bCentre(b).y, r.x, r.y) <= 100); }
 /** A free tile by megastructure b's walls (within MEGA.reach) that rival p's robots can walk to, nearest its base; -1 if none. */

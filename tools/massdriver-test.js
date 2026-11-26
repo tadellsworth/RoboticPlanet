@@ -231,11 +231,12 @@ const kit = JSON.parse(run(kc, `
   let wet = null; for (let j = 0; j < S.H && !wet; j++) for (let i = 0; i < S.W && !wet; i++) { const dd = dist(i, j, D.x, D.y); if (dd >= 20 && dd <= 40 && S.terrain[tIdx(i, j)] === T_WATER) wet = [i, j]; }
   out.wet = applyOrder(0, 'mdKit', [D.id, wet[0], wet[1]]);
   out.close = applyOrder(0, 'mdKit', [D.id, D.x + 4, D.y + 3]);
-  const cem0 = playerGoods(0).cement;
   out.ok = applyOrder(0, 'mdKit', [D.id, far[0], far[1]]);
-  out.paid = cem0 - playerGoods(0).cement;
+  out.asks = Object.fromEntries(needsOf(D).filter((n) => n[1] > 0)); // (the Catcher's cost, loaded into the kit at the Driver)
+  out.status0 = (simStep(SIM_STEP), D.status);
   out.twice = applyOrder(0, 'mdKit', [D.id, far[0], far[1]]);
-  until(() => (S.cans || []).some((m) => m.kit), 30);
+  until(() => (S.cans || []).some((m) => m.kit), 120);
+  out.loadT = Math.round(S.time);
   out.flying = (S.cans || []).some((m) => m.kit && m.from === D.id);
   // a save while it flies: it lands after the load the same way
   const j1 = serializeGame(); deserializeGame(j1);
@@ -257,8 +258,8 @@ const kit = JSON.parse(run(kc, `
   return JSON.stringify(out);
 `));
 console.log(`  kit landed ${kit.at} tiles from its spot, assembled in ${kit.took} s`);
-check('Catcher kit: refused on water, too close, and twice at once; paid from storage (the Catcher\'s cost)', /open, empty ground/.test(kit.wet) && /Too close/.test(kit.close) && kit.ok === '' && kit.paid === 8 && /already has a Catcher kit/.test(kit.twice), kit);
-check('Catcher kit: it flies (and survives a save in flight), lands on its spot as a Catcher site that assembles itself, no Worker, in about 20 s', kit.flying && kit.site && kit.at === 0 && kit.built && kit.took >= 18 && kit.took <= 22, kit);
+check('Catcher kit: refused on water, too close, and twice at once; the Driver asks for the Catcher\'s cost, loaded into the kit', /open, empty ground/.test(kit.wet) && /Too close/.test(kit.close) && kit.ok === '' && kit.asks.cement === 8 && kit.asks.alloy === 5 && kit.asks.chip === 3 && /Loading a Catcher kit/.test(kit.status0) && /already has a Catcher kit/.test(kit.twice), kit);
+check('Catcher kit: Haulers load it, it flies (and survives a save in flight), lands on its spot as a Catcher site that assembles itself, no Worker, in about 20 s', kit.flying && kit.site && kit.at === 0 && kit.built && kit.took >= 18 && kit.took <= 22, kit);
 check('Catcher kit: the new Catcher claims the land round it on the other island, its Driver is aimed at it, and goods fly to it', kit.claim && kit.zone && kit.aimed && kit.got > 0, kit);
 
 // ---- refused on a rival's land and on a Trade Post's ground; Flak bursts a kit (its goods fall as crates)
@@ -291,7 +292,7 @@ const kr = JSON.parse(run(mk(), `
 `));
 console.log('  refused: ' + kr.rival + ' / ' + kr.post);
 check('Catcher kit: refused on a rival\'s land and on a Trade Post\'s ground', /someone else holds/.test(kr.rival) && (kr.post === 'none' || /Trade Post/.test(kr.post)), kr);
-check('Catcher kit: an enemy Flak burst brings it down, its goods fall as crates, its goods fall as crates, no Catcher', kr.ok === '' && kr.burst && !kr.catcher, kr);
+check('Catcher kit: an enemy Flak burst brings it down, its goods fall as crates, no Catcher', kr.ok === '' && kr.burst && !kr.catcher, kr);
 
 // ---- a far end nothing collects from fills up to MASSDRIVER.full of a good, then no more goes: "Far end full"
 const full = JSON.parse(run(mk(), `
@@ -329,6 +330,8 @@ const ai = JSON.parse(run(mk(), `
   computeTerritory(); computeZones();
   for (let k = 0; k < 2; k++) enterBuilding(addBot(0, 'warbot', O.x, O.y), O);
   O.stock.ammo = 0;
+  for (const t of ['foundry', 'fab', 'refinery']) { const q = spot(L.x, L.y, 4, 9, (i, j) => S.zone[tIdx(i, j)] === hz); addBuilding(0, t, q[0], q[1], true); } // (it builds a pair once it makes robots, Chips and Fuel)
+  computeTerritory();
   S.time = AI_MDRIVER.from; // (an Architect's from this time)
   const out = { early: 0 };
   P.lastMd = -999; S.difficulty = 'easy'; aiMassDriver(0, playerBuildings(0), L); out.easy = !P.mdPair; S.difficulty = 'normal';

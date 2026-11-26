@@ -537,6 +537,13 @@ teaches it. The calls made in building it, open for the owner:
     veil and the amber offline lamp are drawn in code for now.
   - **The rivals** seize what they knock out, take their own back and wreck only a Lift they march on for its fall.
     Should a Raider (Salvager) wreck rather than seize, for the crates?
+  - **Re-checked Nov 26 2026** (after a39b0b5 joined them by road and gave their fee priority): in seeded AI games (Medium
+    map, a Lance or Deep Core knocked out a third of the way from the rival at 10 to 12 minutes) the rival seized it in
+    under a minute but never brought it online: 10 minutes on it still owed a few Alloy or Chips, because a Smelter's
+    Alloy went straight into the Foundry beside it by conveyor and never reached storage for the Haulers. Now, while a
+    rival owes its fee, its conveyors don't hand on what it owes, its Ammo Plant rests and, after 45 s, its Foundry:
+    online 289 s (Lance, seed 8) and 430 s (Deep Core, seed 12) after it was seized. Watch: a long fee on a war footing
+    rests the rival's Foundry for minutes; worth it for a Lance, maybe not for a Shield Dome.
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
   **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
@@ -1747,6 +1754,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     water) and still far cheaper on a long hop. *Open for the owner:* a further step would be a slower rate when both
     ends stand on ground a robot can walk between (overland) than across water or a chasm; several Drivers aimed at one
     Catcher still add up (each its own 120 a minute out), unlike a Maglev line's four pods.
+    **Follow-ups built (Nov 26 2026, owner-approved):** (1) **Catcher kit**: a Driver's panel *Throw a Catcher kit*, then
+    open ground 12–50 tiles off that no one else holds (not a Trade Post's ground, its ring cutting no rival off); Haulers
+    load the Catcher's cost (8 Cement, 5 Alloy, 3 Chips) into it at the Driver, it flies like a canister (Flak can burst
+    it: crates), lands as a Catcher that assembles itself in 20 s with no Worker, claims 3 tiles of land (as a Port
+    founded by sea) and the Driver aims at it. Calls made: loaded at the Driver rather than paid from storage at once
+    (a rival's Alloy and Chips never sit in storage, so a storage price was one it could never pay); a spot taken while
+    it flies moves it to the nearest open tile within 2, else its goods fall as crates. (2) **Rivals build pairs**
+    (`aiMassDriver`): Medium and up, one pair, the Architect from 10 minutes and the others from 15, on Islands, Sky
+    islands, Four Isles and the canyon maps, to the nearest fort or store of its own 16–52 tiles out on ground its robots
+    can't walk to (elsewhere only ground no road, Viaduct or ferry reaches); a Catcher site where its Haulers get (a
+    Viaduct), a kit where nothing of its can. Not done: a kit to a rich deposit nobody holds (no Worker can follow it
+    there, so nothing could be built round it: a Ferry or a Drop Outpost first). (3) **Far end full**: a far end stops
+    taking a good at 64 (or what it keeps, if more), the near end's status and panel say so, and it sends again once some
+    is used. Open: 64 a good, or a cap on the whole stock?
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
