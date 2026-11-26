@@ -2574,7 +2574,12 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - **Oil seep shimmer timing check:** it measures a full redraw when the seep is on screen. Separate that redraw
   from the shimmer timing.
 
-## To do: megastructures lit at night (owner, Nov 25)
+## Built: megastructures lit at night (owner, Nov 25)
+
+**Built** (ART_GUIDE.md, Megastructures at night; `megaNight` in `js/render.js`): a cached light layer (lamps and windows
+bloomed, the deck floodlit, an LED strip in the owner's colour round the pad), red warning beacons on the tall parts and
+white floods; dark with its amber lamp while knocked out or offline. The original request:
+
 
 In game the megastructures stay dark at night while every other building is lit (owner's screenshot: the Orbital Lift
 by a lit base, its pad and tower unlit). Give all eight night lighting like the rest of the base: lit windows and
