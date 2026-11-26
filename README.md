@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two to four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -320,7 +320,7 @@ With Planetary events enabled, Immense Ringfall targets up to nine sites per col
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
 The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
-scenery (The Ring is always on Argos's, whatever the Biome setting). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+scenery (The Ring is always on Argos's, whatever the Biome setting; Half underground has the Biome on its surface and the Hollow's look in its caves, and no second biome). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
 Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
 and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -521,6 +521,45 @@ but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles
 canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves; reduced motion holds everything still; no planet tilt,
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
+
+**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two to four players; flat; the owner's idea from IDEAS.md) is half caves
+and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
+the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
+(every tile made to its twin, the noise read at each tile's canonical column; `tools/map-symmetry-test.js` checks it for every size and player
+count). **The wall**: a band of rock five tiles thick across the middle (`CAVES.wall`, a little wavy) that no road tunnels through (`S.cave` 2:
+`canRoad` refuses it); the **entrances** cut through it, each opening into a funnel of open floor on both sides. By seed there are two or three:
+a narrow middle gate (half-width `CAVES.mouth[0]`, 1: three tiles) with a wide mouth (5: eleven tiles) to each side, a wide middle mouth with a narrow gate
+to each side, or two middle-sized mouths (half-width 2.5) and nothing in the middle (`S.caves.variant` 0, 1, 2; widths scale a little with the map's
+width). A Ropeway over the wall (14 tiles) is the only other way for Workers, Haulers and light bots; armies and trucks have the mouths.
+**The two halves** (`S.cave`: 0 surface, 1 inside, 2 wall; the Uint8Array is saved with the game, `checkSave` checks it and `S.caves`):
+the caves are the north half on half the seeds and the south on the rest (`S.caves.south`, from the seed: the map is made with the caves north and then
+turned over end to end, so player 0 starts inside on about half the planets and outside on the rest). The surface has the standard colony's
+fields (stalk groves, fertile soil, Stone, oil seeps) and a little Ore and Crystal (`CAVES.outside`: per thousand tiles of surface); the caves have winding
+passages, rock pillars, **plenty of Ore and Crystal** and Stone and oil (`CAVES.inside`), **no stalk groves or fertile soil**, and a small patch of Ore and Crystal just
+inside each entrance and of stalks and fertile soil just outside it. **Colonies** (`S.caves.seats`: `{ x, y, inside }`): two (one outside, one inside, on the middle
+line), three (an outside pair and one inside on the line: the outside pair share the surface and the lone colony has the whole of the caves), four (an outside and
+an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside (rounded down for three). Each
+kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil, Stone and a little Ore and Crystal on the surface; Ore, Crystal and Stone
+inside, and the oil seeps in both), alike for every colony of that kind to the bit. **Opening stock**: on top of `START_STOCK`, a colony that starts inside lands with
+`CAVES.stock.inside` (+100 Fiber, +30 Fuel, +10 Stone, +12 Cement) and one that starts outside with `CAVES.stock.outside` (+60 Ore, +25 Crystal, +25 Alloy, +20 Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
+Hollow): enough for the first few minutes of what its side lacks, then it has to branch out through the mouths for it (Outposts claim ground across the wall's far side, and the
+rival does exactly that: see below). **The look**: the caves are the Hollow's art (`BIOMES.hollow`, `art/biomes/hollow`) as a second region over the `S.cave` tiles (`applyBiome`:
+`R.secondRegion` is the Hollow, `R.biomeMix` the mask; `makeDecor` gives them the Hollow's plants; no second biome can be picked on this map), the surface the Biome the game picked.
+The caves are lit by their own dim light all the time (`caveGrade`, `CAVE_LIGHT`: the ground is graded for the time of day over the surface only, `caveClip`), and the sunset's tint,
+the planet events' look and the weather (`drawWeather`) are clipped to the surface; the wall draws as the caves' rock, a floor tile under rock gets the cave wall's face (the Hollow's `hollowWall`).
+**The roof** (`caveAt`, `caveTile`, `caveBan`): inside, **nothing grows** (`worldBan(type, t)` → `caveBan`: no Bio Farm or Grove Planter on a cave tile) and no
+building meant for the sky goes up there (no Airfield, Mooring Mast, Mass Driver, Catcher, Missile Factory, Missile or Nuclear Silo, Lance, Sundering Ray, Orbital Lift,
+Atmosphere Engine or Great Uplink); `canPlace` says why. Nothing that comes down from above lands: `missileBlocked`, `nukeBlocked`, `strikeBlocked` (bombs), `napalmBlocked`,
+`airdropBlocked` (Cargo Plane drops and Drop Outposts), `mdAimWhy` (Mass Driver canisters), `lanceAimBlocked` and `sunderAimBlocked` refuse a target there, and a Missile, bomb,
+napalm canister or nuclear missile that is already in the air and comes down on the caves bursts on the roof (`updateMissiles`); a Lance's beam passes over them (`lanceTiles`); a plane's
+supply run won't go there (`airSuppliable`). Ringfall falls on the surface only (`cavesRingfall`: the usual number of strikes, each with its mirror), and a dust storm and a solar flare reach
+no one inside (`evSpeed`, `evDrain`). Ground armies, Mortars and Howitzers go in as anywhere. There is no wildlife in the caves (`faunaTrySpawn`). **No Trade Posts or Uplinks** (`placePosts`; Uplinks
+fall back to Capture, as in the Hollow, and there is no Great Uplink win: `noSkyShape` in js/ui.js). **The Murmur** live in the caves only, and only with the Murmur setting on (the map is
+`murmur: 'off'` by default): `placeCaveNests` puts an ordinary nest on each of the sites `cavesMap` laid out in twin pairs inside (`CAVES.nests`, 2 to 9 a side by Size; half the pairs, rounded up, with the Murmur
+Quiet), level 1, with their tunnels and exits as anywhere; no mound and no tremors (those are the Hollow's). **The rival** (`aiNoCrops`, `aiBan` in js/ai.js): a colony that starts inside builds as the Hollow's
+does where nothing grows (Oil Pumps for its Fuel in place of Bio Farms, the Refinery first, no Grove Planters, and nothing that flies or fires from under the roof), and expands through the mouths
+(the usual `P.short` rule: short of stalks, Outposts toward them) to the Fiber it has none of; one that starts outside builds as on any surface map and expands toward the Ore and Crystal it lacks. The map picker's card
+is a schematic from the flags; the Custom Game, the Observer and a multiplayer lobby list it like any map. Measured (rival vs rival, Normal, Balanced both, 2 players, Medium seeds 11 to 18 and Large seeds 21 to 24, 45-minute cap): all 12 decided, 6 won by the colony that started inside and 6 by the one outside (Medium 3 against 5, Large 3 against 1), games 6 to 23 minutes (14.6 on average at Medium, 11.8 at Large); three- and four-player games (Small and Medium) all ended in 10 to 22 minutes; with the Murmur Active two Small/Medium games ended in 7 and 8 minutes. The first stock tried (150 Fiber inside, 90 Ore outside) gave 6 inside wins in 8; the numbers above came out of three sweeps of the same seeds. Without a fight, a rival outside runs its Ore stock down by minute 18 and has Outposts and Mines in the caves from minute 12; one inside runs out of Fiber by minute 12 to 15 and has Outposts on the surface by minute 9 to 12, but stays Fiber-bound (a long haul home).
 
 **Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
 (`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and

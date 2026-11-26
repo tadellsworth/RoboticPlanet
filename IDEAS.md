@@ -289,11 +289,20 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
   home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
   Viaduct only (as on Sky islands); whether the Ring needs a **mission** (none yet).
-- **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
-  Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
-  reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
-  live outside and raid in. Pairs with the Hollow's underground tech (its cave drawing, tunnels and Murmur). Open:
-  how the entrances work as chokepoints, whether the Murmur live in the caves, and 2/3/4-player layouts.
+- **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
+  js/defs.js; README, Half underground). Two to four players, half the colonies starting inside the caves and half out on the surface:
+  inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
+  in; outside, the Biome's surface with the stalk groves and crop soil and little Ore. A solid wall (no road tunnels through it) runs between
+  them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
+  (Fiber and Fuel inside; Ore, Crystal and Alloy outside) and has to branch out through the mouths; the Murmur, if on, live in the caves only; the rival plays either start
+  (`aiNoCrops`, `aiBan`, the mouth pull in `aiSearchSpot`). Rival vs rival (Normal, 2 players, 12 games): 6 wins for the start inside, 6 for the start outside, none undecided, 6 to 23 minutes.
+  Open: **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
+  gates in a long wall, more than three); **caves with more to them** (underground lakes, floating Crystal masses and ceiling tremors as
+  in the Hollow, a Murmur mound under the middle, the Bloom's veins as an optional Fiber source); **entities in the caves' own
+  light** (units and buildings are drawn in the surface's light at day: only the ground is graded dim); **the caves for the Ring** (an
+  asteroid with a cave); more than two starting kinds (a colony on the wall's top); whether an inside colony should get a Ropeway kit; the
+  rival's early mouth rush on a long game (it expands through the mouths when it runs short, a few minutes after the opening stock is
+  spent: it could go sooner); a mission that teaches the caves (none yet).
 
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 

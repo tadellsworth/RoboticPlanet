@@ -1043,7 +1043,7 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  *             (stalk groves, fertile soil, a little Ore and Crystal) get: the caves hold the riches
  */
 const CAVES = {
-  stock: { inside: { fiber: 150, stone: 20, cement: 12 }, outside: { ore: 90, crystal: 30, alloy: 20 } },
+  stock: { inside: { fiber: 100, fuel: 30, stone: 10, cement: 12 }, outside: { ore: 60, crystal: 25, alloy: 25, fiber: 20 } },
   mouth: [1, 2.5, 5], wall: 2,
   nests: [2, 3, 4, 5, 7, 9],
   inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 1.3, crystal: 0.9, oil: 1 },
