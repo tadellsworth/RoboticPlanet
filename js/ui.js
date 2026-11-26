@@ -645,12 +645,12 @@ function modeInfo(mode, n, teams) {
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
     : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
       : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
-    : n === 4 && haul ? `Free-for-all · 4 on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
-    : n >= 3 && dam ? `Free-for-all · ${n}: you and ${n === 4 ? 'three rival colonies (red, green and purple)' : 'two rival colonies'} round the high ground of ${SH.name}, each valley under its own reservoir and dam. ${win}`
-    : n === 4 && town ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
-    : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
+    : n === 4 && haul ? `Free-for-all · 4 players on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
+    : n >= 3 && dam ? `Free-for-all · ${n} players: you and ${n === 4 ? 'three rival colonies (red, green and purple)' : 'two rival colonies'} round the high ground of ${SH.name}, each valley under its own reservoir and dam. ${win}`
+    : n === 4 && town ? `Free-for-all · 4 players: you and three rival colonies (red, green and purple) on ${where}, one on each side of the town, each with an old avenue running into it. ${win}`
+    : n === 4 ? `Free-for-all · 4 players: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
       : n === 3 && town ? `Free-for-all: you and two rival colonies round ${where}, a round town in the middle with an old avenue from each colony to its heart. ${win}`
-      : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
+      : n === 3 && onCross ? `Free-for-all · 3 players: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
           : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';
 }
@@ -670,7 +670,7 @@ function menuMods() { return modList(UI.menu.mods, UI.menu.mode === 'versus' ? '
 function menuSummary() {
   const m = UI.menu, colony = m.mode !== 'versus', three = menuThree(), horde = m.mode === 'horde';
   const otherBiome = chosenSecondBiome(m, menuSize());
-  const main = [horde ? `Horde · ${DIFFICULTY[m.diff].label} waves · ${m.diff === 'warlord' || m.hgoal === 'endless' ? 'Endless' : `${HORDE.waves} waves`}` : colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
+  const main = [horde ? `Horde · ${DIFFICULTY[m.diff].label} waves · ${m.diff === 'warlord' || m.hgoal === 'endless' ? 'Endless' : `${HORDE.waves} waves`}` : colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()} players` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   if (menuUpWin()) main.push('Great Uplink win');
@@ -1118,7 +1118,7 @@ function syncMenu() {
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
     btn.textContent = mps ? String(v) : btn.dataset.lbl; // (multiplayer: how many colonies, people and computers together)
     btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
-    btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
+    btn.dataset.info = v === 2 ? '2 players: you and one rival colony, landing at the far end of the planet.'
       : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
         : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
     if (mps) btn.dataset.info = `${v} colonies: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);

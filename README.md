@@ -4306,7 +4306,7 @@ its Command Base, drawn as a crate crossing the map. State: `P.allyCmd` (`atk`, 
 allows. A lone post is shared when both teams can reach it with similar effort. Long Haul 2v2 keeps its central post.
 Tied AI turns rotate across teams, and the order in which units and guns act alternates across ticks. A team game is
 won by **Capture**: take both enemy Command Bases and both colonies of your team win. A colony captured while its
-teammate stands is down, not out, until its team captures the base back (see Fallen allies). Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+teammate stands is down, not out, until its team captures the base back (see Fallen allies). Teams also work in a one-person game (Versus, **4 players**: you and a computer
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 
