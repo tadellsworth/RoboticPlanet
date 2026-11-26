@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two to four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -522,7 +522,7 @@ canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
 
-**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two to four players; flat; the owner's idea from IDEAS.md) is half caves
+**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
 the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
 (every tile made to its twin, the noise read at each tile's canonical column; `tools/map-symmetry-test.js` checks it for every size and player
@@ -537,8 +537,12 @@ turned over end to end, so player 0 starts inside on about half the planets and 
 fields (stalk groves, fertile soil, Stone, oil seeps) and a little Ore and Crystal (`CAVES.outside`: per thousand tiles of surface); the caves have winding
 passages, rock pillars, **plenty of Ore and Crystal** and Stone and oil (`CAVES.inside`), **no stalk groves or fertile soil**, and a small patch of Ore and Crystal just
 inside each entrance and of stalks and fertile soil just outside it. **Colonies** (`S.caves.seats`: `{ x, y, inside }`): two (one outside, one inside, on the middle
-line), three (an outside pair and one inside on the line: the outside pair share the surface and the lone colony has the whole of the caves), four (an outside and
-an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside (rounded down for three). Each
+line) or four (an outside and an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside.
+**Two or four players only** (the owner's call, Nov 2026): `SHAPE_PRESETS` `evenOnly` makes the player-count buttons (Custom Game, Observer, the lobby) refuse 3 (`playersFit`),
+the Random map pool leave this map out for three, and a 3 that arrives from a saved setting, a link or a lobby go through `snapPlayers`: it becomes **two** (the least surprising: the
+other maps do the same clamping), or **four** when three people sit in a lobby (everyone needs a place; the fourth is a computer rival). `playerCount` applies it to every game. The
+three-colony layout (an outside pair and one inside on the line) is **parked**, not removed: `cavesMap` still builds it, so an older three-player save loads and plays, and it takes one line to
+bring back (drop `evenOnly`). Each
 kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil, Stone and a little Ore and Crystal on the surface; Ore, Crystal and Stone
 inside, and the oil seeps in both), alike for every colony of that kind to the bit. **Opening stock**: on top of `START_STOCK`, a colony that starts inside lands with
 `CAVES.stock.inside` (+100 Fiber, +30 Fuel, +10 Stone, +12 Cement) and one that starts outside with `CAVES.stock.outside` (+60 Ore, +25 Crystal, +25 Alloy, +20 Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the

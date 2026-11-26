@@ -2841,7 +2841,8 @@ function ringMap(seed, W, H, cfg) {
  * caves to the north and then, on half the seeds, turned over end to end (so player 0 is inside on those). It is
  * mirror-symmetric (every tile made to its twin, west to east: the noise read at each tile's canonical place), so the two
  * colonies of a kind get the same to the bit; an inside colony and an outside one are alike in the totals (not tile for tile).
- *   - Colonies: two (one outside, one inside, on the middle line), three (an outside pair and one inside on the line), four
+ *   - Colonies: two (one outside, one inside, on the middle line), three (PARKED: an outside pair and one inside on the line; the map takes
+ *     two or four, SHAPE_PRESETS evenOnly, but older three-colony saves still load), four
  *     (an outside and an inside pair: west team, outside and inside, against east team in Teams). Half of them start inside.
  *   - The wall: a rock band across the middle (S.cave 2) that no road tunnels through; the entrances cut it. By seed: a
  *     narrow middle gate with wide mouths to each side, a wide middle mouth with narrow gates to each side, or two middle-sized
@@ -3082,8 +3083,17 @@ function maxPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 /** The fewest players map type `shape` is made for: 2, or 3 on the maps built round three or four colonies. */
 function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.minPlayers || 2; }
 
+/**
+ * Map types with `evenOnly` (Half underground) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
+ * is parked in cavesMap). A three that arrives (a saved setting, a lobby, a link) becomes two, or four with `up` (a lobby of three people:
+ * all of them need a place).
+ */
+function snapPlayers(shape, n, up) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.evenOnly && n === 3 ? (up ? 4 : 2) : n; }
+/** Can map type `shape` (a number, or Random: -1) hold exactly `n` colonies? */
+function playersFit(shape, n) { return shape < 0 || (n >= minPlayers(shape) && n <= maxPlayers(shape) && snapPlayers(shape, n) === n); }
+
 /** How many players a game asking for `want` gets: as many as the map type has room for (Versus only). */
-function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape)) : minPlayers(shape); }
+function playerCount(mode, shape, want) { return mode === 'versus' ? snapPlayers(shape, clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape))) : minPlayers(shape); }
 
 /** Planetary is sized for a solo colony or a two-colony match. */
 function mapSizeForPlayers(size, players) {

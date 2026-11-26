@@ -295,13 +295,13 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
   a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
-  js/defs.js; README, Half underground). Two to four players, half the colonies starting inside the caves and half out on the surface:
+  js/defs.js; README, Half underground). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
   inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
   in; outside, the Biome's surface with the stalk groves and crop soil and little Ore. A solid wall (no road tunnels through it) runs between
   them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
   (Fiber and Fuel inside; Ore, Crystal and Alloy outside) and has to branch out through the mouths; the Murmur, if on, live in the caves only; the rival plays either start
   (`aiNoCrops`, `aiBan`, the mouth pull in `aiSearchSpot`). Rival vs rival (Normal, 2 players, 12 games): 6 wins for the start inside, 6 for the start outside, none undecided, 6 to 23 minutes.
-  Open: **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
+  Open: **three players** (parked: `cavesMap` still lays out three colonies, an outside pair and one inside on the line, but the map takes two or four for now, `evenOnly`: the owner will decide whether and how the split of three comes back); **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
   gates in a long wall, more than three); **caves with more to them** (underground lakes, floating Crystal masses and ceiling tremors as
   in the Hollow, a Murmur mound under the middle, the Bloom's veins as an optional Fiber source); **entities in the caves' own
   light** (units and buildings are drawn in the surface's light at day: only the ground is graded dim); **the caves for the Ring** (an
