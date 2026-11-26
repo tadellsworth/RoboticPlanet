@@ -44,3 +44,15 @@ A rival with a completed Bot Foundry and no usable charging building now treats 
 - Standard seed 25: after the minute-12 loss, the first completed, fueled replacement was seen at minute 17. The revised run was undecided at its original 38-minute cap. The earlier loss run ended at 26.62 minutes without a sampled replacement.
 - Long haul seed 21: the first completed, fueled replacement was seen at minute 13. The revised run was undecided at its original 33-minute cap. The earlier loss run ended at 26.99 minutes without a sampled replacement.
 - The two no-loss controls retained their winners and times, 17.32 and 23.81 minutes respectively.
+
+## Opening fairness spot check
+
+Long haul seed 21, Medium Versus, Normal, both Balanced, on `7c7930a`. Both colonies had completed a Fuel Station by the minute-1 check. The table shows the first one-minute checkpoint with positive cumulative production and the totals by minute 12. Starting stock is excluded.
+
+| Good | Colony 1 first by | Colony 2 first by | Colony 1 total at 12 | Colony 2 total at 12 |
+| --- | ---: | ---: | ---: | ---: |
+| Fuel | 4 min | 5 min | 30 | 27 |
+| Alloy | 5 min | 5 min | 60 | 54 |
+| Chips | 7 min | 7 min | 20 | 25 |
+
+Fuel appeared one sample earlier for Colony 1. Alloy and Chips first appeared at the same checkpoints, and each colony led in at least one good by minute 12. This spot check covers one seed, with opening route costs and other starts still to audit. Replay with `TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js 'Long haul' 21 2 12 7c7930a`.
