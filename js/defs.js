@@ -763,9 +763,9 @@ const SHAPE_PRESETS = [
   // The Dam (the owner's idea, approved Nov 2026): a raised shelf runs from the middle toward each colony, holding a
   // reservoir behind a dam over that colony's valley (damShape in world.js, the rules in sim.js, the look in js/dam.js).
   // Two colonies face each other across the high ground; three or four sit round it, each with its own lake and dam.
-  { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Wreck a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
-    tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Wreck it (W) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
-    quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Wreck it (W) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
+  { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Demolish a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
+    tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Demolish it (D) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
+    quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Demolish it (D) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
 ];
 /**
  * The Walking Factory (SHAPE_PRESETS walker: walkerSetup in world.js, the rules in sim.js, the look in js/walker.js).
@@ -1164,7 +1164,7 @@ const RAD = { reactor: { r: 4, life: 300 }, nuke: { r: 7, life: 330 }, hurt: 0.0
  * boost falls to `dark` of itself. It can never be destroyed: whatever hits it (warbots, Missiles, bombs, shells, a nuke,
  * a Lance shot) knocks it down to 0 at most, and then it is knocked out like any megastructure (MEGA, b.mDown; b.cDown
  * while it's dark): its bonus stops and its windows go dark, and whoever holds it takes it (land, bonus and all). It
- * has no Wreck it. Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
+ * has no Demolish it. Not on Argos (the moon was never meant to be lived on). One per colony; it stores nothing.
  */
 const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5 };
 /*
@@ -1176,7 +1176,7 @@ const CITY = { at: 720, reach: 8, boost: 0.2, land: 6, fuel: 60, dark: 0.5 };
  * it stands at `armor` of its armor, switched off (b.mOff): its new owner's Haulers bring `fee` of its build cost
  * (b.mNeed, what's still owed), then a Worker brings it online, mending it up to `online` of its armor. Anything it was
  * charging starts again; its stage (a Deep Core's depth, an Engine's stage) is kept. A colony that orders an enemy one
- * wrecked (Wreck it on its panel, ORDERS.megaWreck: b.mWreck, a bit per colony) shoots it on past 0: `wreck` of its
+ * wrecked (Demolish it on its panel, ORDERS.megaWreck: b.mWreck, a bit per colony) shoots it on past 0: `wreck` of its
  * armor more and it is destroyed, `salvage` of its build cost spilling out in crates with what was inside. Missiles,
  * nukes, bombs, napalm, Howitzer shells and the Lance's shot destroy one as before (Arrival City: never destroyed).
  */

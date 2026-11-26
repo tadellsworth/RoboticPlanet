@@ -6336,7 +6336,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
 }
 
 function hitBuilding(b, dmg, by, src) {
-  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Wreck it can still deal damage)
+  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Demolish it can still deal damage)
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   if (src && isNestB(b)) nestAlarm(b, src); // (a Murmur nest shot at from out of its guards' reach: they come for the shooter)
   dmg = keepShield(b, dmg);
@@ -12007,7 +12007,7 @@ function damStands(d) {
 function damOrder(p, k, what, on) {
   const d = damByK(k);
   if (!d) return 'No dam there.';
-  if (what !== 'wreck' && what !== 'mend') return 'Wreck it or shore it up.';
+  if (what !== 'wreck' && what !== 'mend') return 'Demolish it or shore it up.';
   if (on && d.broke >= 0) return 'This dam has already burst.';
   const bit = 1 << p;
   if (what === 'wreck') { if (on) { d.by |= bit; d.mend &= ~bit; } else d.by &= ~bit; }
@@ -21758,8 +21758,8 @@ function megaDarkStep(b, dt) {
  */
 function megaWreckOrder(p, b, on) {
   if (!b || b.dead || !b.built || !BDEFS[b.type].mega) return 'That megastructure is gone.';
-  if (BDEFS[b.type].city) return 'Arrival City can\'t be wrecked: knock it out and hold it to take it.';
-  if (!foes(p, b.owner)) return 'Only an enemy megastructure can be wrecked.';
+  if (BDEFS[b.type].city) return 'Arrival City can\'t be demolished: knock it out and hold it to take it.';
+  if (!foes(p, b.owner)) return 'Only an enemy megastructure can be demolished.';
   if (on) b.mWreck = (b.mWreck || 0) | (1 << p); else b.mWreck = (b.mWreck || 0) & ~(1 << p);
   return '';
 }

@@ -10,7 +10,7 @@
  *   damItems    the dams among the buildings and robots, sorted by their foot: the concrete wall (its crest, its face
  *               toward the valley with a spillway gate and a trickle over it), cracks that spread as it weakens, water
  *               seeping through them below half, chips flying while it's hit (a Missile's blast on it: damBlast's fx); once burst, its broken ends, rubble and
- *               the lake pouring through the breach; a strength bar while it's hurt; your Wreck or Shore up order as
+ *               the lake pouring through the breach; a strength bar while it's hurt; your Demolish or Shore up order as
  *               a dashed outline
  */
 
@@ -226,18 +226,18 @@ function damSheet(k) {
   if (broke) state = `<b>Burst${d.brokeBy >= 0 ? ` by ${d.brokeBy === p ? 'you' : esc(playerName(d.brokeBy, true))}` : ''}.</b> The lake has flooded ${whose} valley and drained to a muddy bed, with Ore and Crystal in the mud; the river it left is shallows robots wade (Haulers and trucks need a bridge), and the breach is a way up to the lakebed.`;
   else {
     state = `Strength <b>${Math.ceil(d.hp)} of ${DAM.hp}</b> (${pct}%). It holds the lake over ${whose} valley. `;
-    if (wreck) state += at ? `<b>Wrecking it:</b> ${at} of your armed robots in reach, each taking ${DAM.hit} a second off it.` : `<b>Ordered wrecked:</b> select warbots and tap the dam to send them; armed robots within ${DAM.reach} tiles of it shoot it (Howitzers from ${DAM.siegeReach}, ${DAM.siege} a second).`;
+    if (wreck) state += at ? `<b>Demolishing it:</b> ${at} of your armed robots in reach, each taking ${DAM.hit} a second off it.` : `<b>Ordered demolished:</b> select warbots and tap the dam to send them; armed robots within ${DAM.reach} tiles of it shoot it (Howitzers from ${DAM.siegeReach}, ${DAM.siege} a second).`;
     else if (mend) state += crew ? `<b>Being shored up:</b> ${crew} of your Workers on it (up to ${DAM.crew}), each mending ${DAM.mend} a second.` : S.time - d.hitT < DAM.calm ? '<b>Ordered shored up:</b> your Workers go once nothing has hit it for a few seconds.' : '<b>Ordered shored up:</b> your next free Workers go to it.';
-    else state += d.k === p ? 'If it breaks, the flood sweeps your robots, damages your buildings down the valley (those in the river\'s path are wrecked) and washes out the roads there. Guard it from the shelf and the gorge: a rival\'s Missile takes ' + DAM.missile + ' off it.' : `Wreck it and the lake floods ${whose} valley. A Missile aimed at it (your Silo's Aim missile) takes ${DAM.missile} off it.`;
+    else state += d.k === p ? 'If it breaks, the flood sweeps your robots, damages your buildings down the valley (those in the river\'s path are wrecked) and washes out the roads there. Guard it from the shelf and the gorge: a rival\'s Missile takes ' + DAM.missile + ' off it.' : `Demolish it and the lake floods ${whose} valley. A Missile aimed at it (your Silo's Aim missile) takes ${DAM.missile} off it.`;
   }
-  const btn = broke ? '' : (wreck ? '<button class="btn" id="sh-damstop">Stop wrecking</button>' : '<button class="btn primary" id="sh-damwreck">Wreck the dam</button>')
+  const btn = broke ? '' : (wreck ? '<button class="btn" id="sh-damstop">Stop demolishing</button>' : '<button class="btn primary" id="sh-damwreck">Demolish the dam</button>')
     + (mend ? '<button class="btn" id="sh-damunmend">Stop shoring up</button>' : `<button class="btn" id="sh-dammend"${d.hp >= DAM.hp ? ' disabled' : ''}>Shore it up</button>`);
   const html = `<div class="sheet-title"><div><h3>The dam</h3><div class="sub">over ${whose} valley</div></div></div>
     <p class="flavor">${esc(broke ? DAM_LINE.replace('full', 'empty') : DAM_LINE)}</p>
     <p class="desc">${state}</p>
     ${btn ? `<div class="btn-row">${btn}</div>` : ''}`;
   openSheet('dam', k, html);
-  const go = (what, on) => { sfx('click'); act('damOrder', [k, what, on], (why) => { if (why) toast(why, 'warn'); else toast(what === 'wreck' ? (on ? 'Dam ordered wrecked: select warbots and tap it to send them.' : 'Wrecking called off.') : (on ? 'Your free Workers are on their way to shore it up.' : 'Shoring up called off.'), 'info'); damSheet(k); }); };
+  const go = (what, on) => { sfx('click'); act('damOrder', [k, what, on], (why) => { if (why) toast(why, 'warn'); else toast(what === 'wreck' ? (on ? 'Dam ordered demolished: select warbots and tap it to send them.' : 'Demolishing called off.') : (on ? 'Your free Workers are on their way to shore it up.' : 'Shoring up called off.'), 'info'); damSheet(k); }); };
   if ($('sh-damwreck')) $('sh-damwreck').onclick = () => go('wreck', true);
   if ($('sh-damstop')) $('sh-damstop').onclick = () => go('wreck', false);
   if ($('sh-dammend')) $('sh-dammend').onclick = () => go('mend', true);

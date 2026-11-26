@@ -604,7 +604,7 @@ const ORDERS = {
   townStrip(p, id, on) { return S.town && !isWild(p) ? townStrip(p, id | 0, !!on) : 'No town here.'; },
   /** The Dam: order dam k (its index) wrecked or shored up (what: 'wreck' or 'mend'), or call it off. '' or why not. */
   damOrder(p, k, what, on) { return S.dam && !isWild(p) ? damOrder(p, k | 0, String(what), !!on) : 'No dam here.'; },
-  /** Wreck it: player p's robots shoot enemy megastructure `id` on past 0 until it's destroyed (on), or hold it to seize it (off). '' or why not. */
+  /** Demolish it: player p's robots shoot enemy megastructure `id` on past 0 until it's destroyed (on), or hold it to seize it (off). '' or why not. */
   megaWreck(p, id, on) { const b = liveB(id); return b && !isWild(p) ? megaWreckOrder(p, b, !!on) : 'That megastructure is gone.'; },
   undoSite(p, id) {
     const b = ownB(p, id);

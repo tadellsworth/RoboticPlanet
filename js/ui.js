@@ -2673,9 +2673,9 @@ const SHEET_KEYS = {
   'sh-strip': ['s', 'Passenger Town: Strip for salvage'],
   'sh-unstrip': ['s', 'Passenger Town: Stop stripping'],
   'sh-board': ['e', 'The Walking Factory: Send warbots aboard'],
-  'sh-damwreck': ['w', 'The Dam: Wreck the dam'],
-  'sh-mwreck': ['w', 'Megastructure: Wreck it, or seize it'],
-  'sh-damstop': ['w', 'The Dam: Stop wrecking'],
+  'sh-damwreck': ['d', 'The Dam: Demolish the dam'],
+  'sh-mwreck': ['d', 'Megastructure: Demolish it, or seize it'],
+  'sh-damstop': ['d', 'The Dam: Stop demolishing'],
   'sh-dammend': ['u', 'The Dam: Shore it up'],
   'sh-focus': ['t', 'Aim a defence at an enemy'],
   'sh-focus-clear': ['x', 'Clear a defence\'s aim'],
@@ -8597,7 +8597,7 @@ function openBuildingSheet(b) {
       const on = !megaWrecking(b, ME);
       act('megaWreck', [b.id, on], (why) => {
         if (why) { sfx('error'); toast(why, 'warn'); return; }
-        sfx('click'); toast(on ? `Your warbots will wreck the ${def.name}: they shoot it on past 0 until it's destroyed.` : `Your warbots will seize the ${def.name}: knocked out, they hold it ${MEGA.cap} s and it's yours.`, 'info');
+        sfx('click'); toast(on ? `Your warbots will demolish the ${def.name}: they shoot it on past 0 until it's destroyed.` : `Your warbots will seize the ${def.name}: knocked out, they hold it ${MEGA.cap} s and it's yours.`, 'info');
         refreshSheet();
       });
     };
@@ -9185,10 +9185,10 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-mwreck')) {
     const w = megaWrecking(b, ME);
-    $('sh-mwreck').textContent = w ? 'Seize it instead' : 'Wreck it';
+    $('sh-mwreck').textContent = w ? 'Seize it instead' : 'Demolish it';
     $('sh-mwreck').classList.toggle('danger', !w);
-    $('sh-mwreck-hint').textContent = w ? `Ordered wrecked: your warbots shoot it on past 0 until it's destroyed, and part of its goods spill out in crates.`
-      : `Beaten to 0 by your warbots it is knocked out, not wrecked: hold it ${MEGA.cap} s and it's yours, then bring it online for a quarter of its cost. Wreck it to destroy it instead.`;
+    $('sh-mwreck-hint').textContent = w ? `Ordered demolished: your warbots shoot it on past 0 until it's destroyed, and part of its goods spill out in crates.`
+      : `Beaten to 0 by your warbots it is knocked out, not wrecked: hold it ${MEGA.cap} s and it's yours, then bring it online for a quarter of its cost. Demolish it to destroy it instead.`;
   }
 }
 

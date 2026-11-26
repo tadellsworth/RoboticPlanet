@@ -1,7 +1,7 @@
 // Seizing megastructures (MEGA): every megastructure warbots beat to 0 is knocked out, not wrecked; its charge is lost
 // and its stage kept; armed warbots holding it seize it (contested, the clock stops; its old owner can take it back the
 // same way, and can't repair it meanwhile); seized, it is offline until its new owner's Haulers bring a quarter of its
-// cost and a Worker brings it online; Wreck it destroys it instead, spilling crates; Arrival City is never wrecked; a
+// cost and a Worker brings it online; Demolish it destroys it instead, spilling crates; Arrival City is never wrecked; a
 // save replays the same.
 // Usage: node tools/mega-seize-test.js
 const assert = require('node:assert/strict');
@@ -113,10 +113,10 @@ const out = new Function('assert', 'sfx', source + `
     assert.equal(alerts(), first, 'seizing never repeats the attack warning');
     assert.equal(applyOrder(0, 'megaWreck', [b.id, true]), '');
     hitBuilding(b, 2, 0);
-    assert.equal(alerts(), first + 1, 'an actual Wreck it attack can warn again');
+    assert.equal(alerts(), first + 1, 'an actual Demolish it attack can warn again');
     assert.equal(b.mWr, 2, 'wreck damage still counts');
     ME = 0;
-    log.push('seize warning replaces repeated attack alerts; Wreck it still reports fire');
+    log.push('seize warning replaces repeated attack alerts; Demolish it still reports fire');
   }
 
   // 2) Brought online: the fee hauled to it (a road to it), then a Worker; and the work starts again.
@@ -189,21 +189,21 @@ const out = new Function('assert', 'sfx', source + `
     log.push('contested at ' + c1.toFixed(1) + ' s: stopped; taken back by its old owner');
   }
 
-  // 4) Wreck it: destroyed, crates spilt; Arrival City refused.
+  // 4) Demolish it: destroyed, crates spilt; Arrival City refused.
   for (const type of ['gup', 'atmos', 'city']) {
     const { b } = setup(type);
     b.armor = 4;
     const why = applyOrder(0, 'megaWreck', [b.id, true]);
-    if (type === 'city') { assert.ok(why, 'Arrival City can\\'t be ordered wrecked'); log.push('city: Wreck it refused (' + why + ')'); continue; }
+    if (type === 'city') { assert.ok(why, 'Arrival City can\\'t be ordered wrecked'); log.push('city: Demolish it refused (' + why + ')'); continue; }
     assert.equal(why, '', type + ': ordered wrecked');
     const crates0 = (S.loot || []).length;
     const us = band(0, b, 6);
     const t = run(120, () => b.dead);
     assert.ok(b.dead, type + ': wrecked');
     assert.ok((S.loot || []).length > crates0, type + ': part of its goods in crates');
-    log.push(type + ': Wreck it, destroyed in ' + t.toFixed(1) + ' s, ' + ((S.loot || []).length - crates0) + ' crate pile(s)');
+    log.push(type + ': Demolish it, destroyed in ' + t.toFixed(1) + ' s, ' + ((S.loot || []).length - crates0) + ' crate pile(s)');
   }
-  // ...and once knocked out, a Wreck it order finishes it off.
+  // ...and once knocked out, a Demolish it order finishes it off.
   {
     const { b } = setup('dome');
     b.armor = 2; band(0, b, 6);
@@ -212,7 +212,7 @@ const out = new Function('assert', 'sfx', source + `
     applyOrder(0, 'megaWreck', [b.id, true]);
     const t = run(120, () => b.dead);
     assert.ok(b.dead, 'a knocked-out one ordered wrecked goes');
-    log.push('dome: knocked out, then Wreck it: gone ' + t.toFixed(1) + ' s later');
+    log.push('dome: knocked out, then Demolish it: gone ' + t.toFixed(1) + ' s later');
   }
   // 5) A Missile still destroys one (and Arrival City is only knocked out by it).
   for (const type of ['lance', 'city']) {

@@ -443,7 +443,7 @@ middle two tiles to `DAM.chan` of the way, ending in a pool). `S.dam` = `{ v, ve
 (bit p: colony p's orders), hitT, hitBy, broke (-1 or when), brokeBy, fi, ri, li (flood, recede and drain progress), x0
 y0 x1 y1, tiles, gap, lake (far shore first), stream, flood, fd, chan, wet }] }`: saved, checked by checkSave, hashed.
 The `ford` layer is always made on this map. **Rules** (sim.js, three times a second, `damTick`): the `damOrder` order
-(panel: Wreck the dam W, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
+(panel: Demolish the dam D, Shore it up U; one clears the other) sets the bits. Every armed army robot of a colony with
 the wreck bit within `DAM.reach` (3) of the dam's face takes `DAM.hit` (1) a second off its `DAM.hp` (400); a Howitzer
 within `DAM.siegeReach` (6), `DAM.siege` (3) (rivals' times their difficulty's mult). Its colony is told when it is
 first hit, everyone at half and a quarter (`damHurt`). **Blasts** (`damBlast`, the owner's call of Nov 23 2026): a
@@ -3065,7 +3065,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     it at 0 instead and calls `cityDown` (`hitBuilding`, `missileImpact` and its splash, `rocketHit`, `bombHit`,
     `nukeImpact`, `lanceFire`; `destroyBuilding` by force as a backstop; `demolish` and the order refuse it; not on a
     fault line that will open, `footPlace`). **Knocked out** (`b.cDown` while dark): seized like any megastructure (see
-    **Seizing megastructures** below), with no Wreck it; taken, its land, boost and Domination count change sides
+    **Seizing megastructures** below), with no Demolish it; taken, its land, boost and Domination count change sides
     (`P.stats.cities`, `logEvent` `city`). Saved whole with the building; `hashState` covers owner, down, Fuel and dark
     (the seize state with every megastructure's). Art: `renderer/b/city.js` (`tools/render_city.sh`, `tools/install_city.py`): four prefab panel blocks
     of raw concrete round a square (lawns, deer, a fountain, the Arrival clock on a stele ringed like Ithaca I, an empty
@@ -3338,13 +3338,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `armor` (25%) of its armor owing `b.mNeed` = `fee` (a quarter) of its build cost (`megaFee`, rounded up). `needsOf`
     asks Haulers for it; `megaCommission` takes what reaches its stock off the bill; paid (`b.mReady`) it sets `fixLeft` to
     mend it to `online` (50%) of its armor (at least 5 s of work), dispatch's repair step sends a Worker, and `doFix`
-    finishing calls `megaOnline` (a Dome warms up again; `logEvent` `megaOn`). **Wreck it** (ORDERS.`megaWreck`,
+    finishing calls `megaOnline` (a Dome warms up again; `logEvent` `megaOn`). **Demolish it** (ORDERS.`megaWreck`,
     `megaWreckOrder`: `b.mWreck`, a bit per colony; not Arrival City): that colony's robots knock it out and shoot on,
     `wreck` (half) of its armor more in `b.mWr`, then `captureBuilding` destroys it, adding `salvage` (a quarter) of its
     build cost to what spills in crates (`dropLoot`). Missiles, nukes, bombs, napalm, Howitzer shells, fuel blasts and the
     Lance's shot destroy one as before (a City: knocked out). The panel (`megaParts` in `js/ui.js`): Knocked out (who is
-    seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Wreck it** / **Seize it
-    instead** (`sh-mwreck`, key W); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
+    seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Demolish it** / **Seize it
+    instead** (`sh-mwreck`, key D); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
     and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's offline. The rivals
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within

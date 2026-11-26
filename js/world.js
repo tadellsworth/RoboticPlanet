@@ -3857,7 +3857,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
-  if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Wreck it or Shore it up.' };
+  if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   if (S.walker && walkerYard(i, j)) return { ok: false, reason: 'The Walking Factory\'s yard: it walks here, so nothing can be built on it.' };
   const land = landRule(owner, type, t);
