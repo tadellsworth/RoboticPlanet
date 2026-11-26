@@ -2591,7 +2591,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 
 /**
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
- * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All); Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All), 7 Terraform (its five tools, not buildings); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
  * map, and B closes the menu except on the Make tab, where B is the Bot Foundry (Build, 2, B). R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
@@ -2603,8 +2603,10 @@ const BUILD_KEYS = {
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
+  // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c' },
 };
-const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6' };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6', terra: '7' };
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
@@ -2880,8 +2882,8 @@ function renderKeys() {
   };
   const tabs = Object.entries(BUILD_TAB_KEYS).map(([group, key]) => {
     const def = BUILD_GROUPS.find(({ key }) => key === group);
-    const title = `${caps([key])} ${def ? def.name : 'All'}`;
-    const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type].name]);
+    const title = `${caps([key])} ${def ? def.name : group === 'terra' ? 'Terraform' : 'All'}`;
+    const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type] ? BDEFS[type].name : TF_TOOLS_UI[type.slice(3)].name]);
     if (def?.roads) rows.unshift([['r'], 'Roads']);
     if (def?.walls) rows.unshift([['x'], 'Walls']);
     return rows.length ? sub(title, rows) : `<h4>${title}</h4><p>Use a card’s tab number, then its letter.</p>`;
@@ -3039,6 +3041,8 @@ function initKeyboard() {
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
     // Picking a bomber's target: B and N switch its payload (Bomb or Napalm).
     if (R.mode === 'strike' && (k === 'b' || k === 'n')) { e.preventDefault(); setStrikeKind(k === 'n' ? 'napalm' : 'bomb'); return; }
+    // In the Terraform mode a tool's letter switches to it (R, L, F, H, C: js/terraform.js).
+    if (tfKey(k)) { e.preventDefault(); return; }
     // A key on the open panel's buttons (SHEET_KEYS) presses that button.
     const sk = sheetKeyButton(k);
     if (sk) { e.preventDefault(); sk.click(); return; }
@@ -3050,11 +3054,11 @@ function initKeyboard() {
     if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && (k !== 'b' || (BUILD_KEYS[UI.buildTab] && Object.values(BUILD_KEYS[UI.buildTab]).includes('b')))) {
       const keys = BUILD_KEYS[UI.buildTab];
       const type = keys && Object.keys(keys).find((t) => keys[t] === k);
-      const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
+      const card = type && $('sheet-body').querySelector(type.startsWith('tf-') ? `.bcard[data-tf="${type.slice(3)}"]` : `.bcard[data-t="${type}"]`);
       if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
       if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
         e.preventDefault();
-        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega.`, 'info');
+        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega, 7 Terraform.`, 'info');
         return;
       }
     }
@@ -4811,6 +4815,7 @@ function setMode(mode, keepPlan) {
   UI.moveFrom = 0;
   if (mode !== 'bppick') UI.bpPick = null; // (blueprints: picking buildings, placing one: js/blueprint.js)
   if (mode !== 'bpplace') UI.bpPlace = null;
+  if (mode !== 'terra') UI.tf = null; // (a Terraform plan never sent is dropped: it cost nothing)
   if (UI.bpOffer && mode !== 'normal') { UI.bpOffer = null; bpOfferShow(); }
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
@@ -6352,6 +6357,7 @@ function recallAllWarbots() {
 }
 
 function confirmBanner() {
+  if (R.mode === 'terra') { tfConfirm(); return; }
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'bppick') { if (UI.bpPick && UI.bpPick.size) bpSave([...UI.bpPick]); return; }
   if (R.mode === 'bpplace') { bpPlaceNow(); return; }
@@ -6540,6 +6546,7 @@ function onMapTap(i, j, wx, wy) {
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'scorch') { scorchTap(i, j); return; }
+  if (R.mode === 'terra') { tfTap(i, j); return; } // (a Terraform plan: js/terraform.js)
   if (R.mode === 'bppick') { bpPickTap(i, j, wx, wy); return; } // (blueprints: js/blueprint.js)
   if (R.mode === 'bpplace') { bpPlaceTap(i, j); return; }
   if (UI.bpOffer) { UI.bpOffer = null; bpOfferShow(); }
@@ -7102,6 +7109,7 @@ function dragCliff(stroke, p, t) {
  * carries the road on from there as before.
  */
 function onRoadPaint(i, j, first) {
+  if (R.mode === 'terra') { tfPaint(i, j, first); return; } // (a Terraform plan's drag: js/terraform.js)
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
   if (first) {
@@ -8089,10 +8097,10 @@ function openBuildMenu() {
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
-  if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
+  if (UI.buildTab !== 'all' && UI.buildTab !== 'terra' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
   // (A tab marked `late`, Mega, comes after All, in the order of the number keys.)
   const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
-  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}</div>`;
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}${tfTabButton()}</div>`; // (Terraform last: tools, not buildings, js/terraform.js)
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   // The cards in tab order, each tab's under its name (shown on All on a desktop, where All is a wide grid of columns):
   // Roads and Blueprints lead Move, Walls lead Defend. (Elsewhere the grid's CSS order puts the next step, then Roads,
@@ -8111,7 +8119,7 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}${groups.map((g) => `<div class="b-grp" data-grp="${g.key}" aria-hidden="true"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}</div>`
-      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}</div>`;
+      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}${tfCards()}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
@@ -8119,11 +8127,12 @@ function openBuildMenu() {
   $('build-roads').onclick = () => openRoadDraw();
   if ($('build-bp')) $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
+  tfBind($('sheet-body'));
   const show = (g) => {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard, .build-grid .tf-note')) el.hidden = el.dataset.g === 'terra' || g === 'terra' ? el.dataset.g !== g : g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
     $('sheet-body').querySelector('.build-grid').classList.toggle('all', g === 'all'); // (on a desktop: grouped, in columns: style.css)
     document.body.classList.toggle('sheet-build-all', g === 'all');
     // On All, a card's key reads "2 K": its tab's number, then its letter.

@@ -356,6 +356,11 @@ const ORDERS = {
     settlePlans(); // pay for what we can now, oldest plans first; the rest waits for the goods
     return out;
   },
+  /**
+   * A Terraform plan (Build → Terraform): tool one of TF_TOOLS, the tiles in the order dragged (Flatten: to level
+   * `target`). Each that can be done becomes an Earthworks site for a Grader. What happened comes back (tfPlace).
+   */
+  terraform(p, tool, list, target) { return tfPlace(p, String(tool), Array.isArray(list) ? list.slice(0, TERRA.most) : [], target | 0); },
   /** The road crew limit: at most v Workers lay planned road at once (one of ROAD_CREWS; 0: no limit). */
   roadCrew(p, v) { if (ROAD_CREWS.includes(v)) S.players[p].roadCrew = v; },
   paveMark(p, i, j, on) { if (inMap(i, j)) setPaveMark(p, i, j, !!on); },

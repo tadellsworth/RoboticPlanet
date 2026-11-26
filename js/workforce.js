@@ -156,6 +156,12 @@ function wfProblems(auto) {
     const danger = P.danger && dangerAt(ME, b.x, b.y);
     out.push({ s: `<b>${wfName(b)} site</b>: goods in, waiting for a builder${danger ? ' (enemies about: workers keep away)' : capped('sites') ? ' (Building sites are at their cap)' : ''}`, at: b, kind: 'site' });
   }
+  // Terraform jobs (Earthworks sites) are a Grader's, never a Worker's: one line when they wait with no Grader on them.
+  const earth = mine.filter((b) => !b.built && b.tf && tfReady(b) && !tfGrader(b));
+  if (earth.length) {
+    const graders = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
+    out.push({ s: `<b>${earth.length} Earthworks</b> wait${earth.length === 1 ? 's' : ''} for a Grader: ${graders ? `your ${graders === 1 ? 'Grader is' : graders + ' Graders are'} busy` : 'order one at the Bot Foundry (Workers don\'t do them)'}`, at: earth[0], kind: 'site' });
+  }
   // (one line for each kind of building: "2 Quarries want a Worker: no Worker is free"; a row held at your cap says so)
   const kinds = new Map();
   for (const b of mine) {

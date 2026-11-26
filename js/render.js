@@ -3332,6 +3332,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const t = R.time;
   const working = b && b.working;
   if (b && !b.built) {
+    if (type === 'earthwork') { drawEarthwork(ctx, cx, cy, s, owner, b); return; } // (a Terraform job: js/terraform.js)
     if (type === 'sunder') { drawSunderSite(ctx, cx, cy, s, owner, b); return; }
     if (BDEFS[type] && BDEFS[type].foot) { drawMegaSite(ctx, type, cx, cy, s, owner, b); return; }
     drawSite(ctx, type, cx, cy, s, owner, b); return;
@@ -5939,6 +5940,7 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
+  if (BOTS[u.type].grader) { drawGrader(ctx, u, sx, sy, s); botBars(ctx, u, sx, sy, s); return; } // (placeholder art: js/terraform.js)
   const color = PLAYER_COLORS[u.owner];
   // A Rocket Truck with its rack raised (deploying or firing) shows its launcher up and legs out.
   const own = (BOTS[u.type].siege && (u.deployT > ROCKET.deploy * 0.4 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner); // (dug in: spades down, barrel up)
@@ -6024,6 +6026,11 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = gun ? '#e8c39e' : '#8fd8ff';
     ctx.fillRect(x, y, gun ? (w * (u.ammo || 0)) / mag : (w * Math.max(0, u.gel || 0)) / ARC.cells, h);
   }
+  botBars(ctx, u, sx, sy, s);
+}
+
+/** A robot's battery bar (low: orange; flat: flashing red) and health bar. */
+function botBars(ctx, u, sx, sy, s) {
   if (u.owner === ME && !R.clean && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
     const crit = u.bat < BATTERY.critical;
@@ -7310,6 +7317,7 @@ function render(dtReal) {
   }
   if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
   else if (typeof UI !== 'undefined' && UI.planKept) drawDraft(ctx, ox, oy, z, inView); // (a Paths plan, kept while a Viaduct or Ropeway is placed)
+  if (R.mode === 'terra' && typeof tfDrawPlan === 'function') tfDrawPlan(ctx, ox, oy, z, inView); // (a Terraform plan: js/terraform.js)
   drawLights(ctx, ox, oy, z, inView);
   drawOverpassShadows(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);

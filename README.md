@@ -674,7 +674,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   two at a time, and **only drive on roads**. A factory less than a Hauler's load short of an input, with more than
   its next batch in hand or on the way, waits to be topped up (`dispatch`), so Haulers carry full loads instead of one
   unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
-  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt) and **Warbots** fight. You
+  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks (two each: they lay planned road and asphalt), **Graders** do Terraform plans and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Who gets a worker** (`dispatch` step 2, the same for rivals): player priority (`prioRank`) first; then a building
   that can work now before one that would only sit waiting (`stallWhy`: short of an input counting what's on its way,
@@ -805,6 +805,33 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
   order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
   type being built is highlighted. The AI keeps the default order, taking turns.
+- **Terraforming, stage 1** (Nov 2026; `TERRA` in `js/defs.js`, the rules and the work in `js/sim.js`: `tfWhere`,
+  `tfJob`, `tfPlace`, `graderDispatch`, `tfApproach`, `completeEarthwork`; the tab, the plan mode and the drawing in
+  `js/terraform.js`). **Build → Terraform** (key 7, `BUILD_KEYS.terra`): **Raise** (R) and **Lower** (L) a tile a
+  level, **Flatten** (F: a dragged rectangle to the level of its first tile), **Fill shallows** (H: water beside land
+  becomes land, level with the ground it's built out from: new ground planned beside it, else the shore its owner's
+  robots stand on) and **Dig channel** (C: land at the waterline beside water becomes water). The plan mode
+  (`R.mode 'terra'`, `UI.tf`) previews each tile with the order's own rules (`tfJob`, given the tiles planned before it,
+  so a bridge or canal drags out tile by tile), totals the Stone and the Grader time, and sends one order
+  (`ORDERS.terraform(tool, tiles, target)`, at most `TERRA.most` = 48 tiles). Each tile becomes an **Earthworks** site
+  (`BDEFS.earthwork`, `b.tf = { k: 'up'|'down'|'fill'|'dig', to, n }`, its own `b.cost` and `b.buildTime`), outside the
+  site limit. Only **Graders** (`BOTS.grader`: a Foundry robot, 3 rounds of parts, 0.6 of a Worker's speed) build them:
+  `siteReady` says no to Workers, so no Worker step, the Workforce rows or Call a builder touch them; `graderDispatch`
+  (from `dispatch`) sends each free Grader to the nearest one it can stand beside (`tfReady`, `tfApproach`), and
+  `doBuild` works it (`graderWork`: it faces the tile and throws dust). Numbers: a level of earth is `TERRA.stone` (4)
+  Stone and `TERRA.time` (24) s; Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (6) Stone, 36 s.
+  Costs come by Hauler where a road reaches; a Fill site, and any site `dispatch` finds unlinked, is paid from storage
+  as the goods come in (`fromStore`, as a Wall). Yields are crates of Stone (`addLoot`, its owner's priority) where the
+  Grader stood. Refused: a rival's land, buildings (sites too), roads and planned roads, Ramps, track, pipes, resources,
+  Trade Posts, Uplinks, landmarks, the dam, Passenger Town's ruins, the Walking Factory's yard, runways, rock, chasms,
+  lava, tidal flats, the fault, fallen Lift cable, near a Murmur nest, and anywhere no robot of its owner's could get
+  beside; and no cliff steeper than a level (or than it already was). Done (`completeEarthwork`): the terrain and
+  `S.elev` change, a Ramp left leading nowhere is cleared, the tile and the two rings round it are repainted, and
+  `terrainChanged` redoes the zones, territory, the sea (`seaNet`, `shoreDist`), road and plan versions and the minimap;
+  robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
+  `S.tfTiles` and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
+  as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
+  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4622,7 +4649,7 @@ sites added; `node tools/workforce-test.js [seed] [minutes]`, every check runs o
 games with different settings (Auto untouched,
 Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load, builders kept free, minimums with
 nobody free, a pinned factory at its stock limit, the player's own presets), then two devices over the lockstep
-changing the settings all game, one reloading halfway, their fingerprints compared every second.
+changing the settings all game (and ordering Graders and Terraform jobs), one reloading halfway, their fingerprints compared every second.
 
 ```bash
 node tools/massdriver-test.js
@@ -4632,6 +4659,16 @@ The Mass Driver line: goods both ways between a Driver and its Catcher, automati
 list, a 50-tile line across the sea on Islands (allowed on Sky islands and Four Isles, not in the Hollow), a goods list
 overriding Auto, an Outpost kept in Ammo, a rival's Flak bursting a canister, an old one-way save loading, and the
 measured pace over 30 tiles.
+
+```bash
+node tools/terraform-test.js
+```
+
+Terraforming: Raise, Lower, Flatten, Fill shallows and Dig channel done by Graders (never Workers), the Stone each costs
+and yields, the refusals (a building, a road, a rival's land, too steep), robots' routes after a raise and a flatten, a
+land bridge a Worker walks over to an island, a canal joining two lakes that a Ferry then sails through, a robot on a
+flooding tile stepping off, a save made mid-job loading and playing on to the same hash, and the same plan twice
+giving the same hash.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

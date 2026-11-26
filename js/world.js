@@ -4352,7 +4352,7 @@ function keepsRoadSide(u, t) {
 
 function siteCount(owner) {
   let n = 0;
-  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp) n++; // Ramps are part of a path, like roads
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp && !BDEFS[b.type].earthwork) n++; // Ramps are part of a path, like roads
   return n;
 }
 
@@ -5932,6 +5932,8 @@ function checkSave(o) {
   if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k])) && (f.p == null || (Number.isInteger(f.p) && f.p >= -1 && f.p < o.players.length))))) bad();
   // The drought under a Storm Front (tile: whole seconds a foe's crop there has been under it, short of STORM.drought).
   if (o.drought != null && !(obj(o.drought) && Object.keys(o.drought).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && Number.isInteger(o.drought[k]) && o.drought[k] > 0 && o.drought[k] < STORM.drought))) bad();
+  // The ground Graders changed (tile: 1), hashed for a network game (hashState).
+  if (o.tfTiles != null && !(obj(o.tfTiles) && Object.keys(o.tfTiles).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && o.tfTiles[k] === 1))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
@@ -6042,6 +6044,9 @@ function checkSave(o) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
+    // an Earthworks site's job (TERRA): raise or lower to a level, fill or dig
+    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
+    if (b.type === 'earthwork' && b.tf == null) bad();
     if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
     // a Maglev Terminal's suspended lines (the lost end's tile, whether it held the pylons, its id and their layout)

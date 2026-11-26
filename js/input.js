@@ -138,7 +138,7 @@ function onPointerMove(e) {
     g.moved = true;
     clearTimeout(g.hold);
     const t = _tileAt(g.sx, g.sy);
-    if (R.mode === 'road' && !g.panOnly && !(typeof UI !== 'undefined' && UI.roadMode === 'lights') && (!INPUT.canPaint || INPUT.canPaint(t.i, t.j))) {
+    if ((R.mode === 'road' || R.mode === 'terra') && !g.panOnly && !(typeof UI !== 'undefined' && UI.roadMode === 'lights') && (!INPUT.canPaint || INPUT.canPaint(t.i, t.j))) {
       g.painting = true;
       if (INPUT.onPaint) INPUT.onPaint(t.i, t.j, true);
     }

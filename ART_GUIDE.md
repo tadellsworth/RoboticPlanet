@@ -2080,6 +2080,47 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Terraforming: the Grader and Earthworks (placeholder in code; final art pending Claude Design)
+
+Stage 1 of terraforming (Nov 2026; README, "Terraforming, stage 1") needs a new robot and a new kind of site. Both are
+drawn in code for now as plain, clearly temporary placeholders in `js/terraform.js`, the only file that draws them. The
+owner's call: the final look and its animations are designed through Claude Design first (concepts on a Design canvas,
+IDEAS.md, "Redraw the code-drawn art through Claude Design"), then the Grader is rendered with `renderer/` like the
+other rendered robots (the Lancer family's `robkit.js`: seen straight down, the same paint, grime, team light strips).
+When the art lands, only `drawGrader`, `graderArt` and `tfSiteFx` change; the simulation already gives everything the
+art is picked by.
+
+**The Grader** (`BOTS.grader`): a slow tracked earthmover with a dozer blade across its front, a cab, the team colour on
+it. Placeholder: `graderArt` draws tracks, a hull with a team stripe, a cab with glass at the front, an exhaust stack and
+a hazard-striped yellow blade into a 128 px canvas facing east, four frames, cached per team; `drawGrader` turns it the
+way the robot faces, rocks it while the blade bites, throws earth off the blade at work, and adds two cab lamps and a
+pool of light ahead of the blade at dusk and night (`TOD.state.headlights`). Day and night grading comes from `drawArt`.
+
+What the code expects from the rendered set (same conventions as the other robots: 256 × 256, facing right, centred, no
+drop shadow, the game turns it to its heading and draws the shadow):
+
+| Key | What |
+|---|---|
+| `grader@0-f0`…`f3`, `grader@1-f0`…`f3` (+ morning, evening, night) | Driving: the tracks roll a quarter link a frame (the frame steps with distance driven, `FRAME_STEP`) |
+| `grader-cut@<team>-f0`…`f3` | At work lowering or digging (`graderPose` 'cutting'): blade down and biting, spoil curling over it |
+| `grader-push@<team>-f0`…`f3` | At work on a Flatten of more than a level down ('pushing'): blade down, a berm of earth before it |
+| `grader-fill@<team>-f0`…`f3` | At work raising or filling ('filling'): blade low, spreading a heap of earth or Stone ahead |
+| `grader-idle@<team>` | Parked ('idle'): blade up |
+| `grader-brake`, `grader-boost` | The usual brake-light and dust overlays |
+| `grader-headlights` (shared, `TOD.shared`) | Its headlights image, as the other vehicles' (3 × the sprite), in place of the code's lamps |
+
+The team colour should live in the paint stripe and lights only, so the cyan and red sets differ there alone.
+
+**Earthworks sites** (`BDEFS.earthwork`, one per tile, `b.tf.k` 'up', 'down', 'fill' or 'dig', `b.progress` 0 to 1).
+Placeholder: `drawEarthwork` (survey stakes with the owner's flags at the corners, the job's mark and new level, a
+progress bar) over `tfSiteFx`, the "work site" hook: a mound of light earth rising (Raise), a dark pit going down
+(Lower), brown earth spreading out over the water (Fill), dark earth with water seeping in (Dig), and a small spoil pile
+in a corner. Wanted from Claude Design: those four stages as ground overlays at a few points of progress (0, ⅓, ⅔,
+about done), the spoil pile (dug earth, and the grey Stone heap a Raise is fed from), all re-lit with the ground by day
+and night; and a fresh look for ground just made (raw earth on a filled tile, a raw cut bank on a dug one) that fades
+into the biome's ground over a few minutes. The plan preview (`tfDrawPlan`: tinted tiles with their new level, red
+crosses on refused ones, the hovered tile's level) is interface, not art, and stays in code.
+
 ### War scars (drawn in code; no images)
 
 The owner's War scars (Nov 19 2026: README, "War scars"): a long war turns the land into a World War One battlefield.

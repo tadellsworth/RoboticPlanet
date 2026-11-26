@@ -4128,3 +4128,13 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .voice-sub .vs-alien i.said { color: rgba(255, 196, 176, 0.9); text-shadow: 0 0 8px rgba(255, 107, 74, 0.45); }
 .voice-sub .vs-en { font: 500 clamp(15px, 1.9vw, 20px)/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #f3f5f8; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) { .voice-sub { transition: none; } }
+
+/* Build → Terraform (js/terraform.js): its tool cards, the note under them, and the tool row in its banner. */
+.bcard .tf-glyph { width: 44px; height: 44px; grid-row: span 3; display: grid; place-items: center; font-size: 26px; font-weight: 700; border-radius: 10px; background: rgba(255,255,255,0.06); }
+.tf-glyph.tf-raise { color: #ffb24a; } .tf-glyph.tf-lower { color: #7fb4ff; } .tf-glyph.tf-flatten { color: #e8e2d4; }
+.tf-glyph.tf-fill { color: #e2c48a; } .tf-glyph.tf-dig { color: #3fb6e8; }
+.build-grid .tf-note { grid-column: 1 / -1; margin: 4px 2px 0; font-size: 13px; opacity: 0.85; }
+.tf-seg { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.tf-seg button { font-size: 12px; padding: 4px 8px; }
+.tf-seg button kbd { margin-right: 4px; }
+.tf-how, .tf-sum { margin-top: 2px; }

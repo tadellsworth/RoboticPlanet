@@ -1974,6 +1974,7 @@ function moveDirect(u, x, y, dt, cap) {
 function dispatch(p) {
   railPlan(p);
   mdPlan(p);
+  graderDispatch(p); // (Graders: Earthworks sites, and nothing else)
   const blds = [];
   const press = convoysPress(p);
   for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && (!shunned(b) || (press && BDEFS[b.type].terminal))) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about (but a Terminal whose convoys press on)
@@ -2038,6 +2039,8 @@ function dispatch(p) {
   for (const b of blds) {
     b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) && !(BDEFS[b.type].magterm && magPartner(b)) && !mdFed(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
+    // Earthworks no Hauler can reach: their Stone comes straight from storage instead, as it comes in (a Wall's way).
+    if (b.unlinked && b.tf && !b.built && !b.fromStore && !sumValues(b.inc)) { b.fromStore = true; b.unlinked = false; queuePlan('b', b.id, p); }
   }
   // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
   // Hauler a link of its chain that holds a round of what it works with takes even that one (lastLink), giving it back
@@ -3520,7 +3523,7 @@ function assignBuild(u, site, stands) {
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].earthwork ? tfApproach(u, site) : BDEFS[site.type].ramp ? rampApproach(u, site)?.tile ?? -1 : stands && stands.at.has(site.id) ? stands.at.get(site.id) : site.magFrom ? tIdx(siteWorkAt(site).x, siteWorkAt(site).y) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
 }
 
@@ -3799,6 +3802,7 @@ function updateWorker(u, dt) {
 function needsRoad(b) {
   if (b.mNeed) return true; // a seized megastructure needs its fee even if it takes no goods online
   const def = BDEFS[b.type];
+  if (def.earthwork && !sumValues(siteCost(b))) return false; // (Earthworks that only dig: nothing to bring)
   if (b.type === 'lander' || storeFunded(b)) return false; // Walls, Gates and Viaducts are paid from storage: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
@@ -3965,7 +3969,7 @@ function doHaul(u, t, dt) {
  * its goods in and not finished (a site at 99% with everything delivered once never drew a builder: the last sliver
  * was under the margin).
  */
-function siteReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
+function siteReady(b) { if (BDEFS[b.type].earthwork) return false; /* (a Grader's, never a Worker's: tfReady) */ const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
 function siteFrac(site) { const total = sumValues(siteCost(site)); return total > 0 ? deliveredCount(site) / total : 1; }
 
 function deliveredCount(site) {
@@ -3988,6 +3992,7 @@ function doBuild(u, t, dt) {
   if (s.progress < cap) {
     s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u) * cityBoost(u.owner, s.x + 0.5, s.y + 0.5) * radWork(s) * stormWork(s)) / (s.buildTime || def.buildTime)); // (faster by Arrival City, slower in a radiation zone or under a foe's Storm Front)
     u.busy = 1;
+    if (s.tf) graderWork(u, s);
     if (s.magFrom && S.tick % 15 === u.id % 15) magBuildStep(s); // (a Maglev line: its pylons go up one by one)
     if (s.magEdit && s.progress > 0.99 && magEditBusy(s)) s.progress = 0.99; // (a line's new bends switch over once its pods are docked)
   }
@@ -4053,6 +4058,7 @@ function completeBuilding(b) {
   const def = BDEFS[b.type];
   if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
+  if (def.earthwork) { completeEarthwork(b); return; }
   b.built = true;
   delete b.kitT; // (a Catcher kit: assembled)
   if (def.ropeway && !b.link) ropewayAcross(b);
@@ -4102,6 +4108,259 @@ function completeRamp(b) {
   postMsg(b.owner, 'Ramp is complete: a road now climbs the cliff here.', b.x, b.y, 'good');
   if (isMe(b.owner)) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
+}
+
+/* ------------------------------------------------------------------ terraforming, stage 1 (TERRA) */
+
+/*
+ * Build → Terraform plans jobs, one per tile, as Earthworks sites (BDEFS.earthwork, b.tf: { k, to, n }): k 'up' or
+ * 'down' (to level `to`, n levels of earth moved: Raise, Lower, Flatten), 'fill' (water becomes ground at level `to`)
+ * or 'dig' (ground becomes water). Graders take them (graderDispatch) and do nothing else; Workers never build them
+ * (siteReady says no). Stone for Raise and Fill comes by Hauler where a road reaches, else from storage as it comes in
+ * (fromStore); dug earth comes out as crates of Stone on the spot. Done, the site goes and the ground stays changed
+ * (completeEarthwork): the areas, territory, the sea, the bake and the minimap follow (terrainChanged).
+ */
+const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig'];
+
+/** The job planned on tile t: in `plan` (a Map being put together), else an Earthworks site's, else null. */
+function tfJobAt(t, plan) {
+  if (plan && plan.has(t)) return plan.get(t);
+  const b = S.bAt[t] ? getE(S.bAt[t]) : null;
+  return b && !b.dead && !b.built && b.tf ? b.tf : null;
+}
+/** Tile t's ground level once the jobs planned are done, or null if it is (or will be) water, rock or a chasm. */
+function tfLevel(t, plan) {
+  const J = tfJobAt(t, plan);
+  if (J) return J.k === 'dig' ? null : J.to;
+  return S.terrain[t] === T_GROUND && !(S.ford && S.ford[t]) ? S.elev[t] : null;
+}
+/** Will tile t be open water (shallows or a ford count) once the jobs planned are done? */
+function tfWet(t, plan) {
+  const J = tfJobAt(t, plan);
+  if (J) return J.k === 'dig';
+  return S.terrain[t] === T_WATER && !(S.tidal && S.tidal[t]);
+}
+function tfSides(t) {
+  const i = t % S.W, j = (t / S.W) | 0, out = [];
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) out.push(tIdx(i + di, j + dj));
+  return out;
+}
+
+/** Why `owner` can't work tile t at all ('' if it can): the land, what stands on it, whether a Grader could get beside it. */
+function tfWhere(owner, t, plan) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (!inMap(i, j)) return 'Outside the map.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds this ground: terraform your own land or no-one\'s.';
+  if (postAt(t) || calmAt(i + 0.5, j + 0.5)) return 'A Trade Post\'s ground: it stays as it is.';
+  if (uplinkAt(t)) return 'A neutral Uplink stands here.';
+  if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return lw; }
+  if (S.dam && damAt(t)) return 'The dam stands here.';
+  if (S.town && townRuinAt(t)) return 'A building of Passenger Town stands here.';
+  if (S.walker && walkerYard(i, j)) return 'The Walking Factory\'s yard: it walks here.';
+  const s = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (s && s.tf && !s.built && s.owner === owner) return 'Already planned here.';
+  if (s) return 'A building stands here.';
+  if (runwayAt(t)) return 'That\'s an Airfield\'s runway: keep it clear.';
+  if (S.road[t] || S.plan[t]) return 'A road runs here (a ramp too): take it up first.';
+  if ((S.rail && S.rail[t]) || (S.railPlan && S.railPlan[t])) return 'Railway track runs here.';
+  if ((S.pipe && S.pipe[t]) || (S.pipePlan && S.pipePlan[t])) return 'A pipe runs here.';
+  if (S.res[t]) return 'Resources lie here: gather them first.';
+  if (S.ramp[t]) return 'A slope: it stays as it is.';
+  if ((S.lava && S.lava[t]) || (S.fault && S.fault[t]) || (S.tidal && S.tidal[t])) return 'This ground can\'t be worked.';
+  if (S.terrain[t] === T_ROCK || S.terrain[t] === T_CHASM) return 'Rock and chasms can\'t be worked (a Quarry cuts rock).';
+  if (liftWreckAt(t)) return LIFT_WRECK_WHY;
+  if (S.wildlife) for (const e of S.buildings) if (!e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return 'Too close to a Murmur nest: clear it with warbots first.';
+  // A Grader works from beside the tile (or on it): somewhere its owner's robots can walk to, or ground being made
+  // there (a land bridge is filled out a tile at a time).
+  const zones = buildZones(owner);
+  if (![t, ...tfSides(t)].some((u) => (walkable(u) && zones.has(S.zone[u])) || (u !== t && tfJobAt(u, plan) && tfJobAt(u, plan).k !== 'dig'))) return 'Your robots can\'t get beside this tile yet.';
+  return '';
+}
+
+/**
+ * The job tool `tool` (TF_TOOLS) would plan on tile t for `owner` ({ k, to, n } with its cost, yield and time), or
+ * { why }. `target`: Flatten's level. `plan`: the jobs planned so far in the same plan (a Map; tiles in it count at
+ * their new level, so a land bridge or a canal can be dragged out tile by tile).
+ */
+function tfJob(owner, tool, t, target, plan) {
+  const where = tfWhere(owner, t, plan);
+  if (where) return { why: where };
+  const sides = tfSides(t);
+  let k, to;
+  if (tool === 'fill') {
+    if (!tfWet(t)) return { why: 'Fill shallows: only water beside land.' };
+    const lv = sides.map((u) => tfLevel(u, plan)).filter((v) => v !== null);
+    if (!lv.length) return { why: 'Too far out: shallows are water right beside land (fill out from the shore).' };
+    // Level with the ground it's built out from: new ground planned beside it (a land bridge keeps its level all the
+    // way out), else the shore its owner's robots stand on, else the lowest ground beside it.
+    const zones = buildZones(owner), lvOf = (us) => us.map((u) => tfLevel(u, plan)).filter((v) => v !== null);
+    const chain = lvOf(sides.filter((u) => tfJobAt(u, plan))), shore = lvOf(sides.filter((u) => walkable(u) && zones.has(S.zone[u])));
+    k = 'fill'; to = chain.length ? chain[0] : shore.length ? Math.min(...shore) : Math.min(...lv);
+  } else if (tool === 'dig') {
+    if (tfLevel(t) === null) return { why: 'Dig channel: only land beside water.' };
+    const wet = sides.filter((u) => tfWet(u, plan));
+    if (!wet.length) return { why: 'Dig channel: only land right beside water (dig in from the shore).' };
+    // The waterline: the lowest ground the water beside it touches (this tile aside).
+    let line = Infinity;
+    for (const w of wet) for (const u of tfSides(w)) { if (u === t) continue; const v = tfLevel(u, plan); if (v !== null) line = Math.min(line, v); }
+    if (line < Infinity && S.elev[t] > line) return { why: `Above the waterline: Lower it to level ${line} first.` };
+    k = 'dig'; to = S.elev[t];
+  } else {
+    if (tfLevel(t) === null) return { why: S.terrain[t] === T_WATER ? 'Water: Fill shallows first.' : 'Only open ground can be raised or lowered.' };
+    const e = S.elev[t];
+    to = tool === 'raise' ? e + 1 : tool === 'lower' ? e - 1 : Math.round(+target);
+    if (!Number.isInteger(to)) return { why: 'Pick a level.' };
+    if (to > TERRA.top) return { why: 'As high as the ground goes.' };
+    if (to < 0) return { why: 'As low as the ground goes.' };
+    if (to === e) return { why: 'Already at that level.', same: true };
+    // No cliff steeper than a level (or than it already was): every step stays one a Ramp can climb.
+    for (const u of sides) {
+      const v = tfLevel(u, plan);
+      if (v === null || S.terrain[u] !== T_GROUND) continue;
+      if (Math.abs(to - v) > Math.max(1, Math.abs(e - S.elev[u]))) return { why: 'Too steep: the ground beside it would be more than a level away (work round it first).' };
+    }
+    k = to > e ? 'up' : 'down';
+  }
+  const n = k === 'up' || k === 'down' ? Math.abs(to - S.elev[t]) : 1;
+  const cost = k === 'up' ? { stone: TERRA.stone * n } : k === 'fill' ? { stone: TERRA.fill } : {};
+  const yieldN = k === 'down' ? TERRA.stone * n : k === 'dig' ? TERRA.dig : 0;
+  const time = k === 'fill' ? TERRA.fillTime : k === 'dig' ? TERRA.digTime : TERRA.time * n;
+  return { k, to, n, cost, yieldN, time };
+}
+
+/**
+ * Plan Terraform jobs for `owner` (ORDERS.terraform): `list` of tiles, all with tool `tool` (Flatten: to `target`),
+ * in the order dragged. Each that can be done becomes an Earthworks site. { placed, why, stone, yieldN, graders }.
+ */
+function tfPlace(owner, tool, list, target) {
+  const out = { placed: 0, why: '', stone: 0, yieldN: 0, graders: 0 };
+  if (!TF_TOOLS.includes(tool) || !Array.isArray(list)) { out.why = 'Unknown tool.'; return out; }
+  const plan = new Map(), N = S.W * S.H;
+  for (const t of list.slice(0, TERRA.most)) {
+    if (!Number.isInteger(t) || t < 0 || t >= N || plan.has(t)) continue;
+    const J = tfJob(owner, tool, t, target, plan);
+    if (J.why) { if (!out.why && !J.same) out.why = J.why; continue; } // (a Flatten's tiles already at its level: nothing to do)
+    plan.set(t, J);
+  }
+  for (const [t, J] of plan) {
+    const b = addBuilding(owner, 'earthwork', t % S.W, (t / S.W) | 0, false);
+    b.tf = { k: J.k, to: J.to, n: J.n };
+    b.cost = J.cost; b.buildTime = J.time;
+    // (Out on the water no Hauler can come: the Stone for filling is paid from storage as it comes in.)
+    if (J.k === 'fill') { b.fromStore = true; queuePlan('b', b.id, owner); }
+    markDirty(t % S.W, (t / S.W) | 0);
+    out.placed++; out.stone += J.cost.stone || 0; out.yieldN += J.yieldN;
+  }
+  if (out.placed) settlePlans();
+  out.graders = S.bots.filter((u) => !u.dead && u.owner === owner && BOTS[u.type].grader).length;
+  return out;
+}
+
+/** Can a Grader start (or go on with) Earthworks site b now: its Stone in as far as the work has got? (siteReady for Workers.) */
+function tfReady(b) { const f = siteFrac(b); return f > b.progress + 0.01 || (f >= 1 && b.progress < 1); }
+
+/** The Grader building site b, if one is (on its way or at work). */
+function tfGrader(b) {
+  const u = b.builder ? getE(b.builder) : null;
+  return u && !u.dead && u.task && u.task.type === 'build' && u.task.site === b.id ? u : null;
+}
+
+/** Where Grader u stands to work site b: a free tile beside it (or the tile itself) it can walk to, nearest first; -1 if none. */
+function tfApproach(u, b) {
+  const t = tIdx(b.x, b.y), z = u.inside ? S.zone[tIdx(getE(u.inside)?.x ?? Math.floor(u.x), getE(u.inside)?.y ?? Math.floor(u.y))] : botZone(u);
+  let best = -1, bd = Infinity;
+  for (const c of tfSides(t)) {
+    if (!walkable(c) || S.terrain[c] !== T_GROUND || (S.bAt[c] && !passTile(c, u.owner)) || S.zone[c] !== z) continue;
+    const d = dist2((c % S.W) + 0.5, ((c / S.W) | 0) + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+
+/** Player p's free Graders take the Earthworks sites waiting for one, the nearest first (from dispatch). */
+function graderDispatch(p) {
+  let sites = null;
+  const P = S.players[p];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !BOTS[u.type].grader || !isIdleWorker(u) || recycling(u)) continue;
+    if (!sites) {
+      sites = S.buildings.filter((b) => !b.dead && b.owner === p && !b.built && b.tf && !tfGrader(b) && tfReady(b) && !(b.tfNo > S.time) && !(P.danger && dangerAt(p, b.x, b.y)));
+      if (!sites.length) return;
+    }
+    let best = null, bd = Infinity;
+    for (const b of sites) {
+      if (b.builder && tfGrader(b)) continue;
+      const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+      if (d >= bd) continue;
+      if (tfApproach(u, b) >= 0) { bd = d; best = b; } else b.tfNoAt = S.time; // (no free ground beside it on this Grader's side)
+    }
+    if (!best) continue;
+    assignBuild(u, best);
+    if (!(u.task && u.task.type === 'build')) { best.tfNo = S.time + 20; best.tfNoAt = S.time; } // (no way there now: try again in a while)
+  }
+}
+
+/** A Grader at work on site s (doBuild): it faces the tile and throws up dust now and then. */
+function graderWork(u, s) {
+  u.face = datan2(s.y + 0.5 - u.y, s.x + 0.5 - u.x);
+  if (S.tick % 40 === u.id % 40) addFx('dustcloud', s.x + 0.5, s.y + 0.5, { r: 0.6 });
+}
+
+/** What an Earthworks site shows on its panel. */
+function tfStatus(b) {
+  const g = tfGrader(b), owed = storeFunded(b) ? stillOwed(b) : null;
+  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging' }[b.tf.k];
+  if (g && g.task.phase !== 'go') return `${verb}: ${Math.floor(b.progress * 100)}%`;
+  if (owed && Object.keys(owed).length && !tfReady(b)) return `Waiting for ${costText(owed)} from storage`;
+  if (b.unlinked && !tfReady(b)) return 'No road to storage yet';
+  if (!tfReady(b)) return 'Waiting for Stone';
+  if (g) return 'A Grader is on its way';
+  if (!S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].grader)) return 'Waiting for a Grader: order one at the Bot Foundry';
+  return b.tfNoAt > S.time - 45 ? 'No Grader can get beside it: it needs free ground beside it that your robots can reach' : 'Waiting for a Grader';
+}
+
+/** Ramp tile r still leads somewhere: ground a level up or down beside it. */
+function tfRampHolds(r) { return tfSides(r).some((u) => S.terrain[u] === T_GROUND && Math.abs(S.elev[u] - S.elev[r]) === 1); }
+
+/** An Earthworks site is done: the ground changes for good and the site goes. */
+function completeEarthwork(b) {
+  const t = tIdx(b.x, b.y), J = b.tf, P = S.players[b.owner], g = tfGrader(b);
+  const gt = g ? tIdx(Math.floor(g.x), Math.floor(g.y)) : -1;
+  releaseBotsFrom(b, false);
+  b.dead = true; b.gone = 1; // (finished, not lost: see noteGone)
+  S.byId.delete(b.id);
+  S.bAt[t] = 0;
+  S.tfTiles = S.tfTiles || {};
+  S.tfTiles[t] = 1;
+  if (J.k === 'fill') { S.terrain[t] = T_GROUND; if (S.ford) S.ford[t] = 0; S.elev[t] = J.to; S.res[t] = R_NONE; S.amt[t] = 0; }
+  else if (J.k === 'dig') { S.terrain[t] = T_WATER; S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
+  else S.elev[t] = J.to;
+  if (S.decor) S.decor[t] = 0;
+  // No ramp left leading nowhere.
+  for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = 1; }
+  // Dug earth: crates of Stone beside the tile.
+  const yieldN = J.k === 'down' ? TERRA.stone * J.n : J.k === 'dig' ? TERRA.dig : 0;
+  if (yieldN) {
+    // (Where its Grader stands: a lowered tile on its own is a pit no one could walk into.)
+    let at = gt >= 0 && gt !== t && S.terrain[gt] === T_GROUND ? gt : J.k === 'down' ? t : -1;
+    if (at < 0) { const dry = tfSides(t).filter((u) => S.terrain[u] === T_GROUND && !S.bAt[u]); at = dry.length ? dry[0] : -1; }
+    if (at >= 0) addLoot(at % S.W, (at / S.W) | 0, { stone: yieldN }, false, b.owner);
+  }
+  if (P) { const k = 'tf' + J.k; P.stats[k] = (P.stats[k] || 0) + (J.k === 'up' || J.k === 'down' ? J.n : 1); }
+  for (let y = b.y - 2; y <= b.y + 2; y++) for (let x = b.x - 2; x <= b.x + 2; x++) if (inMap(x, y)) markDirty(x, y);
+  terrainChanged();
+  // Nobody is left inside raised ground or under new water: robots on it step off (ships to open water), and routes
+  // over it are worked out again.
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air) continue;
+    const at = tIdx(Math.floor(u.x), Math.floor(u.y)), sea = !!BOTS[u.type].sea;
+    if (at === t) {
+      const to = nearestTile(t, sea ? (v) => v !== t && S.terrain[v] === T_WATER : (v) => v !== t && walkable(v) && !S.bAt[v] && S.terrain[v] !== T_WATER);
+      if (to >= 0) moveOff(u, to, 0); else dropPath(u);
+    } else if (u.path && u.path.slice(u.pi).includes(t)) dropPath(u);
+  }
+  addFx('dustcloud', b.x + 0.5, b.y + 0.5, { r: 1.1 });
+  if (!S.buildings.some((e) => !e.dead && e.owner === b.owner && e.tf && !e.built)) postMsg(b.owner, 'Terraforming done: the Graders have finished every job.', b.x, b.y, 'good');
 }
 
 /** The nearest rock face (see rockFace) a Quarry's worker can cut Stone from, in its owner's or no-one's land. */
@@ -4617,6 +4876,7 @@ function updateBuilding(b, dt) {
     if (b.progress >= 1) completeBuilding(b);
     return;
   }
+  if (!b.built && def.earthwork) { b.status = tfStatus(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
     if (owed && Object.keys(owed).length && !(b.builder && siteReady(b))) b.status = `Waiting for ${costText(owed)} from storage`;
@@ -20634,6 +20894,7 @@ function hashState() {
     if (b.shyN) { int(b.shyN); num(b.shyAt); num(b.unreachUntil || 0); } // (carriers turning back from the Murmur: SHY_ROAD)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
+    if (b.tf) { str(b.tf.k); int(b.tf.to); } // (an Earthworks site's job: TERRA)
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   // Army Groups: each, its order and its flag.
@@ -20655,6 +20916,7 @@ function hashState() {
   for (const P of S.players) if (P.allyCmd) for (const k of ['atk', 'def', 'hold']) { const c = P.allyCmd[k]; if (c) { str(k); int(c.by); int(c.rid || 0); int(c.x || 0); int(c.y || 0); num(c.until); num(c.at); } }
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  for (const k in S.tfTiles || {}) { const t = +k; int(t); int(S.terrain[t]); int(S.elev[t]); int(S.ramp[t]); } // (the ground Graders changed: TERRA)
   for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
   for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
   for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)

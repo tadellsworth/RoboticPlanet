@@ -8,7 +8,7 @@
  *
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
- * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
+ * Roads and Traffic, Industry and Trade, Sea and Sky (ports, bridges over canyons, airships and earthworks; all in Colony games, so the economy is learned in peace), then
  * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War,
  * including the Uplinks race in King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
@@ -1419,6 +1419,37 @@ const MISSIONS = [
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && b.type === 'mast' ? b.shipGot || 0 : 0), 0),
         hint: 'Build a <b>Crystal Tap</b> by the far Mast: its site\'s goods fly out, its Crystal flies home.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+    ],
+  },
+
+  {
+    id: 'earthworks', name: 'Cut and Fill', chapter: 'Sea and Sky',
+    brief: 'The ground the Pathfinder surveyed has moved in thirty-one years. Order a Grader, level the land and fill the shallows out to the island.',
+    intro: [
+      '<b>Build → Terraform</b> (<kbd>7</kbd>) plans earthworks: Raise, Lower, Flatten, Fill shallows and Dig channel.',
+      'A <b>Grader</b>, ordered at the Bot Foundry, does the work, slowly; Workers never touch it.',
+      'Dug earth comes out as Stone crates for the Haulers. Raised and filled ground takes Stone.',
+      'Fill shallows turns water beside land into land: drag out from the shore for a land bridge.',
+      'Dig channel does the reverse: a moat before your walls, or a canal so ships sail inland.',
+    ],
+    mode: 'colony', seed: 23, size: 1, rough: 2, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 25],
+    setup(S) {
+      kit(S, KIT6, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.stone += 60; L.stock.alloy += 6; L.stock.chip += 6; L.stock.fuel += 10;
+    },
+    goals: [
+      { kind: 'bots', type: 'grader', n: 1, at: 'foundry',
+        hint: 'Tap the Bot Foundry → <b>Order bots</b>: Graders <b>+1</b>. It takes a while: a Grader is heavy.',
+        ui: "#sh-orders .order-row[data-k='grader'] [data-d='1']" },
+      { kind: 'levelled', n: [3, 4, 6], text: 'Level {n} tiles of ground',
+        count: (P) => (P.stats.tfup || 0) + (P.stats.tfdown || 0),
+        hint: '<b>Build</b> → <b>Terraform</b> (<kbd>7</kbd>) → <b>Flatten</b> (<kbd>F</kbd>): drag over uneven ground, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='flatten'], #tf-seg [data-tf='flatten'], #banner-ok" },
+      { kind: 'filled', n: [3, 4, 6], text: 'Fill {n} tiles of shallows',
+        count: (P) => P.stats.tffill || 0,
+        hint: '<b>Terraform</b> → <b>Fill shallows</b> (<kbd>H</kbd>): drag out from the shore, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='fill'], #tf-seg [data-tf='fill'], #banner-ok" },
     ],
   },
 

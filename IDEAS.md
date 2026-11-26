@@ -2773,7 +2773,7 @@ Build, a few new robots (a **Grader**, a **Planter**, a **Drill rig**); every ch
 permanent on the map (and could show on the Contingency globe). Suggested stages: 1 land height and water, 2 soil /
 plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big projects.
 
-1. **Land and height:** raise or lower a tile a level (Grader / Earthworks), cost by earth moved, dug earth comes out as
+1. **Land and height** (stage 1 BUILT Nov 26 2026 without the blasting: Build → Terraform, the Grader, README "Terraforming, stage 1"; `tools/terraform-test.js`): raise or lower a tile a level (Grader / Earthworks), cost by earth moved, dug earth comes out as
    Stone (quarry a mountain down); flatten a plateau for a big base, cut a pass, raise a defensive bank. Fill shallows
    into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
    walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
@@ -2797,6 +2797,25 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the
    **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
    objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
+
+**Stage 1, open questions for the owner (Nov 26 2026):**
+- Rivals don't terraform yet (the owner's call). They cope with what a player does (their routes, sites and Ports follow
+  the new ground), but they don't answer a moat or a land bridge on purpose. Teaching them is the next step once the
+  numbers settle.
+- Numbers to tune by play (`TERRA` in `js/defs.js`): a level of earth is 4 Stone and 24 s of a Grader's work; Fill 8
+  Stone and 40 s; Dig yields 6 Stone in 36 s. Lowering is a slow Quarry (about 10 Stone a minute a Grader) and that is
+  meant: it shouldn't beat a Quarry on a rock face.
+- Stone for raising comes by Hauler where a road reaches; filling out on the water, and any job no road reaches, is
+  paid from storage as it comes in (a Wall's way), because no Hauler can drive onto water. Is that the split you want,
+  or should all of it come from storage?
+- Fill shallows takes any water beside land (the map has no deep and shallow water of its own); a ford or a tidal
+  flat counts as such too (tidal flats are refused). Should open sea far from shore be off limits beyond some depth
+  (`shoreDist`)?
+- Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
+  later option.
+- Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.
+- The Grader's look and its animations, and the earthworks' ground art, go through Claude Design (ART_GUIDE,
+  "Terraforming"); what's in the game is a placeholder.
 
 ## To do: Argos on the main menu (owner, Nov 26)
 

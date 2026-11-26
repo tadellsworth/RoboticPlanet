@@ -184,6 +184,9 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks takes two: they lay your planned roads, twice as fast as a Worker, and surface roads with asphalt.' },
+  // The earthmover (see TERRA): it works the Terraform plans (Build → Terraform) and nothing else.
+  grader:  { name: 'Grader', plural: 'Graders', speed: WORKER_SPEED * 0.6, hp: 12, grader: true, offroad: true, parts: 3,
+    desc: 'A slow tracked earthmover with a blade. It does your Terraform plans (Build → Terraform: raise, lower, flatten, fill shallows, dig a channel) and nothing else: dug earth comes out as Stone, and raised or filled ground takes Stone.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
@@ -245,7 +248,7 @@ const BOTS = {
   harrow:   { name: 'Harrow', plural: 'Harrows', speed: WORKER_SPEED * 0.45, hp: 240, wild: true, bite: 10, behemoth: true,
     desc: 'The biggest of the Murmur: a badger-mole the size of a hill, its back a mantle of crystal plate. It walks straight at a colony and the ground breaks under it: the roads, track and pipes it walks over are torn up, and every few seconds it rears and slams the ground, stunning every robot within 3 tiles and breaking the Walls, guns and buildings there. Small arms (warbots, Bulwarks, Skirmishers, turrets, Minigun Nests, Bunkers) do a quarter of their damage to it; Railgunners, Howitzers, Mortars, Rockets, Torches, bombs and Missiles do it all. Scuttlers ride on its back and drop off when it slams, and a pack comes with it. Only a real army brings it down: meet it in the open, spread out, before it reaches your walls.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -547,6 +550,16 @@ const LAKES_WET = 0.37;
 // a bot waiting at a Port gives up after FERRY_GIVEUP s. In routes a ferry crossing costs FERRY_COST times
 // the straight distance, plus FERRY_BOARD tiles' worth for the wait.
 const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off everywhere)
+/*
+ * Terraforming, stage 1 (Build → Terraform; a Grader does the work, see tfPlace and completeEarthwork in sim.js).
+ * One job per tile. Raise or lower it a level (a flatten moves it as many levels as it takes to reach its target):
+ * `time` seconds of a Grader's work for each level of earth moved, `stone` Stone each level (raising costs it, lowering
+ * yields it). Fill shallows (water beside land becomes land, level with the lowest ground beside it): `fill` Stone,
+ * `fillTime` s. Dig a channel (land at the waterline beside water becomes water): yields `dig` Stone, `digTime` s.
+ * Levels go from 0 to `top`. A plan takes `most` tiles at once. Yields come out as crates on the spot (Haulers take
+ * them to storage); costs come by Hauler where a road reaches, else straight from storage as the work goes (a Wall's way).
+ */
+const TERRA = { time: 24, stone: 4, fill: 8, fillTime: 40, dig: 6, digTime: 36, top: 4, most: 48 };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
@@ -1594,6 +1607,12 @@ const BDEFS = {
     name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff. A worker builds it from whichever side is the shorter trip, so a Ramp down off high ground is built from the top: nobody drives all the way round.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
+  // A Terraform job on one tile (see TERRA): planned from Build → Terraform, worked by a Grader, gone when it's done.
+  // Not in the build menu; its cost and time are its own (b.cost, b.buildTime), its job b.tf.
+  earthwork: {
+    name: 'Earthworks', desc: 'Ground being raised, lowered, filled or dug by a Grader (Build → Terraform). When the Grader is done the site goes and the new ground stays.',
+    cost: { stone: 1 }, earthwork: true, armor: 4, buildTime: 20,
+  },
   repair: {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
@@ -2582,6 +2601,8 @@ const FLAVOR = {
   hauler: 'Certified for paved roads. Will not go anywhere else. Do not ask.',
   agribot: 'Plants for a harvest nobody has scheduled.',
   paver: 'Every road built to passenger standard. No passengers yet.',
+  grader: 'Levels the ground the Pathfinder surveyed for the arks. The survey is thirty-one years old; the ground has moved.',
+  earthwork: 'Cut and fill, to the Accord grade. Somebody will want a level place to land.',
   express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',

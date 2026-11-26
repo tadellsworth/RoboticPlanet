@@ -4479,7 +4479,7 @@ function aiAffordable(p, type, except) {
 }
 
 /** Construction sites of p's that count against its limit: not a megastructure's (see megaSites in aiThink). */
-function aiSiteCount(p) { let n = 0; for (const b of S.buildings) if (!b.dead && b.owner === p && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp && !BDEFS[b.type].mega) n++; return n; }
+function aiSiteCount(p) { let n = 0; for (const b of S.buildings) if (!b.dead && b.owner === p && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp && !BDEFS[b.type].earthwork && !BDEFS[b.type].mega) n++; return n; }
 
 /** Square-window resource counts for every tile (summed-area table), for cheap Outpost scoring. */
 function resourceSums(type) {
