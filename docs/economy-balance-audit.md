@@ -56,3 +56,21 @@ Long haul seed 21, Medium Versus, Normal, both Balanced, on `7c7930a`. Both colo
 | Chips | 7 min | 7 min | 20 | 25 |
 
 Fuel appeared one sample earlier for Colony 1. Alloy and Chips first appeared at the same checkpoints, and each colony led in at least one good by minute 12. This spot check covers one seed, with opening route costs and other starts still to audit. Replay with `TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js 'Long haul' 21 2 12 7c7930a`.
+
+### Islands seed 21
+
+Medium Versus, Normal, both Balanced, revision `b9cdfd5`. The replay had a 12-minute cap and ended at minute 9.29 with Colony 1 winning. Compare the minute-9 checkpoint, the last one with both colonies alive.
+
+| Metric | Colony 1 | Colony 2 |
+| --- | ---: | ---: |
+| First Fuel by | 4 min | 4 min |
+| First Alloy by | 6 min | 5 min |
+| First Chips by | 7 min | 7 min |
+| Fuel / Alloy / Chips produced by minute 9 | 29 / 33 / 14 | 28 / 33 / 11 |
+| Net road tiles added by minute 9 | 98 | 73 |
+| Gross Cement charged through the road payment routine by minute 9 | 22.9 | 18.1 |
+| Completed Ramps at minute 9 | 0 | 0 |
+
+Colony 1 built 25 more road tiles and paid 4.8 more Cement through the infrastructure payment routine. Colony 2 started Alloy one checkpoint sooner, but the total was even at minute 9. There was no observed Ramp cost difference. This measures what each AI built and paid, and does not isolate the terrain cost of equivalent routes. The payment routine also serves some non-road infrastructure and the trace counts gross charges before refunds.
+
+The production timing can be reproduced with `TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js Islands 21 2 12 b9cdfd5`. This spot check used temporary observers on `payRoad` and the owned road grid for the infrastructure figures.
