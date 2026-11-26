@@ -1743,15 +1743,30 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   card), then `contBattleOver`. Sound: `sfx('flare')` / `flareDown` beside `win` / `lose`, then the end's music
   (`musicCue(tone, story)`) and the Command core's spoken line (`voiceEnding`), neither for Contact (`gupSilence`). UI only.
 - **The end's music (`musicCue`, `cueMood`, `MOODS.victory` / `defeat` / `victoryC` / `defeatC`, `cueMelody` in
-  `js/audio.js`):** a cue scored bar by bar (`cue`: each bar's chord `c`, parts `L`, one-off hits `fx` ('riser', 'hit' a
-  crash and impact, 'toll', 'thud') and lead notes `mel` [step, semitones over the key an octave up, length]), then a
-  quiet loop on its `progs` / `arrange` at `settle` of its level. Victory (A, 92 bpm, about 18 s): F and G major swelling
-  up (halo, the arpeggio, a riser) into A major with a crash and impact, the drums, bright horns (`mBrass(..., clean)`,
-  the 'horn' part) and a rising bell fanfare over A–D–F–G, home on A held; then major sevenths with the shimmer. Defeat
-  (D Phrygian, 64 bpm, about 19 s): a drone, the whispering choir and a cold low toll, the heartbeat, chords falling
-  (Dm, E♭, B♭, Gm, Dm) under the cold lead (`mCold`, lead 'cold') walking down an octave, the ground's thud; then the drone
-  and choir. `victoryC` / `defeatC` are Contingency's: the campaign theme's key (D) and its tune (STORY_THEME), in Lydian
-  (halo, arpeggio in threes, half-time drums) or Phrygian (the choir, the pulse, the glints). `musicCue` dips the music bus
+  `js/audio.js`):** film-score cues (rescored Nov 26 2026 after the owner listened: grand, not cute; crushing, not
+  light), each scored bar by bar (`cue`: each bar's chord `c`, parts `L`, the horns' dynamic `v`, `hold` to let its
+  chords ring that many bars, one-off hits `fx`, lead notes `mel` [step, semitones over the key an octave up, length] and
+  a low line `low` [step, semitones over the key two octaves down, length]), then a quiet loop on its `progs` /
+  `arrange` at `settle` of its level (from loop bar `settleAt`). Its own orchestra, at the end of the file: `mHorn` (low
+  brass: saws and a square a note, scooped into pitch, the filter blaring open, vibrato, spread; `hornVoicing` keeps the
+  chord low and wide; `soft` for the loop), `mHornLead` (the heroic solo horn, an octave under for weight), `mTimp` /
+  `mTimpRoll` (timpani, a roll swelling over a bar), `mTaiko`, `mBoom` (a sub boom into the soft clipper), `mSwell` (a
+  cymbal swell into the next bar; dark, a low hollow one), `mDarkBrass` / `mDarkLead` (detuned saws driven into the
+  clipper, sour and distorted), `mSubDrone` (a beating sub pedal), `mCollapse` (something huge falling far off: boom,
+  rumble, a metal groan, rubble), `mKnell` (a low funeral bell). fx: 'roll', 'swell', 'swellDark', 'hit' (crash, impact,
+  boom), 'boom', 'collapse', 'knell', 'crush' (the final blow: a huge boom, a collapse, a distorted cluster), and the
+  older 'riser', 'toll', 'thud'. **Victory** (A, 76 bpm, 7 bars, about 22 s): Am, F, G (i–♭VI–♭VII) under a timpani roll,
+  low horns and the timpani's march, the horn's call rising (E, A B C, D B D E), a cymbal swell into A MAJOR with a crash,
+  sub boom, the big drums and the choir, the horn on C♯ E A (the Picardy third); F, G again with a roll and a swell, home
+  on A major held two bars, wide; then a calm, proud loop (A, F, G, A in soft horns and pads, a timpani stroke a chord).
+  **Defeat** (D, 54 bpm, 5 bars, about 22 s): a sub pedal on low D throughout; a collapse far off; distorted low brass
+  on chords with a minor second ground in (Dm, E♭ over D, B♭ diminished, A♭: the tritone), the bass sinking a semitone
+  at a time (D C♯ C B B♭ A), the dark brass sighing down (E♭ D, C♯ B♭, A♭ G), the choir an octave down, a funeral knell,
+  more collapses, a dark swell, then the final blow, held, decaying into a cold, empty drone; the loop is the pedal, a far
+  choir on Dm and E♭ and now and then something falling a long way off. `victoryC` / `defeatC` are Contingency's, in the
+  campaign theme's key (D): the same climb (Dm, B♭, C into D major, 80 bpm, the tune's opening D A B♭ A on the horn) and
+  the same descent (58 bpm, the tune twisted, its fifth flattened to A♭, on the dark brass; the Murmur's knock in its
+  loop). `musicCue` dips the music bus
   to silence, makes the cue's first bar the next step (`MUSIC.next`, `MUSIC.step`) and `musicSetMood` swells it in over
   2.2 s; `musicMood` returns it (`cueMood`) while its game's end screen is up, or for Contingency (`keep`) until it has
   played out over the globe (`until`); leaving it fades out (`musicFades`: out of a cue it fades, the next swells in).
@@ -1764,11 +1779,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   each vowel or voiced consonant (m n r v z d g); one noise band-pass set per consonant (`VOX_NOISE`: hisses for s sh kh
   z v, a closure then a crisp click and burst for the stops k t d g p). Then the machine: a nasal peak at 1.25 kHz, a
   band limit, a short metallic comb (a delay with feedback), an amplitude ring at `ringHz`, a little bit-crush, a soft
-  clip, a long dark reverb (`voxKit`: low-passed noise decaying, energy held to one). Two presets
+  clip, a dark reverb (`voxKit`: low-passed noise decaying, energy held to one). Two presets
   (`VOICE_PRESETS`): **cinematic** (64 Hz, slow, measured: a syllable about 0.26 s, long pauses at full stops, the pitch
-  drifting down and falling at each full stop, a 5.5 s reverb, over a low drone on D that swells in before it speaks and
+  drifting down and falling at each full stop, a 3.3 s reverb at 0.3 wet (it was 5.5 s at 0.42: "tone it down a touch", the owner, Nov 26 2026), over a low drone on D that swells in before it speaks and
   a deep boom as it opens) for the opening and ending lines; **droid** (96 Hz, quick and even, flat pitch, narrow 290 Hz
-  to 3.4 kHz radio band, sharper formants, a stronger comb and ring, a radio squelch in and out) for short callouts
+  to 3.4 kHz radio band, sharper formants, a stronger comb and ring, a 1.2 s metal room at 0.1 wet, a radio squelch in and out) for short callouts
   later (`VOICE_CALLOUTS`). **The tongue** (`voxParse`, `voxWord`): each English word becomes its machine word of one to
   three syllables ((onset) vowel (coda) from `VOX_ONSET` / `VOX_VOWEL` / `VOX_CODA`, the first stressed: longer and
   higher), from a generator seeded with the English word (`voxHash`, `voxRng`), so a word always comes out the same and

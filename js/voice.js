@@ -5,7 +5,7 @@
  * Not text-to-speech: a small formant synthesizer made in Web Audio, like everything else the game sounds. A buzzy
  * glottal pulse (and a square an octave under it, for weight) goes through four band-pass formant filters that glide
  * from vowel to vowel; consonants are bursts and hisses of noise and crisp clicks; then the machine in it: a metallic
- * comb, an amplitude ring and a touch of bit-crush, band-limited like a radio, into a long dark reverb, over a low drone.
+ * comb, an amplitude ring and a touch of bit-crush, band-limited like a radio, into a dark reverb (a little of it: the owner's call, Nov 26 2026), over a low drone.
  * The words are an invented language (VOX_*): each English word of a line is given its machine word, made from a fixed
  * syllable inventory and seeded from the English word itself, so the same word always comes out the same (the Accord is
  * always "the Accord") and the same line always sounds the same. Only the subtitles say what it means.
@@ -80,9 +80,9 @@ function voxParse(text) {
 /** The two timbres (see the top of the file). Times in seconds, pitch in Hz, `fall` and `stress` in semitones. */
 const VOICE_PRESETS = {
   cinematic: { f0: 64, vowel: 0.2, cons: 0.062, stressMul: 1.4, gap: 0.1, comma: 0.42, stop: 0.78, stress: 2, fall: 4, drift: -1.5, glide: 0.035, gate: 0.016,
-    q: 1, fscale: 0.86, sub: 0.55, ring: 0.16, ringHz: 43, comb: 0.0095, combFb: 0.32, crush: 0.1, hp: 70, subBody: 0.3, droneLvl: 0.04, lp: 5200, nasal: 3, wet: 0.42, verb: 5.5, drone: true, lvl: 0.72 },
+    q: 1, fscale: 0.86, sub: 0.55, ring: 0.16, ringHz: 43, comb: 0.0095, combFb: 0.24, crush: 0.1, hp: 70, subBody: 0.3, droneLvl: 0.04, lp: 5200, nasal: 3, wet: 0.3, verb: 3.3, drone: true, lvl: 0.72 },
   droid: { f0: 96, vowel: 0.085, cons: 0.036, stressMul: 1.15, gap: 0.045, comma: 0.18, stop: 0.32, stress: 1, fall: 1, drift: 0, glide: 0.008, gate: 0.005,
-    q: 1.7, fscale: 0.95, sub: 0.3, ring: 0.3, ringHz: 31, comb: 0.0042, combFb: 0.48, crush: 0.22, hp: 290, subBody: 0.2, droneLvl: 0, lp: 3400, nasal: 9, wet: 0.14, verb: 1.6, drone: false, lvl: 1.25, squelch: true },
+    q: 1.7, fscale: 0.95, sub: 0.3, ring: 0.3, ringHz: 31, comb: 0.0042, combFb: 0.42, crush: 0.22, hp: 290, subBody: 0.2, droneLvl: 0, lp: 3400, nasal: 9, wet: 0.1, verb: 1.2, drone: false, lvl: 1.25, squelch: true },
 };
 
 /** Vowel formants (Hz, F1 to F4), and the voiced consonants' (the nasals and liquids). */

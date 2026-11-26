@@ -2658,65 +2658,76 @@ const MOODS = {
     arrange: [['drone', 'alarm', 'heart', 'hat16']],
   },
   end: { bpm: 90, keys: [57], scale: MINOR, chordBars: 1, progs: [[[0, 'm']]], arrange: [[]] },
-  // The end of a game (musicCue). Each is scored bar by bar (`cue`: the bar's chord `c`, its parts `L`, one-off hits
-  // `fx`: 'riser' into the next bar, 'hit' a crash and an impact, 'toll' a low cold note, 'thud' the ground; `mel` the
-  // lead's notes, [step, semitones over the key an octave up, length in steps]), then settles into a quiet loop on
-  // `progs` and `arrange` (`settle` its trim) under the dashboard.
-  // Victory: the main theme's key and instruments, its minor turned major. A swell up the sixth and seventh (F, G), a
-  // crash on A major with the drums, a bright brass swell (mBrass clean) and a rising bell fanfare, round the chords once
-  // more, home on A held. Then a calm loop of major sevenths with the shimmer.
+  // The end of a game (musicCue), rescored as film-score cues (owner, Nov 26 2026: the first was "light and fun" in
+  // victory and "light hearted" in defeat). Each is scored bar by bar (`cue`: the bar's chord `c`, its parts `L`, one-off
+  // hits `fx`, the lead's notes `mel` [step, semitones over the key an octave up, length in steps], the low line `low`
+  // [step, semitones over the key two octaves down, length], `v` the horns' dynamic, `hold` to let the bar's chords ring on that many bars), then
+  // settles into a quiet loop on `progs` and `arrange` (`settle` its trim, from loop bar `settleAt`) under the dashboard.
+  // fx: 'roll' a timpani roll swelling over the bar, 'swell' a cymbal swell into the next bar, 'hit' a crash, an impact
+  // and a sub boom, 'boom' a sub boom, 'collapse' a far structure falling (a boom, rubble and a groan), 'knell' a low
+  // funeral bell, 'crush' the final blow (a huge boom, a collapse and a distorted cluster).
+  // Victory: A, 76 bpm, about 22 s. The minor key lifted to major: i, ♭VI, ♭VII (Am, F, G) under a timpani roll and low
+  // horns, the heroic horn call rising (E, A B C, D B D E), a cymbal swell into A MAJOR with a crash, a sub boom and the
+  // choir, the horn on C♯ E A (the Picardy third); F and G again with the march on the timpani and a roll and swell, home
+  // on A major held, wide, ringing over. Then a calm, proud loop: A, F, G, A in soft horns and pads, a timpani stroke on
+  // each chord.
   victory: {
-    bpm: 92, keys: [57], scale: MINOR, chordBars: 2, gain: 0.8, settle: 0.6,
+    bpm: 76, keys: [57], scale: MIXOLYDIAN, chordBars: 2, gain: 0.85, settle: 0.55, settleAt: 1, lead: 'horn', low: 'horn',
     cue: [
-      { c: [8, 'M'], L: ['pad', 'halo', 'bassW'] },
-      { c: [10, 'M'], L: ['pad', 'halo', 'arp8', 'bassW'], fx: ['riser'] },
-      { c: [0, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], fx: ['hit'], mel: [[0, 7, 6], [6, 12, 2], [8, 16, 8]] },
-      { c: [5, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], mel: [[0, 17, 6], [6, 16, 2], [8, 12, 8]] },
-      { c: [8, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], mel: [[0, 12, 6], [6, 15, 2], [8, 20, 8]] },
-      { c: [10, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'tom', 'lead', 'horn'], fx: ['riser'], mel: [[0, 19, 4], [4, 22, 4], [8, 23, 8]] },
-      { c: [0, 'M'], L: ['pad', 'halo', 'shimmer', 'bassW', 'lead', 'horn'], fx: ['hit'], mel: [[0, 24, 16]] },
+      { c: [0, 'm'], v: 0.55, L: ['pad', 'horns', 'low', 'lead'], fx: ['roll'], low: [[0, 0, 16]], mel: [[8, -5, 6], [14, -5, 2]] },
+      { c: [8, 'M'], v: 0.7, L: ['pad', 'horns', 'low', 'lead', 'timpMarch'], low: [[0, 8, 16]], mel: [[0, 0, 6], [6, 2, 2], [8, 3, 8]] },
+      { c: [10, 'M'], v: 0.85, L: ['pad', 'horns', 'low', 'lead', 'timpMarch'], fx: ['swell'], low: [[0, 10, 8], [8, 10, 8]], mel: [[0, 5, 6], [6, 2, 2], [8, 5, 6], [14, 7, 2]] },
+      { c: [0, 'M'], v: 1.15, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'taiko'], fx: ['hit'], low: [[0, 0, 16]], mel: [[0, 4, 6], [6, 7, 2], [8, 12, 8]] },
+      { c: [8, 'M'], v: 1, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'timpMarch'], low: [[0, 8, 16]], mel: [[0, 12, 6], [6, 10, 2], [8, 8, 8]] },
+      { c: [10, 'M'], v: 1.05, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'timpMarch'], fx: ['roll', 'swell'], low: [[0, 10, 8], [8, 10, 8]], mel: [[0, 2, 4], [4, 5, 4], [8, 10, 6], [14, 11, 2]] },
+      { c: [0, 'M'], v: 1.2, hold: 2, L: ['pad', 'horns', 'low', 'lead', 'choirV'], fx: ['hit'], low: [[0, 0, 32]], mel: [[0, 12, 28]] },
     ],
-    progs: [[[0, 'M7'], [8, 'M7'], [5, 'M7'], [10, 'M']]], arrange: [['pad', 'shimmer', 'bassW']],
+    progs: [[[0, 'M'], [8, 'M'], [10, 'M'], [0, 'M']]], arrange: [['pad', 'hornsSoft', 'timpSoft']],
   },
-  // Defeat: low and slow in D Phrygian. A drone and the whispering choir, a cold low toll; the heartbeat; the chords
-  // falling (D minor, E flat, B flat, G minor, home) under a cold lead walking down from D to D an octave under, the
-  // ground's thud at the end. Then the drone and the choir, faint.
+  // Defeat: D, 54 bpm, about 22 s. Evil and crushing, no way up. A sub-bass pedal on low D the whole way; a far structure
+  // falls; distorted low brass swelling on chords with a minor second ground into them (Dm, E♭ over D, B♭ diminished,
+  // A♭: the tritone), the bass under them sinking a semitone at a time (D C♯ C B B♭ A), the dark brass's sigh falling
+  // (E♭ D, C♯ B♭, A♭ G), the choir down in the dark, a funeral knell, more collapses; then the final blow, a huge low
+  // hit on the cluster, decaying into a cold, empty drone. The loop: the pedal and a far choir on Dm and E♭, and now and
+  // then something falling a long way off.
   defeat: {
-    bpm: 64, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 0.85, settle: 0.55, lead: 'cold',
+    bpm: 54, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 0.9, settle: 0.6, settleAt: 1, lead: 'dark', low: 'dark',
     cue: [
-      { c: [0, 'm'], L: ['drone', 'whisper'], fx: ['toll'] },
-      { c: [1, 'M'], L: ['pad', 'drone', 'heart', 'lead'], mel: [[0, 12, 8], [8, 10, 8]] },
-      { c: [8, 'M'], L: ['pad', 'heart', 'bassW', 'lead'], mel: [[0, 8, 8], [8, 7, 8]] },
-      { c: [5, 'm'], L: ['pad', 'whisper', 'bassW', 'lead'], mel: [[0, 5, 6], [6, 3, 2], [8, 1, 8]] },
-      { c: [0, 'm'], L: ['pad', 'drone', 'whisper', 'lead'], fx: ['thud'], mel: [[0, 0, 16]] },
+      { c: [0, 'm'], L: ['subdrone', 'whisperLow', 'dbrass'], fx: ['collapse'] },
+      { c: [1, 'M'], L: ['subdrone', 'dbrass', 'whisperLow', 'low', 'lead'], fx: ['knell'], low: [[0, 12, 8], [8, 11, 8]], mel: [[0, 1, 7], [8, 0, 8]] },
+      { c: [8, 'dim'], L: ['subdrone', 'dbrass', 'whisperLow', 'low', 'lead'], fx: ['collapse'], low: [[0, 10, 8], [8, 9, 8]], mel: [[0, -1, 7], [8, -4, 8]] },
+      { c: [6, 'M'], L: ['subdrone', 'dbrass', 'whisperLow', 'whisper', 'low', 'lead'], fx: ['knell', 'swellDark'], low: [[0, 8, 8], [8, 7, 8]], mel: [[0, -6, 7], [8, -7, 8]] },
+      { c: [0, 'm'], hold: 2, L: ['subdrone', 'whisperLow'], fx: ['crush'] },
     ],
-    progs: [[[0, 'm'], [1, 'M']]], arrange: [['drone', 'whisper']],
+    progs: [[[0, 'm'], [1, 'M']]], arrange: [['subdrone', 'whisperFar', 'distant']],
   },
-  // Contingency's: the campaign theme's key (D) and its tune (STORY_THEME). A win in Lydian, its Landfall colours (the
-  // halo, the arpeggio in threes, half-time drums, the bell); a loss in Phrygian, slow, the choir and the pulse, the tune
-  // on the cold lead.
+  // Contingency's: the campaign theme's key (D) and its tune (STORY_THEME). The win the same climb as Victory's, Dm, B♭,
+  // C into D MAJOR, the tune's opening (D A B♭ A) on the horn and up to the Picardy third; 80 bpm, about 21 s. The loss
+  // the same descent as Defeat's in D Locrian, the tune twisted (its fifth flattened to the tritone, A♭) on the dark
+  // brass, 58 bpm, about 21 s; its loop has the Murmur's knock under the ground.
   victoryC: {
-    bpm: 96, keys: [50], scale: LYDIAN, chordBars: 2, gain: 0.85, settle: 0.6,
+    bpm: 80, keys: [50], scale: MIXOLYDIAN, chordBars: 2, gain: 0.85, settle: 0.55, settleAt: 1, lead: 'horn', low: 'horn',
     cue: [
-      { c: [7, 'M'], L: ['pad', 'halo', 'shimmer'] },
-      { c: [2, 'M'], L: ['pad', 'halo', 'arp3', 'bassW'], fx: ['riser'] },
-      { c: [0, 'M7'], L: ['pad', 'halo', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], fx: ['hit'], mel: [[0, 12, 6], [6, 19, 2], [8, 26, 6], [14, 24, 2]] },
-      { c: [2, 'M'], L: ['pad', 'halo', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], mel: [[0, 23, 4], [4, 19, 4], [8, 21, 8]] },
-      { c: [9, 'm'], L: ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], fx: ['riser'], mel: [[0, 12, 6], [6, 19, 2], [8, 26, 4], [12, 28, 2], [14, 26, 2]] },
-      { c: [0, 'M'], L: ['pad', 'halo', 'shimmer', 'bassW', 'lead', 'horn'], fx: ['hit'], mel: [[0, 24, 16]] },
+      { c: [0, 'm'], v: 0.55, L: ['pad', 'horns', 'low', 'lead'], fx: ['roll'], low: [[0, 12, 16]], mel: [[8, -5, 6], [14, -5, 2]] },
+      { c: [8, 'M'], v: 0.7, L: ['pad', 'horns', 'low', 'lead', 'timpMarch'], low: [[0, 8, 16]], mel: [[0, 0, 6], [6, 7, 2], [8, 8, 6], [14, 7, 2]] },
+      { c: [10, 'M'], v: 0.85, L: ['pad', 'horns', 'low', 'lead', 'timpMarch'], fx: ['swell'], low: [[0, 10, 8], [8, 10, 8]], mel: [[0, 10, 6], [6, 7, 2], [8, 5, 6], [14, 2, 2]] },
+      { c: [0, 'M'], v: 1.15, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'taiko'], fx: ['hit'], low: [[0, 12, 16]], mel: [[0, 4, 6], [6, 7, 2], [8, 12, 8]] },
+      { c: [8, 'M'], v: 1, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'timpMarch'], low: [[0, 8, 16]], mel: [[0, 12, 6], [6, 10, 2], [8, 8, 8]] },
+      { c: [10, 'M'], v: 1.05, L: ['pad', 'horns', 'low', 'lead', 'choirV', 'timpMarch'], fx: ['roll', 'swell'], low: [[0, 10, 8], [8, 10, 8]], mel: [[0, 2, 4], [4, 5, 4], [8, 10, 6], [14, 11, 2]] },
+      { c: [0, 'M'], v: 1.2, hold: 2, L: ['pad', 'horns', 'low', 'lead', 'choirV'], fx: ['hit'], low: [[0, 12, 32]], mel: [[0, 12, 28]] },
     ],
-    progs: [[[0, 'M7'], [2, 'M'], [9, 'm'], [7, 'M']]], arrange: [['pad', 'halo', 'shimmer']],
+    progs: [[[0, 'M'], [8, 'M'], [10, 'M'], [0, 'M']]], arrange: [['pad', 'hornsSoft', 'timpSoft']],
   },
   defeatC: {
-    bpm: 72, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 1, settle: 0.5, lead: 'cold',
+    bpm: 58, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 0.9, settle: 0.6, settleAt: 1, lead: 'dark', low: 'dark',
     cue: [
-      { c: [0, 'm'], L: ['drone', 'whisper'], fx: ['toll'] },
-      { c: [1, 'M'], L: ['pad', 'whisper', 'pulse', 'lead'], mel: [[0, 12, 6], [6, 19, 2], [8, 25, 6], [14, 24, 2]] },
-      { c: [10, 'm'], L: ['pad', 'whisper', 'pulse', 'glints', 'lead'], mel: [[0, 22, 4], [4, 19, 4], [8, 20, 8]] },
-      { c: [8, 'M'], L: ['pad', 'whisper', 'pulse', 'glints', 'lead'], mel: [[0, 12, 6], [6, 19, 2], [8, 13, 4], [12, 10, 2], [14, 8, 2]] },
-      { c: [0, 'm'], L: ['pad', 'drone', 'whisper', 'lead'], fx: ['thud'], mel: [[0, 0, 16]] },
+      { c: [0, 'm'], L: ['subdrone', 'whisperLow', 'dbrass'], fx: ['collapse'] },
+      { c: [1, 'M'], L: ['subdrone', 'dbrass', 'whisperLow', 'low', 'lead'], fx: ['knell'], low: [[0, 12, 8], [8, 11, 8]], mel: [[0, 0, 6], [6, 6, 2], [8, 1, 8]] },
+      { c: [8, 'm'], L: ['subdrone', 'dbrass', 'whisperLow', 'low', 'lead'], fx: ['collapse'], low: [[0, 10, 8], [8, 9, 8]], mel: [[0, -4, 4], [4, -6, 4], [8, -7, 8]] },
+      { c: [6, 'M'], L: ['subdrone', 'dbrass', 'whisperLow', 'whisper', 'low', 'lead'], fx: ['knell', 'swellDark'], low: [[0, 8, 8], [8, 6, 8]], mel: [[0, -12, 6], [6, -6, 2], [8, -11, 8]] },
+      { c: [0, 'm'], hold: 2, L: ['subdrone', 'whisperLow'], fx: ['crush'] },
     ],
-    progs: [[[0, 'm'], [1, 'M']]], arrange: [['drone', 'whisper']],
+    progs: [[[0, 'm'], [1, 'M']]], arrange: [['subdrone', 'whisperFar', 'distant', 'knock']],
   },
 };
 
@@ -2900,10 +2911,17 @@ function musicStep(t) {
     if (b === 0) mBeacon(t, MUSIC.key + (s === 12 ? 31 : 36));
     else if (b === 1 && MUSIC.answer) mThud(t, s === 0 ? 1 : 0.75);
   }
+  // The end cues' drums: the timpani's march (a stroke on one, a pair into three, a pickup), its stroke on each chord in
+  // the calm loop, the big drums under the arrival; the Murmur's knock under the ground in Contingency's lost loop.
+  const tn = MUSIC.timpN;
+  if (L.has('timpMarch') && (s === 0 || s === 6 || s === 8 || s === 14)) mTimp(t, s === 6 || s === 14 ? tn + 7 - 12 * (tn + 7 > 50) : tn, s === 0 ? 1 : s === 8 ? 0.85 : 0.55);
+  if (L.has('timpSoft') && s === 0 && Math.max(0, MUSIC.bar - (d.cue ? d.cue.length : 0)) % d.chordBars === 0) mTimp(t, tn, 0.5);
+  if (L.has('taiko') && [0, 4, 8, 10, 12, 14].includes(s)) mTaiko(t, s === 0 ? 1 : s === 8 ? 0.85 : 0.5);
+  if (L.has('knock') && s === 0 && MUSIC.bar % 2 === 1 && Math.random() < 0.4) { mThud(t, 0.6); mThud(t + sd * 3, 0.45); }
   // Melody
   if (L.has('lead') && MUSIC.melody) {
     const n = MUSIC.melody[s];
-    if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : d.lead === 'cold' ? mCold : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
+    if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : d.lead === 'cold' ? mCold : d.lead === 'horn' ? mHornLead : d.lead === 'dark' ? mDarkLead : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
   }
 }
 
@@ -2956,20 +2974,22 @@ function musicBar(t) {
   const d = MUSIC.def, prog = MUSIC.prog;
   MUSIC.lv = d.stages ? storyLevel() : 0;
   // (an end cue: its own bar's chord and parts, a chord a bar; after it, the quiet loop, a little lower)
-  const cue = d.cue && MUSIC.bar < d.cue.length ? d.cue[MUSIC.bar] : null, cb = cue ? 1 : d.chordBars;
+  const cue = d.cue && MUSIC.bar < d.cue.length ? d.cue[MUSIC.bar] : null;
+  let cb = cue ? 1 : d.chordBars;
   const kb = d.cue ? MUSIC.bar - d.cue.length : MUSIC.bar;
   const c = cue ? cue.c : prog[Math.floor(Math.max(0, kb) / d.chordBars) % prog.length];
   if (d.cue) {
     MUSIC.layers = new Set(cue ? cue.L : d.arrange[0]);
-    if (kb === 0 && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel() * d.settle, t, 1.5);
+    if (kb === (d.settleAt || 0) && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel() * d.settle, t, 1.5);
   }
   let q = c[1];
-  if (MUSIC.color && q === 'm') q = 'm7'; else if (MUSIC.color && q === 'M') q = 'M7';
+  if (MUSIC.color && !d.cue && q === 'm') q = 'm7'; else if (MUSIC.color && !d.cue && q === 'M') q = 'M7';
   MUSIC.chordRoot = c[0];
   MUSIC.chord = CHORD[q].map((n) => n + c[0]);
   const L = MUSIC.layers;
   if (AUDIO.music <= 0) return;
   const barDur = MUSIC.stepDur * 16, on = (cue ? 0 : Math.max(0, kb)) % cb === 0;
+  if (cue && cue.hold) cb *= cue.hold; // (the bar's chords ring on: the end of a cue)
   if (L.has('pad') && on) mPad(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * cb);
   if (L.has('drone')) mDrone(t, MUSIC.key - 12 + c[0], barDur, MUSIC.bar);
   if (L.has('pedal')) mDrone(t, MUSIC.key - 12, barDur, MUSIC.bar, 0.45, 1000); // (Redline's: on the key's root whatever the chord, under the grind)
@@ -2984,9 +3004,32 @@ function musicBar(t) {
     const lv = Math.max(0.25, Math.min(0.75, MUSIC.lv)), v = d.silence ? 2.6 : 1.8 * Math.pow(10, ((lv - 0.25) / 0.5) * 0.75);
     mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars, v, d.silence ? 1 : 0, !d.silence && MUSIC.lv >= 0.6);
   }
+  // The end cues' own parts (see MOODS.victory): the horns, the dark brass, the sub pedal, the choirs, the low line.
+  const hv = hornVoicing(c[0]);
+  const dyn = (cue && cue.v) || 1; // (a cue bar's dynamic, for the build)
+  if (L.has('horns') && on) mHorn(t, hv, barDur * cb, dyn);
+  if (L.has('hornsSoft') && on) mHorn(t, hv, barDur * cb, 0.6, true);
+  if (L.has('dbrass') && on) mDarkBrass(t, hv.slice(0, 4).map((n) => n - 12).concat(c[1] === 'm' || c[1] === 'M' ? [hv[1] - 11] : []), barDur * cb, 1, barDur * cb * 0.45);
+  if (L.has('subdrone') && on) mSubDrone(t, MUSIC.key - 24, barDur * cb);
+  if (L.has('whisperLow') && on) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key - 12 + n), barDur * cb, 1.5);
+  if (L.has('whisperFar') && on) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key - 12 + n), barDur * cb, 1.2, 1);
+  if (L.has('choirV') && on) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * cb, 1.7, 0, true);
+  MUSIC.timpN = (() => { let n = MUSIC.key - 12 + c[0]; while (n > 47) n -= 12; while (n < 38) n += 12; return n; })();
+  if (L.has('distant') && on && Math.random() < 0.5) mCollapse(t + Math.random() * barDur, 0.3);
+  if (cue && cue.low && L.has('low')) for (const [s0, n, len] of cue.low) {
+    const at = t + s0 * MUSIC.stepDur, nn = MUSIC.key - 24 + n, dur = len * MUSIC.stepDur;
+    if (d.low === 'dark') { mDarkBrass(at, [nn], dur, 0.9, Math.min(1.2, dur * 0.3)); mSubDrone(at, nn, dur, 0.35); } else mHorn(at, [nn], dur, 1.1 * dyn);
+  }
   if (cue && cue.fx) for (const f of cue.fx) {
     if (f === 'riser') mRiser(t, barDur);
-    else if (f === 'hit') { mCrash(t); mImpact(t); }
+    else if (f === 'hit') { mCrash(t); mImpact(t); mBoom(t, 0.7); }
+    else if (f === 'boom') mBoom(t, 1);
+    else if (f === 'roll') mTimpRoll(t, MUSIC.timpN, barDur);
+    else if (f === 'swell') mSwell(t, barDur);
+    else if (f === 'swellDark') mSwell(t, barDur, true);
+    else if (f === 'collapse') mCollapse(t + MUSIC.stepDur * 2, 0.85);
+    else if (f === 'knell') mKnell(t, MUSIC.key - 12);
+    else if (f === 'crush') { mBoom(t, 1.5); mCollapse(t, 1); mDarkBrass(t, [MUSIC.key - 24, MUSIC.key - 12, MUSIC.key - 11, MUSIC.key - 6, MUSIC.key - 5], barDur * cb, 1.25, 0.03); }
     else if (f === 'toll') mCold(t, MUSIC.key, barDur * 0.9);
     else if (f === 'thud') mThud(t, 1);
   }
@@ -3425,4 +3468,190 @@ function mCrash(t) {
   env(g, t, 0.003, 0.07, 0.01, 1.6);
   src.connect(hp).connect(g); sends(g, 1, 0.5, 0);
   src.start(t, Math.random()); src.stop(t + 1.8);
+}
+
+/*
+ * The end cues' orchestra (MOODS.victory and the rest; owner, Nov 26 2026: triumphant, not cute; crushing, not light).
+ */
+
+/** The horn section's voicing of a chord on `croot` (over the key): the root low and high, the triad between, kept low and wide. */
+function hornVoicing(croot) {
+  const w = croot > 6 ? -12 : 0, ch = MUSIC.chord || CHORD.M.map((n) => n + croot);
+  return [MUSIC.key - 12 + croot + w, ...ch.map((n) => MUSIC.key + n + w), MUSIC.key + 12 + croot + w];
+}
+
+/**
+ * Low brass, a horn section: on each note two detuned saws and a square, scooped up into pitch, the filter blaring open
+ * and settling, a slow vibrato coming in, spread across the stereo. `soft`: the calm loop's, swelling in slowly.
+ */
+function mHorn(t, notes, dur, v = 1, soft = false) {
+  const ac = AUDIO.ctx, lp = ac.createBiquadFilter(), g = ac.createGain(), a = soft ? Math.min(1.4, dur * 0.3) : 0.16;
+  lp.type = 'lowpass'; lp.Q.value = 0.8;
+  lp.frequency.setValueAtTime(260, t); lp.frequency.exponentialRampToValueAtTime(soft ? 1000 : 2300, t + a);
+  lp.frequency.exponentialRampToValueAtTime(soft ? 800 : 1400, t + a + 0.9); lp.frequency.exponentialRampToValueAtTime(380, t + dur + 0.8);
+  env(g, t, a, v, dur, 1);
+  const lfo = mOsc('sine', 4.8, t), lg = ac.createGain();
+  lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(5, t + 0.9); lfo.connect(lg);
+  notes.forEach((n, i) => {
+    const ng = ac.createGain(); ng.gain.value = n < 45 ? 0.03 : n < 60 ? 0.022 : 0.016;
+    for (const [type, det, lvl] of [['sawtooth', -8, 1], ['sawtooth', 8, 1], ['square', 0, 0.5]]) {
+      const o = mOsc(type, midiHz(n), t), og = ac.createGain();
+      o.detune.setValueAtTime(det - 35, t); o.detune.linearRampToValueAtTime(det, t + 0.08); lg.connect(o.detune);
+      og.gain.value = lvl; o.connect(og).connect(ng); o.start(t); o.stop(t + dur + 1.1);
+    }
+    if (ac.createStereoPanner && notes.length > 1) { const p = ac.createStereoPanner(); p.pan.value = (i / (notes.length - 1)) * 1.1 - 0.55; ng.connect(p).connect(lp); } else ng.connect(lp);
+  });
+  lfo.start(t); lfo.stop(t + dur + 1.1);
+  lp.connect(g); sends(g, 0.85, 0.55, 0);
+}
+
+/** The heroic solo horn over them: saws and a square, an octave under for weight, scooped in, bright, with vibrato. */
+function mHornLead(t, n, dur, vol) {
+  const ac = AUDIO.ctx, f = midiHz(n), lp = ac.createBiquadFilter(), g = ac.createGain(), len = Math.max(0.25, dur);
+  lp.type = 'lowpass'; lp.Q.value = 1.1;
+  lp.frequency.setValueAtTime(500, t); lp.frequency.exponentialRampToValueAtTime(2800, t + 0.1); lp.frequency.exponentialRampToValueAtTime(1700, t + 0.7);
+  env(g, t, 0.07, 0.06 * (vol || 1), len * 0.9, 0.45);
+  const lfo = mOsc('sine', 5.2, t), lg = ac.createGain();
+  lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(0, t + 0.25); lg.gain.linearRampToValueAtTime(9, t + 0.7); lfo.connect(lg);
+  for (const [type, mul, det, lvl] of [['sawtooth', 1, -6, 0.5], ['sawtooth', 1, 6, 0.5], ['square', 1, 0, 0.25], ['sawtooth', 0.5, 0, 0.35]]) {
+    const o = mOsc(type, f * mul, t), og = ac.createGain();
+    o.detune.setValueAtTime(det - 40, t); o.detune.linearRampToValueAtTime(det, t + 0.07); lg.connect(o.detune);
+    og.gain.value = lvl; o.connect(og).connect(lp); o.start(t); o.stop(t + len + 0.55);
+  }
+  lfo.start(t); lfo.stop(t + len + 0.55);
+  lp.connect(g); sends(g, 0.9, 0.55, 0.12);
+}
+
+/** A timpani stroke on `n`: the drum's tone (and its fifth-ish partial) after a quick pitch drop, the mallet's thump. */
+function mTimp(t, n, v) {
+  const ac = AUDIO.ctx, f = midiHz(n), g = ac.createGain(), o = mOsc('sine', f * 1.12, t), o2 = mOsc('sine', f * 1.51, t), g2 = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.05); o2.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.05);
+  env(g, t, 0.003, 0.32 * v, 0.02, 1.3); env(g2, t, 0.003, 0.1 * v, 0.01, 0.45);
+  o.connect(g); o2.connect(g2).connect(g); sends(g, 1, 0.4, 0);
+  for (const x of [o, o2]) { x.start(t); x.stop(t + 1.45); }
+  const src = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
+  src.buffer = AUDIO.noise; lp.type = 'lowpass'; lp.frequency.value = 800;
+  env(ng, t, 0.002, 0.2 * v, 0.005, 0.1);
+  src.connect(lp).connect(ng); sends(ng, 1, 0.3, 0);
+  src.start(t, Math.random()); src.stop(t + 0.15);
+}
+/** A timpani roll over `dur`: strokes quickening and swelling from a murmur to a roar. */
+function mTimpRoll(t, n, dur) {
+  for (let x = 0; x < dur - 0.05;) {
+    const k = x / dur;
+    mTimp(t + x, n, 0.04 + 0.15 * k * k); // (a stroke's ring overlaps the next dozen: quiet each)
+    x += 0.09 - 0.035 * k;
+  }
+}
+
+/** The big drum under the arrival: a deep body that falls fast, a skin's slap, a little sub. */
+function mTaiko(t, v) {
+  const ac = AUDIO.ctx, o = mOsc('sine', 130, t), g = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(52, t + 0.1); o.frequency.exponentialRampToValueAtTime(44, t + 0.6);
+  env(g, t, 0.002, 0.5 * v, 0.03, 0.7);
+  o.connect(g); sends(g, 1, 0.45, 0);
+  o.start(t); o.stop(t + 0.85);
+  const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
+  src.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 0.8;
+  env(ng, t, 0.002, 0.22 * v, 0.01, 0.14);
+  src.connect(bp).connect(ng); sends(ng, 1, 0.45, 0);
+  src.start(t, Math.random()); src.stop(t + 0.2);
+}
+
+/** A sub boom: a huge low sine falling to the floor, driven into the soft clipper (so a small speaker hears it), a rumble of dark noise. */
+function mBoom(t, v) {
+  const ac = AUDIO.ctx, o = mOsc('sine', 78, t), g = ac.createGain(), ws = ac.createWaveShaper(), out = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(40, t + 0.35); o.frequency.exponentialRampToValueAtTime(24, t + 2.2);
+  env(g, t, 0.004, 1.1 * v, 0.08, 2.4);
+  ws.curve = AUDIO.boomCurve; out.gain.value = 0.34;
+  o.connect(g).connect(ws).connect(out); sends(out, 1, 0.3, 0);
+  o.start(t); o.stop(t + 2.6);
+  const src = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
+  src.buffer = AUDIO.noise; src.loop = true; lp.type = 'lowpass'; lp.frequency.setValueAtTime(700, t); lp.frequency.exponentialRampToValueAtTime(120, t + 1.8);
+  env(ng, t, 0.003, 0.2 * v, 0.03, 1.8);
+  src.connect(lp).connect(ng); sends(ng, 1, 0.6, 0);
+  src.start(t, Math.random()); src.stop(t + 2);
+}
+
+/** A cymbal swell over `dur` into the next downbeat (a reversed cymbal); `dark`, a low, hollow one, for the defeat. */
+function mSwell(t, dur, dark) {
+  const ac = AUDIO.ctx, src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = AUDIO.noise; src.loop = true;
+  f.type = dark ? 'bandpass' : 'highpass'; f.frequency.setValueAtTime(dark ? 200 : 3000, t); if (dark) { f.Q.value = 1.5; f.frequency.exponentialRampToValueAtTime(900, t + dur); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(dark ? 0.12 : 0.075, t + dur * 0.98); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.02);
+  src.connect(f).connect(g); sends(g, 1, 0.5, 0);
+  src.start(t, Math.random()); src.stop(t + dur + 0.05);
+}
+
+/**
+ * The defeat's brass, distorted and wrong: on each note saws detuned apart (a slow, sour beating) and one an octave
+ * down, all driven into the soft clipper, under a low-pass that opens slowly and closes. `atk`: its swell.
+ */
+function mDarkBrass(t, notes, dur, v = 1, atk = 0.5) {
+  const ac = AUDIO.ctx, pre = ac.createGain(), ws = ac.createWaveShaper(), lp = ac.createBiquadFilter(), g = ac.createGain();
+  pre.gain.value = 2.2; ws.curve = AUDIO.boomCurve;
+  lp.type = 'lowpass'; lp.Q.value = 2;
+  lp.frequency.setValueAtTime(150, t); lp.frequency.exponentialRampToValueAtTime(850, t + Math.max(0.05, atk) + dur * 0.25); lp.frequency.exponentialRampToValueAtTime(260, t + dur + 1);
+  env(g, t, Math.max(0.02, atk), 0.16 * v, dur, 1.2);
+  notes.forEach((n, i) => {
+    const ng = ac.createGain(); ng.gain.value = 0.11 / Math.sqrt(notes.length);
+    for (const [mul, det] of n < 40 ? [[1, -17], [1, 15]] : [[1, -17], [1, 15], [0.5, 4]]) { const o = mOsc('sawtooth', midiHz(n) * mul, t); o.detune.value = det; o.connect(ng); o.start(t); o.stop(t + dur + 1.3); }
+    if (ac.createStereoPanner && notes.length > 1) { const p = ac.createStereoPanner(); p.pan.value = (i % 2 ? 0.45 : -0.45) * (i / notes.length); ng.connect(p).connect(pre); } else ng.connect(pre);
+  });
+  pre.connect(ws).connect(lp).connect(g); sends(g, 0.9, 0.6, 0.05);
+}
+/** The defeat's lead: one note of the dark brass, quicker to speak. */
+function mDarkLead(t, n, dur, vol) { mDarkBrass(t, [n], Math.max(0.3, dur), 0.85 * (vol || 1), 0.25); }
+
+/** A sub-bass pedal on `n`: two sines a breath apart (a slow, uneasy beat), and a low saw for the harmonics a small speaker can play. */
+function mSubDrone(t, n, dur, v = 1) {
+  const ac = AUDIO.ctx, f = midiHz(n), g = ac.createGain(), lp = ac.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 170; lp.Q.value = 1;
+  env(g, t, Math.min(0.6, dur * 0.3), 0.06 * v, dur, 0.9);
+  for (const [type, ff, lvl] of [['sine', f, 1], ['sine', f + 0.6, 0.7], ['sawtooth', f, 0.35], ['sawtooth', f * 2.003, 0.18]]) {
+    const o = mOsc(type, ff, t), og = ac.createGain(); og.gain.value = lvl; o.connect(og).connect(lp); o.start(t); o.stop(t + dur + 1);
+  }
+  lp.connect(g); sends(g, 1, 0.15, 0);
+}
+
+/**
+ * Something huge falling a long way off: a deep boom, a long rumble, a groan of bending metal and rubble clattering
+ * down, most of it in the reverb (distance). `v` how near.
+ */
+function mCollapse(t, v) {
+  const ac = AUDIO.ctx, o = mOsc('sine', 60, t), g = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(22, t + 1.8);
+  env(g, t, 0.01, 0.42 * v, 0.1, 2.4);
+  o.connect(g); sends(g, 0.7, 0.6, 0);
+  o.start(t); o.stop(t + 2.6);
+  const src = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
+  src.buffer = AUDIO.noise; src.loop = true; lp.type = 'lowpass'; lp.frequency.setValueAtTime(450, t); lp.frequency.exponentialRampToValueAtTime(90, t + 3);
+  env(ng, t, 0.05, 0.28 * v, 0.3, 2.8);
+  src.connect(lp).connect(ng); sends(ng, 0.6, 0.9, 0);
+  src.start(t, Math.random()); src.stop(t + 3.4);
+  const gr = mOsc('sawtooth', 52, t + 0.2), gl = ac.createBiquadFilter(), gg = ac.createGain();
+  gr.frequency.setValueAtTime(52, t + 0.2); gr.frequency.exponentialRampToValueAtTime(31, t + 2.4);
+  gl.type = 'bandpass'; gl.frequency.value = 240; gl.Q.value = 4;
+  env(gg, t + 0.2, 0.5, 0.18 * v, 1, 1);
+  gr.connect(gl).connect(gg); sends(gg, 0.5, 0.8, 0);
+  gr.start(t + 0.2); gr.stop(t + 2.8);
+  for (let k = 0; k < 6; k++) {
+    const at = t + 0.15 + Math.random() * 1.6, d = ac.createBufferSource(), bp = ac.createBiquadFilter(), dg = ac.createGain();
+    d.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 500 + Math.random() * 1600; bp.Q.value = 6;
+    env(dg, at, 0.002, (0.05 + Math.random() * 0.05) * v, 0.01, 0.18);
+    d.connect(bp).connect(dg); sends(dg, 0.3, 0.9, 0);
+    d.start(at, Math.random()); d.stop(at + 0.25);
+  }
+}
+
+/** A low funeral bell on `n`: a bell's out-of-tune partials (the hum an octave under, the minor third), ringing a long time. */
+function mKnell(t, n) {
+  const ac = AUDIO.ctx, f = midiHz(n), g = ac.createGain();
+  env(g, t, 0.004, 1, 0.02, 4.5);
+  for (const [mul, lvl, dec] of [[0.5, 0.05, 4.5], [1, 0.045, 3.5], [1.19, 0.03, 2.2], [1.5, 0.02, 1.6], [2, 0.022, 1.8], [2.74, 0.012, 0.9]]) {
+    const o = mOsc('sine', f * mul, t), og = ac.createGain();
+    og.gain.setValueAtTime(lvl, t); og.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(og).connect(g); o.start(t); o.stop(t + dec + 0.1);
+  }
+  sends(g, 0.7, 0.7, 0.1);
 }
