@@ -2760,3 +2760,9 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the
    **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
    objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
+
+## To do: Argos on the main menu (owner, Nov 26)
+
+The moon Argos in the main menu's background (js/menuplanet.js) reads as an out-of-focus orb. Render it crisply at menu
+scale: a real surface (craters and maria, the grey lunar look of its biome), a sharp terminator and rim light matching
+the planet's sun, and it shouldn't be blurred by the depth-of-field/glow pass meant for the planet.
