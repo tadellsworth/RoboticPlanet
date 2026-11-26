@@ -122,3 +122,61 @@ Status: In progress. This inventory covers static map and selected-panel tables.
 | , | army | Pick idle warbots (again: the next group) | js/ui.js:2821 |
 | TAB | army | Command view: your Army Groups from above (drag one to send it, tap it for its panel) | js/ui.js:2822 |
 | . | army | Ping under the pointer for your team (multiplayer; Alt+click too) | js/ui.js:2823 |
+| H | Build gather | Select harvester | js/ui.js:2601 |
+| Q | Build gather | Select quarry | js/ui.js:2601 |
+| R | Build gather | Select mine | js/ui.js:2601 |
+| C | Build gather | Select tap | js/ui.js:2601 |
+| G | Build gather | Select grower | js/ui.js:2601 |
+| F | Build gather | Select farm | js/ui.js:2601 |
+| P | Build gather | Select pump | js/ui.js:2601 |
+| T | Build gather | Select fueltank | js/ui.js:2601 |
+| C | Build make | Select kiln | js/ui.js:2602 |
+| M | Build make | Select smelter | js/ui.js:2602 |
+| F | Build make | Select fab | js/ui.js:2602 |
+| R | Build make | Select refinery | js/ui.js:2602 |
+| T | Build make | Select tarworks | js/ui.js:2602 |
+| B | Build make | Select foundry | js/ui.js:2602 |
+| I | Build make | Select armory | js/ui.js:2602 |
+| N | Build make | Select munitions | js/ui.js:2602 |
+| Y | Build make | Select reactor | js/ui.js:2602 |
+| L | Build make | Select lab | js/ui.js:2602 |
+| G | Build make | Select generator | js/ui.js:2602 |
+| F | Build move | Select charger | js/ui.js:2603 |
+| E | Build move | Select depot | js/ui.js:2603 |
+| O | Build move | Select roadworks | js/ui.js:2603 |
+| N | Build move | Select station | js/ui.js:2603 |
+| G | Build move | Select magterm | js/ui.js:2603 |
+| V | Build move | Select mdriver | js/ui.js:2603 |
+| C | Build move | Select catcher | js/ui.js:2603 |
+| P | Build move | Select port | js/ui.js:2603 |
+| I | Build move | Select airfield | js/ui.js:2603 |
+| T | Build move | Select mast | js/ui.js:2603 |
+| M | Build move | Select terminal | js/ui.js:2603 |
+| O | Build defend | Select outpost | js/ui.js:2604 |
+| T | Build defend | Select turret | js/ui.js:2604 |
+| G | Build defend | Select minigun | js/ui.js:2604 |
+| U | Build defend | Select bunker | js/ui.js:2604 |
+| K | Build defend | Select keep | js/ui.js:2604 |
+| Z | Build defend | Select disruptor | js/ui.js:2604 |
+| M | Build defend | Select mortar | js/ui.js:2604 |
+| F | Build defend | Select flak | js/ui.js:2604 |
+| R | Build defend | Select repair | js/ui.js:2604 |
+| I | Build defend | Select silo | js/ui.js:2604 |
+| N | Build defend | Select nukesilo | js/ui.js:2604 |
+| L | Build mega | Select lance | js/ui.js:2605 |
+| Y | Build mega | Select sunder | js/ui.js:2605 |
+| H | Build mega | Select dome | js/ui.js:2605 |
+| C | Build mega | Select city | js/ui.js:2605 |
+| O | Build mega | Select lift | js/ui.js:2605 |
+| N | Build mega | Select atmos | js/ui.js:2605 |
+| E | Build mega | Select deepcore | js/ui.js:2605 |
+| U | Build mega | Select gup | js/ui.js:2605 |
+| R | Build terra | Select tf-raise | js/ui.js:2607 |
+| L | Build terra | Select tf-lower | js/ui.js:2607 |
+| F | Build terra | Select tf-flatten | js/ui.js:2607 |
+| H | Build terra | Select tf-fill | js/ui.js:2607 |
+| C | Build terra | Select tf-dig | js/ui.js:2607 |
+| 1–7 | Build menu | Select Gather, Make, Move, Defend, All, Mega, Terraform | js/ui.js:2609 |
+| Shift+W | Map | Open Workforce | js/ui.js:2827 |
+| Y | Map | Open Economy | js/ui.js:2811 |
+| D | Enemy megastructure panel | Demolish or seize | js/ui.js:2706 |
