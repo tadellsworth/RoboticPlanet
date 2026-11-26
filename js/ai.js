@@ -439,7 +439,10 @@ function aiThink(p) {
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') nWorkers++;
   const wantStaff = me.reduce((n, b) => n + (b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew ? 1 : 0), 0);
   const few = S.mode !== 'colony' && S.time > 60 && nWorkers < (P.triage ? clamp(wantStaff + MIN_FREE_WORKERS, AI_ENOUGH, AI_PLENTY) : AI_FEW);
-  if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type)) demolish(b);
+  const needsCharge = me.some(b => b.built && b.type === 'foundry') &&
+    !me.some(b => b.built && BDEFS[b.type].charger && !aiShut(b));
+  if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type) &&
+      !(needsCharge && b.type === 'charger')) demolish(b);
   if (few) me = me.filter((b) => !b.dead);
 
   // 1) Construction
@@ -721,6 +724,9 @@ function aiThink(p) {
   // first, as a starved Mine is. (The Hollow, Scarce, seed 25: the Murmur wrecked a colony's Foundry, Fab and Smelters
   // at 25 minutes, an Outpost and a Refinery waiting for goods held both its sites, and it never made a robot again.)
   if ((P.opened || (!smart && S.time > AI_EASY_OPENING * 2)) && !few) for (const t of ['smelter', 'fab', 'foundry']) if (!me.some((b) => b.type === t)) starved.push(t);
+  // Recover charging as a critical link even when other construction occupies the normal slots.
+  const replaceCharger = needsCharge && !counts.charger;
+  if (replaceCharger) starved.push('charger');
   for (const t of starved) plan = [[t, (counts[t] || 0) + 1]].concat(plan);
   if (starved.length) siteCap = Math.max(siteCap, sites + 1);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
@@ -846,18 +852,20 @@ function aiThink(p) {
   // (A Warden's next turrets, up to its six, go first too as each falls due: behind the plan's Mines, Outposts and Keep
   // it had two of the six it promises by 18 minutes.)
   else if (st.turrets && !firstTurret && (counts.turret || 0) < turretsWanted && counts.foundry && !me.some((b) => b.type === 'turret' && !b.built)) plan = [['turret', turretsWanted]].concat(plan);
+  if (replaceCharger) plan = [['charger', 1]].concat(plan.filter(([type]) => type !== 'charger'));
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (type === 'turret' && firstTurret && S.time <= defAt && !aiMurCut(P)) continue;
-      if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
+      const restoreCharge = type === 'charger' && replaceCharger;
+      if (few && !restoreCharge && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
       // Extra sites are for urgent supply only. Trade and a missing factory can qualify at the same time.
       if (sites >= maxSites && (cementStarved || fiberStarved || starved.length || tradeFirst) &&
           !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') &&
           !starved.includes(type) && !(tradeFirst && type === 'terminal')) continue;
-      if (flakFirst && sites >= capBefore && type !== 'flak') continue;
-      if (upFirst && sites >= capBefore && type !== 'bunker') continue;
-      if (blobFirst && sites >= capBefore && type !== 'mortar') continue;
-      if (reactorFirst && sites >= capBefore && type !== 'reactor') continue;
+      if (flakFirst && sites >= capBefore && type !== 'flak' && !restoreCharge) continue;
+      if (upFirst && sites >= capBefore && type !== 'bunker' && !restoreCharge) continue;
+      if (blobFirst && sites >= capBefore && type !== 'mortar' && !restoreCharge) continue;
+      if (reactorFirst && sites >= capBefore && type !== 'reactor' && !restoreCharge) continue;
       if (S.mode === 'colony' && !S.horde && BDEFS[type].war) continue; // (Horde: guns and Ammo, against the waves)
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -887,7 +895,7 @@ function aiThink(p) {
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
       // So is an Architect's Missile Factory or Silo: waiting for the whole price to lie in storage while the Foundry and
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
-      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
+      const defenceNow = (restoreCharge && counts.smelter && aiAffordable(p, type, ['alloy'])) || (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
         (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
         (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])) || // (the Hollow's first Refinery: see oilFirst)
         (type === 'mortar' && blobFirst && aiAffordable(p, type, ['alloy'])); // (against a blob: see blobFirst)
@@ -908,7 +916,7 @@ function aiThink(p) {
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
         if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && (!counts[type] || (type === 'mine' && oreLow))) placed.building.prio = 'high';
         if (type === 'armory') placed.building.prio = 'low';
-        if (defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
+        if (restoreCharge || defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
         break;
       }
     }

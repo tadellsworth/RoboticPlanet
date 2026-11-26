@@ -1725,6 +1725,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   are in `P.stats` (`lostBld`, `lostMat`, `lostIn`, `lostAboard`); open shortages in `P.dry`. A save from before the
   log starts it where it was loaded (`S.logFrom`).
 - **Ammo:** warbots carry 10 shots (each Ammo is 5: `AMMO_SHOTS`; a Railgunner's 2 slugs of its 4) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant.
+  A rival with a Bot Foundry and no working charging building can give one replacement Fuel Station an emergency
+  build slot. The station uses normal placement, construction and Fuel deliveries.
   Rivals exclude Crystal deposits under fire when estimating local reserves. An urgent Trade Terminal and a missing
   supply building can both qualify for an extra construction slot, and the rival weighs how many Chips or Crystal a
   contract will actually bring back during a shortage.

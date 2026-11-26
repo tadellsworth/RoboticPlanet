@@ -36,3 +36,11 @@ TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js 'Long haul' 21 2 33 ef
 TERRAFALL_ECONOMY_TRACE=1 TERRAFALL_ECONOMY_LOSS=1:mine:12 node tools/late-attack-audit.js 'Long haul' 21 2 33 ef57e13
 TERRAFALL_ECONOMY_TRACE=1 TERRAFALL_ECONOMY_LOSS=1:charger:12 node tools/late-attack-audit.js 'Long haul' 21 2 33 ef57e13
 ```
+
+## Fuel Station recovery fix
+
+A rival with a completed Bot Foundry and no usable charging building now treats a replacement Fuel Station as critical construction. It can use an emergency slot and gets high delivery priority. A station site already under construction satisfies the request.
+
+- Standard seed 25: after the minute-12 loss, the first completed, fueled replacement was seen at minute 17. The revised run was undecided at its original 38-minute cap. The earlier loss run ended at 26.62 minutes without a sampled replacement.
+- Long haul seed 21: the first completed, fueled replacement was seen at minute 13. The revised run was undecided at its original 33-minute cap. The earlier loss run ended at 26.99 minutes without a sampled replacement.
+- The two no-loss controls retained their winners and times, 17.32 and 23.81 minutes respectively.
