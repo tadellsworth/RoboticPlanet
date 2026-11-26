@@ -93,7 +93,7 @@ const rate = (c2, distT, shape) => JSON.parse(run(c2, `
 `));
 const r30 = rate(mk(), 30);
 console.log(`  measured over ${r30.d} tiles: ${r30.out} goods/min out, ${r30.home} goods/min home`);
-check('both ways at once over 30 tiles: goods move out and home, a canister of 16 every 6 s each way', r30.out >= 120 && r30.home >= 120, r30);
+check('both ways at once over 30 tiles: goods move out and home, a canister of 16 every 8 s each way (about 120 a minute)', r30.out >= 100 && r30.home >= 100 && r30.out <= 130 && r30.home <= 130, r30);
 
 // ---- the far end's goods list overrides: it sends only what's on it
 const ov = JSON.parse(run(c, `

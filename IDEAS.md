@@ -1709,8 +1709,14 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     Maglev line). Open: the rival still builds none (an Architect pair to an island it holds on Islands or Sky islands
     would be the natural first use: aiMaglev's far-cluster test with a Catcher instead); a Catcher still can't be put
     on an island nobody of yours can reach yet (a foothold first: a Ferry, a Drop Outpost); a Catcher full of goods
-    nobody fetches (no cap today); whether 160 a minute each way for 28 goods of buildings is too strong next to a
-    Maglev line (watch it).
+    nobody fetches (no cap today). **Tuned (Nov 26 2026 balance pass):** at 160 a minute each way for 16 Cement, 12
+    Alloy, 6 Chips a line it out-carried a 30-tile 4-pod Maglev line (about 120 a minute for some 46 Cement, 58 Alloy,
+    29 Chips with its pods) at a quarter of the cost, longer reach and nothing on the ground to defend: a shot every
+    **8 s** now (about 120 a minute each way, measured 118 over 30 tiles), and the Driver costs 12 Cement, 10 Alloy, 5
+    Chips, the Catcher 8, 5, 3. Still the only way over a gap a Maglev line can't span (over 6 tiles of chasm or deep
+    water) and still far cheaper on a long hop. *Open for the owner:* a further step would be a slower rate when both
+    ends stand on ground a robot can walk between (overland) than across water or a chasm; several Drivers aimed at one
+    Catcher still add up (each its own 120 a minute out), unlike a Maglev line's four pods.
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no

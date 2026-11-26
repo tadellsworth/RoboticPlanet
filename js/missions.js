@@ -1085,7 +1085,7 @@ const MISSIONS = [
     intro: [
       'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
       'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
-      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 6 seconds from each end.',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 8 seconds from each end.',
       'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],

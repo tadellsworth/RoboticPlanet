@@ -382,7 +382,7 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
  * the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
  */
-const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 6,
+const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8,
   flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
@@ -1624,12 +1624,12 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 6 seconds from each end. Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
-    cost: { cement: 10, alloy: 8, chip: 4 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end. Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
     name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take several Drivers.',
-    cost: { cement: 6, alloy: 4, chip: 2 }, store: true, catcher: true, armor: 12, buildTime: 12,
+    cost: { cement: 8, alloy: 5, chip: 3 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
   // square of foot x foot tiles from its own tile, east and south: footTiles).
@@ -2536,7 +2536,7 @@ const FLAVOR = {
   deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
   atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
-  catcher: 'A canister every six seconds, each way, around the clock, for settlements still on the drawing board.',
+  catcher: 'A canister every eight seconds, each way, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',
