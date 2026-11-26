@@ -1252,10 +1252,14 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   the Architect from 600 s, the others from 900 s, every 20 s): on a map of islands, mesas or canyons (`aiMdMap`:
   Islands, Sky islands, Four Isles, Canyon maze, Grand Canyon) to its nearest fort or store 16–52 tiles out on ground its
   robots can't walk to (another `walkZones` area: over a Viaduct, a landing's), elsewhere only to one no link or road
-  reaches; with Cement in hand, a usual site free and a Bot Foundry and Chip Fab of its own (not the Alloy and Chips: they never sit in its storage, the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a
-  Generator by it, and a Catcher site by the foothold (`aiMdFarSpots`) when its Workers and Haulers get there (the same
-  `S.zone`), else a Catcher kit once the Driver stands; then it aims the Driver, and `mdPlan` runs the line. Lost, it
-  tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
+  reaches; with Cement in hand, a usual site free, a Bot Foundry and Chip Fab of its own and Fuel to spare (12, and a
+  Refinery or two Bio Farms: the Driver fires by a Generator), not the Alloy and Chips (they never sit in its storage:
+  the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a Generator by it, and a Catcher
+  site by the foothold (`aiMdFarSpots`) when its Workers and Haulers get there (the same `S.zone`), else a Catcher kit
+  once the Driver stands; the sites and the kit's load are High priority (`sitePrio`, `b.kitPrio`) and count as owed
+  like a seized megastructure's fee (`megaFeeOwed`: its conveyors don't hand on what they need, its Ammo Plant and then
+  its Foundry rest), and its usual 120 s give-up waits 420 s for them as for a Silo; then it aims the Driver, puts a
+  Generator by a Catcher its Workers reach, and `mdPlan` runs the line. Lost, it tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
   (`mdriver-<dir>@T`, e/w lying east-west, n/s north-south, `mdDir`; framed wide, `MD_FRAME`), the Catcher's arms swing
   in as one lands (`catcher-closed@T`, `mdArmsIn`); `drawMassDrivers` (in the air layer) lights the coils in sequence
   while it charges, with arcs crackling up the rail from the breech, the shot's flash, a faint guidance beam while a

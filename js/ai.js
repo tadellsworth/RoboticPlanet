@@ -961,7 +961,8 @@ function aiThink(p) {
     if (!b.paused && have >= hi) setPaused(b, true);
     else if (b.paused && have < lo) setPaused(b, false);
   }
-  // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed): the Ammo Plant rests at
+  // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed; or a Mass Driver pair's
+  // sites or kit it put first, aiMassDriver): the Ammo Plant rests at
   // once, and the Bot Foundry too once the fee has waited AI_SEIZE.rest s, so what the Smelters and Chip Fabs make
   // reaches it (they ate it all, and a seized Lance sat a few Alloy and Chips short for ten minutes). Not in triage.
   const owe = !few && (megaFeeOwed(p, 'alloy') >= 1 || megaFeeOwed(p, 'chip') >= 1);
@@ -2194,21 +2195,33 @@ function aiMassDriver(p, me, lander) {
   if (pair) {
     const D = getE(pair.d);
     if (!D || D.dead || D.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
-    // A Generator by the Driver (it fires only with power).
-    if (!me.some((g) => g.type === 'generator' && !g.dead && dist(g.x, g.y, D.x, D.y) <= (g.built ? BDEFS.generator.burner.radius : 3))) {
+    // Its sites (and a kit's load) come first: High priority, back to Normal once built (sitePrio), as for a
+    // megastructure's (its Alloy and Chips otherwise all went to the Foundry and the Missile programme, and the sites
+    // were given up unbuilt after seven minutes on Sky islands).
+    for (const b of [D, getE(pair.c), ...me.filter((g) => g.type === 'generator' && !g.built && dist(g.x, g.y, D.x, D.y) <= 3)]) if (b && !b.dead && !b.built && !b.prio) { b.prio = 'high'; b.sitePrio = 1; }
+    if (D.built && D.kitPrio && !D.mdKit) { delete D.prio; delete D.kitPrio; }
+    // A Generator by the Driver (it fires only with power), and by its Catcher once it stands where Workers get (so
+    // the far end's spare goes home too).
+    const gen = (E) => {
+      if (me.some((g) => g.type === 'generator' && !g.dead && dist(g.x, g.y, E.x, E.y) <= (g.built ? BDEFS.generator.burner.radius : 3))) return;
       let best = null, bd = Infinity;
-      for (let j = D.y - 3; j <= D.y + 3; j++) for (let i = D.x - 3; i <= D.x + 3; i++) { const d = dist(i, j, D.x, D.y); if (d > 3 || d >= bd || !inMap(i, j) || !canPlace(p, 'generator', i, j, true).ok || wouldBlock(tIdx(i, j))) continue; bd = d; best = [i, j]; }
+      for (let j = E.y - 3; j <= E.y + 3; j++) for (let i = E.x - 3; i <= E.x + 3; i++) { const d = dist(i, j, E.x, E.y); if (d > 3 || d >= bd || !inMap(i, j) || !canPlace(p, 'generator', i, j, true).ok || wouldBlock(tIdx(i, j))) continue; bd = d; best = [i, j]; }
       if (best) placeSite(p, 'generator', best[0], best[1]);
-    }
+    };
+    gen(D);
     if (!D.built) return;
     const C = pair.c ? getE(pair.c) : null, aimed = D.mdTo ? getE(D.mdTo) : null;
-    if (aimed && !aimed.dead && aimed.owner === p && BDEFS[aimed.type].catcher) { pair.c = aimed.id; return; } // (the line stands; mdPlan runs it)
+    if (aimed && !aimed.dead && aimed.owner === p && BDEFS[aimed.type].catcher) { // (the line stands; mdPlan runs it)
+      pair.c = aimed.id;
+      if (aimed.built && S.zone[tIdx(aimed.x, aimed.y)] === S.zone[tIdx(lander.x, lander.y)] && (playerGoods(p).fuel || 0) >= A.fuel) gen(aimed);
+      return;
+    }
     if (C && !C.dead && C.owner === p) { if (C.built) setMdAim(p, D, C); return; }
     if (D.mdKit || (S.cans || []).some((m) => m.kit && m.from === D.id)) return; // (a kit on its way)
     // No Catcher (or it was lost): a kit to the foothold's ground, when there's one to throw it to and it can pay.
     const T = getE(pair.to);
     if (!T || T.dead || T.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
-    for (const [i, j] of aiMdFarSpots(p, T, D.x, D.y)) if (!mdKitWhy(p, D, i, j)) { setMdKit(p, D, i, j); return; }
+    for (const [i, j] of aiMdFarSpots(p, T, D.x, D.y)) if (!mdKitWhy(p, D, i, j)) { if (!setMdKit(p, D, i, j) && !D.prio) { D.prio = 'high'; D.kitPrio = 1; } return; }
     return;
   }
   if (S.time < (P.mdRetry || 0) || me.some((b) => b.type === 'mdriver')) return;

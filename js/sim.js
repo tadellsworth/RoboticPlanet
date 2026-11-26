@@ -151,16 +151,21 @@ function prioRank(b) {
  * What a computer player p still owes of good g to bring its seized megastructures online (their fee, less what is in
  * them or on its way): while it does, its factories' conveyors don't hand g on to their neighbours and keep none back
  * from the Haulers (feedStep, feedHold), so the fee comes first (prioRank). Without it the Alloy from a Smelter beside a
- * Foundry never reached storage, and a seized Lance or Deep Core sat a few Alloy short for ten minutes. Kept for the tick.
+ * Foundry never reached storage, and a seized Lance or Deep Core sat a few Alloy short for ten minutes. A rival's Mass
+ * Driver and Catcher sites it put first (High: aiMassDriver), and a Catcher kit it is loading, count the same. Kept
+ * for the tick.
  */
 let _megaOwe = { tick: -1, S: null, by: null };
 function megaFeeOwed(p, g) {
   if (_megaOwe.tick !== S.tick || _megaOwe.S !== S) {
     _megaOwe = { tick: S.tick, S, by: null };
     for (const b of S.buildings) {
-      if (b.dead || !b.mOff || !b.mNeed || !S.players[b.owner]?.ai) continue;
+      if (b.dead || !S.players[b.owner]?.ai) continue;
+      // (and a rival's Mass Driver pair going up, or its Catcher kit loading, put first: aiMassDriver)
+      const owe = b.mOff && b.mNeed ? b.mNeed : mdEnd(b) && !b.built && b.sitePrio ? siteCost(b) : b.kitPrio && b.mdKit ? BDEFS.catcher.cost : null;
+      if (!owe) continue;
       const by = (_megaOwe.by = _megaOwe.by || {}), o = (by[b.owner] = by[b.owner] || {});
-      for (const k in b.mNeed) o[k] = (o[k] || 0) + Math.max(0, b.mNeed[k] - (b.stock[k] || 0) - (b.inc[k] || 0));
+      for (const k in owe) o[k] = (o[k] || 0) + Math.max(0, owe[k] - (b.stock[k] || 0) - (b.inc[k] || 0));
     }
   }
   return (_megaOwe.by && _megaOwe.by[p] && _megaOwe.by[p][g]) || 0;
