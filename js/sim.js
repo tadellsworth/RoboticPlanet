@@ -10457,6 +10457,7 @@ function missileBotAt(owner, i, j) {
 }
 
 /** Can this silo fire at tile (i, j) now? '' if so, otherwise why not. */
+const CAVE_ROOF = 'The roof is in the way: no Missile, bomb or aircraft reaches inside the caves.';
 function missileBlocked(silo, i, j) {
   if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
   if (!(silo.stock.warhead > 0)) return 'This Silo has no Missiles: haulers bring them from a Missile Factory.';
@@ -10464,6 +10465,7 @@ function missileBlocked(silo, i, j) {
   if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every Missile, and this one never blows over.' : `A dust storm grounds every Missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   if (dist(silo.x, silo.y, i, j) > BDEFS[silo.type].missile.range) return `Out of range: Missiles reach ${BDEFS[silo.type].missile.range} tiles.`;
   if (calmAt(i + 0.5, j + 0.5)) return 'Not there: the Trade Post\'s ground is a no-fire zone.';
+  if (caveAt(i + 0.5, j + 0.5)) return CAVE_ROOF;
   return '';
 }
 
@@ -10499,6 +10501,8 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
+    // (Half underground: a Missile, bomb, napalm canister or nuclear missile that comes down on the caves bursts on the roof: nothing reaches in.)
+    if (S.cave && !m.shell && !m.rocket && m.t >= m.dur && caveAt(m.x1, m.y1)) { addFx('puff', m.x1, m.y1, { r: 0.7, life: 1 }); continue; }
     if (m.shell) {
       if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
       if (m.t >= m.dur) shellImpact(m);
@@ -10643,6 +10647,7 @@ function nukeBlocked(silo, i, j) {
   if (dist(silo.x, silo.y, i, j) > NUKE.range) return `Out of range: nuclear missiles reach ${NUKE.range} tiles.`;
   if (calmAt(i + 0.5, j + 0.5)) return 'Not there: the Trade Post\'s ground is a no-fire zone.';
   if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every missile, and this one never blows over.' : `A dust storm grounds every missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
+  if (caveAt(i + 0.5, j + 0.5)) return CAVE_ROOF;
   return '';
 }
 
@@ -12607,9 +12612,9 @@ function eventNow(type) {
   return E && S.time >= E.t0 && (!type || E.type === type) ? E : null;
 }
 /** Bot speed in a dust storm. */
-function evSpeed(x, y, p) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && (p === undefined ? atmosAt(x, y) >= 1 : atmosOwnAt(x, y, p))) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside, for its owner and allies)
+function evSpeed(x, y, p) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && (caveAt(x, y) || (p === undefined ? atmosAt(x, y) >= 1 : atmosOwnAt(x, y, p)))) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside, for its owner and allies)
 /** Battery drain in a solar flare. */
-function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
+function evDrain(x, y) { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 && !(x !== undefined && caveAt(x, y)) ? FLARE_DRAIN : 1; } // (the caves' roof keeps a flare out)
 
 /** Start, run and end planetary events (see EVENTS). */
 function updateEvents() {
@@ -12724,6 +12729,7 @@ function ringfallHits(alone) {
  */
 function meteorPlan(rng, t0, dur) {
   if (S.hollow) return hollowRingfall(rng, t0, dur);
+  if (S.caves) return cavesRingfall(rng, t0, dur);
   const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
   const L = getE(S.players[0].lander), hits = [], n = ringfallHits(alone);
   for (let k = 0; k < n; k++) {
@@ -12756,6 +12762,26 @@ function hollowRingfall(rng, t0, dur) {
     const x = Math.round(b.x + dcos(a) * r), y = Math.round(b.y + dsin(a) * r);
     const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
     for (const [i, j] of alone ? [[x, y]] : [[x, y], [W - 1 - x, H - 1 - y]]) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
+  }
+  return hits;
+}
+
+/**
+ * Ringfall on Half underground falls on the surface only (the roof keeps it out of the caves), each strike with its mirror on the other
+ * side (west to east), half of them near player 0's own ground: the same number of strikes as on any map.
+ */
+function cavesRingfall(rng, t0, dur) {
+  const W = S.W, alone = S.mode === 'colony', hits = [], n = ringfallHits(alone), L = getE(S.players[0].lander);
+  for (let k = 0; k < n; k++) {
+    let x = -1, y = -1;
+    for (let tries = 0; tries < 60 && x < 0; tries++) {
+      let i, j;
+      if (L && alone && k % 2 === 0) { const a = rng() * Math.PI * 2, r = 4 + rng() * 14; i = Math.round(L.x + dcos(a) * r); j = Math.round(L.y + dsin(a) * r); } else { i = Math.floor(rng() * ((W + 1) / 2)); j = Math.floor(rng() * S.H); }
+      if (inMap(i, j) && S.cave[tIdx(i, j)] === 0 && S.terrain[tIdx(i, j)] === T_GROUND) { x = i; y = j; }
+    }
+    if (x < 0) continue;
+    const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
+    for (const [i, j] of alone || x === W - 1 - x ? [[x, y]] : [[x, y], [W - 1 - x, y]]) hits.push({ x: i, y: j, at, roll, done: 0 });
   }
   return hits;
 }
@@ -12997,7 +13023,7 @@ function acceptTrade(p) {
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
 function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
-function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
+function drainMul(u) { return evDrain(u.x, u.y) * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
 function carryOf(u, g) { return isLiquid(g) && !BOTS[u.type].tanker && !BOTS[u.type].tankShip ? 1 : botCarry(u); }
@@ -13118,7 +13144,7 @@ function murmurStart(level) {
   murmurLayer();
   // (The Hollow, their lair, has its own sites, laid out with its map in twin pairs, the Deep's mound in the middle.)
   // (Horde: no nests, only the Maw at the far end, with its mouths and the lanes down the map: hordeSetup.)
-  if (S.horde) hordeSetup(); else if (S.hollow) placeHollowNests(makeRng((S.seed ^ 0x6e357) >>> 0)); else if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
+  if (S.horde) hordeSetup(); else if (S.hollow) placeHollowNests(makeRng((S.seed ^ 0x6e357) >>> 0)); else if (S.caves) placeCaveNests(); else if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
   for (const b of S.buildings) if (!b.dead && isNestB(b)) murmurAdopt(b);
 }
 
@@ -13281,6 +13307,25 @@ function placeHollowNests(rng) {
 }
 
 /**
+ * Half underground: the Murmur live in the caves only (and only with the Murmur on): a nest on each of the sites cavesMap laid out inside (twin
+ * pairs, west and east), CAVES.nests of them a side by Size, half the pairs (rounded up) with the Murmur Quiet. No mound: these are the
+ * ordinary nests, level 1, owned by the Murmur's slot. They dig tunnels and open exits like any nest, so what grows below the caves
+ * comes up through them, and out of the entrances when the wall lets them (their packs go for whoever is nearest).
+ */
+function placeCaveNests() {
+  const sites = S.caves.nests, keep = murmurLevel() === 'quiet' ? Math.ceil(sites.length / 4) * 2 : sites.length;
+  for (const n of sites.slice(0, keep)) {
+    const t = tIdx(n.x, n.y);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) continue;
+    S.res[t] = R_NONE; S.amt[t] = 0;
+    const b = addBuilding(wildOwner(), 'nest', n.x, n.y, true);
+    b.level = 1;
+    for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
+    for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+  }
+}
+
+/**
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
@@ -13289,7 +13334,7 @@ function placeHollowNests(rng) {
  */
 function placePosts(seed) {
   S.posts = [];
-  if (S.hollow) return; // (none in the Hollow: the Pathfinder, which built them, never mapped it)
+  if (S.hollow || S.caves) return; // (none in the Hollow nor the caves: the Pathfinder, which built them, never mapped them)
   const Ls = S.players.filter((P) => !P.absent && !isWild(P.id)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
   if (!Ls.length) return;
   const grandCanyon = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0].grandCanyon;
@@ -18265,6 +18310,7 @@ function airNeeds(c) {
 function airSuppliable(b) {
   const def = b && BDEFS[b.type];
   if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
+  if (caveTile(tIdx(b.x, b.y))) return false; // (Half underground: no plane flies into the caves)
   if (!b.built) return !storeFunded(b);
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }
@@ -18465,6 +18511,7 @@ function airdropBlocked(owner, u, kind, i, j) {
   if (u.mission) return 'That plane is already on a flight.';
   if (!inMap(i, j)) return 'Outside the map.';
   const t = tIdx(i, j);
+  if (caveTile(t)) return 'The roof is in the way: nothing is dropped into the caves. Drop it out on the surface, by an entrance.';
   if (kind === 'outpost') {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
@@ -18696,6 +18743,7 @@ function strikeBlocked(owner, u, t, deck) {
   if (!strikeTarget(u, t)) return 'Pick an enemy building, or an enemy vehicle or robot out in the open.';
   const [tx, ty] = strikeAim(t, deck);
   if (calmAt(tx, ty)) return 'Not there: nothing is bombed on a Trade Post\'s ground.';
+  if (caveAt(tx, ty)) return CAVE_ROOF;
   if (sortieFuel(u, base, tx, ty) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
@@ -18734,6 +18782,7 @@ function napalmBlocked(owner, u, i, j) {
   if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Outside the map.';
   if (S.terrain[tIdx(i, j)] !== T_GROUND) return 'Aim napalm at the ground, not water, rock or a chasm.';
   if (calmAt(i + 0.5, j + 0.5)) return 'Not there: nothing is bombed on a Trade Post\'s ground.';
+  if (caveAt(i + 0.5, j + 0.5)) return CAVE_ROOF;
   if (sortieFuel(u, base, i + 0.5, j + 0.5) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
@@ -21190,6 +21239,7 @@ function mdAimWhy(owner, b, c) {
   if (!b.built) return 'That Mass Driver is still going up.';
   if (!c || c.dead || !(BDEFS[c.type].catcher || mdFortType(c.type))) return 'Tap one of your Catchers, or an Outpost or Keep to keep supplied.';
   if (c.owner !== owner) return `That ${BDEFS[c.type].name} isn't yours: tap one of your own.`;
+  if (caveAt(c.x + 0.5, c.y + 0.5)) return 'Nothing flies down into the caves: a canister cannot land there.';
   const d = dist(b.x, b.y, c.x, c.y);
   if (d < M.min) return `Too close: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
   if (d > M.max) return `Too far: that ${BDEFS[c.type].name} is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
@@ -21687,6 +21737,7 @@ function lanceAimBlocked(b, i, j) {
   if (!inMap(i, j)) return 'Off the map.';
   const c = bCentre(b);
   if (dist(c.x, c.y, i + 0.5, j + 0.5) < 3) return 'Too close: aim it at a spot away from the gun.';
+  if (caveAt(i + 0.5, j + 0.5)) return CAVE_ROOF;
   return '';
 }
 
@@ -21815,7 +21866,7 @@ function lanceTiles(b, L) {
     const p = u > 0 ? lo + k : hi - k, qc = q0 + (v / u) * (p + 0.5 - p0);
     for (let q = Math.max(0, Math.floor(qc - span)); q <= Math.min(qN - 1, Math.floor(qc + span)); q++) {
       const i = xm ? p : q, j = xm ? q : p, t = tIdx(i, j);
-      if (S.bAt[t] === b.id) continue;
+      if (S.bAt[t] === b.id || (S.cave && S.cave[t] === 1)) continue; // (the caves' roof: the beam passes over them)
       const fx = i + 0.5 - L.x0, fy = j + 0.5 - L.y0, along = fx * L.ux + fy * L.uy;
       if (along < a0 || along > a1) continue;
       const d = Math.abs(fx * L.uy - fy * L.ux) - pr; // (how near the tile's square comes to the line)
@@ -23193,6 +23244,7 @@ function sunderAimBlocked(b, i, j, mode) {
   if (mode === 'deep') return sunderDeepOn() ? '' : 'No Murmur in this game: Strike the Deep has nothing to strike. A Quake still works.';
   const c = bCentre(b);
   if (dist(c.x, c.y, i + 0.5, j + 0.5) > SUNDER.range) return `Too far: a Quake reaches ${SUNDER.range} tiles from the Ray.`;
+  if (caveAt(i + 0.5, j + 0.5)) return 'The roof is in the way: the Ray cannot reach the caves.';
   return '';
 }
 

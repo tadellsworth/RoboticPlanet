@@ -544,7 +544,11 @@ function saveSettings() {
 }
 
 /** Can the Great Uplink win be on with the menu as it is (Megastructures on, not the Hollow)? */
-function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && (SHAPE_PRESETS[m.shape || 0] || {}).hollow); }
+function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && noSkyShape(m.shape)); }
+/** Does map type `shape` have no Uplinks and no Great Uplink win (the Hollow, which the Pathfinder never mapped, and Half underground's caves)? */
+function noSkyShape(shape) { const P = SHAPE_PRESETS[shape || 0] || {}; return !!(P.hollow || P.caves); }
+/** Why map type `shape` has no Uplinks: the sentence for the menus. */
+function noUplinksWhy(shape) { return (SHAPE_PRESETS[shape || 0] || {}).caves ? 'No Uplinks on Half underground: the Pathfinder never mapped the caves.' : 'No Uplinks in the Hollow: the Pathfinder never mapped it.'; }
 /** Is the Great Uplink win on for the game the menu would start (Versus)? */
 function menuUpWin() { return UI.menu.mode === 'versus' && !!UI.menu.upwin && menuUpWinOk(); }
 const menuSizePlayers = () => UI.menu.mode !== 'versus' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
@@ -1091,12 +1095,12 @@ function syncMenu() {
     btn.dataset.info = off ? 'Warlord waves never end: always Endless.' : HORDE_GOAL_INFO[btn.dataset.v];
   }
   // (The Hollow has no Uplinks, the Pathfinder never having mapped it: that choice is greyed out, and the game is Capture.)
-  const noUplinks = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow, vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
+  const noUplinks = !m.shapeRnd && noSkyShape(m.shape), vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
   for (const btn of $('m-victory').children) {
     mark(btn, btn.dataset.v === vic);
     const off = noUplinks && btn.dataset.v === 'uplinks';
     btn.disabled = off;
-    btn.title = off ? 'No Uplinks in the Hollow: the Pathfinder never mapped it.' : '';
+    btn.title = off ? noUplinksWhy(m.shape) : '';
   }
   // Teams (four colonies, two against two, Capture only): the Victory choice gives way to it.
   const teams = menuTeams();
@@ -1112,8 +1116,8 @@ function syncMenu() {
   $('m-upwin-row').classList.toggle('na', !upOk);
   $('m-upwin').setAttribute('aria-disabled', upOk ? 'false' : 'true');
   $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
-    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow, which has no sky to transmit to.';
-  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? 'No Uplinks in the Hollow (the Pathfinder never mapped it): this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
+    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow or Half underground, which have no open sky to transmit to.';
+  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? noUplinksWhy(m.shape).replace(/\.$/, '') + ': this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -1702,6 +1706,18 @@ function drawShapeThumb(cv, P) {
     rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
     crags = 0;
+  } else if (P.caves) {
+    // Half underground: the caves dark in the top half (Ore and Crystal dots, rock pillars), the surface below (green fields), the wall
+    // between with its middle gate and its two side mouths.
+    ctx.fillStyle = '#1b1822'; ctx.fillRect(x0, y0, mw, mh * 0.5);
+    ctx.fillStyle = THUMB.ground; ctx.fillRect(x0, y0 + mh * 0.5, mw, mh * 0.5);
+    for (const [uu, vv, rr] of [[0.3, 0.7, 0.09], [0.7, 0.78, 0.09], [0.5, 0.62, 0.06]]) blob(uu, vv, rr, rr * 0.7, THUMB.green, null, false);
+    ctx.fillStyle = '#4a4458'; for (const [uu, vv] of [[0.3, 0.2], [0.7, 0.3], [0.5, 0.35], [0.2, 0.36], [0.8, 0.12]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), U * 0.05, 0, 7); ctx.fill(); }
+    ctx.fillStyle = THUMB.res[1]; for (const [uu, vv] of [[0.34, 0.1], [0.66, 0.4], [0.15, 0.24], [0.85, 0.2]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    ctx.fillStyle = THUMB.res[2]; for (const [uu, vv] of [[0.66, 0.1], [0.34, 0.4], [0.45, 0.22], [0.55, 0.16]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    const wy = 0.5, wl = Math.max(2, U * 0.07);
+    line([[0, wy], [0.14, wy]], THUMB.rock, wl); line([[0.26, wy], [0.46, wy]], THUMB.rock, wl); line([[0.54, wy], [0.74, wy]], THUMB.rock, wl); line([[0.86, wy], [1, wy]], THUMB.rock, wl);
+    crags = 0;
   } else if (P.hollow) {
     // The Hollow: solid rock, caverns joined by passages, a chasm with its floating Crystal on each side, the Deep's
     // mound in the middle and the breaches' daylight (gold) over the bases and the flank caverns.
@@ -1934,7 +1950,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2106,8 +2122,9 @@ function renderPreview(cv, m, p) {
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
-  const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
-  const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
+  const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
+  const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
+  const boundary = other && !caveMask ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -2127,7 +2144,7 @@ function renderPreview(cv, m, p) {
     else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
     if (other) {
       const key = terr === T_GROUND && c === C.ground ? 'ground' : terr === T_WATER ? 'water' : terr === T_ROCK ? 'rock' : null;
-      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed, boundary));
+      if (key && other[key]) c = mixBiomeRGB(c, other[key], caveMask ? (caveMask[t] ? 1 : 0) : biomeMixAt(i, j, W, H, p.seed, boundary));
     }
     const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
     // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.
@@ -3935,7 +3952,7 @@ function startNewGame(again) {
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${nColonies() > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
-  if (opts.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && S.hollow) postMsg(ME, 'No Uplinks in the Hollow: the Pathfinder never mapped it. This game is won by Capture.', 0, 0, 'info');
+  if (opts.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && (S.hollow || S.caves)) postMsg(ME, noUplinksWhy(S.settings.shape) + ' This game is won by Capture.', 0, 0, 'info');
   if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');

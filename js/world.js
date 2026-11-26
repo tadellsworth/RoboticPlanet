@@ -27,6 +27,7 @@ function generateMap(seed, W, H, cfg) {
   cfg = cfg || {};
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
@@ -2832,6 +2833,248 @@ function ringMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ Half underground */
+
+/**
+ * Half underground (SHAPE_PRESETS caves, CAVES in defs.js): a surface half and a cave half, a solid wall between them
+ * broken by two or three entrances. Its own generator, called by generateMap first thing. The whole map is laid out with the
+ * caves to the north and then, on half the seeds, turned over end to end (so player 0 is inside on those). It is
+ * mirror-symmetric (every tile made to its twin, west to east: the noise read at each tile's canonical place), so the two
+ * colonies of a kind get the same to the bit; an inside colony and an outside one are alike in the totals (not tile for tile).
+ *   - Colonies: two (one outside, one inside, on the middle line), three (an outside pair and one inside on the line), four
+ *     (an outside and an inside pair: west team, outside and inside, against east team in Teams). Half of them start inside.
+ *   - The wall: a rock band across the middle (S.cave 2) that no road tunnels through; the entrances cut it. By seed: a
+ *     narrow middle gate with wide mouths to each side, a wide middle mouth with narrow gates to each side, or two middle-sized
+ *     mouths only. Each opens into a funnel of open floor on both sides.
+ *   - Inside: the Hollow's look; winding passages and pillars, no stalks or fertile soil, plenty of Ore and Crystal, Stone and oil.
+ *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and little Ore or Crystal.
+ *   - Returns what generateMap does, plus `cave` (the S.cave tile mask) and `caves`: { south, seats: [{x, y, inside}],
+ *     entrances: [{x, y, hw}], nests: [{x, y}] (twin pairs, inside), wall: [y of the wall's middle at each column] }.
+ */
+function cavesMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const N = W * H, ccx = (W - 1) / 2, np = clamp(cfg.players || 2, 2, 4), sz = clamp(cfg.size ?? 1, 0, SIZE_PRESETS.length - 1);
+  const terrain = new Uint8Array(N), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1), cave = new Uint8Array(N);
+  const id = (i, j) => j * W + i, mir = (t) => t - (t % W) + (W - 1 - (t % W));
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0xca7e5) >>> 0), sN = seed * 31 + 7, sW = seed * 13 + 5, sH = seed * 7 + 11, sE = (Math.imul(seed, 0x9e3779b1) ^ 0x77e1) >>> 0;
+  const dens = RPR.density, stampDens = clamp(dens, 0.7, 1.15);
+  const mi = (i) => Math.min(i, W - 1 - i);
+  // 1) The wall's middle line (wc: the row at each column), its thickness and the entrances. Laid out with the caves in the north.
+  const yb = Math.floor(H / 2), th = CAVES.wall;
+  const wc = new Int16Array(W);
+  for (let i = 0; i < W; i++) wc[i] = yb + Math.round((fbm(mi(i) / 7, 3.3, sW, 2) - 0.5) * 4);
+  const hwOf = (k) => clamp(Math.round(CAVES.mouth[k] * (W >= 60 ? 1.25 : W < 40 ? 0.8 : 1)), 1, 7);
+  const variant = Math.floor(hash2(3, 5, sE) * 3); // 0: narrow middle gate, wide side mouths; 1: wide middle mouth, narrow side gates; 2: two middle mouths
+  const pairX = Math.round(W * 0.17), jit = Math.floor(hash2(7, 1, sE) * 3) - 1;
+  const entrances = [];
+  if (variant === 0) entrances.push({ x: Math.round(ccx), hw: hwOf(0) }, { x: pairX + jit, hw: hwOf(2) });
+  else if (variant === 1) entrances.push({ x: Math.round(ccx), hw: hwOf(2) }, { x: pairX + jit, hw: hwOf(0) });
+  else entrances.push({ x: pairX + jit, hw: hwOf(1) });
+  for (const e of entrances.slice()) if (e.x !== Math.round(ccx)) entrances.push({ x: W - 1 - e.x, hw: e.hw });
+  for (const e of entrances) e.y = wc[clamp(e.x, 0, W - 1)];
+  // The colonies' places (the caves north, so an inside colony is in the top half): outside ones south of the wall.
+  const yOut = H - 1 - Math.round(H * 0.15), yIn = Math.round(H * 0.15), bxs = Math.round(W * 0.25);
+  const seats = np === 2 ? [{ x: Math.round(ccx), y: yOut, inside: false }, { x: Math.round(ccx), y: yIn, inside: true }]
+    : np === 3 ? [{ x: bxs, y: yOut, inside: false }, { x: Math.round(ccx), y: yIn, inside: true }, { x: W - 1 - bxs, y: yOut, inside: false }]
+      : [{ x: bxs, y: yOut, inside: false }, { x: bxs, y: yIn, inside: true }, { x: W - 1 - bxs, y: yIn, inside: true }, { x: W - 1 - bxs, y: yOut, inside: false }];
+  // 2) The land: every tile starts as ground; the caves' rock by noise, the wall, the edge.
+  const put = (t, v) => { terrain[t] = v; terrain[mir(t)] = v; };
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = id(i, j), m = mi(i), inside = j <= wc[i], band = Math.abs(j - wc[i]) <= th;
+    cave[t] = band ? 2 : inside ? 1 : 0;
+    if (band) { terrain[t] = T_ROCK; continue; }
+    if (inside) {
+      const edge = j <= 1 || i <= 1 || i >= W - 2;
+      const wall = fbm(m / 5.2, j / 5.2, sN, 3) > 0.555 || fbm(m / 2.6 + 9, j / 2.6, sN + 5, 2) > 0.72;
+      terrain[t] = edge || wall ? T_ROCK : T_GROUND;
+    } else if (fbm(m / 6.5, j / 6.5, sH, 3) > TPR.rock + 0.07) terrain[t] = T_ROCK;
+  }
+  // The entrances: the gap through the wall (with wobbling sides), and a funnel of open floor on each side.
+  const open = (i, j) => { if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1) return; const t = id(i, j); if (cave[t] === 2) return; terrain[t] = T_GROUND; terrain[mir(t)] = T_GROUND; };
+  for (const e of entrances) {
+    for (let i = e.x - e.hw - 3; i <= e.x + e.hw + 3; i++) {
+      if (i < 1 || i >= W - 1) continue;
+      const wob = (fbm(mi(i) / 2.5, 5.5, sW + 3, 2) - 0.5) * 1.6;
+      for (let j = wc[i] - th - 5; j <= wc[i] + th + 5; j++) {
+        if (j < 1 || j >= H - 1) continue;
+        const band = Math.abs(j - wc[i]) <= th, d = Math.abs(i - e.x);
+        if (band) { if (d <= e.hw + wob) { cave[id(i, j)] = j <= wc[i] ? 1 : 0; cave[mir(id(i, j))] = cave[id(i, j)]; open(i, j); } }
+        else { const k = Math.abs(j - wc[i]) - th; if (d <= e.hw + 1 + (k > 1 ? 1.4 * (k - 1) : 0) - wob * 0.4 && k <= 5) open(i, j); }
+      }
+    }
+  }
+  // Make the whole thing symmetric now (the loop above read noise at canonical columns, but wrote only on the first side).
+  for (let t = 0; t < N; t++) { const u = mir(t); if (t < u) { terrain[u] = terrain[t]; cave[u] = cave[t]; } }
+  // 3) Open ground round each colony and ways from it to every entrance on its own side (so no start is walled in).
+  const carve = (ax, ay, bx, by, w) => {
+    const n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2 + 1;
+    for (let k = 0; k <= n; k++) {
+      const f = k / n, x = ax + (bx - ax) * f + (fbm(k / 5, 1.7, sN + 21, 2) - 0.5) * 3 * Math.sin(Math.PI * f), y = ay + (by - ay) * f;
+      for (let dj = -w; dj <= w; dj++) for (let di = -w; di <= w; di++) { if (di * di + dj * dj > w * w + 0.5) continue; open(Math.round(x + di), Math.round(y + dj)); }
+    }
+  };
+  for (const s of seats) {
+    for (let j = s.y - 6; j <= s.y + 6; j++) for (let i = s.x - 6; i <= s.x + 6; i++) if (dist2(i, j, s.x, s.y) <= 38) open(i, j);
+    for (const e of entrances) { const sx = e.x, sy = s.inside ? wc[clamp(e.x, 0, W - 1)] - th - 3 : wc[clamp(e.x, 0, W - 1)] + th + 3; carve(s.x, s.y, sx, sy, s.inside ? 1 : 1); }
+  }
+  // Pillars for the passages' shape: the inside's wide-open spaces get a few single rock tiles.
+  for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
+    const t = id(i, j);
+    if (cave[t] !== 1 || terrain[t] !== T_GROUND || hash2(mi(i), j, sN + 99) > 0.02) continue;
+    if (seats.some((s) => dist2(i, j, s.x, s.y) < 49) || entrances.some((e) => dist2(i, j, e.x, e.y) < sq(e.hw + 7))) continue;
+    let nr = 0; orth(t, (u) => { if (terrain[u] === T_ROCK) nr++; });
+    if (!nr) { terrain[t] = T_ROCK; terrain[mir(t)] = T_ROCK; }
+  }
+  // 4) Everything on the map has to join up with the colonies: ground cut off from player 0's is carved to the nearest ground that is
+  //    joined (the colonies' own twin ground is joined through the middle, so the map stays symmetric), or filled in if it is small.
+  const reach = new Uint8Array(N);
+  const flood = () => { reach.fill(0); const q = []; for (const s of seats) { const t = id(s.x, s.y); if (!reach[t]) { reach[t] = 1; q.push(t); } } for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!reach[u] && terrain[u] === T_GROUND) { reach[u] = 1; q.push(u); } }); };
+  flood();
+  for (let pass = 0; pass < 4; pass++) {
+    const lab = new Int32Array(N).fill(-1); let bad = false;
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_GROUND || reach[t] || lab[t] >= 0) continue;
+      const q = [t]; lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] === T_GROUND && !reach[u]) { lab[u] = t; q.push(u); } });
+      if (q.length < 30) { for (const u of q) { terrain[u] = T_ROCK; terrain[mir(u)] = T_ROCK; } bad = true; continue; }
+      // a pocket of size: carve to the nearest reached tile in a straight line out of its middle point
+      let best = Infinity, bu = -1, bv = -1;
+      for (const u of q) { const ui = u % W, uj = (u / W) | 0; if (u % 3) continue; for (let v = 0; v < N; v += 5) { if (!reach[v] || cave[v] !== cave[u]) continue; const d = dist2(ui, uj, v % W, (v / W) | 0); if (d < best) { best = d; bu = u; bv = v; } } }
+      if (bu >= 0) carve(bu % W, (bu / W) | 0, bv % W, (bv / W) | 0, 1);
+      bad = true;
+    }
+    if (!bad) break;
+    flood();
+  }
+  // Flat ground: no levels, no ramps. Landing zone: no crags, no deposits, open ground round each Command Base.
+  for (const s of seats) for (let j = s.y - 4; j <= s.y + 4; j++) for (let i = s.x - 4; i <= s.x + 4; i++) { if (cave[id(i, j)] === 2) continue; put(id(i, j), T_GROUND); }
+  // 5) The resources. Every field is made to its twin as well.
+  const basePts = seats.map((s) => ({ x: s.x, y: s.y })).concat(seats.map((s) => ({ x: W - 1 - s.x, y: s.y })));
+  const free = (t) => { if (terrain[t] !== T_GROUND || res[t] || fert[t] || cave[t] === 2) return false; const i = t % W, j = (t / W) | 0; for (const p of basePts) if (dist2(i, j, p.x, p.y) < 5) return false; return true; };
+  const stamp = (x, y, rad, type, fill, region) => {
+    for (let j = Math.max(1, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t) || (region !== undefined && cave[t] !== region)) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+      }
+    }
+  };
+  const oil = (x, y, k, region) => {
+    const c = [];
+    for (let j = Math.max(1, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t) && (region === undefined || cave[t] === region)) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
+  };
+  // Each colony's own fields (a kit round its Command Base: dx sideways, fy toward the middle of the map). The east colonies get the
+  // mirror of the west's; a colony on the middle line stamps its west half, and the mirror is its east.
+  const KIT = {
+    out: [[-6, 2, 2.6, R_STALK, 0.85], [-4, -4, 1.6, R_STALK, 0.8], [7, -3, 1.6, R_STALK, 0.8], [1, 8, 2.0, R_STALK, 0.8],
+      [6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75],
+      [-1, 6.5, 2.2, 'fert', 0.85], [5, 7, 1.8, 'fert', 0.85], [-9, 5, 1.7, 'fert', 0.85],
+      [-4, 5, 1.0, R_ORE, 0.9], [4, 5, 1.0, R_CRYSTAL, 0.9], [9, -2, 0.9, R_ORE, 0.8], [-10, 1, 0.9, R_CRYSTAL, 0.8]],
+    in: [[6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75], [-5, 7, 1.3, R_BOULDER, 0.7],
+      [-4, 5, 1.9, R_ORE, 0.9], [9, 3.5, 1.9, R_ORE, 0.85], [-8, -4, 1.6, R_ORE, 0.85], [-1, 9, 1.8, R_ORE, 0.8],
+      [4, 5, 1.7, R_CRYSTAL, 0.9], [-10, -1, 1.6, R_CRYSTAL, 0.85], [10, -4, 1.6, R_CRYSTAL, 0.8], [5, 10, 1.5, R_CRYSTAL, 0.8]],
+    oil: [[7.5, -4.5, 4], [-9, 4, 4]],
+  };
+  const kit = (s) => {
+    const ey = s.inside ? 1 : -1; // (+y is south: toward the middle for the north colonies, away from it for the south ones)
+    const items = (s.inside ? KIT.in : KIT.out);
+    for (const [dx, fy, r, ty, fill] of items) {
+      for (const sx of s.x === Math.round(ccx) ? [1] : [1, -1]) {
+        const x = s.x + (s.x === Math.round(ccx) ? -Math.abs(dx) : dx * sx), y = s.y + ey * fy;
+        stamp(x, y, r, ty, fill * stampDens);
+      }
+    }
+    for (const [dx, fy, k] of KIT.oil) for (const sx of s.x === Math.round(ccx) ? [1] : [1, -1]) oil(s.x + (s.x === Math.round(ccx) ? -Math.abs(dx) : dx * sx), s.y + ey * fy, k);
+  };
+  // (West seats only: the east ones are their mirror; the seat on the line stamps itself.)
+  for (const s of seats) if (s.x <= Math.round(ccx)) kit(s);
+  // The rest of the map: fields scattered over each half (the west half of the map, mirrored), by the area there is to fill.
+  const area = [0, 0];
+  for (let t = 0; t < N; t++) if (terrain[t] === T_GROUND && cave[t] < 2) area[cave[t]]++;
+  const scatter = (region, type, per, rad, fill, minBase) => {
+    const n = Math.round(area[region] / 1000 * per * RPR.density * (RPR.density > 0 ? 1 : 1));
+    for (let k = 0, tries = 0; k < n && tries < n * 60; tries++) {
+      const i = 2 + Math.floor(rng() * Math.ceil(ccx)), j = 2 + Math.floor(rng() * (H - 4)), t = id(i, j);
+      if (cave[t] !== region || terrain[t] !== T_GROUND || !free(t)) continue;
+      if (seats.some((s) => dist2(i, j, s.x, s.y) < sq(minBase) || dist2(i, j, W - 1 - s.x, s.y) < sq(minBase))) continue;
+      if (type === R_OIL) oil(i, j, 4, region); else stamp(i, j, rad, type, fill, region);
+      k++;
+    }
+  };
+  const C = CAVES;
+  scatter(1, R_ORE, C.inside.ore, 1.9, 0.85, 8); scatter(1, R_CRYSTAL, C.inside.crystal, 1.7, 0.85, 8); scatter(1, R_BOULDER, C.inside.stone, 1.5, 0.8, 7); scatter(1, R_OIL, C.inside.oil, 0, 0, 8);
+  scatter(0, R_STALK, C.outside.stalk, 2.1, 0.8, 8); scatter(0, 'fert', C.outside.fert, 2.0, 0.85, 8); scatter(0, R_BOULDER, C.outside.stone, 1.5, 0.8, 7);
+  scatter(0, R_ORE, C.outside.ore, 1.2, 0.85, 8); scatter(0, R_CRYSTAL, C.outside.crystal, 1.1, 0.85, 8); scatter(0, R_OIL, C.outside.oil, 0, 0, 8);
+  // A little Ore and Crystal just inside each entrance (a reason to come in) and a patch of stalk grove just outside (a reason to come out).
+  for (const e of entrances) {
+    if (e.x > ccx) continue;
+    stamp(e.x - e.hw - 2, e.y - th - 5, 1.6, R_ORE, 0.85, 1); stamp(e.x + e.hw + 2, e.y - th - 6, 1.5, R_CRYSTAL, 0.85, 1);
+    stamp(e.x - e.hw - 2, e.y + th + 5, 1.7, R_STALK, 0.8, 0); stamp(e.x + e.hw + 2, e.y + th + 6, 1.5, 'fert', 0.85, 0);
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 800 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = 2 + Math.floor(rng() * (W - 4)), j = 2 + Math.floor(rng() * (H - 4)), t = id(i, j);
+      if (!free(t) || cave[t] !== 1 || seats.some((s) => dist(i, j, s.x, s.y) < 12)) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // Nothing grows inside; no deposit on rock, in the gaps' floor or the landing ground.
+  for (let t = 0; t < N; t++) {
+    if (cave[t] === 1 && (res[t] === R_STALK || res[t] === R_CROP)) res[t] = R_NONE;
+    if (cave[t] !== 0) fert[t] = 0;
+    if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  }
+  for (const s of seats) for (const sx of [s.x, W - 1 - s.x]) for (let j = s.y - 2; j <= s.y + 2; j++) for (let i = sx - 2; i <= sx + 2; i++) { const t = id(i, j); res[t] = R_NONE; fert[t] = 0; }
+  // How much each holds: richer out toward the middle as on every map.
+  const bases = basePts, reachD = Math.max(1, H * 0.4 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0;
+    let d = Infinity; for (const b of bases) d = Math.min(d, dist(i, j, b.x, b.y));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reachD, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich), 1, 255);
+  }
+  // The Murmur's nest sites (used only with the Murmur on): open inside floor away from the colonies and the entrances, in twin pairs.
+  const nests = [], want = C.nests[sz] || 2;
+  {
+    const cands = [];
+    for (let j = 3; j < H - 3; j++) for (let i = 3; i <= Math.floor(ccx); i++) {
+      const t = id(i, j);
+      if (cave[t] !== 1 || terrain[t] !== T_GROUND || res[t] || mir(t) === t) continue;
+      let o = 0; orth(t, (u) => { if (terrain[u] === T_GROUND) o++; });
+      if (o < 3 || seats.some((s) => dist(i, j, s.x, s.y) < 15 || dist(i, j, W - 1 - s.x, s.y) < 15) || entrances.some((e) => dist(i, j, e.x, e.y) < e.hw + 11) || !reach[t]) continue;
+      cands.push({ x: i, y: j, h: hash2(i, j, sE ^ 0x1234) });
+    }
+    cands.sort((a, b) => a.h - b.h || a.x - b.x || a.y - b.y);
+    for (const c of cands) { if (nests.length >= want * 2) break; if (nests.every((n) => dist(n.x, n.y, c.x, c.y) >= 9)) nests.push({ x: c.x, y: c.y }, { x: W - 1 - c.x, y: c.y }); }
+  }
+  // Turn it over end to end for half the seeds (the caves south: player 0 inside), and put the colonies in order: south first, the west team first.
+  const south = hash2(9, 9, sE) < 0.5;
+  let out = { terrain, res, amt, grow, elev, ramp, fert, cave }, order = seats.map((s, k) => k);
+  if (south) {
+    const flip = (a) => { const b = new a.constructor(N); for (let j = 0; j < H; j++) b.set(a.subarray(j * W, j * W + W), (H - 1 - j) * W); return b; };
+    for (const k of Object.keys(out)) out[k] = flip(out[k]);
+    for (const s of seats) s.y = H - 1 - s.y;
+    for (const e of entrances) e.y = H - 1 - e.y;
+    for (const n of nests) n.y = H - 1 - n.y;
+    order = np === 2 ? [1, 0] : np === 3 ? [1, 0, 2] : [1, 0, 3, 2];
+  }
+  const ordered = order.map((k) => seats[k]);
+  return {
+    ...out, bases: ordered.map((s) => ({ x: s.x, y: s.y })),
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    caves: { south, seats: ordered.map((s) => ({ x: s.x, y: s.y, inside: s.inside })), entrances, nests, variant },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -2863,6 +3106,12 @@ function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; r
 
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
+  const d = mapDims0(st), sh = SHAPE_PRESETS[st.shape || 0];
+  // Half underground: an odd width (a middle column to mirror about), and wider for four colonies (two side by side in each half).
+  if (sh.caves) return { W: (st.players === 4 ? Math.round(d.W * 1.45) : d.W) | 1, H: d.H };
+  return d;
+}
+function mapDims0(st) {
   const size = mapSizeForPlayers(st.size, st.players);
   const sz = SIZE_PRESETS[size], sh = SHAPE_PRESETS[st.shape || 0];
   // Crossroads for three or four: a square map in four quarters, 80% more ground than for two.
@@ -2902,7 +3151,7 @@ function megaBlocked(owner, type) {
  * Is the Great Uplink win in this game (GUP)? The game-setup switch (off unless it was turned on; a save from before it:
  * off), with Megastructures on, in a Versus game (never Colony), and never in the Hollow, which has no sky.
  */
-function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow; }
+function gupWinOn() { return !!(S && S.settings && S.settings.upWin) && megaOn() && S.mode !== 'colony' && !S.hollow && !S.caves; }
 
 /** Can the Deep Core be built yet (DEEP.at s into a free-play game; at once in a mission that teaches it)? */
 function deepOpen() { return !!S && (!!S.mission || S.time >= DEEP.at); }
@@ -3012,10 +3261,11 @@ function newGame(opts) {
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
   // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
-  if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow) settings.upWin = true;
+  if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow && !SHAPE_PRESETS[settings.shape].caves) settings.upWin = true;
   settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
   if (SHAPE_PRESETS[settings.shape].asteroids) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring has Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
@@ -3072,6 +3322,8 @@ function newGame(opts) {
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
+  // Half underground: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
+  if (m.caves) { S.cave = m.cave; S.caves = { south: m.caves.south, seats: m.caves.seats, entrances: m.caves.entrances, nests: m.caves.nests, variant: m.caves.variant }; }
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
@@ -3083,7 +3335,7 @@ function newGame(opts) {
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
-  if (S.victory === 'uplinks' && m.hollow) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped: Capture)
+  if (S.victory === 'uplinks' && (m.hollow || m.caves)) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped: Capture)
   // The Murmur (see MURMUR and WILD): opts.murmur ('off', 'quiet' or 'active'); unset, the map type's own (SHAPE_PRESETS
   // murmur: the Hollow, their lair, has them Active) except on a hand-made map (a mission's: it switches them on in its
   // setup, see missionOptions), else off. An older Colony game's switch (opts.wildlife) is Active. Never on a silent
@@ -3120,8 +3372,11 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
-    // (The Hollow: nothing grows, so a Worker comes down in the Agribot's place.)
-    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, m.hollow && type === 'agribot' ? 'worker' : type, base.x, base.y), L);
+    // (Half underground: a colony that starts inside has no way to make Fiber, one outside little Ore or Crystal: its opening stock is bigger by what it lacks, CAVES.stock.)
+    const inCave = !!(m.caves && m.caves.seats[p] && m.caves.seats[p].inside);
+    if (m.caves) for (const g in CAVES.stock[inCave ? 'inside' : 'outside']) L.stock[g] = (L.stock[g] || 0) + CAVES.stock[inCave ? 'inside' : 'outside'][g];
+    // (The Hollow, and a colony inside the caves: nothing grows, so a Worker comes down in the Agribot's place.)
+    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, (m.hollow || inCave) && type === 'agribot' ? 'worker' : type, base.x, base.y), L);
     for (let k = 0; k < (horde ? HORDE.start.warbot : mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
       enterBuilding(w, L);
@@ -3151,7 +3406,7 @@ function newGame(opts) {
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
-  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || SH.tip);
+  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || (S.caves && S.caves.seats[ME] ? (S.caves.seats[ME].inside ? SH.tipIn : SH.tipOut) : SH.tip));
   if (tip && L0) postMsg(ME, tip, L0.x, L0.y, 'info');
   return S;
 }
@@ -3198,9 +3453,13 @@ function hollowOn() { return !!(S && S.hollow); }
  * (no Airfields, and no missiles: no Missile Factory, Silo or Nuclear race), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
-function worldBan(type) {
+function worldBan(type, t) {
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
+  if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
+    if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts on this map: the Pathfinder never mapped the caves, so there is nowhere to dock a Trade Terminal.';
+    return t === undefined ? '' : caveBan(type, t);
+  }
   if (!hollowOn()) return '';
   if (BDEFS[type] && BDEFS[type].atmos) return 'No Atmosphere Engine in the Hollow: there is no sky down here to make weather in.';
   if (BDEFS[type] && BDEFS[type].gup) return 'No Great Uplink in the Hollow: there is no sky down here to transmit to.';
@@ -3212,6 +3471,24 @@ function worldBan(type) {
   // (Nor missiles: nothing flies under the cavern roof. No Missile Factory or Silo, and no Nuclear race: see nukeOn.)
   if (type === 'munitions' || (BDEFS[type] && (BDEFS[type].missile || BDEFS[type].nukeSilo))) return 'No missiles fly in the Hollow: there is no sky down here, only the cavern roof.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
+  return '';
+}
+
+/**
+ * Why a `type` can't be built on tile t inside the caves of Half underground ('' if it can): nothing grows without light (no Bio Farms or
+ * Grove Planters), no aircraft or missile can fly in or out through the roof (no Airfields, Mooring Masts, Mass Drivers, Silos, Lance, Sundering Ray,
+ * Orbital Lift, Atmosphere Engine or Great Uplink). The same buildings go up on the surface.
+ */
+function caveBan(type, t) {
+  if (!S || !S.cave || S.cave[t] !== 1) return '';
+  const d = BDEFS[type];
+  if (!d) return '';
+  if (type === 'grower' || d.farm) return 'Nothing grows in the caves: no light reaches the floor. Build it out on the surface; the caves have Ore, Crystal, Stone and oil.';
+  if (d.airfield || d.mast) return 'No aircraft fly in the caves: there is no sky down here. Put the Airfield out on the surface.';
+  if (d.mdriver || d.catcher) return 'No Mass Driver in the caves: nothing flies under the roof. Build it on the surface.';
+  if (type === 'munitions' || d.missile || d.nukeSilo) return 'No missiles fly from the caves: the roof is in the way. Build it on the surface.';
+  if (d.lance || d.sunder) return 'No line of fire from under the roof: build it on the surface.';
+  if (d.atmos || d.gup || d.lift) return 'No sky down here: build it on the surface.';
   return '';
 }
 
@@ -3236,7 +3513,7 @@ function canyonMeadow(t) {
  */
 function makeDecor() {
   const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
-  const primary = BIOMES[biome()], second = BIOMES[S.settings?.biome2];
+  const primary = BIOMES[biome()], second = S.cave ? BIOMES.hollow : BIOMES[S.settings?.biome2]; // (Half underground: the caves wear the Hollow's plants)
   const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
@@ -3244,7 +3521,7 @@ function makeDecor() {
     const t = j * W + i;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
-    const local = second && secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed, S.settings.biomeBoundary)) ? second : primary;
+    const local = second && (S.cave ? S.cave[t] : secondBiomePlant(i, j, S.seed, biomeMixAt(i, j, W, H, S.seed, S.settings.biomeBoundary))) ? second : primary;
     const dens0 = canyon && canyonMeadow(t) ? Math.max(0.38, local.plants) : local.plants;
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
@@ -4108,7 +4385,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   // (A rival keeps its buildings off its own Orbital Lift's fall line: aiOnLiftLine.)
   if (!def.lift && S.players[owner] && S.players[owner].ai && typeof aiOnLiftLine === 'function' && aiOnLiftLine(owner, t)) return { ok: false, reason: 'That is on its Orbital Lift\'s fall line.' };
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
-  const ban = worldBan(type);
+  const ban = worldBan(type, t);
   if (ban) return { ok: false, reason: ban };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
@@ -4427,6 +4704,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
+  if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
@@ -5864,7 +6142,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
-const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
+const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
 const SPARSE_LAYERS = ['crater', 'ash', 'crk']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
@@ -5876,6 +6154,7 @@ const TYPED_FIELDS = {
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
   heat: Float32Array, // (the traffic map's flow: see HEAT)
   tun: Uint8Array, // (the Murmur's tunnels: see murmurTick)
+  cave: Uint8Array, // (Half underground: 0 surface, 1 inside the caves, 2 the wall; see cavesMap)
 };
 
 function serializeGame() {
@@ -5955,6 +6234,14 @@ function checkSave(o) {
     if (M.huntSeq != null && !(Number.isInteger(M.huntSeq) && M.huntSeq >= 0)) bad();
     if (M.huntFrom != null && !(Number.isInteger(M.huntFrom) && M.huntFrom >= 0)) bad(); // (a mission's: the hunt sooner)
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
+  }
+  // Half underground (S.caves, with the S.cave layer): where the colonies, the entrances and the Murmur's nest sites are, plain numbers on the map.
+  if (o.caves != null) {
+    const C = o.caves, pt = (q, ks) => obj(q) && ks.every((k) => Number.isFinite(q[k])) && q.x >= 0 && q.y >= 0 && q.x < o.W && q.y < o.H;
+    if (!obj(C) || !Array.isArray(C.seats) || C.seats.length > 4 || !C.seats.every((q) => pt(q, ['x', 'y']) && typeof q.inside === 'boolean')) bad();
+    if (!Array.isArray(C.entrances) || C.entrances.length > 6 || !C.entrances.every((q) => pt(q, ['x', 'y', 'hw']))) bad();
+    if (!Array.isArray(C.nests) || C.nests.length > 64 || !C.nests.every((q) => pt(q, ['x', 'y']))) bad();
+    if (o.cave == null) bad();
   }
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.
   if (o.landmarks != null) { if (typeof lmCheckSave === 'function') lmCheckSave(o, bad); else bad(); }
