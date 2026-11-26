@@ -25,4 +25,4 @@ node tools/army-order-audit.cjs
 node tools/army-pathing-test.cjs
 ```
 
-The first command checks the observed results on the audited revision, including the three bugs. The second contains the existing expected-behavior assertions.
+On the fix revision, both commands verify the corrected behavior. The regression cases include a second Warbot that remains on its Hunt, an unreachable unit that keeps its task during a mixed Station order, an in-range shot across water, and a Warbot that moves into an empty shield but leaves a full shield alone.

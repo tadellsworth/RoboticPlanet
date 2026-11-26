@@ -67,7 +67,7 @@ function report(name, actual, expect) {
 {
   fixture();
   const u=bot(0,'warbot',26.1,26.1), w=bot(0,'bulwark',25.5,25.5), foe=bot(1,'warbot',26.3,25.5);
-  w.sh=50; w.shAim=0; SHIELDS.push(w);
+  w.sh=BULWARK.shield; w.shAim=0; SHIELDS.push(w); shieldCovers(w);
   const target=b(1,'depot',30,25);
   orderAttack(0,[u.id,w.id],target);
   w.fight=foe.id;
@@ -77,14 +77,15 @@ function report(name, actual, expect) {
   // Keep the target alive while measuring the moving unit's position.
   for (let k = 0; k < 70; k++) {
     S.time += SIM_STEP; S.tick++;
-    u.cd = 10; u.fight = foe.id; updateWarbot(u, SIM_STEP);
+    u.cd = 10; u.fight = foe.id; shieldCovers(w); updateWarbot(u, SIM_STEP);
   }
+  shieldCovers(w);
   assert.ok(shieldProtects(w, u, foe.x, foe.y));
   assert.ok(dist(u.x, u.y, foe.x, foe.y) <= WARBOT_RANGE);
   const hp = u.hp;
   damageBot(u, 2, foe.x, foe.y);
   assert.equal(u.hp, hp);
-  assert.equal(w.sh, 48);
+  assert.equal(w.sh, BULWARK.shield - 2);
   w.sh = 0;
   damageBot(u, 2, foe.x, foe.y);
   assert.equal(u.hp, hp - 2);

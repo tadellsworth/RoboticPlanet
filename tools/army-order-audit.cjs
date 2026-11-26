@@ -1,4 +1,4 @@
-// Reproduce the order-routing findings in docs/army-order-pathing-audit.md on the audited revision.
+// Regression checks for the order-routing findings in docs/army-order-pathing-audit.md.
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { runInNewContext } = require('node:vm');
@@ -21,15 +21,18 @@ runInNewContext(source + `
   {
     reset();
     const u = unit(0, 12, 20), rival = unit(1, 23, 20);
-    assert.equal(command([u.id], { foe: rival.id }).n, 1);
+    const hunter = unit(0, 11, 20);
+    assert.equal(command([u.id, hunter.id], { foe: rival.id }).n, 2);
+    const huntFlag = rallyById(hunter.task.rally);
     const move = command([u.id], { i: 23, j: 21 });
     const flag = rallyById(u.task.rally);
     assert.equal(move.n, 1);
-    assert.equal(flag.follow, rival.id);
+    assert.notEqual(flag.id, huntFlag.id);
     rival.x += 4;
     followRallies();
-    assert.deepEqual([flag.x, flag.y], [27.5, 20.5]);
-    console.log('Ground move to (23,21) reported success but inherited the hunt and moved to (27,20).');
+    assert.deepEqual([flag.x, flag.y], [23.5, 21.5]);
+    assert.deepEqual([huntFlag.x, huntFlag.y, huntFlag.follow], [27.5, 20.5, rival.id]);
+    console.log('Move holds its exact destination while the other Warbot continues its Hunt.');
   }
   {
     reset();
@@ -38,15 +41,25 @@ runInNewContext(source + `
     const u = unit(0, 17, 20), rival = unit(1, 23, 20);
     const target = addBuilding(1, 'depot', 24, 21, true);
     const outpost = addBuilding(0, 'outpost', 24, 23, true);
+    const reachable = unit(0, 24, 19);
+    command([u.id], { i: 16, j: 20 });
+    const original = u.task;
     const move = command([u.id], { i: 23, j: 21 });
     const hunt = command([u.id], { foe: rival.id });
     const attack = command([u.id], { b: target.id });
     const station = command([u.id], { b: outpost.id });
-    assert.deepEqual([move.n, move.blocked, hunt.n, attack.n, station.n], [0, 1, 1, 1, 1]);
-    updateWarbot(u, SIM_STEP);
-    assert.equal(u.task, null);
+    for (const r of [move, hunt, attack, station]) assert.deepEqual([r.n, r.blocked], [0, 1]);
+    assert.equal(u.task, original);
     assert.equal(outpost.garInc, 0);
-    console.log('Across water with no crossing: Move rejected; Hunt, Attack and Station each reported one unit sent.');
+    const mixed = command([u.id, reachable.id], { b: outpost.id });
+    assert.deepEqual([mixed.n, mixed.blocked, outpost.garInc], [1, 1, 1]);
+    assert.equal(u.task, original);
+    assert.equal(reachable.task.bld, outpost.id);
+    const railgunner = unit(0, 19, 21, 'railgunner');
+    const shoreTarget = addBuilding(1, 'depot', 21, 21, true);
+    assert.equal(command([railgunner.id], { b: shoreTarget.id }).n, 1);
+    assert.equal(railgunner.task.target, shoreTarget.id);
+    console.log('Unreachable orders retain old jobs; mixed orders send reachable units and in-range shots still work.');
   }
   {
     reset();
@@ -58,11 +71,18 @@ runInNewContext(source + `
     SHIELDS.push(w);
     shieldCovers(w);
     assert.equal(w.covIds.size, 0);
+    const start = [u.x, u.y];
+    for (let k = 0; k < BULWARK.coverMax; k++) unit(0, 25, 25);
+    shieldCovers(w);
+    assert.equal(w.covIds.size, BULWARK.coverMax);
     assert.equal(firingCover(u, foe.x, foe.y, WARBOT_RANGE, SIM_STEP), false);
-    // Same geometry, with an available shield slot granted for the proposed position.
-    w.covIds.add(u.id);
+    assert.deepEqual([u.x, u.y], start);
+    for (const v of S.bots) if (v !== u && v !== w && v.owner === 0) v.dead = true;
+    shieldCovers(w);
+    assert.equal(shieldProtects(w, u, foe.x, foe.y), false);
     assert.equal(firingCover(u, foe.x, foe.y, WARBOT_RANGE, SIM_STEP), true);
-    console.log('An empty Bulwark shield has a reachable firing position, but current membership blocks the move.');
+    assert.notDeepEqual([u.x, u.y], start);
+    console.log('A Warbot moves into available firing cover and declines a full shield.');
   }
   {
     reset();

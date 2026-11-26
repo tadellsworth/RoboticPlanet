@@ -391,7 +391,12 @@ const ORDERS = {
    */
   command(p, ids, spec) {
     ids = ownIds(p, ids);
-    agManual(p, ids.map(getE)); // (a direct order: their Army Groups' standing orders wait for Back to order)
+    const units = ids.map(getE), tasks = units.map((u) => u.task);
+    const assigned = (result) => {
+      // Only groups whose units received a new task wait for Back to order.
+      agManual(p, units.filter((u, k) => u.task !== tasks[k]));
+      return result;
+    };
     let s = spec || {};
     const out = { kind: '', n: 0, nr: 0 };
     // (Passenger Town: a building tapped, they go and stand beside it: at its sentry, they shoot it down)
@@ -417,7 +422,7 @@ const ORDERS = {
     if (s.ferry) {
       const f = ownU(p, s.ferry, 'ferry'); if (!f) return { why: 'That Ferry is gone.' };
       const r = orderBoardFerry(p, ids, f);
-      return typeof r === 'string' ? { why: r } : { kind: 'ferry', n: r };
+      return typeof r === 'string' ? { why: r } : assigned({ kind: 'ferry', n: r });
     }
     const b = s.b ? liveB(s.b) : null;
     if (b && foes(b.owner, p)) out.nr = orderBombard(p, ids, b);
@@ -425,19 +430,19 @@ const ORDERS = {
     else if (!b && inMap(s.i, s.j) && walkable(tIdx(s.i, s.j))) out.nr = orderPark(p, ids, s.i, s.j);
     if (b && b.owner === p && BDEFS[b.type].repair) {
       const r = orderRepair(p, ids, b);
-      return typeof r === 'string' ? { why: r } : { kind: 'repair', n: r };
+      return typeof r === 'string' ? { why: r } : assigned({ kind: 'repair', n: r });
     }
     const foe = !b && s.foe ? liveU(s.foe) : null;
-    if (foe && foes(foe.owner, p)) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe); }
-    else if (b && foes(b.owner, p)) { out.kind = 'attack'; out.n = orderAttack(p, ids, b); }
-    else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b); }
+    if (foe && foes(foe.owner, p)) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe, out); }
+    else if (b && foes(b.owner, p)) { out.kind = 'attack'; out.n = orderAttack(p, ids, b, out); }
+    else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b, out); }
     else if (!b && inMap(s.i, s.j)) {
       if (!walkable(tIdx(s.i, s.j))) return { why: 'No route to that tile. Choose ground the selected units can reach.' };
       out.kind = 'move';
       out.n = orderMove(p, ids, s.i, s.j, out);
     }
     else out.kind = 'none';
-    return out;
+    return assigned(out);
   },
   /**
    * Undo for a tap's order (the selection bar's Undo, under a finger): each robot goes back to what it was doing

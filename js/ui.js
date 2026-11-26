@@ -3450,7 +3450,7 @@ function onMapCommand(i, j, wx, wy, done) {
     }
     if (!n) {
       sfx('error');
-      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} armed warbots`}.`
+      toast(blocked ? `No route to that destination for ${r.blocked === 1 ? 'the selected warbot' : `the ${r.blocked} selected warbots`}.`
         : mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
       return;
     }

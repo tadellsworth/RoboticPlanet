@@ -5540,9 +5540,10 @@ function botArmed(u) {
 const SHIELDS = [];
 
 /** Does w's active shield intercept a shot toward u or its proposed firing position? */
-function shieldProtects(w, u, sx, sy, x = u.x, y = u.y) {
+function shieldProtects(w, u, sx, sy, x = u.x, y = u.y, moving = false) {
   if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) return false;
-  if (u !== w && !(w.covIds && w.covIds.has(u.id))) return false; // (one of the BULWARK.coverMax it shelters: shieldCovers)
+  // A proposed move can use a free slot. Damage still uses the current step's shield assignment.
+  if (u !== w && !w.covIds?.has(u.id) && !(moving && w.covIds?.size < BULWARK.coverMax)) return false;
   const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
   if (ad < BULWARK.r + 0.15) return false;
   const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
@@ -6161,7 +6162,7 @@ function firingCover(u, x, y, range, dt) {
       const dd = dist2(u.x, u.y, tx, ty), i = Math.floor(tx), j = Math.floor(ty);
       if (dd >= bd || dist2(tx, ty, x, y) > range * range || !inMap(i, j)) continue;
       const t = tIdx(i, j);
-      if (S.bAt[t] || !walkable(t) || !shieldProtects(w, u, x, y, tx, ty) || !clearLine(u.x, u.y, tx, ty)) continue;
+      if (S.bAt[t] || !walkable(t) || !shieldProtects(w, u, x, y, tx, ty, true) || !clearLine(u.x, u.y, tx, ty)) continue;
       best = { x: tx, y: ty }; bd = dd;
     }
   }
@@ -9068,6 +9069,7 @@ function orderPark(owner, ids, i, j) {
 
 /** Take a warbot out of its garrison and off its current job, ready for a new order. */
 function readyForOrder(u) {
+  const ropeEnd = u.ride >= 0 && u.path?.[u.pi] === u.ride ? u.ride : null;
   exitBuilding(u);
   cancelTask(u);
   u.recycleTo = 0;
@@ -9076,40 +9078,52 @@ function readyForOrder(u) {
   u.retreat = false; u.resume = null;
   u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
-  u.path = null;
+  if (u.ferryWait && !u.ferryWait.ferry) u.ferryWait = null;
+  u.failGoal = -1; u.failUntil = 0;
+  // Finish an active Ropeway ride before taking the new route.
+  u.path = ropeEnd === null ? null : [ropeEnd];
+  u.pi = 0; u.goal = -1;
 }
 
-/** Send selected warbots to a rally. Direct move commands also report which armed bots have no route. */
-function orderMove(owner, ids, i, j, result) {
+/** Test the route with the movement options the new order will use, before abandoning the old order. */
+function armyOrderRoute(u, i, j, inRange) {
+  if (u.ferryWait?.ferry) return false;
+  if (inRange) return true;
+  const ropeEnd = u.ride >= 0 && u.path?.[u.pi] === u.ride ? u.ride : null;
+  const start = ropeEnd ?? deckEnds(u)?.[0] ?? tIdx(Math.floor(u.x), Math.floor(u.y));
+  return !!squadRoute({ ...u, fight: 0, task: null }, start, i, j);
+}
+
+/** Send selected warbots to a rally for one exact destination and order. */
+function orderMove(owner, ids, i, j, result, follow = 0) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
   const armed = orderable(owner, ids).filter((u) => botArmed(u));
-  let r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
-  const goalX = r ? Math.floor(r.x) : i, goalY = r ? Math.floor(r.y) : j;
-  const bots = result ? armed.filter((u) => {
-    if (u.ferryWait?.ferry) return false;
-    const start = deckEnds(u)?.[0] ?? tIdx(Math.floor(u.x), Math.floor(u.y));
-    return !!squadRoute(u, start, goalX, goalY);
-  }) : armed;
+  const bots = armed.filter((u) => armyOrderRoute(u, i, j, follow && armyInRange(u, getE(follow))));
   if (result) result.blocked = armed.length - bots.length;
   if (!bots.length) return 0;
-  if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
-  if (S.walker) walkerFlag(r); // (sent onto the Walking Factory's deck: they board it and ride with it)
+  let r = S.rallies.find((q) => q.owner === owner && !q.grp && !q.target && !q.raid && !q.first && !q.safe &&
+    (q.follow || 0) === follow && Math.floor(q.x) === i && Math.floor(q.y) === j);
+  if (!r) {
+    r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 };
+    if (follow) r.follow = follow;
+    S.rallies.push(r);
+  }
+  if (S.walker) walkerFlag(r);
   let slot = rallyMembers(r.id).length;
-  for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
+  for (const u of bots) {
+    readyForOrder(u);
+    u.task = { type: 'hold', rally: r.id, slot: slot++ };
+    if (!follow && usesPosts(owner)) u.march = S.time + MARCH_MAX;
+  }
   marchTogether(bots);
   breachCheck(owner, bots, i, j);
   return bots.length;
 }
 
-/** Send selected warbots after an enemy robot (a flag that follows it: see followRallies). Only armed ones go. */
-function orderHunt(owner, ids, e) {
+/** Send selected warbots after this enemy robot. */
+function orderHunt(owner, ids, e, result) {
   if (!e || e.dead || !foes(e.owner, owner)) return 0;
-  const i = Math.floor(e.x), j = Math.floor(e.y), r0 = S.rallies.length;
-  const n = orderMove(owner, ids, i, j);
-  if (!n) return 0;
-  const r = S.rallies.find((q) => q.owner === owner && !q.grp && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
-  if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; for (const u of rallyMembers(r.id)) u.march = 0; }
-  return n;
+  return orderMove(owner, ids, Math.floor(e.x), Math.floor(e.y), result, e.id);
 }
 
 /**
@@ -9137,9 +9151,15 @@ function orderRepair(owner, ids, b) {
 }
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
-function orderAttack(owner, ids, target) {
+function orderAttack(owner, ids, target, result) {
   if (!target || target.dead || !foes(target.owner, owner) || calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
-  const bots = orderable(owner, ids).filter((u) => botArmed(u));
+  const armed = orderable(owner, ids).filter((u) => botArmed(u));
+  const bots = armed.filter((u) => {
+    const inReach = megaHeldBy(target, owner) ? footDist(target, u.x, u.y) <= MEGA.reach - 0.6 :
+      dist2(u.x, u.y, target.x + 0.5, target.y + 0.5) <= sq(armyBldReach(u));
+    return armyOrderRoute(u, target.x, target.y, inReach);
+  });
+  if (result) result.blocked = armed.length - bots.length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   marchTogether(bots);
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
@@ -9147,18 +9167,20 @@ function orderAttack(owner, ids, target) {
 }
 
 /** Station selected warbots in one of your garrisons, as many as it has room for. */
-function orderStation(owner, ids, to) {
+function orderStation(owner, ids, to, result) {
   if (!to || !to.built || to.dead || to.owner !== owner || !BDEFS[to.type].mil) return 0;
-  let room = garrisonRoom(to), sent = 0;
+  let room = garrisonRoom(to), sent = 0, blocked = 0;
   for (const u of orderable(owner, ids)) {
     if (room <= 0) break;
     if (u.inside === to.id || (u.task && u.task.type === 'garrison' && u.task.bld === to.id)) continue;
+    if (!armyOrderRoute(u, to.x, to.y)) { blocked++; continue; }
     readyForOrder(u);
     u.task = { type: 'garrison', bld: to.id };
     if (usesPosts(owner)) { u.post = to.type === 'lander' ? 0 : to.id; u.march = S.time + MARCH_MAX; } // stationed there from now on (marching there)
     to.garInc = (to.garInc || 0) + 1;
     room--; sent++;
   }
+  if (result) result.blocked = blocked;
   return sent;
 }
 
@@ -17413,9 +17435,10 @@ function orderBoardFerry(owner, ids, f) {
   }
   if (best < 0) return 'The Ferry isn\'t at a shore: sail it right up to the land first.';
   const bi = best % S.W, bj = (best / S.W) | 0;
-  const n = orderMove(owner, ids.filter((id) => { const v = getE(id); return v && isArmy(v); }), bi, bj);
+  const us = orderable(owner, ids), tasks = us.map((u) => u.task);
+  const n = orderMove(owner, us.map((u) => u.id), bi, bj);
   if (!n) return 'None of them can walk there.';
-  for (const id of ids) { const v = getE(id); if (v && isArmy(v) && v.task) v.embarkOn = f.id; }
+  us.forEach((u, k) => { if (u.task !== tasks[k]) u.embarkOn = f.id; });
   if (!f.manual) { f.manual = { i: Math.floor(f.x), j: Math.floor(f.y) }; ferryChanged(); } // it waits there for them (its line waits)
   return n;
 }

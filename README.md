@@ -1588,6 +1588,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   prefers a pylon in the middle third. If it can't safely reach a target, it tries the next one. Its flag goes beside
   the target and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
   `P.magCuts`).
+- **Direct Warbot orders:** Move uses the clicked tile and cannot inherit a nearby hunt flag. Move, Hunt, Attack and Station validate each unit before changing its task or reserving garrison space. Units already in firing range can take an Attack or Hunt order. A Warbot can step into a Bulwark’s available cover while keeping its shot.
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
