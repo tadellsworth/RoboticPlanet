@@ -6224,6 +6224,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
 }
 
 function hitBuilding(b, dmg, by, src) {
+  if (b.mDown && megaHeldBy(b, by)) return; // (seizing already warns the owner; only Wreck it can still deal damage)
   if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   if (src && isNestB(b)) nestAlarm(b, src); // (a Murmur nest shot at from out of its guards' reach: they come for the shooter)
   dmg = keepShield(b, dmg);

@@ -96,6 +96,29 @@ const out = new Function('assert', 'sfx', source + `
     log.push(type + ': knocked out in ' + tDown.toFixed(1) + ' s, seized ' + tSeize.toFixed(1) + ' s later; owes ' + costText(b.mNeed));
   }
 
+  // Hits reported through another combat path while a band holds a ruin must leave the seize alert in charge.
+  {
+    const { b } = setup('dome');
+    ME = 1;
+    b.armor = 1;
+    hitBuilding(b, 2, 0);
+    band(0, b, 5);
+    run(15);
+    assert.ok(b.mDown && b.mCap > 0, 'the enemy is seizing the knocked-out Dome');
+    const alerts = () => S.msgs.filter((m) => m.text.includes('are attacking your Shield Dome')).length;
+    const first = alerts();
+    assert.equal(first, 1, 'the original attack was announced');
+    assert.ok(S.msgs.some((m) => m.text.includes('are seizing your Shield Dome')), 'seize warning still shown');
+    hitBuilding(b, 2, 0);
+    assert.equal(alerts(), first, 'seizing never repeats the attack warning');
+    assert.equal(applyOrder(0, 'megaWreck', [b.id, true]), '');
+    hitBuilding(b, 2, 0);
+    assert.equal(alerts(), first + 1, 'an actual Wreck it attack can warn again');
+    assert.equal(b.mWr, 2, 'wreck damage still counts');
+    ME = 0;
+    log.push('seize warning replaces repeated attack alerts; Wreck it still reports fire');
+  }
+
   // 2) Brought online: the fee hauled to it (a road to it), then a Worker; and the work starts again.
   for (const type of ['deepcore', 'lance', 'city']) {
     const { b, A } = setup(type, 47);

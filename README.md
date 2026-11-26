@@ -3302,7 +3302,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Lift's reserve and reload). **Seize clock** (`megaSeize`): armed army robots of one side (not aloft, not inside) within
     `reach` (3) tiles of its walls (`footDist`) and none of a foe's fill `b.mCap` toward `cap` (40) s for `b.mBy`; contested,
     it stops; empty, it runs back `decay` times as fast; a new side starts from 0 (its owner is told). Robots sent to attack
-    it stop shooting and stand within reach (`strikeBuilding`: `megaHeldBy`), so an attack or a flag on it holds it.
+    it stop shooting and stand within reach (`strikeBuilding`: `megaHeldBy`), so an attack or a flag on it holds it. While they seize it, the owner gets a seize warning instead of repeated attack alerts.
     **Seized** (`megaSeized`; its old owner too, retaking it): owner, `noteLost`, `P.stats.captured` and `megaSeized`
     (`cities` for a City), `logEvent` `megaTaken` (`city` for a City), territory and roads redone; offline (`b.mOff`) at
     `armor` (25%) of its armor owing `b.mNeed` = `fee` (a quarter) of its build cost (`megaFee`, rounded up). `needsOf`
