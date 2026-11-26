@@ -129,6 +129,8 @@ const ORDERS = {
   gate(p, id) { const b = ownB(p, id); return b ? wallToGate(p, b) : 'That Wall is gone.'; },
   /** Aim Mass Driver `id` at Catcher `to`, or an Outpost or Keep to keep supplied (0: stand down). '' or why not. */
   mdAim(p, id, to) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; const c = to ? ownB(p, to) : null; if (to && !c) return 'Tap one of your Catchers.'; return setMdAim(p, b, c); },
+  /** Mass Driver `id` throws a Catcher kit to tile (i, j), paid from storage now (i < 0: the kit not yet thrown is called off). '' or why not. */
+  mdKit(p, id, i, j) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; i = Math.floor(+i); j = Math.floor(+j); if (!Number.isFinite(i) || !Number.isFinite(j)) return 'Outside the map.'; return setMdKit(p, b, i, j); },
   /** Send good g from Mass Driver or Catcher `id` (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
   mdSend(p, id, g, on) { const b = ownB(p, id); if (!b || !mdEnd(b)) return 'That Mass Driver is gone.'; return setMdSend(b, String(g), !!on); },
   /** Mass Driver or Catcher `id` back to automatic supply (its goods list goes). */

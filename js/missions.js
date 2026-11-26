@@ -1087,6 +1087,7 @@ const MISSIONS = [
       'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
       'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
       'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
+      'No foothold out there? A Driver throws a <b>Catcher kit</b> to open ground: it assembles itself into a Catcher.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
     setup(S) {
@@ -1134,6 +1135,10 @@ const MISSIONS = [
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver ? b.mdGot || 0 : 0), 0),
         hint: 'Haulers crate the camp\'s survey Crystal into the Catcher, and its spare flies home. Keep it powered.',
         ui: '#sh-md' },
+      { kind: 'mdKit', n: 1, text: 'Throw a Catcher kit to open ground', at: 'mdriver',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].catcher && b.claim > 0) ? 1 : 0),
+        hint: 'Mass Driver → <b>Throw a Catcher kit</b>, then open ground 12 to 50 tiles off: it builds itself.',
+        ui: '#sh-mdkit' },
     ],
   },
   {

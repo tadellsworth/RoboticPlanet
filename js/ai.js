@@ -463,6 +463,7 @@ function aiThink(p) {
     aiBridge(p, maxSites);
     aiRopeway(p, maxSites);
     aiMaglev(p, me, lander);
+    aiMassDriver(p, me, lander);
   }
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -2163,6 +2164,103 @@ function aiMaglev(p, me, lander) {
       return;
     }
   }
+}
+
+/**
+ * A Mass Driver pair (MASSDRIVER) to an island or mesa of its own: on a map of islands, mesas or canyons (aiMdMap), a
+ * rival holding a fort or store on ground its robots can't walk to from home (an Outpost over a Viaduct, a landing's, a
+ * Port founded by sea, a Drop Outpost), and on any other map one no road, Viaduct or ferry reaches, AI_MDRIVER.near
+ * to MASSDRIVER.max tiles from its Command Base builds a Driver at home (a Generator by it) and a Catcher by that
+ * foothold, or throws a Catcher kit there when its robots can't get there at all; then it aims the Driver at the Catcher and the line supplies itself (mdPlan). The Architect from AI_MDRIVER.from,
+ * the others from AI_MDRIVER.others; one pair each; not on Easy. Lost, it tries again after AI_MDRIVER.retry.
+ */
+const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, spare: { cement: 10, alloy: 12, chip: 6 } };
+function aiMdMap() { const sh = SHAPE_PRESETS[S.settings.shape] || {}; return !!(sh.islands || sh.sky || /Canyon/.test(sh.name || '')); }
+function aiMassDriver(p, me, lander) {
+  const P = S.players[p], A = AI_MDRIVER, M = MASSDRIVER;
+  if (S.difficulty === 'easy' || S.time < (P.style === 'tycoon' ? A.from : A.others) || worldBan('mdriver') || worldBan('catcher') || S.time - (P.lastMd || -999) < A.every) return;
+  P.lastMd = S.time;
+  const pair = P.mdPair;
+  if (pair) {
+    const D = getE(pair.d);
+    if (!D || D.dead || D.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
+    // A Generator by the Driver (it fires only with power).
+    if (!me.some((g) => g.type === 'generator' && !g.dead && dist(g.x, g.y, D.x, D.y) <= (g.built ? BDEFS.generator.burner.radius : 3))) {
+      let best = null, bd = Infinity;
+      for (let j = D.y - 3; j <= D.y + 3; j++) for (let i = D.x - 3; i <= D.x + 3; i++) { const d = dist(i, j, D.x, D.y); if (d > 3 || d >= bd || !inMap(i, j) || !canPlace(p, 'generator', i, j, true).ok || wouldBlock(tIdx(i, j))) continue; bd = d; best = [i, j]; }
+      if (best) placeSite(p, 'generator', best[0], best[1]);
+    }
+    if (!D.built) return;
+    const C = pair.c ? getE(pair.c) : null, aimed = D.mdTo ? getE(D.mdTo) : null;
+    if (aimed && !aimed.dead && aimed.owner === p && BDEFS[aimed.type].catcher) { pair.c = aimed.id; return; } // (the line stands; mdPlan runs it)
+    if (C && !C.dead && C.owner === p) { if (C.built) setMdAim(p, D, C); return; }
+    if (D.mdKit || (S.cans || []).some((m) => m.kit && m.from === D.id)) return; // (a kit on its way)
+    // No Catcher (or it was lost): a kit to the foothold's ground, when there's one to throw it to and it can pay.
+    const T = getE(pair.to);
+    if (!T || T.dead || T.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
+    const have = playerGoods(p), c = BDEFS.catcher.cost;
+    if ((have.cement || 0) < c.cement + A.spare.cement || (have.alloy || 0) < c.alloy + A.spare.alloy || (have.chip || 0) < c.chip + A.spare.chip) return;
+    for (const [i, j] of aiMdFarSpots(p, T, D.x, D.y)) if (!mdKitWhy(p, D, i, j)) { setMdKit(p, D, i, j); return; }
+    return;
+  }
+  if (S.time < (P.mdRetry || 0) || me.some((b) => b.type === 'mdriver')) return;
+  // The foothold: the nearest of its own forts and stores out on ground its robots can't walk to from home, no road joining it.
+  const wz = walkZones(), hw = wz[tIdx(lander.x, lander.y)], hz = S.zone[tIdx(lander.x, lander.y)], onMap = aiMdMap();
+  let T = null, bt = Infinity;
+  for (const b of me) {
+    const d = BDEFS[b.type];
+    if (!b.built || b.type === 'lander' || !(d.store || (d.mil && d.terr)) || d.mdriver || d.catcher || b.cut) continue;
+    const t = tIdx(b.x, b.y), dl = dist(b.x, b.y, lander.x, lander.y);
+    if (wz[t] === hw || dl < A.near || dl > M.max + 2) continue;
+    if (!onMap && (S.zone[t] === hz || onHomeNet(b))) continue; // (on other maps only ground no road, Viaduct or ferry reaches)
+    if (dl < bt) { bt = dl; T = b; }
+  }
+  if (!T) return;
+  const have = playerGoods(p), cd = BDEFS.mdriver.cost, cc = BDEFS.catcher.cost;
+  for (const g of ['cement', 'alloy', 'chip']) if ((have[g] || 0) < cd[g] + cc[g] + A.spare[g]) return;
+  // The Driver's spot at home (3 to 9 tiles from the Command Base, nearest the foothold), its axis toward it.
+  const axis = Math.abs(T.x - lander.x) >= Math.abs(T.y - lander.y) ? 'ew' : 'ns';
+  const homes = [];
+  for (let j = lander.y - 9; j <= lander.y + 9; j++) for (let i = lander.x - 9; i <= lander.x + 9; i++) {
+    const dl = dist(i, j, lander.x, lander.y);
+    if (dl < 3 || dl > 9 || !inMap(i, j) || S.zone[tIdx(i, j)] !== hz) continue;
+    const dt = dist(i, j, T.x, T.y);
+    if (dt < M.min + 2 || dt > M.max - 4) continue;
+    homes.push([i, j, dt]);
+  }
+  homes.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
+  for (const [i, j] of homes) {
+    const [i2, j2] = longTile(i, j, axis);
+    if (!inMap(i2, j2) || !canPlace(p, 'mdriver', i, j, true, axis).ok || wouldBlock(tIdx(i, j)) || wouldBlock(tIdx(i2, j2))) continue;
+    const fars = aiMdFarSpots(p, T, i, j);
+    if (!fars.length) continue;
+    const r = placeSite(p, 'mdriver', i, j, undefined, false, axis);
+    if (!r || r.ok === false) return;
+    P.mdPair = { d: S.bAt[tIdx(i, j)], to: T.id, c: 0 };
+    // A Catcher site by the foothold if its Workers and Haulers get there (a Viaduct, a ferry line: the same area as
+    // home, links and all); otherwise a kit, thrown once the Driver stands.
+    if (S.zone[tIdx(T.x, T.y)] === hz) {
+      for (const [fi, fj] of fars) {
+        if (!canPlace(p, 'catcher', fi, fj, true).ok || wouldBlock(tIdx(fi, fj))) continue;
+        const q = placeSite(p, 'catcher', fi, fj);
+        if (q && q.ok !== false) { P.mdPair.c = S.bAt[tIdx(fi, fj)]; break; }
+      }
+    }
+    return;
+  }
+}
+
+/** Spots by foothold T (2 to 5 tiles off, on its ground) for a Catcher or a kit, MASSDRIVER.min + 1 to max - 1 tiles from (x, y): nearest T first. */
+function aiMdFarSpots(p, T, x, y) {
+  const M = MASSDRIVER, z = S.zone[tIdx(T.x, T.y)], out = [];
+  for (let j = T.y - 5; j <= T.y + 5; j++) for (let i = T.x - 5; i <= T.x + 5; i++) {
+    if (!inMap(i, j)) continue;
+    const d = dist(i, j, T.x, T.y), dd = dist(i, j, x, y), t = tIdx(i, j);
+    if (d < 2 || d > 5 || dd < M.min + 1 || dd > M.max - 1 || S.zone[t] !== z || !mdKitGround(p, i, j) || wouldBlock(t)) continue;
+    out.push([i, j, d]);
+  }
+  out.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
+  return out.slice(0, 12);
 }
 
 /** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */

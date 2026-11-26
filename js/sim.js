@@ -4026,6 +4026,7 @@ function completeBuilding(b) {
   if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
+  delete b.kitT; // (a Catcher kit: assembled)
   if (def.ropeway && !b.link) ropewayAcross(b);
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
@@ -4581,6 +4582,13 @@ function updateBuilding(b, dt) {
   b.working = false;
   if (def.burrow) return; // (a Murmur tunnel exit: see murmurTick)
   if (def.wild) { updateNest(b); return; }
+  if (!b.built && b.kitT) {
+    // A Catcher kit assembling itself where it came down (mdKitLand): no Worker needed.
+    b.progress = Math.min(1, b.progress + dt / MASSDRIVER.kitBuild);
+    b.status = `Assembling itself: ${Math.floor(b.progress * 100)}%`;
+    if (b.progress >= 1) completeBuilding(b);
+    return;
+  }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
     if (owed && Object.keys(owed).length && !(b.builder && siteReady(b))) b.status = `Waiting for ${costText(owed)} from storage`;
@@ -20675,9 +20683,9 @@ function hashState() {
     if (b.magLayout) { int(b.id); for (const t of b.magLayout) int(t); }
     if (b.deepSurgeTier || b.deepLast) { int(b.id); int(b.deepSurgeTier || 0); num(b.deepSurgeAt || 0); int(b.deepLast || 0); }
     if (b.crater) { int(b.id); int(b.nest || 0); } // (a Harrow's crater, a tunnel exit)
-    if (BDEFS[b.type].mdriver || BDEFS[b.type].catcher) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); int(b.mdAt || 0); int(b.mdNext || 0); int(b.mdFar || 0); obj(b.auto); for (const k in b.mdAuto || {}) { str(k); obj(b.mdAuto[k]); } } // (Mass Driver ends)
+    if (BDEFS[b.type].mdriver || BDEFS[b.type].catcher) { int(b.id); str(b.mdAxis); int(b.mdTo || 0); obj(b.mdSend); num(b.mdFire || 0); num(b.mdCd || 0); num(b.mdLast || 0); int(b.mdAt || 0); int(b.mdNext || 0); int(b.mdFar || 0); obj(b.auto); for (const k in b.mdAuto || {}) { str(k); obj(b.mdAuto[k]); } if (b.mdKit) { int(b.mdKit[0]); int(b.mdKit[1]); } if (b.kitT || b.claim) { int(b.kitT || 0); int(b.claim || 0); } } // (Mass Driver ends, a Catcher kit to throw or assembling)
   }
-  for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); } // (their canisters in flight)
+  for (const m of S.cans || []) { int(m.id); int(m.owner); int(m.to); num(m.t); num(m.dur); num(m.hp); obj(m.goods); if (m.kit) { int(m.from); num(m.x1); num(m.y1); } } // (their canisters in flight)
   // Megastructures: the Lance (aim, charge, reload) and the Shield Dome (strength, down, Crystal), the cuts, who's dimmed.
   for (const b of S.buildings) {
     if (BDEFS[b.type].lance) { int(b.id); int(b.lOn || 0); num(b.lCharge || 0); num(b.lReload || 0); int(b.lAim ? b.lAim[0] : -1); int(b.lAim ? b.lAim[1] : -1); str(b.lSrc); int(b.lReactor || 0); num(b.lTime || 0); int(b.lUseR ? 1 : 0); }
@@ -20899,6 +20907,102 @@ function setMdAim(owner, b, c) {
   return '';
 }
 
+/** Is tile t ground a Catcher kit can come down on for `owner` (open, empty, no one else's, no Trade Post's, its ring cutting no rival off)? */
+function mdKitGround(owner, i, j) {
+  if (!inMap(i, j)) return false;
+  const t = tIdx(i, j), r = MASSDRIVER.kitClaim;
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return false;
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return false;
+  if ((S.posts || []).some((q) => Math.max(Math.abs(q.x - i), Math.abs(q.y - j)) <= r + 1)) return false;
+  if (ringOverRival(owner, i, j, r)) return false;
+  return !(S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear));
+}
+
+/** Can player `owner`'s Mass Driver b throw a Catcher kit to tile (i, j)? '' if so, otherwise why not. */
+function mdKitWhy(owner, b, i, j) {
+  const M = MASSDRIVER, cost = BDEFS.catcher.cost;
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
+  if (!b.built) return 'That Mass Driver is still going up.';
+  if (worldBan('catcher')) return 'No Catchers here.';
+  if (b.mdKit || (S.cans || []).some((m) => m.kit && m.from === b.id && !m.gone)) return 'That Mass Driver already has a Catcher kit on the way.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j), d = dist(b.x, b.y, i, j), r = M.kitClaim;
+  if (d < M.min) return `Too close: that spot is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (d > M.max) return `Too far: that spot is ${Math.round(d)} tiles away. A Mass Driver throws ${M.min} to ${M.max} tiles.`;
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Throw it onto open, empty ground (no water, road, track, runway or deposit).';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+  if ((S.posts || []).some((q) => Math.max(Math.abs(q.x - i), Math.abs(q.y - j)) <= r + 1)) return 'Not on a Trade Post\'s ground.';
+  if (ringOverRival(owner, i, j, r)) return `Too close to a rival's buildings: the Catcher's land (${r} tiles round it) would cut them off.`;
+  if (!mdKitGround(owner, i, j)) return 'Too close to a Murmur nest.';
+  if (!canAffordRoad(owner, cost)) return `A Catcher kit costs ${costText(cost)}: not enough ${missingGoods(owner, cost)} in storage.`;
+  return '';
+}
+
+/**
+ * Mass Driver b throws a Catcher kit to tile (i, j) (i < 0: the kit not yet thrown is called off, its goods back in
+ * storage). It is paid from storage now; the Driver throws it as soon as it can fire (mdLaunchKit). '' or why not.
+ */
+function setMdKit(owner, b, i, j) {
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mdriver) return 'Pick one of your Mass Drivers.';
+  if (i < 0) {
+    if (!b.mdKit) return '';
+    if (b.mdFire && !b.mdAt) b.mdFire = 0; // (charging for it: stood down)
+    refundRoad(owner, BDEFS.catcher.cost, b.x, b.y);
+    delete b.mdKit;
+    return '';
+  }
+  const why = mdKitWhy(owner, b, i, j);
+  if (why) return why;
+  payRoad(owner, BDEFS.catcher.cost);
+  b.mdKit = [i, j];
+  return '';
+}
+
+/** Driver b's coils are charged for its Catcher kit: it flies to its spot (S.cans, `kit`), and the Driver reloads. */
+function mdLaunchKit(b) {
+  const M = MASSDRIVER, [i, j] = b.mdKit, o = bCentre(b);
+  if (!magPowered(b)) return; // (its power went while it charged: it tries again)
+  delete b.mdKit;
+  const d = dist(b.x, b.y, i, j), k = clamp((d - M.min) / (M.max - M.min), 0, 1);
+  S.cans = S.cans || [];
+  S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: 0, kit: 1, goods: Object.assign({}, BDEFS.catcher.cost), t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
+    x0: o.x, y0: o.y, x1: i + 0.5, y1: j + 0.5, hp: M.hp });
+  b.mdCd = M.reload - M.charge;
+  b.mdLast = S.time;
+  b.mdShot = S.time;
+  b.working = true;
+  sfx('mdlaunch', b.x + 0.5, b.y + 0.5);
+}
+
+/**
+ * A Catcher kit (canister m) comes down: a Catcher site on its spot (or the nearest open ground within 2 tiles that
+ * will take it) that assembles itself (b.kitT) and will claim the land round it (b.claim); its Driver is aimed at it.
+ * With nowhere to stand, its goods lie there in crates.
+ */
+function mdKitLand(m) {
+  m.gone = true;
+  const i0 = Math.floor(m.x1), j0 = Math.floor(m.y1);
+  let at = mdKitGround(m.owner, i0, j0) ? tIdx(i0, j0) : -1;
+  for (let r = 1; r <= 2 && at < 0; r++) for (let dj = -r; dj <= r && at < 0; dj++) for (let di = -r; di <= r && at < 0; di++) if (Math.max(Math.abs(di), Math.abs(dj)) === r && mdKitGround(m.owner, i0 + di, j0 + dj)) at = tIdx(i0 + di, j0 + dj);
+  if (at < 0) {
+    addLoot(clamp(i0, 0, S.W - 1), clamp(j0, 0, S.H - 1), m.goods);
+    addFx('puff', m.x1, m.y1, { r: 0.5, life: 0.9 });
+    sfx('mdthud', m.x1, m.y1);
+    postMsg(m.owner, 'A Catcher kit came down where a Catcher couldn\'t stand: its goods lie there in crates.', i0, j0, 'warn');
+    return;
+  }
+  const x = at % S.W, y = (at / S.W) | 0;
+  const c = addBuilding(m.owner, 'catcher', x, y, false);
+  for (const g in m.goods) bump(c.stock, g, m.goods[g]);
+  c.kitT = 1; // (it assembles itself: see updateBuilding)
+  c.claim = MASSDRIVER.kitClaim;
+  const D = getE(m.from);
+  if (D && !D.dead && D.owner === m.owner && D.built && BDEFS[D.type].mdriver && !mdAimWhy(m.owner, D, c)) { D.mdTo = c.id; D.mdLast = S.time; S.players[m.owner].mdT = undefined; }
+  addFx('puff', x + 0.5, y + 0.5, { r: 0.7, life: 1.1 });
+  sfx('mdcatch', x + 0.5, y + 0.5);
+  postMsg(m.owner, `A Catcher kit is down: it assembles itself in ${MASSDRIVER.kitBuild} s and claims the land ${MASSDRIVER.kitClaim} tiles round it.`, x, y, 'good');
+}
+
 /** Send good g from Mass Driver or Catcher b (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
 function setMdSend(b, g, on) {
   if (!ownKey(GOOD, g) || g === 'crude') return 'A Mass Driver throws goods in sealed canisters: no Crude.';
@@ -20954,13 +21058,31 @@ function mdHold(b, g) {
   return b.mdFar ? 0 : mdAutoN(b, g);
 }
 
-/** What end b can load of good g for partner o: whole units. */
+/**
+ * Room for good g at end o, by canister: at a far end, MASSDRIVER.full of it (or what it keeps, if more) less what it
+ * holds and what is on the way, so a far end nothing collects from doesn't fill up for ever; anywhere else, no limit.
+ */
+function mdRoom(o, g) {
+  if (!o.mdFar || mdFortType(o.type)) return Infinity;
+  const k = keepOf(o);
+  return Math.max(MASSDRIVER.full, (k && k[g]) || 0) - (o.stock[g] || 0) - mdFlying(o, g);
+}
+
+/** The goods end b would send partner o but o has no room for (mdRoom): its far end is full of them. */
+function mdFullGoods(b, o) {
+  const gs = b.mdSend && !mdFortType(o.type) ? Object.keys(b.mdSend) : Object.keys((b.mdAuto && b.mdAuto[o.id]) || {});
+  return gs.filter((g) => (b.stock[g] || 0) >= 1 && mdRoom(o, g) < 1);
+}
+
+/** What end b can load of good g for partner o: whole units (no more than o has room for). */
 function mdAvail(b, o, g) {
-  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.floor(b.stock[g] || 0) : 0;
+  const room = Math.floor(mdRoom(o, g));
+  if (room < 1) return 0;
+  if (b.mdSend && !mdFortType(o.type)) return b.mdSend[g] !== undefined ? Math.min(room, Math.floor(b.stock[g] || 0)) : 0;
   const plan = b.mdAuto && b.mdAuto[o.id];
   if (!plan || !plan[g]) return 0;
   const has = b.mdFar ? keepSupply(b, g) : (b.stock[g] || 0) - (b.res[g] || 0);
-  return Math.max(0, Math.min(plan[g], Math.floor(has)));
+  return Math.max(0, Math.min(plan[g], room, Math.floor(has)));
 }
 
 /** The goods end b could load for partner o now, and how many in all. */
@@ -21029,6 +21151,19 @@ function updateMassDriver(b, dt) {
     if (S.time >= b.mdFire) mdLaunch(b);
     return;
   }
+  if (drv && b.mdKit) {
+    // A Catcher kit to throw comes first.
+    if (!magPowered(b)) b.status = `A Catcher kit is loaded: waiting for power (a Generator with Fuel within ${BDEFS.generator.burner.radius} tiles)`;
+    else if (b.mdCd > 0) b.status = `A Catcher kit is loaded: it flies in ${Math.ceil(b.mdCd)}s`;
+    else {
+      b.mdFire = S.time + MASSDRIVER.charge;
+      b.mdAt = 0;
+      b.working = true;
+      b.status = 'Charging the coils';
+      sfx('mdcharge', b.x + 0.5, b.y + 0.5);
+    }
+    return;
+  }
   const ps = mdPartners(b);
   if (!ps.length) {
     if (!drv) b.status = 'Storing goods: no Mass Driver is aimed at it yet';
@@ -21058,6 +21193,9 @@ function updateMassDriver(b, dt) {
     b.working = true;
     b.status = 'Charging the coils';
     sfx('mdcharge', b.x + 0.5, b.y + 0.5);
+  } else if (!best && ps.some((o) => mdFullGoods(b, o).length)) {
+    const full = [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))];
+    b.status = `Far end full: nothing there collects its ${full.map((g) => GOOD[g].name).join(', ')}, so no more is sent`;
   } else b.status = best ? `Loading: ${Math.min(best, M.load)} of ${M.load} goods for the next canister` : !b.mdSend && !b.mdAuto ? (b.mdFar ? 'Nothing needed here, nothing spare to send home' : 'Nothing needed at the far end yet') : 'Waiting for goods to send';
 }
 
@@ -21065,6 +21203,7 @@ function updateMassDriver(b, dt) {
 function mdLaunch(b) {
   const M = MASSDRIVER;
   b.mdFire = 0;
+  if (!b.mdAt && b.mdKit) { mdLaunchKit(b); return; } // (a Catcher kit)
   const C = getE(b.mdAt);
   if (!C || !mdPartners(b).includes(C) || !magPowered(b)) return; // (its far end or power went while it charged: it tries again)
   const L = mdLoadFor(b, C), goods = {};
@@ -21131,7 +21270,7 @@ function canDown(m, p, by) {
   if (by !== undefined) {
     blastFx(p.x, p.y, 0.5, { small: true });
     sfx('mdburst', p.x, p.y);
-    postMsg(m.owner, 'A Mass Driver canister was shot down: its goods fell as crates.', i, j, 'bad');
+    postMsg(m.owner, m.kit ? 'A Catcher kit was shot down: its goods fell as crates.' : 'A Mass Driver canister was shot down: its goods fell as crates.', i, j, 'bad');
     if (by >= 0 && foes(by, m.owner)) postMsg(by, 'Your flak burst an enemy canister: its goods fell as crates.', i, j, 'good');
   } else {
     addFx('puff', p.x, p.y, { r: 0.5, life: 0.9 });
@@ -21148,6 +21287,7 @@ function updateCans(dt) {
     // A rival's Shield Dome bursts a canister coming down into it (one flying over, high, goes on).
     if (m.t < m.dur && m.t / m.dur > 0.5 && S.tick % 3 === 0) { const p = canPos(m); if (p.alt < 2.5 && domeCatch(p.x, p.y, m.owner, 'canister', m.x0, m.y0)) { canDown(m, p, -1); continue; } }
     if (m.t < m.dur) continue;
+    if (m.kit) { mdKitLand(m); continue; }
     const C = getE(m.to), i = Math.floor(m.x1), j = Math.floor(m.y1);
     if (C && !C.dead && C.built && C.owner === m.owner && (mdEnd(C) || mdFortType(C.type)) && C.x === i && C.y === j) {
       let n = 0;

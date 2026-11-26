@@ -6068,6 +6068,10 @@ function checkSave(o) {
     // and its plan (mdPlan): the end it charged for, the last it fired to, whether it's the far end, what it ships to each partner
     for (const k of ['mdAt', 'mdNext']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad();
     if (b.mdFar != null && b.mdFar !== 0 && b.mdFar !== 1) bad();
+    // a Catcher kit to throw (its tile), a Catcher kit assembling itself, the land a Port or a kit's Catcher claims
+    if (b.mdKit != null && !(b.type === 'mdriver' && Array.isArray(b.mdKit) && b.mdKit.length === 2 && Number.isInteger(b.mdKit[0]) && Number.isInteger(b.mdKit[1]) && b.mdKit[0] >= 0 && b.mdKit[1] >= 0 && b.mdKit[0] < o.W && b.mdKit[1] < o.H)) bad();
+    if (b.kitT != null && !(b.type === 'catcher' && b.kitT === 1)) bad();
+    if (b.claim != null && !(Number.isInteger(b.claim) && b.claim >= 0 && b.claim <= 8)) bad();
     if (b.mdAuto != null && !(obj(b.mdAuto) && Object.keys(b.mdAuto).length <= 64 && Object.keys(b.mdAuto).every((k) => /^[0-9]+$/.test(k) && obj(b.mdAuto[k]) && Object.keys(b.mdAuto[k]).every((g) => ownKey(GOOD, g) && Number.isFinite(b.mdAuto[k][g]))))) bad();
     // a megastructure's state (the Lance: its aim, charge and power; the Shield Dome: its strength): plain numbers and words
     if (b.lAim != null && !(Array.isArray(b.lAim) && b.lAim.length === 2 && Number.isInteger(b.lAim[0]) && Number.isInteger(b.lAim[1]) && b.lAim[0] >= 0 && b.lAim[1] >= 0 && b.lAim[0] < o.W && b.lAim[1] < o.H)) bad();
@@ -6208,7 +6212,7 @@ function checkSave(o) {
   if (o.ruins != null && !(Array.isArray(o.ruins) && o.ruins.length <= 4 * RAD.ruins && o.ruins.every((r) => onMap(r) && Number.isInteger(r.x) && Number.isInteger(r.y) && Number.isFinite(r.id) && Number.isFinite(r.t) && owner(r.o)))) bad();
   // Mass Driver canisters in flight (S.cans, see mdLaunch): numbers, owners, goods, places on the map.
   if (o.cans != null && !(Array.isArray(o.cans) && o.cans.length <= 4096 && o.cans.every((m) => obj(m) && owner(m.owner) && obj(m.goods) &&
-    Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 &&
+    Object.keys(m.goods).every((g) => ownKey(GOOD, g) && Number.isFinite(m.goods[g])) && ['id', 'from', 'to', 't', 'dur', 'hp'].every((k) => Number.isFinite(m[k])) && m.dur > 0 && (m.kit == null || m.kit === 1) &&
     [m.x0, m.x1].every((x) => Number.isFinite(x) && x >= 0 && x <= o.W) && [m.y0, m.y1].every((y) => Number.isFinite(y) && y >= 0 && y <= o.H)))) bad();
   // The Ring drizzle (S.drizzle, see updateDrizzle): its clock, its deposits and the pieces in the sky, numbers and tiles.
   if (o.drizzle != null) {

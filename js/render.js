@@ -12665,7 +12665,7 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     }
     const h = R.aimHover;
     if (h) {
-      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = !!c && (BDEFS[c.type].catcher || mdFortType(c.type)) && !mdAimWhy(b.owner, b, c);
+      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = ui.mdKit ? !mdKitWhy(b.owner, b, h.i, h.j) : !!c && (BDEFS[c.type].catcher || mdFortType(c.type)) && !mdAimWhy(b.owner, b, c); // (a Catcher kit: open ground)
       mdArc(ctx, b, h.i + 0.5, h.j + 0.5, ox, oy, z, ok ? col : '#ff6b6b');
     }
   } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }

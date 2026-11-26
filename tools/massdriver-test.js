@@ -211,6 +211,144 @@ const old = JSON.parse(run(mk(), `
 `));
 check('a save from before (a Driver with a goods list, its Catcher) loads and runs: the pair is two-way, the list kept', !old.err && old.got >= 56 && old.list.join() === 'cement' && old.far === 1 && old.catcherAuto, old);
 
+// ---- a Catcher kit: thrown to an island with no foothold, it assembles itself into a Catcher, claims land, the Driver aims at it
+const kitSetup = `{
+  newGame({ seed: 11, mode: 'colony', size: 3, shape: SHAPE_PRESETS.findIndex((s) => s.name === 'Islands') });
+  ${HELP}
+  const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)];
+  for (const g of ['cement', 'alloy', 'chip', 'fuel', 'stone']) bump(L.stock, g, 300);
+  const d = spot(L.x, L.y, 3, 7, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
+  const D = driver(d[0], d[1]); gen(D.x, D.y);
+  const far = spot(D.x, D.y, 30, MASSDRIVER.max - 1, (i, j) => S.zone[tIdx(i, j)] !== hz && S.zone[tIdx(i, j)] > 0 && S.owner[tIdx(i, j)] < 0 && dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + 20);
+  computeTerritory(); computeZones();
+  Object.assign(globalThis, { K: { D: D.id, far } });
+}`;
+const kc = mk();
+const kit = JSON.parse(run(kc, `
+  ${kitSetup}
+  const D = getE(K.D), far = K.far, out = { far };
+  // refused: water, too close, a rival's land, not affordable
+  let wet = null; for (let j = 0; j < S.H && !wet; j++) for (let i = 0; i < S.W && !wet; i++) { const dd = dist(i, j, D.x, D.y); if (dd >= 20 && dd <= 40 && S.terrain[tIdx(i, j)] === T_WATER) wet = [i, j]; }
+  out.wet = applyOrder(0, 'mdKit', [D.id, wet[0], wet[1]]);
+  out.close = applyOrder(0, 'mdKit', [D.id, D.x + 4, D.y + 3]);
+  const cem0 = playerGoods(0).cement;
+  out.ok = applyOrder(0, 'mdKit', [D.id, far[0], far[1]]);
+  out.paid = cem0 - playerGoods(0).cement;
+  out.twice = applyOrder(0, 'mdKit', [D.id, far[0], far[1]]);
+  until(() => (S.cans || []).some((m) => m.kit), 30);
+  out.flying = (S.cans || []).some((m) => m.kit && m.from === D.id);
+  // a save while it flies: it lands after the load the same way
+  const j1 = serializeGame(); deserializeGame(j1);
+  until(() => S.buildings.some((b) => !b.dead && b.type === 'catcher'), 20);
+  const C = S.buildings.find((b) => !b.dead && b.type === 'catcher');
+  out.site = !!C && !C.built && C.kitT === 1;
+  out.at = C ? Math.round(dist(C.x, C.y, far[0], far[1])) : -1;
+  out.aimed = getE(K.D).mdTo === (C && C.id);
+  const t0 = S.time;
+  until(() => C.built, 40);
+  out.took = Math.round(S.time - t0);
+  out.built = C.built;
+  out.claim = S.owner[tIdx(C.x, C.y)] === 0 && S.owner[tIdx(C.x + 2, C.y)] === 0;
+  out.zone = S.zone[tIdx(C.x, C.y)] !== S.zone[tIdx(getE(K.D).x, getE(K.D).y)];
+  // goods fly to it: a deep order there
+  C.keep = { cement: 30 };
+  until(() => (C.mdGot || 0) > 0, 60);
+  out.got = C.mdGot || 0;
+  return JSON.stringify(out);
+`));
+console.log(`  kit landed ${kit.at} tiles from its spot, assembled in ${kit.took} s`);
+check('Catcher kit: refused on water, too close, and twice at once; paid from storage (the Catcher\'s cost)', /open, empty ground/.test(kit.wet) && /Too close/.test(kit.close) && kit.ok === '' && kit.paid === 8 && /already has a Catcher kit/.test(kit.twice), kit);
+check('Catcher kit: it flies (and survives a save in flight), lands on its spot as a Catcher site that assembles itself, no Worker, in about 20 s', kit.flying && kit.site && kit.at === 0 && kit.built && kit.took >= 18 && kit.took <= 22, kit);
+check('Catcher kit: the new Catcher claims the land round it on the other island, its Driver is aimed at it, and goods fly to it', kit.claim && kit.zone && kit.aimed && kit.got > 0, kit);
+
+// ---- refused on a rival's land and on a Trade Post's ground; Flak bursts a kit (its goods fall as crates)
+const kr = JSON.parse(run(mk(), `
+  newGame({ seed: 21, mode: 'versus', size: 3, rough: 0 });
+  ${HELP}
+  const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)], E = getE(S.players[1].lander);
+  for (const g of ['cement', 'alloy', 'chip', 'fuel']) bump(L.stock, g, 300);
+  const d = spot(L.x, L.y, 3, 6, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
+  const D = driver(d[0], d[1]); gen(D.x, D.y);
+  computeTerritory(); computeZones();
+  const out = {};
+  const o = spot(D.x, D.y, 26, 28, (i, j) => dist(i, j, L.x, L.y) > 20); addBuilding(1, 'outpost', o[0], o[1], true); computeTerritory();
+  let theirs = null; for (let j = 0; j < S.H && !theirs; j++) for (let i = 0; i < S.W && !theirs; i++) { const t = tIdx(i, j), dd = dist(i, j, D.x, D.y); if (dd >= 14 && dd <= 48 && S.owner[t] === 1 && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.road[t]) theirs = [i, j]; }
+  out.rival = theirs ? applyOrder(0, 'mdKit', [D.id, theirs[0], theirs[1]]) : 'none';
+  const post = (S.posts || []).find((q) => { const dd = dist(q.x, q.y, D.x, D.y); return dd >= 14 && dd <= 48; });
+  let pt = null; if (post) for (let dj = -2; dj <= 2 && !pt; dj++) for (let di = -2; di <= 2 && !pt; di++) { const t = tIdx(post.x + di, post.y + dj); if (S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.road[t] && !S.ramp[t]) pt = [post.x + di, post.y + dj]; }
+  out.post = pt ? applyOrder(0, 'mdKit', [D.id, pt[0], pt[1]]) : 'none';
+  // Flak under the line
+  const far = spot(D.x, D.y, 30, 32, (i, j) => S.owner[tIdx(i, j)] < 0 && !ringOverRival(0, i, j, MASSDRIVER.kitClaim) && dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + 20);
+  const mid = spot((D.x + far[0]) / 2, (D.y + far[1]) / 2, 0, 3);
+  const F = addBuilding(1, 'flak', mid[0], mid[1], true); bump(F.stock, 'ammo', 50);
+  computeTerritory(); computeZones();
+  out.ok = applyOrder(0, 'mdKit', [D.id, far[0], far[1]]);
+  // (its flak fires as a Flak Gun does; a burst in its splash is what brings a canister down)
+  until(() => { const m = (S.cans || []).find((q) => q.kit && canAirborne(q)); if (m) { const p = canPos(m); canFlak(p.x, p.y, 1, BDEFS.flak.flak); } return (S.loot || []).some((l) => l.goods.alloy >= 5) || S.buildings.some((b) => !b.dead && b.type === 'catcher'); }, 60);
+  out.burst = (S.loot || []).some((l) => l.goods.alloy >= 5 && l.goods.chip >= 3);
+  out.catcher = S.buildings.some((b) => !b.dead && b.type === 'catcher');
+  return JSON.stringify(out);
+`));
+console.log('  refused: ' + kr.rival + ' / ' + kr.post);
+check('Catcher kit: refused on a rival\'s land and on a Trade Post\'s ground', /someone else holds/.test(kr.rival) && (kr.post === 'none' || /Trade Post/.test(kr.post)), kr);
+check('Catcher kit: an enemy Flak burst brings it down, its goods fall as crates, its goods fall as crates, no Catcher', kr.ok === '' && kr.burst && !kr.catcher, kr);
+
+// ---- a far end nothing collects from fills up to MASSDRIVER.full of a good, then no more goes: "Far end full"
+const full = JSON.parse(run(mk(), `
+  newGame({ seed: 5, mode: 'colony', size: 3, rough: 0 });
+  ${HELP}
+  const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)];
+  for (const g of ['cement', 'alloy', 'chip', 'fuel']) bump(L.stock, g, 300);
+  const d = spot(L.x, L.y, 3, 6, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
+  const D = driver(d[0], d[1]); gen(D.x, D.y);
+  const far = spot(D.x, D.y, 24, 26, (i, j) => dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + 16);
+  const C = addBuilding(0, 'catcher', far[0], far[1], true);
+  computeTerritory(); computeZones();
+  applyOrder(0, 'mdAim', [D.id, C.id]);
+  applyOrder(0, 'mdSend', [D.id, 'cement', true]);
+  until(() => { if ((D.stock.cement || 0) < 16) bump(D.stock, 'cement', 16); return false; }, 200);
+  const out = { far: C.mdFar, held: C.stock.cement || 0, sent: D.mdSent || 0, status: D.status, max: MASSDRIVER.full };
+  // something there takes it: it flows again
+  C.stock.cement = 10; const s0 = D.mdSent || 0;
+  until(() => { if ((D.stock.cement || 0) < 16) bump(D.stock, 'cement', 16); return (D.mdSent || 0) > s0; }, 30);
+  out.again = (D.mdSent || 0) > s0;
+  return JSON.stringify(out);
+`));
+check('a far end nothing collects from stops at ' + 64 + ' of a good, the Driver says "Far end full", and ships again once some is used', full.far === 1 && full.held <= full.max && full.held >= full.max - 16 && full.sent <= full.max + 16 && /Far end full/.test(full.status) && full.again, full);
+
+// ---- the rival builds a pair: a Driver at home and a Catcher kit to an island it holds that no road reaches
+const ai = JSON.parse(run(mk(), `
+  newGame({ seed: 11, mode: 'versus', size: 3, murmur: 'off', shape: SHAPE_PRESETS.findIndex((s) => s.name === 'Islands') });
+  ${HELP}
+  const P = S.players[0], L = getE(P.lander), hz = S.zone[tIdx(L.x, L.y)];
+  P.style = 'tycoon';
+  for (const g of ['cement', 'alloy', 'chip', 'fuel', 'ammo']) bump(L.stock, g, 200);
+  // an Outpost of its own on another island (a landing's), 25 to 40 tiles off
+  const o = spot(L.x, L.y, 25, 40, (i, j) => S.zone[tIdx(i, j)] !== hz && S.zone[tIdx(i, j)] >= 0 && S.owner[tIdx(i, j)] < 0);
+  const O = addBuilding(0, 'outpost', o[0], o[1], true);
+  computeTerritory(); computeZones();
+  for (let k = 0; k < 2; k++) enterBuilding(addBot(0, 'warbot', O.x, O.y), O);
+  O.stock.ammo = 0;
+  S.time = AI_MDRIVER.from; // (an Architect's from this time)
+  const out = { early: 0 };
+  P.lastMd = -999; S.difficulty = 'easy'; aiMassDriver(0, playerBuildings(0), L); out.easy = !P.mdPair; S.difficulty = 'normal';
+  P.lastMd = -999;
+  // (the rival's road planner joins its sites as usual: aiRoads; here, laid at once)
+  const roads = () => { for (const b of S.buildings) if (!b.dead && b.owner === 0 && !b.built && !b.roaded && S.zone[tIdx(b.x, b.y)] === hz) { b.roaded = 1; for (const t of roadRouteTo(0, b) || []) setRoad(t % S.W, (t / S.W) | 0, true, 0); } };
+  until(() => { aiMassDriver(0, playerBuildings(0), L); roads(); const D = S.buildings.find((b) => !b.dead && b.type === 'mdriver'); return D && D.mdTo && getE(D.mdTo).built; }, 400);
+  const D = S.buildings.find((b) => !b.dead && b.type === 'mdriver'), C = D && getE(D.mdTo);
+  out.driver = !!D && D.built; out.home = D ? S.zone[tIdx(D.x, D.y)] === hz : false;
+  out.gen = S.buildings.some((g) => !g.dead && g.type === 'generator' && D && dist(g.x, g.y, D.x, D.y) <= 4);
+  out.catcher = !!C && C.type === 'catcher' && C.built; out.byO = C ? Math.round(dist(C.x, C.y, O.x, O.y)) : -1;
+  out.t = Math.round(S.time - AI_MDRIVER.from);
+  until(() => { aiMassDriver(0, playerBuildings(0), L); return (O.stock.ammo || 0) > 0 || (C && (C.mdGot || 0) > 0); }, 200);
+  out.got = C ? C.mdGot || 0 : 0; out.ammo = O.stock.ammo || 0;
+  out.pairs = S.buildings.filter((b) => !b.dead && b.type === 'mdriver').length;
+  return JSON.stringify(out);
+`));
+console.log(`  the rival's pair stood and was aimed ${ai.t} s after it started, its Catcher ${ai.byO} tiles from the Outpost`);
+check('a rival (an Architect, not on Easy) builds a Driver at home with a Generator, throws a Catcher kit to its Outpost\'s island, aims it, and goods fly', ai.easy && ai.driver && ai.home && ai.gen && ai.catcher && ai.byO <= 5 && ai.got > 0 && ai.pairs === 1, ai);
+
 // ---- the same run twice ends alike (deterministic)
 const h = () => run(mk(), `
   newGame({ seed: 5, mode: 'colony', size: 3, rough: 0 });

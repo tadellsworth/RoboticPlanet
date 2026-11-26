@@ -382,9 +382,15 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * the Generator's radius (magPowered); without one it waits (it still catches). A canister has `hp`: an enemy Flak Gun
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
- * the Hollow (nothing flies under the cavern roof); the rival builds none (IDEAS.md).
+ * the Hollow (nothing flies under the cavern roof).
+ * A Driver can also throw a Catcher kit (mdKit: the Catcher's cost, paid from storage) to open ground `min` to `max`
+ * tiles away that no one else holds (no Trade Post's ground): it lands as a Catcher site that assembles itself in
+ * `kitBuild` s (no Worker needed), claims the land `kitClaim` tiles round it (b.claim, as a Port founded by sea does),
+ * and the Driver is aimed at it: a foothold on an island or a mesa with none. Flak can burst it like any canister.
+ * A far end nothing collects from fills up: past `full` of a good there (or what it keeps, if more), no more of it is
+ * shipped there ("Far end full"). The rival builds a pair to an island or mesa it holds that no road reaches (aiMassDriver).
  */
-const MASSDRIVER = { min: 12, max: 50, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
+const MASSDRIVER = { min: 12, max: 50, kitClaim: 3, kitBuild: 20, full: 64, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
   flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
