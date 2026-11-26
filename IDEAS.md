@@ -2582,12 +2582,31 @@ decks, beacons and warning lights, a glow in the owner's colour (see how the oth
 `daynight.js` do it; ART_GUIDE.md for the look). A knocked-out one stays dark (its offline look), and switches on
 again once it's back online.
 
-## To do: a cooler Victory screen (owner, Nov 25)
+## Built: a cooler Victory screen (owner, Nov 25)
+
+**Built** (Nov 26 2026: `overFlare` in `js/ui.js`, `#o-flare` in `index.html`, the `.o-flare` rules at the end of
+`style.css`; README's end screen entry has the code map). The word flares in over the dimmed map in the TERRAFALL look
+(Chakra Petch, the coral gradient, its glow) with a light streak, a shine across the letters and a soft flash, holds
+about two seconds, then shrinks into the end screen's heading while the dashboard fades in; under the heading, a short
+line says how (Capture, Domination, Uplinks held, Command Base lost...). DEFEAT is cold grey, slower, falls into place
+with a dark vignette and the map desaturated. The same word in every end: missions (COMPLETE / FAILED), Horde (HELD,
+OVERRUN with the wave, VICTORY for the Maw), Contact, Teams, Observer (GAME OVER, who won under it), and Contingency's
+battles in the Command Deck's blue before the globe. A tap or a key skips to the dashboard; reduced motion only fades.
+A short sound under it (`sfx('flare')`, a rising rush of air; `flareDown`, a low falling one) beside the old win and
+lose notes. The original ask:
 
 When you win, a big **VICTORY** flashes and animates in before the victory dashboard: the same look as the TERRAFALL
 title on the main menu (the M2 cinematic menu's font, coral gradient and glow), e.g. sweeping or flaring in over the
 map, then settling above the dashboard. Worth a matching **DEFEAT** in the same style (darker), and the Contingency
 battle end can reuse it (in its blue Command Deck look).
+
+## To do: victory and defeat music (owner, Nov 26)
+
+A short music cue, or a track, on the Victory and Defeat screens, generative like the game's other music in
+`js/audio.js`: a triumphant swell for Victory, a low, sombre one for Defeat; Horde, Teams, missions and Contingency could
+reuse the two. What's there now is only a sting: the old four-note `win` / `lose` arpeggios plus the flare's rush of air
+(`sfx('flare')`, `flareDown`) as the word comes in (see a cooler Victory screen, above). The music would follow it and
+carry on quietly under the dashboard.
 
 ## Built: Fallen allies, down not out (owner, Nov 25 2026)
 

@@ -4245,7 +4245,12 @@ function showGameOver() {
   showCheckpoints('o');
   $('o-rematch').hidden = true;
   if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
-  if (S.contingency && typeof contBattleOver === 'function') { contBattleOver(false); return; } // (a Contingency battle: its result goes back to the globe)
+  if (S.contingency && typeof contBattleOver === 'function') { // (a Contingency battle: its result goes back to the globe, after the word in the Command Deck's blue)
+    const cwon = S.winner === ME || allies(S.winner, ME);
+    sfx(cwon ? 'win' : 'lose');
+    overFlare(cwon ? 'Victory' : 'Defeat', cwon ? 'Battle won' : 'Battle lost', cwon ? 'win' : 'loss', () => { $('screen-over').hidden = true; if (S && S.contingency) contBattleOver(false); });
+    return;
+  }
   clearSave();
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
@@ -4264,7 +4269,11 @@ function showGameOver() {
   $('o-log').hidden = false;
   // (Contact: silence, then one answering tone, the same for everyone: see gupSilence.)
   if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (how === 'contact' ? 'Contact!' : how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
+  // (the heading, the word that flares in: overFlare; under it, how it was won or lost)
+  const word = won ? (how === 'contact' ? 'Contact' : 'Victory') : 'Defeat';
+  const kick = won ? (S.teams ? 'Your team wins' : { domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike' }[how] || 'Capture')
+    : how === 'surrender' && S.players[ME].out ? 'You surrendered' : how === 'contact' ? 'A rival made contact' : how === 'domination' ? 'Rival domination' : how === 'uplinks' ? 'A rival held the Uplinks'
+      : S.players[ME].out ? 'Command Base lost' : 'The planet is lost';
   $('o-text').textContent = won
     ? (how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
       : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
@@ -4295,7 +4304,7 @@ function showGameOver() {
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
   dailyOver(won); // (the Daily Planet's best time: js/polish3.js)
   syncRematch(); // (js/polish.js)
-  $('screen-over').hidden = false;
+  overFlare(word, kick, won ? 'win' : 'loss');
 }
 
 /**
@@ -4613,7 +4622,6 @@ function showMissionOver() {
   const M = S.mission, def = missionDef(M), states = missionStates(M), k = Math.max(0, MISSIONS.indexOf(def));
   const won = M.result === 'won';
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? 'Mission complete' : 'Mission failed';
   $('o-text').textContent = won
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
@@ -4643,7 +4651,7 @@ function showMissionOver() {
   UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
   metaGameOver(); // (achievements earned: js/goals.js)
   syncRematch(); // (js/polish.js)
-  $('screen-over').hidden = false;
+  overFlare(won ? 'Complete' : 'Failed', `Mission ${k + 1} · ${def.name}`, won ? 'win' : 'loss');
 }
 
 /* ------------------------------------------------------------------ statistics screen */
@@ -11123,7 +11131,6 @@ function showHordeOver() {
     : 'Command core lost. The Murmur hold the region. Transferring authority. Hold position.';
   $('o-log').hidden = false;
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (H.won === 'maw' ? 'The Maw has fallen!' : 'The line held!') : 'Overrun';
   $('o-text').textContent = won
     ? (H.won === 'maw' ? `You wrecked the Maw${reached ? ` after ${reached} wave${reached === 1 ? '' : 's'}` : ''}: its mouths cave in and the waves are over.` : `You survived all ${H.of} waves on ${DIFFICULTY[H.lv].label}. The Murmur fall back into the dark.`)
     : `The Murmur broke ${H.lostP !== undefined && H.lostP !== ME ? `${playerName(H.lostP)}'s` : 'your'} Command Base ${H.n ? `during wave ${H.n}` : 'before the first wave'}. You cleared ${reached} wave${reached === 1 ? '' : 's'}${endless ? (isBest ? ': a new best on this level!' : ` (your best on ${DIFFICULTY[H.lv].label}: wave ${best}).`) : '.'}`;
@@ -11138,5 +11145,67 @@ function showHordeOver() {
   $('o-keep').hidden = true;
   metaGameOver(); // (Horde's achievements and records: js/goals.js)
   syncRematch();
-  $('screen-over').hidden = false;
+  overFlare(won ? (H.won === 'maw' ? 'Victory' : 'Held') : 'Overrun', won ? (H.won === 'maw' ? 'The Maw has fallen' : `The line held · ${H.of} waves`)
+    : H.n ? `Wave ${H.n} · ${reached} cleared` : 'Before the first wave', won ? 'win' : 'loss');
+}
+
+/**
+ * The end of a game, announced (owner, Nov 2026): the result, in the main menu's TERRAFALL look (Chakra Petch, the
+ * coral gradient, its glow), flares in over the dimmed map with a light streak and a soft flash, holds a moment, then
+ * shrinks into place as the end screen's heading while the dashboard fades in under it. A defeat is darker, grey and
+ * slower, with no streak. A tap, a click or a key skips straight to the dashboard; with reduced motion it only fades.
+ * tone: 'win', 'loss' or 'neutral' (an Observer's end). done: Contingency's battles, which have no dashboard here (the
+ * result goes back to the globe): the word in the Command Deck's blue, then done().
+ */
+function overFlare(word, kick, tone, done) {
+  const scr = $('screen-over'), fl = $('o-flare'), w = fl.querySelector('.of-word'), card = scr.querySelector('.card');
+  if (UI.flareEnd) UI.flareEnd(true);
+  $('o-title').textContent = word;
+  $('o-title').classList.toggle('loss', tone === 'loss');
+  $('o-kicker').textContent = kick || ''; $('o-kicker').hidden = !kick;
+  w.textContent = word; fl.querySelector('.of-kick').textContent = kick || '';
+  w.style.transform = ''; w.style.transition = '';
+  fl.className = `o-flare ${tone}${done ? ' blue' : ''}`;
+  scr.classList.remove('settling', 'flare-loss', 'flare-blue');
+  scr.classList.add('flaring');
+  if (tone === 'loss') scr.classList.add('flare-loss');
+  if (done) scr.classList.add('flare-blue');
+  fl.hidden = false;
+  scr.hidden = false;
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (!calm) sfx(tone === 'loss' ? 'flareDown' : 'flare');
+  let timer = 0, settled = false;
+  const finish = (quiet) => { // the dashboard in place (quiet: replaced by another, nothing more to run)
+    clearTimeout(timer);
+    UI.flareEnd = null;
+    removeEventListener('keydown', onKey, true);
+    scr.removeEventListener('pointerdown', onTap, true);
+    fl.hidden = true;
+    scr.classList.remove('flaring', 'settling', 'flare-loss', 'flare-blue');
+    if (!quiet && done) done();
+    else if (!quiet && !scr.hidden) { const b = $('o-new'); if (b && matchMedia('(pointer: fine)').matches) b.focus({ preventScroll: true }); }
+  };
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    if (scr.hidden && !done) { finish(true); return; }
+    scr.classList.add('settling');
+    if (done || calm) { fl.classList.add('out'); timer = setTimeout(finish, calm ? 300 : 500); return; }
+    // (FLIP: from the middle of the screen to the heading's own text box, scaled by the font size)
+    const box = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
+    const a = box(w), b = box($('o-title')), fs = (el) => parseFloat(getComputedStyle(el).fontSize) || 0;
+    const k = fs(w) ? fs($('o-title')) / fs(w) : 0.3;
+    w.style.transition = `transform ${tone === 'loss' ? 0.8 : 0.62}s cubic-bezier(0.6, 0, 0.2, 1), opacity 0.25s ease ${tone === 'loss' ? 0.6 : 0.42}s`;
+    w.style.transform = `translate(${b.left + b.width / 2 - (a.left + a.width / 2)}px, ${b.top + b.height / 2 - (a.top + a.height / 2)}px) scale(${k})`;
+    fl.classList.add('out');
+    timer = setTimeout(finish, tone === 'loss' ? 900 : 700);
+  };
+  // (a tap or a key skips it: the dashboard at once, its buttons live a moment later so the tap doesn't press one)
+  const skip = () => { finish(); if (!done) { card.style.pointerEvents = 'none'; setTimeout(() => { card.style.pointerEvents = ''; }, 250); } };
+  const onTap = (e) => { e.preventDefault(); e.stopPropagation(); skip(); };
+  const onKey = (e) => { if (e.repeat || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return; e.preventDefault(); e.stopPropagation(); skip(); };
+  addEventListener('keydown', onKey, true);
+  scr.addEventListener('pointerdown', onTap, true);
+  UI.flareEnd = finish;
+  timer = setTimeout(settle, calm ? 1100 : tone === 'loss' ? 2300 : 1900);
 }

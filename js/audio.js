@@ -847,6 +847,9 @@ function sfx(name, dest, y, dur) {
     case 'capture': _tone(392, 0.12, 'triangle', 0.09, null, 0, D); _tone(587, 0.2, 'triangle', 0.09, null, 0.1, D); break;
     case 'error': _tone(200, 0.12, 'square', 0.05, 150, 0, D); break;
     case 'win': [523, 659, 784, 1047].forEach((f, i) => _tone(f, 0.25, 'triangle', 0.09, null, i * 0.14, D)); break;
+    // The end of a game flaring in (overFlare): a rising rush of air under the fanfare; a defeat's falls, low and slow.
+    case 'flare': _noise(1.1, 0.05, { type: 'bandpass', freq: 380, to: 3400, q: 0.9, attack: 0.5, dest: D }); _tone(1568, 0.5, 'sine', 0.025, null, 0.55, D); break;
+    case 'flareDown': _noise(1.6, 0.06, { type: 'lowpass', freq: 900, to: 140, attack: 0.3, dest: D }); break;
     case 'lose': [392, 330, 262, 196].forEach((f, i) => _tone(f, 0.3, 'triangle', 0.09, null, i * 0.18, D)); break;
     // Orders acknowledged over the radio: two quick blips through a narrow band.
     case 'order': {
