@@ -4447,7 +4447,10 @@ node tools/workforce-test.js
 node tools/workforce-lockstep-test.js
 ```
 
-The Workforce ladder: a computer colony's game copied into side-by-side games with different settings (Auto untouched,
+The Workforce ladder: a colony set up the same way every time (a Colony game the computer plays for 10 minutes, no
+rival and the Murmur off, then its raw goods topped up, two finished Cement Works with no stock limit and two building
+sites added; `node tools/workforce-test.js [seed] [minutes]`, every check runs on any seed) copied into side-by-side
+games with different settings (Auto untouched,
 Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load, builders kept free, minimums with
 nobody free, a pinned factory at its stock limit, the player's own presets), then two devices over the lockstep
 changing the settings all game, one reloading halfway, their fingerprints compared every second.
