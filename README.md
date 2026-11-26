@@ -818,10 +818,15 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   site limit. Only **Graders** (`BOTS.grader`: a Foundry robot, 3 rounds of parts, 0.6 of a Worker's speed) build them:
   `siteReady` says no to Workers, so no Worker step, the Workforce rows or Call a builder touch them; `graderDispatch`
   (from `dispatch`) sends each free Grader to the nearest one it can stand beside (`tfReady`, `tfApproach`), and
-  `doBuild` works it (`graderWork`: it faces the tile and throws dust). Numbers: a level of earth is `TERRA.stone` (4)
-  Stone and `TERRA.time` (24) s; Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (6) Stone, 36 s.
-  Costs come by Hauler where a road reaches; a Fill site, and any site `dispatch` finds unlinked, is paid from storage
-  as the goods come in (`fromStore`, as a Wall). Yields are crates of Stone (`addLoot`, its owner's priority) where the
+  `doBuild` works it (`graderWork`: it faces the tile and throws dust). Numbers: a level of earth is `TERRA.time` (24) s;
+  raising costs `TERRA.stone` (4) Stone a level, lowering yields `TERRA.dug` (2) a level (about 5 Stone a minute a Grader,
+  so it's no better a Quarry); Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (3) Stone, 36 s. Stone
+  supply (the owner's split): a Raise site's comes by Hauler where a road reaches it, and from storage as the goods come
+  in where `dispatch` finds it unlinked (`fromStore`, as a Wall); a Fill site's always comes from storage. Fill reaches
+  only `TERRA.reach` (6) tiles from the shore as the map was made (`tfInReach`: an originally dry tile within 6, 8-way;
+  `tfDry0` reads `S.tfTiles`, which records what each changed tile was before the Graders first changed it, 1 dry or
+  2 water, so new land never moves the shore and a save keeps it; a tidal flat counts as shore). Graders run on
+  batteries like Workers and charge at a Fuel Station. Yields are crates of Stone (`addLoot`, its owner's priority) where the
   Grader stood. Refused: a rival's land, buildings (sites too), roads and planned roads, Ramps, track, pipes, resources,
   Trade Posts, Uplinks, landmarks, the dam, Passenger Town's ruins, the Walking Factory's yard, runways, rock, chasms,
   lava, tidal flats, the fault, fallen Lift cable, near a Murmur nest, and anywhere no robot of its owner's could get
@@ -829,7 +834,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `S.elev` change, a Ramp left leading nowhere is cleared, the tile and the two rings round it are repainted, and
   `terrainChanged` redoes the zones, territory, the sea (`seaNet`, `shoreDist`), road and plan versions and the minimap;
   robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
-  `S.tfTiles` and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
+  `S.tfTiles` (1 or 2, see above) and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
   as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
   **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
@@ -4666,7 +4671,8 @@ node tools/terraform-test.js
 
 Terraforming: Raise, Lower, Flatten, Fill shallows and Dig channel done by Graders (never Workers), the Stone each costs
 and yields, the refusals (a building, a road, a rival's land, too steep), robots' routes after a raise and a flatten, a
-land bridge a Worker walks over to an island, a canal joining two lakes that a Ferry then sails through, a robot on a
+land bridge a Worker walks over to an island, a fill dragged out to open sea stopping 6 tiles from the original shore
+(and still refused past its new land, before and after a save), a canal joining two lakes that a Ferry then sails through, a robot on a
 flooding tile stepping off, a save made mid-job loading and playing on to the same hash, and the same plan twice
 giving the same hash.
 

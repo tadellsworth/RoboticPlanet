@@ -2798,19 +2798,23 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
    objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
 
-**Stage 1, open questions for the owner (Nov 26 2026):**
+**Stage 1, the owner's decisions (Nov 26 2026; done):**
+- **Stone supply: keep the split.** Raising's Stone comes by Hauler where a road reaches the work, otherwise from
+  storage as it comes in (a Wall's way); filling's always comes from storage (no Hauler drives onto water).
+- **Fill shallows reaches 6 tiles from the original shore** (`TERRA.reach`): a water tile can be filled only if an
+  originally dry tile (land as the map was made) lies within 6 tiles (8-way steps; `tfInReach`). `S.tfTiles` records
+  what each changed tile was before the Graders first changed it (1 dry, 2 water), so new land never moves the shore and
+  a save keeps it; nothing new is hashed. Land bridges to near islands still work; the preview crosses out tiles beyond
+  ("Too far out to sea"). (The Dam's drained lake bed counts as shore once drained: the one place the coast moves
+  without a Grader.)
+- **Graders run on batteries like Workers.** Kept; How to play tells players to build a Fuel Station near a long job.
+- **Lowering yields less than raising costs**, so terraforming is no better a Quarry: Lower yields 2 Stone a level
+  (`TERRA.dug`; raising still costs 4), Dig channel 3 (was 6); the times stay, about 5 Stone a minute a Grader.
+
+**Stage 1, still open:**
 - Rivals don't terraform yet (the owner's call). They cope with what a player does (their routes, sites and Ports follow
   the new ground), but they don't answer a moat or a land bridge on purpose. Teaching them is the next step once the
   numbers settle.
-- Numbers to tune by play (`TERRA` in `js/defs.js`): a level of earth is 4 Stone and 24 s of a Grader's work; Fill 8
-  Stone and 40 s; Dig yields 6 Stone in 36 s. Lowering is a slow Quarry (about 10 Stone a minute a Grader) and that is
-  meant: it shouldn't beat a Quarry on a rock face.
-- Stone for raising comes by Hauler where a road reaches; filling out on the water, and any job no road reaches, is
-  paid from storage as it comes in (a Wall's way), because no Hauler can drive onto water. Is that the split you want,
-  or should all of it come from storage?
-- Fill shallows takes any water beside land (the map has no deep and shallow water of its own); a ford or a tidal
-  flat counts as such too (tidal flats are refused). Should open sea far from shore be off limits beyond some depth
-  (`shoreDist`)?
 - Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
   later option.
 - Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.

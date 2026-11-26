@@ -1429,7 +1429,7 @@ const MISSIONS = [
       '<b>Build → Terraform</b> (<kbd>7</kbd>) plans earthworks: Raise, Lower, Flatten, Fill shallows and Dig channel.',
       'A <b>Grader</b>, ordered at the Bot Foundry, does the work, slowly; Workers never touch it.',
       'Dug earth comes out as Stone crates for the Haulers. Raised and filled ground takes Stone.',
-      'Fill shallows turns water beside land into land: drag out from the shore for a land bridge.',
+      'Fill shallows turns water beside land into land, up to 6 tiles out from the shore: drag out from the shore for a land bridge.',
       'Dig channel does the reverse: a moat before your walls, or a canal so ships sail inland.',
     ],
     mode: 'colony', seed: 23, size: 1, rough: 2, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 25],

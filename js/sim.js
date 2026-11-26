@@ -4140,6 +4140,21 @@ function tfWet(t, plan) {
   if (J) return J.k === 'dig';
   return S.terrain[t] === T_WATER && !(S.tidal && S.tidal[t]);
 }
+/**
+ * Was tile t dry land when the map was made? Ground the Graders changed says what it was before they first did (S.tfTiles:
+ * 1 dry, 2 water); a tidal flat counts as shore whatever the tide. (Fill shallows reaches TERRA.reach tiles from it.)
+ */
+function tfDry0(t) {
+  const was = S.tfTiles && S.tfTiles[t];
+  if (was) return was === 1;
+  return S.terrain[t] !== T_WATER || !!(S.tidal && S.tidal[t]);
+}
+/** Is water tile t within TERRA.reach tiles (8-way steps) of the shore as the map was made? */
+function tfInReach(t) {
+  const i = t % S.W, j = (t / S.W) | 0, R = TERRA.reach;
+  for (let y = Math.max(0, j - R); y <= Math.min(S.H - 1, j + R); y++) for (let x = Math.max(0, i - R); x <= Math.min(S.W - 1, i + R); x++) if (tfDry0(y * S.W + x)) return true;
+  return false;
+}
 function tfSides(t) {
   const i = t % S.W, j = (t / S.W) | 0, out = [];
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) out.push(tIdx(i + di, j + dj));
@@ -4189,6 +4204,7 @@ function tfJob(owner, tool, t, target, plan) {
   let k, to;
   if (tool === 'fill') {
     if (!tfWet(t)) return { why: 'Fill shallows: only water beside land.' };
+    if (!tfInReach(t)) return { why: `Too far out to sea: fill reaches ${TERRA.reach} tiles from the original shore.` };
     const lv = sides.map((u) => tfLevel(u, plan)).filter((v) => v !== null);
     if (!lv.length) return { why: 'Too far out: shallows are water right beside land (fill out from the shore).' };
     // Level with the ground it's built out from: new ground planned beside it (a land bridge keeps its level all the
@@ -4223,7 +4239,7 @@ function tfJob(owner, tool, t, target, plan) {
   }
   const n = k === 'up' || k === 'down' ? Math.abs(to - S.elev[t]) : 1;
   const cost = k === 'up' ? { stone: TERRA.stone * n } : k === 'fill' ? { stone: TERRA.fill } : {};
-  const yieldN = k === 'down' ? TERRA.stone * n : k === 'dig' ? TERRA.dig : 0;
+  const yieldN = k === 'down' ? TERRA.dug * n : k === 'dig' ? TERRA.dig : 0;
   const time = k === 'fill' ? TERRA.fillTime : k === 'dig' ? TERRA.digTime : TERRA.time * n;
   return { k, to, n, cost, yieldN, time };
 }
@@ -4331,15 +4347,15 @@ function completeEarthwork(b) {
   S.byId.delete(b.id);
   S.bAt[t] = 0;
   S.tfTiles = S.tfTiles || {};
-  S.tfTiles[t] = 1;
+  if (!S.tfTiles[t]) S.tfTiles[t] = J.k === 'fill' ? 2 : 1; // (what it was before the Graders first changed it: see tfDry0)
   if (J.k === 'fill') { S.terrain[t] = T_GROUND; if (S.ford) S.ford[t] = 0; S.elev[t] = J.to; S.res[t] = R_NONE; S.amt[t] = 0; }
   else if (J.k === 'dig') { S.terrain[t] = T_WATER; S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
   else S.elev[t] = J.to;
   if (S.decor) S.decor[t] = 0;
   // No ramp left leading nowhere.
-  for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = 1; }
+  for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = S.tfTiles[u] || 1; }
   // Dug earth: crates of Stone beside the tile.
-  const yieldN = J.k === 'down' ? TERRA.stone * J.n : J.k === 'dig' ? TERRA.dig : 0;
+  const yieldN = J.k === 'down' ? TERRA.dug * J.n : J.k === 'dig' ? TERRA.dig : 0;
   if (yieldN) {
     // (Where its Grader stands: a lowered tile on its own is a pit no one could walk into.)
     let at = gt >= 0 && gt !== t && S.terrain[gt] === T_GROUND ? gt : J.k === 'down' ? t : -1;

@@ -5932,8 +5932,8 @@ function checkSave(o) {
   if (o.aeFade != null && !(Array.isArray(o.aeFade) && o.aeFade.length < 64 && o.aeFade.every((f) => obj(f) && ['x', 'y', 'r', 'st', 't0'].every((k) => Number.isFinite(f[k])) && (f.p == null || (Number.isInteger(f.p) && f.p >= -1 && f.p < o.players.length))))) bad();
   // The drought under a Storm Front (tile: whole seconds a foe's crop there has been under it, short of STORM.drought).
   if (o.drought != null && !(obj(o.drought) && Object.keys(o.drought).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && Number.isInteger(o.drought[k]) && o.drought[k] > 0 && o.drought[k] < STORM.drought))) bad();
-  // The ground Graders changed (tile: 1), hashed for a network game (hashState).
-  if (o.tfTiles != null && !(obj(o.tfTiles) && Object.keys(o.tfTiles).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && o.tfTiles[k] === 1))) bad();
+  // The ground Graders changed (tile: 1 dry before they first changed it, 2 water: tfDry0), hashed for a network game (hashState).
+  if (o.tfTiles != null && !(obj(o.tfTiles) && Object.keys(o.tfTiles).every((k) => /^\d+$/.test(k) && +k < o.W * o.H && (o.tfTiles[k] === 1 || o.tfTiles[k] === 2)))) bad();
   if (o.mur != null) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
