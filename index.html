@@ -1958,7 +1958,7 @@
           <li><b>Your robots</b> (<kbd>U</kbd>): every robot by type and job, against the limit, your spare Workers with <b>Recycle spare Workers</b>, and where each warbot is, with <b>Show</b>. <b>Show workers on the map</b> rings every Worker (and dots it on the minimap) by what it's doing: green running buildings, orange building or paving, blue carrying, purple recharging, red being repaired, grey going to be recycled, yellow free, with a line to where it's going.</li>
           <li><b>Traffic map</b> (<kbd>T</kbd>) and <b>Goods flow</b> (<kbd>Shift</kbd>+<kbd>T</kbd>): see Roads and traffic.</li>
           <li><b>Statistics</b> (<kbd>I</kbd> and the pause menu: the Economy panel's <b>History</b> tab; the end screen and Observer mode: a screen of its own): graphs over time of your bots, land and goods, your <b>Economy size</b> (pick Output: goods made a minute, Buildings, or Workers and vehicles) and, with war on, your <b>Military size</b> (pick Army or Defences), against your rivals in Versus; then how busy each kind of building was over the game. Each building's panel shows how busy it's been lately.</li>
-          <li>The <b>end screen</b> says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
+          <li>The <b>end screen</b> opens with the result flaring in big over the map, <b>VICTORY</b> (or <b>DEFEAT</b>, <b>CONTACT</b>; in a mission <b>COMPLETE</b> or <b>FAILED</b>; in Horde <b>HELD</b> or <b>OVERRUN</b>; in Observer mode <b>GAME OVER</b>), which then settles as its heading with a short line under it on how it was won or lost (a Contingency battle shows the word in blue, then goes back to the globe). Tap, click or press any key to skip straight to it. It says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
           <li>Below that, the <b>report</b>: the moments that mattered (your first robot, the first attacks each way, buildings lost, when Fiber, Alloy, Crystal or another good ran out and for how long, the deciding battle or capture), where your goods were lost (buildings destroyed, robots destroyed with their loads, crates left lying), and one <b>Next time, try</b> tip drawn from what happened.</li>
         </ul>
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
@@ -2409,8 +2409,10 @@
 </div>
 
 <div id="screen-over" class="screen" role="dialog" aria-modal="true" aria-labelledby="o-title" tabindex="-1" hidden>
+  <div id="o-flare" class="o-flare" aria-hidden="true" hidden><i class="of-flash"></i><i class="of-streak"></i><b class="of-word"></b><span class="of-kick"></span></div>
   <div class="card">
-    <h2 id="o-title">Victory</h2>
+    <h2 id="o-title" class="o-title">Victory</h2>
+    <p id="o-kicker" class="o-kicker" hidden></p>
     <p id="o-log" class="o-log" hidden></p>
     <p id="o-text"></p>
     <div id="o-stats" class="stats"></div>

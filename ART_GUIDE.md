@@ -2203,6 +2203,26 @@ does (1 / (1 + (r/r0)²)^1.5) through the colour itself to a long faint tail, fi
 replaced the tinted `art/tod/shared/light-pool.webp` (kept for `renderer/`'s mock-ups; no longer loaded). The street
 lamps' own pools are still art (`streetlamp-*-pool`).
 
+### Megastructures at night (drawn in code; no images)
+
+The owner, Nov 25 2026: the megastructures stood dark beside a lit base, their night renders' lamps too dim. So at dusk
+and night (as `TOD.state.lights` rises) each one but Arrival City (its own `cityLights`) gets, over its sprite
+(`megaNight` in `js/render.js`):
+- **A light layer**, made once per night image and colony colour (`megaNightLayer`, 512 px, kept with the image) and laid
+  on additively in one draw: the night art multiplied by itself three times (only its lamps and lit windows left) and
+  bloomed (a 96 px and a 32 px copy scaled back up); the deck floodlit warm-white (`#ffd9a8`) from the middle of its pad
+  (the day art, faded out toward the edge, at 34%); an LED strip in the owner's colour round the pad's edge, with a soft
+  glow. Only blending, no pixel reads, so it works on a page opened from a file.
+- **Beacons** (`MEGA_LAMPS`: the pad's edge and each lamp as fractions of the sprite): red warning lights blinking slowly
+  on the tall parts (the Lift's anchor and huts, the Ray's stacks and bore tower, the Deep Core's headframe, the Engine's
+  rim, the Uplink's small dishes, the Lance's corner rigs and its muzzle, `lanceTipLight`, which turns with the gun);
+  white floods on lamp heads; a lamp in the owner's colour on the Dome's emitter and the Lift's anchor.
+Their own lights stay as they were (the Lift's cable, the Uplink's rim, the Deep Core's shaft, the Engine's plume, the
+Lance's charge glow, the Dome's shimmer). Knocked out or offline (`megaOut`) it is dark: its graded day art in place of
+the lit night art (`drawMegaArt`), no layer, no pools, its Lift cable dim and unlit, and only its amber lamp blinking
+(`drawMegaDark`). A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
+render, 0..1 across and down).
+
 ### The minimap (drawn in code)
 
 `minimapDetail` makes its picture at a few pixels a tile whenever the land, the borders or the roads change: the tile

@@ -4043,3 +4043,70 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
   body.deck #hud #sheet .ec-grid .btn, body.deck #hud #sheet .ec-qa .btn { min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
   .ec-hist .chart-legend { display: none; }
 }
+
+/* ---------- the end of a game, announced (overFlare in js/ui.js): the result in the main menu's TERRAFALL look (Chakra
+   Petch, the coral gradient, its glow) flares in over the dimmed map with a light streak and a soft flash, holds, then
+   shrinks into the end screen's heading as the dashboard fades in. A defeat: grey, darker, slower, no streak. Observer:
+   no flash. Contingency: the Command Deck's blue, and no dashboard. A tap or a key skips it. */
+#screen-over #o-title { margin: 0 0 2px; font: 700 clamp(30px, 4.2vw, 46px)/1 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
+  background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 16px rgba(255, 107, 74, 0.3)); }
+#screen-over #o-title.loss { background-image: linear-gradient(180deg, #eef0f4 10%, #a9afbd 62%, #7c6a6c); filter: drop-shadow(0 0 12px rgba(150, 160, 180, 0.18)); }
+#screen-over .o-kicker { margin: 0 0 8px; font: 600 12px/1.3 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.26em; text-transform: uppercase; color: #ffb08f; }
+#screen-over:has(#o-title.loss) .o-kicker { color: #a9afbd; }
+#screen-over > .card { transition: opacity 0.45s ease 0.15s; }
+#screen-over.flaring { background: rgba(3, 7, 11, 0.5); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); transition: background-color 0.6s ease; overflow: hidden; cursor: pointer; }
+#screen-over.flaring.flare-loss { background: rgba(3, 5, 8, 0.62); backdrop-filter: saturate(0.2) blur(2px); -webkit-backdrop-filter: saturate(0.2) blur(2px); }
+#screen-over.flaring.settling { background: rgba(3, 7, 11, 0.66); }
+#screen-over.flaring #o-title, #screen-over.flaring .o-kicker { visibility: hidden; }
+#screen-over.flaring > .card { opacity: 0; pointer-events: none; }
+#screen-over.flaring.settling > .card { opacity: 1; }
+#screen-over.flare-blue > .card { display: none; }
+.o-flare { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; align-content: center; gap: 0; pointer-events: none; text-align: center; padding: 0 16px; }
+.o-flare[hidden] { display: none; }
+.o-flare::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse max(70%, 420px) 26% at 50% 50%, rgba(3, 7, 11, 0.72), rgba(3, 7, 11, 0.35) 55%, transparent 80%); animation: of-fade 0.5s ease both; }
+.o-flare.out::before { opacity: 0; transition: opacity 0.4s ease; animation: none; }
+.o-flare .of-word { display: inline-block; justify-self: center; font: 700 clamp(48px, min(15vw, 22vh), 176px)/1 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.95) 50%, transparent 62%) -160% 0 / 250% 100% no-repeat, linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a);
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 28px rgba(255, 107, 74, 0.45)); transform-origin: 50% 50%; will-change: transform;
+  animation: of-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both, of-shine 1.1s ease-in-out 0.55s both; }
+.o-flare .of-kick { margin-top: clamp(6px, 1.4vh, 14px); font: 600 clamp(12px, 1.5vw, 17px)/1.3 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.34em; text-transform: uppercase; color: #ffd9cc;
+  text-shadow: 0 0 12px rgba(255, 107, 74, 0.5); animation: of-fade 0.6s ease 0.55s both; transition: opacity 0.25s ease; }
+.o-flare .of-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 45% at 50% 50%, rgba(255, 214, 196, 0.55), rgba(255, 107, 74, 0.16) 45%, transparent 72%); animation: of-flash 1.1s ease-out 0.12s both; }
+.o-flare .of-streak { position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 176, 143, 0.6) 30%, #fff6ec 50%, rgba(255, 176, 143, 0.6) 70%, transparent);
+  box-shadow: 0 0 18px 4px rgba(255, 107, 74, 0.55); transform-origin: 50% 50%; animation: of-streak 0.95s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+.o-flare.out .of-flash, .o-flare.out .of-streak, .o-flare.out .of-kick { opacity: 0; transition: opacity 0.25s ease; animation: none; }
+.o-flare.out .of-word { animation: none; }
+.o-flare.blue.out, .o-flare.neutral.out { transition: opacity 0.45s ease; }
+.o-flare.blue.out .of-word { opacity: 0; transform: scale(0.96); transition: opacity 0.45s ease, transform 0.45s ease; }
+/* a defeat: cold grey, a slow fall into place, no streak or flash; a dark vignette instead */
+.o-flare.loss .of-word { background: linear-gradient(180deg, #eef0f4 10%, #a9afbd 62%, #7c6a6c); -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 22px rgba(120, 130, 150, 0.3)); animation: of-fall 1.5s cubic-bezier(0.25, 0.6, 0.2, 1) both; }
+.o-flare.loss .of-kick { color: #b4b9c9; text-shadow: none; animation-duration: 1s; animation-delay: 0.9s; }
+.o-flare.loss .of-streak { display: none; }
+.o-flare.loss .of-flash { background: radial-gradient(ellipse 85% 70% at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.55)); animation: of-fade 1.4s ease both; }
+.o-flare.neutral .of-flash { display: none; }
+/* Contingency's battles: the Command Deck's blue */
+.o-flare.blue .of-word { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.95) 50%, transparent 62%) -160% 0 / 250% 100% no-repeat, linear-gradient(180deg, #f0fbff 10%, #8fe6ff 58%, #38d4ff);
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 28px rgba(56, 212, 255, 0.45)); }
+.o-flare.blue .of-kick { color: #bfefff; text-shadow: 0 0 12px rgba(56, 212, 255, 0.5); }
+.o-flare.blue .of-streak { background: linear-gradient(90deg, transparent, rgba(143, 230, 255, 0.6) 30%, #f0fbff 50%, rgba(143, 230, 255, 0.6) 70%, transparent); box-shadow: 0 0 18px 4px rgba(56, 212, 255, 0.55); }
+.o-flare.blue .of-flash { background: radial-gradient(ellipse 70% 45% at 50% 50%, rgba(200, 244, 255, 0.5), rgba(56, 212, 255, 0.14) 45%, transparent 72%); }
+.o-flare.blue.loss .of-flash { background: radial-gradient(ellipse 85% 70% at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.55)); }
+.o-flare.blue.loss .of-kick { color: #9fb2bd; text-shadow: none; }
+.o-flare.blue.loss .of-word { background: linear-gradient(180deg, #e8f2f6 10%, #9fb2bd 62%, #5f7584); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 22px rgba(56, 120, 150, 0.3)); }
+@keyframes of-in { from { opacity: 0; transform: scale(1.32); letter-spacing: 0.32em; filter: blur(14px) brightness(2.2) drop-shadow(0 0 40px rgba(255, 107, 74, 0.9)); }
+  55% { opacity: 1; filter: blur(0) brightness(1.5) drop-shadow(0 0 36px rgba(255, 107, 74, 0.7)); } to { opacity: 1; transform: none; letter-spacing: 0.06em; } }
+@keyframes of-shine { from { background-position: -160% 0, 0 0; } to { background-position: 260% 0, 0 0; } }
+@keyframes of-fall { from { opacity: 0; transform: translateY(-18px) scale(1.04); filter: blur(10px) drop-shadow(0 0 22px rgba(120, 130, 150, 0.3)); } to { opacity: 1; transform: none; } }
+@keyframes of-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes of-flash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes of-streak { from { opacity: 0; transform: scaleX(0.05); } 30% { opacity: 1; } 70% { opacity: 1; transform: scaleX(1); } to { opacity: 0; transform: scaleX(1) scaleY(0.4); } }
+@media (prefers-reduced-motion: reduce) {
+  .o-flare .of-word, .o-flare.loss .of-word, .o-flare .of-kick { animation: of-fade 0.4s ease both; }
+  .o-flare .of-flash, .o-flare .of-streak { display: none; }
+  .o-flare.out { opacity: 0; transition: opacity 0.3s ease; }
+  #screen-over > .card { transition: opacity 0.3s ease; }
+}

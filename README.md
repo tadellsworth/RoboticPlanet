@@ -1731,6 +1731,16 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Economy panel's
   Bottlenecks lead with it. Display only: it never asks the danger map unless it is current (`insGuns`), so it
   can't change when the simulation works it out.
+- **The end announced (`overFlare(word, kick, tone, done)`, `js/ui.js`; `#o-flare` in `#screen-over`; the `.o-flare`
+  rules at the end of `style.css`):** every end screen (`showGameOver`, `showMissionOver`, `showHordeOver`, `watchOver`)
+  shows itself through it: the word (`#o-title`, VICTORY / DEFEAT / CONTACT, COMPLETE / FAILED, HELD / OVERRUN, GAME
+  OVER) flares in over the dimmed map in the main menu title's look (Chakra Petch, the coral gradient, its glow) with a
+  streak, a shine and a soft flash (`tone` 'win'; 'loss': grey, slower, a vignette, the map desaturated; 'neutral':
+  Observer, no flash), holds ~1.9 s (2.3 s a loss), then a FLIP transition carries it onto the heading's own text box
+  (a Range's rect) as the card fades in (`.flaring`, `.settling`); `#o-kicker` under the heading says how. A tap or a
+  key (capture phase) skips to the dashboard, its buttons dead for 250 ms so the tap can't press one;
+  `prefers-reduced-motion` only fades. `done`: Contingency's battles, the word in the Command Deck's blue (`.blue`, no
+  card), then `contBattleOver`. Sound: `sfx('flare')` / `flareDown` beside `win` / `lose`. UI only.
 - **Post-game report (`gameReport`, on the end screen, `#o-report`; missions too):** the moments that mattered
   (`reportMoments`, the dozen weightiest, in order): your first robot and first defence, the first attack each way,
   runs of buildings lost or taken, every shortage of 45 s or more and how long it lasted (still going at the end
@@ -3348,7 +3358,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Lance's shot destroy one as before (a City: knocked out). The panel (`megaParts` in `js/ui.js`): Knocked out (who is
     seizing it, how long left) or Bring it online (what it still needs), and an enemy one's **Demolish it** / **Seize it
     instead** (`sh-mwreck`, key D); the map (`drawMegaDark` in `js/render.js`) veils it dark, rings its seize reach dashed
-    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's offline. The rivals
+    and fills the ring in the seizer's colour with their flag, and blinks an amber lamp while it's knocked out or offline;
+    its night lights stay out meanwhile (`megaOut`: `drawMegaArt` draws its graded day art, not its lit night art; no
+    `megaNight` layer, pools, beacons or Lift cable lights) and come on again once it's back online. The rivals
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
