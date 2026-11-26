@@ -2194,6 +2194,32 @@ function dispatch(p) {
     idle.push(u);
     return null;
   };
+  // A captured depot network can have parts and Workers but no freight vehicle. Let one free
+  // rival Worker carry the next Foundry input a short distance while the network is isolated.
+  let freightNets = null;
+  const takeFoundrySupply = (src, dst) => {
+    if (!P.ai || free <= minFree || dst.type !== 'foundry' || !dst.built || farApart(src, dst) ||
+        dist2(src.x, src.y, dst.x, dst.y) > FOOT_CARRY ** 2) return null;
+    const z = zoneAt(src.x + 0.5, src.y + 0.5);
+    if (z < 0 || z !== zoneAt(dst.x + 0.5, dst.y + 0.5)) return null;
+    if (!freightNets) {
+      freightNets = new Set();
+      for (const u of S.bots) if (!u.dead && u.owner === p && !recycling(u) && (u.type === 'hauler' || u.type === 'truck')) {
+        for (const net of botGroups(u)) freightNets.add(net);
+      }
+    }
+    if (fleetReaches(freightNets, src, dst)) return null;
+    let best = -1, eta = Infinity;
+    for (let k = 0; k < idle.length; k++) {
+      const u = idle[k];
+      if (u.type !== 'worker' || botZone(u) !== z || dist2(u.x, u.y, src.x + 0.5, src.y + 0.5) > FOOT_CARRY ** 2 ||
+          (u.failUntil > S.time && (u.failGoal === tIdx(src.x, src.y) || u.failGoal === tIdx(dst.x, dst.y)))) continue;
+      const fromPickup = { ...u, x: src.x + 0.5, y: src.y + 0.5, inside: src.id };
+      const time = cargoPickupTime(u, src) + cargoPickupTime(fromPickup, dst);
+      if (time < eta) { best = k; eta = time; }
+    }
+    return best < 0 ? null : idle.splice(best, 1)[0];
+  };
   function fleetReaches(nets, src, dst) {
     if (!nets.size) return false;
     const ends = dst ? buildingGroups(dst, true) : null;
@@ -2650,6 +2676,8 @@ function dispatch(p) {
         }
         // Every Hauler busy: an idle Freight Truck takes a short run too, if it's a truckload.
         if (!u && !long && vansOnRoute && !isLiquid(r.g) && bulk >= TRUCK_MIN_LOAD && !idle.some((v) => v.type === 'hauler')) u = take(src.x, src.y, 'truck', src, r.g, r.b);
+        const hand = !u && !r.keep && starving && (r.g === 'chip' || r.g === 'alloy') && takeFoundrySupply(src, r.b);
+        if (hand) u = hand;
         if (!u) continue;
         // (Trucks bring a full load on the long runs. A Tanker brings a factory a full buffer too, near or
         // far, and anything else what it asks for.)
@@ -2661,6 +2689,7 @@ function dispatch(p) {
           for (const r2 of reqs) if (r2 !== r && r2.b === r.b && r2.n >= 1 && !isLiquid(r2.g) && !extra[r2.g]) { const m = Math.min(r2.n, Math.floor(sup(src, r2.g))); if (m >= 1) extra[r2.g] = m; }
         }
         if (!assignHaul(u, src, r.b, r.g, n, extra)) { idle.push(u); continue; }
+        if (hand) { free--; r.n = 0; }
         for (const r2 of reqs) if (r2.b === r.b) r2.n -= r2.g === r.g ? u.task.n : u.task.mix?.[r2.g] || 0;
         sent = any = true;
         break;

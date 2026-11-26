@@ -56,6 +56,14 @@ All nine runs finished. On four-colony Standard 25, the finalists started their 
 
 The dispatch regression uses one Hauler and competing Foundry and Ammo Plant orders. It checks that the rival delivers only the next batch first, redirects ready Ammo to the waiting garrison, and makes the same dispatch with the same seed and state hash. A smaller shortage and an identical human-controlled setup both keep the normal delivery order.
 
+## Foundry follow-up
+
+- **Crossroads 21, four colonies:** At minute 30 Colony 4 had two staffed Foundries on a captured road network with 11 Alloy and 5 Chips. None of its Haulers could make the trip on that network. The original Foundry was on a separate network with neither part. Dispatch had treated both captured Command Bases as home storage, so the existing off-network Worker fallback did not apply.
+- **Fix:** A rival short of the next Foundry input can use a spare Worker for one unit on a short local trip if no Hauler or Freight Truck serves that route. The dispatcher checks both walking legs for safety, keeps the existing builder reserve, and uses current world state. The focused regression verifies routing on a split network, usual Hauler preference, the builder reserve, human dispatch and deterministic results.
+- **Crossroads replay:** Colony 1 still won, at 30.48 minutes instead of 35.32. Colony 4 made 33 army units by minute 25 and remained at 33 at minute 30, versus 34 at both checkpoints before. The fix closes the local delivery gap, while the replay still shows a late reinforcement gap. The fix cannot move parts between disconnected islands of the road network or replenish exhausted stock.
+- **Standard 11, 1v1:** Colony 1 still won at 25.65. The minute-by-minute trace confirmed that Colony 2 burned through local Crystal. Its active Stone-for-Chips contract supplied only small amounts, and sample-time dispatchable Chip stock was zero even while the Foundry had Alloy. The new Crystal Tap was working by minute 23. There was no Warbot replacement from minute 20 through the minute-25 check. This calls for a separate supply fix.
+- **Standard 25, 1v1:** Colony 1 still won at 45.53. In a separate trace of the existing Ammo-fix revision, the four-colony Standard 25 winner already had ten armed units in the field at minute 48, including a group holding, units moving to garrisons, escorts and a looter. Ordinary rally counted only three additional garrison slots. Both sides' occupied garrisons were in the target ground zone at the minute-48 through minute-52 checks. The winner launched two storms in the final duel and finished at 52.44. This replay gives no basis for lowering the defense reserve.
+
 ## Suggested fixes and checks
 
 1. If a rival still stays dry, trace whether it can produce or import Alloy and whether the garrison has a practical resupply or rearm route. Use Standard 25 to verify that both sides can sustain pressure after the first reload.
