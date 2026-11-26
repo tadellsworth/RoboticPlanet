@@ -4,10 +4,12 @@ Status: In progress. Inspected the Custom Game screen and the Gather build tab a
 
 | Severity | Finding | Location |
 | --- | --- | --- |
-| Medium | Build tabs are about 31.75 px tall, and All is about 36 px wide, below the requested approximately 40 px touch target at both sizes. | `style.css:433`, `style.css:435`, `style.css:766` |
-| Medium | Workforce ladder arrows measure 34 × 34 px at 430 × 932. | `style.css:3925`, `js/workforce.js:425` |
-| Medium | Economy tabs measure 31.75 px high at 430 × 932. | `style.css:3953`, `js/economy.js:333` |
+| Medium | Robot-count labels are clipped in the top bar at 390 × 844. | `style.css:101`, `style.css:3122`, `index.html` (`#pop`) |
+| Medium | The selected restore point's age is cut off at 390 × 844. | `style.css:606`, `index.html:650`, `js/ui.js:2273` |
+| Unverified | Small controls measured with a mouse may be larger under the phone's coarse-pointer rules. | `style.css:1162`, `style.css:433`, `js/workforce.js:425`, `js/economy.js:333` |
 
-At 390 × 844, the browser measured the seven visible tab buttons at 31.75 px high. Their widths were approximately 63, 48, 49, 64, 36, 49 and 92 px. Increase their hit areas to approximately 40 px in both dimensions while keeping every tab reachable. Further touch testing is needed to assess real-device usability.
+**Medium — clipped robot labels.** In the 390 × 844 browser viewport, the top bar's robot-count labels were visibly clipped, including the start of Workers and the end of Warbots. The population element uses overflow hidden. Let the counts and labels fit, wrap, or use deliberately shortened labels without losing their meaning.
 
-At 430 × 932 the Workforce up/down controls measured 34 × 34 px and the Economy tabs measured 31.75 px high. Make their touch targets approximately 40 px in each dimension. Terraform controls, Workforce and Economy opened successfully. Measurements used viewport resizing with browser pointer input, so touch emulation remains unverified.
+**Medium — restore point age truncated.** At 390 × 844, the selected restore-point label showed “3:00 in game · just n” rather than the complete “just now” shown in the accessible text. Allow the selected label enough width or use a shorter format so that the age is readable without opening the list.
+
+**Unverified — touch target sizes.** With mouse pointer input at 390 × 844, the build tabs measured 31.75 px high, and at 430 × 932 Workforce arrows measured 34 × 34 px and Economy tabs 31.75 px high. However, `style.css:1162` applies 44 px minimum heights to several controls when the pointer is coarse. These mouse measurements alone do not establish that the corresponding phone targets are too small. Verify the affected selectors with actual touch emulation before treating them as defects. Terraform controls, Workforce, Economy, Army, pause and How to play opened; the remaining requested panels and screenshots still require inspection.

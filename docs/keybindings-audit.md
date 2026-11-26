@@ -180,3 +180,28 @@ Status: In progress. This inventory covers static map and selected-panel tables.
 | Shift+W | Map | Open Workforce | js/ui.js:2827 |
 | Y | Map | Open Economy | js/ui.js:2811 |
 | D | Enemy megastructure panel | Demolish or seize | js/ui.js:2706 |
+| W/A/S/D, arrow keys | Map | Pan while held; a focused panel or tool may take precedence | js/ui.js:2590, js/ui.js:3044 |
+| ] | Map | Increase game speed | js/ui.js:2817 |
+| / | In game | Open or close shortcut sheet | js/ui.js:2842, js/ui.js:2955 |
+| Escape | In game | Step back or open pause | js/ui.js:3008 |
+| Space | In game | Pause or resume | js/ui.js:3013 |
+| Shift+Space, Pause | Single-player game | Plan while paused | js/ui.js:3013 |
+| Shift+F | Map | Open Foundry orders, cycle Foundries | js/ui.js:2826 |
+| Shift+T | Map | Toggle goods-flow display | js/ui.js:2828 |
+| Shift+A | Map, with computer ally | Open ally command panel; otherwise pan | js/ui.js:2829 |
+| Shift+V/Y/M/E | Map | Viaduct, Ropeway, Maglev, Express paths | js/ui.js:2615, js/ui.js:2830 |
+| F1–F4, Shift+F1–F4 | Map | Recall, or save, a camera view | js/ui.js:3035 |
+| 1–9, Ctrl/Cmd/Shift+1–9 | Map | Recall, or save, control group | js/ui.js:2966 |
+| Alt+1–6, Alt+Shift+1–6 | Map | Select Army Group, or open its panel | js/ui.js:2993 |
+| Ctrl/Cmd+Z | Paths or immediately after placing a site | Undo last stroke or site | js/ui.js:3001 |
+| Enter | Active banner | Confirm its main action | js/ui.js:3041 |
+| B/N | Bomber target mode | Choose bomb or napalm | js/ui.js:3043 |
+| R, Shift+R | Placing blueprint, Mass Driver, Orbital Lift | Rotate; Shift reverses Orbital Lift rotation | js/ui.js:3065 |
+| Alt+Enter | Game | Toggle fullscreen | js/ui.js:2999 |
+| Shift+P | Game or Photo mode | Enter or exit Photo mode | js/photo.js:304 |
+| F | Observer map | Follow the action | js/watch.js:683 |
+| Enter / Escape / Tab | Multiplayer chat | Send / close / switch recipient | js/polish3.js:420 |
+| Ctrl/Cmd+Enter | Feedback dialog | Send feedback | js/feedback.js:110 |
+| Arrow keys, Escape | Contingency globe | Rotate globe; step back or close | js/contingency-ui.js:446 |
+
+Panel button shortcuts take precedence over map bindings (`js/ui.js:3047`); for example, D can trigger Demolish on the relevant visible panel and otherwise pans. This is contextual priority, not by itself proof of a clash. The inventory still requires a complete tooltip and help comparison and a review of dynamic controls.
