@@ -1740,7 +1740,49 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (a Range's rect) as the card fades in (`.flaring`, `.settling`); `#o-kicker` under the heading says how. A tap or a
   key (capture phase) skips to the dashboard, its buttons dead for 250 ms so the tap can't press one;
   `prefers-reduced-motion` only fades. `done`: Contingency's battles, the word in the Command Deck's blue (`.blue`, no
-  card), then `contBattleOver`. Sound: `sfx('flare')` / `flareDown` beside `win` / `lose`. UI only.
+  card), then `contBattleOver`. Sound: `sfx('flare')` / `flareDown` beside `win` / `lose`, then the end's music
+  (`musicCue(tone, story)`) and the Command core's spoken line (`voiceEnding`), neither for Contact (`gupSilence`). UI only.
+- **The end's music (`musicCue`, `cueMood`, `MOODS.victory` / `defeat` / `victoryC` / `defeatC`, `cueMelody` in
+  `js/audio.js`):** a cue scored bar by bar (`cue`: each bar's chord `c`, parts `L`, one-off hits `fx` ('riser', 'hit' a
+  crash and impact, 'toll', 'thud') and lead notes `mel` [step, semitones over the key an octave up, length]), then a
+  quiet loop on its `progs` / `arrange` at `settle` of its level. Victory (A, 92 bpm, about 18 s): F and G major swelling
+  up (halo, the arpeggio, a riser) into A major with a crash and impact, the drums, bright horns (`mBrass(..., clean)`,
+  the 'horn' part) and a rising bell fanfare over A–D–F–G, home on A held; then major sevenths with the shimmer. Defeat
+  (D Phrygian, 64 bpm, about 19 s): a drone, the whispering choir and a cold low toll, the heartbeat, chords falling
+  (Dm, E♭, B♭, Gm, Dm) under the cold lead (`mCold`, lead 'cold') walking down an octave, the ground's thud; then the drone
+  and choir. `victoryC` / `defeatC` are Contingency's: the campaign theme's key (D) and its tune (STORY_THEME), in Lydian
+  (halo, arpeggio in threes, half-time drums) or Phrygian (the choir, the pulse, the glints). `musicCue` dips the music bus
+  to silence, makes the cue's first bar the next step (`MUSIC.next`, `MUSIC.step`) and `musicSetMood` swells it in over
+  2.2 s; `musicMood` returns it (`cueMood`) while its game's end screen is up, or for Contingency (`keep`) until it has
+  played out over the globe (`until`); leaving it fades out (`musicFades`: out of a cue it fades, the next swells in).
+  It follows the Music volume like the rest.
+- **The machine voice (`js/voice.js`):** spoken lines in an invented language with subtitles; not text-to-speech but a
+  small formant synthesizer in Web Audio (`voiceRender(ac, dest, text, preset, t0)`, any context, an
+  OfflineAudioContext too). The source: a glottal pulse wave (a `PeriodicWave`, harmonics falling as n^-0.75, all in
+  phase: buzzy, nasal), a quieter saw and a square an octave down (the sub, also straight through a 220 Hz low-pass for
+  weight), gated by the voicing; four parallel band-pass formants (`VOX_FORMANTS`, F1–F4, scaled by `fscale`) gliding to
+  each vowel or voiced consonant (m n r v z d g); one noise band-pass set per consonant (`VOX_NOISE`: hisses for s sh kh
+  z v, a closure then a crisp click and burst for the stops k t d g p). Then the machine: a nasal peak at 1.25 kHz, a
+  band limit, a short metallic comb (a delay with feedback), an amplitude ring at `ringHz`, a little bit-crush, a soft
+  clip, a long dark reverb (`voxKit`: low-passed noise decaying, energy held to one). Two presets
+  (`VOICE_PRESETS`): **cinematic** (64 Hz, slow, measured: a syllable about 0.26 s, long pauses at full stops, the pitch
+  drifting down and falling at each full stop, a 5.5 s reverb, over a low drone on D that swells in before it speaks and
+  a deep boom as it opens) for the opening and ending lines; **droid** (96 Hz, quick and even, flat pitch, narrow 290 Hz
+  to 3.4 kHz radio band, sharper formants, a stronger comb and ring, a radio squelch in and out) for short callouts
+  later (`VOICE_CALLOUTS`). **The tongue** (`voxParse`, `voxWord`): each English word becomes its machine word of one to
+  three syllables ((onset) vowel (coda) from `VOX_ONSET` / `VOX_VOWEL` / `VOX_CODA`, the first stressed: longer and
+  higher), from a generator seeded with the English word (`voxHash`, `voxRng`), so a word always comes out the same and
+  a line always sounds the same. **The lines** (`VOICE_LINES`, LORE.md's voice; Earth's fate never said): the openings,
+  the Carrier in orbit (`voiceOpening`, from `showBriefing`: `versus`, `many` (a free-for-all), `teams`, `colony`,
+  `argos`, `hollow`, `horde` (the Maw), `mission`, `contingency`); the endings, your Command core (`voiceEnding`, from
+  `overFlare`: `victory`, `defeat`, `held`, `overrun`, `complete`, `failed`, `contWon`, `contLost`). `voiceSay(key,
+  delay, opts)` plays one on its own bus into the master at the Effects volume (`VOICE.lvl`), ducks the music under it
+  (`AUDIO.musicDuck`), and shows the subtitle (`#voice-sub`, `voiceCaption`: the speaker, the machine words lighting up
+  as each is said (`.said`), the English; at the foot of the screen, or at the top for an ending, `.top`); without sound
+  (Effects at 0, audio locked) the subtitle alone. A tap on the subtitle skips it (`voiceStop`); it stops with its game
+  (quit, or another one started) unless `keep` (Contingency's ending, over the globe). Not under test automation unless
+  `window.BOTFALL_VOICE`, not for an Observer. **Settings → Voice lines** (`#p-voice`, `setVoiceOn`, `botfall.voice` in
+  localStorage, on by default). Local display only: nothing reaches the simulation or the lockstep.
 - **Post-game report (`gameReport`, on the end screen, `#o-report`; missions too):** the moments that mattered
   (`reportMoments`, the dozen weightiest, in order): your first robot and first defence, the first attack each way,
   runs of buildings lost or taken, every shortage of 45 s or more and how long it lasted (still going at the end
@@ -3573,7 +3615,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   Save to the cloud, their full names in `aria-label` and `title`), the line on when the game last saved, then
   **Feedback** and **Save & quit**. **Settings** (`#p-setview`; **Back** or Esc returns, and the focus goes to Back on
   the way in and to Settings on the way out): the Music, Effects and Ambience sliders, **Graphics**, a switch each
-  (`role="switch"`, `pauseSwitch`) for Full screen, Weather, Scout reports and Vibration where they apply on the device,
+  (`role="switch"`, `pauseSwitch`) for Voice lines (`#p-voice`, js/voice.js), Full screen, Weather, Scout reports and Vibration where they apply on the device,
   and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
   always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
   pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
@@ -3641,7 +3683,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
   (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war themes Overdrive and Redline, the Murmur's Night
   Murmurs, the nuke alarm Zero Hour, the campaign theme The Long Silence (not shown over the Lore guide, a full screen), `end`
-  none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
+  and the end cues none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a

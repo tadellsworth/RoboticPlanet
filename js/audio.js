@@ -24,7 +24,9 @@
  * The campaign theme, The Long Silence, tells the story's arc from a level the game sets (musicStory):
  * the Lore guide plays it while it's open. It's written a bar at a time from chord progressions, arpeggios,
  * bass lines, drum patterns and short melodies, arranged in 8-bar sections that bring parts in and
- * out, so it never loops exactly. On a computer a small card names each theme as it starts (MUSIC_TITLES).
+ * out, so it never loops exactly. On a computer a small card names each theme as it starts (MUSIC_TITLES). The end of a
+ * game has a short scored cue, a Victory or a Defeat (musicCue), then a quiet loop under the end screen. The spoken
+ * machine voice and its subtitles are in js/voice.js.
  *
  * Volumes (Music, Effects and Ambience, 0..1) are set in the pause menu and remembered on this device. Ambience is the
  * land's own sounds (AUDIO.natureBus: each biome's wind, bed and calls, water, crickets, the sea), apart from the effects.
@@ -2380,6 +2382,8 @@ function nightSounds(live, dt, b, wx, zl) {
 
 /** Which mood the music should be in right now. */
 function musicMood() {
+  const cue = cueMood();
+  if (cue) return cue;
   if (typeof UI === 'undefined' || !UI.inGame || !S) return MUSIC.lore ? 'campaign' : 'menu';
   if (S.winner >= 0) return 'end';
   if (S.missiles.some((m) => m.nuke)) return 'nuke';
@@ -2408,6 +2412,34 @@ function musicMood() {
   if (S.time < MUSIC.warUntil) return warTheme();
   // (in the campaign, once it sets the story's level, its theme plays in place of the build themes)
   return S.time < (MUSIC.murmurUntil || 0) ? 'murmur' : MUSIC.story != null ? 'campaign' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
+}
+
+/**
+ * The end of a game (owner, Nov 26 2026): a short scored cue under the Victory or Defeat screen (overFlare in js/ui.js
+ * calls musicCue as the word comes in), then a quiet loop under the dashboard. `tone` 'win' or 'loss'; `story`: a
+ * Contingency battle, in the campaign theme's colours (D, its tune), and it plays out over the globe before the globe's
+ * own music fades in. Horde, Teams and the Missions use the same two. The old music stops at once (its bus dips to
+ * silence) and the cue swells in from it; leaving the screen fades it out (musicFades).
+ */
+function musicCue(tone, story) {
+  if (tone !== 'win' && tone !== 'loss') return;
+  const mood = (tone === 'win' ? 'victory' : 'defeat') + (story ? 'C' : ''), d = MOODS[mood], ac = AUDIO.ctx;
+  MUSIC.cue = { mood, of: typeof S !== 'undefined' ? S : null, keep: !!story, until: Infinity };
+  if (!ac) return;
+  const now = ac.currentTime, t0 = Math.max(MUSIC.next, now + 0.45);
+  MUSIC.cue.until = t0 + d.cue.length * 4 * 60 / d.bpm + 3;
+  MUSIC.want = mood; MUSIC.fadeTo = null;
+  musicRamp(now, 0.0001, now + 0.4);
+  MUSIC.next = t0; MUSIC.step = 0; // (the cue's first bar is the next step)
+}
+/** The cue playing, if it still should: while its game's end screen is up, or (Contingency's) until it has played out. */
+function cueMood() {
+  const c = MUSIC.cue;
+  if (!c) return '';
+  if (typeof S !== 'undefined' && S && S === c.of && S.winner >= 0 && typeof UI !== 'undefined' && UI.inGame) return c.mood;
+  if (c.keep && AUDIO.ctx && AUDIO.ctx.currentTime < c.until) return c.mood;
+  MUSIC.cue = null;
+  return '';
 }
 
 /**
@@ -2626,6 +2658,66 @@ const MOODS = {
     arrange: [['drone', 'alarm', 'heart', 'hat16']],
   },
   end: { bpm: 90, keys: [57], scale: MINOR, chordBars: 1, progs: [[[0, 'm']]], arrange: [[]] },
+  // The end of a game (musicCue). Each is scored bar by bar (`cue`: the bar's chord `c`, its parts `L`, one-off hits
+  // `fx`: 'riser' into the next bar, 'hit' a crash and an impact, 'toll' a low cold note, 'thud' the ground; `mel` the
+  // lead's notes, [step, semitones over the key an octave up, length in steps]), then settles into a quiet loop on
+  // `progs` and `arrange` (`settle` its trim) under the dashboard.
+  // Victory: the main theme's key and instruments, its minor turned major. A swell up the sixth and seventh (F, G), a
+  // crash on A major with the drums, a bright brass swell (mBrass clean) and a rising bell fanfare, round the chords once
+  // more, home on A held. Then a calm loop of major sevenths with the shimmer.
+  victory: {
+    bpm: 92, keys: [57], scale: MINOR, chordBars: 2, gain: 0.8, settle: 0.6,
+    cue: [
+      { c: [8, 'M'], L: ['pad', 'halo', 'bassW'] },
+      { c: [10, 'M'], L: ['pad', 'halo', 'arp8', 'bassW'], fx: ['riser'] },
+      { c: [0, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], fx: ['hit'], mel: [[0, 7, 6], [6, 12, 2], [8, 16, 8]] },
+      { c: [5, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], mel: [[0, 17, 6], [6, 16, 2], [8, 12, 8]] },
+      { c: [8, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead', 'horn'], mel: [[0, 12, 6], [6, 15, 2], [8, 20, 8]] },
+      { c: [10, 'M'], L: ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'tom', 'lead', 'horn'], fx: ['riser'], mel: [[0, 19, 4], [4, 22, 4], [8, 23, 8]] },
+      { c: [0, 'M'], L: ['pad', 'halo', 'shimmer', 'bassW', 'lead', 'horn'], fx: ['hit'], mel: [[0, 24, 16]] },
+    ],
+    progs: [[[0, 'M7'], [8, 'M7'], [5, 'M7'], [10, 'M']]], arrange: [['pad', 'shimmer', 'bassW']],
+  },
+  // Defeat: low and slow in D Phrygian. A drone and the whispering choir, a cold low toll; the heartbeat; the chords
+  // falling (D minor, E flat, B flat, G minor, home) under a cold lead walking down from D to D an octave under, the
+  // ground's thud at the end. Then the drone and the choir, faint.
+  defeat: {
+    bpm: 64, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 0.85, settle: 0.55, lead: 'cold',
+    cue: [
+      { c: [0, 'm'], L: ['drone', 'whisper'], fx: ['toll'] },
+      { c: [1, 'M'], L: ['pad', 'drone', 'heart', 'lead'], mel: [[0, 12, 8], [8, 10, 8]] },
+      { c: [8, 'M'], L: ['pad', 'heart', 'bassW', 'lead'], mel: [[0, 8, 8], [8, 7, 8]] },
+      { c: [5, 'm'], L: ['pad', 'whisper', 'bassW', 'lead'], mel: [[0, 5, 6], [6, 3, 2], [8, 1, 8]] },
+      { c: [0, 'm'], L: ['pad', 'drone', 'whisper', 'lead'], fx: ['thud'], mel: [[0, 0, 16]] },
+    ],
+    progs: [[[0, 'm'], [1, 'M']]], arrange: [['drone', 'whisper']],
+  },
+  // Contingency's: the campaign theme's key (D) and its tune (STORY_THEME). A win in Lydian, its Landfall colours (the
+  // halo, the arpeggio in threes, half-time drums, the bell); a loss in Phrygian, slow, the choir and the pulse, the tune
+  // on the cold lead.
+  victoryC: {
+    bpm: 96, keys: [50], scale: LYDIAN, chordBars: 2, gain: 0.85, settle: 0.6,
+    cue: [
+      { c: [7, 'M'], L: ['pad', 'halo', 'shimmer'] },
+      { c: [2, 'M'], L: ['pad', 'halo', 'arp3', 'bassW'], fx: ['riser'] },
+      { c: [0, 'M7'], L: ['pad', 'halo', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], fx: ['hit'], mel: [[0, 12, 6], [6, 19, 2], [8, 26, 6], [14, 24, 2]] },
+      { c: [2, 'M'], L: ['pad', 'halo', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], mel: [[0, 23, 4], [4, 19, 4], [8, 21, 8]] },
+      { c: [9, 'm'], L: ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead', 'horn'], fx: ['riser'], mel: [[0, 12, 6], [6, 19, 2], [8, 26, 4], [12, 28, 2], [14, 26, 2]] },
+      { c: [0, 'M'], L: ['pad', 'halo', 'shimmer', 'bassW', 'lead', 'horn'], fx: ['hit'], mel: [[0, 24, 16]] },
+    ],
+    progs: [[[0, 'M7'], [2, 'M'], [9, 'm'], [7, 'M']]], arrange: [['pad', 'halo', 'shimmer']],
+  },
+  defeatC: {
+    bpm: 72, keys: [50], scale: PHRYGIAN, chordBars: 2, gain: 1, settle: 0.5, lead: 'cold',
+    cue: [
+      { c: [0, 'm'], L: ['drone', 'whisper'], fx: ['toll'] },
+      { c: [1, 'M'], L: ['pad', 'whisper', 'pulse', 'lead'], mel: [[0, 12, 6], [6, 19, 2], [8, 25, 6], [14, 24, 2]] },
+      { c: [10, 'm'], L: ['pad', 'whisper', 'pulse', 'glints', 'lead'], mel: [[0, 22, 4], [4, 19, 4], [8, 20, 8]] },
+      { c: [8, 'M'], L: ['pad', 'whisper', 'pulse', 'glints', 'lead'], mel: [[0, 12, 6], [6, 19, 2], [8, 13, 4], [12, 10, 2], [14, 8, 2]] },
+      { c: [0, 'm'], L: ['pad', 'drone', 'whisper', 'lead'], fx: ['thud'], mel: [[0, 0, 16]] },
+    ],
+    progs: [[[0, 'm'], [1, 'M']]], arrange: [['drone', 'whisper']],
+  },
 };
 
 const MUSIC = { timer: 0, next: 0, step: 0, bar: 0, mood: '', want: 'menu', def: null, layers: new Set(), stepDur: 0.15, key: 57, prog: null, sect: 0, arr: 0, of: null, warUntil: 0, motif: null, arpMode: 0, color: false, lastDeg: 7,
@@ -2684,6 +2776,11 @@ function musicSetMood(m, t) {
   if (AUDIO.mEcho) AUDIO.mEcho.delayTime.setValueAtTime(MUSIC.stepDur * 3, t); // a dotted-eighth echo
   if (d.crash) mCrash(t);
   if (d.impact) mImpact(t);
+  if (d.cue && AUDIO.musicBus) { // (an end cue swells in from the silence musicCue left)
+    MUSIC.color = false;
+    const g = AUDIO.musicBus.gain;
+    g.cancelScheduledValues(t); g.setValueAtTime(0.0001, t); g.linearRampToValueAtTime(musicLevel(), t + 2.2);
+  }
 }
 
 /**
@@ -2806,7 +2903,7 @@ function musicStep(t) {
   // Melody
   if (L.has('lead') && MUSIC.melody) {
     const n = MUSIC.melody[s];
-    if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
+    if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : d.lead === 'cold' ? mCold : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
   }
 }
 
@@ -2819,7 +2916,8 @@ function pingPong(k, n) { const p = 2 * n - 2; const m = k % p; return m < n ? m
  */
 const MUSIC_FADE_OUT = 3, MUSIC_FADE_IN = 9;
 function musicFades(from, to) {
-  if (!from || WAR_THEMES.includes(to) || to === 'nuke' || to === 'end') return false;
+  if (!from || WAR_THEMES.includes(to) || to === 'nuke' || to === 'end' || (MOODS[to] && MOODS[to].cue)) return false;
+  if (MOODS[from] && MOODS[from].cue) return true; // (out of a victory or defeat cue: it fades, the next swells in)
   return (to === 'murmur') !== (from === 'murmur');
 }
 
@@ -2857,28 +2955,50 @@ function musicBar(t) {
   }
   const d = MUSIC.def, prog = MUSIC.prog;
   MUSIC.lv = d.stages ? storyLevel() : 0;
-  const c = prog[Math.floor(MUSIC.bar / d.chordBars) % prog.length];
+  // (an end cue: its own bar's chord and parts, a chord a bar; after it, the quiet loop, a little lower)
+  const cue = d.cue && MUSIC.bar < d.cue.length ? d.cue[MUSIC.bar] : null, cb = cue ? 1 : d.chordBars;
+  const kb = d.cue ? MUSIC.bar - d.cue.length : MUSIC.bar;
+  const c = cue ? cue.c : prog[Math.floor(Math.max(0, kb) / d.chordBars) % prog.length];
+  if (d.cue) {
+    MUSIC.layers = new Set(cue ? cue.L : d.arrange[0]);
+    if (kb === 0 && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel() * d.settle, t, 1.5);
+  }
   let q = c[1];
   if (MUSIC.color && q === 'm') q = 'm7'; else if (MUSIC.color && q === 'M') q = 'M7';
   MUSIC.chordRoot = c[0];
   MUSIC.chord = CHORD[q].map((n) => n + c[0]);
   const L = MUSIC.layers;
   if (AUDIO.music <= 0) return;
-  const barDur = MUSIC.stepDur * 16;
-  if (L.has('pad') && MUSIC.bar % d.chordBars === 0) mPad(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
+  const barDur = MUSIC.stepDur * 16, on = (cue ? 0 : Math.max(0, kb)) % cb === 0;
+  if (L.has('pad') && on) mPad(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * cb);
   if (L.has('drone')) mDrone(t, MUSIC.key - 12 + c[0], barDur, MUSIC.bar);
   if (L.has('pedal')) mDrone(t, MUSIC.key - 12, barDur, MUSIC.bar, 0.45, 1000); // (Redline's: on the key's root whatever the chord, under the grind)
-  if (L.has('brass') && MUSIC.bar % d.chordBars === 0) mBrass(t, c[0], MUSIC.chord, barDur * d.chordBars);
-  if (L.has('whisper') && MUSIC.bar % d.chordBars === 0) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
+  if (L.has('brass') && on) mBrass(t, c[0], MUSIC.chord, barDur * cb);
+  if (L.has('horn') && on) mBrass(t, c[0], MUSIC.chord, barDur * cb, true);
+  if (L.has('whisper') && on) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * cb);
   // The campaign theme: the halo, and the choir as loud as the story's level says (far off and faint in the Silence).
-  if (L.has('halo') && MUSIC.bar % d.chordBars === 0) mHalo(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
+  if (L.has('halo') && on) mHalo(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * cb);
   // (15 dB louder from the first murmur, 0.25, to the climax, 0.75: from a breath under the pads to a wall over them,
   // and from 0.6 an octave higher too)
   if (L.has('choir') && MUSIC.bar % d.chordBars === 0) {
     const lv = Math.max(0.25, Math.min(0.75, MUSIC.lv)), v = d.silence ? 2.6 : 1.8 * Math.pow(10, ((lv - 0.25) / 0.5) * 0.75);
     mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars, v, d.silence ? 1 : 0, !d.silence && MUSIC.lv >= 0.6);
   }
-  MUSIC.melody = !L.has('lead') ? null : d.theme ? realizeTheme(d) : realizeMotif(MUSIC.motif, MUSIC.chord);
+  if (cue && cue.fx) for (const f of cue.fx) {
+    if (f === 'riser') mRiser(t, barDur);
+    else if (f === 'hit') { mCrash(t); mImpact(t); }
+    else if (f === 'toll') mCold(t, MUSIC.key, barDur * 0.9);
+    else if (f === 'thud') mThud(t, 1);
+  }
+  MUSIC.melody = !L.has('lead') ? null : cue ? cueMelody(cue) : d.theme ? realizeTheme(d) : realizeMotif(MUSIC.motif, MUSIC.chord);
+}
+
+/** An end cue's bar of melody (its `mel`: [step, semitones over the key an octave up, length in steps]). */
+function cueMelody(cue) {
+  if (!cue.mel) return null;
+  const out = new Array(16).fill(null);
+  for (const [s, n, len] of cue.mel) out[s] = [MUSIC.key + 12 + n, len * 0.92];
+  return out;
 }
 
 /** The bar's notes of the campaign theme's tune (STORY_THEME) in the stage's scale; null in a bar the stage leaves out. */
@@ -3182,14 +3302,16 @@ function mClank(t, v) {
 /**
  * Redline's brass: a low swell under the chord (its root an octave down, then the chord), saws opening slowly as it
  * swells and closing as it fades, with a minor second over the root of the key's own chord. Not pumped by the kick.
+ * `clean`: the victory cue's horns (the 'horn' part): quicker and brighter, the root on top in place of the minor second.
  */
-function mBrass(t, croot, chord, dur) {
+function mBrass(t, croot, chord, dur, clean) {
   const ac = AUDIO.ctx, lp = ac.createBiquadFilter(), g = ac.createGain();
   lp.type = 'lowpass'; lp.Q.value = 1.5;
-  lp.frequency.setValueAtTime(220, t); lp.frequency.exponentialRampToValueAtTime(1300, t + dur * 0.7); lp.frequency.exponentialRampToValueAtTime(500, t + dur + 0.4);
-  env(g, t, dur * 0.45, 1, dur * 0.85, 0.5);
+  lp.frequency.setValueAtTime(220, t); lp.frequency.exponentialRampToValueAtTime(clean ? 2400 : 1300, t + dur * (clean ? 0.4 : 0.7)); lp.frequency.exponentialRampToValueAtTime(500, t + dur + 0.4);
+  env(g, t, dur * (clean ? 0.25 : 0.45), 1, dur * 0.85, 0.5);
   const notes = [MUSIC.key - 12 + croot, ...chord.map((n) => MUSIC.key + n)];
-  if (croot === 0) notes.push(MUSIC.key + 13);
+  if (clean) notes.push(MUSIC.key + 12 + croot); // (the victory's horns: bright, open, the root on top, no minor second)
+  else if (croot === 0) notes.push(MUSIC.key + 13);
   for (const n of notes) for (const det of [-9, 9]) {
     const o = mOsc('sawtooth', midiHz(n), t), og = ac.createGain();
     o.detune.value = det; og.gain.value = n === MUSIC.key + 13 ? 0.01 : 0.02;
