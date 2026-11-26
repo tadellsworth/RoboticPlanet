@@ -34,9 +34,31 @@ Colony 2 used its regular AI in every game. The hold variant suppresses Colony 1
 - **Out of replacements, Standard 11.** Colony 2 last launched a ground attack at 19.20. From minute 20 to 25 its surviving army went from seven to two, with no new units. Its Foundry waited for Chips and colony Chip stock stayed at zero at both checks. Over the same interval Colony 1's cumulative army production went from 20 to 34 before a seven-unit storm at 24.53.
 - **The rival can recover against a defender, but with long gaps.** On Standard 11 with a hold at minute 12, Colony 2 went from 25.77 to 36.90 without launching a new attack on Colony 1. It recovered from five armed units at minute 35 to nineteen at minute 40 and ultimately stormed with seventeen. On Long haul 21 with a hold at minute 18, Colony 2 produced no army units from minute 25 to 30 and had zero ordinary rally candidates at minute 30 despite seven armed units. Its last successful storm of eleven launched at 45.07. The Hard Warden ended both Standard 25 runs before minute 22, so those runs do not test its late-game behavior.
 
+## Ammo recovery follow-up
+
+Rival freight dispatch now gives the next batch of Alloy and Cement for built Ammo Plants, and the first reloads for dry garrisons, priority when at least four units and at least a third of the army are waiting unarmed in garrison. Fuel and Crystal weapons do not trigger the rule. Emergency Fuel Station and Repair Station deliveries still come first. Priorities are calculated from the current simulation state and use the existing freight and reloading systems.
+
+On Standard 25 in 1v1, the first new attack after minute 20 launched at **30.53**, down from **41.47**. At the minute-30 check, Colonies 1 and 2 had seven and two armed robots respectively, up from zero each. Colony 1 fell back to zero armed at minute 35 and had five at minute 40. This fixes part of the prolonged Ammo drought. A rival can still run low again, and Colony 2 did not launch a new attack after minute 20 in this replay. The winner stayed the same and the full match ran 3.16 minutes longer.
+
+| Map and seed | Setup | Before | After |
+| --- | --- | --- | --- |
+| Standard 11 | 1v1 | Colony 1 at 25.65 | Colony 1 at 25.65 |
+| Standard 25 | 1v1 | Colony 1 at 42.37 | Colony 1 at 45.53 |
+| Long haul 21 | 1v1 | Colony 2 at 23.81 | Colony 2 at 23.81 |
+| Crossroads 21 | 1v1 | Colony 1 at 12.52 | Colony 1 at 12.52 |
+| The Hollow 11 | 1v1 | Colony 2 at 32.39 | Colony 2 at 32.39 |
+| Standard 11 | 1v1, Colony 1 holds from minute 12 | Colony 2 at 56.54 | Colony 2 at 51.76 |
+| Long haul 21 | 1v1, Colony 1 holds from minute 18 | Colony 2 at 47.35 | Colony 2 at 43.97 |
+| Crossroads 21 | Four colonies | Colony 1 at 35.32 | Colony 1 at 35.32 |
+| Standard 25 | Four colonies | Undecided at 75.00 | Colony 1 at 52.44 |
+
+All nine runs finished. On four-colony Standard 25, the finalists started their duel at 47.09 and the first base storm between them launched at 48.03. Before the fix, the duel started at 47.99 and the first storm launched at 73.37. To reproduce these runs, use the commands below and replace `50bb4de` with `-` to run the current checkout.
+
+The dispatch regression uses one Hauler and competing Foundry and Ammo Plant orders. It checks that the rival delivers only the next batch first, redirects ready Ammo to the waiting garrison, and makes the same dispatch with the same seed and state hash. A smaller shortage and an identical human-controlled setup both keep the normal delivery order.
+
 ## Suggested fixes and checks
 
-1. Start with Ammo recovery. When a significant share of the army is unarmed, trace which Armory or garrison needs supplies. Prioritize delivering available Alloy to Armories, and replenishing Alloy when none is available. Check for practical resupply or rearm routes for troops in dry garrisons. Use Standard 25 to verify that both sides can get armed again sooner and resume pressure.
+1. If a rival still stays dry, trace whether it can produce or import Alloy and whether the garrison has a practical resupply or rearm route. Use Standard 25 to verify that both sides can sustain pressure after the first reload.
 2. Triage starving Foundries. Distinguish no stock, disconnected stock and connected stock with no scheduled delivery. Prefer a viable Foundry when replacing losses, or repair the network serving the one the rival already has. Check Standard 11 and the captured Foundries on Crossroads 21.
 3. When a rival has a sustained lead, trace which armed units are reserved, assigned or unreachable before changing rally thresholds. Preserve the defense reserve and try a concentrated attack only when a useful force can assemble and reach its target. Standard 25 four-player is the regression case, with the other seeds kept as controls against weaker defense or longer games.
 

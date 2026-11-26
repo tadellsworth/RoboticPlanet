@@ -1725,6 +1725,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   are in `P.stats` (`lostBld`, `lostMat`, `lostIn`, `lostAboard`); open shortages in `P.dry`. A save from before the
   log starts it where it was loaded (`S.logFrom`).
 - **Ammo:** warbots carry 10 shots (each Ammo is 5: `AMMO_SHOTS`; a Railgunner's 2 slugs of its 4) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant.
+  When many of a rival’s Warbots are unarmed in garrison, it prioritizes the next batch of Alloy and Cement for its Ammo Plants and sends the first reloads to the waiting troops.
   A reload fills to full (`reloadAmmo`): the spare shots of an Ammo it opened earlier (`u.ammoCr`, fewer than one
   Ammo's worth) go in first, then a whole Ammo from the garrison if it's still short, and what of that doesn't fit
   becomes its spare. No Ammo is made or lost: every Ammo taken is all its shots, loaded or spare (both lost with the

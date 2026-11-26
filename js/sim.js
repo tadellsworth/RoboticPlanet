@@ -2444,6 +2444,7 @@ function dispatch(p) {
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
   //    priority the Foundry goes first (new workers unblock everything), then construction sites
   //    and production inputs share turns, whichever has the fewest goods on the way first.
+  const dryGarrisons = idle.length ? aiDryGarrisons(p) : null;
   const reqs = [], load = botCarry({ type: 'hauler', owner: p }); // (what a Hauler of ours carries: 2, or 3 with the cargo research)
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && (BDEFS[b.type].bots || (BDEFS[b.type].yard && hasYardOrders(b))) ? 0 : 1); // (a yard with orders: its parts as urgent as a Foundry's)
@@ -2455,14 +2456,20 @@ function dispatch(p) {
     const fed = b.built && BDEFS[b.type].inp ? feedersOf(b) : null;
     const inp = b.built && BDEFS[b.type].inp;
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
-      const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
+      const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null;
+      const normal = h === null ? n0 : Math.min(n0, h);
+      // First reloads for a grounded rival army, and only the next batch of parts for its Ammo Plant.
+      const held = (b.stock[g] || 0) + (b.inc[g] || 0);
+      const rearm = dryGarrisons && b.built && !keep ? Math.max(0, (g === 'ammo' ? dryGarrisons.get(b.id) || 0
+        : b.type === 'armory' ? inp[g] || 0 : 0) - held) : 0;
+      const n = rearm ? Math.min(normal, rearm) : normal;
       if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
       if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based, until a road reaches it: see above)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
       if (inp && inp[g] && !keep && n < load && !isLiquid(g) && (b.stock[g] || 0) + (b.inc[g] || 0) >= 2 * inp[g]) continue;
-      reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+      reqs.push({ b, g, n, pri: dry ? -1 : rearm ? -0.5 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly, rearm });
     }
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
@@ -2583,7 +2590,7 @@ function dispatch(p) {
         const have = sup(src, r.g), avail = Math.min(r.n, have);
         const long = farApart(src, r.b);
         const s2s = !!BDEFS[src.type].store && !!BDEFS[r.b.type].store;
-        const bulk = Math.min(have, r.b.built && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
+        const bulk = Math.min(have, r.b.built && !r.rearm && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
         let u = null;
         const byRoad = truckLinked(src, r.b), vansOnRoute = byRoad && fleetReaches(vanNets, src, r.b);
         const held = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0), starving = held <= 0;

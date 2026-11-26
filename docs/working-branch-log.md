@@ -312,3 +312,4 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 ## November 26, 2026
 
 - Replayed the two long four-colony games and traced nine 1v1s, including defending-opponent variants. Reproduced a 1v1 Ammo drought, a losing rival unable to replace units without Chips, and a four-colony final duel still undecided at 75 minutes. Saved a headless runner and seed results. [Late-game attack audit](late-attack-audit.md)
+- Fixed rival Ammo dispatch during a garrison shortage. Rivals send the ingredients for the next Ammo batch and reloads for dry garrisons ahead of ordinary freight. In Standard seed 25, the next 1v1 attack came at 30.53 minutes instead of 41.47. Added a dispatch regression and documented the replay results. [Ammo recovery follow-up](late-attack-audit.md#ammo-recovery-follow-up)

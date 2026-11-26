@@ -398,6 +398,23 @@ function aiScrap(p, c) {
   }
 }
 
+/** Garrisons that hold a third of a rival's army waiting for Ammo. Tanked units need Fuel or Crystal instead. */
+function aiDryGarrisons(p) {
+  if (!S.players[p].ai || !warOn()) return null;
+  let army = 0, waiting = 0, dry = null;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !isArmy(u)) continue;
+    army++;
+    if (!u.inside || botTank(u.type) || botArmed(u)) continue;
+    const b = getE(u.inside);
+    if (!b || b.dead || b.owner !== p || !BDEFS[b.type].ammoStock || b.stock.ammo > 0) continue;
+    if (!dry) dry = new Map();
+    dry.set(b.id, (dry.get(b.id) || 0) + 1);
+    waiting++;
+  }
+  return waiting >= Math.max(4, army / 3) ? dry : null;
+}
+
 function aiThink(p) {
   const P = S.players[p];
   let lvl = aiLevel(p);
