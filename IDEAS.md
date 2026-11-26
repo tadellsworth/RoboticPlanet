@@ -1443,11 +1443,14 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   at night as the Expressway has, or an arrow that fades out along the lane. Pair with the Express highway's art so the
   two share a marking language. A small sheet of three looks first.
 - **Redesign the nuclear missile** (the owner's to-do, Nov 17). DONE, Nov 26 2026 (the owner's spec): a long, rounded
-  three-stage ICBM drawn in code (off-white, a dark heat-shield nose, stage bands, red warning marks, small fins: ART_GUIDE,
+  three-stage ICBM drawn in code (first off-white with red warning marks, now olive drab: stage bands, small fins: ART_GUIDE,
   The nuclear missile), and a launch sequence in the look only: the missile waits in its Silo with the warning lights
   flashing and steam venting, lifts off 10 s before impact, climbs off the screen and falls onto the target (README,
   Nuclear race). Open: the blast itself (`nuke-blast-sheet`) is unchanged; a rival's launch seen off screen shows only on
   the minimap and in the messages (an edge marker pointing to it?); the Silo's art still has no closed hatch to open.
+  Its look: the owner chose **Garrison** (matte olive drab, a black nose, a yellow live-warhead band, white stencils)
+  from a design sheet of six (Lancet, Leviathan, Garrison, Nightshade, Redline, Hydra), Nov 26 2026; installed with a
+  lighter rim and a soft dark halo so it reads on rust ground. The first off-white look is gone.
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.

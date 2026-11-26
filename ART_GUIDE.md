@@ -2266,17 +2266,23 @@ render, 0..1 across and down).
 
 ### The nuclear missile (drawn in code; no images)
 
-The owner, Nov 26 2026: longer and more rounded, like a modern ICBM, still menacing. It replaced
+The owner, Nov 26 2026: longer and more rounded, like a modern ICBM, still menacing; painted in the Garrison look. It replaced
 `markers/nuclear-missile.webp` (the old black-and-yellow rocket) and the missile baked into `nukesilo@T`: the Nuclear Silo
 is now always drawn with its open shaft (`nukesilo-empty@T`) and the missile in code standing in it.
 - **The sprite** (`icbmArt` in `js/render.js`, made once, 768 px square, nose to the right, kept as an art entry so
   `drawArt` grades it for morning, evening and night like any image): `ICBM.len` 1.85 tiles long, `ICBM.dia` 0.155 wide
-  (12 : 1). Three stages, each a little narrower (radius 0.5, 0.47, 0.435 of its width), grey separation bands with rivet
-  rows, a rounded ogive nose (about 1.9 calibres, blunt at the tip) with a dark ablative heat-shield on its front third and
-  a scorched edge; an off-white body (`#e9e7df`) shaded as a cylinder lit from above (multiply, then a soft sheen and a
-  cool reflected rim); panel seams, a stencilled serial block, red warning bands (`#b3191e`) on the first and third
-  stages, a short black-and-yellow stripe by the first band, a red trefoil; soot toward the base; a dark nozzle; four
-  small clipped-delta fins (two edge-on, one face-on). A fine dark outline keeps it readable on pale ground.
+  (12 : 1). Three stages, each a little narrower (radius 0.5, 0.47, 0.435 of its width), darker separation bands with
+  rivet rows, a rounded ogive nose (about 1.9 calibres, blunt at the tip).
+- **The Garrison look** (the owner's pick from the design sheet of six looks, Nov 26 2026; it replaced the first
+  off-white, red-marked body): matte olive drab (`#5b6444`, bands `#363c2b`), a matte black re-entry body on the nose
+  (`#1f2120`, its last tenth), a yellow live-warhead band (`#d8b326`) just behind it, white stencils (a serial block, a
+  data plate, a small trefoil; `rgba(232,230,218,0.8)`), olive fins (two edge-on, one face-on), tan dust on its
+  underside, heavier soot toward the base and a dark nozzle. Shaded as a cylinder lit from above (multiply), with only a
+  faint sheen (it's matte) and a cool reflected rim below.
+- **Readable on any ground**: olive on rust is the hardest pairing at 48 px a tile, so it has a slightly lighter rim
+  (`rgba(196,206,150,0.3)`, a stroke following the profile just inside its lit edge) and a soft dark halo round the whole
+  silhouette, fins included (blurred, about a screen pixel at normal zoom), under a fine dark outline. Checked on the
+  Rust, Greenreach, the Polar Caps and Argos, by day and at night, in the Silo, at liftoff and falling.
 - **Drawing it** (`drawIcbm`): turned to any angle, flipped so its lit side stays up and to the left; at night its day
   colours come back at 45% (floodlit by its Silo, then its own fire); `drawIcbmFlame` is its exhaust (three additive
   layers, a white-hot core, flickering) with a glow; re-entry adds a hot glow at the nose.

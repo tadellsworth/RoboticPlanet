@@ -9323,9 +9323,10 @@ function drawMissiles(ctx, ox, oy, z) {
 
 /*
  * The nuclear missile (the owner's redesign, Nov 26 2026): a long, slender ICBM drawn in code (icbmArt, a cached
- * sprite graded for the time of day like any art): an off-white body in three stages with dark separation bands, a
- * rounded ogive nose with a dark heat-shield tip, panel seams, red warning bands and a trefoil, four small fins at
- * the base. Its strike (drawNukeFlight), on the game's clock: the missile waits in its Silo while the warning lights
+ * sprite graded for the time of day like any art), in the Garrison look the owner chose from the design sheet: a
+ * matte olive-drab body in three stages with darker separation bands, a rounded ogive nose in matte black behind a
+ * yellow live-warhead band, white stencils (a serial block, a data plate, a small trefoil), dust on its underside,
+ * four small fins at the base; a lighter rim along its lit side and a soft dark halo keep it readable on any ground. Its strike (drawNukeFlight), on the game's clock: the missile waits in its Silo while the warning lights
  * flash and steam vents, until NUKE_LAUNCH seconds before impact; then it climbs straight up on a long plume, off the
  * top of the screen, leaving a smoke column; in its last NUKE_FALL seconds it drops out of the sky onto the target,
  * glowing with re-entry. Only the look: the game still has it land NUKE.flight seconds after it was fired.
@@ -9347,7 +9348,7 @@ function steamPuff() {
   return (R.steamPuff = c);
 }
 
-/** The missile's sprite (nose to the right, in the middle of a square), made once. */
+/** The missile's sprite (nose to the right, in the middle of a square), made once: the Garrison look. */
 function icbmArt() {
   if (R.icbm) return R.icbm;
   const N = 768, c = document.createElement('canvas');
@@ -9374,72 +9375,81 @@ function icbmArt() {
     ctx.closePath();
   };
   // the fins: two seen edge-on above and below, a third face-on (in front)
-  const fin = (sgn) => {
+  const finPath = (sgn) => {
     g.beginPath();
     g.moveTo(X(0.035), cy + sgn * D * 0.48); g.lineTo(X(0.035), cy + sgn * D * 0.98); g.lineTo(X(0.075), cy + sgn * D * 0.98);
     g.lineTo(X(0.135), cy + sgn * D * 0.48); g.closePath();
+  };
+  const fin = (sgn) => {
+    finPath(sgn);
     const gr = g.createLinearGradient(0, cy + sgn * D * 0.5, 0, cy + sgn * D);
-    gr.addColorStop(0, sgn < 0 ? '#5d6066' : '#3a3c40'); gr.addColorStop(1, sgn < 0 ? '#7a7d83' : '#2a2b2e');
+    gr.addColorStop(0, sgn < 0 ? '#4b5338' : '#2f3424'); gr.addColorStop(1, sgn < 0 ? '#5d6646' : '#25291c');
     g.fillStyle = gr; g.fill();
     g.strokeStyle = 'rgba(20,20,24,0.6)'; g.lineWidth = 1.2; g.stroke();
   };
+  // a soft dark halo round the whole silhouette (about a screen pixel at normal zoom), so the olive body keeps its
+  // edge on rust, desert and green ground alike
+  g.save(); g.filter = 'blur(4px)'; g.fillStyle = g.strokeStyle = 'rgba(14,13,9,0.42)'; g.lineWidth = 9; g.lineJoin = 'round';
+  body(g); g.fill(); g.stroke(); finPath(-1); g.fill(); g.stroke(); finPath(1); g.fill(); g.stroke();
+  g.restore();
   fin(-1); fin(1);
-  // the body in its flat colours: off-white, grey separation bands, the dark nozzle and the heat-shield on the nose
+  // the body in its flat colours: matte olive drab, darker separation bands, the dark nozzle and a matte black
+  // re-entry body on the nose
   g.save(); body(g); g.clip();
-  g.fillStyle = '#e9e7df'; g.fillRect(0, 0, N, N);
+  g.fillStyle = '#5b6444'; g.fillRect(0, 0, N, N);
   const band = (f0, f1, col) => { g.fillStyle = col; g.fillRect(X(f0), 0, X(f1) - X(f0), N); };
-  band(0, 0.03, '#2c2d30');                 // nozzle
-  band(0.03, 0.045, '#55585d');             // aft skirt ring
-  band(0.135, 0.15, '#b8b5ac');             // a panel joint
-  band(0.475, 0.51, '#4b4e53');             // first separation band
-  band(0.70, 0.735, '#4b4e53');             // second
-  band(0.86, 0.87, '#6a6d72');              // the shroud joint
-  band(0.945, 1.01, '#232427');             // the heat-shield
-  band(0.93, 0.945, '#3e3f43');            // ... its edge, scorched
-  // red warning bands (menacing, and to be seen from far off) and a short black-and-yellow stripe by the first band
-  band(0.39, 0.41, '#b3191e'); band(0.42, 0.427, '#b3191e');
-  band(0.80, 0.82, '#b3191e');
-  for (let k = 0; k < 7; k++) {
-    g.fillStyle = k % 2 ? '#1d1d1f' : '#e2b21c';
-    g.beginPath(); const xa = X(0.452) + k * D * 0.07;
-    g.moveTo(xa, cy - D); g.lineTo(xa + D * 0.07, cy - D); g.lineTo(xa + D * 0.07 - D * 0.25, cy + D); g.lineTo(xa - D * 0.25, cy + D); g.closePath(); g.fill();
-  }
-  // a trefoil on the first stage, red on white, and a stencilled serial block
-  const tx = X(0.3), r0 = D * 0.3;
-  g.fillStyle = '#b3191e';
+  band(0, 0.03, '#26282a');                 // nozzle
+  band(0.03, 0.045, '#3c4232');             // aft skirt ring
+  band(0.475, 0.51, '#363c2b');             // first separation band
+  band(0.70, 0.735, '#363c2b');             // second
+  band(0.86, 0.868, '#3a4030');             // the shroud joint
+  band(0.9, 1.01, '#1f2120');               // the black re-entry body
+  band(0.83, 0.845, '#d8b326');             // a yellow band: the warhead is live
+  // white stencils: a serial block, a data plate and a small trefoil
+  const ink = 'rgba(232,230,218,0.8)';
+  g.fillStyle = ink;
+  for (let k = 0; k < 6; k++) g.fillRect(X(0.2) + k * D * 0.13, cy - D * 0.06, D * 0.09, D * 0.12);
+  g.fillRect(X(0.585), cy - D * 0.05, D * 0.55, D * 0.1); g.fillRect(X(0.585), cy + D * 0.1, D * 0.3, D * 0.07);
+  const tx = X(0.355), r0 = D * 0.2;
+  g.fillStyle = 'rgba(232,230,218,0.85)';
   for (let k = 0; k < 3; k++) { const a = -Math.PI / 2 + k * Math.PI * 2 / 3; g.beginPath(); g.moveTo(tx, cy); g.arc(tx, cy, r0, a - Math.PI / 6, a + Math.PI / 6); g.closePath(); g.fill(); }
-  g.beginPath(); g.arc(tx, cy, r0 * 0.24, 0, Math.PI * 2); g.fillStyle = '#e9e7df'; g.fill();
-  g.beginPath(); g.arc(tx, cy, r0 * 0.15, 0, Math.PI * 2); g.fillStyle = '#b3191e'; g.fill();
-  g.fillStyle = 'rgba(30,30,34,0.75)';
-  for (let k = 0; k < 6; k++) g.fillRect(X(0.18) + k * D * 0.13, cy - D * 0.06, D * 0.09, D * 0.12);
-  g.fillRect(X(0.585), cy - D * 0.05, D * 0.5, D * 0.1);
+  g.beginPath(); g.arc(tx, cy, r0 * 0.24, 0, Math.PI * 2); g.fillStyle = '#5b6444'; g.fill();
+  g.beginPath(); g.arc(tx, cy, r0 * 0.15, 0, Math.PI * 2); g.fillStyle = 'rgba(232,230,218,0.85)'; g.fill();
   // panel seams and rivet lines
-  g.strokeStyle = 'rgba(60,58,54,0.35)'; g.lineWidth = 1.3;
+  g.strokeStyle = 'rgba(30,34,22,0.45)'; g.lineWidth = 1.3;
   for (const f of [0.1, 0.22, 0.34, 0.6, 0.66, 0.775, 0.895]) { g.beginPath(); g.moveTo(X(f), 0); g.lineTo(X(f), N); g.stroke(); }
-  g.beginPath(); g.moveTo(X(0.045), cy - D * 0.2); g.lineTo(X(0.85), cy - D * 0.2); g.stroke();
-  g.fillStyle = 'rgba(70,68,62,0.45)';
-  for (const f of [0.045, 0.475, 0.51, 0.70, 0.735]) for (let k = -3; k <= 3; k++) { g.beginPath(); g.arc(X(f) + (f === 0.045 || f === 0.51 || f === 0.735 ? 3 : -3), cy + k * D * 0.12, 1.3, 0, Math.PI * 2); g.fill(); }
-  // shading round the body: lit from above, falling off to a dark underside, with a soft sheen and a rim of reflected light
+  g.fillStyle = 'rgba(30,34,22,0.5)';
+  for (const f of [0.475, 0.51, 0.70, 0.735]) for (let k = -3; k <= 3; k++) { g.beginPath(); g.arc(X(f), cy + k * D * 0.12, 1.3, 0, Math.PI * 2); g.fill(); }
+  // dust and scuffs on the lower side
+  let gr = g.createLinearGradient(0, cy, 0, cy + D * 0.5);
+  gr.addColorStop(0, 'rgba(150,120,80,0)'); gr.addColorStop(1, 'rgba(150,120,80,0.35)');
+  g.fillStyle = gr; g.fillRect(0, cy, N, D);
+  // shading round the body: lit from above, falling off to a dark underside; a faint sheen (it's matte) and a rim of
+  // reflected light below
   g.globalCompositeOperation = 'multiply';
-  let gr = g.createLinearGradient(0, cy - D * 0.5, 0, cy + D * 0.5);
+  gr = g.createLinearGradient(0, cy - D * 0.5, 0, cy + D * 0.5);
   gr.addColorStop(0, '#8a8884'); gr.addColorStop(0.18, '#ffffff'); gr.addColorStop(0.4, '#e4e2dd'); gr.addColorStop(0.72, '#9a9894'); gr.addColorStop(0.92, '#4e4d4b'); gr.addColorStop(1, '#666563');
   g.fillStyle = gr; g.fillRect(0, 0, N, N);
   g.globalCompositeOperation = 'screen';
   gr = g.createLinearGradient(0, cy - D * 0.5, 0, cy + D * 0.5);
-  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.2, 'rgba(255,255,255,0.32)'); gr.addColorStop(0.3, 'rgba(255,255,255,0)'); gr.addColorStop(0.9, 'rgba(150,170,200,0)'); gr.addColorStop(1, 'rgba(150,170,200,0.25)');
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.2, 'rgba(255,255,255,0.12)'); gr.addColorStop(0.3, 'rgba(255,255,255,0)'); gr.addColorStop(0.9, 'rgba(150,170,200,0)'); gr.addColorStop(1, 'rgba(150,170,200,0.18)');
   g.fillStyle = gr; g.fillRect(0, 0, N, N);
-  // grime toward the base (exhaust soot) and the nose's ablative sheen
+  // a slightly lighter rim along the lit side, following the profile, so its outline reads at normal zoom
   g.globalCompositeOperation = 'source-over';
+  g.beginPath();
+  for (let k = 0; k <= 220; k++) { const f = 0.035 + 0.915 * k / 220; g[k ? 'lineTo' : 'moveTo'](X(f), cy - rad(f) + D * 0.11); }
+  g.strokeStyle = 'rgba(196,206,150,0.3)'; g.lineWidth = D * 0.09; g.lineJoin = 'round'; g.stroke();
+  // grime toward the base (exhaust soot)
   gr = g.createLinearGradient(X(0.03), 0, X(0.2), 0);
-  gr.addColorStop(0, 'rgba(40,34,30,0.45)'); gr.addColorStop(1, 'rgba(40,34,30,0)');
+  gr.addColorStop(0, 'rgba(40,34,30,0.55)'); gr.addColorStop(1, 'rgba(40,34,30,0)');
   g.fillStyle = gr; g.fillRect(X(0.03), 0, X(0.2) - X(0.03), N);
   g.restore();
   // the third fin, face-on, in front of the body
   g.beginPath();
   g.moveTo(X(0.035), cy - D * 0.07); g.lineTo(X(0.075), cy - D * 0.07); g.lineTo(X(0.135), cy - D * 0.02); g.lineTo(X(0.135), cy + D * 0.02);
   g.lineTo(X(0.075), cy + D * 0.07); g.lineTo(X(0.035), cy + D * 0.07); g.closePath();
-  g.fillStyle = '#4a4d52'; g.fill(); g.strokeStyle = 'rgba(15,15,18,0.7)'; g.lineWidth = 1.2; g.stroke();
-  // a fine dark outline, so it reads on pale ground and snow
+  g.fillStyle = '#3c4430'; g.fill(); g.strokeStyle = 'rgba(15,15,18,0.7)'; g.lineWidth = 1.2; g.stroke();
+  // a fine dark outline over the halo's inner edge
   g.save(); body(g); g.strokeStyle = 'rgba(25,25,30,0.55)'; g.lineWidth = 1.6; g.stroke(); g.restore();
   return (R.icbm = { img: c, scale: 1, key: 'icbm' });
 }
