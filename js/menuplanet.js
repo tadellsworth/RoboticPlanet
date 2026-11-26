@@ -35,6 +35,7 @@ const MPLANET = {
   turn: 150,              // ...to turn once
   clouds: 120,            // ...for its clouds
   moon: 55,               // ...for Argos to go round it
+  moonTex: 512,           // the width of Argos's map, made once (mplMoonMap: longitude × latitude, 2:1)
   carrier: 46,            // ...for a Carrier to go round
   tilt: -0.32,            // the Ring's slant (radians)
   wren: 190,              // seconds between the Wren's visits (it takes 70 to come in)
@@ -558,12 +559,154 @@ function mplRing(g, st, half) {
   g.restore();
 }
 
-/** Argos (a small grey moon, lit from Corvane's side), or nothing if it's behind the planet's disc. */
+/** Argos's face, made once: an equirectangular map (MPLANET.moonTex wide) of grey regolith, the darker, smoother maria
+ * (a few round basins with ragged shores, most on the face toward Ithaca I) and craters of every size, a few young ones
+ * bright with rays (LORE.md: a grey, airless field of craters; the Lunar biome's look). `alb` its brightness, `mare` how
+ * much of it is mare, `gu`, `gv` the slopes of its height (the craters' bowls and rims), east and north, for the light. */
+function mplMoonMap() {
+  const W = MPLANET.moonTex, H = W / 2, seed = 7717, N = W * H;
+  const alb = new Float32Array(N), mare = new Float32Array(N), hgt = new Float32Array(N), gu = new Float32Array(N), gv = new Float32Array(N);
+  const pt = (u, lat) => { const lo = u * Math.PI * 2, cl = Math.cos(lat); return [cl * Math.sin(lo), Math.sin(lat), cl * Math.cos(lo)]; };
+  const rnd = (k, j) => hash2(k, j, seed);
+  const basins = [[0.08, 0.38, 0.4], [0.94, 0.14, 0.34], [0.03, -0.2, 0.28], [0.88, -0.38, 0.22], [0.16, 0.02, 0.18], [0.52, 0.24, 0.24], [0.62, -0.34, 0.16]]
+    .map(([u, lat, r]) => ({ p: pt(u, lat), r }));
+  const craters = [];
+  for (let k = 0; k < 320; k++) {
+    const p = pt(rnd(k, 2), Math.asin(rnd(k, 1) * 2 - 1)), r = 0.012 + 0.16 * Math.pow(rnd(k, 3), 4);
+    // (a frame on the sphere at its middle, for the angle round it that its rays follow)
+    let e1 = [p[2], 0, -p[0]]; const el = Math.hypot(e1[0], e1[2]) || 1; e1 = [e1[0] / el, 0, e1[2] / el];
+    const e2 = [p[1] * e1[2] - p[2] * e1[1], p[2] * e1[0] - p[0] * e1[2], p[0] * e1[1] - p[1] * e1[0]];
+    craters.push({ p, r, cr: Math.cos(Math.min(Math.PI, r * (rnd(k, 4) < 0.12 ? 4.6 : 1.6))), young: rnd(k, 4) < 0.12, dep: 0.6 + 0.4 * rnd(k, 5), ray: rnd(k, 6) * 100, e1, e2 });
+  }
+  const doRow = (j) => {
+    const lat = (0.5 - (j + 0.5) / H) * Math.PI;
+    for (let i = 0; i < W; i++) {
+      const [x, y, z] = pt((i + 0.5) / W, lat), t = j * W + i;
+      let m = 0;
+      const wob = 0.26 * (mplFbm(x * 5 + 3, y * 5, z * 5, seed + 1, 4) - 0.5);
+      for (const b of basins) { const d = Math.acos(clamp(x * b.p[0] + y * b.p[1] + z * b.p[2], -1, 1)); m = Math.max(m, clamp((b.r + wob - d) / 0.09, 0, 1)); }
+      const n1 = mplFbm(x * 6, y * 6, z * 6, seed + 2, 4), n2 = mplNoise(x * 40, y * 40, z * 40, seed + 3);
+      let a = (0.8 + 0.24 * (n1 - 0.5) + 0.08 * (n2 - 0.5)) * (1 - m) + (0.4 + 0.12 * (n1 - 0.5) + 0.03 * (n2 - 0.5)) * m;
+      let h = 0.003 * (n2 - 0.5) * (1 - 0.7 * m);
+      for (const c of craters) {
+        const dot = x * c.p[0] + y * c.p[1] + z * c.p[2];
+        if (dot < c.cr) continue;
+        const q = Math.acos(clamp(dot, -1, 1)) / c.r; // (its distance from the middle, in its radii)
+        const fill = 1 - 0.6 * m; // (the maria flooded the old craters: shallower there)
+        if (q < 1) h -= c.r * 0.14 * c.dep * fill * (1 - q * q);
+        h += c.r * 0.045 * fill * Math.exp(-(((q - 1) / 0.16) ** 2));
+        a += (q < 0.85 ? -0.025 : 0.04 * Math.exp(-(((q - 1) / 0.14) ** 2))) * fill;
+        if (c.young) {
+          a += 0.16 * Math.exp(-(((q - 1) / 0.25) ** 2)) + (q < 1 ? 0.06 : 0);
+          if (q > 1) { // (rays thrown out across whatever lies round it)
+            const ang = Math.atan2(x * c.e2[0] + y * c.e2[1] + z * c.e2[2], x * c.e1[0] + y * c.e1[1] + z * c.e1[2]);
+            const ray = Math.pow(Math.max(0, Math.sin(ang * 5 + c.ray) * Math.sin(ang * 9 + c.ray * 2)), 3);
+            a += 0.13 * ray * Math.max(0, 1 - (q - 1) / 1.8);
+          }
+        }
+      }
+      alb[t] = clamp(a, 0.2, 1.15); mare[t] = m; hgt[t] = h;
+    }
+  };
+  // the height's slopes per radian, east along the latitude's circle and north, wrapping round in longitude
+  const slopes = () => {
+    const du = (Math.PI * 2) / W, dv = Math.PI / H;
+    for (let j = 0; j < H; j++) {
+      const cl = Math.max(0.15, Math.cos((0.5 - (j + 0.5) / H) * Math.PI));
+      for (let i = 0; i < W; i++) {
+        const t = j * W + i, e = j * W + ((i + 1) % W), w = j * W + ((i - 1 + W) % W), nn = Math.max(0, j - 1) * W + i, ss = Math.min(H - 1, j + 1) * W + i;
+        gu[t] = (hgt[e] - hgt[w]) / (2 * du * cl); gv[t] = (hgt[nn] - hgt[ss]) / (2 * dv);
+      }
+    }
+  };
+  // (made a few rows a frame, as the planet's own face is, so the menu never stalls on it; Argos shows when it's done)
+  const A = { W, H, alb, mare, gu, gv, done: false, row: 0 };
+  A.step = (rows) => { for (let k = 0; k < rows && A.row < H; k++) doRow(A.row++); if (A.row >= H && !A.done) { slopes(); A.done = true; } };
+  return A;
+}
+
+/** The per-pixel geometry of Argos's disc (n × n, radius n/2 - 1), made once a size: each pixel's normal, the map row
+ * and longitude under it (about Argos's axis, slanted as the Ring is), and its east and north directions on screen
+ * (turning about the axis never changes them). */
+function mplMoonGeometry(n) {
+  const N = n * n, G = { n, nx: new Float32Array(N), ny: new Float32Array(N), nz: new Float32Array(N), v: new Int32Array(N), lon: new Float32Array(N), ex: new Float32Array(N * 3), no: new Float32Array(N * 3), edge: new Float32Array(N) };
+  const c = Math.cos(MPLANET.tilt), s = Math.sin(MPLANET.tilt), H = MPLANET.moonTex / 2, R = n / 2 - 1;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    let x = (i + 0.5 - n / 2) / R, y = (j + 0.5 - n / 2) / R;
+    const rr = Math.hypot(x, y), k = j * n + i;
+    G.edge[k] = clamp((1 - rr) * R + 0.5, 0, 1); // (a pixel's worth of soft edge, no more)
+    if (G.edge[k] <= 0) continue;
+    if (rr > 1) { x /= rr; y /= rr; }
+    const z = Math.sqrt(Math.max(0, 1 - x * x - y * y));
+    G.nx[k] = x; G.ny[k] = y; G.nz[k] = z;
+    const lx = x * c + y * s, ly = -x * s + y * c, lat = Math.asin(clamp(-ly, -1, 1)), lo = Math.atan2(lx, z), sl = Math.sin(lat);
+    G.v[k] = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0)); G.lon[k] = lo / (Math.PI * 2);
+    const E = [Math.cos(lo), 0, -Math.sin(lo)], No = [-sl * Math.sin(lo), -Math.cos(lat), -sl * Math.cos(lo)];
+    G.ex[k * 3] = E[0] * c - E[1] * s; G.ex[k * 3 + 1] = E[0] * s + E[1] * c; G.ex[k * 3 + 2] = E[2];
+    G.no[k * 3] = No[0] * c - No[1] * s; G.no[k * 3 + 1] = No[0] * s + No[1] * c; G.no[k * 3 + 2] = No[2];
+  }
+  return G;
+}
+
+/** Argos's image (n × n), lit by L with its face turned by `turn` (0..1): airless, so a hard terminator with the crater
+ * walls catching the low light along it, a thin bright rim on the limb toward Corvane, and on its night side only a
+ * faint coral planetshine from Ithaca I. Cached: made again only when it has turned a step or the size or light change. */
+function mplMoonShade(n, L, turn) {
+  const A = MPL.moonMap;
+  if (!MPL.moonGeo || MPL.moonGeo.n !== n) {
+    MPL.moonGeo = mplMoonGeometry(n);
+    const c = document.createElement('canvas'); c.width = c.height = n;
+    MPL.moonImg = { c, ctx: c.getContext('2d'), img: null, key: '' };
+  }
+  const key = turn + ':' + L.join(','), I = MPL.moonImg;
+  if (I.key === key) return I.c;
+  I.key = key;
+  const G = MPL.moonGeo, img = I.img || (I.img = I.ctx.createImageData(n, n)), px = img.data, W = A.W;
+  const [Lx, Ly, Lz] = L, l2 = Math.hypot(Lx, Ly) || 1, bump = 1.7;
+  for (let k = 0; k < n * n; k++) {
+    const o = k * 4, e = G.edge[k];
+    if (e <= 0) { px[o + 3] = 0; continue; }
+    let u = (G.lon[k] + turn) % 1; if (u < 0) u += 1;
+    const t = G.v[k] * W + ((u * W) | 0), a = A.alb[t], m = A.mare[t], k3 = k * 3, su = A.gu[t] * bump, sv = A.gv[t] * bump;
+    const nx0 = G.nx[k], ny0 = G.ny[k], nz0 = G.nz[k];
+    let nx = nx0 - su * G.ex[k3] - sv * G.no[k3], ny = ny0 - su * G.ex[k3 + 1] - sv * G.no[k3 + 1], nz = nz0 - su * G.ex[k3 + 2] - sv * G.no[k3 + 2];
+    const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+    const mu0 = nx * Lx + ny * Ly + nz * Lz, g0 = nx0 * Lx + ny0 * Ly + nz0 * Lz;
+    // regolith: Lommel-Seeliger (lit nearly flat out to the limb, as a moon is) with a little Lambert in it
+    let lit = 0;
+    if (mu0 > 0) { const mu = Math.max(0.08, nz0); lit = ((1.3 * mu0) / (mu0 + mu)) * 0.68 + mu0 * 0.36; lit *= clamp(mu0 / 0.03, 0, 1); }
+    // the rim: a thin bright edge on the limb toward the light, fading round to the terminator
+    const side = (nx0 * Lx + ny0 * Ly) / l2 / Math.max(0.2, Math.hypot(nx0, ny0));
+    const rim = Math.pow(1 - nz0, 4) * clamp(side, 0, 1) * clamp(g0 * 4 + 0.4, 0, 1) * 0.9;
+    const shine = 0.045 * clamp(-g0 * 3 + 0.25, 0, 1); // (planetshine)
+    // (the maria a shade browner, the highlands a cool pale grey; Corvane's light a little warm)
+    const cr = a * (1 - m * 0.03), cg = a * (1 - m * 0.06), cb = a * (1 - m * 0.1);
+    px[o] = clamp(cr * (lit * 258 + shine * 160) + rim * 255, 0, 255);
+    px[o + 1] = clamp(cg * (lit * 248 + shine * 110) + rim * 242, 0, 255);
+    px[o + 2] = clamp(cb * (lit * 236 + shine * 96) + rim * 226, 0, 255);
+    px[o + 3] = 255 * e;
+  }
+  I.ctx.putImageData(img, 0, 0);
+  return I.c;
+}
+
+/** Argos, a small grey moon lit from Corvane's side, drawn sharp at the canvas's own pixels (none of the planet's soft
+ * glow on it): its image is shaded at the size it shows (mplMoonShade) and turns with its orbit, one face always
+ * toward Ithaca I. */
 function mplMoon(g, st) {
-  const m = st.moon, x = st.px + m.x * st.r, y = st.py + m.y * st.r, rm = st.r * 0.2;
-  const gr = g.createRadialGradient(x + st.L[0] * rm * 0.5, y + st.L[1] * rm * 0.5, rm * 0.1, x, y, rm);
-  gr.addColorStop(0, '#dcdce2'); gr.addColorStop(0.65, '#8a8a94'); gr.addColorStop(1, '#2a2a34');
-  g.fillStyle = gr; g.beginPath(); g.arc(x, y, rm, 0, Math.PI * 2); g.fill();
+  const A = MPL.moonMap || (MPL.moonMap = mplMoonMap());
+  if (!A.done) { A.step(6); if (A.done) A.at = performance.now(); return; }
+  const m = st.moon, d = MPL.dpr, x = (st.px + m.x * st.r) * d, y = (st.py + m.y * st.r) * d, rm = st.r * 0.2 * d;
+  const n = Math.min(MPL.saver ? 128 : 256, Math.max(16, Math.ceil(rm * 2) + 2)), s = (n * rm) / (n / 2 - 1);
+  // (tidally locked: the point under the planet stays the map's middle; a step is 1/360 of a turn, a few shadings a second)
+  const turn = ((Math.round((-Math.atan2(-m.x, -m.z) / (Math.PI * 2)) * 360) / 360) % 1 + 1) % 1;
+  const c = mplMoonShade(n, st.L, turn);
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.globalAlpha *= clamp((performance.now() - A.at) / 1200, 0, 1); // (it fades in once its map is made)
+  g.drawImage(c, x - s / 2, y - s / 2, s, s);
+  g.restore();
 }
 
 /** The four vanguard Carriers in orbit: tiny lit specks, a light blinking on each; `front`: those in front of the planet. */
