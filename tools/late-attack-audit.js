@@ -1,4 +1,6 @@
 // Trace late-game attacks and production in a deterministic Versus match.
+// TERRAFALL_ECONOMY_TRACE=1 adds one-minute factory input and staffing observations.
+// TERRAFALL_ECONOMY_LOSS=colony:building:minute optionally simulates one targeted building loss.
 // node tools/late-attack-audit.js Standard 25 4 75 [git-ref|-] [difficulty] [rival-doctrine] [hold-after-min]
 const { execFileSync } = require('node:child_process');
 const { readFileSync } = require('node:fs');
@@ -18,13 +20,17 @@ const read = (file) => ref ? execFileSync('git', ['show', ref + ':' + file], { c
 const modules = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders', 'landmarks', 'city', 'walker', 'dam'];
 const source = modules.map((name) => read('js/' + name + '.js')).join('\n');
 const game = new Function('sfx', source + `
-  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail }) => {
+  return ({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail, economy, loss }) => {
     const shapeId = SHAPE_PRESETS.findIndex((p) => p.name.toLowerCase() === shape.toLowerCase());
     if (shapeId < 0) throw new Error('Unknown map ' + shape);
     if (!DIFFICULTY[difficulty] || !isDoctrine(doctrine) || !Number.isFinite(holdAfter) || holdAfter < 0 || (holdAfter && players !== 2)) throw new Error('Invalid scenario');
     newGame({ shape: shapeId, seed, players, humans: [], mode: 'versus', difficulty, style: doctrine,
       nuke: true, mega: true, events: false, murmur: 'active', victory: 'capture' });
     S.watch = true;
+    const intervention = loss && /^([1-4]):(mine|smelter|charger|fab):([1-9][0-9]*)$/.exec(loss);
+    if (loss && (!intervention || Number(intervention[1]) > players || Number(intervention[3]) >= minutes)) throw new Error('Invalid economic setback');
+    const lossTick = intervention ? Math.round(Number(intervention[3]) * 60 / SIM_STEP) : -1;
+    let setback = null;
     // Trace successful decisions from the running simulation. Samples do not issue orders.
     const events = [], strikes = Array.from({ length: players }, () => 0);
     const contacts = Array.from({ length: players }, () => []);
@@ -99,6 +105,32 @@ const game = new Function('sfx', source + `
           ammo: goods.ammo || 0, armories: buildings.filter((b) => b.type === 'armory').map((b) => b.status || ''),
           unarmedInDryGarrison: army.filter((u) => !botArmed(u) && u.inside && !(getE(u.inside)?.stock.ammo > 0)).length,
           ore: goods.ore || 0, alloy: goods.alloy || 0, chip: goods.chip || 0, hit: strikes[p.id],
+          ...(economy ? {
+            economy: {
+              goods: Object.fromEntries(['ore', 'alloy', 'crystal', 'chip', 'fuel', 'cement'].map(g => [g, goods[g] || 0])),
+              made: { ...p.made },
+              buildings: buildings.filter(b => ['mine', 'smelter', 'tap', 'fab', 'foundry', 'armory', 'charger', 'kiln', 'farm', 'refinery'].includes(b.type))
+                .map(b => {
+                  const nearby = new Set(buildingGroups(b));
+                  const connected = buildings.filter(source => source !== b && buildingGroups(source).some(group => nearby.has(group)));
+                  const required = Object.keys(BDEFS[b.type].inp || (b.type === 'charger' ? { fuel: 1 } : {}));
+                  const oreSources = b.type === 'smelter' && (b.stock.ore || 0) < BDEFS.smelter.inp.ore
+                    ? buildings.filter(source => supplyOf(source, 'ore') > 0).map(source => {
+                      const onNetwork = connected.includes(source);
+                      const carrier = { type: 'hauler', owner: p.id, x: source.x + 0.5, y: source.y + 0.5, inside: source.id, bat: 100 };
+                      return { type: source.type, x: source.x, y: source.y, amount: supplyOf(source, 'ore'), onNetwork,
+                        dangerous: shunned(source), reachable: reachable(source),
+                        deliveryPath: onNetwork && Number.isFinite(cargoPickupTime(carrier, b)) };
+                    }) : [];
+                  return { id: b.id, type: b.type, x: b.x, y: b.y, status: b.status, staffed: !!b.staff, paused: !!b.paused,
+                    cut: !!b.cut, danger: shunned(b), oreSources, stock: { ...b.stock }, incoming: { ...b.inc },
+                    supply: Object.fromEntries(required.map(g => [g, [
+                      connected.reduce((n, source) => n + Math.max(0, supplyOf(source, g)), 0),
+                      connected.reduce((n, source) => n + (shunned(source) || !reachable(source) ? 0 : Math.max(0, supplyOf(source, g))), 0),
+                    ]])) };
+                }),
+            },
+          } : {}),
           inputs, foundries: foundries.map((b) => b.status || (b.paused ? 'Paused' : '')),
           goal: p.massFor?.until > S.time ? p.massFor.need : 0,
           spareAtBase: target && !target.dead ? aiSpare(p.id, target, 'flag').n : null,
@@ -107,7 +139,7 @@ const game = new Function('sfx', source + `
       }),
     });
     const checkpoints = [];
-    const checkEvery = detail ? 1 : 5;
+    const checkEvery = economy || detail ? 1 : 5;
     let nextCheck = checkEvery;
     const cap = Math.round(minutes * 60 / SIM_STEP), holdTick = Math.round(holdAfter * 60 / SIM_STEP);
     while (S.winner < 0 && S.tick < cap) {
@@ -116,15 +148,21 @@ const game = new Function('sfx', source + `
         S.players[0].passive = true;
         events.push({ p: 1, at: round(S.time), kind: 'hold' });
       }
+      if (S.tick === lossTick) {
+        const owner = Number(intervention[1]) - 1, type = intervention[2];
+        const target = playerBuildings(owner).find(b => b.built && b.type === type);
+        if (target) destroyBuilding(target);
+        setback = { colony: owner + 1, type, at: round(S.time), id: target?.id ?? null };
+      }
       simStep(SIM_STEP);
       if (S.tick === Math.round(nextCheck * 60 / SIM_STEP)) { checkpoints.push(snapshot()); nextCheck += checkEvery; }
     }
     if (S.winner >= 0 && snapshot().alive.length !== 1) throw new Error('Capture ended before only one colony remained');
     return {
-      shape, size, seed, players, difficulty, doctrine, holdAfter, events, ...(detail ? { contacts } : {}), winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
+      shape, size, seed, players, difficulty, doctrine, holdAfter, events, ...(loss ? { setback } : {}), ...(detail ? { contacts } : {}), winner: S.winner < 0 ? null : S.winner + 1, time: round(S.time), built: built(), checkpoints,
       end: snapshot().alive, eliminations: (S.log || []).filter((e) => e.k === 'out').map((e) => [e.p + 1, round(e.t)]),
       megastructuresSeized: colonies().map((p) => p.stats.megaSeized || 0), maglevRaids: colonies().map((p) => p.magCuts || 0),
     };
   };
 `)(() => {});
-console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail: process.env.TERRAFALL_PRESSURE_TRACE === '1' }) }));
+console.log(JSON.stringify({ ref: ref || 'working tree', ...game({ shape, seed, players, minutes, difficulty, doctrine, holdAfter, detail: process.env.TERRAFALL_PRESSURE_TRACE === '1', economy: process.env.TERRAFALL_ECONOMY_TRACE === '1', loss: process.env.TERRAFALL_ECONOMY_LOSS }) }));
