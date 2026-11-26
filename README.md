@@ -3319,8 +3319,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     (`aiMegaHold`, `AI_SEIZE` in `js/ai.js`): every 5 s a rival without a seize band out sends one (its own: at least 4
     armed; a foe's within 45 tiles of its base, not ordered wrecked: at least 6, and two for each foe's armed robot within
     8 tiles) under a flag by its walls, called home once it's taken or after 3 minutes; a march near a knocked-out one it is
-    seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. Bringing one online is
-    its Haulers' work, as its goods allow. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
+    seizing stays that much longer (`aiSeizing`); a Lift it marches on for its fall it orders wrecked. A rival plans a
+    road to a seized megastructure ahead of ordinary sites when it can afford one, and gives the commissioning fee
+    High delivery priority until it is paid. `hashState` covers the seize state. Test: `node tools/mega-seize-test.js`.
   - **The cap on the rivals** (`AI_MEGA_CAP`, `AI_MEGA_KIND`, `aiMegaProjects`, `aiMegaRoom`): a rival builds at most
     one weapon (the Lance, the nukes or the Sundering Ray: the `megaPick` choice counts as the one) and two megastructures in all; a
     Shield Dome (`shield`) never counts, nor does a Deep Core (`aiDeep`, above); the Atmosphere Engine is a main project (`aiAtmos`, above). Its main project is `AI_MEGA_MAIN` by doctrine (Arrival City for the Architect, once its first Silo stands or

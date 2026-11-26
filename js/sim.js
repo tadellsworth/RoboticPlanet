@@ -142,7 +142,10 @@ function nearestStoreTo(owner, x, y, except) {
 }
 
 /** Building priority set by the player: high-priority buildings get workers and goods first. */
-function prioRank(b) { return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1; }
+function prioRank(b) {
+  if (b.mNeed && S.players[b.owner]?.ai) return 0; // commissioning fee first, until paid
+  return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1;
+}
 
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
@@ -3657,6 +3660,7 @@ function updateWorker(u, dt) {
  * bring their materials), and so do Depots and any building that takes goods in or sends them out.
  */
 function needsRoad(b) {
+  if (b.mNeed) return true; // a seized megastructure needs its fee even if it takes no goods online
   const def = BDEFS[b.type];
   if (b.type === 'lander' || storeFunded(b)) return false; // Walls, Gates and Viaducts are paid from storage: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base

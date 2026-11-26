@@ -142,6 +142,30 @@ const out = new Function('assert', 'sfx', source + `
     log.push(type + ': fee hauled in ' + paid.toFixed(0) + ' s, a Worker brought it online ' + on.toFixed(0) + ' s later (armor ' + Math.round(b.armor) + '/' + BDEFS[type].armor + ')');
   }
 
+  // The rival commissions a seized megastructure using its road planner, normal Haulers and a Worker.
+  {
+    const { b, A } = setup('lance', 47);
+    megaDown(b, 0);
+    megaSeized(b, 0);
+    const P = S.players[0];
+    P.ai = true;
+    P.aiT = 1000; // (exercise its road planner without starting an unrelated build or march)
+    assert.ok(!onHomeNet(b), 'the seized Lance starts disconnected');
+    const route = roadRouteTo(0, b);
+    assert.ok(route?.length, 'the rival can reach it by road');
+    for (const g in b.mNeed) bump(A.stock, g, b.mNeed[g] + 30);
+    bump(A.stock, 'fiber', 50);
+    for (let i = 0; i < 3; i++) enterBuilding(addBot(0, 'hauler', A.x, A.y), A);
+    aiRoads(0, playerBuildings(0));
+    assert.ok(route.every((t) => S.plan[t] === 1), 'the rival plans a road to the seized Lance');
+    assert.equal(prioRank(b), 0, 'the rival gives commissioning goods High priority');
+    const t = run(500, () => !b.mOff);
+    assert.ok(onHomeNet(b), 'Workers built the road');
+    assert.ok(!b.mOff && !b.mNeed, 'Haulers paid the fee and a Worker brought the Lance online');
+    assert.equal(prioRank(b), 1, 'the Lance is back to Normal priority after commissioning');
+    log.push('rival connected and commissioned a seized Lance in ' + t.toFixed(0) + ' s');
+  }
+
   // 3) Contested: the clock stops; its old owner takes it back the same way.
   {
     const { b } = setup('lift');

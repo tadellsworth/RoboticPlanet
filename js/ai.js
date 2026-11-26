@@ -4130,15 +4130,16 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
 function aiRoadCrew(p) { S.players[p].roadCrew = 0; }
 
 /**
- * Lay roads from storage to buildings that have none, construction sites first, as far as the
- * Cement allows. A site that no road can reach is given up after a while.
+ * Lay roads from storage to buildings that have none, seized megastructures and then sites first,
+ * as far as the Cement allows. A site that no road can reach is given up after a while.
  */
 function aiRoads(p, me) {
   const P = S.players[p];
   aiRoadCrew(p);
   let budget = roadTilesAffordable(p), done = 0;
+  const roadRank = (b) => b.mNeed ? 0 : b.built ? 2 : 1;
   const todo = me.filter((b) => needsRoad(b) && !onHomeNet(b))
-    .sort((a, b) => (a.built - b.built) || a.born - b.born);
+    .sort((a, b) => roadRank(a) - roadRank(b) || a.born - b.born);
   for (const b of todo) {
     if (done >= 3) break;
     // Ramps cut for this one's road still going up: wait for them (aiRampCut), the road then takes the short way.
