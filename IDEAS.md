@@ -1121,6 +1121,23 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
+- **Terrain detail view: see the routes through the terrain** (the owner, Nov 2026: for later). So a player can tell at a
+  glance which cliffs, ramps and gaps let an enemy walk round to the base, and so that no enemy robots can sneak round a
+  cliff into it unseen. An overlay, like the traffic map and the goods-flow overlay (a toggle, `Shift+T` style, and a
+  button on the phone), over the terrain:
+  - **Walkable routes:** shade the ground a ground robot can walk (the game already works out walkable areas, the
+    zones, and where ramps join levels), draw cliff edges and drops clearly, and mark **ramps, passes and chokepoints**
+    (a narrow gap shown as a bright gate).
+  - **Approach routes to your base:** from each rival's base (or the nearest enemy robot), the shortest walkable
+    routes to your Command Base and key buildings, drawn as lines, so the unguarded back door shows up; a warning where
+    a route reaches your land with no turret, wall or garrison covering it.
+  - **Other kinds of mover:** a switch between ground robots, aircraft (everything open) and ships (water only), since
+    Viaducts, Ropeways, bridges and Airships open routes the ground view does not show; show the routes a Viaduct or a
+    Ramp you could build would add or close (a "what if I wall this gap" preview).
+  - **Reuses:** the zone and walkability maps, the rival's route search (`findPath`), the Bottleneck finder's style of
+    highlighting, the traffic overlay's drawing. A cheap first version: just the walkable shading with cliffs and ramps
+    marked; then the approach lines. Pairs with the military roster work (Mine Layer and Skirmisher make
+    chokepoints matter) and the Grand Canyon and Spine maps.
 - **Polish and quality of life, to feel like a studio game** (the owner, Nov 2026: saved for later). The game already has
   photo mode, cloud saves with a QR code, goals, records and achievements, undo, control groups, idle-robot explanations,
   the traffic and goods-flow overlays, graphics presets, an installable app, reduced-motion and text-size options. A
